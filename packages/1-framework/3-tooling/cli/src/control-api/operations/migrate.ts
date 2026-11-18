@@ -10,7 +10,9 @@ import type {
   ControlExtensionDescriptor,
   ControlFamilyInstance,
   DatabasePolicies,
+  MigrationAccessChange,
   MigrationOperationPolicy,
+  MigrationOperationSubject,
   MigrationPlanOperation,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
@@ -30,6 +32,7 @@ import {
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { isGraphNode } from '@internal/migration-tools/migration-graph';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -43,8 +46,10 @@ import {
 } from '../../utils/cli-errors';
 import { errorMarkerMismatch, readLedgerQuietly } from '../../utils/marker-mismatch';
 import { migrateRunnerFailureError } from '../../utils/migrate-failure';
+import type { DataProtectionRefusedOperation } from '../../utils/policy-errors';
 import { declaredSettingsText, errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
+import { subjectText } from '../statements/plan-questions';
 import type {
   MigratePathDecision,
   MigrateResult,
@@ -58,9 +63,12 @@ import {
   buildContractSpaceAggregate,
 } from './contract-space-aggregate-loader';
 import {
+  type CheckedDatabasePolicies,
   checkRunPolicies,
   type DatabasePoliciesToWrite,
   databasePoliciesInForce,
+  forbiddenDataProtectionOfRun,
+  refuseForbiddenChanges,
 } from './database-policies';
 import { noInvariantPathError } from './no-invariant-path';
 import {
@@ -195,6 +203,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       refName: ref?.name,
     },
     storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+    accessChangesOf: (operations) => familyInstance.accessChangesOf(operations),
     migrationsDir,
     invocation: options.invocation,
     readLedger: (spaceId) => familyInstance.readLedger({ driver, space: spaceId }),
@@ -216,6 +225,15 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   });
   if (!checkedPolicies.ok) {
     return notOk(checkedPolicies.failure);
+  }
+  const forbidden = refuseForbiddenMigrations({
+    appSpaceId: aggregate.app.spaceId,
+    checked: checkedPolicies.value,
+    ref,
+    outcomes: planned.value,
+  });
+  if (forbidden !== undefined) {
+    return notOk(forbidden);
   }
   const policiesToWrite = checkedPolicies.value.toWrite;
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
@@ -407,6 +425,68 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   });
 }
 
+/** The migration of `edges` that holds the operation at `operationIndex` of their joined operations. */
+function migrationAt(
+  edges: readonly AggregateMigrationEdgeRef[],
+  operationIndex: number,
+): string | undefined {
+  let start = 0;
+  for (const edge of edges) {
+    if (operationIndex < start + edge.operationCount) return edge.dirName;
+    start += edge.operationCount;
+  }
+  return undefined;
+}
+
+function recordedOperations(
+  spaceId: string,
+  entry: PerSpacePlan,
+  subjects: readonly MigrationOperationSubject[],
+): readonly DataProtectionRefusedOperation[] {
+  return subjects.map(({ operationIndex, subject }) => {
+    const operation = entry.displayOps[operationIndex];
+    if (operation === undefined) {
+      throw new InternalError(
+        `Unreachable: space "${spaceId}" names operation ${operationIndex}, which its plan does not hold`,
+      );
+    }
+    return {
+      spaceId,
+      ...ifDefined('migration', migrationAt(entry.migrationEdges, operationIndex)),
+      operationId: operation.id,
+      subject: subjectText(subject, { origin: entry.destinationContract, statements: [] }),
+      label: operation.label,
+    };
+  });
+}
+
+/**
+ * Refuses a run whose pending migrations, in any space, lose data or change who can read or write
+ * rows where the run's data protection policy forbids it. `db migrate`, `db migrate --show` and the
+ * control API's `migrate` all decide it here.
+ */
+export function refuseForbiddenMigrations(args: {
+  readonly appSpaceId: string;
+  readonly checked: CheckedDatabasePolicies;
+  readonly ref: NamedRef | undefined;
+  readonly outcomes: ReadonlyMap<string, PlannedSpaceOutcome>;
+}): CliStructuredError | undefined {
+  const pending = [...args.outcomes].flatMap(([spaceId, outcome]) =>
+    outcome.kind === 'ok' ? [{ spaceId, entry: outcome.plan }] : [],
+  );
+  return refuseForbiddenChanges({
+    appSpaceId: args.appSpaceId,
+    command: 'db migrate',
+    forbidden: forbiddenDataProtectionOfRun(args.checked, args.ref),
+    dataLoss: pending.flatMap(({ spaceId, entry }) =>
+      recordedOperations(spaceId, entry, entry.dataLoss),
+    ),
+    accessChanges: pending.flatMap(({ spaceId, entry }) =>
+      recordedOperations(spaceId, entry, entry.accessChanges),
+    ),
+  });
+}
+
 const MIGRATE_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
 } as const satisfies MigrationOperationPolicy;
@@ -524,6 +604,7 @@ export function planSpacePath({
   liveMarker,
   refName,
   storageNameOf,
+  accessChangesOf,
 }: {
   readonly space: AggregateContractSpace;
   readonly aggregate: Pick<ContractSpaceAggregate, 'targetId' | 'app'>;
@@ -532,6 +613,9 @@ export function planSpacePath({
   readonly liveMarker: ContractMarkerRecordLike | null;
   readonly refName?: string;
   readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+  readonly accessChangesOf: (
+    operations: readonly MigrationPlanOperation[],
+  ) => readonly MigrationAccessChange[];
 }): SpacePathOutcome {
   const isAppSpace = space.spaceId === aggregate.app.spaceId;
   const headRef = requireHeadRef(space);
@@ -614,6 +698,7 @@ export function planSpacePath({
     currentMarker: liveMarker,
     ...(isAppSpace && refName !== undefined ? { refName } : {}),
     storageNameOf,
+    accessChangesOf,
   });
 
   if (walked.kind === 'unreachable') {
@@ -660,6 +745,9 @@ interface PlanSpacesInputs {
     readonly refName: string | undefined;
   };
   readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+  readonly accessChangesOf: (
+    operations: readonly MigrationPlanOperation[],
+  ) => readonly MigrationAccessChange[];
 }
 
 /** Every contract space's outcome, keyed by space, the application space first. */
@@ -676,6 +764,7 @@ export function planSpaces(args: PlanSpacesInputs): ReadonlyMap<string, SpacePat
         liveMarker: args.markers.get(space.spaceId) ?? null,
         ...(isAppSpace ? ifDefined('refName', appTarget.refName) : {}),
         storageNameOf: args.storageNameOf,
+        accessChangesOf: args.accessChangesOf,
       });
       return [space.spaceId, outcome] as const;
     }),

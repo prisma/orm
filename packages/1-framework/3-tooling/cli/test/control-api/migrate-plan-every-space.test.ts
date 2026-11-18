@@ -100,6 +100,7 @@ function planned(args: {
     markers: args.markers,
     appTarget: { hash: args.appTargetHash ?? APP_B, invariants: undefined, refName: undefined },
     storageNameOf: (operation) => operation.id,
+    accessChangesOf: () => [],
     migrationsDir: '/work/app/migrations',
     invocation,
     readLedger: args.readLedger ?? (async () => []),
@@ -115,6 +116,7 @@ function planApp(liveMarker: string, targetHash = APP_B, onSpace = app) {
     refInvariants: undefined,
     liveMarker: markerAt(liveMarker),
     storageNameOf: (operation) => operation.id,
+    accessChangesOf: () => [],
   });
 }
 
@@ -261,6 +263,7 @@ describe('planEverySpace', () => {
       markers: new Map([['app', markerAt(APP_DELETED)]]),
       appTarget: { hash: APP_B, invariants: undefined, refName: undefined },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
       migrationsDir: '/work/app/migrations',
       invocation,
       readLedger: async () => [],

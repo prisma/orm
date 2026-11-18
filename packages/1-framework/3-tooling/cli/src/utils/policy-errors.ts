@@ -160,12 +160,11 @@ export function errorDataProtectionForbids(args: {
   readonly refusals: readonly DataProtectionRefusal[];
 }): ActionableCliError {
   const { spaceId, command, refusals } = args;
-  const [first] = refusals;
-  const refName =
-    first?.source.kind === 'ref' &&
-    refusals.every(({ source }) => source.kind === 'ref' && source.refName === first.source.refName)
-      ? first.source.refName
-      : undefined;
+  const refNames = new Set(
+    refusals.map(({ source }) => (source.kind === 'ref' ? source.refName : undefined)),
+  );
+  const [onlyRefName] = refNames;
+  const refName = refNames.size === 1 ? onlyRefName : undefined;
   const policyHolder =
     refName === undefined
       ? "This database's data protection policy"

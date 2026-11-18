@@ -34,6 +34,7 @@ describe('defineConfig', () => {
         markerLocation: 'prisma_contract.marker',
         deserializeContract: (contract: unknown) => contract as Contract,
         storageNameOf: (operation) => operation.id,
+        accessChangesOf: () => [],
         verify: async () => ({
           ok: true,
           summary: 'test',

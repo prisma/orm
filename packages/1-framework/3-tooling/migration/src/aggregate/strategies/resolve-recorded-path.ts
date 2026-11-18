@@ -1,4 +1,8 @@
-import type { MigrationPlan, MigrationPlanOperation } from '@internal/framework-components/control';
+import type {
+  MigrationAccessChange,
+  MigrationPlan,
+  MigrationPlanOperation,
+} from '@internal/framework-components/control';
 import { InternalError } from '@internal/utils/internal-error';
 import { EMPTY_CONTRACT_HASH } from '../../constants';
 import { findPathWithDecision } from '../../migration-graph';
@@ -35,6 +39,10 @@ export interface ResolveRecordedPathInputs {
   readonly refName?: string;
   /** The name the database knows the object an operation acts on by; names what a drop loses. */
   readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+  /** The operations of one migration that change who can read or write rows, by position in that migration. */
+  readonly accessChangesOf: (
+    operations: readonly MigrationPlanOperation[],
+  ) => readonly MigrationAccessChange[];
 }
 
 /**
@@ -77,6 +85,7 @@ export function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRe
   }
 
   const pathOps: MigrationOps[number][] = [];
+  const accessChanges: MigrationAccessChange[] = [];
   const providedInvariantsSet = new Set<string>();
   const edgeRefs: AggregateMigrationEdgeRef[] = [];
   for (const edge of outcome.decision.selectedPath) {
@@ -85,6 +94,9 @@ export function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRe
       throw new InternalError(
         `Migration package missing for edge ${edge.migrationHash} in space "${space.spaceId}". The hydrated migration graph and packagesByMigrationHash map are out of sync — this should be unreachable; report.`,
       );
+    }
+    for (const change of input.accessChangesOf(pkg.ops)) {
+      accessChanges.push({ ...change, operationIndex: pathOps.length + change.operationIndex });
     }
     for (const op of pkg.ops) pathOps.push(op);
     for (const invariant of pkg.metadata.providedInvariants) providedInvariantsSet.add(invariant);
@@ -128,7 +140,7 @@ export function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRe
             ]
           : [],
       ),
-      accessChanges: [],
+      accessChanges,
       temporaryValues: [],
       migrationEdges: edgeRefs,
       pathDecision: outcome.decision,

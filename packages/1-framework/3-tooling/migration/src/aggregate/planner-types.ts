@@ -4,6 +4,7 @@ import type {
   AppliedMigrationStatement,
   ControlAdapterInstance,
   ControlFamilyInstance,
+  MigrationAccessChange,
   MigrationOperationPolicy,
   MigrationPlan,
   MigrationPlanNamespaces,
@@ -97,6 +98,10 @@ export interface PlannerInput<TFamilyId extends string, TTargetId extends string
   readonly appSpace: AppSpacePlanningInputs;
   /** The name the database knows the object an operation acts on by; names what a recorded drop loses. */
   readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+  /** The operations of one recorded migration that change who can read or write rows. */
+  readonly accessChangesOf: (
+    operations: readonly MigrationPlanOperation[],
+  ) => readonly MigrationAccessChange[];
 }
 
 /** See {@link PlannerInput.appSpace}. */
@@ -153,9 +158,10 @@ export interface AggregateMigrationEdgeRef {
  * - `dataLoss` and `accessChanges`: what the operations of `plan` lose
  *   and whose access they change. A recorded path names each destructive
  *   operation by its storage name, since no planner mapped it to a model,
- *   lists each as a `drop`, since a recorded operation does not say whether
- *   it drops or changes a type, and lists no access change: a written migration is
- *   reviewed before it runs.
+ *   and does not say whether it drops or changes a type, since a recorded
+ *   operation does not say. Its access changes are those the family
+ *   recognises from each migration's operations; raw SQL and data
+ *   transforms are not read.
  * - `temporaryValues`: the new required fields whose existing rows the plan
  *   gives a temporary value. A recorded path lists none.
  */

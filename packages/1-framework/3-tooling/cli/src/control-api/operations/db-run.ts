@@ -366,6 +366,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       operationPolicy: policy,
       appSpace: { fromContract, statements: resolved },
       storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+      accessChangesOf: (operations) => familyInstance.accessChangesOf(operations),
     });
     if (!planned.ok) {
       onProgress?.({ action, kind: 'spanEnd', spanId: SPAN_IDS.plan, outcome: 'error' });

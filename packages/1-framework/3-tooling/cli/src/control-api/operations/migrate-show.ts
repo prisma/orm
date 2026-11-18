@@ -29,7 +29,12 @@ import type { CreateControlClient } from '../types';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 import { checkRunPolicies, databasePoliciesInForce } from './database-policies';
-import { planEverySpace, planSpaces, type SpacePathOutcome } from './migrate';
+import {
+  planEverySpace,
+  planSpaces,
+  refuseForbiddenMigrations,
+  type SpacePathOutcome,
+} from './migrate';
 import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
@@ -134,7 +139,7 @@ export async function executeMigrateShowPlan(
   if (!loaded.ok) {
     return notOk(loaded.failure);
   }
-  const { aggregate, contractHash, storageNameOf, markerLocation } = loaded.value;
+  const { aggregate, contractHash, storageNameOf, accessChangesOf, markerLocation } = loaded.value;
   const appGraph = aggregate.app.graph();
 
   // Resolve the --to target (defaults to the on-disk contract, same as migrate).
@@ -188,6 +193,7 @@ export async function executeMigrateShowPlan(
     markers: markerBySpace,
     appTarget: { hash: targetHash, invariants: refInvariants, refName: undefined },
     storageNameOf,
+    accessChangesOf,
   });
   let outcomes: ReadonlyMap<string, SpacePathOutcome> | undefined;
 
@@ -255,6 +261,15 @@ export async function executeMigrateShowPlan(
       });
       if (!permitted.ok) {
         return notOk(permitted.failure);
+      }
+      const forbidden = refuseForbiddenMigrations({
+        appSpaceId: aggregate.app.spaceId,
+        checked: permitted.value,
+        ref: namedRef,
+        outcomes: checked.value,
+      });
+      if (forbidden !== undefined) {
+        return notOk(forbidden);
       }
       if (liveOrigin) {
         outcomes = checked.value;
