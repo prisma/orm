@@ -213,7 +213,7 @@ describe('the Prisma 7 result document', () => {
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: {
           status: 'failed',
-          deps: ['@prisma/orm-postgres', 'dotenv'],
+          deps: ['@prisma/orm-postgres', 'dotenv', 'pg'],
           devDeps: [],
         },
       });

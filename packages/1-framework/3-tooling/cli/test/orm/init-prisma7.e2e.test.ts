@@ -248,7 +248,7 @@ describe('init on the Prisma 7 fixture, end to end', () => {
           ),
           meta: {
             diagnostics: [expect.objectContaining({ code: 'PSL.PRISMA7_VIEW_UNSUPPORTED' })],
-            packagesAdded: ['@prisma/orm-postgres', 'dotenv'],
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
           },
         },
       });
@@ -256,7 +256,7 @@ describe('init on the Prisma 7 fixture, end to end', () => {
       expect(readProjectFile('package.json')).toBe(fixtureFile('package.json.fixture'));
       expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(false);
       expect(existsSync(join(projectDir, 'src/prisma'))).toBe(false);
-      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
     },
     timeouts.coldTransformImport,
   );
