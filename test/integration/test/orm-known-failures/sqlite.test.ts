@@ -36,7 +36,7 @@ function withoutReturning(db: Client) {
 
 describe('SQLite ORM calls known to fail', () => {
   describe('a BigInt beyond the safe integer range', () => {
-    it.fails('is returned by the create that stores it', async () => {
+    it('is returned by the create that stores it', async () => {
       await withDatabase(async (db) => {
         expect(await db.orm.Counter.create({ id: 1, big: 2n ** 62n })).toEqual({
           id: 1,
@@ -45,7 +45,7 @@ describe('SQLite ORM calls known to fail', () => {
       });
     });
 
-    it.fails('is read back', async () => {
+    it('is read back', async () => {
       await withDatabase(async (db) => {
         await db.orm.Counter.createAndCount([{ id: 1, big: 2n ** 62n }]);
         expect(await db.orm.Counter.select('id', 'big').all()).toEqual([{ id: 1, big: 2n ** 62n }]);
