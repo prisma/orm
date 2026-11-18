@@ -28,12 +28,19 @@ export class FindByKeys extends StatementNode<Keyed> {
   readonly ast: SelectAst;
   readonly keyColumns: readonly ColumnMapping[];
   readonly owner: WrittenRowOwner;
+  readonly missing: Error | undefined;
 
-  constructor(ast: SelectAst, keyColumns: readonly ColumnMapping[], owner: WrittenRowOwner) {
+  constructor(
+    ast: SelectAst,
+    keyColumns: readonly ColumnMapping[],
+    owner: WrittenRowOwner,
+    missing?: Error,
+  ) {
     super();
     this.ast = ast;
     this.keyColumns = Object.freeze([...keyColumns]);
     this.owner = owner;
+    this.missing = missing;
     Object.freeze(this);
   }
 
@@ -54,16 +61,19 @@ export class FindByKeys extends StatementNode<Keyed> {
       parameters: KEYS_PER_STATEMENT * this.keyColumns.length,
       bytes: Number.POSITIVE_INFINITY,
     });
-    const { owner } = this;
+    const { owner, missing } = this;
     const statementFor = (chunk: readonly StorageRow[]) => this.#statementFor(chunk);
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
       for (const chunk of chunks) {
         const rows = await run.query(statementFor(chunk)).toArray();
         if (rows.length < chunk.length) {
-          throw ormError(
-            'ORM.MUTATION_ROW_MISSING',
-            `${owner.operation}() for model "${owner.modelName}" did not find the row it wrote`,
-            { meta: { operation: owner.operation, model: owner.modelName, phase: 'read-back' } },
+          throw (
+            missing ??
+            ormError(
+              'ORM.MUTATION_ROW_MISSING',
+              `${owner.operation}() for model "${owner.modelName}" did not find the row it wrote`,
+              { meta: { operation: owner.operation, model: owner.modelName, phase: 'read-back' } },
+            )
           );
         }
         yield* rows;
@@ -83,6 +93,7 @@ export class FindByKeys extends StatementNode<Keyed> {
       this.ast.withProjection(withColumns(this.returns, columns)),
       this.keyColumns,
       this.owner,
+      this.missing,
     );
   }
 }

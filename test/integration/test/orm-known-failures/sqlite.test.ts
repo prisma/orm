@@ -94,16 +94,46 @@ describe('SQLite ORM calls known to fail', () => {
   });
 
   describe('upsert on a variant whose key a row of another variant holds', () => {
-    it.fails('returns a row the variant holds', async () => {
+    it.each([
+      ['with RETURNING', (db: Client) => db.orm.Task],
+      ['without RETURNING', (db: Client) => withoutReturning(db).Task],
+    ])('is refused and leaves that row unchanged, %s', async (_path, tasks) => {
       await withDatabase(async (db) => {
         await db.orm.Task.variant('bug').create({ id: 1, title: 'Crash', severity: 'high' });
-        const chores = db.orm.Task.variant('chore');
-        const upserted = await chores.upsert({
-          create: { id: 1, title: 'Dishes', effort: 2 },
-          update: {},
-          conflictOn: { id: 1 },
+
+        await expect(
+          tasks(db)
+            .variant('chore')
+            .upsert({
+              create: { id: 1, title: 'Dishes', effort: 2 },
+              update: { title: 'Dishes' },
+              conflictOn: { id: 1 },
+            }),
+        ).rejects.toMatchObject({
+          code: 'ORM.MUTATION_ROW_MISSING',
+          message:
+            'upsert() on variant "Chore" of model "Task" found the conflict values (id) on a row of another variant, which it leaves unchanged',
         });
-        expect(await chores.whereUnique({ id: 1 }).first()).toEqual(upserted);
+        expect(await db.orm.Task.select('id', 'title', 'kind').all()).toEqual([
+          { id: 1, title: 'Crash', kind: 'bug' },
+        ]);
+      });
+    });
+
+    it('creates the row when no row holds the key and updates a row of the variant that does', async () => {
+      await withDatabase(async (db) => {
+        const chores = db.orm.Task.variant('chore').select('id', 'title', 'kind');
+        const upsert = (title: string) =>
+          chores.upsert({
+            create: { id: 1, title, effort: 2 },
+            update: { title },
+            conflictOn: { id: 1 },
+          });
+
+        expect({ created: await upsert('Dishes'), updated: await upsert('Laundry') }).toEqual({
+          created: { id: 1, title: 'Dishes', kind: 'chore' },
+          updated: { id: 1, title: 'Laundry', kind: 'chore' },
+        });
       });
     });
   });
