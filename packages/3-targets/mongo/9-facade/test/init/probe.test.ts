@@ -2,31 +2,41 @@ import type * as MongoDriver from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
 import { probeMongo } from '../../src/init/probe';
 
-function driverAnswering(buildInfo: Record<string, unknown>) {
+function driverAnswering(buildInfo: Record<string, unknown> | Error) {
   const close = vi.fn(async () => {});
   const constructed: unknown[][] = [];
+  const commands: unknown[] = [];
   class FakeClient {
     constructor(...args: unknown[]) {
       constructed.push(args);
     }
     async connect(): Promise<void> {}
     db() {
-      return { admin: () => ({ command: async () => buildInfo }) };
+      return {
+        admin: () => ({
+          command: async (command: unknown) => {
+            commands.push(command);
+            if (buildInfo instanceof Error) throw buildInfo;
+            return buildInfo;
+          },
+        }),
+      };
     }
     close = close;
   }
   const driver = { MongoClient: FakeClient } as unknown as Pick<typeof MongoDriver, 'MongoClient'>;
-  return { load: async () => driver, close, constructed };
+  return { load: async () => driver, close, constructed, commands };
 }
 
 describe('probeMongo', () => {
   it('reads the server version from buildInfo and closes the client', async () => {
-    const { load, close } = driverAnswering({ version: '8.0.4' });
+    const { load, close, commands } = driverAnswering({ version: '8.0.4' });
 
     await expect(probeMongo('mongodb://localhost:27017/db', load)).resolves.toEqual({
       kind: 'server-version',
       serverVersion: '8.0.4',
     });
+    expect(commands).toEqual([{ buildInfo: 1 }]);
     expect(close).toHaveBeenCalledTimes(1);
   });
 
@@ -38,6 +48,16 @@ describe('probeMongo', () => {
     expect(constructed).toEqual([
       ['mongodb://localhost:27017/db', { timeoutMS: 20_000, serverSelectionTimeoutMS: 20_000 }],
     ]);
+  });
+
+  it('says it could not read the version when the server refuses buildInfo', async () => {
+    const { load, close } = driverAnswering(new Error('not authorized on admin'));
+
+    await expect(probeMongo('mongodb://localhost:27017/db', load)).resolves.toEqual({
+      kind: 'version-unreadable',
+      detail: 'buildInfo failed: not authorized on admin',
+    });
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it('says the version could not be read when buildInfo has none', async () => {

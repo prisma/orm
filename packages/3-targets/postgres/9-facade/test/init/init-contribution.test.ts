@@ -93,10 +93,12 @@ describe('templates', () => {
     it('only imports from the facade package for TypeScript', () => {
       const schema = contribution.starterContract('typescript');
 
-      const imports = schema.match(/from '@internal\/[^']+'/g) ?? [];
-      expect(imports.length).toBeGreaterThan(0);
-      for (const importLine of imports) {
-        expect(importLine).toMatch(/from '@internal\/postgres(\/[^']+)?'/);
+      const specifiers = [
+        ...schema.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"]+)['"]/g),
+      ].map((match) => match[1]);
+      expect(specifiers.length).toBeGreaterThan(0);
+      for (const specifier of specifiers) {
+        expect(specifier).toMatch(/^@internal\/postgres(\/.+)?$/);
       }
     });
 
@@ -209,6 +211,16 @@ describe('templates', () => {
         expect(md).not.toContain('```prisma');
         expect(md).not.toMatch(/^model User \{/m);
       });
+    });
+  });
+
+  describe('rendering', () => {
+    it('inserts values as they are, even ones that look like placeholders or patterns', () => {
+      const schemaPath = 'src/cost$&$$/{{pkg}}/contract.prisma';
+
+      const md = quickReferenceFor('psl', schemaPath);
+
+      expect(md).toContain(schemaPath);
     });
   });
 

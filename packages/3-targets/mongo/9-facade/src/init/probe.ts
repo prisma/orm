@@ -37,7 +37,12 @@ export async function probeMongo(
   });
   await client.connect();
   try {
-    const buildInfo = await client.db().admin().command({ buildInfo: 1 });
+    let buildInfo: MongoDriver.Document;
+    try {
+      buildInfo = await client.db().admin().command({ buildInfo: 1 });
+    } catch (error) {
+      return { kind: 'version-unreadable', detail: `buildInfo failed: ${causeMessage(error)}` };
+    }
     const versionString = String(buildInfo['version'] ?? '');
     return versionString.length === 0
       ? { kind: 'version-unreadable', detail: 'buildInfo did not include a `version` field' }

@@ -14,7 +14,9 @@ class FakeClient {
     this.listeners.set(event, listener);
     return this;
   }
+  listenedWhileConnecting = false;
   async connect(): Promise<void> {
+    this.listenedWhileConnecting = this.listeners.has('error');
     if (connectError !== undefined) throw connectError;
   }
   readonly queries: unknown[] = [];
@@ -60,6 +62,18 @@ describe('probePostgres', () => {
     });
   });
 
+  it('reports a driver that is not installed', async () => {
+    const missing = Object.assign(new Error("Cannot find package 'pg'"), {
+      code: 'ERR_MODULE_NOT_FOUND',
+    });
+
+    await expect(
+      probePostgres('postgres://localhost:5432/db', async () => {
+        throw missing;
+      }),
+    ).resolves.toEqual({ kind: 'driver-missing', driver: 'pg', cause: "Cannot find package 'pg'" });
+  });
+
   it('says the version could not be read when the row holds none', async () => {
     versionRow = 'CockroachDB CCL v23.1';
 
@@ -91,6 +105,7 @@ describe('probePostgres', () => {
     await probePostgres('postgres://localhost:5432/db');
 
     expect(clients).toHaveLength(1);
+    expect(clients[0]?.listenedWhileConnecting).toBe(true);
     const errorListener = clients[0]?.listeners.get('error');
     expect(errorListener).toBeDefined();
     expect(() => errorListener?.(new Error('connection terminated unexpectedly'))).not.toThrow();

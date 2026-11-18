@@ -1,4 +1,5 @@
 import type { InitProbeResult } from '@internal/cli/init-contribution';
+import type pgDriver from 'pg';
 import type { QueryConfig } from 'pg';
 
 /**
@@ -19,8 +20,29 @@ export function parsePostgresVersion(versionString: string): string | undefined 
 /** How long the probe waits for the server to accept the connection, and then to answer. */
 const PROBE_TIMEOUT_MILLIS = 20_000;
 
-export async function probePostgres(databaseUrl: string): Promise<InitProbeResult> {
-  const pg = await import('pg');
+type LoadDriver = () => Promise<{ readonly default: typeof pgDriver }>;
+
+function isModuleNotFound(error: unknown): boolean {
+  return error instanceof Error && Reflect.get(error, 'code') === 'ERR_MODULE_NOT_FOUND';
+}
+
+export async function probePostgres(
+  databaseUrl: string,
+  loadDriver: LoadDriver = () => import('pg'),
+): Promise<InitProbeResult> {
+  let pg: { readonly default: typeof pgDriver };
+  try {
+    pg = await loadDriver();
+  } catch (error) {
+    if (isModuleNotFound(error)) {
+      return {
+        kind: 'driver-missing',
+        driver: 'pg',
+        cause: error instanceof Error ? error.message : String(error),
+      };
+    }
+    throw error;
+  }
   const client = new pg.default.Client({
     connectionString: databaseUrl,
     connectionTimeoutMillis: PROBE_TIMEOUT_MILLIS,
