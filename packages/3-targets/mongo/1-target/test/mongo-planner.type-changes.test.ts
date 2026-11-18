@@ -342,7 +342,7 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
           kind: 'typeChangeRefused',
           summary:
             'Cannot cast field "age" of model "User" in collection "people": model "Admin" stores it in the same collection',
-          why: 'Collection "people" stores several models and no discriminator tells their documents apart, so casting the field would cast it in the documents of "Admin" too. To change it in "User" documents only, move the models to separate collections, or carry out the change in a dataTransform operation of a migration.ts, with a filter that selects only their documents.',
+          why: 'Collection "people" stores several models and no discriminator tells their documents apart, so casting the field would cast it in the documents of "Admin" too. To change it in "User" documents only, move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.',
         },
       ]);
     });
@@ -481,6 +481,35 @@ describe('MongoMigrationPlanner, a field whose type changes', () => {
           'Cannot cast field "age" in collection "users": the collection stores several root models',
         ],
       ]);
+    });
+
+    it('finds no type change when a new root model of a shared collection sorts before the others', () => {
+      const note = closedSchema({ age: { bsonType: 'string' }, title: { bsonType: 'string' } });
+      const task = closedSchema({ age: { bsonType: 'string' }, done: { bsonType: 'bool' } });
+      const article = closedSchema({ age: { bsonType: 'int' } });
+      const destination = contract(
+        'to',
+        {
+          Article: { collection: 'items', fields: ['_id', 'age'], types: { _id: OBJECT_ID } },
+          Note: { collection: 'items', fields: ['_id', 'age', 'title'], types: { _id: OBJECT_ID } },
+          Task: { collection: 'items', fields: ['_id', 'age', 'done'], types: { _id: OBJECT_ID } },
+        },
+        { items: { jsonSchema: { bsonType: 'object', anyOf: [article, note, task] } } },
+      );
+
+      expect(
+        planned(
+          plan({
+            from: null,
+            to: destination,
+            schema: [
+              schemaCollection('items', {
+                jsonSchema: { bsonType: 'object', anyOf: [note, task] },
+              }),
+            ],
+          }),
+        ).dataLoss,
+      ).toEqual([]);
     });
 
     it("casts a variant's field in that variant's documents only, read from the validator's variants", () => {

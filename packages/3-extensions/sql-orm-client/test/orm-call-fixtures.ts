@@ -90,11 +90,15 @@ export function createActivityRuntime(options: ActivityRuntimeOptions = {}): {
         const index = call.transactions.push('open') - 1;
         return {
           ...recordingScope(call.statements),
+          signal: new AbortController().signal,
           commit: async () => {
             call.transactions[index] = 'committed';
           },
           rollback: async () => {
             call.transactions[index] = 'rolled-back';
+          },
+          transaction: async (): Promise<never> => {
+            throw new Error('transaction is not stubbed');
           },
         };
       };

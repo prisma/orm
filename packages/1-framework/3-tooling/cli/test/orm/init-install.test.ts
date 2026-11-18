@@ -228,103 +228,23 @@ describe('init installs', () => {
     timeouts.coldTransformImport,
   );
 
-  describe('the pnpm fallback', () => {
-    it(
-      'retries the pair with npm when pnpm leaks a workspace specifier',
-      async () => {
-        script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
+  it(
+    'runs a failed pnpm install once and reports it, whatever pnpm said',
+    async () => {
+      script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
 
-        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+      const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
 
-        expect(run.exitCode).toBe(0);
-        expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
-          'pnpm add @prisma/orm-postgres dotenv',
-          'npm add @prisma/orm-postgres dotenv',
-          'npm add -D prisma@latest @types/node',
-          'npm add -D @prisma/cli-engine@latest',
-        ]);
-        expect(run.events).toContainEqual(
-          expect.objectContaining({
-            kind: 'message',
-            severity: 'warn',
-            text: expect.stringContaining('package-lock.json'),
-          }),
-        );
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'keeps registry credentials out of the fallback warning',
-      async () => {
-        script = [
-          {
-            exitCode: 1,
-            stderr: `${PNPM_WORKSPACE_LEAK} https://alice:hunter2@registry.example.com/ //registry.npmjs.org/:_authToken=npm_realsecret`,
-          },
-        ];
-
-        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
-        const warnings = run.presented?.data;
-
-        expect(JSON.stringify(warnings)).not.toContain('hunter2');
-        expect(JSON.stringify(warnings)).not.toContain('npm_realsecret');
-        expect(warnings).toMatchObject({
-          warnings: expect.arrayContaining([expect.stringContaining('ERR_PNPM_WORKSPACE')]),
-        });
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'completes at exit 4 when npm fails too',
-      async () => {
-        script = [
-          { exitCode: 1, stderr: PNPM_WORKSPACE_LEAK },
-          { exitCode: 1, stderr: 'npm ERR! 404 Not Found' },
-        ];
-
-        const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
-
-        expect(run.exitCode).toBe(4);
-        expect(envelopeOf(run)).toMatchObject({
-          diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
-        });
-        expect(run.presented?.data).toMatchObject({
-          warnings: expect.arrayContaining([
-            expect.stringContaining('ERR_PNPM_WORKSPACE_PKG_NOT_FOUND'),
-          ]),
-        });
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'does not retry a pnpm failure it does not recognise',
-      async () => {
-        script = [{ exitCode: 1, stderr: 'EACCES: permission denied' }];
-
-        const run = await harness('pnpm').run([...scaffoldArgv(), '--json'], { cwd: projectDir });
-
-        expect(run.exitCode).toBe(4);
-        expect(calls).toHaveLength(1);
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'does not retry a manager other than pnpm',
-      async () => {
-        script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
-
-        const run = await harness('yarn').run(scaffoldArgv(), { cwd: projectDir });
-
-        expect(run.exitCode).toBe(4);
-        expect(calls).toHaveLength(1);
-      },
-      timeouts.coldTransformImport,
-    );
-  });
+      expect(run.exitCode).toBe(4);
+      expect(envelopeOf(run)).toMatchObject({
+        diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
+      });
+      expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
+        'pnpm add @prisma/orm-postgres dotenv',
+      ]);
+    },
+    timeouts.coldTransformImport,
+  );
 
   it(
     'installs the driver the Mongo package declares as a peer dependency',

@@ -113,7 +113,7 @@ describe('a generator on a Postgres column with a length', () => {
 });
 
 describe('a generator on a SQLite column with a length', () => {
-  it.each(['sql.String(5) @onCreate(uuid())', 'sql.String(3) @onCreate(nanoid())'])(
+  it.each(['sql.Varchar(5) @onCreate(uuid())', 'sql.Varchar(3) @onCreate(nanoid())'])(
     'takes %s, as SQLite does not limit the length',
     async (field) => {
       expect(await author('sqlite', field)).toMatchObject({ ok: true });

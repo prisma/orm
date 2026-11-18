@@ -13,6 +13,8 @@ const recorded = vi.hoisted(() => ({
     readonly values?: readonly unknown[];
   }>,
   connections: 0,
+  disposals: [] as unknown[],
+  rollbackFailure: undefined as Error | undefined,
 }));
 
 vi.mock('pg', () => {
@@ -27,6 +29,8 @@ vi.mock('pg', () => {
         recorded.statements.push(
           params === undefined ? { connection, text } : { connection, text, values: params },
         );
+        if (text === 'ROLLBACK' && recorded.rollbackFailure !== undefined)
+          throw recorded.rollbackFailure;
         return { rows: [], rowCount: 0 };
       },
     );
@@ -35,7 +39,7 @@ vi.mock('pg', () => {
     on = vi.fn().mockReturnThis();
     connect = vi.fn(async () => ({
       query: recordingQuery(++recorded.connections),
-      release: vi.fn(),
+      release: vi.fn((reason?: unknown) => recorded.disposals.push(reason)),
       on: vi.fn(),
     }));
     end = vi.fn().mockResolvedValue(undefined);
@@ -62,6 +66,14 @@ class ProfileCollection extends Collection<Contract, 'Profile'> {
 
 const contract = contractFromJson<Contract>(contractJson);
 
+function deferred() {
+  let resolve = () => {};
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 function underRole(
   role: string,
   statements: ReadonlyArray<readonly [string, readonly unknown[]] | readonly [string]>,
@@ -83,9 +95,52 @@ const selectByName = 'SELECT "id" AS "id" FROM "public"."profile" WHERE "usernam
 afterEach(() => {
   recorded.statements.length = 0;
   recorded.connections = 0;
+  recorded.disposals.length = 0;
+  recorded.rollbackFailure = undefined;
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe.each(['anon', 'service_role'] as const)('isolation options under %s', (role) => {
+  it('inherits timeout and destroys without rollback, role reset or release', async () => {
+    await using db = await supabase({
+      contract,
+      url: 'postgres://localhost/db',
+      verifyMarker: false,
+      jwtSecret: 'test-secret',
+      transactionOptions: { isolationLevel: 'Serializable', timeout: 10 },
+    });
+    const bound = role === 'anon' ? db.asAnon() : db.asServiceRole();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const entered = deferred();
+    const resume = deferred();
+    let late: (() => Promise<unknown>) | undefined;
+    const run = bound.transaction(
+      async (tx) => {
+        late = () =>
+          tx.execute(tx.raw.sql`UPDATE profile SET username = 'late'`.affectedCount().build());
+        entered.resolve();
+        await resume.promise;
+      },
+      { timeout: undefined },
+    );
+    const rejected = expect(run).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT' });
+    await entered.promise;
+    await vi.advanceTimersByTimeAsync(10);
+    await rejected;
+    if (late === undefined) throw new Error('Missing late operation');
+    await expect(late()).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_CLOSED' });
+    resume.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(recorded.statements).toEqual(
+      underRole(role, [['BEGIN ISOLATION LEVEL SERIALIZABLE']]).slice(0, 3),
+    );
+    expect(recorded.disposals).toEqual([
+      expect.objectContaining({ code: 'RUNTIME.TRANSACTION_TIMEOUT' }),
+    ]);
+    expect(vi.getTimerCount()).toBe(0);
+    await expect(bound.transaction(async () => 42, { timeout: null })).resolves.toBe(42);
+  });
   it.each([
     [undefined, undefined, 'BEGIN'],
     [{}, {}, 'BEGIN'],
@@ -126,6 +181,8 @@ describe.each(['anon', 'service_role'] as const)('isolation options under %s', (
   });
 
   it.each([
+    { timeout: 0 },
+    { timeout: 2147483648 },
     null,
     1,
     'Serializable',
@@ -160,6 +217,80 @@ describe.each(['anon', 'service_role'] as const)('isolation options under %s', (
 });
 
 describe('isolation across Supabase roots and user roles', () => {
+  it('retains ordinary callback-error rollback failure semantics with a configured timeout', async () => {
+    await using db = await supabase({
+      contract,
+      url: 'postgres://localhost/db',
+      verifyMarker: false,
+      jwtSecret: 'test-secret',
+    });
+    const failure = new Error('rollback failed');
+    recorded.rollbackFailure = failure;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const callbackError = new Error('callback failed');
+    const run = db.asAnon().transaction(
+      async () => {
+        throw callbackError;
+      },
+      { timeout: 1 },
+    );
+    const rejected = expect(run).rejects.toMatchObject({
+      code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
+      cause: callbackError,
+      details: { rollbackError: failure },
+    });
+    await vi.advanceTimersByTimeAsync(1);
+    await rejected;
+    expect(recorded.statements.map(({ text }) => text)).toEqual([
+      'SELECT set_config($1, $2, false)',
+      'SELECT set_config($1, $2, false)',
+      'BEGIN',
+      'ROLLBACK',
+    ]);
+    expect(recorded.disposals).toEqual([failure]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('includes delayed post-BEGIN role-wrapper setup without invoking an expired callback', async () => {
+    const entered = deferred();
+    const resume = deferred();
+    const original = roleRuntime.roleScope;
+    vi.spyOn(roleRuntime, 'roleScope').mockImplementation((...args) => {
+      const scope = original(...args);
+      const open = scope.connection.bind(scope);
+      vi.spyOn(scope, 'connection').mockImplementation(async () => {
+        const session = await open();
+        const begin = session.transaction.bind(session);
+        vi.spyOn(session, 'transaction').mockImplementation(async (...start) => {
+          const tx = await begin(...start);
+          entered.resolve();
+          await resume.promise;
+          return tx;
+        });
+        return session;
+      });
+      return scope;
+    });
+    await using db = await supabase({
+      contract,
+      url: 'postgres://localhost/db',
+      verifyMarker: false,
+      jwtSecret: 'test-secret',
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    const callback = vi.fn(async () => {});
+    const run = db.asAnon().transaction(callback, { timeout: 10 });
+    const rejected = expect(run).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT' });
+    await entered.promise;
+    await vi.advanceTimersByTimeAsync(10);
+    resume.resolve();
+    await rejected;
+    expect(callback).not.toHaveBeenCalled();
+    expect(recorded.statements).toEqual(underRole('anon', [['BEGIN']]).slice(0, 3));
+    expect(recorded.disposals).toEqual([
+      expect.objectContaining({ code: 'RUNTIME.TRANSACTION_TIMEOUT' }),
+    ]);
+  });
   it('applies selected isolation after JWT role setup on the same connection', async () => {
     const secret = 'test-secret';
     const claims = { role: 'authenticated', sub: 'user-1' };
@@ -204,8 +335,9 @@ describe('isolation across Supabase roots and user roles', () => {
         url: 'postgres://localhost/db',
         jwtSecret: 'test-secret',
         verifyMarker: false,
-        transactionOptions: { isolationLevel: 'Serializable' },
+        transactionOptions: { isolationLevel: 'Serializable', timeout: 1 },
       });
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
       const service = db.asServiceRole();
       expect('transaction' in service.supabase).toBe(false);
       expect(scopes).toHaveLength(2);
@@ -217,6 +349,8 @@ describe('isolation across Supabase roots and user roles', () => {
         });
         const tx = await activity.transaction?.(undefined);
         if (!tx) throw new Error('Expected transaction');
+        await vi.advanceTimersByTimeAsync(10);
+        expect(vi.getTimerCount()).toBe(0);
         await tx.commit();
         await activity.end({ outcome: 'succeeded' });
         expect(recorded.statements).toEqual(underRole('service_role', [['BEGIN'], ['COMMIT']]));

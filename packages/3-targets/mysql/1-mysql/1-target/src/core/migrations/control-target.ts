@@ -16,7 +16,6 @@ import { mysqlError } from '../errors';
 import { MysqlContractSerializer } from '../mysql-contract-serializer';
 import { diffMysqlSchema, mysqlContractToSchema } from './diff-database-schema';
 import { MysqlSchemaVerifier } from './mysql-schema-verifier';
-import { MYSQL_MIGRATION_MODULE } from './op-factory-call';
 import { createMysqlMigrationPlanner } from './planner';
 import type { MysqlPlanTargetDetails } from './planner-target-details';
 import { createMysqlMigrationRunner } from './runner';
@@ -37,13 +36,11 @@ type ControlTargetKeysMysqlBuilds =
   | 'createPlanner'
   | 'createRunner';
 
-/** What a target that extends MySQL gives the control target factory: its descriptor meta, which carries its target id and session settings, and the facade module its `migration.ts` files import from. */
 export interface MysqlControlTargetOptions<TargetId extends string> {
   readonly descriptorMeta: Omit<
     SqlControlTargetDescriptor<TargetId, MysqlPlanTargetDetails>,
     ControlTargetKeysMysqlBuilds
   >;
-  readonly migrationModule: string;
 }
 
 /** The control target of MySQL, or of a target that extends it, which reuses MySQL's planner, runner, schema verifier and contract serializer under its own target id. */
@@ -52,10 +49,7 @@ export function createMysqlControlTargetDescriptor<TargetId extends string = 'my
 ): SqlControlTargetDescriptor<TargetId, MysqlPlanTargetDetails> {
   setFallbackTemporal(fallbackTemporal);
   const { descriptorMeta } = options;
-  const migrationTarget = {
-    targetId: descriptorMeta.targetId,
-    migrationModule: options.migrationModule,
-  };
+  const migrationTarget = { targetId: descriptorMeta.targetId };
   return {
     ...descriptorMeta,
     contractSerializer: new MysqlContractSerializer(),
@@ -77,7 +71,7 @@ export function createMysqlControlTargetDescriptor<TargetId extends string = 'my
         if (!isSqlContract(contract)) {
           throw mysqlError(
             'CONTRACT.TARGET_MISMATCH',
-            'The MySQL target received a contract that is not a SQL contract.',
+            'The MySQL or MariaDB control target received a contract that is not a SQL contract.',
           );
         }
         return mysqlContractToSchema(contract, sqlTypeLookupsOf(frameworkComponents));
@@ -97,7 +91,6 @@ export function createMysqlControlTargetDescriptor<TargetId extends string = 'my
 
 const mysqlControlTargetDescriptor = createMysqlControlTargetDescriptor({
   descriptorMeta: mysqlTargetDescriptorMeta,
-  migrationModule: MYSQL_MIGRATION_MODULE,
 });
 
 export default mysqlControlTargetDescriptor;

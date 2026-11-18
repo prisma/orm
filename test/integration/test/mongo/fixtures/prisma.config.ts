@@ -5,6 +5,7 @@ import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { ok } from '@internal/utils/result';
 import { definePrismaConfig } from '@prisma/cli-engine';
+import { workspaceTypesModule } from '@repo/test-utils';
 import { contract } from './contract';
 
 export default definePrismaConfig({
@@ -18,6 +19,7 @@ export default definePrismaConfig({
         load: async () => ok(contract as Contract),
       },
       output: 'generated/contract.json',
+      typesModule: workspaceTypesModule.mongo,
     },
   }),
 });

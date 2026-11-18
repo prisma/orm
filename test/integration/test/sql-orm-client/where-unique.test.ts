@@ -1,12 +1,18 @@
 import { Collection, createCollectionTables, createModelAccessor } from '@internal/sql-orm-client';
-import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { Char } from '@internal/target-postgres/codec-types';
 import { describe, expect, it } from 'vitest';
 import { withReturningCapability } from './collection-fixtures';
-import { getTestContext, getTestContract, type TestContract } from './helpers';
+import {
+  contextFor,
+  getTestContext,
+  getTestContract,
+  type IncludeStrategy,
+  includeStrategies,
+} from './helpers';
 import {
   createReturningPostsCollection,
   createReturningUsersCollection,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -21,9 +27,11 @@ import {
 const ROLE_ADMIN = 'role-admin';
 const ROLE_EDITOR = 'role-editor';
 
-function createReturningUserRolesCollection(runtime: PgIntegrationRuntime) {
-  const contract = withReturningCapability(getTestContract());
-  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+function createReturningUserRolesCollection(
+  runtime: PgIntegrationRuntime,
+  strategy: IncludeStrategy,
+) {
+  const context = contextFor(withReturningCapability(getTestContract()), strategy);
   return new Collection({ runtime, context }, 'UserRole', { namespaceId: 'public' });
 }
 
@@ -57,12 +65,16 @@ function readUserRoles(runtime: PgIntegrationRuntime) {
   );
 }
 
-describe('integration/whereUnique', () => {
+describe.each(includeStrategies)('integration/whereUnique (%s)', (strategy) => {
   it(
     'first() returns the row a primary key or a unique constraint names',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
+        const users = createReturningUsersCollection(runtime, strategy).select(
+          'id',
+          'name',
+          'email',
+        );
         await seedTwoUsers(runtime);
 
         const byId = await users.whereUnique({ id: 2 }).first();
@@ -81,8 +93,12 @@ describe('integration/whereUnique', () => {
     'firstOrThrow() returns the row the key names and rejects, as after where(), when no row has the key',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
-        const userRoles = createReturningUserRolesCollection(runtime).select(
+        const users = createReturningUsersCollection(runtime, strategy).select(
+          'id',
+          'name',
+          'email',
+        );
+        const userRoles = createReturningUserRolesCollection(runtime, strategy).select(
           'userId',
           'roleId',
           'level',
@@ -124,7 +140,11 @@ describe('integration/whereUnique', () => {
     'update() changes and returns only the row the key names',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
+        const users = createReturningUsersCollection(runtime, strategy).select(
+          'id',
+          'name',
+          'email',
+        );
         await seedTwoUsers(runtime);
 
         const updated = await users.whereUnique({ id: 2 }).update({ name: 'Robert' });
@@ -143,7 +163,11 @@ describe('integration/whereUnique', () => {
     'delete() removes and returns only the row the key names',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
+        const users = createReturningUsersCollection(runtime, strategy).select(
+          'id',
+          'name',
+          'email',
+        );
         await seedTwoUsers(runtime);
 
         const deleted = await users.whereUnique({ email: 'bob@example.com' }).delete();
@@ -159,7 +183,7 @@ describe('integration/whereUnique', () => {
     'first() returns the row a compound key names',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const userRoles = createReturningUserRolesCollection(runtime).select(
+        const userRoles = createReturningUserRolesCollection(runtime, strategy).select(
           'userId',
           'roleId',
           'level',
@@ -179,7 +203,7 @@ describe('integration/whereUnique', () => {
     'update() changes and returns only the row a compound key names',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const userRoles = createReturningUserRolesCollection(runtime).select(
+        const userRoles = createReturningUserRolesCollection(runtime, strategy).select(
           'userId',
           'roleId',
           'level',
@@ -205,7 +229,7 @@ describe('integration/whereUnique', () => {
     'delete() removes and returns only the row a compound key names',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const userRoles = createReturningUserRolesCollection(runtime).select(
+        const userRoles = createReturningUserRolesCollection(runtime, strategy).select(
           'userId',
           'roleId',
           'level',
@@ -228,7 +252,11 @@ describe('integration/whereUnique', () => {
     'a following where() that excludes the row gives null and writes nothing',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
+        const users = createReturningUsersCollection(runtime, strategy).select(
+          'id',
+          'name',
+          'email',
+        );
         await seedTwoUsers(runtime);
         const excluded = users.whereUnique({ id: 1 }).where({ name: 'Bob' });
 
@@ -248,7 +276,11 @@ describe('integration/whereUnique', () => {
     'a following where() that keeps the row returns it',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
+        const users = createReturningUsersCollection(runtime, strategy).select(
+          'id',
+          'name',
+          'email',
+        );
         await seedTwoUsers(runtime);
 
         const found = await users.whereUnique({ id: 1 }).where({ name: 'Alice' }).first();
@@ -263,18 +295,20 @@ describe('integration/whereUnique', () => {
     'first() with include() returns the row with its relation',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const posts = createReturningPostsCollection(runtime);
+        const posts = createReturningPostsCollection(runtime, strategy);
         await seedTwoUsers(runtime);
         await seedPosts(runtime, [
           { id: 10, title: 'First', userId: 1, views: 5 },
           { id: 11, title: 'Second', userId: 2, views: 7 },
         ]);
 
+        runtime.resetExecutions();
         const found = await posts
           .whereUnique({ id: 11 })
           .select('id', 'title')
           .include('author', (author) => author.select('id', 'name'))
           .first();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(found).toEqual({ id: 11, title: 'Second', author: { id: 2, name: 'Bob' } });
       });
@@ -286,7 +320,7 @@ describe('integration/whereUnique', () => {
     'first() with include() of a to-many relation returns the row with its related rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
+        const users = createReturningUsersCollection(runtime, strategy);
         await seedTwoUsers(runtime);
         await seedPosts(runtime, [
           { id: 10, title: 'First', userId: 1, views: 5 },
@@ -294,11 +328,13 @@ describe('integration/whereUnique', () => {
           { id: 12, title: 'Third', userId: 2, views: 9 },
         ]);
 
+        runtime.resetExecutions();
         const found = await users
           .whereUnique({ email: 'alice@example.com' })
           .select('id', 'name')
           .include('posts', (posts) => posts.select('id', 'title').orderBy((p) => p.id.asc()))
           .first();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(found).toEqual({
           id: 1,
@@ -317,8 +353,12 @@ describe('integration/whereUnique', () => {
     'delete() after a key whose value is undefined rejects and removes nothing',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
-        const userRoles = createReturningUserRolesCollection(runtime).select(
+        const users = createReturningUsersCollection(runtime, strategy).select(
+          'id',
+          'name',
+          'email',
+        );
+        const userRoles = createReturningUserRolesCollection(runtime, strategy).select(
           'userId',
           'roleId',
           'level',
@@ -359,8 +399,12 @@ describe('integration/whereUnique', () => {
     'delete() after a key whose value is a query expression rejects and removes nothing',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
-        const userRoles = createReturningUserRolesCollection(runtime).select(
+        const users = createReturningUsersCollection(runtime, strategy).select(
+          'id',
+          'name',
+          'email',
+        );
+        const userRoles = createReturningUserRolesCollection(runtime, strategy).select(
           'userId',
           'roleId',
           'level',
@@ -413,8 +457,12 @@ describe('integration/whereUnique', () => {
     'a key that matches no row gives null and writes nothing',
     async () => {
       await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime).select('id', 'name', 'email');
-        const userRoles = createReturningUserRolesCollection(runtime).select(
+        const users = createReturningUsersCollection(runtime, strategy).select(
+          'id',
+          'name',
+          'email',
+        );
+        const userRoles = createReturningUserRolesCollection(runtime, strategy).select(
           'userId',
           'roleId',
           'level',

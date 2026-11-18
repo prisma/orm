@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
 import {
   Binary,
   BSON,
@@ -40,6 +41,7 @@ const scalars: ReadonlyArray<readonly [string, BsonValue]> = [
   ['boolean', true],
   ['null', null],
   ['Date', new Date(0)],
+  ['Date from another realm', runInNewContext('new Date(0)')],
   ['ObjectId', new ObjectId('64b7f0c2a1b2c3d4e5f60718')],
   ['Long', Long.fromBigInt(2n ** 60n)],
   ['Decimal128', Decimal128.fromString('1234.5600')],

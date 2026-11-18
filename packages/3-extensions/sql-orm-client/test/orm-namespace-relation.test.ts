@@ -67,7 +67,13 @@ const twoNamespaceContract = blindCast<Contract<SqlStorage>, 'hand-built multi-n
   targetFamily: 'sql',
   capabilities: {
     returning: { enabled: true },
-    sql: { jsonAgg: true, returning: true, lateral: true },
+    sql: {
+      jsonAgg: true,
+      outerReferencesInDerivedTables: true,
+      jsonAggWithoutTruncation: true,
+      returning: true,
+      lateral: true,
+    },
     postgres: { jsonAgg: true, returning: true, lateral: true },
   },
   domain: {

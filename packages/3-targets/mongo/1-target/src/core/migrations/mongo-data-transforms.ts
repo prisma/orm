@@ -11,8 +11,10 @@ import {
   collectionOfModel,
   type MongoContract,
   ownStoredNameOf,
+  type SelectedVariant,
+  selectedVariantOf,
   validatorDocumentShapesOf,
-  variantFilterOf,
+  variantFilter,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import {
@@ -23,7 +25,6 @@ import {
 import type { PlannedRewrite } from './mongo-rewrite-refusals';
 import {
   collectionControlPolicy,
-  EMBEDDED_MODEL_WHY,
   embeddedModelReason,
   type ModelMatchInput,
   modelAt,
@@ -68,8 +69,11 @@ function refuse(
   };
 }
 
-function withFilter(filter: Document | undefined, condition: Document): Document {
-  return filter === undefined ? condition : { $and: [filter, condition] };
+const NESTED_CONVERT_WHY =
+  'A --convert statement converts a field of a model or a variant. Converting a field inside a value object or an embedded model is not a statement on any database in this release: rewrite the values yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, and leave out this statement.';
+
+function withVariant(variant: SelectedVariant | undefined, condition: Document): Document {
+  return variant === undefined ? condition : { $and: [variantFilter(variant), condition] };
 }
 
 /** Why the plan cannot rewrite a field of the destination contract, if it cannot. */
@@ -99,7 +103,7 @@ export function convertTransform(
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): StatementTransform {
   const embedded = embeddedModelReason(contracts.contract, statement.field);
-  if (embedded !== undefined) return refuse(statement, embedded, EMBEDDED_MODEL_WHY, contracts);
+  if (embedded !== undefined) return refuse(statement, embedded, NESTED_CONVERT_WHY, contracts);
   const unrewritable = unrewritableReason(contracts.contract, statement.field);
   if (unrewritable !== undefined) {
     return refuse(statement, unrewritable, 'Leave out this statement.', contracts);
@@ -116,14 +120,15 @@ export function convertTransform(
     call: new DataTransformCall(
       fieldStatementText(contracts.contract, statement.field),
       change.collection,
-      withFilter(change.filter, notOfType),
+      withVariant(change.variant, notOfType),
     ),
     rewrite: {
       kind: 'conversion',
       collection: change.collection,
       field: change.field,
-      filter: change.filter,
+      variant: change.variant,
       model: change.destination,
+      storedKey: undefined,
     },
   };
 }
@@ -188,8 +193,6 @@ export function backfillTransform(
       contracts,
     );
   }
-  const embedded = embeddedModelReason(input.contract, statement.field);
-  if (embedded !== undefined) return refuse(statement, embedded, EMBEDDED_MODEL_WHY, contracts);
   const unrewritable = unrewritableReason(input.contract, statement.field);
   if (unrewritable !== undefined) {
     return refuse(statement, unrewritable, 'Leave out this statement.', contracts);
@@ -220,20 +223,21 @@ export function backfillTransform(
       contracts,
     );
   }
-  const variant = variantFilterOf(input.contract.domain, statement.field);
+  const variant = selectedVariantOf(input.contract.domain, statement.field);
   return {
     kind: 'transform',
     call: new DataTransformCall(
       fieldStatementText(input.contract, statement.field),
       collection,
-      withFilter(variant, documentsMissingOrNull(storedName)),
+      withVariant(variant, documentsMissingOrNull(storedName)),
     ),
     rewrite: {
       kind: 'backfill',
       collection,
       field: storedName,
-      filter: variant,
+      variant,
       model: statement.field,
+      storedKey: undefined,
     },
   };
 }

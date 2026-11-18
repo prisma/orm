@@ -6,7 +6,7 @@ import type { CodecDescriptorRegistry } from '@internal/sql-relational-core/quer
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
-import { validateContractCodecMappings } from '../src/codecs/validation';
+import { extractCodecIds, validateContractCodecMappings } from '../src/codecs/validation';
 
 const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
   'ext/missing@1': 'ext/missing',
@@ -76,5 +76,45 @@ describe('validateContractCodecMappings', () => {
     expect(() => validateContractCodecMappings(registryWith('pg/text@1'), contract)).toThrow(
       /analytics\.docs\.value \(ext\/missing@1\)/,
     );
+  });
+
+  it('passes when a namespace has no table entries at all', () => {
+    const contract = contractWithNamespaces({
+      app: createTestSqlNamespace({ id: 'app', entries: {} }),
+    });
+    expect(() => validateContractCodecMappings(registryWith(), contract)).not.toThrow();
+  });
+});
+
+describe('extractCodecIds', () => {
+  it('returns an empty set for a contract with no tables', () => {
+    const contract = contractWithNamespaces({
+      app: createTestSqlNamespace({ id: 'app', entries: {} }),
+    });
+    expect(extractCodecIds(contract)).toEqual(new Set());
+  });
+
+  it('collects codec ids across all columns and tables', () => {
+    const contract = contractWithNamespaces({
+      app: createTestSqlNamespace({
+        id: 'app',
+        entries: { table: { docs: tableWithColumn('pg/text@1') } },
+      }),
+    });
+    expect(extractCodecIds(contract)).toEqual(new Set(['pg/text@1']));
+  });
+
+  it('deduplicates repeated codec ids across namespaces', () => {
+    const contract = contractWithNamespaces({
+      app: createTestSqlNamespace({
+        id: 'app',
+        entries: { table: { docs: tableWithColumn('pg/text@1') } },
+      }),
+      analytics: createTestSqlNamespace({
+        id: 'analytics',
+        entries: { table: { events: tableWithColumn('pg/text@1') } },
+      }),
+    });
+    expect(extractCodecIds(contract)).toEqual(new Set(['pg/text@1']));
   });
 });

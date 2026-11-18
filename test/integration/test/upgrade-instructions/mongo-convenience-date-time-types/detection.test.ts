@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
 const GUIDES = {
-  app: 'upgrade-instructions/pending/mongo-convenience-date-time-types/app/instructions.md',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md',
   extension:
-    'upgrade-instructions/pending/mongo-convenience-date-time-types/extension/instructions.md',
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md',
 } as const;
 
 const mongoSchema = (field: string) =>

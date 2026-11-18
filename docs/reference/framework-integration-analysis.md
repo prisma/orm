@@ -126,7 +126,9 @@ Next.js (11.2M downloads/week) and Remix (1.1M) use React Server Components. Thi
 
 - The **ORM client** (`orm()`) is a Proxy that lazily caches Collection instances in a `Map` and holds a reference to the runtime. Each query execution goes through `acquireRuntimeScope()` which borrows a connection, executes, and releases.
 
-- **Mutations** of more than one statement run in a transaction that the mutation graph runner opens beneath the call's `orm-call` activity — open transaction, execute statements, commit/rollback. Inherently stateful and connection-scoped.
+- **Mutations** of more than one statement run in a transaction that the statement graph runner opens beneath the call's `orm-call` activity — open transaction, execute statements, commit/rollback. Inherently stateful and connection-scoped.
+
+- **Reads** of more than one statement, such as a read whose includes load with one query per relation where the database cannot run the one-query include, open no transaction: each statement borrows and releases a connection like any read.
 
 ### How RSC exposes the statefulness
 
@@ -134,7 +136,7 @@ In RSC, multiple Server Components render **concurrently within the same request
 
 **Reads in parallel Server Components**: Multiple components calling `db.users.all()` and `db.posts.all()` concurrently should be fine — each `acquireRuntimeScope()` borrows and releases a connection independently. The statefulness is scoped to the connection lifetime, not the ORM client instance.
 
-**Server Actions (mutations)**: Run sequentially (one at a time per request in Next.js). The mutation graph runner handles the transaction lifecycle of a mutation automatically. Should work, but the runtime's state must be safe for concurrent reads happening alongside.
+**Server Actions (mutations)**: Run sequentially (one at a time per request in Next.js). The statement graph runner handles the transaction lifecycle of a mutation automatically. Should work, but the runtime's state must be safe for concurrent reads happening alongside.
 
 **Transactions across components**: If a user wants a transaction spanning operations in different Server Components, the current API has no way to express this — and shouldn't. Transactions should be scoped to a single logical operation, not spread across UI components.
 
@@ -299,7 +301,7 @@ All meta-frameworks enforce a server/client boundary. Prisma 8's runtime package
 
 ### NestJS dependency injection
 
-NestJS (~5M/week) is the only framework that structurally requires a DI wrapper — a `PrismaNextModule` with `forRoot()` configuration and an injectable provider. This is trivial to build (see [Appendix A: NestJS integration pattern](#nestjs-integration-pattern)), but it does need to be published as a package.
+NestJS (~5M/week) is the only framework that structurally requires a DI wrapper — a `PrismaModule` with `forRoot()` configuration and an injectable provider. This is trivial to build (see [Appendix A: NestJS integration pattern](#nestjs-integration-pattern)), but it does need to be published as a package.
 
 ---
 
@@ -402,7 +404,7 @@ NestJS is the only framework that structurally requires a wrapper package:
 
 ```typescript
 @Module({
-  imports: [PrismaNextModule.forRoot({ contract, url: process.env['DATABASE_URL']! })],
+  imports: [PrismaModule.forRoot({ contract, url: process.env['DATABASE_URL']! })],
 })
 export class AppModule {}
 

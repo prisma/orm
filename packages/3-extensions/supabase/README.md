@@ -32,19 +32,11 @@ Compose the pack into your application contract via `extensions`. The pack's con
 
 ```ts
 // prisma.config.ts
-import { defineConfig } from '@internal/cli/config-types';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import sql from '@internal/family-sql/control';
-import postgres from '@internal/target-postgres/control';
-import postgresPackRef from '@internal/target-postgres/pack';
-import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { defineConfig } from '@internal/postgres/config';
 import supabasePack from '@internal/extension-supabase/pack';
 
 export default defineConfig({
-  family: sql,
-  target: postgres,
-  adapter: postgresAdapter,
-  contract: prismaContract('./src/contract.prisma', { target: postgresPackRef }),
+  contract: './src/contract.prisma',
   extensions: [supabasePack],
 });
 ```
@@ -108,6 +100,8 @@ await userDb.transaction(async (tx) => {
 ```
 
 Import `{ supabase, IsolationLevel }` from `@prisma/orm-extension-supabase/runtime`; the constant object is the exact PostgreSQL object and string literals remain accepted. Callback isolation uses PostgreSQL's `PostgresTransactionOptions`: set `transactionOptions: { isolationLevel: IsolationLevel.RepeatableRead }` on `supabase(...)`, or pass `{ isolationLevel: IsolationLevel.Serializable }` as the second argument to a role-bound `transaction(fn, options)`. Supported levels are `ReadUncommitted`, `ReadCommitted`, `RepeatableRead`, and `Serializable`; PostgreSQL treats ReadUncommitted as ReadCommitted. Omitted or undefined local levels inherit the factory default; without either, the database default applies. Invalid options reject before role-session acquisition. Role/claims setup and BEGIN use the same connection. Defaults affect callback transactions only: implicit ORM transactions on either root and manual role sessions do not inherit them, and the `.supabase` secondary root still has no callback transaction API.
+
+Callback options also accept `timeout` defaults and overrides independently of isolation. The clock starts at successful BEGIN, after role/claims binding. Expiry destroys the session without rollback, role reset or release for reuse. Local `null` disables an inherited deadline. See [callback timeouts](../../../docs/reference/transaction-options.md#timeout).
 
 A prepared statement runs on what it is given. `ps.query(roleBound, params)` runs under that client's role, and `ps.query(tx, params)` runs inside the transaction. Preparing sends nothing to the database.
 

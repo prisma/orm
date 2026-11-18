@@ -16,8 +16,9 @@ import { runWrittenFile } from './runner-failure-advice';
 
 /**
  * The planner's refusal as the CLI reports it. When a conflict can be written by hand, its next
- * action prints the plan to write it in: the run's statements without the ones the conflict leaves
- * out, from the contract the database is at when that is known.
+ * actions are the conflicts' own advice, which says what to write, then the plan to write it in:
+ * the run's statements without the ones the conflict leaves out, from the contract the database is
+ * at when that is known.
  */
 export function planningRefusedError(
   conflicts: readonly MigrationPlannerConflict[],
@@ -52,10 +53,11 @@ export function planningRefusedError(
   const action = chooseAction(
     `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with \`${plan}\`, add the rewrites the message describes to the migration.ts it writes, ${runWrittenFile(context.invocation)}`,
   );
+  const reasons = conflicts.flatMap(({ why }) => (why === undefined ? [] : [why]));
   return new ActionableCliError(refused.code, refused.message, {
     why: refused.why,
     fix: refused.fix ?? action.label,
-    nextActions: [action],
+    nextActions: [...(reasons.length === 0 ? [] : [chooseAction(reasons.join('\n'))]), action],
     ...ifDefined('meta', refused.meta),
     ...ifDefined('docsUrl', refused.docsUrl),
   });

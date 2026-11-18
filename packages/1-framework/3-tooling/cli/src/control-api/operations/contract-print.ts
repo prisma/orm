@@ -1,4 +1,4 @@
-import type { ContractSourceDiagnostic, PrismaNextConfig } from '@internal/config/config-types';
+import type { ContractSourceDiagnostic, PrismaConfig } from '@internal/config/config-types';
 import type { PslSourceSettings } from '@internal/framework-components/control';
 import { createControlStack, hasPslContractBuild } from '@internal/framework-components/control';
 import { printPsl } from '@internal/psl-printer';
@@ -7,10 +7,10 @@ import { errorRuntime } from '../../utils/cli-errors';
 import { loadContractSourceWithStack, withWarningFindings } from './load-contract-source';
 import { validateLoadedContract } from './validate-loaded-contract';
 
-type ContractConfig = NonNullable<PrismaNextConfig['contract']>;
+type ContractConfig = NonNullable<PrismaConfig['contract']>;
 
 export interface ContractPrintOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly contractConfig: ContractConfig;
   /** The line under the `// use prisma-8` marker saying where the file came from. */
   readonly description: string;

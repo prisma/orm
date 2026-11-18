@@ -819,7 +819,7 @@ model User {
     const incompleteCallResult = interpretSqlContract(
       `model User {
   id Int @id
-  name sql.String(
+  name sql.Varchar(
 }
 `,
       {
@@ -836,7 +836,7 @@ model User {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_UNRESOLVED_REFERENCE',
-          message: 'Cannot find type "sql.String"',
+          message: 'Cannot find type "sql.Varchar"',
         }),
       ]),
     );

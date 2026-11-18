@@ -15,8 +15,8 @@ const contract = defineContract({ enums: { Level } }, ({ field, model, type, gen
     Reading: model('Reading', {
       fields: {
         id: field.column({ codecId: 'sqlite/integer@1' }).id(),
-        label: field.column(type.sql.String(50)),
-        note: field.column(type.sql.String(50)).optional(),
+        label: field.column(type.sql.Varchar(50)),
+        note: field.column(type.sql.Varchar(50)).optional(),
         count: field.column(type.BigIntNumber()),
         seen: field.column(type.DateTime()),
         score: field.column({ codecId: 'sqlite/real@1' }),

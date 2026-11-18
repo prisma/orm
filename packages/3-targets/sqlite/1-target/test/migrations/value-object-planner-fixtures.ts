@@ -15,6 +15,7 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { sqliteContractToSchema } from '../../src/core/migrations/diff-database-schema';
 import { createSqliteMigrationPlanner } from '../../src/core/migrations/planner';
 import { sqliteCreateNamespace } from '../../src/core/sqlite-unbound-database';
@@ -200,7 +201,7 @@ export function conflictsOf(result: ReturnType<typeof plan>) {
 }
 
 export function renderedCalls(result: ReturnType<typeof plan>): readonly string[] {
-  const rendered = succeeded(result).plan.renderTypeScript((specifier) => specifier);
+  const rendered = succeeded(result).plan.renderTypeScript(workspaceMigrationModule.sqlite);
   return rendered.split('\n').flatMap((line) => {
     const call = /this\.(renameStoredKey|removeStoredKey|fillStoredKey)\(.*\)/.exec(line);
     return call === null ? [] : [call[0]];

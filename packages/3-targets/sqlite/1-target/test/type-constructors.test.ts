@@ -25,8 +25,8 @@ describe('the type constructors the SQLite target contributes', () => {
     expect(Object.keys(sqliteAuthoringTypes)).toEqual(['sql', 'BigIntNumber', 'temporal']);
   });
 
-  it('contributes the family’s sql.String, whose length is a value of sqlite/real', () => {
-    expect(sqliteAuthoringTypes.sql.String.args).toEqual([
+  it('contributes the family’s sql.Varchar, whose length is a value of sqlite/real', () => {
+    expect(sqliteAuthoringTypes.sql.Varchar.args).toEqual([
       { kind: 'value', dataType: 'sqlite/real', name: 'length' },
     ]);
   });

@@ -107,7 +107,7 @@ Capabilities are a JSON-serializable object with stable key ordering:
 - **Unknown schema version**: Warn and treat unknown keys as opaque, but do not assume capabilities exist
 - **Missing critical key**: Assume the most conservative default, e.g. `ddl.transactional: false`, and allow compile profile to reject if it cannot provide a safe lowering
 - **Runtime mismatch**: If the connection rotates to a different `profileHash` mid-process, the runtime must invalidate compiled outputs and recompile
-- **Degraded capabilities**: Compile profile may choose a fallback lowering or return a deterministic error with a suggested capability requirement
+- **Degraded capabilities**: Compile profile may choose a fallback lowering or return a deterministic error with a suggested capability requirement. The ORM client, which may run several statements for one call, chooses how to load includes from capabilities: the one-query include where the contract's `sql` group reports `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`, otherwise one query per relation ([ADR 164](ADR%20164%20-%20Repository%20Layer.md))
 
 ## Versioning
 

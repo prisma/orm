@@ -4,16 +4,8 @@
  * exactly one published `@prisma/orm-*` shell: the internal root export maps
  * to `@prisma/<shell>/<entry>` and each internal subpath `./x` maps to
  * `@prisma/<shell>/<entry>/x`.
- *
- * Consumed by the shell build (`@repo/tsdown/shell-build`), by the
- * emitters' import-root resolution (`./import-roots`), and later by the
- * publish-surface lint.
  */
 
-/**
- * How an application acquires a shell, which decides whether emitted code may
- * name it. See `directDependencyShells` in `./import-roots`.
- */
 export type ShellKind =
   /** Installed directly only by a decomposed application. */
   | 'platform'
@@ -341,6 +333,11 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           name: '@internal/type-implementations',
           entry: 'type-implementations',
         },
+        {
+          dir: 'packages/3-targets/0-shared/target-package-config',
+          name: '@internal/target-package-config',
+          entry: 'target-package-config',
+        },
       ],
     },
   ],
@@ -403,14 +400,6 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           dir: 'packages/1-framework/3-tooling/vite-plugin-contract-emit',
           name: '@internal/vite-plugin-contract-emit',
           entry: 'vite-plugin-contract-emit',
-        },
-        // This table itself. Emission resolves generated import specifiers
-        // through it at run time, so the toolchain carries it rather than
-        // duplicating a copy of the mapping wherever a resolver is built.
-        {
-          dir: 'packages/0-shared/publish-surface',
-          name: '@internal/publish-surface',
-          entry: 'publish-surface',
         },
       ],
       copy: ['packages/1-framework/3-tooling/cli/dist/*.md'],
@@ -752,6 +741,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           'rls-canonicalize',
           'runtime',
           'schema-ir-annotations',
+          'server-version',
           'sql-utils',
           'types',
         ],
@@ -811,12 +801,14 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: '',
         },
       ],
-      reexports: facadeContractReexports({
+      reexports: facadeReexports({
         family: '@internal/sql-contract',
         familyPack: '@internal/family-sql',
+        runtime: '@internal/sql-runtime',
         target: '@internal/target-mariadb',
         adapter: '@internal/adapter-mariadb',
         driver: '@internal/driver-mariadb',
+        queryBuilders: SQL_QUERY_REEXPORTS,
       }),
     },
   ],
@@ -843,6 +835,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           'migration',
           'pack',
           'runtime',
+          'server-version',
         ],
         adapter: '@internal/adapter-mongo',
         driver: '@internal/driver-mongo',

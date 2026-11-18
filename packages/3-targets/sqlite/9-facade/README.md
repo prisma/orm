@@ -95,6 +95,12 @@ await control.dbUpdate({
 
 Re-exports all migration operation helpers from `@internal/target-sqlite/migration` (`Migration`, `MigrationCLI`, `col`, `lit`, `fn`, `primaryKey`, `foreignKey`, `unique`, `addColumn`, `dropTable`, `createIndex`, `dropIndex`, `dropColumn`, `recreateTable`, `dataTransform`, `placeholder`, `rawSql`). `createTable` is no longer a free export — it is a protected method on `Migration`; call it as `this.createTable({...})` inside `get operations()`.
 
+`defineConfig` names this module in `migrations.module`, the module rendered migration files import from.
+
+### `@internal/sqlite/contract-types`
+
+Re-exports, as types only, the framework contract types, the SQL family contract types and the SQLite codec types: everything a generated `contract.d.ts` imports. `JsonValue` is the SQLite codec types one. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-sqlite/contract-types`.
+
 ### `@internal/sqlite/runtime`
 
 Composes the SQLite execution stack and returns typed query roots (`db.sql`, `db.raw`, `db.orm`, `db.query(plan)`, `db.execute(plan)`, `db.toSql(plan)`, `db.context`, `db.stack`). Creating a client has no side effects; the database opens on the first query, `db.runtime()` or `db.connect(...)`.
@@ -131,7 +137,9 @@ await db.execute(db.raw.sql`UPDATE posts SET views = 0`.affectedCount().build())
 
 ### Transactions
 
-Import `{ IsolationLevel }` from `@prisma/orm-sqlite/runtime`. `SqliteTransactionOptions` accepts only `isolationLevel: IsolationLevel.Serializable` (or the literal `'Serializable'`), through factory `transactionOptions` or `transaction(fn, options?)`. The driver keeps plain BEGIN and does not alter PRAGMAs. See [transaction isolation](../../../../docs/reference/transaction-isolation.md) for null rejection, undefined inheritance and explicit-only defaults.
+Import `{ IsolationLevel }` from `@prisma/orm-sqlite/runtime`. `SqliteTransactionOptions` accepts only `isolationLevel: IsolationLevel.Serializable` (or the literal `'Serializable'`), through factory `transactionOptions` or `transaction(fn, options?)`. The driver keeps plain BEGIN and does not alter PRAGMAs. See [transaction isolation](../../../../docs/reference/transaction-options.md) for null rejection, undefined inheritance and explicit-only defaults.
+
+Callback options also accept `timeout` defaults and overrides independently of isolation. Local `undefined` inherits; `null` disables an inherited deadline. Synchronous SQLite calls can delay deadline observation. See [callback timeouts](../../../../docs/reference/transaction-options.md#timeout).
 
 `db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes and `fragment`), `raw`, `prepare`, `query`, `execute`, `toSql` and `enums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]`, `transaction` or `runtime()`. The type is `SqliteTransactionContext<Contract>`.
 

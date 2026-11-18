@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type {
   Contract,
   ContractField,
@@ -13,13 +14,9 @@ import type {
 } from '@internal/contract/types';
 import { valueObjectsWithCoordinates } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
-import {
-  type ImportSpecifierResolver,
-  keepInternalSpecifiers,
-  type TypesImportSpec,
-} from '@internal/framework-components/emission';
+import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { entityAt } from '@internal/framework-components/ir';
-import { type ImportRequirement, renderImports, tsStringLiteral } from '@internal/ts-render';
+import { type ImportRequirement, tsStringLiteral } from '@internal/ts-render';
 import { blindCast } from '@internal/utils/casts';
 import { emitterError } from './emitter-errors';
 import { isSafeTypeExpression } from './type-expression-safety';
@@ -220,7 +217,9 @@ export function generateModelsType(
   }
 
   const modelTypes: string[] = [];
-  for (const [modelName, model] of Object.entries(models).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [modelName, model] of Object.entries(models).sort(([a], [b]) =>
+    compareCodeUnits(a, b),
+  )) {
     const fieldsType = generateModelFieldsType(model.fields);
     const relationsType = generateModelRelationsType(model.relations);
     const storageType = generateModelStorage(modelName, model);
@@ -269,18 +268,15 @@ export function deduplicateImports(imports: TypesImportSpec[]): TypesImportSpec[
   return result;
 }
 
-export function generateImportLines(
-  imports: TypesImportSpec[],
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
-): string[] {
-  const requirements: ImportRequirement[] = imports.map((imp) => ({
-    moduleSpecifier: resolveImportSpecifier(imp.package),
+export function typesImportRequirements(
+  imports: ReadonlyArray<TypesImportSpec>,
+): ImportRequirement[] {
+  return imports.map((imp) => ({
+    moduleSpecifier: imp.package,
     symbol: imp.named,
     alias: imp.alias,
     typeOnly: true,
   }));
-  const rendered = renderImports(requirements);
-  return rendered === '' ? [] : rendered.split('\n');
 }
 
 export function generateCodecTypeIntersection(
@@ -533,7 +529,7 @@ export function renderTypeOverridesMap(
 
 function renderOverrideTree(tree: OverrideTree): string {
   const parts = [...tree]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => compareCodeUnits(a, b))
     .map(
       ([key, value]) =>
         `readonly ${serializeObjectKey(key)}: ${value instanceof Map ? renderOverrideTree(value) : renderTypeOverride(value)}`,

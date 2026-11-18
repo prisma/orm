@@ -42,11 +42,20 @@ import {
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import { createMysqlBuiltinCodecLookup } from '@internal/target-mysql/codecs';
+import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
 import { describe, expect, it } from 'vitest';
-import { renderMysqlSql } from '../src/core/sql-renderer';
+import { MysqlSqlRenderer } from '../src/core/sql-renderer';
 
-const codecs = createMysqlBuiltinCodecLookup();
-const lower = (ast: AnyQueryAst) => renderMysqlSql(ast, undefined, codecs);
+const renderer = new MysqlSqlRenderer(
+  createMysqlBuiltinCodecLookup(),
+  mysqlTargetDescriptorMetaRuntime,
+);
+/** Renders `ast` and records what it rendered as a snapshot, so every input below pins the SQL MySQL is sent. */
+const lower = (ast: AnyQueryAst) => {
+  const lowered = renderer.render(ast, undefined);
+  expect(lowered).toMatchSnapshot();
+  return lowered;
+};
 const sqlOf = (ast: AnyQueryAst) => lower(ast).sql;
 
 const id = ColumnRef.of('user', 'id');
@@ -760,11 +769,28 @@ describe('MySQL lowering of a statement embedded in raw SQL', () => {
         .withReturning([ProjectionItem.of('id', id)]),
     ],
     ['a delete', DeleteAst.from(user).withReturning([ProjectionItem.of('id', id)])],
-  ])('refuses %s with RETURNING, which MySQL lacks', (_name, ast) => {
+  ])('refuses %s with RETURNING, which MySQL lacks', (name, ast) => {
     expect(() => sqlOf(RawQueryAst.affectedCount(['WITH x AS (', ast, ') SELECT 1']))).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.AST_UNSUPPORTED',
-        meta: expect.objectContaining({ feature: 'returning' }),
+        message: `MySQL cannot return the rows ${name} writes; it has no RETURNING`,
+        meta: { target: 'mysql', feature: 'returning' },
+      }),
+    );
+  });
+
+  it('names the database it renders for in a refusal, and carries its target id', () => {
+    const other = new MysqlSqlRenderer(createMysqlBuiltinCodecLookup(), {
+      targetId: 'other',
+      displayName: 'Other',
+    });
+    const fullJoin = fromUser.withJoins([
+      JoinAst.full(TableSource.named('post'), BinaryExpr.eq(id, ColumnRef.of('post', 'userId'))),
+    ]);
+    expect(() => other.render(fullJoin, undefined)).toThrow(
+      expect.objectContaining({
+        message: 'Other has no FULL JOIN',
+        meta: { target: 'other', feature: 'full-join' },
       }),
     );
   });
@@ -783,6 +809,52 @@ describe('MySQL lowering of a statement embedded in raw SQL', () => {
       expect.objectContaining({
         code: 'RUNTIME.AST_UNSUPPORTED',
         meta: expect.objectContaining({ feature: 'ordered-array-outside-select' }),
+      }),
+    );
+  });
+});
+
+describe('MySQL lowering of a row value IN a subquery', () => {
+  const rowValueInSubquery = SelectAst.from(TableSource.named('tag'))
+    .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+    .withWhere(
+      BinaryExpr.in(
+        ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+        SubqueryExpr.of(
+          SelectAst.from(TableSource.named('user_tags', 'ut'))
+            .withProjection([
+              ProjectionItem.of('tenant_id', ColumnRef.of('ut', 'tenant_id')),
+              ProjectionItem.of('tag_id', ColumnRef.of('ut', 'tag_id')),
+            ])
+            .withWhere(BinaryExpr.eq(ColumnRef.of('ut', 'user_id'), LiteralExpr.of(1))),
+        ),
+      ),
+    );
+
+  it('renders the row value and the subquery', () => {
+    expect(sqlOf(rowValueInSubquery)).toBe(
+      'SELECT `tag`.`id` AS `id` FROM `tag` WHERE (`tag`.`tenant_id`, `tag`.`id`) IN (SELECT `ut`.`tenant_id` AS `tenant_id`, `ut`.`tag_id` AS `tag_id` FROM `user_tags` AS `ut` WHERE `ut`.`user_id` = 1)',
+    );
+  });
+
+  it('refuses a subquery whose columns do not match the row value', () => {
+    const ast = SelectAst.from(TableSource.named('tag'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('tag', 'id'))])
+      .withWhere(
+        BinaryExpr.in(
+          ListExpression.of([ColumnRef.of('tag', 'tenant_id'), ColumnRef.of('tag', 'id')]),
+          SubqueryExpr.of(
+            SelectAst.from(TableSource.named('user_tags')).withProjection([
+              ProjectionItem.of('tag_id', ColumnRef.of('user_tags', 'tag_id')),
+            ]),
+          ),
+        ),
+      );
+
+    expect(() => lower(ast)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_INVALID',
+        message: 'A subquery compared with a row value of 2 columns must project 2 columns',
       }),
     );
   });

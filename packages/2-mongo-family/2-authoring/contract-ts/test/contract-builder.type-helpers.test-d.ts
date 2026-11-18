@@ -56,10 +56,8 @@ test('a type choice combination with no row does not compile', () => {
 });
 
 test('a constructor PSL keeps only as a deprecated name is not a type helper', () => {
-  expectTypeOf(type).not.toHaveProperty('Int');
-  expectTypeOf(type).not.toHaveProperty('Float');
-  expectTypeOf(type).not.toHaveProperty('Boolean');
-  expectTypeOf(type).toHaveProperty('Int32');
+  expectTypeOf(type).not.toHaveProperty('Int64');
+  expectTypeOf(type).toHaveProperty('Int64BigInt');
 });
 
 test('field.scalar takes a type, not a codec id', () => {

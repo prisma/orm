@@ -209,6 +209,18 @@ describe('explicit namespaced accessors end-to-end (PGlite)', () => {
             token: 'auth-tok',
           });
 
+          expect(await orm.public.User.select('email').first()).toEqual({ email: 'alice@x.io' });
+          expect(await orm.auth.User.select('token').first()).toEqual({ token: 'auth-tok' });
+          expect(await orm.auth.User.distinct('token').select('token').all()).toEqual([
+            { token: 'auth-tok' },
+          ]);
+          expect(
+            await orm.auth.User.orderBy((u) => u.token.asc())
+              .cursor({ token: 'a' })
+              .select('token')
+              .all(),
+          ).toEqual([{ token: 'auth-tok' }]);
+
           await orm.public.User.where({ id: 10 }).updateAndCount({ email: 'alice2@x.io' });
           await orm.auth.User.where({ id: 20 }).updateAndCount({ token: 'auth-tok-2' });
           expect((await orm.public.User.where({ id: 10 }).first())?.email).toBe('alice2@x.io');

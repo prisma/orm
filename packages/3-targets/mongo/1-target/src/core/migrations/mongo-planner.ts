@@ -9,26 +9,27 @@ import {
   contractToMongoSchemaIR,
 } from '@internal/family-mongo/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import {
-  describeMigrationStatement,
-  type MigrationDataLoss,
-  type MigrationOperationPolicy,
-  type MigrationPlanner,
-  type MigrationPlannerConflict,
-  type MigrationPlannerResult,
-  type MigrationPlanWithAuthoringSurface,
-  type MigrationScaffoldContext,
-  type MigrationSubject,
-  type ModelCoordinate,
-  type PlanOrigin,
-  type ResolvedMigrationStatement,
-  type ResolvedRenameStatement,
+import type {
+  MigrationDataLoss,
+  MigrationOperationPolicy,
+  MigrationPlanner,
+  MigrationPlannerConflict,
+  MigrationPlannerResult,
+  MigrationPlanWithAuthoringSurface,
+  MigrationScaffoldContext,
+  MigrationSubject,
+  ModelCoordinate,
+  PlanOrigin,
+  ResolvedMigrationStatement,
+  ResolvedRenameStatement,
 } from '@internal/framework-components/control';
 import {
   canonicalize,
   collectionOfModel,
+  embeddingModelOf,
   indexLookupKey,
   type MongoContract,
+  mongoModelsOf,
   validatorDocumentShapesOf,
 } from '@internal/mongo-contract';
 import type {
@@ -46,7 +47,15 @@ import {
   type PlannedTransform,
 } from './mongo-data-transforms';
 import { documentsNotRewrittenWarnings } from './mongo-documents-not-rewritten';
+import { planEnumValueRewrites } from './mongo-enum-value-planning';
 import { planFieldFills } from './mongo-field-fills';
+import {
+  type DiscriminatorFilter,
+  type OrderedRewrite,
+  overlapRefusal,
+  type RewriteFacts,
+  variantDiscriminatorFilter,
+} from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import {
   type CollectionControl,
@@ -59,6 +68,8 @@ import {
   planValidatorFieldRemovals,
   type StatementCalls,
 } from './mongo-statement-planning';
+import { planStoredKeyFills } from './mongo-stored-key-fills';
+import { planStoredKeyRewrites } from './mongo-stored-key-planning';
 import {
   castFieldCallOf,
   noCastRefusals,
@@ -69,6 +80,8 @@ import {
   unrewritableTypeChangeRefusals,
 } from './mongo-type-changes';
 import { mongoTypeLookupsOf } from './mongo-type-lookups';
+import type { UnansweredChange } from './mongo-unanswered-changes';
+import { planVariantDocumentRewrites, VARIANT_TWO_STEPS } from './mongo-variant-planning';
 import type { OpFactoryCall } from './op-factory-call';
 import {
   CollModCall,
@@ -76,6 +89,7 @@ import {
   CreateIndexCall,
   DropCollectionCall,
   DropIndexCall,
+  ReplaceStoredValueCall,
   schemaCollectionToCreateCollectionOptions,
   schemaIndexToCreateIndexOptions,
 } from './op-factory-call';
@@ -111,21 +125,66 @@ function propertiesOf(schema: Record<string, unknown>): Record<string, string> {
   );
 }
 
+interface PropertyChanges {
+  readonly changed: readonly string[];
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+}
+
+function propertyChanges(
+  origin: Readonly<Record<string, unknown>>,
+  dest: Readonly<Record<string, unknown>>,
+): PropertyChanges {
+  return {
+    changed: Object.keys(dest).filter(
+      (field) => Object.hasOwn(origin, field) && origin[field] !== dest[field],
+    ),
+    added: Object.keys(dest).filter((field) => !Object.hasOwn(origin, field)),
+    removed: Object.keys(origin).filter((field) => !Object.hasOwn(dest, field)),
+  };
+}
+
+/** The property changes of each kind of document both validators describe that the collection-wide changes do not name, each in the words of the documents it applies to. */
+function shapeChanges(
+  origin: MongoSchemaValidator,
+  dest: MongoSchemaValidator,
+  named: PropertyChanges,
+): PropertyChanges {
+  const canonical = (properties: Readonly<Record<string, unknown>>) =>
+    Object.fromEntries(
+      Object.entries(properties).map(([field, schema]) => [field, canonicalize(schema)]),
+    );
+  const shapesBefore = validatorDocumentShapesOf(origin.jsonSchema);
+  const changes = validatorDocumentShapesOf(dest.jsonSchema).flatMap((shape) => {
+    const before = shapesBefore.find(({ key }) => key === shape.key);
+    if (before === undefined || shape.discriminator === undefined) return [];
+    const { field, value } = shape.discriminator;
+    const where = ` in documents whose ${field} is ${JSON.stringify(value)}`;
+    const found = propertyChanges(canonical(before.properties), canonical(shape.properties));
+    const unnamed = (kind: keyof PropertyChanges) =>
+      found[kind].filter((each) => !named[kind].includes(each)).map((each) => `${each}${where}`);
+    return [{ changed: unnamed('changed'), added: unnamed('added'), removed: unnamed('removed') }];
+  });
+  return {
+    changed: changes.flatMap(({ changed }) => changed),
+    added: changes.flatMap(({ added }) => added),
+    removed: changes.flatMap(({ removed }) => removed),
+  };
+}
+
 /**
- * A label naming the properties whose schema changed, so a dry run shows what a validator update does: `Update validator on items (changed: meta; added: note)`.
+ * A label naming the properties whose schema changed, so a dry run shows what a validator update does: `Update validator on items (changed: meta; added: note)`. A change of a variant's properties that the collection's properties as a whole do not show names the variant's documents.
  */
 function validatorUpdateLabel(
   collName: string,
   origin: MongoSchemaValidator,
   dest: MongoSchemaValidator,
 ): string {
-  const originProps = propertiesOf(origin.jsonSchema);
-  const destProps = propertiesOf(dest.jsonSchema);
-  const changed = Object.keys(destProps).filter(
-    (field) => Object.hasOwn(originProps, field) && originProps[field] !== destProps[field],
-  );
-  const added = Object.keys(destProps).filter((field) => !Object.hasOwn(originProps, field));
-  const removed = Object.keys(originProps).filter((field) => !Object.hasOwn(destProps, field));
+  const whole = propertyChanges(propertiesOf(origin.jsonSchema), propertiesOf(dest.jsonSchema));
+  const ofVariants = shapeChanges(origin, dest, whole);
+  const changed = [...whole.changed, ...ofVariants.changed];
+  const added = [...whole.added, ...ofVariants.added];
+  const removed = [...whole.removed, ...ofVariants.removed];
   const parts = [
     ...(changed.length > 0 ? [`changed: ${changed.join(', ')}`] : []),
     ...(added.length > 0 ? [`added: ${added.join(', ')}`] : []),
@@ -225,20 +284,6 @@ function modelStoredIn(
       }),
   );
   return (storing.find(({ isRoot }) => isRoot) ?? storing[0])?.coordinate;
-}
-
-/** A convert or backfill statement this release cannot carry out on MongoDB. */
-function unsupportedStatementConflict(
-  statement: ResolvedMigrationStatement,
-  fromContract: ContractWithDomain,
-  contract: ContractWithDomain,
-): MigrationPlannerConflict {
-  return {
-    kind: 'statementRefused',
-    summary: `MongoDB does not apply ${statement.kind} statements in this release, so nothing was planned: ${describeMigrationStatement(statement, fromContract, contract)}`,
-    why: `MongoDB cannot carry out ${statement.kind} statements in this release. Leave out the statement.`,
-    refusedStatement: statement,
-  };
 }
 
 /**
@@ -577,20 +622,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       'framework planner passes the inspected Mongo schema IR selected for the mongo target'
     >(options.schema);
     const fromContract = options.fromContract;
-    const unsupported = options.statements.find(
-      (statement) =>
-        statement.kind !== 'rename' &&
-        !(
-          (statement.kind === 'convert' || statement.kind === 'backfill') &&
-          statement.entity === 'field'
-        ),
-    );
-    if (unsupported !== undefined) {
-      return {
-        kind: 'failure',
-        conflicts: [unsupportedStatementConflict(unsupported, fromContract ?? contract, contract)],
-      };
-    }
     const renames = options.statements.filter(
       (statement): statement is ResolvedRenameStatement => statement.kind === 'rename',
     );
@@ -603,7 +634,62 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     if (!statementPlan.ok) return { kind: 'failure', conflicts: statementPlan.failure };
     const { schema, collectionRenames, fieldRenames, callOfStatement } = statementPlan.value;
     const destinationIR = contractToMongoSchemaIR(contract);
+    const storedKeys = planStoredKeyRewrites({
+      statements: renames,
+      fromContract,
+      contract,
+      schema,
+      destination: destinationIR,
+    });
+    if (!storedKeys.ok) return { kind: 'failure', conflicts: [...storedKeys.failure] };
+    const storedKeyRewrites = [...storedKeys.value.renames, ...storedKeys.value.removals];
+    const enumValues = planEnumValueRewrites({
+      statements: renames,
+      fromContract,
+      contract,
+      schema,
+      lookups: mongoTypeLookupsOf(options.frameworkComponents),
+    });
+    if (!enumValues.ok) return { kind: 'failure', conflicts: [...enumValues.failure] };
+    const { replacements: valueReplacements, removals: valueRemovals } = enumValues.value;
     const renamedTo = new Map(collectionRenames.map((call) => [call.from, call.to]));
+    const match: ModelMatchInput | undefined =
+      fromContract === null
+        ? undefined
+        : {
+            statements: renames,
+            fromContract,
+            contract,
+            collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
+          };
+    const lookups = mongoTypeLookupsOf(options.frameworkComponents);
+    const plannedFills = planFieldFills({
+      match,
+      contract,
+      lookups,
+      schema,
+      destination: destinationIR,
+      statements: options.statements,
+    });
+    if (!plannedFills.ok) return { kind: 'failure', conflicts: [...plannedFills.failure] };
+    const fills = plannedFills.value;
+    const variants = planVariantDocumentRewrites({
+      statements: options.statements,
+      fromContract,
+      contract,
+      schema,
+      keptCollections: new Set(
+        schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
+      ),
+      collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
+      enumReplacements: valueReplacements.flatMap(({ call }) =>
+        call instanceof ReplaceStoredValueCall ? [call] : [],
+      ),
+      fieldRenames: fieldRenames.map(({ call }) => call),
+    });
+    if (!variants.ok) return { kind: 'failure', conflicts: [...variants.failure] };
+    const { deletes: variantDeletes, replacements: variantReplacements } = variants.value;
+    const variantCalls = new Set<OpFactoryCall>(variantReplacements.map(({ call }) => call));
     const removals: readonly FieldRemoval[] =
       fromContract === null
         ? planValidatorFieldRemovals({ origin: schema, destination: destinationIR, contract })
@@ -616,16 +702,6 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
               schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
             ),
           });
-    const match: ModelMatchInput | undefined =
-      fromContract === null
-        ? undefined
-        : {
-            statements: renames,
-            fromContract,
-            contract,
-            collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
-          };
-    const lookups = mongoTypeLookupsOf(options.frameworkComponents);
     const typeChanges: readonly TypeChange[] =
       fromContract === null
         ? planValidatorTypeChanges({ origin: schema, destination: destinationIR, contract })
@@ -651,7 +727,11 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         if (change !== undefined) converted.push(change);
         return [{ statement, outcome: convertTransform(statement, change, contracts) }];
       }
-      if (statement.kind === 'backfill' && statement.entity === 'field') {
+      if (
+        statement.kind === 'backfill' &&
+        statement.entity === 'field' &&
+        embeddingModelOf(contract.domain, statement.field) === undefined
+      ) {
         return [
           {
             statement,
@@ -669,22 +749,24 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       const call = castFieldCallOf(change);
       return call === undefined ? [] : [{ ...change, call }];
     });
-    const fills = planFieldFills({
-      match,
+    const storedKeyFills = planStoredKeyFills({
+      statements: options.statements,
+      fromContract,
       contract,
       lookups,
       schema,
       destination: destinationIR,
-      statements: options.statements,
     });
+    if (!storedKeyFills.ok) return { kind: 'failure', conflicts: [...storedKeyFills.failure] };
     const rewrites: readonly PlannedRewrite[] = [
       ...removals.map(
-        ({ call, subject }): PlannedRewrite => ({
+        ({ call, destination, variant }): PlannedRewrite => ({
           kind: 'removal',
           collection: call.collection,
           field: call.field,
-          filter: call.filter,
-          model: subject.kind === 'field' ? subject : undefined,
+          variant,
+          model: destination,
+          storedKey: undefined,
         }),
       ),
       ...casts.map(
@@ -692,20 +774,22 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           kind: 'cast',
           collection: change.collection,
           field: change.field,
-          filter: change.filter,
+          variant: change.variant,
           model: change.destination,
+          storedKey: undefined,
         }),
       ),
       ...transforms.flatMap(({ outcome }) =>
         outcome.kind === 'transform' ? [outcome.rewrite] : [],
       ),
       ...fills.map(
-        ({ call, subject }): PlannedRewrite => ({
+        ({ call, subject, variant }): PlannedRewrite => ({
           kind: 'fill',
           collection: call.options.collection,
           field: call.options.field,
-          filter: call.options.filter,
+          variant,
           model: subject.kind === 'field' ? subject : undefined,
+          storedKey: undefined,
         }),
       ),
     ];
@@ -723,32 +807,182 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ),
     ];
     if (refusals.length > 0) return { kind: 'failure', conflicts: refusals };
-    const castCalls = casts.map(({ call }) => call);
-    const callOf = new Map<ResolvedMigrationStatement, OpFactoryCall | undefined>([
-      ...renames.map((statement, index) => [statement, callOfStatement[index]] as const),
+    const callsOf = new Map<ResolvedMigrationStatement, readonly OpFactoryCall[]>([
+      ...renames.map((statement, index) => {
+        const call = callOfStatement[index];
+        const keyCalls = [
+          ...storedKeyRewrites,
+          ...variantReplacements,
+          ...valueReplacements,
+        ].flatMap((rewrite) => (rewrite.statement === statement ? [rewrite.call] : []));
+        return [statement, call === undefined ? keyCalls : [call, ...keyCalls]] as const;
+      }),
       ...transforms.map(({ statement, outcome }) =>
         outcome.kind === 'transform'
-          ? ([statement, outcome.call] as const)
-          : ([statement, undefined] as const),
+          ? ([statement, [outcome.call]] as const)
+          : ([statement, []] as const),
+      ),
+      ...variantReplacements.flatMap((rewrite) =>
+        rewrite.statement?.kind === 'convert' ? [[rewrite.statement, [rewrite.call]] as const] : [],
+      ),
+      ...options.statements.flatMap((statement) => {
+        const calls = storedKeyFills.value.flatMap((fill) =>
+          fill.statement === statement ? [fill.call] : [],
+        );
+        return calls.length === 0 ? [] : [[statement, calls] as const];
+      }),
+    ]);
+    const twoMigrationsAdvice = new Map<OpFactoryCall, string>([
+      ...[...valueReplacements, ...valueRemovals].map(
+        (rewrite) => [rewrite.call, rewrite.twoMigrationsAdvice] as const,
+      ),
+      ...[...variantDeletes, ...variantReplacements].map(
+        (rewrite) => [rewrite.call, VARIANT_TWO_STEPS] as const,
       ),
     ]);
-    const transformCalls = (kind: 'convert' | 'backfill') =>
-      transforms.flatMap(({ statement, outcome }) =>
-        statement.kind === kind && outcome.kind === 'transform' ? [outcome.call] : [],
+    const changeOfCall = new Map<OpFactoryCall, UnansweredChange>([
+      ...removals.map(({ call, subject }) => [call, { kind: 'removed', subject }] as const),
+      ...variantDeletes.map(
+        ({ call, model }) =>
+          [call, { kind: 'removed', subject: { kind: 'model', ...model } }] as const,
+      ),
+      ...storedKeys.value.removals.map(
+        ({ call, subject }) => [call, { kind: 'removed', subject }] as const,
+      ),
+      ...valueRemovals.map(
+        ({ call, enumValue }) =>
+          [call, { kind: 'removed', subject: { kind: 'enumValue', ...enumValue } }] as const,
+      ),
+      ...fills.map(({ call, subject }) => [call, { kind: 'newRequired', subject }] as const),
+      ...storedKeyFills.value.flatMap(({ call, subject, text }) =>
+        text === undefined ? [] : [[call, { kind: 'newRequired', subject }] as const],
+      ),
+    ]);
+    const rewriteOf = (facts: RewriteFacts): OrderedRewrite => {
+      const statements = options.statements.filter((statement) =>
+        (callsOf.get(statement) ?? []).includes(facts.call),
       );
+      return {
+        ...facts,
+        statements,
+        twoMigrationsAdvice: twoMigrationsAdvice.get(facts.call),
+        unanswered: statements.length === 0 ? changeOfCall.get(facts.call) : undefined,
+      };
+    };
+    const writesDiscriminator = ({ statement }: PlannedTransform) => {
+      const { namespaceId, model, field } = statement.field;
+      return mongoModelsOf(contract.domain, namespaceId)[model]?.discriminator?.field === field;
+    };
+    const transformRewrites = (
+      kind: 'convert' | 'backfill',
+      selected: (transform: PlannedTransform) => boolean = () => true,
+    ) =>
+      transforms.filter(selected).flatMap(({ statement, outcome }) =>
+        statement.kind === kind && outcome.kind === 'transform'
+          ? [
+              rewriteOf({
+                kind: 'dataTransform',
+                call: outcome.call,
+                transformedField: outcome.rewrite.field,
+                discriminatorFilter: variantDiscriminatorFilter(outcome.rewrite.variant),
+              }),
+            ]
+          : [],
+      );
+    const fieldRenamesSelecting = (kind: DiscriminatorFilter['kind'] | undefined) =>
+      fieldRenames.flatMap(({ call, discriminatorFilter }) =>
+        discriminatorFilter?.kind === kind
+          ? [rewriteOf({ kind: 'renameField', call, discriminatorFilter })]
+          : [],
+      );
+    const orderedRewrites = [
+      ...fieldRenamesSelecting('variant'),
+      ...fieldRenamesSelecting(undefined),
+      ...variantDeletes.map(({ call, field, from }) =>
+        rewriteOf({ kind: 'deleteDocuments', call, deletedVariant: { field, value: from } }),
+      ),
+      ...variantReplacements.map(({ call, to }) =>
+        rewriteOf({
+          kind: 'replaceStoredValue',
+          call,
+          writtenValue:
+            valueReplacements.find((replacement) => replacement.call === call)?.writtenValue ?? to,
+          discriminatorFilter: undefined,
+        }),
+      ),
+      ...fieldRenamesSelecting('noneOf'),
+      ...storedKeys.value.renames.map(({ call, variant }) =>
+        rewriteOf({
+          kind: 'renameStoredKey',
+          call,
+          discriminatorFilter: variantDiscriminatorFilter(variant),
+        }),
+      ),
+      ...valueReplacements.flatMap(({ call, writtenValue, variant }) =>
+        variantCalls.has(call)
+          ? []
+          : [
+              rewriteOf({
+                kind: 'replaceStoredValue',
+                call,
+                writtenValue,
+                discriminatorFilter: variantDiscriminatorFilter(variant),
+              }),
+            ],
+      ),
+      ...transformRewrites('backfill', writesDiscriminator),
+      ...casts.map(({ call, variant }) =>
+        rewriteOf({
+          kind: 'castField',
+          call,
+          discriminatorFilter: variantDiscriminatorFilter(variant),
+        }),
+      ),
+      ...transformRewrites('convert'),
+      ...fills.map(({ call, variant }) =>
+        rewriteOf({
+          kind: 'fillField',
+          call,
+          discriminatorFilter: variantDiscriminatorFilter(variant),
+        }),
+      ),
+      ...storedKeyFills.value.map(({ call, variant }) =>
+        rewriteOf({
+          kind: 'fillStoredKey',
+          call,
+          discriminatorFilter: variantDiscriminatorFilter(variant),
+        }),
+      ),
+      ...transformRewrites('backfill', (transform) => !writesDiscriminator(transform)),
+      ...removals.map(({ call, discriminatorFilter }) =>
+        rewriteOf({ kind: 'unsetField', call, discriminatorFilter }),
+      ),
+      ...storedKeys.value.removals.map(({ call, variant }) =>
+        rewriteOf({
+          kind: 'removeStoredKey',
+          call,
+          discriminatorFilter: variantDiscriminatorFilter(variant),
+        }),
+      ),
+      ...valueRemovals.map(({ call, variant }) =>
+        rewriteOf({
+          kind: 'removeStoredValue',
+          call,
+          discriminatorFilter: variantDiscriminatorFilter(variant),
+        }),
+      ),
+    ];
+    const overlap = overlapRefusal(orderedRewrites, {
+      ...contracts,
+      statements: options.statements,
+    });
+    if (overlap !== undefined) return { kind: 'failure', conflicts: [overlap] };
     const result = this.planCalls({
       ...options,
       statementCalls: {
         schema,
         collectionRenames,
-        rewrites: [
-          ...fieldRenames,
-          ...castCalls,
-          ...transformCalls('convert'),
-          ...fills.map((fill) => fill.call),
-          ...transformCalls('backfill'),
-          ...removals.map((removal) => removal.call),
-        ],
+        rewrites: orderedRewrites.map(({ call }) => call),
       },
     });
     if (result.kind === 'failure') return result;
@@ -758,12 +992,36 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       ...(match === undefined ? [] : documentsNotRewrittenWarnings(match)),
     ];
     const fieldLoss: readonly MigrationDataLoss[] = [
+      ...variantDeletes.map(
+        (rewrite): MigrationDataLoss => ({
+          operationIndex: calls.indexOf(rewrite.call),
+          subject: { kind: 'model', ...rewrite.model },
+          loss: 'drop',
+          label: rewrite.call.label,
+        }),
+      ),
       ...removals.map((removal) => ({
         operationIndex: calls.indexOf(removal.call),
         subject: removal.subject,
         loss: 'drop' as const,
         label: removal.call.label,
       })),
+      ...storedKeys.value.removals.map((removal) => ({
+        operationIndex: calls.indexOf(removal.call),
+        subject: removal.subject,
+        loss: 'drop' as const,
+        label: removal.call.label,
+      })),
+      ...valueRemovals.map(
+        (removal): MigrationDataLoss => ({
+          operationIndex: calls.indexOf(removal.call),
+          subject: { kind: 'enumValue', ...removal.enumValue },
+          loss: 'drop',
+          label: removal.call.label,
+          ...ifDefined('keepDataEdit', removal.keepDataEdit),
+          ...ifDefined('keepDataAdvice', removal.keepDataAdvice),
+        }),
+      ),
       ...casts.flatMap(({ call, subject }): MigrationDataLoss[] =>
         call.operationClass !== 'destructive'
           ? []
@@ -787,10 +1045,10 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         },
         options.snapshotsImportPath,
       ),
-      appliedStatements: options.statements.map((statement) => {
-        const call = callOf.get(statement);
-        return { statement, operationIndexes: call === undefined ? [] : [calls.indexOf(call)] };
-      }),
+      appliedStatements: options.statements.map((statement) => ({
+        statement,
+        operationIndexes: (callsOf.get(statement) ?? []).map((call) => calls.indexOf(call)),
+      })),
       dataLoss: [
         ...collectionDrops(calls, fromContract, contract, {
           origin: schema,
@@ -799,11 +1057,16 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         ...fieldLoss,
       ].sort((a, b) => a.operationIndex - b.operationIndex),
       accessChanges: [],
-      temporaryValues: fills.map((fill) => ({
-        operationIndex: calls.indexOf(fill.call),
-        subject: fill.subject,
-        value: fill.text,
-      })),
+      temporaryValues: [
+        ...fills.map((fill) => ({
+          operationIndex: calls.indexOf(fill.call),
+          subject: fill.subject,
+          value: fill.text,
+        })),
+        ...storedKeyFills.value.flatMap(({ call, subject, text }) =>
+          text === undefined ? [] : [{ operationIndex: calls.indexOf(call), subject, value: text }],
+        ),
+      ],
       ...(allWarnings.length > 0 ? { warnings: allWarnings } : {}),
     };
   }

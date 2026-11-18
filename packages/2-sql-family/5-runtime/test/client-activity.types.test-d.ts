@@ -6,6 +6,7 @@ import type {
   Runtime,
   RuntimeConnection,
   RuntimeTransaction,
+  RuntimeTransactionOptions,
   TransactionContext,
 } from '../src/sql-runtime';
 import './client-activity-kinds';
@@ -34,8 +35,10 @@ test('a handle is typed by its kind, and nests through its own members', async (
   >();
   expectTypeOf<keyof SqlTransactionOptions>().toEqualTypeOf<'isolationLevel'>();
   expectTypeOf(call.transaction).toEqualTypeOf<
-    ((start?: SqlTransactionOptions) => Promise<RuntimeTransaction>) | undefined
+    ((start?: RuntimeTransactionOptions) => Promise<RuntimeTransaction>) | undefined
   >();
+  expectTypeOf<RuntimeTransaction['signal']>().toEqualTypeOf<AbortSignal>();
+  expectTypeOf<RuntimeTransactionOptions['timeout']>().toEqualTypeOf<number | null | undefined>();
   expectTypeOf(call.startActivity).toBeFunction();
   expectTypeOf(call.planContentHash).toBeFunction();
   // @ts-expect-error - statement is not a client kind

@@ -81,7 +81,7 @@ export const sqlEmission: EmissionSpi = {
   id: 'sql',
   generateStorageType(contract, storageHashTypeName) { ... },
   generateModelStorageType(modelName, model) { ... },
-  getFamilyImports() { ... },
+  getFamilyImports(typesModule) { ... },
   getFamilyTypeAliases(options) { ... },
   getTypeMapsExpression() { ... },
   getContractWrapper(contractBaseName, typeMapsName) { ... },
