@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { ContractSourceContext } from '@internal/config/config-types';
@@ -215,6 +216,41 @@ model User {
           code: 'PSL_SCHEMA_READ_FAILED',
           sourceId: missingSchemaPath,
         }),
+      ],
+    });
+  });
+
+  it('returns PSL_SCHEMA_READ_FAILED naming the file when it is not valid UTF-8', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-utf8-'));
+    tempDirs.push(tempDir);
+    const schemaPath = join(tempDir, 'schema.prisma');
+    await writeFile(
+      schemaPath,
+      Buffer.concat([
+        Buffer.from(
+          '// use prisma-8\nmodel User {\n  id ObjectId @id @map("_id") // invalid byte: ',
+          'utf-8',
+        ),
+        Buffer.from([0x97]),
+        Buffer.from('\n}\n', 'utf-8'),
+      ]),
+    );
+    const contract = mongoContract('./schema.prisma', mongoTestStack);
+    const result = await contract.source.load(
+      createMongoTestContext({ resolvedInputs: [schemaPath] }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+
+    expect(result.failure).toMatchObject({
+      summary: 'Failed to read Prisma schema files',
+      diagnostics: [
+        {
+          code: 'PSL_SCHEMA_READ_FAILED',
+          message: expect.stringContaining(schemaPath),
+          sourceId: schemaPath,
+        },
       ],
     });
   });
