@@ -183,7 +183,7 @@ export function updateFirstGraph(
   }
 
   const model = modelOf(collection);
-  const t: Translation = { ...b, parentRow: find };
+  const t: Translation = { ...b, parentRow: find, parentValues: set };
   const before = addBeforeWrite(t, model, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
   const owner = { operation: 'update', modelName: collection.modelName };
@@ -284,12 +284,17 @@ export function createGraph(
   const b = builderOf(collection);
   requireIdentityColumnsForIncludes(collection);
   b.graph.setResult(
-    addCreateWithRelations({ ...b, parentRow: undefined }, modelOf(collection), parsed, {
-      keysFromParent: [],
-      returns: 'rows',
-      shape: shapeOf(collection),
-      variantValue: collection.state.variantValue,
-    }),
+    addCreateWithRelations(
+      { ...b, parentRow: undefined, parentValues: {} },
+      modelOf(collection),
+      parsed,
+      {
+        keysFromParent: [],
+        returns: 'rows',
+        shape: shapeOf(collection),
+        variantValue: collection.state.variantValue,
+      },
+    ),
   );
   return b.graph;
 }

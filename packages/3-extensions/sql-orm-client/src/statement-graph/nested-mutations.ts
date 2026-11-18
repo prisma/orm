@@ -101,6 +101,7 @@ type FilteredWrite = Extract<Mutation, { kind: 'updateAll' | 'deleteAll' }>;
 
 export interface Translation extends Builder {
   readonly parentRow: NodeId | undefined;
+  readonly parentValues: Readonly<Record<string, unknown>>;
 }
 
 export interface CreateOf {
@@ -291,6 +292,9 @@ export function addBeforeWrite(
           model,
           relationMutation.relation.on.localFields,
         );
+        if (disconnectsNothing(mutation)) {
+          continue;
+        }
         if (isConditionalUnlink(mutation)) {
           unlinksAfterWrite = true;
           continue;
@@ -315,7 +319,11 @@ export function addAfterWrite(
   const { parentOwned, childOwned, junctionOwned } = partitionByOwnership(relationMutations);
   for (const relationMutation of parentOwned) {
     for (const mutation of relationMutation.mutations) {
-      if (mutation.kind === 'disconnect' && isConditionalUnlink(mutation)) {
+      if (
+        mutation.kind === 'disconnect' &&
+        !disconnectsNothing(mutation) &&
+        isConditionalUnlink(mutation)
+      ) {
         addConditionalUnlink(t, model, parent, relationMutation, mutation);
       }
     }
@@ -345,7 +353,11 @@ function rejectUpdateOnly({ name, mutations }: ParsedRelationMutation): void {
 }
 
 function isConditionalUnlink(mutation: Extract<Mutation, { kind: 'disconnect' }>): boolean {
-  return mutation.state !== undefined || (mutation.criteria ?? []).length > 0;
+  return mutation.state !== undefined || mutation.criteria !== undefined;
+}
+
+function disconnectsNothing(mutation: Extract<Mutation, { kind: 'disconnect' }>): boolean {
+  return mutation.criteria !== undefined && mutation.criteria.length === 0;
 }
 
 function addConditionalUnlink(
@@ -375,13 +387,16 @@ function addConditionalUnlink(
     model.tables.root,
     resolveRowIdentityColumns(contract, namespaceId, tableName),
   );
-  const criteria = mutation.criteria ?? [];
+  const { criteria } = mutation;
   const wheres =
-    criteria.length === 0
+    criteria === undefined
       ? [variantWhere(contract, mutation.state, undefined)]
       : criteria.map((criterion) => requiredCriterion(context, related, name, mutation, criterion));
   const nulls = Object.fromEntries(localColumns.map((column) => [column, null]));
-  const unlink = { ...nulls, ...updateDefaultsOf(context, model, nulls) };
+  const unlink = {
+    ...nulls,
+    ...updateDefaultsOf(context, model, { ...t.parentValues, ...nulls }),
+  };
   for (const where of wheres) {
     const target = SelectAst.from(related.tables.root.tableSource(contract)).withProjection(
       targets,

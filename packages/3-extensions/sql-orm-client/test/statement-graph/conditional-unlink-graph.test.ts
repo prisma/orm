@@ -21,6 +21,7 @@ function printUpdate(
   contract: Contract<SqlStorage>,
   modelName: string,
   input: Record<string, unknown>,
+  set: Record<string, unknown> = {},
 ): string {
   const context = buildTestContextFromContract(contract);
   const runtime = createMockRuntime();
@@ -36,7 +37,7 @@ function printUpdate(
   return printGraph(
     updateFirstGraph(
       { context, state: collection.where({ id: 1 }).state, modelName, namespaceId: 'public' },
-      {},
+      set,
       parsed.relationMutations,
     ),
   );
@@ -100,6 +101,27 @@ describe('disconnect with criteria on a relation the parent holds the key for', 
         'result: n3',
       ].join('\n'),
     );
+  });
+
+  it('leaves out of the Update that unlinks the parent the update defaults of fields the parent sets itself', () => {
+    expect(
+      printUpdate(
+        updateDefaultContract(),
+        'Article',
+        { author: (author: Disconnectable) => author.disconnect([{ id: 2 }]) },
+        { updatedAt: new Date('2021-01-01T00:00:00.000Z') },
+      ),
+    ).toMatch(
+      /^n3 Update articles set author_id = null where author_id in \(select id from authors where id = 2\) <- FilterData n2 \(id->id\)$/m,
+    );
+  });
+
+  it('adds no Update for an explicit empty list of criteria', () => {
+    expect(
+      printUpdate(updateDefaultContract(), 'Article', {
+        author: (author: Disconnectable) => author.disconnect([]),
+      }),
+    ).toBe(['n1 Find articles where id = 1', 'result: n1'].join('\n'));
   });
 
   it('applies the update defaults of the parent to the Update that unlinks it', () => {

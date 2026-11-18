@@ -232,6 +232,10 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
             name: 'Bob B.',
             invitedBy: (inviter) => inviter.disconnect([{ id: 3 }]),
           });
+        const empty = await users
+          .where({ id: 2 })
+          .select('id', 'name', 'invitedById')
+          .update({ invitedBy: (inviter) => inviter.disconnect([]) });
         const matched = await users
           .where({ id: 2 })
           .select('id', 'name', 'invitedById')
@@ -239,7 +243,8 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
             invitedBy: (inviter) => inviter.disconnect([{ id: 3 }, { email: 'alice@example.com' }]),
           });
 
-        expect([unmatched, matched]).toEqual([
+        expect([unmatched, empty, matched]).toEqual([
+          { id: 2, name: 'Bob B.', invitedById: 1 },
           { id: 2, name: 'Bob B.', invitedById: 1 },
           { id: 2, name: 'Bob B.', invitedById: null },
         ]);
