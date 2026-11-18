@@ -688,7 +688,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       },
       fn,
       options,
-      (reason) => connection.destroy(reason),
+      { clean: async () => {}, unclean: (reason) => connection.destroy(reason) },
     );
   }
 
@@ -1755,7 +1755,14 @@ class RowsBeneath<Row> implements AsyncGenerator<Row, void, unknown> {
 export interface ConnectionProvider {
   connection(
     options?: Pick<ActivityExecuteOptions, 'activityParent'>,
-  ): Promise<RuntimeConnection & Partial<TransactionStartTarget>>;
+  ): Promise<
+    Pick<RuntimeConnection, 'transaction' | 'release' | 'destroy'> & Partial<TransactionStartTarget>
+  >;
+}
+
+interface ConnectionSettled {
+  clean(): Promise<void>;
+  unclean(reason: unknown): Promise<void>;
 }
 
 /**
@@ -1778,28 +1785,17 @@ export async function withTransaction<R>(
   const connection = await runtime.connection(
     parent === undefined ? undefined : { activityParent: parent },
   );
-  let destroyed = false;
-  try {
-    return await runTransactionOn(connection, fn, options, (reason) => {
-      destroyed = true;
-      return connection.destroy(reason);
-    });
-  } finally {
-    if (!destroyed) {
-      if (wasRefusedBeforeBegin(connection)) {
-        await connection.release().catch(() => undefined);
-      } else {
-        await connection.release();
-      }
-    }
-  }
+  return runTransactionOn(connection, fn, options, {
+    clean: () => connection.release(),
+    unclean: (reason) => connection.destroy(reason),
+  });
 }
 
 async function runTransactionOn<R>(
   connection: Pick<RuntimeConnection, 'transaction'> & Partial<TransactionStartTarget>,
   fn: (tx: TransactionContext) => PromiseLike<R>,
   options: RuntimeTransactionOptions | undefined,
-  destroy: (reason: unknown) => Promise<void>,
+  settled: ConnectionSettled,
 ): Promise<R> {
   validateTransactionTimeout(options?.timeout);
   let invalidated = false;
@@ -1807,9 +1803,11 @@ async function runTransactionOn<R>(
   try {
     transaction = await connection.transaction(options);
   } catch (error) {
-    if (!wasRefusedBeforeBegin(connection)) {
-      // A teardown error would mask the start error.
-      await destroy(error).catch(() => undefined);
+    // A teardown error would mask the start error.
+    if (wasRefusedBeforeBegin(connection)) {
+      await settled.clean().catch(() => undefined);
+    } else {
+      await settled.unclean(error).catch(() => undefined);
     }
     throw error;
   }
@@ -1927,7 +1925,7 @@ async function runTransactionOn<R>(
     if (connectionDisposed) return;
     connectionDisposed = true;
     // SqlConnection.destroy() propagates teardown errors so callers can decide what to do with them. Here, we're already about to throw a more informative error describing why we're evicting the connection (rollback/commit failure), so swallowing the teardown error is the right call — surfacing it would mask the original cause.
-    await destroy(reason).catch(() => undefined);
+    await settled.unclean(reason).catch(() => undefined);
   };
 
   let commitRequested = false;
@@ -1981,5 +1979,8 @@ async function runTransactionOn<R>(
   } finally {
     invalidated = true;
     signal.removeEventListener('abort', onAbort);
+    if (!connectionDisposed) {
+      await settled.clean();
+    }
   }
 }
