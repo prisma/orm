@@ -470,7 +470,17 @@ Every database records two policies in its marker, and every command obeys them.
 
 A database that records nothing permits both. Production records `["migrate"]`, so `db update` and `db sign` refuse it with `MIGRATION.CHANGE_POLICY_FORBIDS`. The off-graph error (`MIGRATION.MARKER_MISMATCH`) reads the policy and gives only the recovery it permits.
 
-**Data protection policy.** `dataLoss` and `accessWidening`, each `data-loss-forbidden` / `data-loss-with-consent` / `data-loss-permitted` (and the `access-widening-` forms). `with-consent` is the default and is today's behaviour: `db update` asks, and a migration carries the consent given when it was planned. No command enforces the data protection settings yet: they are recorded and compared with a ref's, and `forbidden` and `permitted` behave as `with-consent` until enforcement is in place. Do not tell a user that `data-loss-forbidden` protects their data today.
+**Data protection policy.** `dataLoss` and `accessWidening`, each `data-loss-forbidden` / `data-loss-with-consent` / `data-loss-permitted` (and the `access-widening-` forms). `with-consent` is the default and is today's behaviour: `db update` asks, and a migration carries the consent given when it was planned. Every command enforces them before it runs anything:
+
+| Level | `db update` | `db migrate`, a Composer deploy | `migration plan --to <ref>` |
+|---|---|---|---|
+| `forbidden` | Refuses the change, even with `--delete` or `--allow` | Refuses a run containing a migration that does it | Refuses to write the migration, when the ref declares the level |
+| `with-consent` | Asks (`--delete`, `--rename`, `--allow`) | Runs | Asks about data loss |
+| `permitted` | Does not ask; an unanswered loss is a delete, and `--rename` still applies | Runs | Asks about data loss |
+
+A refusal is `MIGRATION.DATA_PROTECTION_FORBIDS`; `meta.operations` lists each refused operation, and for `db migrate` the migration that contains it. The way forward is to change the contract or the migration: to keep the data, carry it first with a data transform, or state a `--rename` when the loss is really a rename. Never loosen the policy to get past it.
+
+A loss is an operation whose class is `destructive`. An access change is disabling row-level security or dropping a row-level-security policy (Postgres only). In a recorded migration these are recognised from the operation itself, so an access change written as raw SQL is not seen: `access-widening-forbidden` does not stop a hand-written `DISABLE ROW LEVEL SECURITY`.
 
 **Declaring policies.** A ref declares the policies its database should have. Edit the ref file; every key is optional, and a key you leave out declares nothing:
 
