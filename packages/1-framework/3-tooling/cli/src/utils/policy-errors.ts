@@ -45,7 +45,7 @@ export function errorPolicyMismatch(args: {
   );
 }
 
-export type PolicyCheckedCommand = 'db update' | 'db sign' | 'db migrate';
+export type ChangePolicyCheckedCommand = 'db update' | 'db sign' | 'db migrate';
 
 /** Where a refused policy comes from: the database's marker, or the ref a run consents to record or a plan is made for. */
 export type PolicySource =
@@ -55,7 +55,7 @@ export type PolicySource =
 /** `MIGRATION.CHANGE_POLICY_FORBIDS`: the change policy does not permit the command's way of changing the database. */
 export function errorChangePolicyForbids(args: {
   readonly spaceId: string;
-  readonly command: PolicyCheckedCommand;
+  readonly command: ChangePolicyCheckedCommand;
   readonly change: readonly ChangeStrategy[];
   readonly source: PolicySource;
   /** The contract the refused command was moving the database to. */

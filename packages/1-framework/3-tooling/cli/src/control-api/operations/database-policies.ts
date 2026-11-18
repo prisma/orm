@@ -14,6 +14,7 @@ import type { NamedRef } from '@internal/migration-tools/refs';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../../utils/cli-errors';
 import {
+  type ChangePolicyCheckedCommand,
   type DataProtectionCheckedCommand,
   type DataProtectionRefusedOperation,
   type DataProtectionSetting,
@@ -21,7 +22,6 @@ import {
   errorDataProtectionForbids,
   errorPolicyMismatch,
   FORBIDDEN_LEVEL,
-  type PolicyCheckedCommand,
   type PolicySource,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
@@ -58,7 +58,7 @@ export interface CheckedDatabasePolicies {
   readonly toWrite: DatabasePoliciesToWrite | undefined;
 }
 
-const STRATEGY_OF: Record<PolicyCheckedCommand, ChangeStrategy> = {
+const STRATEGY_OF: Record<ChangePolicyCheckedCommand, ChangeStrategy> = {
   'db migrate': 'migrate',
   'db update': 'reconcile',
   'db sign': 'reconcile',
@@ -70,7 +70,7 @@ const STRATEGY_OF: Record<PolicyCheckedCommand, ChangeStrategy> = {
  * them. Then the change policy the run would leave in force must permit the command.
  */
 export function checkRunPolicies(args: {
-  readonly command: PolicyCheckedCommand;
+  readonly command: ChangePolicyCheckedCommand;
   readonly appSpaceId: string;
   readonly inForce: DatabasePolicies;
   readonly ref: NamedRef | undefined;
