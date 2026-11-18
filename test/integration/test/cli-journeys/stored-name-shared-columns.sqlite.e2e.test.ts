@@ -4,7 +4,7 @@
  * The SQLite twin of `stored-name-shared-columns.e2e.test.ts`. Each journey runs through `migration plan` only, since a hand-written migration is the route its refusal offers there.
  *
  * - C1: `Task.title` and `Bug.label` share column `title`, and `--rename Bug.label:Bug.heading` moves `Bug` to a column of its own. The statement is refused, since the values of `Task.title` would not move. The hand-written migration its advice describes adds column `heading` and copies the label of each bug into it.
- * - C2: `Task.a` moves from column `x` to `z`, and `--rename Bug.b:Bug.c` moves `Bug` from column `y` to `z` too. The statement is refused, since column `z` would also store the values of `Task.a`. The hand-written migration its advice describes renames `x` to `z`, copies `b` of each bug into it, and drops `y`.
+ * - C2: `Task.a` moves from column `x` to `z`, and `--rename Bug.b:Bug.c` moves `Bug` from column `y` to `z` too. The statement is refused, since column `z` would also store the values of `Task.a`. The hand-written migration its advice describes renames `x` to `z`, copies `b` of each bug into it, and drops `y`. A bug row then holds `b` in `z` and loses its value of `a`, since the destination stores both fields of a bug in that one column: this journey keeps the variant's field.
  *
  * Each journey reads every row back and ends with `db verify --schema-only` clean and a further plan empty.
  */
@@ -182,7 +182,7 @@ withTempDir(({ createTempDir }) => {
 
   describe('Journey C2 (SQLite): a variant field moves into the column a base field moves to', () => {
     it(
-      'is refused, and the hand-written migration its advice describes keeps the values of both fields',
+      'is refused, and the hand-written migration its advice describes keeps b in each bug row and a in every other row',
       async () => {
         const journey = sqliteJourney(createTempDir, 'migration plan');
         await start(
@@ -220,7 +220,7 @@ withTempDir(({ createTempDir }) => {
 
         expect(
           await rows(journey, 'SELECT id, type, z FROM "task" ORDER BY id'),
-          'C2.05: z holds b of each bug and a of every other row',
+          'C2.05: z holds b of each bug, even where b is NULL, and a of every other row; a bug row loses its a, since one column holds one value per row',
         ).toEqual([
           { id: 1, type: 'bug', z: 'b1' },
           { id: 2, type: 'epic', z: 'a2' },
