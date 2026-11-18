@@ -2,7 +2,7 @@
 changes:
   - id: sti-variant-unscoped-index-refused
     summary: |
-      `prisma contract emit` now refuses `@unique`, `@@unique` and `@@index` without `where:` on a single-table variant (a model with `@@base` and no `@@map`), with `PSL_UNSCOPED_INDEX_ON_STI_VARIANT`. Before, these were dropped from the contract without a word. Replace each with an `@@index` whose `where:` selects the variant's discriminator value. The detection matches PSL files that declare a variant and a unique or an index.
+      `prisma contract emit` now refuses `@unique`, `@@unique` and `@@index` without `where:` on a single-table variant (a model with `@@base` and no `@@map`), with `PSL_UNSCOPED_INDEX_ON_STI_VARIANT`. Before, these were dropped from the contract without a word. Replace each with an `@@index` whose `where:` selects the variant's discriminator value. A variant `@@index` with `where:`, which was also dropped before, now emits a partial index on the base table, so plan and apply a migration for it. The detection matches PSL files that declare a variant and a unique or an index.
     detection:
       glob: "**/*.prisma"
       matches:
@@ -25,10 +25,10 @@ This applies to SQL contracts only; a MongoDB contract is not affected. A single
 A unique constraint or a plain index on the shared table would also cover the other variants' rows. `prisma contract emit` used to drop these attributes from the contract. It now refuses each one at the attribute:
 
 ```text
-PSL_UNSCOPED_INDEX_ON_STI_VARIANT: Model "Bug" shares the table of its base model "Task" (single-table inheritance), so "@unique" would also cover the rows of other variants. Scope it to this variant instead: @@index([ticket], unique: true, where: sql`type = 'bug'`)
+PSL_UNSCOPED_INDEX_ON_STI_VARIANT: Model "Bug" shares the table of its base model "Task" (single-table inheritance), so "@unique" would also cover the rows of other variants. Without a condition, only a plain @@index over exactly the fields of one of its relations is accepted. Scope it to this variant instead: @@index([ticket], unique: true, where: sql`type = 'bug'`)
 ```
 
-A plain `@@index` over exactly the `fields:` of one of the variant's relations is still accepted: the relation's foreign key derives that index anyway.
+One form without `where:` is still accepted: a plain `@@index` over exactly the `fields:` of one of the variant's relations, because the relation's foreign key creates that same index anyway.
 
 In every file the detection matches, find each variant that declares `@unique`, `@@unique` or an `@@index` without `where:`. Replace it with the `@@index` the message writes out: the same fields, `unique: true` for a unique one, and a `where:` condition that compares the base's discriminator column with the variant's value.
 
@@ -50,6 +50,10 @@ model Bug {
 ```
 
 These attributes were never in the contract before, so the new index is a change to storage: plan and apply a migration for it. A unique index fails to build if two rows of the variant already hold the same value; remove the duplicates first.
+
+## An `@@index` with `where:` is now stored
+
+A variant's `@@index` with `where:` used to be dropped from the contract too. It now becomes a partial index on the base model's table. Re-emit the contract with `prisma contract emit`, then plan and apply a migration to create the index.
 
 ## A relation's foreign key is now stored
 

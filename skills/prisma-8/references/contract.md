@@ -294,7 +294,7 @@ model Feature {
 }
 ```
 
-An STI variant's relations put their foreign keys on the base table. Its `@@unique`, `@unique` and `@@index` without `where:` are refused, because on the shared table they would also cover the other variants' rows; scope the index to the variant instead, as in ``@@index([severity], unique: true, where: sql`type = 'bug'`)``. A plain `@@index` over exactly a variant relation's `fields:` is accepted, since the foreign key derives it anyway. Two variants that declare different foreign keys on the same column are refused too. `@@check` on an STI variant is refused; declare it on the base.
+An STI variant's relations put their foreign keys on the base table. Its `@@unique`, `@unique` and `@@index` without `where:` are refused, because on the shared table they would also cover the other variants' rows; scope the index to the variant instead, as in ``@@index([severity], unique: true, where: sql`type = 'bug'`)``. One form without `where:` is accepted: a plain `@@index` over exactly a variant relation's `fields:`, because the relation's foreign key creates that same index anyway. A variant `@@index` with `where:` becomes a partial index on the base table; before, it was dropped from the contract. Two variants that declare different foreign keys on the same column are refused too. `@@check` on an STI variant is refused; declare it on the base.
 
 A variant's base can be in another namespace: write `@@base(ns.Model, "value")`. Such a variant must set `@@map(...)`, because a variant that shares its base's table has to be in the base's namespace.
 

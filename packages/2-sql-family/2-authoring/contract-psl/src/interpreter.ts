@@ -2270,7 +2270,7 @@ function unscopedIndexDiagnostics(
     indexArguments: readonly string[],
   ): PslDiagnostic => ({
     code: PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
-    message: `Model "${baseDecl.model.name}" shares the table of its base model "${baseDecl.base.model.name}" (single-table inheritance), so "${label}" would also cover the rows of other variants. Scope it to this variant instead: @@index(${[...indexArguments, condition].join(', ')})`,
+    message: `Model "${baseDecl.model.name}" shares the table of its base model "${baseDecl.base.model.name}" (single-table inheritance), so "${label}" would also cover the rows of other variants. Without a condition, only a plain @@index over exactly the fields of one of its relations is accepted. Scope it to this variant instead: @@index(${[...indexArguments, condition].join(', ')})`,
     ...diagnosticSource(sources, node.syntax).at(nodePslSpan(node.syntax, sources)),
   });
   const writtenArguments = (args: readonly ResolvedAttributeArg[]) =>

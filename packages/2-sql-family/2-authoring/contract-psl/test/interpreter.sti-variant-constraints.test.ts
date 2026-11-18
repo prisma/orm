@@ -222,7 +222,7 @@ model HumanActor {
       diagnosticsOf([contact, actor, humanWithContact(`  ${attribute}`)].join('\n\n')),
     ).toEqual([
       expect.objectContaining({
-        message: `Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), so "${attribute.split('(')[0]}" would also cover the rows of other variants. Scope it to this variant instead: ${advice}`,
+        message: `Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), so "${attribute.split('(')[0]}" would also cover the rows of other variants. Without a condition, only a plain @@index over exactly the fields of one of its relations is accepted. Scope it to this variant instead: ${advice}`,
       }),
     ]);
   });

@@ -222,7 +222,7 @@ function assertVariantIndexesScoped(variant: VariantStorage): void {
   const listed = unscoped.map((columns) => `(${columns.join(', ')})`).join(', ');
   throw contractError(
     'CONTRACT.UNSCOPED_INDEX_ON_STI_VARIANT',
-    `Model "${variant.modelName}" shares table "${variant.tableName}" with its base model (single-table inheritance), so its unique constraints and indexes on ${listed} would also cover the rows of other variants. Declare each as an index with a \`where\` condition that selects this variant's discriminator value.`,
+    `Model "${variant.modelName}" shares table "${variant.tableName}" with its base model (single-table inheritance), so its unique constraints and indexes on ${listed} would also cover the rows of other variants. Without a condition, only a plain index over exactly the columns of one of its foreign keys is accepted. Declare each as an index with a \`where\` condition that selects this variant's discriminator value.`,
     {
       meta: {
         modelName: variant.modelName,
