@@ -36,7 +36,7 @@
       "expiryDays": 90,
       "assignee": null,
       "linear": "TML-2521",
-      "notes": "vitest.config.ts excludes the IR class-only files from coverage (mirroring the existing pack-types.ts pattern); validators.ts and index-type-validation.ts remain under-covered pending dedicated branch-coverage tests. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue). Renewed 2026-11-16: expired 2026-11-15 and turned the Coverage check red in the merge queue for every pull request; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
+      "notes": "The package's coverage.config.json excludes index-type-validation.ts from coverage; validators.ts and index-type-validation.ts remain under-covered pending dedicated branch-coverage tests. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue). Renewed 2026-11-16: expired 2026-11-15 and turned the Coverage check red in the merge queue for every pull request; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue). 2026-11-18: sql-storage.ts, storage-column.ts, storage-table.ts, storage-type-instance.ts and unique-constraint.ts, which were excluded until then, have direct unit tests and are counted in coverage."
     },
     {
       "package": "2-sql-family/2-authoring/contract-ts",
