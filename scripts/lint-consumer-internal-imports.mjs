@@ -208,6 +208,8 @@ export function publishedNamesOnLine(line) {
   const names = [];
   for (const match of line.matchAll(PUBLISHED_NAME)) {
     let name = match[0].replace(/^(@prisma\/[^@/]+(?:\/[^@]*)?)@.*$/, '$1').replace(/[.!?]+$/, '');
+    name = name.replace(/([^-/*])[*_]+$/, '$1');
+    if (!name.includes('<')) name = name.replace(/>+$/, '');
     if (PLACEHOLDER.test(name)) continue;
     if (line[match.index - 1] === '/') name = name.split('/').slice(0, 2).join('/');
     if (!names.includes(name)) names.push(name);
@@ -244,19 +246,30 @@ export function publishedEntries(scanDir, packageName) {
   const manifest = join(scanDir, 'packages/9-public', packageName, 'package.json');
   if (!existsSync(manifest)) return undefined;
   const exports = JSON.parse(readFileSync(manifest, 'utf-8')).exports ?? {};
-  const keys = typeof exports === 'string' ? ['.'] : Object.keys(exports);
+  const targets = typeof exports === 'string' ? { '.': exports } : exports;
   const specifierOf = (key) => (key === '.' ? packageName : `${packageName}/${key.slice(2)}`);
-  const exact = new Set(keys.filter((key) => !key.includes('*')).map(specifierOf));
-  const wildcards = keys
-    .filter((key) => key.includes('*'))
-    .map((key) => {
-      const [before, after] = specifierOf(key).split('*');
-      return (specifier) =>
+  const exact = new Map();
+  const wildcards = [];
+  for (const [key, target] of Object.entries(targets)) {
+    if (!key.includes('*')) {
+      exact.set(specifierOf(key), target);
+      continue;
+    }
+    const [before, after] = specifierOf(key).split('*');
+    wildcards.push({ before, after, target });
+  }
+  wildcards.sort((a, b) => b.before.length - a.before.length);
+  const targetOf = (specifier) => {
+    if (exact.has(specifier)) return exact.get(specifier);
+    const match = wildcards.find(
+      ({ before, after }) =>
         specifier.length > before.length + after.length &&
         specifier.startsWith(before) &&
-        specifier.endsWith(after);
-    });
-  return { has: (specifier) => exact.has(specifier) || wildcards.some((fits) => fits(specifier)) };
+        specifier.endsWith(after),
+    );
+    return match?.target ?? null;
+  };
+  return { has: (specifier) => targetOf(specifier) !== null };
 }
 
 /** One record per prose line naming an internal package or a published entry that does not exist. */

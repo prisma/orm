@@ -6,11 +6,13 @@
 
 ## Setup
 
-The `User` table holds at least one row with an `email`, created before the migration is planned.
+The `User` table holds at least one row, created before the migration is planned. Every row has a non-null `email`.
 
 ## Prompt
 
 > Add a `displayName String` field to User, NOT NULL, defaulting to the user's email if displayName isn't set yet.
+
+The request is a backfill of existing rows. New rows supply `displayName` themselves.
 
 ## Expected agent behavior
 

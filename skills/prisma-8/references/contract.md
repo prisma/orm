@@ -541,9 +541,9 @@ Infer captures indexes at full fidelity — expression, partial (`where:`), uniq
 ## Checklist
 
 - [ ] Read `prisma.config.ts` and identified the contract source (path string ending in `.prisma` or `.ts`) and the installed `extensions: [...]`.
-- [ ] Every Prisma ORM import in a user-authored file resolves to `@prisma/orm-<target>/<subpath>` (e.g. `@prisma/orm-postgres/config`) or `@prisma/orm-extension-<name>/<subpath>`, apart from `definePrismaConfig` in `prisma.config.ts`, which comes from `@prisma/cli-engine`. No imports from `@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*` or `@prisma/orm-toolchain` in user files.
+- [ ] Every Prisma ORM import in a user-authored file resolves to `@prisma/orm-<target>/<subpath>` (e.g. `@prisma/orm-postgres/config`) or to `@prisma/orm-extension-<name>` or one of its subpaths, apart from `definePrismaConfig` in `prisma.config.ts`, which comes from `@prisma/cli-engine`. No imports from `@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*` or `@prisma/orm-toolchain` in user files.
 - [ ] Edited the contract source (`contract.prisma` or `contract.ts`), not an emitted artefact.
-- [ ] For new extension namespaces: added the package, imported its control descriptor (`@prisma/orm-extension-<name>/control`), added it to `extensions: [...]` in `ormConfig({...})` (and the matching pack descriptor to `defineContract({extensions: {...}})` if using the TS builder).
+- [ ] For new extension namespaces: added the package, imported its control descriptor (`@prisma/orm-extension-<name>/control`, or `/pack` for a package with no `/control` entry, such as Supabase), added it to `extensions: [...]` in `ormConfig({...})` (and the matching pack descriptor to `defineContract({extensions: {...}})` if using the TS builder).
 - [ ] `prisma.config.ts` is the envelope form — `definePrismaConfig({ orm: ormConfig({...}) })` — not a flat `defineConfig({...})`.
 - [ ] For renames: passed `--rename old:new` to `migration plan` or `db update` (or hand-edited `migration.ts` where statements do not cover the rename).
 - [ ] Ran `pnpm prisma contract emit` after the edit (or let the Vite plugin re-emit on save).

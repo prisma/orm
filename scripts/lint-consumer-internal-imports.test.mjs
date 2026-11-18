@@ -517,6 +517,20 @@ describe('publishedNamesOnLine', () => {
     );
   });
 
+  it('drops Markdown emphasis and an autolink bracket, so the name is still resolved', () => {
+    assert.deepEqual(publishedNamesOnLine('Use **@prisma/orm-postgres/missing**.'), [
+      '@prisma/orm-postgres/missing',
+    ]);
+    assert.deepEqual(publishedNamesOnLine('Use _@prisma/orm-postgres/missing_.'), [
+      '@prisma/orm-postgres/missing',
+    ]);
+    assert.deepEqual(
+      publishedNamesOnLine('See <https://www.npmjs.com/package/@prisma/orm-postgres>.'),
+      ['@prisma/orm-postgres'],
+    );
+    assert.deepEqual(publishedNamesOnLine('Never `@prisma/orm-family-*`.'), []);
+  });
+
   it('skips placeholders and prefixes', () => {
     assert.deepEqual(
       publishedNamesOnLine(
@@ -550,6 +564,26 @@ describe('publishedEntries', () => {
     assert.equal(entries.has('@prisma/orm-x/Runtime'), false);
     assert.equal(entries.has('@prisma/orm-x/runtime/'), false);
     assert.equal(publishedEntries(repo, '@prisma/orm-y'), undefined);
+  });
+
+  it('reads a null target as an exclusion, and the most specific wildcard wins', () => {
+    writeRepoFile(
+      'packages/9-public/@prisma/orm-x/package.json',
+      JSON.stringify({
+        name: '@prisma/orm-x',
+        exports: {
+          '.': './i.mjs',
+          './runtime': null,
+          './features/*': './f/*.mjs',
+          './features/internal/*': null,
+        },
+      }),
+    );
+    const entries = publishedEntries(repo, '@prisma/orm-x');
+    assert.equal(entries.has('@prisma/orm-x'), true);
+    assert.equal(entries.has('@prisma/orm-x/runtime'), false);
+    assert.equal(entries.has('@prisma/orm-x/features/a'), true);
+    assert.equal(entries.has('@prisma/orm-x/features/internal/a'), false);
   });
 
   it('resolves prose against real manifests: a real export passes, a made-up one and an unknown package fail', () => {
