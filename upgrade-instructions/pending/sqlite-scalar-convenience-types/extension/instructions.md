@@ -17,7 +17,7 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*[''"](?:@prisma/orm-sqlite|@internal/sqlite)/contract-builder[''"])[\s\S]*\.\s*Decimal\s*\('
   - id: sqlite-bigintnumber-deprecated
     summary: |
-      On SQLite, `BigIntNumber` is a deprecated alias of `IntegerNumber` that warns with `PSL_DEPRECATED_SCALAR_NAME`, and a field written with it now emits codec `sqlite/integer@1` instead of `sqlite/bigintnumber@1`. Write `BigInt(as: number)` (or `type.BigInt({ as: 'number' })`), re-emit the contract and sign the database. No column changes and no data moves.
+      On SQLite, `BigIntNumber` is a deprecated alias of `IntegerNumber` that warns with `PSL_DEPRECATED_SCALAR_NAME`, and a field written with it now emits codec `sqlite/integer@1` instead of `sqlite/bigintnumber@1`. Write `BigInt(as: number)` (or `type.BigInt({ as: 'number' })`), or `IntegerNumber`, which the warning names; both give the same contract. Re-emit the contract and sign the database. No column changes and no data moves.
     detection:
       glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
@@ -25,7 +25,7 @@ changes:
         - '\.\s*BigIntNumber\s*\('
   - id: sqlite-integer-safe-range
     summary: |
-      On SQLite, an `Int` field, and every field whose codec is `sqlite/integer@1` (`IntegerNumber`, `BigInt(as: number)`, the deprecated `BigIntNumber`), now refuses to write a number that is not an integer within ±(2^53 − 1), such as `1.5`, with `RUNTIME.ENCODE_FAILED`, and reading a stored number that is not an integer, such as a `real`, raises `RUNTIME.DECODE_FAILED` naming the table and column. Before, the codec wrote any number as it was and read such a number as it was. A stored integer outside the range already failed to read before. Find rows that hold such values and fix them.
+      On SQLite, an `Int` field, and every field whose codec is `sqlite/integer@1` (`IntegerNumber`, `BigInt(as: number)`, the deprecated `BigIntNumber`), now refuses to write a number that is not an integer within ±(2^53 − 1), such as `1.5`, with `RUNTIME.ENCODE_FAILED`, and reading a stored number that is not an integer, such as a `real`, raises `RUNTIME.DECODE_FAILED` naming the table and column. Before, the codec wrote any number as it was and read such a number as it was. A stored integer outside the range, which failed to read in a row with a `RangeError` from `node:sqlite` before, now raises `RUNTIME.DECODE_FAILED` naming the table and column. `sql/int@1` checks a read the same way. Find rows that hold such values and fix them.
     detection:
       glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
@@ -57,13 +57,15 @@ Two names change the contract. A `Decimal` field gets its own codec, `sqlite/dec
 
 `Int` and every other field on the codec `sqlite/integer@1` now checks that a value is an integer within the safe integer range, as `BigIntNumber` did; see `sqlite-integer-safe-range`.
 
+A `BigInt` field now reads every stored 64-bit integer. Before, reading a row that held an integer outside ±(2^53 − 1) failed in `node:sqlite` with a `RangeError` whose code is `ERR_OUT_OF_RANGE`, so only a read through an `include()` or a `sumBigInt` gave the value. Nothing in the schema changes for it.
+
 The column helpers of the TypeScript contract builder are renamed after the explicit type each gives, and `decimalStringColumn` and `integerBooleanColumn` are new.
 
 ## Sign the database with the new contract
 
 The `Decimal` and `BigIntNumber` changes below change the contract's storage hash, so `db verify` reports `CONTRACT.MARKER_MISMATCH` until the database is signed with the new contract. After re-emitting the contract:
 
-- In a project with migrations, run `migration plan`. It writes a migration with no operations, which names the changed table, and `db migrate` applies it and signs the database. No table is rebuilt.
+- In a project with migrations, run `migration plan --from <latest migration>`, where `<latest migration>` is the name of the newest folder under `migrations/`. It writes a migration with no operations, which names the changed table, and `db migrate` applies it and signs the database. No table is rebuilt. Without `--from`, `migration plan` starts from the `db` ref, and a project that applies its migrations with `db migrate` has none, so it refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN`.
 - In a project without migrations, run `db update`. It runs no operation and signs the database.
 
 `db verify --schema-only` passes before and after: the columns are the same.
@@ -105,7 +107,7 @@ In a SQLite TypeScript contract, `type.Decimal()` and `type.DecimalString()` giv
 
 This applies to a SQLite schema or TypeScript contract. On PostgreSQL, `BigIntNumber` is covered by the PostgreSQL scalar rename; skip this entry there.
 
-In each matched SQLite schema, replace the type `BigIntNumber` with `BigInt(as: number)`, in fields, value object members and `types {}` aliases. In a SQLite TypeScript contract, replace `type.BigIntNumber()` with `type.BigInt({ as: 'number' })`:
+In each matched SQLite schema, replace the type `BigIntNumber` with `BigInt(as: number)`, in fields, value object members and `types {}` aliases. In a SQLite TypeScript contract, replace `type.BigIntNumber()` with `type.BigInt({ as: 'number' })`. The deprecation warning names `IntegerNumber`, the explicit type, which gives the same contract as `BigInt(as: number)`; either is right:
 
 ```prisma
 model Post {
@@ -114,7 +116,7 @@ model Post {
 }
 ```
 
-`IntegerNumber`, the explicit type, and `Int` give the same column too. The field's codec id changes from `sqlite/bigintnumber@1` to `sqlite/integer@1`, which writes and reads a `number` within the safe integer range, as `sqlite/bigintnumber@1` did; `sqlite-integer-safe-range` says what a value outside it raises. Re-emit the contract and sign the database as described above.
+`Int` gives the same column too. The field's codec id changes from `sqlite/bigintnumber@1` to `sqlite/integer@1`, which writes and reads a `number` within the safe integer range, as `sqlite/bigintnumber@1` did; `sqlite-integer-safe-range` says what a value outside it raises. Re-emit the contract and sign the database as described above.
 
 `sqlite/bigintnumber@1` stays: `count()` and the `sum` of an integer column still read their result through it, so a reference to it in generated `contract.d.ts` aggregate types is expected. A file that matches only because a comment or a string mentions `BigIntNumber` needs no change. Leave the `contract.prisma` copy inside each migration folder under `migrations/` as it is.
 
@@ -126,8 +128,10 @@ Nothing in the schema or the contract changes. The codec `sqlite/integer@1`, whi
 
 - A write of a number that is not an integer, such as `1.5`, or of an integer outside ±(2^53 − 1), the range a JavaScript `number` holds exactly, fails with `RUNTIME.ENCODE_FAILED` before any SQL runs, as in `sqlite/integer@1 value must be an integer within the safe integer range, got 1.5`. Before, the number was written as it was: SQLite stored `1.5` as a `real` in the `integer` column, and an integer past the range had already lost digits in the JavaScript `number` before it was written. Round the value in the application, or give the field `BigInt` if it needs the full 64-bit range.
 - A read of a stored number that is not an integer, such as the `real` `1.5` an earlier write stored, fails with `RUNTIME.DECODE_FAILED` and names the table and column, as in `Column "line_item"."quantity" holds 1.5, which is not an integer within the safe integer range.` Before, a read of the row gave the number as it was, and a read through an `include()` already failed.
-- A stored integer outside the range failed to read before this change, and still does. A read of the row fails in `node:sqlite` before any codec runs, with a `RangeError` whose code is `ERR_OUT_OF_RANGE` and which names no column, as in `Value is too large to be represented as a JavaScript number: 9007199254740993`. A read through an `include()` fails with `RUNTIME.DECODE_FAILED` and names the table and column.
-- A stored blob fails with `RUNTIME.DECODE_FAILED` and names the table and column, in a row and through an `include()`, as in `Column "line_item"."quantity" holds bytes x'35', which is not an integer within the safe integer range.` `sql/int@1` reads a blob the same way. Before, a blob whose bytes spell digits was read as a number: `x'35'` read as 53 in a row and as 5 through an `include()`.
+- A read of a stored integer outside the range fails with `RUNTIME.DECODE_FAILED` and names the table and column, in a row and through an `include()`, as in `Column "line_item"."quantity" holds 9007199254740993, which is not an integer within the safe integer range.` Before, a read of the row failed in `node:sqlite` before any codec ran, with a `RangeError` whose code is `ERR_OUT_OF_RANGE` and which named no column, and a read through an `include()` already raised `RUNTIME.DECODE_FAILED`.
+- A stored blob fails with `RUNTIME.DECODE_FAILED` and names the table and column, in a row and through an `include()`, as in `Column "line_item"."quantity" holds bytes x'35', which is not an integer within the safe integer range.` `sql/int@1` reads a blob the same way. Before, some blobs were read as a number: in a row a one-byte blob read as the value of its byte, so `x'07'` read as 7, and a longer blob such as `x'3132'` was refused; through an `include()` a blob whose bytes spell digits read as that number, so `x'3132'` read as 12.
+
+`sql/int@1`, which a TypeScript contract can name on SQLite, reads the same way: a stored number that is not an integer, an integer outside the range and a blob each raise `RUNTIME.DECODE_FAILED` naming the table and column. Before, it read a stored number in a row as it was.
 
 Find such rows with this query, putting in each `Int` column and its table:
 

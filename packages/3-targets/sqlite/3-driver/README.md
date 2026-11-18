@@ -27,6 +27,8 @@ Provide SQLite transport and connection management. Execute SQL statements and m
 - **Connection Management**: Acquire and release database connections via `node:sqlite` `DatabaseSync`
 - **Statement Execution**: Execute SQL statements with positional `?` parameters
 - **Write Results**: `execute()` reports `affectedRows` from `run().changes`. When `changes` is 1 it also reports `insertId`, `lastInsertRowid` as decimal text. That names the inserted row only after a one-row insert: after a one-row `UPDATE` or `DELETE` it is left over from the connection's last insert and means nothing
+- **Exact Integers**: Every statement reads integers with `setReadBigInts(true)`. A row hands an integer within ±(2^53 − 1) over as a `number` and one outside it as the exact `bigint`, for its codec to read or refuse, in `query()`, `explain()` and the control driver's `query()` alike. `insertId` is exact at any size
+- **Statement Release**: A read that stops part-way, because SQLite fails on a later row or the reader stops, resets its statement, so no read lock stays behind
 - **Query Explanation**: Execute `EXPLAIN QUERY PLAN` queries for query analysis
 - **Persistent Connection**: Top-level `execute()`/`query()`/`explain()` reuse a persistent connection opened at `connect()` time
 - **Scoped Connections**: `acquireConnection()` opens fresh `DatabaseSync` handles for isolated scopes (transactions)
