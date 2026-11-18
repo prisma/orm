@@ -18,7 +18,9 @@ describe('validateMysqlUrl', () => {
   });
 
   it('still refuses a URL whose host is malformed rather than blank', () => {
-    expect(() => validateMysqlUrl('mysql://user:password@[db.example/db', TARGET, URL_SCHEMES)).toThrow(
+    expect(() =>
+      validateMysqlUrl('mysql://user:password@[db.example/db', TARGET, URL_SCHEMES),
+    ).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.BINDING_INVALID',
         message: 'MySQL URL must be a valid URL',
@@ -29,9 +31,7 @@ describe('validateMysqlUrl', () => {
 
 describe('resolveMysqlBinding', () => {
   it('resolves a URL that leaves the host blank', () => {
-    expect(
-      resolveMysqlBinding({ url: 'mysql://user:password@/db' }, TARGET, URL_SCHEMES),
-    ).toEqual({
+    expect(resolveMysqlBinding({ url: 'mysql://user:password@/db' }, TARGET, URL_SCHEMES)).toEqual({
       kind: 'url',
       url: 'mysql://user:password@/db',
     });
