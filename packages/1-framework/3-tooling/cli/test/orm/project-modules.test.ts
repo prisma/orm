@@ -1,6 +1,6 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'pathe';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { importFromProject } from '../../src/orm/project-modules';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
@@ -11,6 +11,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   rmSync(projectDir, { recursive: true, force: true });
 });
 
@@ -114,5 +115,46 @@ describe('importFromProject', () => {
     const result = await importFromProject(projectDir, 'acme-db/init');
 
     expect(result).toMatchObject({ kind: 'unloadable', cause: new Error('init exploded') });
+  });
+
+  describe('when the child Node that resolves the export misbehaves', () => {
+    beforeEach(() => {
+      writePackage(
+        { type: 'module', exports: { './init': './init.mjs' } },
+        { 'init.mjs': 'export default 42;\n' },
+      );
+    });
+
+    it('ignores what a NODE_OPTIONS preload prints', async () => {
+      writeFile('noisy-preload.cjs', "console.log('{ preload says hello');\n");
+      vi.stubEnv('NODE_OPTIONS', `--require ${join(projectDir, 'noisy-preload.cjs')}`);
+
+      await expect(importFromProject(projectDir, 'acme-db/init')).resolves.toMatchObject({
+        kind: 'loaded',
+        module: { default: 42 },
+      });
+    });
+
+    it('says the export cannot be loaded when the child exits with an error', async () => {
+      vi.stubEnv('NODE_OPTIONS', '--no-such-node-option');
+
+      const result = await importFromProject(projectDir, 'acme-db/init');
+
+      expect(result).toMatchObject({ kind: 'unloadable' });
+      expect(String(Reflect.get(result, 'cause'))).toContain('--no-such-node-option');
+    });
+
+    it('says the export cannot be loaded when the child cannot start', async () => {
+      const execPath = process.execPath;
+      process.execPath = join(projectDir, 'no-such-runtime');
+      try {
+        const result = await importFromProject(projectDir, 'acme-db/init');
+
+        expect(result).toMatchObject({ kind: 'unloadable' });
+        expect(String(Reflect.get(result, 'cause'))).toContain('no-such-runtime');
+      } finally {
+        process.execPath = execPath;
+      }
+    });
   });
 });

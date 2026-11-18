@@ -1,7 +1,8 @@
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire, findPackageJSON } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { type } from 'arktype';
 import { join } from 'pathe';
 
 /** What the project resolves a module specifier to, and what importing it gave. */
@@ -14,28 +15,66 @@ export type ProjectImport =
 /** Imports a module as the project at `cwd` resolves it, not as the CLI's own location would. */
 export type ImportFromProject = (cwd: string, specifier: string) => Promise<ProjectImport>;
 
+const ANSWER_START = '\u0000prisma-resolution-start\u0000';
+const ANSWER_END = '\u0000prisma-resolution-end\u0000';
+
 /**
- * Asks a child Node, started in the project folder, to resolve the specifier with
- * `import.meta.resolve`, so the project's own resolution, conditions and all, decides.
+ * Asks a child, started in the project folder, to resolve the specifier with
+ * `import.meta.resolve`, so the project's own resolution, conditions and all, decides. The answer
+ * sits between fixed markers, so output from a `NODE_OPTIONS` preload cannot be mistaken for it.
  */
 const RESOLVE_IN_PROJECT = `
+const answer = (value) => process.stdout.write(${JSON.stringify(ANSWER_START)} + JSON.stringify(value) + ${JSON.stringify(ANSWER_END)});
 try {
-  process.stdout.write(JSON.stringify({ url: import.meta.resolve(process.argv[1]) }));
+  answer({ url: import.meta.resolve(process.argv[1]) });
 } catch (error) {
-  process.stdout.write(JSON.stringify({ code: error?.code, message: String(error?.message ?? error) }));
+  answer({ code: error?.code, message: String(error?.message ?? error) });
 }`;
 
-type NodeResolution =
-  | { readonly url: string }
-  | { readonly code: string | undefined; readonly message: string };
+const nodeResolution = type({ url: 'string' }).or({
+  'code?': 'string',
+  message: 'string',
+});
 
+type NodeResolution = typeof nodeResolution.infer | { readonly failed: Error };
+
+function answerIn(stdout: string): string | undefined {
+  const start = stdout.lastIndexOf(ANSWER_START);
+  const end = stdout.lastIndexOf(ANSWER_END);
+  return start === -1 || end < start ? undefined : stdout.slice(start + ANSWER_START.length, end);
+}
+
+/**
+ * The child runs on `process.execPath` with Node's command-line flags, so it works where the CLI
+ * runs on Node or Bun; Deno takes different flags and fails here as `unloadable`.
+ */
 function resolveWithNode(cwd: string, specifier: string): NodeResolution {
-  const output = execFileSync(
+  const child = spawnSync(
     process.execPath,
     ['--input-type=module', '-e', RESOLVE_IN_PROJECT, specifier],
     { cwd, encoding: 'utf-8' },
   );
-  return JSON.parse(output);
+  const command = `${process.execPath} resolving ${specifier} in ${cwd}`;
+  if (child.error !== undefined) {
+    return { failed: new Error(`${command} could not start`, { cause: child.error }) };
+  }
+  if (child.status !== 0) {
+    return {
+      failed: new Error(`${command} exited with ${child.status ?? child.signal}: ${child.stderr}`),
+    };
+  }
+  const answer = answerIn(child.stdout);
+  let parsed: unknown;
+  try {
+    parsed = answer === undefined ? undefined : JSON.parse(answer);
+  } catch {
+    parsed = undefined;
+  }
+  const resolution = nodeResolution(parsed);
+  if (resolution instanceof type.errors) {
+    return { failed: new Error(`${command} gave no answer it could read: ${child.stdout}`) };
+  }
+  return resolution;
 }
 
 function errorCode(error: unknown): unknown {
@@ -92,6 +131,9 @@ function resolveFromProject(cwd: string, specifier: string): Resolution {
     }
   }
   const resolved = resolveWithNode(cwd, specifier);
+  if ('failed' in resolved) {
+    return { kind: 'unreadable', cause: resolved.failed };
+  }
   if ('url' in resolved) {
     return { kind: 'resolved', path: fileURLToPath(resolved.url) };
   }
