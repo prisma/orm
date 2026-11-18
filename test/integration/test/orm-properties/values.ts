@@ -11,15 +11,30 @@ export interface ValueSchema {
   readonly contractJson: unknown;
 }
 
+export const probeTables = ['Probe', 'Holder'] as const;
+
 export function valueSchemas(target: Target, rounds: number): ValueSchema[] {
   const seed = seedOfRun();
   return fc.sample(oneOfEachScalarType[target], { seed, numRuns: rounds }).map((types, round) => {
     const fields = types.map((type, index) => `  value${index} ${type.psl}?`);
-    const psl = `// use prisma-8\n\nmodel Probe {\n  id Int @id\n${fields.join('\n')}\n}\n`;
+    const psl = `// use prisma-8
+
+model Holder {
+  id Int @id
+  probes Probe[]
+}
+
+model Probe {
+  id Int @id
+  holderId Int?
+  holder Holder? @relation(fields: [holderId], references: [id])
+${fields.join('\n')}
+}
+`;
     return {
       types,
       contractJson: emitContract(
-        { target, psl, shape: { models: [] }, tables: ['Probe'], features: [] },
+        { target, psl, shape: { models: [] }, tables: probeTables, features: [] },
         `values-${target}-${process.pid}-${round}`,
       ),
     };
@@ -40,6 +55,7 @@ function fieldOfRow(row: unknown, field: string): unknown {
 }
 
 async function roundTrips(
+  holder: LooseCollection,
   probe: LooseCollection,
   clear: () => void | Promise<void>,
   field: string,
@@ -47,9 +63,10 @@ async function roundTrips(
   value: unknown,
 ): Promise<'stored' | 'refused'> {
   await clear();
+  await holder.createAndCount([{ id: 1 }]);
   let created: unknown;
   try {
-    created = await probe.select('id', field).create({ id: 1, [field]: value });
+    created = await probe.select('id', field).create({ id: 1, holderId: 1, [field]: value });
   } catch (error) {
     if (refusedByCodec(error)) return 'refused';
     throw error;
@@ -60,10 +77,23 @@ async function roundTrips(
   });
 
   const stored = fieldOfRow(first, field);
-  await probe.createAndCount([{ id: 2, [field]: stored }]);
+  await probe.createAndCount([{ id: 2, holderId: 1, [field]: stored }]);
   const second = await probe.whereUnique({ id: 2 }).select('id', field).first();
   expect({ storedAgain: comparable(fieldOfRow(second, field)) }).toEqual({
     storedAgain: comparable(stored),
+  });
+
+  const including = await holder
+    .whereUnique({ id: 1 })
+    .include('probes', (probes) =>
+      probes.select('id', field).orderBy([(row) => accessor(row, 'id').asc()]),
+    )
+    .first();
+  expect({ included: comparable(fieldOfRow(including, 'probes')) }).toEqual({
+    included: comparable([
+      { id: 1, [field]: stored },
+      { id: 2, [field]: stored },
+    ]),
   });
 
   if (type.equatable && stored !== null) {
@@ -93,7 +123,10 @@ export async function valuesRoundTrip(
   runs: number,
 ): Promise<void> {
   const probe = paths.reference['Probe'];
-  if (probe === undefined) throw new Error('the ORM offers no model Probe');
+  const holder = paths.reference['Holder'];
+  if (probe === undefined || holder === undefined) {
+    throw new Error('the ORM offers no model Probe or Holder');
+  }
   const failures: string[] = [];
   const neverStored: string[] = [];
   for (const [index, type] of types.entries()) {
@@ -101,7 +134,7 @@ export async function valuesRoundTrip(
     try {
       await fc.assert(
         fc.asyncProperty(type.values, async (value) => {
-          const result = await roundTrips(probe, paths.clear, `value${index}`, type, value);
+          const result = await roundTrips(holder, probe, paths.clear, `value${index}`, type, value);
           if (result === 'stored') stored += 1;
         }),
         { numRuns: runs, seed: seedOfRun() + index },

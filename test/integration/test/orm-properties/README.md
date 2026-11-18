@@ -6,7 +6,8 @@ These tests generate schemas, rows and ORM calls with [fast-check](https://fast-
 | --- | --- |
 | `capabilities.*.test.ts` | A sequence of calls gives the same results and the same rows on the client's own ORM and on an ORM whose contract lacks some capabilities. After every call that returns rows, each row equals the row read by its key straight after. |
 | `reads.*.test.ts` | A read agrees with the same rows read another way. |
-| `values.*.test.ts` | A value of every scalar type is returned as stored, is stored again unchanged, and is found by an equality filter. |
+| `nested.*.test.ts` | A write with relation callbacks stores the same rows as the same writes made one call at a time. |
+| `values.*.test.ts` | A value of every scalar type is returned as stored, is stored again unchanged, reads the same through an include, and is found by an equality filter. |
 | `known-failures/*.test.ts` | Typed examples of what the tests above found, marked `it.fails`. |
 
 ## Capabilities
@@ -37,12 +38,17 @@ After a generated sequence of writes, `reads.ts` checks, on the client's own ORM
 - `count`, `sum`, `min` and `max` equal the same figures computed over `all()`;
 - `groupBy(field)` with a count equals grouping `all()`.
 
+## Nested writes
+
+`nested.ts` takes one generated `create` or `update` with relation callbacks and runs it twice from the same rows: once as written, and once as separate calls (`SeparateWrites`). The separate calls create or look up a row the record holds the key for first, then write the record, then apply each operation on the other relations in order: a `create` or `update` of the related rows' foreign key, a write of a junction row for a many-to-many relation, or `updateAll` and `deleteAll` with a filter on the relation. When both succeed, every table must hold the same rows; when one is rejected, the other must be rejected too.
+
 ## Values
 
 `values.ts` puts one nullable field of every scalar type on a model, with generated type parameters, and for each generated value requires:
 
 - `create` returns what a read by key returns;
 - storing that read value in a second row reads back the same;
+- both rows read through an include of their parent hold the same value, which checks that the codec decodes a value from the include's JSON as it decodes it from a column;
 - for a type with equality, a filter on the read value finds both rows, in the object form and in the callback form.
 
 A value the codec or the database refuses is skipped; a type none of whose values was stored fails the test.
@@ -88,10 +94,11 @@ ORM_PROPERTIES_SEED=<seed> ORM_PROPERTIES_SCHEMA=<index> ORM_PROPERTIES_PATH=<pa
 | Postgres: a `TimeTemporal(p)` value from `23:59:59.5` up is rounded to `24:00:00`, which the codec refuses to read | times from `23:59:59` up |
 | `deleteAll` returns a row another deleted row's `onDelete: SetNull` changed with its foreign key `null` with `RETURNING`, and as it was before the delete without | cascading actions on a relation from a model to itself |
 | `update` of a key that `onUpdate: Cascade` propagates to the same row returns the foreign key as written with `RETURNING`, and as stored without | the same |
-| `create` on a variant stored in its own table ignores `select` and returns every field | `select` on those creates |
+| `create` and `createAll` on a variant stored in its own table ignore `select` and return every field | `select` on those creates |
 | SQLite: a `sql.Char(n)` value is read without its trailing spaces, and a filter on the value read does not find the row | trailing spaces in `sql.Char` values |
+| `create` on a variant stored in its own table with a relation callback is refused with `ORM.FIELD_UNKNOWN` | relation callbacks on those creates |
 
-**Calls the types reject.** The calls are made through loosely typed interfaces, so a generated call can be one TypeScript refuses. The generators avoid the ones found so far, all about a field a variant declares: it is not accepted in `update`, `updateAll` or `upsert` data, in the object form of `where`, or in `select` on a variant. The first two are refused with `ORM.FIELD_UNKNOWN`; a `select` of such a field on `update`, `updateAll`, `delete` or `deleteAll` of a variant stored in its own table reaches the database and fails with `no such column` when the statement has `RETURNING`.
+**Calls the types reject.** The calls are made through loosely typed interfaces, so a generated call can be one TypeScript refuses. The generators avoid the ones found so far, all about a field a variant declares: it is not accepted in `update`, `updateAll` or `upsert` data, in the object form of `where`, or in `select` on a variant. The types also reject `include` on a variant collection, so calls on a variant are generated without one; before `create` or `createAll` of a variant stored in its own table it is ignored. The first two are refused with `ORM.FIELD_UNKNOWN`; a `select` of such a field on `update`, `updateAll`, `delete` or `deleteAll` of a variant stored in its own table reaches the database and fails with `no such column` when the statement has `RETURNING`.
 
 **Refused by a codec.** Postgres `IntervalString` refuses a negative duration such as `-PT5S`.
 

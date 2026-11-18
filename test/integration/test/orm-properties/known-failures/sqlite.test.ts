@@ -77,6 +77,22 @@ describe('SQLite ORM calls known to fail', () => {
     });
   });
 
+  describe('create on a variant with a relation callback', () => {
+    it.fails('stores a variant in its own table', async () => {
+      await withDatabase(async (db) => {
+        await db.orm.Project.createAndCount([{ id: 1 }]);
+        expect(
+          await db.orm.Task.variant('feature').create({
+            id: 2,
+            title: 'Dark mode',
+            priority: 3,
+            project: (project) => project.connect({ id: 1 }),
+          }),
+        ).toEqual({ id: 2, title: 'Dark mode', kind: 'feature', priority: 3, projectId: 1 });
+      });
+    });
+  });
+
   describe('a row another row of the same call changes', () => {
     it.fails('is returned by deleteAll the same with and without RETURNING', async () => {
       const deleted: unknown[] = [];

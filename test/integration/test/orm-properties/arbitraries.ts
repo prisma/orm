@@ -3,6 +3,7 @@ import {
   type Command,
   type FieldShape,
   type Filter,
+  hasRelatedWrites,
   type Included,
   type IncludeTree,
   type Key,
@@ -130,10 +131,6 @@ function fullRowOf(model: ModelShape): fc.Arbitrary<Scalars> {
   return recordOf(model.fields, (field) => valuesOfNewRow(model, field));
 }
 
-function withoutSelect(shape: Shape): Shape {
-  return { ...shape, select: undefined };
-}
-
 function scopesOf(model: ModelShape): (string | undefined)[] {
   return [undefined, ...model.variants.map((variant) => variant.value)];
 }
@@ -210,8 +207,11 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
     const linked = foreignKeyFields(model);
     const own = model.fields.filter((field) => !linked.includes(field.name));
     const others = model.relations.filter((relation) => relation.name !== reachedThrough);
+    const inOwnTable = base.variants.some(
+      (candidate) => candidate.value === variant && candidate.ownTable,
+    );
     const holding = others.filter((relation) => relation.foreignKey !== undefined);
-    const lists = others.filter((relation) => relation.foreignKey === undefined);
+    const lists = inOwnTable ? [] : others.filter((relation) => relation.foreignKey === undefined);
     return fc
       .record({
         own: recordOf(own, (field) => valuesOfNewRow(model, field)),
@@ -233,8 +233,7 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
                     ({ type }) => type.values,
                   ),
                 }),
-                newRelated(tie, relation),
-                newRelated(tie, relation),
+                ...(inOwnTable ? [] : [newRelated(tie, relation), newRelated(tie, relation)]),
               ),
             ]),
           ),
@@ -406,7 +405,10 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
     const on = {
       model: fc.constant(model.name),
       variant: fc.constant(variant),
-      shape: shapeOf(tie, unvaried),
+      shape:
+        variant === undefined
+          ? shapeOf(tie, unvaried)
+          : shapeOf(tie, unvaried).map((shape) => ({ ...shape, include: {} })),
     };
     const counted = fc.boolean();
     const filter = filterOf(tie, base, variant);
@@ -430,7 +432,7 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
           row: row.map((created) =>
             withDistinctKeys(created, model, { values: new Set(), next: 0 }),
           ),
-          ...(inOwnTable ? { shape: shapeOf(tie, unvaried).map(withoutSelect) } : {}),
+          ...(inOwnTable ? { shape: fc.constant({ select: undefined, include: {} }) } : {}),
         }),
       },
       {
@@ -440,6 +442,7 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
           kind: fc.constant('createAll' as const),
           rows: fc.array(fullRowOf(model), { minLength: 1, maxLength: 3 }),
           counted,
+          ...(inOwnTable ? { shape: fc.constant({ select: undefined, include: {} }) } : {}),
         }),
       },
       {
@@ -761,9 +764,14 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
       existingRows(),
       fc.array(command as fc.Arbitrary<Command>, { minLength: 1, maxLength: 8 }),
       fc.array(fc.nat(), { minLength: 32, maxLength: 32 }),
+      (command as fc.Arbitrary<Command>).filter(hasRelatedWrites),
     )
-    .map(([existing, following, picks]) => ({
-      existing,
-      following: aimedAtExistingRows(existing, following, picks),
-    }));
+    .map(([existing, following, picks, nested]) => {
+      const [aimedNested, ...aimedFollowing] = aimedAtExistingRows(
+        existing,
+        [nested, ...following],
+        picks,
+      );
+      return { existing, following: aimedFollowing, nested: aimedNested ?? nested };
+    });
 }

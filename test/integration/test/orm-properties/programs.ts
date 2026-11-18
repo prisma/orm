@@ -16,6 +16,11 @@ export interface RelationShape {
   readonly inverse: string | undefined;
   readonly foreignKey: readonly string[] | undefined;
   readonly required: boolean;
+  readonly through?: {
+    readonly model: string;
+    readonly near: readonly string[];
+    readonly far: readonly string[];
+  };
 }
 
 export type KeyKind = 'single' | 'generated' | 'composite';
@@ -179,4 +184,10 @@ export function depthOfInclude(include: IncludeTree): number {
 export interface Sequence {
   readonly existing: readonly Command[];
   readonly following: readonly Command[];
+  readonly nested: Command;
+}
+
+export function hasRelatedWrites(command: Command): boolean {
+  if (command.kind === 'create') return Object.keys(command.row.related).length > 0;
+  return command.kind === 'update' && Object.keys(command.related).length > 0;
 }

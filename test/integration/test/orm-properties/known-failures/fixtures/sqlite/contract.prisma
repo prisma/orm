@@ -13,10 +13,17 @@ model Person {
   reports Person[] @relation("Management")
 }
 
-model Task {
+model Project {
   id    Int    @id
-  title String
-  kind  String
+  tasks Task[]
+}
+
+model Task {
+  id        Int      @id
+  title     String
+  kind      String
+  projectId Int?
+  project   Project? @relation(fields: [projectId], references: [id])
 
   @@discriminator(kind)
 }

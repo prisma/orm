@@ -16,6 +16,10 @@
       "model": "Person",
       "namespace": "__unbound__"
     },
+    "Project": {
+      "model": "Project",
+      "namespace": "__unbound__"
+    },
     "Task": {
       "model": "Task",
       "namespace": "__unbound__"
@@ -178,6 +182,43 @@
               "table": "Person"
             }
           },
+          "Project": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "tasks": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "projectId"
+                  ]
+                },
+                "to": {
+                  "model": "Task",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Project"
+            }
+          },
           "Task": {
             "discriminator": {
               "field": "kind"
@@ -197,6 +238,13 @@
                   "kind": "scalar"
                 }
               },
+              "projectId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "title": {
                 "nullable": false,
                 "type": {
@@ -205,7 +253,24 @@
                 }
               }
             },
-            "relations": {},
+            "relations": {
+              "project": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "projectId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Project",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
             "storage": {
               "fields": {
                 "id": {
@@ -213,6 +278,9 @@
                 },
                 "kind": {
                   "column": "kind"
+                },
+                "projectId": {
+                  "column": "projectId"
                 },
                 "title": {
                   "column": "title"
@@ -337,6 +405,23 @@
               },
               "uniques": []
             },
+            "Project": {
+              "columns": {
+                "id": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Task": {
               "columns": {
                 "id": {
@@ -355,14 +440,48 @@
                     "plane": "storage"
                   }
                 },
+                "projectId": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
                 "title": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
                 }
               },
-              "foreignKeys": [],
-              "indexes": [],
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Task_projectId_idx_a96e4d92"
+                  },
+                  "source": {
+                    "columns": [
+                      "projectId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Task"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Project"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "projectId"
+                  ],
+                  "name": "Task_projectId_idx_a96e4d92",
+                  "prefix": "Task_projectId_idx",
+                  "unique": false
+                }
+              ],
               "primaryKey": {
                 "columns": [
                   "id"
@@ -426,7 +545,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "bd579e884222cf4bcb5faef12fa414646617fb8fd427295a5c6b402be111667f"
+    "storageHash": "d3ae220a4af9e2b1f4e3e82be63bede2c824dada6cff6e96fa9e98362f53a25d"
   },
   "capabilities": {
     "sql": {

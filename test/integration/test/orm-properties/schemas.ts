@@ -239,8 +239,10 @@ function linkManyToMany(
     { model: left, name: 'left', list: `${prefix}rights`, other: right },
     { model: right, name: 'right', list: `${prefix}lefts`, other: left },
   ] as const;
+  const links = new Map<string, readonly string[]>();
   for (const side of sides) {
     const foreignKey = referencing(junction, side.name, side.model, false);
+    links.set(side.name, foreignKey);
     junction.key.push(...foreignKey);
     junction.relations.push({
       name: side.name,
@@ -269,6 +271,11 @@ function linkManyToMany(
       inverse: opposite.list,
       foreignKey: undefined,
       required: false,
+      through: {
+        model: junction.name,
+        near: links.get(side.name) ?? [],
+        far: links.get(opposite.name) ?? [],
+      },
     });
     const named = ` @relation("${prefix}${side.name}")`;
     side.model.relationLines.push(`  ${side.list} ${side.other.name}[]${named}`);
