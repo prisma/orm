@@ -11,7 +11,7 @@ changes:
       To get an empty table or column under a new stored name instead of renaming the old one, remove the model or field in one change and add it back in a second.
   - id: sql-stored-name-swaps-refused
     summary: |
-      Swaps, chains and takeovers of table names, column names and enum stored values, which planned with no question before and left rows under the wrong model, are now refused with `MIGRATION.PLANNING_FAILED`.
+      Swaps, chains and takeovers of table and column names, which planned with no question before and left rows under the wrong model, are now refused with `MIGRATION.PLANNING_FAILED`. So are enum members that swap stored values or take the stored value of a removed member, which were asked about before. Chains of enum stored values are planned.
   - id: sql-lowered-table-names-renamed
     summary: |
       A project with an origin snapshot whose tables still have the names an earlier release gave models with no `@@map` (the first letter lowered) now gets those tables renamed to the model names, with no question. Add `@@map` to keep the old names.

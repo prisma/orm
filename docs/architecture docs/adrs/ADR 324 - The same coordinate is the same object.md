@@ -108,6 +108,8 @@ Before any rename is applied, one check runs over all the renames of the plan: t
 
 The same cases are refused for columns, and in both directions for a chain with a statement. Rename statements among themselves are planned in the order the user gives them, as before.
 
+A statement and a model that keeps its name can also move into one new table, as when `User` moves to `people` while `--rename Member:Person` gives `Person` the table `people`. That merges two tables' rows, so it is not in the table above: the statement is refused (`statementRefused`), as [Storage is renamed only when all of it moves](#storage-is-renamed-only-when-all-of-it-moves) says, with `Cannot rename table "members" to "people": table "people" also stores model "public.User", whose rows are not in table "members"`. Columns are the same.
+
 Each refusal is a `MIGRATION.PLANNING_FAILED` conflict of kind `unsupportedOperation`, with no `refusedStatement`, and its text names the contract change, never a statement. It says why the plan would read the rows of one table as rows of another model, and gives a route that works on both commands: make the change in two plans through names nothing uses, such as `prisma_swap_users`, each planned and applied before the next.
 
 Enum members are checked inside the enum. Members that move stored values in a cycle, such as two members that swap values, are refused, with the same two-plan route through a value no member stores (`prisma_swap`, or the next integer for a number). A member that takes a stored value another member of the origin enum holds, when no change in the plan moves that value away, is refused, since their rows would merge. That includes a member the destination removes; then the route is to remove it in one plan and change the other member in the next.
@@ -123,7 +125,7 @@ For `db update`, the planner's working copy is the live database, which can diff
 | Old name present, new name absent | Plans the rename. |
 | Old name absent, new name present | Plans nothing for it. The rename is already done. The planner still records that the origin model is now in the new table, as a planned rename does, so field renames on it, questions about it and `--delete User.field` answers work. |
 | Both absent | Plans nothing for it. The diff creates the table, as for any new table. |
-| Both present | Refused, unless the origin contract has the new name too, when the swap and takeover refusals above apply. The text gives the likely causes and the fix for each: move any rows of the new table into the old one and drop the new one, or, if the old name was used again after a rename by hand, rename or drop that table; then run again. |
+| Both present | Refused, unless the origin contract has the new name too, when the swap and takeover refusals above apply. The text gives the likely causes and the fix for each: move into the old table the rows of the new table that it does not already hold, and drop the new table; or, if the old name was used again for another table after a rename by hand, drop that table, after moving its rows into a table the contract has, since `db update` drops every table the contract does not have; then run again. The text for columns is the same. |
 
 The second row cannot lose data even when the new table is not the old one renamed: nothing is planned for it, and the diff does what it does for any table.
 
