@@ -74,6 +74,8 @@ function defaultOutputFromSchemaPath(schemaPath: string): string {
   return `${base}.json`;
 }
 
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
 export function prismaContract(schemaPath: string, options: PrismaContractOptions): ContractConfig {
   const source: PslInterpretCapable = {
     format: 'psl',
@@ -129,9 +131,13 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
       const members: { readonly path: string; readonly text: string }[] = [];
       const undirected: string[] = [];
       for (const path of candidates) {
-        let text: string;
         try {
-          text = new TextDecoder('utf-8', { fatal: true }).decode(await readFile(path));
+          const bytes = await readFile(path);
+          if (isPrisma8Schema(bytes.toString('utf-8'))) {
+            members.push({ path, text: strictUtf8.decode(bytes) });
+          } else {
+            undirected.push(path);
+          }
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
           readDiagnostics.push({
@@ -139,12 +145,6 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
             message: `Could not read ${path}: ${reason}`,
             sourceId: path,
           });
-          continue;
-        }
-        if (isPrisma8Schema(text)) {
-          members.push({ path, text });
-        } else {
-          undirected.push(path);
         }
       }
 

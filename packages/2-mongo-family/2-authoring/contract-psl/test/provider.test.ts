@@ -15,8 +15,9 @@ import {
 import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { jsonValue, mapBlock } from '@internal/psl-parser';
+import { hasPslInterpreter } from '@internal/psl-parser/interpret';
 import { join } from 'pathe';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
 import {
   describeUnsupportedMongoAttribute,
@@ -253,6 +254,43 @@ model User {
         },
       ],
     });
+  });
+
+  it('loads the opted-in file when a file without the directive has an invalid byte', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-utf8-'));
+    tempDirs.push(tempDir);
+    const schemaPath = join(tempDir, 'schema.prisma');
+    const otherPath = join(tempDir, 'other.prisma');
+    await writeFile(
+      schemaPath,
+      '// use prisma-8\nmodel User {\n  id ObjectId @id @map("_id")\n}\n',
+      'utf-8',
+    );
+    await writeFile(
+      otherPath,
+      Buffer.concat([Buffer.from('// notes: ', 'utf-8'), Buffer.from([0x97])]),
+    );
+    const contract = mongoContract('./*.prisma', mongoTestStack);
+    const result = await contract.source.load(
+      createMongoTestContext({ resolvedInputs: [schemaPath, otherPath] }),
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('keeps a leading byte-order mark in the text it reads', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-utf8-'));
+    tempDirs.push(tempDir);
+    const schemaPath = join(tempDir, 'schema.prisma');
+    const text = '\uFEFF// use prisma-8\nmodel User {\n  id ObjectId @id @map("_id")\n}\n';
+    await writeFile(schemaPath, text, 'utf-8');
+    const contract = mongoContract('./schema.prisma', mongoTestStack);
+    const { source } = contract;
+    if (!hasPslInterpreter(source)) throw new Error('expected an interpret-capable source');
+    const interpret = vi.spyOn(source, 'interpret');
+    await source.load(createMongoTestContext({ resolvedInputs: [schemaPath] }));
+
+    expect(interpret.mock.calls[0]?.[0].sources.sourceFileNamed(schemaPath).text).toBe(text);
   });
 
   it('reports the attribute on the enum member and produces no contract', async () => {

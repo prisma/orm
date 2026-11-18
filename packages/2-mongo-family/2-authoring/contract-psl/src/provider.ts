@@ -30,6 +30,8 @@ function hasTarget(options: MongoContractOptions | undefined): boolean {
   return options?.target !== undefined;
 }
 
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
 export function mongoContract(schemaPath: string, options: MongoContractOptions): ContractConfig {
   if (!hasTarget(options)) {
     throw structuredError(
@@ -81,9 +83,13 @@ export function mongoContract(schemaPath: string, options: MongoContractOptions)
       const members: { readonly path: string; readonly text: string }[] = [];
       const undirected: string[] = [];
       for (const path of candidates) {
-        let text: string;
         try {
-          text = new TextDecoder('utf-8', { fatal: true }).decode(await readFile(path));
+          const bytes = await readFile(path);
+          if (isPrisma8Schema(bytes.toString('utf-8'))) {
+            members.push({ path, text: strictUtf8.decode(bytes) });
+          } else {
+            undirected.push(path);
+          }
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
           readDiagnostics.push({
@@ -91,12 +97,6 @@ export function mongoContract(schemaPath: string, options: MongoContractOptions)
             message: `Could not read ${path}: ${reason}`,
             sourceId: path,
           });
-          continue;
-        }
-        if (isPrisma8Schema(text)) {
-          members.push({ path, text });
-        } else {
-          undirected.push(path);
         }
       }
 
