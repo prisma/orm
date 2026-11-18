@@ -213,7 +213,6 @@ async function planThroughControlApi(
         baseDir: project.dir,
       } as unknown as PrismaConfig,
       cwd: project.dir,
-      projectDir: project.dir,
       to: 'production',
       statements,
       answerQuestions,
