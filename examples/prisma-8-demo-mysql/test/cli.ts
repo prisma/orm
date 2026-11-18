@@ -9,6 +9,11 @@ const execFileAsync = promisify(execFile);
 const exampleDir = fileURLToPath(new URL('..', import.meta.url));
 const prismaBin = join(exampleDir, 'node_modules', '.bin', 'prisma');
 
+function cliEnv(databaseUrl: string | undefined): NodeJS.ProcessEnv {
+  const { MYSQL_URL: _, ...env } = process.env;
+  return databaseUrl === undefined ? env : { ...env, MYSQL_URL: databaseUrl };
+}
+
 export interface CliRun {
   readonly exitCode: number;
   readonly result: Record<string, unknown>;
@@ -22,7 +27,7 @@ export async function prisma(
 ): Promise<CliRun> {
   const { stdout, exitCode } = await execFileAsync(prismaBin, [...args, '--json'], {
     cwd: projectDir,
-    env: databaseUrl === undefined ? process.env : { ...process.env, MYSQL_URL: databaseUrl },
+    env: cliEnv(databaseUrl),
   }).then(
     ({ stdout }) => ({ stdout, exitCode: 0 }),
     (error: { stdout: string; code: number }) => ({ stdout: error.stdout, exitCode: error.code }),

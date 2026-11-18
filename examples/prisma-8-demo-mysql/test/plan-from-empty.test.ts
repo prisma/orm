@@ -53,6 +53,7 @@ describe('migration plan in a project with no migrations', () => {
       exitCode: 0,
       result: { ok: true, noOp: false, from: null, to: committedManifest.to },
     });
+    expect(await readdir(join(project.dir, 'migrations', 'app'))).toHaveLength(1);
     const plannedDir = await firstMigrationDir(project.dir);
     expect(await readJson(join(plannedDir, 'ops.json'))).toEqual(
       await readJson(join(committedDir, 'ops.json')),
