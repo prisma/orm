@@ -497,3 +497,20 @@ describe('executeDbUpdate --permit-policy-change, the permitted level', () => {
     expect(asked.map((questions) => questions.length)).toEqual([1]);
   });
 });
+
+describe('executeDbUpdate apply under permitted', () => {
+  it('names the permitted settings, which answered without asking', async () => {
+    const { result } = await update({
+      policies: { dataProtection: { dataLoss: 'data-loss-permitted' } },
+    });
+
+    expect(
+      result.ok
+        ? {
+            permitted: result.value.permitted,
+            statements: result.value.appliedStatements.map(({ verb }) => verb),
+          }
+        : result.failure,
+    ).toEqual({ permitted: ['dataLoss'], statements: ['delete'] });
+  });
+});

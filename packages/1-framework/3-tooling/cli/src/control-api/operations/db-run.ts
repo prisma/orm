@@ -667,6 +667,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       ? changedStorageEntities(fromContract, contract)
       : undefined,
     databasePoliciesUpdated: policiesToWrite?.differences,
+    permitted,
   });
 }
 
@@ -962,9 +963,11 @@ function wrapApplyResult(args: {
   /** Set when `db update` signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities: readonly ChangedStorageEntity[] | undefined;
   readonly databasePoliciesUpdated: readonly DatabasePolicyDifference[] | undefined;
+  readonly permitted: readonly DataProtectionSetting[];
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'apply',
+    ...(args.permitted.length > 0 ? { permitted: args.permitted } : {}),
     ...ifDefined('databasePoliciesUpdated', args.databasePoliciesUpdated),
     ...ifDefined('databaseStorageHash', args.databaseStorageHash),
     ...ifDefined('changedStorageEntities', args.changedStorageEntities),

@@ -319,6 +319,31 @@ function fallbackMarkerBlocks(result: MigrationCommandResult): readonly Block[] 
   ];
 }
 
+const PERMITTED_STATEMENTS = {
+  dataLoss: { verb: 'delete', text: 'permits losing data, so these deletes' },
+  accessWidening: {
+    verb: 'allow',
+    text: 'permits changing who can read or write data, so these allows',
+  },
+} as const satisfies Record<DataProtectionSetting, { verb: string; text: string }>;
+
+/** Says which applied statements the database's data protection policy answered, without asking. */
+function permittedStatementBlocks(result: MigrationCommandResult): readonly Block[] {
+  const verbs = new Set((result.appliedStatements ?? []).map(({ verb }) => verb));
+  return (result.permitted ?? []).flatMap((setting) => {
+    const { verb, text } = PERMITTED_STATEMENTS[setting];
+    return verbs.has(verb)
+      ? [
+          {
+            kind: 'summary' as const,
+            status: 'info' as const,
+            text: `This database's data protection policy ${text} were applied without asking.`,
+          },
+        ]
+      : [];
+  });
+}
+
 function applyBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
@@ -331,6 +356,7 @@ function applyBlocks(
     ...operationBlocks(result),
     ...temporaryValueBlocks(result, invocation, databaseStorageHash),
     ...appliedStatementBlocks(result.appliedStatements ?? []),
+    ...permittedStatementBlocks(result),
     ...fallbackMarkerBlocks(result),
     ...(advanced === null || advanced === undefined
       ? []

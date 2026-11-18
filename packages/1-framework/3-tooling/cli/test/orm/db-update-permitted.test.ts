@@ -152,4 +152,45 @@ describe('db update --dry-run on a database whose data protection policy permits
       },
     });
   });
+
+  it('says on an apply that the policy permitted the deletes it applied, in its output and its JSON', async () => {
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...permittedPlan(),
+        mode: 'apply',
+        permitted: ['dataLoss'],
+        accessChanges: [],
+        appliedStatements: [
+          {
+            verb: 'delete',
+            statement: { kind: 'delete', subject: legacy },
+            description: 'delete field "User.legacy"',
+            operationIndexes: [0],
+          },
+        ],
+        execution: { operationsPlanned: 1, operationsExecuted: 1 },
+        marker: { storageHash: DEST_HASH },
+      }),
+    );
+
+    const human = await harness().run(['db', 'update'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+    const json = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
+
+    expect({
+      human: human.presented?.presentation.human,
+      permitted: (json.presented?.data as { permitted?: unknown } | undefined)?.permitted,
+    }).toMatchObject({
+      human: expect.arrayContaining([
+        {
+          kind: 'summary',
+          status: 'info',
+          text: "This database's data protection policy permits losing data, so these deletes were applied without asking.",
+        },
+      ]),
+      permitted: ['dataLoss'],
+    });
+  });
 });
