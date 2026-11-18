@@ -75,5 +75,6 @@ export {
   type SharedTableMerge,
   type SharedTableRefusal,
   type TableSharer,
+  type VariantTableSharer,
 } from '../shared-table-constraints';
 export { unbound } from '../unbound';

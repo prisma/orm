@@ -2156,7 +2156,10 @@ function materializeStiVariantStorageColumns(
     const merged = mergeSharedTable({
       tableName: baseNode.tableName,
       base: tableSharerOf(baseNode),
-      variants: variants.map(tableSharerOf),
+      variants: variants.map((variant) => ({
+        ...tableSharerOf(variant),
+        uniques: variant.uniques ?? [],
+      })),
       viewOf: foreignKeyNodeView,
     });
     mergedByBase.set(baseKey, merged);
@@ -2178,19 +2181,17 @@ function materializeStiVariantStorageColumns(
 
   const enriched = modelNodes.map((node): ModelNode => {
     // STI variant: contributes a domain model but no storage table of its own.
-    // It keeps its uniques, which a one-to-one relation to it reads.
     if (stiVariantKeys.has(keyOf(node))) {
-      const { indexes: _indexes, foreignKeys: _foreignKeys, ...variant } = node;
+      const { uniques: _uniques, indexes: _indexes, foreignKeys: _foreignKeys, ...variant } = node;
       return { ...variant, sharesBaseTable: true };
     }
     const merged = mergedByBase.get(keyOf(node));
     if (merged === undefined) return node;
-    const { indexes, uniques, foreignKeys } = merged;
+    const { indexes, foreignKeys } = merged;
     return {
       ...node,
       fields: [...node.fields, ...(stiColumnsByBase.get(keyOf(node)) ?? [])],
       ...(indexes.length > 0 ? { indexes } : {}),
-      ...(uniques.length > 0 ? { uniques } : {}),
       ...(foreignKeys.length > 0 ? { foreignKeys } : {}),
     };
   });
@@ -2212,7 +2213,6 @@ function tableSharerOf(node: ModelNode): TableSharer<ForeignKeyNode> {
       node.fields.filter((field) => field.default !== undefined).map((field) => field.columnName),
     ),
     foreignKeys: node.foreignKeys ?? [],
-    uniques: node.uniques ?? [],
     indexes: node.indexes ?? [],
   };
 }
@@ -2370,14 +2370,10 @@ function stiRefusalDiagnostic(
       ...at,
     };
   }
-  if (
-    refusal.kind === 'unique' &&
-    refusal.sharedWith !== undefined &&
-    context.backsSingularRelation(refusal.unique.columns)
-  ) {
+  if (refusal.kind === 'unique' && context.backsSingularRelation(refusal.unique.columns)) {
     return {
       code: PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
-      message: `${shared}, and "${refusal.sharedWith}" also maps ${columnsPhrase(refusal.unique.columns)} without this unique. A one-to-one relation needs the unique, so give the field of "${variant}" its own column with @map.`,
+      message: `${shared}, so "${label}" cannot be stored there, and a one-to-one relation from a single-table variant is not supported yet.`,
       ...at,
     };
   }
@@ -2388,7 +2384,7 @@ function stiRefusalDiagnostic(
       : `Scope it to this variant instead: @@index(${[...site.indexArguments, condition].join(', ')})`;
   return {
     code: PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
-    message: `${shared}, so "${label}" would also cover the rows of other variants. Without a condition, only a plain @@index, @unique or @@unique over exactly the fields of one of its own relations is accepted, and only when no other model maps those columns differently. ${advice}`,
+    message: `${shared}, so "${label}" would also cover the rows of other variants. Without a condition, only the backing index of one of its own relations is accepted. ${advice}`,
     ...at,
   };
 }

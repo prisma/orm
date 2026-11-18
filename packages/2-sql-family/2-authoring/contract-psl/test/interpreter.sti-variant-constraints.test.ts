@@ -162,7 +162,7 @@ model HumanActor {
       diagnosticsOf([contact, actor, humanWithContact(`  ${attribute}`)].join('\n\n')),
     ).toEqual([
       expect.objectContaining({
-        message: `Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), so "${attribute.split('(')[0]}" would also cover the rows of other variants. Without a condition, only a plain @@index, @unique or @@unique over exactly the fields of one of its own relations is accepted, and only when no other model maps those columns differently. Scope it to this variant instead: ${advice}`,
+        message: `Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), so "${attribute.split('(')[0]}" would also cover the rows of other variants. Without a condition, only the backing index of one of its own relations is accepted. Scope it to this variant instead: ${advice}`,
       }),
     ]);
   });
@@ -171,9 +171,9 @@ model HumanActor {
     { form: '@unique', field: 'contactId Int? @unique', attribute: '' },
     { form: '@@unique', field: 'contactId Int?', attribute: '  @@unique([contactId])' },
   ])(
-    "accepts $form over the variant's own one-to-one relation, as a unique constraint on the base table",
-    ({ field, attribute }) => {
-      const tables = tablesOf(`model Contact {
+    'refuses $form behind a one-to-one relation from the variant with one diagnostic that says it is not supported',
+    ({ form, field, attribute }) => {
+      const schema = `model Contact {
   id    Int         @id
   human HumanActor? @relation("Human")
 
@@ -187,12 +187,19 @@ model HumanActor {
   ${field}
 ${attribute}
   @@base(Actor, "human")
-}`);
+}`;
 
-      expect(tables['actor']).toMatchObject({
-        uniques: [{ columns: ['contactId'] }],
-        foreignKeys: [{ source: { columns: ['contactId'] }, target: { tableName: 'contact' } }],
-      });
+      expect(diagnosticsOf(schema)).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSCOPED_INDEX_ON_STI_VARIANT',
+          message: `Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), so "${form}" cannot be stored there, and a one-to-one relation from a single-table variant is not supported yet.`,
+          span: expect.objectContaining({
+            start: expect.objectContaining({
+              offset: schema.indexOf(form === '@unique' ? '@unique' : '@@unique'),
+            }),
+          }),
+        }),
+      ]);
     },
   );
 

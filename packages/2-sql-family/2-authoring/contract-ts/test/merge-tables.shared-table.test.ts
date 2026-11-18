@@ -107,12 +107,21 @@ describe('mergeTables on a table single-table variants share', () => {
     );
   });
 
-  it("accepts a unique constraint over the variant's own foreign key columns", () => {
-    const uniques = [{ columns: ['ownerId'] }];
-
-    expect(
-      mergeTables([ownTable(ownerTable), variantOwning('Bug', 'user', { uniques })], []),
-    ).toEqual([{ ...ownerTable, uniques, foreignKeys: [foreignKey('ownerId', 'user')] }]);
+  it("refuses a unique constraint over the variant's own foreign key columns", () => {
+    expect(() =>
+      mergeTables(
+        [
+          ownTable(ownerTable),
+          variantOwning('Bug', 'user', { uniques: [{ columns: ['ownerId'] }] }),
+        ],
+        [],
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.UNSCOPED_INDEX_ON_STI_VARIANT',
+        meta: expect.objectContaining({ modelName: 'Bug', unscoped: [['ownerId']] }),
+      }),
+    );
   });
 
   it.each([
@@ -172,7 +181,7 @@ describe('mergeTables on a table single-table variants share', () => {
     );
   });
 
-  it('refuses a variant unique on a foreign key column a sibling maps without that unique', () => {
+  it('refuses a variant unique on a foreign key column a sibling also maps', () => {
     expect(() =>
       mergeTables(
         [

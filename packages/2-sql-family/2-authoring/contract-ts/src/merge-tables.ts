@@ -7,7 +7,7 @@ import {
   mergeSharedTable,
   type SharedForeignKeyView,
   type SharedTableRefusal,
-  type TableSharer,
+  type VariantTableSharer,
 } from './shared-table-constraints';
 import {
   type ColumnDescription,
@@ -35,7 +35,7 @@ function isTableProperty(key: string): key is keyof TableProperties {
 /**
  * Collects the tables the models and table nodes describe, one per namespace and table name: the models' tables in model order, then the tables only table nodes declare.
  *
- * A table node for a table a model maps adds its columns to that table and nothing else, because the model owns the table's table-level properties. A table node for any other table is the whole table. A single-table variant adds its uniques, indexes and foreign keys to its base's table, by the rules of {@link mergeSharedTable}; each of its columns must already be on that table, which the base owns, and no table node may declare a column a variant's field maps. A variant whose table no model owns adds nothing, and its columns are checked only when a table node declares that table.
+ * A table node for a table a model maps adds its columns to that table and nothing else, because the model owns the table's table-level properties. A table node for any other table is the whole table. A single-table variant adds its indexes and foreign keys to its base's table, by the rules of {@link mergeSharedTable}, which refuse its uniques; each of its columns must already be on that table, which the base owns, and no table node may declare a column a variant's field maps. A variant whose table no model owns adds nothing, and its columns are checked only when a table node declares that table.
  *
  * Every table comes out with its foreign keys from exactly one declaration, a model or a table node, in the order that declaration lists them, followed by those its single-table variants add.
  */
@@ -228,11 +228,10 @@ function withVariantConstraints(
           .filter((columnName) => !variantColumns.has(columnName)),
       ),
       foreignKeys: table.foreignKeys,
-      uniques: table.uniques,
       indexes: table.indexes,
     },
     variants: variants.map(
-      (variant): TableSharer<ForeignKeyAuthoringInput> => ({
+      (variant): VariantTableSharer<ForeignKeyAuthoringInput> => ({
         modelName: variant.modelName,
         columns: new Set(variant.columns.map((column) => column.columnName)),
         defaultedColumns: new Set(
@@ -252,7 +251,6 @@ function withVariantConstraints(
   if (refusal !== undefined) throw refusalError(table, merged.refusals, refusal);
   return {
     ...table,
-    uniques: merged.uniques,
     indexes: merged.indexes,
     foreignKeys: merged.foreignKeys,
   };
@@ -327,7 +325,7 @@ function refusalError(
   const listed = unscoped.map((columns) => `(${columns.join(', ')})`).join(', ');
   return contractError(
     'CONTRACT.UNSCOPED_INDEX_ON_STI_VARIANT',
-    `Model "${first.variant}" shares table "${tableName}" with its base model (single-table inheritance), so its unique constraints and indexes on ${listed} would also cover the rows of other variants. Without a condition, only the backing index or a unique over exactly the columns of one of its own foreign keys is accepted, and only when no other model maps those columns differently. Declare each as an index with a \`where\` condition that selects this variant's discriminator value.`,
+    `Model "${first.variant}" shares table "${tableName}" with its base model (single-table inheritance), so its unique constraints and indexes on ${listed} would also cover the rows of other variants. Without a condition, only the backing index of one of its own foreign keys is accepted. Declare each as an index with a \`where\` condition that selects this variant's discriminator value.`,
     { meta: { modelName: first.variant, namespaceId, tableName, unscoped } },
   );
 }

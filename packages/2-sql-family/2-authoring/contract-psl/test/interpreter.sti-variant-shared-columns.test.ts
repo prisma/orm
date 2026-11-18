@@ -104,7 +104,7 @@ describe('a single-table variant column another model of the table also maps', (
     ]);
   });
 
-  it('refuses a unique on a shared foreign key column that the other variant does not declare', () => {
+  it('refuses a unique on a shared foreign key column', () => {
     const schema = [
       contactWithBots,
       actor,
@@ -120,53 +120,6 @@ describe('a single-table variant column another model of the table also maps', (
         }),
       }),
     ]);
-  });
-
-  it('accepts a unique on a shared foreign key column when both variants declare it', () => {
-    const tables = tablesOf(
-      [
-        contactWithBots,
-        actor,
-        humanWithContact('').replace('contactId Int', 'contactId Int    @unique'),
-        botWithOwner('Contact').replace('contactId Int', 'contactId Int @unique'),
-      ].join('\n\n'),
-    );
-
-    expect(tables['actor']?.uniques).toMatchObject([{ columns: ['contactId'] }]);
-  });
-
-  it('tells a one-to-one relation to give its field its own column instead of a partial index', () => {
-    const schema = `model Contact {
-  id    Int         @id
-  human HumanActor? @relation("Human")
-  bots  BotActor[]  @relation("Bot")
-
-  @@map("contact")
-}
-
-${actor}
-
-model HumanActor {
-  contact   Contact? @relation("Human", fields: [contactId], references: [id])
-  contactId Int?     @unique
-
-  @@base(Actor, "human")
-}
-
-model BotActor {
-  owner     Contact? @relation("Bot", fields: [contactId], references: [id])
-  contactId Int?
-
-  @@base(Actor, "bot")
-}`;
-
-    expect(diagnosticsOf(schema)).toContainEqual(
-      expect.objectContaining({
-        code: 'PSL_UNSCOPED_INDEX_ON_STI_VARIANT',
-        message:
-          'Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), and "BotActor" also maps column "contactId" without this unique. A one-to-one relation needs the unique, so give the field of "HumanActor" its own column with @map.',
-      }),
-    );
   });
 
   it('refuses foreign keys over the same columns in another order to different targets', () => {

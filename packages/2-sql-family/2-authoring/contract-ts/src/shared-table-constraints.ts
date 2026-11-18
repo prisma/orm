@@ -29,8 +29,12 @@ export interface TableSharer<ForeignKey> {
   /** Columns this model gives a stored default, which a row of any model of the table then gets when it leaves the column out. */
   readonly defaultedColumns: ReadonlySet<string>;
   readonly foreignKeys: readonly ForeignKey[];
-  readonly uniques: readonly UniqueConstraintNode[];
   readonly indexes: readonly IndexNode[];
+}
+
+/** A variant that shares its base's table, with the uniques it declares, which are all refused. */
+export interface VariantTableSharer<ForeignKey> extends TableSharer<ForeignKey> {
+  readonly uniques: readonly UniqueConstraintNode[];
 }
 
 export type SharedTableRefusal<ForeignKey> =
@@ -55,8 +59,6 @@ export type SharedTableRefusal<ForeignKey> =
       readonly kind: 'unique';
       readonly variant: string;
       readonly unique: UniqueConstraintNode;
-      /** The model that maps those columns without the same relation and unique, when that is the reason. */
-      readonly sharedWith: string | undefined;
     }
   | {
       readonly kind: 'index';
@@ -67,7 +69,6 @@ export type SharedTableRefusal<ForeignKey> =
     };
 
 export interface SharedTableMerge<ForeignKey> {
-  readonly uniques: readonly UniqueConstraintNode[];
   readonly indexes: readonly IndexNode[];
   readonly foreignKeys: readonly ForeignKey[];
   readonly refusals: readonly SharedTableRefusal<ForeignKey>[];
@@ -80,19 +81,19 @@ export function columnsPhrase(columns: readonly string[]): string {
 }
 
 /**
- * The uniques, indexes and foreign keys of a table that single-table-inheritance variants share with their base, and what of the variants' declarations is refused.
+ * The indexes and foreign keys of a table that single-table-inheritance variants share with their base, and what of the variants' declarations is refused.
  *
  * Another model whose rows are in the table may write the same columns, so a variant's declaration is checked against every other model that maps one of its columns:
  * - A variant's foreign key is refused unless each such model declares the same foreign key, compared by its source-to-target column pairs; otherwise that model's rows would have to satisfy it. It is refused too when one of its columns has a stored default, which every row of the table would get. A foreign key that creates no constraint is not checked.
- * - A variant's unique is accepted only over exactly the columns of one of its own foreign keys, and only when each such model declares the same foreign key and the same unique. Its columns then hold NULL in every other row, so it constrains only the rows that relate.
+ * - A variant's unique is always refused: on the shared table it would also constrain the other rows. A one-to-one relation from a variant, which needs one, is therefore not supported yet.
  * - A variant's index without a `where` condition is accepted only when it backs one of its own foreign keys: it is identical in content to the backing index the foreign key derives, or it is the plain index the foreign key names as its backing index and starts with the foreign key's columns.
- * - A unique or backing index over a column with a stored default is not accepted, since every row of the table gets the default. The same index already on the table under the same name is kept once; under another name, whether the base or another variant declares it, it is refused.
+ * - A backing index over a column with a stored default is not accepted, since every row of the table gets the default. The same index already on the table under the same name is kept once; under another name, whether the base or another variant declares it, it is refused.
  * - Identical declarations are kept once, in the order first declared.
  */
 export function mergeSharedTable<ForeignKey>(input: {
   readonly tableName: string;
   readonly base: TableSharer<ForeignKey>;
-  readonly variants: readonly TableSharer<ForeignKey>[];
+  readonly variants: readonly VariantTableSharer<ForeignKey>[];
   readonly viewOf: (foreignKey: ForeignKey) => SharedForeignKeyView;
 }): SharedTableMerge<ForeignKey> {
   const { tableName, base, variants, viewOf } = input;
@@ -128,7 +129,6 @@ export function mergeSharedTable<ForeignKey>(input: {
 
   const refusals: SharedTableRefusal<ForeignKey>[] = [];
   const foreignKeys = [...base.foreignKeys];
-  const uniques = [...base.uniques];
   const indexes = [...base.indexes];
   const indexDeclarers = new Map<IndexNode, string>();
 
@@ -150,7 +150,7 @@ export function mergeSharedTable<ForeignKey>(input: {
       const other = view.constraint
         ? othersMapping(variant, view.columns).find((sharer) => {
             if (declaresForeignKey(sharer, identity)) return false;
-            const later = variants.indexOf(sharer) > position;
+            const later = variants.findIndex((candidate) => candidate === sharer) > position;
             return !(later && declaresConstraintOn(sharer, view.columns));
           })
         : undefined;
@@ -172,34 +172,7 @@ export function mergeSharedTable<ForeignKey>(input: {
     }
 
     for (const unique of variant.uniques) {
-      const own = variant.foreignKeys.find((foreignKey) =>
-        sameColumnSet(viewOf(foreignKey).columns, unique.columns),
-      );
-      if (own === undefined || defaulted(unique.columns).length > 0) {
-        refusals.push({
-          kind: 'unique',
-          variant: variant.modelName,
-          unique,
-          sharedWith: undefined,
-        });
-        continue;
-      }
-      const identity = identityOf(own);
-      const other = othersMapping(variant, unique.columns).find(
-        (sharer) =>
-          !declaresForeignKey(sharer, identity) ||
-          !sharer.uniques.some((candidate) => sameUnique(candidate, unique)),
-      );
-      if (other !== undefined) {
-        refusals.push({
-          kind: 'unique',
-          variant: variant.modelName,
-          unique,
-          sharedWith: other.modelName,
-        });
-        continue;
-      }
-      if (!uniques.some((existing) => sameUnique(existing, unique))) uniques.push(unique);
+      refusals.push({ kind: 'unique', variant: variant.modelName, unique });
     }
 
     for (const index of variant.indexes) {
@@ -250,7 +223,7 @@ export function mergeSharedTable<ForeignKey>(input: {
     }
   }
 
-  return { uniques, indexes, foreignKeys, refusals };
+  return { indexes, foreignKeys, refusals };
 }
 
 /** A foreign key's identity: its source-to-target column pairs, in source column order, and everything else about it. Two foreign keys that list the same pairs in another order are the same foreign key. */
@@ -259,12 +232,4 @@ function foreignKeyIdentity(view: SharedForeignKeyView): string {
     .map((column, position) => [column, view.targetColumns[position]] as const)
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
   return canonicalStringify({ pairs, rest: view.rest });
-}
-
-function sameColumnSet(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((column) => right.includes(column));
-}
-
-function sameUnique(left: UniqueConstraintNode, right: UniqueConstraintNode): boolean {
-  return isArrayEqual(left.columns, right.columns) && left.name === right.name;
 }
