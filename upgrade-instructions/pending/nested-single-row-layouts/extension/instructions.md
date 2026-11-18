@@ -2,7 +2,7 @@
 changes:
   - id: relation-mutator-writes-many-rows-removed-delete-disabled
     summary: |
-      `RelationWrites`, the type of the `Writes` parameter of `RelationMutator` and `VariantRelationMutator` (exported from `@prisma/orm-family-sql`), no longer has `'manyRows'`: a many-to-many relation now takes `'many'`, and a relation the record holds the key for takes `'one'`. Both types also take a new last type parameter, `DeleteDisabled extends boolean = false` (the eighth of `RelationMutator`, the ninth of `VariantRelationMutator`), which makes `delete` unavailable. Code that passes `'manyRows'` passes `'many'`; code that passes fewer type arguments is unaffected.
+      `RelationWrites`, the type of the `Writes` parameter of `RelationMutator` and `VariantRelationMutator` (exported from `@prisma/orm-family-sql`), no longer has `'manyRows'`: a many-to-many relation now takes `'many'`, and a relation the record holds the key for takes `'one'`. Both types also take a new last type parameter, `DeleteDisabled extends boolean = false` (the ninth of `RelationMutator`, the tenth of `VariantRelationMutator`, after `NsId`), which makes `delete` unavailable. Code that passes `'manyRows'` passes `'many'`; code that passes fewer type arguments is unaffected.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -19,6 +19,6 @@ Nested `update(data)` and `delete()` are now available on every relation layout,
 | `'one'` | to-one, including a relation the record holds the key for | a mutator with `update`, `delete` | not available | available |
 | `'none'` | in `create()` | not available | not available | not available |
 
-`RelationMutator<TContract, ModelName, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, DeleteDisabled>` and `VariantRelationMutator<TContract, ModelName, VariantValue, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, DeleteDisabled>` take `DeleteDisabled` last, `false` by default. When it is `true`, `delete`, bare and after `where()`, takes a `never` parameter, so a call is a type error; the ORM sets it on a relation whose foreign key, held by the record, is required.
+`RelationMutator<TContract, ModelName, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, DeleteDisabled>` and `VariantRelationMutator<TContract, ModelName, VariantValue, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, DeleteDisabled>` take `DeleteDisabled` last, `false` by default. When it is `true`, `delete`, bare and after `where()`, takes a `never` parameter, so a call is a type error; the ORM sets it on a relation whose foreign key, held by the record, is required.
 
 In every file the detection matches, replace `'manyRows'` passed as `Writes` with `'many'`. Where code passes `'none'` for a relation the record holds the key for in `update()` data, it may pass `'one'` to offer `update` and `delete`. Uses that stop before the `DeleteDisabled` position need no change.
