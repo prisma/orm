@@ -46,7 +46,7 @@ describe('MySQL lowering of an update or delete whose statement reads the writte
     code: 'RUNTIME.AST_UNSUPPORTED',
     message:
       'MySQL cannot run an UPDATE or DELETE whose filter or values read the table being written, `task`',
-    why: 'MySQL refuses such a statement with its error 1093. The only form it accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes can deadlock.',
+    why: 'MySQL refuses such a statement with its error 1093.',
     fix: 'Read the keys of the rows, and any values the write takes from this table, with a query first. Then update or delete those rows by key, writing those values; for a variant, one row at a time with update or delete. The filter is not checked again when the rows are written.',
     meta: { target: 'mysql', feature: 'write-reads-written-table' },
   };

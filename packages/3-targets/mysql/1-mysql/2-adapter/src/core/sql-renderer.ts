@@ -423,7 +423,7 @@ export class MysqlSqlRenderer {
           qualified === ctx.writtenTable ? this.writtenTableReadRefusal(qualified) : undefined;
         if (refusal !== undefined) {
           throw this.unsupported('write-reads-written-table', refusal, {
-            why: `${this.target.displayName} refuses such a statement with its error 1093. The only form it accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes can deadlock.`,
+            why: `${this.target.displayName} refuses such a statement with its error 1093.`,
             fix: 'Read the keys of the rows, and any values the write takes from this table, with a query first. Then update or delete those rows by key, writing those values; for a variant, one row at a time with update or delete. The filter is not checked again when the rows are written.',
           });
         }
@@ -505,7 +505,7 @@ export class MysqlSqlRenderer {
       if (isParam && typeof next === 'string' && /^\d/.test(next)) {
         throw structuredError(
           'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-          `Raw SQL puts a digit right after an interpolated value, which ${this.target.displayName} lowering would read as part of the value's placeholder`,
+          "Raw SQL puts a digit right after an interpolated value, which would become part of the value's placeholder",
           {
             why: 'Each value is written as a numbered placeholder, ?N, so a digit that follows it in the SQL text makes a different placeholder: ?1 followed by 0 reads as ?10.',
             fix: 'Put a space or an operator between the interpolated value and the digit.',
@@ -566,9 +566,10 @@ export class MysqlSqlRenderer {
     }
     if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
     if (typeof value === 'bigint') return String(value);
+    const kind = value instanceof Date ? 'date' : Array.isArray(value) ? 'array' : typeof value;
     throw this.unsupported(
       'value-literal',
-      `${this.target.displayName} lowering writes only numbers, booleans and NULL as literals; a ${value instanceof Date ? 'date' : Array.isArray(value) ? 'array' : typeof value} value must be a param`,
+      `Prisma writes only numbers, booleans and NULL into ${this.target.displayName} SQL as literals, and this query has ${/^[aeiou]/.test(kind) ? 'an' : 'a'} ${kind} literal; pass the value as a parameter instead`,
     );
   }
 
@@ -665,8 +666,11 @@ export class MysqlSqlRenderer {
     if (descriptor === undefined) {
       throw structuredError(
         'RUNTIME.PARAM_REF_MISSING_CODEC',
-        `${this.target.displayName} lowering: ${use} carries codecId "${codec.codecId}" but the codec registry has no entry for it. Register the extension pack that contributes this codec.`,
-        { meta: { codecId: codec.codecId } },
+        `${use} uses codec "${codec.codecId}", which no extension given to the client provides.`,
+        {
+          fix: `Add the extension that provides codec "${codec.codecId}" to the client's \`extensions\`.`,
+          meta: { codecId: codec.codecId },
+        },
       );
     }
     return descriptor;
@@ -682,7 +686,7 @@ export class MysqlSqlRenderer {
 
   /** A param as its numbered placeholder, refusing one whose codec the MySQL registry lacks. */
   private renderParam(ref: AnyParamRef, ctx: RenderContext): string {
-    if (ref.codec !== undefined) this.descriptorOf(ref.codec, ctx, 'a parameter');
+    if (ref.codec !== undefined) this.descriptorOf(ref.codec, ctx, 'A value in this query');
     return this.placeholder(ref, ctx);
   }
 
@@ -691,7 +695,10 @@ export class MysqlSqlRenderer {
     codec: CodecRef,
     ctx: RenderContext,
   ): ProjectionExpr {
-    return this.descriptorOf(codec, ctx, 'a JSON projection').projectJson(value, codec);
+    return this.descriptorOf(codec, ctx, 'A column this query reads in an include').projectJson(
+      value,
+      codec,
+    );
   }
 
   private renderJsonValue(projection: AnyJsonValueProjection, ctx: RenderContext): string {
