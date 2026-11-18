@@ -33,13 +33,7 @@ import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
 import { appliedStatementBlocks } from '../statement-blocks';
 import { migrationPlanStatementVerbs } from '../statement-verbs';
-import {
-  appMigrationsDirFor,
-  baseDirFor,
-  contractPathFor,
-  displayPath,
-  migrationsDirFor,
-} from './paths';
+import { appMigrationsDirFor, contractPathFor, displayPath, migrationsDirFor } from './paths';
 
 function hashRow(label: string, hash: string | null): { label: string; value: Text } {
   return {
@@ -358,7 +352,6 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
         {
           config: ctx.config,
           cwd: ctx.cwd,
-          projectDir: baseDirFor(ctx.config),
           ...ifDefined('configPath', ctx.configPath),
           ...ifDefined('name', args.flags.name),
           ...ifDefined('from', args.flags.from),

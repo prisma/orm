@@ -5,7 +5,30 @@ import mysqlTarget, { MysqlContractSerializer } from '@internal/target-mysql/run
 import { version } from '../../package.json' with { type: 'json' };
 
 const serializer = new MysqlContractSerializer();
-const validator = `${mysqlTarget.targetId}@${version}`;
+
+export interface MysqlContractValidation {
+  contractFromJson<TContract extends Contract<SqlStorage>>(json: unknown): TContract;
+  validateContract<TContract extends Contract<SqlStorage>>(contract: TContract): TContract;
+}
+
+/** Validates the contracts of MySQL, or of a target that extends it, once per contract and target. */
+export function createMysqlContractValidation(targetId: string): MysqlContractValidation {
+  const validator = `${targetId}@${version}`;
+  return {
+    contractFromJson<TContract extends Contract<SqlStorage>>(json: unknown): TContract {
+      return validateContractOnce(json, validator, (input) =>
+        serializer.deserializeContract<TContract>(input),
+      );
+    },
+    validateContract<TContract extends Contract<SqlStorage>>(contract: TContract): TContract {
+      return validateContractOnce(contract, validator, () =>
+        serializer.deserializeContract<TContract>(serializer.serializeContract(contract)),
+      );
+    },
+  };
+}
+
+const mysqlValidation = createMysqlContractValidation(mysqlTarget.targetId);
 
 /**
  * Validates an emitted MySQL `contract.json` and returns it as the contract type the application
@@ -24,15 +47,5 @@ const validator = `${mysqlTarget.targetId}@${version}`;
  * ```
  */
 export function contractFromJson<TContract extends Contract<SqlStorage>>(json: unknown): TContract {
-  return validateContractOnce(json, validator, (input) =>
-    serializer.deserializeContract<TContract>(input),
-  );
-}
-
-export function validateMysqlContract<TContract extends Contract<SqlStorage>>(
-  contract: TContract,
-): TContract {
-  return validateContractOnce(contract, validator, () =>
-    serializer.deserializeContract<TContract>(serializer.serializeContract(contract)),
-  );
+  return mysqlValidation.contractFromJson<TContract>(json);
 }

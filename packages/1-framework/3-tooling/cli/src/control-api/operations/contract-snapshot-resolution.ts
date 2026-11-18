@@ -3,7 +3,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
@@ -17,7 +17,9 @@ import {
   parseContractRef,
   type RefResolutionWrongGrammar,
 } from '@internal/migration-tools/ref-resolution';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import {
@@ -37,7 +39,7 @@ function isEnoent(error: unknown): boolean {
 }
 
 interface ResolveContractRefToSnapshotBaseOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   readonly migrationsDir: string;
   /** User-supplied contract reference (hash, prefix, ref name, migration dir name, or <dir>^). */
   readonly refInput: string;
@@ -66,6 +68,8 @@ export interface ResolveContractRefToSnapshotSuccess {
   /** snapshot → join(contractSnapshotDir(migrationsDir, hash), 'contract.json'); emitted → contractPathAbsolute. */
   readonly contractJsonPath: string;
   readonly source: 'snapshot' | 'emitted';
+  /** The ref the input named, with everything it declares; absent when the input named no ref. */
+  readonly ref?: NamedRef;
 }
 
 function reservedRefRefusal(
@@ -103,6 +107,12 @@ export async function resolveContractRefToSnapshot(
       return notOk(mapRefResolutionError(refResult.failure));
     }
     const targetHash = refResult.value.hash;
+    const { provenance } = refResult.value;
+    const refEntry = provenance.kind === 'ref' ? refs[provenance.refName] : undefined;
+    const namedRef =
+      provenance.kind === 'ref' && refEntry !== undefined
+        ? { name: provenance.refName, ...refEntry }
+        : undefined;
     const matchingBundle = bundles.find((p) => p.metadata.to === targetHash);
     if (matchingBundle) {
       const contractJson = blindCast<
@@ -123,6 +133,7 @@ export async function resolveContractRefToSnapshot(
           'contract.json',
         ),
         source: 'snapshot',
+        ...ifDefined('ref', namedRef),
       });
     }
     if (!options.fallbackToEmitted) {
@@ -188,6 +199,7 @@ export async function resolveContractRefToSnapshot(
         contractJson: defaultContract,
         contractJsonPath: options.contractPathAbsolute,
         source: 'emitted',
+        ...ifDefined('ref', namedRef),
       });
     }
     return notOk(

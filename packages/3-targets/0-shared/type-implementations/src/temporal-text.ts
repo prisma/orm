@@ -1,3 +1,4 @@
+import { isDate } from './date';
 import type { TemporalImplementation } from './temporal';
 
 /** The `Symbol.toStringTag` of each Temporal kind a codec reads and writes. */
@@ -67,7 +68,7 @@ function describeEncodeInput(value: unknown, tag: unknown): string {
 /** A value of the wrong type, as an error message names it: `null`, `a Date`, or `a` and its `typeof`. */
 export function describeValue(value: unknown): string {
   if (value === null) return 'null';
-  if (value instanceof Date) return 'a Date';
+  if (isDate(value)) return 'a Date';
   return `a ${typeof value}`;
 }
 

@@ -19,12 +19,14 @@ export default definePrismaConfig({
         load: async () => ({ ok: true as const, value: contract }),
       },
       output: 'output/contract.json',
+      typesModule: '@internal/mongo/contract-types',
     },
     db: {
       connection: '{{MONGO_URI}}',
     },
     migrations: {
       dir: 'migrations',
+      module: '@internal/target-mongo/migration',
     },
   }),
 });

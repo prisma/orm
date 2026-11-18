@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import type { Codec, CodecInstanceContext } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import {
@@ -170,6 +171,14 @@ describe('sqlite/datetime@1 text', () => {
     const instant = new Date('2026-01-02T03:04:05.678Z');
     expect(toContractJson(codec, instant)).toBe('2026-01-02T03:04:05.678Z');
     expect(fromContractJson(codec, '2026-01-02T03:04:05.678Z')).toEqual(instant);
+  });
+
+  it('writes a Date created in another realm', async () => {
+    const value: Date = runInNewContext('new Date("2026-01-02T03:04:05.678Z")');
+    expect({
+      wire: await codec.toWire(value, {}),
+      json: toContractJson(codec, value),
+    }).toEqual({ wire: '2026-01-02T03:04:05.678Z', json: '2026-01-02T03:04:05.678Z' });
   });
 
   it.each([

@@ -1,3 +1,4 @@
+import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
@@ -274,6 +275,7 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
   options?: {
     readonly mutationDefaultGenerators?: ReadonlyArray<RuntimeMutationDefaultGenerator>;
     readonly extensions?: ReadonlyArray<SqlRuntimeExtensionDescriptor<'postgres'>>;
+    readonly adapter?: typeof postgresAdapter;
   },
 ): ExecutionContext<TContract> {
   const generators = options?.mutationDefaultGenerators ?? [];
@@ -300,11 +302,24 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
     contract,
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapter,
+      adapter: options?.adapter ?? postgresAdapter,
       extensions,
     }),
   });
 }
+
+/** The Postgres adapter, reporting that the database cannot run the one-query include, so includes load with one query per relation. */
+export const perRelationPostgresAdapter: typeof postgresAdapter = {
+  ...postgresAdapter,
+  capabilities: {
+    ...postgresAdapterCapabilities,
+    sql: {
+      ...postgresAdapterCapabilities.sql,
+      outerReferencesInDerivedTables: false,
+      jsonAggWithoutTruncation: false,
+    },
+  },
+};
 
 const testContext: ExecutionContext<TestContract> = buildTestContextFromContract(baseTestContract);
 

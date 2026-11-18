@@ -68,6 +68,7 @@ const ALL_POLICY: MigrationOperationPolicy = {
 };
 
 const NOOP_MARKER_OPS: MarkerOperations = {
+  markerLocation: '_prisma_migrations',
   readMarker: async () => null,
   initMarker: async () => {},
   updateMarker: async () => true,
@@ -519,6 +520,7 @@ describe('MongoMigrationRunner schema verification', () => {
   function makeTrackingMarkerOps(): { ops: MarkerOperations; calls: MarkerCallLog } {
     const calls = { initMarker: 0, updateMarker: 0, writeLedgerEntry: 0 };
     const ops: MarkerOperations = {
+      markerLocation: '_prisma_migrations',
       readMarker: async () => null,
       initMarker: async () => {
         calls.initMarker++;
@@ -675,6 +677,7 @@ function makeLedgerHarness(): {
 } {
   const ledgerEntries: LedgerEntryPayload[] = [];
   const markerOps: MarkerOperations = {
+    markerLocation: '_prisma_migrations',
     readMarker: async () => null,
     initMarker: async () => {},
     updateMarker: async () => true,
@@ -1051,7 +1054,7 @@ describe('MongoMigrationRunner, a field rename stopped because documents already
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         'Operation field.posts.title.rename(headline).where({"type":"bug"}) stopped: some documents in collection posts already hold headline as well as title',
-      why: 'Renaming title to headline would overwrite their headline. Find them with db.getCollection("posts").find({"$and":[{"type":"bug"},{"title":{"$exists":true}},{"headline":{"$exists":true}}]}) in mongosh, and move or remove one of the two values in each. Nothing was renamed. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+      why: 'Renaming title to headline would overwrite their headline. Find them with db.getCollection("posts").find({"$and":[{"type":"bug"},{"title":{"$exists":true}},{"headline":{"$exists":true}}]}) in mongosh, and move or remove one of the two values in each. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.',
       meta: {
         databaseUnchanged: true,
         operationId: 'field.posts.title.rename(headline).where({"type":"bug"})',
@@ -1062,7 +1065,7 @@ describe('MongoMigrationRunner, a field rename stopped because documents already
 });
 
 describe('MongoMigrationRunner, a collection rename stopped because the new collection exists', () => {
-  it('says that the new collection exists, names both collections, and that nothing was renamed', async () => {
+  it('says that the new collection exists, names both collections, and once that the failed apply changed nothing', async () => {
     const harness = makeHarness();
     harness.inspectionExecutor.collections = [{ name: 'events' }, { name: 'occasions' }];
 
@@ -1073,7 +1076,7 @@ describe('MongoMigrationRunner, a collection rename stopped because the new coll
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         'Operation collection.events.rename(occasions) stopped: collection occasions already exists, so collection events cannot be renamed to it',
-      why: 'Nothing was renamed. If occasions holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created occasions, as a createIndex on occasions does, make renameCollection("events", "occasions") the first operation of its migration.ts, run node on that migration.ts, and then drop occasions and run the command again. The failed apply changed nothing.',
+      why: 'If occasions holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created occasions, as a createIndex on occasions does, make renameCollection("events", "occasions") the first operation of its migration.ts, run node on that migration.ts, and then drop occasions and run the command again. The failed apply changed nothing.',
       meta: { operationId: 'collection.events.rename(occasions)', databaseUnchanged: true },
     });
   });

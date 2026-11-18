@@ -18,6 +18,8 @@ import { getSqlDescriptorBundle } from '../utils/framework-components';
 
 const execFileAsync = promisify(execFile);
 
+const TYPES_MODULE = '@internal/postgres/contract-types';
+
 /**
  * Runs TypeScript compiler on a tsconfig and asserts success.
  * On failure, includes the generated contract.d.ts content in the error for debugging.
@@ -201,7 +203,7 @@ describe('contract.d.ts imports resolution', () => {
         extensionIds,
       };
 
-      const result = await emit(ir, options, sqlEmission);
+      const result = await emit(ir, options, sqlEmission, { typesModule: TYPES_MODULE });
 
       const contractJsonPath = join(testDir, 'contract.json');
       const contractDtsPath = join(testDir, 'contract.d.ts');
@@ -211,7 +213,9 @@ describe('contract.d.ts imports resolution', () => {
 
       // Verify the generated contract.d.ts contains the correct import
       const contractDtsContent = await readFile(contractDtsPath, 'utf-8');
-      expect(contractDtsContent).toContain("from '@internal/sql-contract/types'");
+      expect(contractDtsContent).toContain(`from '${TYPES_MODULE}'`);
+      expect(contractDtsContent).not.toContain("from '@internal/sql-contract/types'");
+      expect(contractDtsContent).not.toContain("from '@internal/contract/types'");
       expect(contractDtsContent).toContain('Contract');
       expect(contractDtsContent).toContain('ContractWithTypeMaps');
       expect(contractDtsContent).not.toContain("from './contract-types'");
@@ -258,6 +262,9 @@ type UserIdColumn = UserColumns['id'];
           types: [],
           baseUrl: '.',
           paths: {
+            '@internal/postgres/contract-types': [
+              `${relativeToWorkspace}/packages/3-targets/postgres/9-facade/dist/contract-types.d.mts`,
+            ],
             '@internal/sql-contract/types': [
               `${relativeToWorkspace}/packages/2-sql-family/1-core/contract/dist/types.d.mts`,
             ],
@@ -362,7 +369,7 @@ type UserIdColumn = UserColumns['id'];
         extensionIds,
       };
 
-      const result = await emit(ir, options, sqlEmission);
+      const result = await emit(ir, options, sqlEmission, { typesModule: TYPES_MODULE });
 
       const contractJsonPath = join(testDir, 'contract.json');
       const contractDtsPath = join(testDir, 'contract.d.ts');
@@ -372,7 +379,7 @@ type UserIdColumn = UserColumns['id'];
 
       // Verify the contract.d.ts imports are correct
       const contractDtsContent = await readFile(contractDtsPath, 'utf-8');
-      expect(contractDtsContent).toContain("from '@internal/sql-contract/types'");
+      expect(contractDtsContent).toContain(`from '${TYPES_MODULE}'`);
       expect(contractDtsContent).toContain("from '@internal/target-postgres/codec-types'");
 
       // Create a comprehensive test file that uses all exported types
@@ -420,6 +427,9 @@ type CodecIntType = CodecTypes['pg/int4@1'];
           types: [],
           baseUrl: '.',
           paths: {
+            '@internal/postgres/contract-types': [
+              `${relativeToWorkspace}/packages/3-targets/postgres/9-facade/dist/contract-types.d.mts`,
+            ],
             '@internal/sql-contract-ts/*': [
               `${relativeToWorkspace}/packages/2-sql-family/2-authoring/contract-ts/dist/*`,
             ],

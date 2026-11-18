@@ -21,8 +21,14 @@ function createMockStack() {
         generateStorageType: () =>
           '{ readonly tables: Record<string, never>; readonly types: Record<string, never>; readonly storageHash: StorageHash }',
         generateModelStorageType: () => 'Record<string, never>',
-        getFamilyImports: () => [
-          "import type { ContractWithTypeMaps, TypeMaps as TypeMapsType } from '@internal/sql-contract/types';",
+        getFamilyImports: (typesModule: string) => [
+          { moduleSpecifier: typesModule, symbol: 'ContractWithTypeMaps', typeOnly: true },
+          {
+            moduleSpecifier: typesModule,
+            symbol: 'TypeMaps',
+            alias: 'TypeMapsType',
+            typeOnly: true,
+          },
         ],
         getFamilyTypeAliases: () => '',
         getTypeMapsExpression: () => 'TypeMapsType<CodecTypes, OperationTypes>',

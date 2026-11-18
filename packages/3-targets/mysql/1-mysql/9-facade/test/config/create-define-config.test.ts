@@ -2,7 +2,7 @@ import mysqlAdapter, {
   createMysqlControlAdapter,
   readMysqlCatalog,
 } from '@internal/adapter-mysql/control';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { createMysqlControlDriverDescriptor } from '@internal/driver-mysql/control';
 import sql, { type SqlControlAdapterDescriptor } from '@internal/family-sql/control';
 import type { TargetPackRef } from '@internal/framework-components/components';
@@ -14,10 +14,10 @@ import { createMysqlDefineConfig } from '../../src/config/define-config';
 const mariadbMeta = { ...mysqlPackRef, targetId: 'mariadb', id: 'mariadb' } as const;
 
 const mariadbComponents = {
+  family: sql,
   pack: mariadbMeta satisfies TargetPackRef<'sql', 'mariadb'>,
   target: createMysqlControlTargetDescriptor({
     descriptorMeta: mariadbMeta,
-    migrationModule: '@internal/mariadb/migration',
   }),
   adapter: {
     ...mysqlAdapter,
@@ -25,7 +25,12 @@ const mariadbComponents = {
     id: 'mariadb',
     create: (stack) => createMysqlControlAdapter(stack, { readCatalog: readMysqlCatalog }),
   } satisfies SqlControlAdapterDescriptor<'mariadb'>,
-  driver: createMysqlControlDriverDescriptor('mariadb'),
+  driver: createMysqlControlDriverDescriptor({
+    target: { targetId: 'mariadb', displayName: 'MariaDB' },
+    checkViolationErrors: [4025],
+  }),
+  typesModule: '@acme/mariadb/contract-types',
+  migrationModule: '#migration-helpers',
 };
 
 describe('createMysqlDefineConfig', () => {
@@ -34,7 +39,7 @@ describe('createMysqlDefineConfig', () => {
       contract: './prisma/contract.prisma',
       db: { connection: 'mysql://root@localhost:3306/app' },
     });
-    expectTypeOf(config).toEqualTypeOf<PrismaNextConfig<'sql', 'mariadb'>>();
+    expectTypeOf(config).toEqualTypeOf<PrismaConfig<'sql', 'mariadb'>>();
     expect({
       family: config.family,
       target: config.target,
@@ -42,6 +47,8 @@ describe('createMysqlDefineConfig', () => {
       driver: config.driver,
       output: config.contract?.output,
       inputs: config.contract?.source.inputs,
+      typesModule: config.contract?.typesModule,
+      migrations: config.migrations,
     }).toEqual({
       family: sql,
       target: mariadbComponents.target,
@@ -49,6 +56,8 @@ describe('createMysqlDefineConfig', () => {
       driver: mariadbComponents.driver,
       output: './prisma/contract.json',
       inputs: ['./prisma/contract.prisma'],
+      typesModule: '@acme/mariadb/contract-types',
+      migrations: { module: '#migration-helpers' },
     });
   });
 

@@ -23,6 +23,7 @@ export default definePrismaConfig({
         },
       },
       output: '{{OUTPUT_DIR}}/contract.json',
+      typesModule: '@internal/postgres/contract-types',
     },
   }),
 });

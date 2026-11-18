@@ -186,7 +186,7 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         code: 'MIGRATION.PRECHECK_FAILED',
         message:
           'Operation validator.users.update stopped: 2 documents in collection users do not fit the new validator',
-        why: `This validator change makes "name" and "plan" required. One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
+        why: `This validator change makes "plan" required. One of them has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The failed apply changed nothing.`,
         meta: {
           databaseUnchanged: true,
           operationId: 'validator.users.update',
@@ -232,10 +232,136 @@ describe('MongoMigrationRunner, a validator change that checks the documents fir
         databaseUnchanged: result.failure.meta.databaseUnchanged,
         indexes: (await db.collection('users').indexes()).map(({ name }) => name),
       }).toEqual({
-        why: `This validator change makes "name" and "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
+        why: `This validator change makes "plan" required. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "plan". Find them all with ${query} in mongosh. ${NO_VALIDATOR_BY_HAND} ${CHECK_DOCUMENTS_FALSE} This operation did not change the validator. Once the documents are fixed, run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`,
         databaseUnchanged: false,
         indexes: ['_id_', 'name_1'],
       });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'names only what the document lacks, not a newly required field it holds',
+    async () => {
+      const before = {
+        bsonType: 'object',
+        required: ['_id', 'nm'],
+        properties: { _id: { bsonType: 'objectId' }, nm: { bsonType: 'string' } },
+      };
+      const after = {
+        bsonType: 'object',
+        required: ['_id', 'fn', 'nm'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          fn: { bsonType: 'string' },
+          nm: { bsonType: 'string' },
+        },
+      };
+      await db.createCollection('users', { validator: { $jsonSchema: before } });
+      await db
+        .collection('users')
+        .insertOne(
+          { _id: new ObjectId('64b7f0c2a1b2c3d4e5f60718'), fn: 'Ann' },
+          { bypassDocumentValidation: true },
+        );
+
+      const result = await run([
+        setValidation('users', after, {
+          validationLevel: 'strict',
+          validationAction: 'error',
+          checkDocuments: true,
+        }),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why?.split(' Find them all')[0]).toBe(
+        'It has _id ObjectId("64b7f0c2a1b2c3d4e5f60718"). That document has no "nm".',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'names no nested key a document does not lack, for a list element that is not an object and a missing object',
+    async () => {
+      const address = (required: readonly string[]) => ({
+        bsonType: 'object',
+        ...(required.length === 0 ? {} : { required }),
+        properties: { line1: { bsonType: 'string' } },
+      });
+      const schema = (required: readonly string[]) => ({
+        bsonType: 'object',
+        required: ['_id'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          addresses: { bsonType: 'array', items: address(required) },
+          home: address(required),
+        },
+      });
+      await db.createCollection('users', { validator: { $jsonSchema: schema([]) } });
+      await db
+        .collection('users')
+        .insertOne(
+          { _id: new ObjectId('64b7f0c2a1b2c3d4e5f60719'), addresses: [{ line1: 'a' }, null] },
+          { bypassDocumentValidation: true },
+        );
+
+      const result = await run([
+        setValidation('users', schema(['line1']), {
+          validationLevel: 'strict',
+          validationAction: 'error',
+          checkDocuments: true,
+        }),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why?.split(' Find them all')[0]).toBe(
+        'This validator change changes what "addresses" accepts. It has _id ObjectId("64b7f0c2a1b2c3d4e5f60719"). That document holds an element in "addresses" that is not an object.',
+      );
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'names a nested key the object a document holds lacks, beside a list element that is not an object',
+    async () => {
+      const address = (required: readonly string[]) => ({
+        bsonType: 'object',
+        ...(required.length === 0 ? {} : { required }),
+        additionalProperties: false,
+        properties: { line1: { bsonType: 'string' }, zip: { bsonType: ['null', 'string'] } },
+      });
+      const schema = (required: readonly string[]) => ({
+        bsonType: 'object',
+        required: ['_id'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          addresses: { bsonType: 'array', items: address(required) },
+          home: { oneOf: [{ bsonType: 'null' }, address(required)] },
+        },
+      });
+      await db.createCollection('users', { validator: { $jsonSchema: schema([]) } });
+      await db.collection('users').insertOne(
+        {
+          _id: new ObjectId('64b7f0c2a1b2c3d4e5f6071a'),
+          addresses: [null, { line1: 'a' }],
+          home: { zip: '9' },
+        },
+        { bypassDocumentValidation: true },
+      );
+
+      const result = await run([
+        setValidation('users', schema(['line1']), {
+          validationLevel: 'strict',
+          validationAction: 'error',
+          checkDocuments: true,
+        }),
+      ]);
+
+      if (result.ok) throw new Error('Expected the validator change to stop at its document check');
+      expect(result.failure.why?.split(' Find them all')[0]).toBe(
+        'This validator change makes "home.line1" required and changes what "addresses" and "home" accept. It has _id ObjectId("64b7f0c2a1b2c3d4e5f6071a"). That document has no "home.line1" and holds an element in "addresses" that is not an object.',
+      );
     },
     timeouts.spinUpMongoMemoryServer,
   );

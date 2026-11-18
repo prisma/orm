@@ -6,18 +6,19 @@ import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 const scalarTypes: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
-  ['Int64', 'mongo/int64@1'],
+  ['Int64BigInt', 'mongo/int64@1'],
   ['Decimal128', 'mongo/decimal128@1'],
   ['Binary', 'mongo/binary@1'],
+  ['PlainJson', 'mongo/json@1'],
   ['Json', 'mongo/json@1'],
 ]);
 
 const SCHEMA = `model Post {
   id        ObjectId    @id @map("_id")
-  views     Int64
+  views     Int64BigInt
   price     Decimal128
   thumbnail Binary
-  meta      Json
+  meta      PlainJson
   notes     Json?
 }
 `;

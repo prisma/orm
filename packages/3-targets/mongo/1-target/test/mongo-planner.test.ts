@@ -1,7 +1,6 @@
 import { coreHash, type JsonValue } from '@internal/contract/types';
 import type { MigrationOperationPolicy } from '@internal/framework-components/control';
 import { planOriginOf } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import {
   buildMongoNamespace,
   MongoCollection,
@@ -31,6 +30,7 @@ import {
   MongoSchemaIR,
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { MongoMigrationPlanner } from '../src/core/migrations/mongo-planner';
 import { CollModCall, CreateIndexCall } from '../src/core/migrations/op-factory-call';
@@ -1141,6 +1141,46 @@ describe('MongoMigrationPlanner', () => {
           'Update validator on items (changed: name; added: note; removed: legacy)',
         ]);
       });
+    });
+
+    it('names the variant fields a validator update changes when the fields of the whole collection stay the same', () => {
+      const tasks = (bug: string, epic: string) => ({
+        bsonType: 'object',
+        required: ['_id', 'type'],
+        properties: { _id: { bsonType: 'objectId' }, type: { bsonType: 'string' } },
+        oneOf: [
+          {
+            required: ['type'],
+            properties: { type: { enum: ['bug'] }, [bug]: { bsonType: 'string' } },
+            additionalProperties: false,
+          },
+          {
+            required: ['type'],
+            properties: { type: { enum: ['epic'] }, [epic]: { bsonType: 'string' } },
+            additionalProperties: false,
+          },
+        ],
+      });
+      const validator = (jsonSchema: Record<string, unknown>) => ({
+        jsonSchema,
+        validationLevel: 'strict' as const,
+        validationAction: 'error' as const,
+      });
+      const contract = makeContract({ tasks: { validator: validator(tasks('y', 'x')) } });
+      const origin = new MongoSchemaIR(
+        [
+          new MongoSchemaCollection({
+            name: 'tasks',
+            validator: new MongoSchemaValidator(validator(tasks('x', 'y'))),
+          }),
+        ],
+        { fromDatabase: false },
+      );
+      expect(
+        planSuccess(planner, contract, origin).operations.map((operation) => operation.label),
+      ).toEqual([
+        'Update validator on tasks (added: y in documents whose type is "bug", x in documents whose type is "epic"; removed: x in documents whose type is "bug", y in documents whose type is "epic")',
+      ]);
     });
 
     it('classifies adding a non-required property as widening', () => {
@@ -2271,10 +2311,10 @@ describe('MongoMigrationPlanner', () => {
         snapshotsImportPath: '../../snapshots',
       });
 
-      const source = empty.renderTypeScript(keepInternalSpecifiers);
+      const source = empty.renderTypeScript(workspaceMigrationModule.mongo);
 
       expect(source).toContain(
-        "import { Migration, MigrationCLI } from '@internal/target-mongo/migration';",
+        "import { Migration, MigrationCLI } from '@internal/mongo/migration';",
       );
       expect(source).toContain('class M extends Migration<Start, End>');
       expect(source).toContain('MigrationCLI.run(import.meta.url, M);');

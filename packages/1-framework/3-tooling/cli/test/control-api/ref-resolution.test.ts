@@ -25,10 +25,14 @@ describe('retryCommandFor', () => {
       retry: `{bin} migration status --from ${HASH_A} --to @db --db $DATABASE_URL`,
     },
     {
-      args: { ...migrate, to: 'prod', advanceRef: 'staging' },
+      args: { ...migrate, rerunArgs: ['--to', 'prod', '--advance-ref', 'staging'] },
       retry: '{bin} db migrate --to prod --advance-ref staging --db $DATABASE_URL',
     },
-    { args: { ...migrate, to: undefined }, retry: '{bin} db migrate --db $DATABASE_URL' },
+    { args: { ...migrate, rerunArgs: [] }, retry: '{bin} db migrate --db $DATABASE_URL' },
+    {
+      args: { ...migrate, rerunArgs: ['--to', 'prod', '--permit-policy-change'] },
+      retry: '{bin} db migrate --to prod --permit-policy-change --db $DATABASE_URL',
+    },
   ])('repeats the flags as given: $retry', ({ args, retry }) => {
     expect(retryCommandFor(args)).toBe(retry);
   });

@@ -298,6 +298,12 @@ export default class M extends Migration {
 MigrationCLI.run(import.meta.url, M);
 ```
 
+`defineConfig` names this module in `migrations.module`, the module rendered migration files import from.
+
+### `@internal/postgres/contract-types`
+
+Re-exports, as types only, the framework contract types, the SQL family contract types and the Postgres codec and operation types: everything a generated `contract.d.ts` imports. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-postgres/contract-types`.
+
 ### `@internal/postgres/family`
 
 Re-exports the SQL family pack (the value passed as `family:` to `defineContract`).

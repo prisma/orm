@@ -67,13 +67,13 @@ For SQL contracts, use `@internal/sql-contract-ts/schema-sql` instead.
 
 ## Related Subsystems
 
-- [Data Contract](../../../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)
-- [Contract Emitter & Types](../../../../../docs/architecture%20docs/subsystems/2.%20Contract%20Emitter%20&%20Types.md)
+- [Data Contract](../../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)
+- [Contract Emitter & Types](../../../../docs/architecture%20docs/subsystems/2.%20Contract%20Emitter%20&%20Types.md)
 
 ## Related ADRs
 
-- [ADR 001 - Migrations as Edges](../../../../../docs/architecture%20docs/adrs/ADR%20001%20-%20Migrations%20as%20Edges.md)
-- [ADR 004 - Storage Hash vs Profile Hash](../../../../../docs/architecture%20docs/adrs/ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md)
-- [ADR 010 - Canonicalization Rules](../../../../../docs/architecture%20docs/adrs/ADR%20010%20-%20Canonicalization%20Rules.md)
-- [ADR 021 - Contract Marker Storage](../../../../../docs/architecture%20docs/adrs/ADR%20021%20-%20Contract%20Marker%20Storage.md)
-- [ADR 185 - SPI types live at the lowest consuming layer](../../../../../docs/architecture%20docs/adrs/ADR%20185%20-%20SPI%20types%20live%20at%20the%20lowest%20consuming%20layer.md)
+- [ADR 001 - Migrations as Edges](../../../../docs/architecture%20docs/adrs/ADR%20001%20-%20Migrations%20as%20Edges.md)
+- [ADR 004 - Storage Hash vs Profile Hash](../../../../docs/architecture%20docs/adrs/ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md)
+- [ADR 010 - Canonicalization Rules](../../../../docs/architecture%20docs/adrs/ADR%20010%20-%20Canonicalization%20Rules.md)
+- [ADR 021 - Contract Marker Storage](../../../../docs/architecture%20docs/adrs/ADR%20021%20-%20Contract%20Marker%20Storage.md)
+- [ADR 185 - SPI types live at the lowest consuming layer](../../../../docs/architecture%20docs/adrs/ADR%20185%20-%20SPI%20types%20live%20at%20the%20lowest%20consuming%20layer.md)

@@ -1,4 +1,7 @@
-import { assertSafeAuthoringHelperKey } from '@internal/contract-authoring';
+import {
+  answerMissingPropertyReads,
+  assertSafeAuthoringHelperKey,
+} from '@internal/contract-authoring';
 import type {
   AuthoringArgumentDescriptor,
   AuthoringTypeChoiceOption,
@@ -82,20 +85,34 @@ function fieldTypeOf(output: ScalarTypeConstructorOutput): MongoTypeInstance {
   };
 }
 
-/** The runtime `type` helpers of `namespace`: each type constructor, type choice and type alias as a function giving the MongoDB field type it stands for. A constructor marked `deprecated` is a PSL name only, and has no helper. */
+function refuseDeprecatedTypeHelper(helperPath: string, replacementPath: string): never {
+  const helper = `type.${helperPath}`;
+  throw contractError(
+    'CONTRACT.FIELD_HELPER_UNKNOWN',
+    `${helper}() was removed. ${helperPath} is a deprecated PSL name, which has no TypeScript helper. Write type.${replacementPath}().`,
+    { meta: { helper } },
+  );
+}
+
+/** The runtime `type` helpers of `namespace`: each type constructor, type choice and type alias as a function giving the MongoDB field type it stands for. A constructor marked `deprecated` is a PSL name only, and has no helper; reading its name throws `CONTRACT.FIELD_HELPER_UNKNOWN` naming the replacement. */
 export function createTypeHelpersFromNamespace(
   namespace: AuthoringTypeNamespace,
   lookups: AuthoringHelperLookups,
   path: readonly string[] = [],
 ): Record<string, unknown> {
   const helpers: Record<string, unknown> = {};
+  const refusals = new Map<string, () => never>();
 
   for (const [key, value] of Object.entries(namespace)) {
     assertSafeAuthoringHelperKey(key, path);
     const helperPath = [...path, key].join('.');
 
     if (isAuthoringTypeConstructorDescriptor(value)) {
-      if (value.deprecated !== undefined) continue;
+      if (value.deprecated !== undefined) {
+        const replacementPath = [...path, value.deprecated.replacement].join('.');
+        refusals.set(key, () => refuseDeprecatedTypeHelper(helperPath, replacementPath));
+        continue;
+      }
       helpers[key] = (...written: readonly unknown[]): MongoTypeInstance => {
         validateAuthoringHelperArguments(helperPath, value.args, written);
         const args = readValueArguments(helperPath, value.args, written, lookups.dataTypes);
@@ -154,5 +171,7 @@ export function createTypeHelpersFromNamespace(
     helpers[key] = createTypeHelpersFromNamespace(value, lookups, [...path, key]);
   }
 
-  return helpers;
+  return answerMissingPropertyReads(helpers, new Set(refusals.keys()), (name) =>
+    refusals.get(name)?.(),
+  );
 }

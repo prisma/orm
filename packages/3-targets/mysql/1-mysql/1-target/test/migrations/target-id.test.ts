@@ -3,6 +3,7 @@ import type {
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { col } from '@internal/sql-relational-core/contract-free';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { mysqlTargetDescriptorMeta } from '../../src/core/descriptor-meta';
 import { createMysqlControlTargetDescriptor } from '../../src/core/migrations/control-target';
@@ -15,14 +16,14 @@ import {
 import { renderOps } from '../../src/core/migrations/render-ops';
 import { contractOf, frameworkComponents, int, stubLowerer } from './fixtures';
 
-const MARIADB = { targetId: 'mariadb', migrationModule: '@internal/mariadb/migration' } as const;
+const MARIADB = { targetId: 'mariadb' } as const;
 
 const mariadbMeta = {
   ...mysqlTargetDescriptorMeta,
   targetId: 'mariadb',
   id: 'mariadb',
   displayName: 'MariaDB',
-  sessionSettings: { time_zone: '+00:00', tx_isolation: 'READ-COMMITTED' },
+  sessionSettings: { time_zone: '+00:00' },
 } as const;
 
 class MariadbExample extends MysqlMigrationBase<'mariadb'> {
@@ -70,7 +71,6 @@ function planUserTable(planner: MysqlMigrationPlanner<string>) {
 function mysqlControlTarget() {
   return createMysqlControlTargetDescriptor({
     descriptorMeta: mysqlTargetDescriptorMeta,
-    migrationModule: '@internal/mysql/migration',
   });
 }
 
@@ -110,7 +110,7 @@ describe('a target that extends MySQL', () => {
   it('plans operations with its target id and writes migration.ts against its own migration module', async () => {
     const plan = planUserTable(createMysqlMigrationPlanner(stubLowerer, MARIADB));
     const operations = await Promise.all(plan.operations);
-    const source = plan.renderTypeScript((specifier) => specifier);
+    const source = plan.renderTypeScript(workspaceMigrationModule.mariadb);
     const modules = [...source.matchAll(/from '([^']+)'/g)]
       .map(([, module]) => module)
       .filter((module) => module?.startsWith('@internal/'));
@@ -177,7 +177,6 @@ describe('a target that extends MySQL', () => {
   it('builds a control target from its own descriptor meta, with its session settings and planner', () => {
     const target = createMysqlControlTargetDescriptor({
       descriptorMeta: mariadbMeta,
-      migrationModule: MARIADB.migrationModule,
     });
     const planner = target.migrations.createPlanner(
       stubLowerer as never,
@@ -190,7 +189,7 @@ describe('a target that extends MySQL', () => {
     }).toEqual({
       instance: { familyId: 'sql', targetId: 'mariadb' },
       targetId: 'mariadb',
-      sessionSettings: { time_zone: '+00:00', tx_isolation: 'READ-COMMITTED' },
+      sessionSettings: { time_zone: '+00:00' },
       planTargetId: 'mariadb',
     });
   });

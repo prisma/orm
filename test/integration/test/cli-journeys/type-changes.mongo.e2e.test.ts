@@ -1,7 +1,7 @@
 /**
  * A field whose type changes (MongoDB).
  *
- * Journey T1 changes `User.age` from `String` to `Int` on documents: `migration plan` asks, offering `--convert User.age` and `--delete User.age`; `--delete` plans a `castField`, and `db migrate` casts `"42"` to `42`. Journey T2 changes it from `DateTime` to `Int`, which `$convert` has no cast for: the plan is refused, pointing to `--convert` only, and `--convert User.age` then writes the data transform to fill in. Journey T3 changes `Int` to `Int64` through `db update`, which casts every value with nothing asked. Journey T4 plans `--delete User.age` on documents holding `"abc"`, which `db migrate` cannot cast: the failure advises `--convert User.age` once.
+ * Journey T1 changes `User.age` from `String` to `Int` on documents: `migration plan` asks, offering `--convert User.age` and `--delete User.age`; `--delete` plans a `castField`, and `db migrate` casts `"42"` to `42`. Journey T2 changes it from `DateTime` to `Int`, which `$convert` has no cast for: the plan is refused, pointing to `--convert` only, and `--convert User.age` then writes the data transform to fill in. Journey T3 changes `Int` to `BigInt` through `db update`, which casts every value with nothing asked. Journey T4 plans `--delete User.age` on documents holding `"abc"`, which `db migrate` cannot cast: the failure advises `--convert User.age` once.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -243,7 +243,7 @@ describe('Journeys (MongoDB): a field whose type changes', {
     ).toMatch(/placeholder\(['"]User\.age:update['"]\)/);
   });
 
-  it('T3: db update casts Int to Int64 with nothing asked', async () => {
+  it('T3: db update casts Int to BigInt with nothing asked', async () => {
     const dbName = 'mongo_type_change_widening';
     const ctx = setupProject(withDatabase(replSet.getUri(), dbName), 'Int');
     created.add(ctx.testDir);
@@ -256,7 +256,7 @@ describe('Journeys (MongoDB): a field whose type changes', {
         { email: 'bo@example.com', age: 41 },
       ]);
 
-    await emitAge(ctx, 'Int64', 'T3.01');
+    await emitAge(ctx, 'BigInt', 'T3.01');
     const updated = await runDbUpdate(ctx, ['--no-interactive', '--json']);
     expect(updated.exitCode, `T3.02: db update: ${updated.stderr}`).toBe(0);
     expect(await ageTypes(dbName), 'T3.03: every age is a long').toEqual(['long', 'long']);

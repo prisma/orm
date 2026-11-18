@@ -14,6 +14,7 @@ import {
   type ResolvedValueObjectFieldRenameStatement,
 } from '@internal/framework-components/control';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import { postgresContractToSchema } from '../../src/core/migrations/postgres-contract-to-schema';
 import { postgresCreateNamespace } from '../../src/core/postgres-schema';
@@ -199,7 +200,7 @@ export function conflictsOf(result: ReturnType<typeof plan>) {
 }
 
 export function renderedCalls(result: ReturnType<typeof plan>): readonly string[] {
-  const rendered = succeeded(result).plan.renderTypeScript((specifier) => specifier);
+  const rendered = succeeded(result).plan.renderTypeScript(workspaceMigrationModule.postgres);
   return rendered.split('\n').flatMap((line) => {
     const call = /this\.(renameStoredKey|removeStoredKey|fillStoredKey)\(.*\)/.exec(line);
     return call === null ? [] : [call[0]];

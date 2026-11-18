@@ -105,6 +105,7 @@ function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unkn
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(projectDir, 'contract.json'),
+      typesModule: '@acme/orm-db/contract-types',
     },
     ...overrides,
   };
@@ -677,6 +678,49 @@ describe('db update', () => {
     ]);
   });
 
+  describe('a run that records policies', () => {
+    const updated = [
+      { setting: 'change', declared: ['migrate'], inForce: ['migrate', 'reconcile'] },
+    ];
+
+    it('says the policies were updated when nothing else ran', async () => {
+      mocks.dbUpdate.mockResolvedValue(
+        ok({
+          ...applySuccess(),
+          plan: { operations: [] },
+          execution: { operationsPlanned: 0, operationsExecuted: 0 },
+          databasePoliciesUpdated: updated,
+        }),
+      );
+
+      const run = await harness().run(['db', 'update'], {
+        cwd: projectDir,
+        isTty: { stdout: true },
+      });
+
+      expect(run.presented?.presentation.human[1]).toEqual({
+        kind: 'summary',
+        status: 'ok',
+        text: 'Policies updated: change: migrate',
+      });
+    });
+
+    it('names the policies after the operations that ran', async () => {
+      mocks.dbUpdate.mockResolvedValue(ok({ ...applySuccess(), databasePoliciesUpdated: updated }));
+
+      const run = await harness().run(['db', 'update'], {
+        cwd: projectDir,
+        isTty: { stdout: true },
+      });
+
+      expect(run.presented?.presentation.human[1]).toEqual({
+        kind: 'summary',
+        status: 'ok',
+        text: 'Applied 2 operation(s) across 1 contract space; policies updated: change: migrate',
+      });
+    });
+  });
+
   it('heads the run with the contract and the masked database', async () => {
     const run = await harness().run(['db', 'update'], {
       cwd: projectDir,
@@ -883,6 +927,7 @@ describe('db update', () => {
         contract: {
           source: { format: 'typescript', inputs: [], load: async () => ({}) },
           output: join(projectDir, 'absent.json'),
+          typesModule: '@acme/orm-db/contract-types',
         },
       }),
     ).run(['db', 'update', '--json'], { cwd: projectDir });
@@ -1188,7 +1233,7 @@ describe('db update', () => {
       expect(run.exitCode).toBe(0);
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
         contract: { storage: { storageHash: MARKER_HASH } },
-        resolveImportSpecifier: expect.any(Function),
+        typesModule: '@acme/orm-db/contract-types',
       });
       expect(mocks.renderContractDts.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.connect.mock.invocationCallOrder[0]!,
