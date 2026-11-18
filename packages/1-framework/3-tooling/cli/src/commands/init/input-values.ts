@@ -36,6 +36,20 @@ export function resolveAuthoring(value: string | undefined): ContractSourceForma
 }
 
 /**
+ * Refuses a `--schema-path` that no authoring style takes, before `--authoring` is known.
+ */
+export function rejectSchemaPathNoModeTakes(value: string): void {
+  const ext = extname(value.trim()).toLowerCase();
+  if (ext !== '.prisma' && ext !== '.ts') {
+    throw errorInitInvalidFlagValue({
+      flag: 'schema-path',
+      value,
+      allowed: ['<file path with .prisma or .ts extension>'],
+    });
+  }
+}
+
+/**
  * Validates `--schema-path` against the chosen `--authoring` style: PSL
  * authoring requires a `.prisma` file and TypeScript authoring requires a
  * `.ts` file. Mismatched combinations would silently scaffold PSL content

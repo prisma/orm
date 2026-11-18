@@ -131,7 +131,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           brief: 'Connect to DATABASE_URL once and check the server version',
         }),
         strictProbe: flag.boolean({ brief: 'Treat a failed --probe-db as fatal' }),
-        skipInstall: flag.boolean({ brief: 'Skip dependency installation and contract emission' }),
+        skipInstall: flag.boolean({
+          brief:
+            'Skip dependency installation and contract emission; the target package must already be installed',
+        }),
         keepPreviousFacade: flag.boolean({
           brief: 'Keep the previous target package in package.json when switching targets',
         }),

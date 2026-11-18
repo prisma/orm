@@ -49,6 +49,10 @@ describe('importFromProject', () => {
       { './init': { types: './init.d.ts', node: { import: './init.mjs' } } },
     ],
     ['a subpath pattern', { './*': './*.mjs' }],
+    [
+      'the node-addons condition Node turns on by default',
+      { './init': { 'node-addons': './init.mjs' } },
+    ],
   ])('loads an export given as %s', async (_case, exports) => {
     writePackage({ type: 'module', exports }, { 'init.mjs': 'export default 42;\n' });
 
@@ -56,6 +60,27 @@ describe('importFromProject', () => {
       kind: 'loaded',
       module: { default: 42 },
     });
+  });
+
+  it('reads an export target as a URL, as Node does', async () => {
+    writePackage(
+      { type: 'module', exports: { './init': './init%20entry.mjs' } },
+      { 'init entry.mjs': 'export default 42;\n' },
+    );
+
+    await expect(importFromProject(projectDir, 'acme-db/init')).resolves.toMatchObject({
+      kind: 'loaded',
+      module: { default: 42 },
+    });
+  });
+
+  it('says a package whose package.json does not parse cannot be loaded', async () => {
+    writeFile('node_modules/acme-db/package.json', '{ not json');
+
+    const result = await importFromProject(projectDir, 'acme-db/init');
+
+    expect(result).toMatchObject({ kind: 'unloadable' });
+    expect(String(Reflect.get(result, 'cause'))).toContain('acme-db');
   });
 
   it('loads a package with no exports field the way Node requires it', async () => {

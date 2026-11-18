@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
+import { declareAddedPackages, withoutFakeAdditions } from '../utils/fake-package-manager';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
@@ -39,7 +40,9 @@ let loadInit: ImportFromProject;
 
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
-  return script.shift() ?? { exitCode: 0, stderr: '' };
+  const result = script.shift() ?? { exitCode: 0, stderr: '' };
+  if (result.exitCode === 0) declareAddedPackages(request);
+  return result;
 };
 
 beforeEach(() => {
@@ -143,7 +146,9 @@ function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }
 function expectProjectUnchangedApartFromTheCheckInstall(): void {
   expect(projectFile('prisma.config.ts')).toBe(fixtureFile('prisma.config.ts'));
   expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(false);
-  expect(projectFile('package.json')).toBe(fixtureFile('package.json.fixture'));
+  expect(withoutFakeAdditions(projectFile('package.json'))).toEqual(
+    JSON.parse(fixtureFile('package.json.fixture')),
+  );
   expect(existsSync(join(projectDir, 'src/prisma'))).toBe(false);
   expect(existsSync(join(projectDir, 'prisma-8.md'))).toBe(false);
   expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
@@ -431,11 +436,13 @@ describe('the Prisma 7 check before init changes the project', () => {
       expect(envelopeOf(run)).toMatchObject({
         error: {
           code: 'CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE',
-          summary: 'Could not load @prisma/orm-postgres from the project',
-          meta: { reason: 'not-resolvable' },
+          summary: 'Could not load @internal/postgres/config from the project',
+          meta: { reason: 'not-resolvable', module: '@internal/postgres/config' },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: expect.stringMatching(/^Check that @prisma\/orm-postgres is installed/),
+              label: expect.stringMatching(
+                /^Check that @prisma\/orm-postgres is installed and exports @internal\/postgres\/config/,
+              ),
             }),
           ]),
         },
@@ -493,6 +500,31 @@ describe('the Prisma 7 check before init changes the project', () => {
         },
       });
       expectProjectUnchangedApartFromTheCheckInstall();
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'reports a config module that exports prisma7Schema but no defineConfig as broken, not as having no Prisma 7 source',
+    async () => {
+      copyFixture();
+      loadTargetConfig = async () => ({
+        kind: 'loaded',
+        module: { prisma7Schema: () => ({}) },
+      });
+
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+          meta: { reason: 'invalid-shape' },
+          why: expect.stringContaining(
+            '@internal/postgres/config exports prisma7Schema, but not a defineConfig function',
+          ),
+        },
+      });
     },
     timeouts.coldTransformImport,
   );

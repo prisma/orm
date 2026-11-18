@@ -36,8 +36,9 @@ export const InitOutputSchema = type({
    * What became of the dependency install. `skipped` is the deliberate
    * `--skip-install`; `failed` is an install that ran and did not succeed,
    * which leaves a scaffolded project that cannot run yet. `deps` and
-   * `devDeps` list what was installed, so both non-`installed` states
-   * carry them empty.
+   * `devDeps` list what was installed: under `skipped`, and under a `failed`
+   * first install, both are empty; when a later install fails, `deps` holds
+   * what the first install, before the questions, put in place.
    */
   packagesInstalled: {
     status: "'installed'|'skipped'|'failed'",

@@ -8,6 +8,8 @@ export function requirementsBlock(
   label: string,
   requirement: ServerRequirement | undefined,
   pkgRun: string,
+  /** Whether the target package can check the server for `--probe-db`. */
+  canProbe: boolean,
 ): string {
   if (requirement === undefined) {
     return '';
@@ -16,6 +18,10 @@ export function requirementsBlock(
     '## Requirements',
     '',
     `- **${label} ${requirement.minVersion} or newer.** Older servers are not supported. Run \`${requirement.checkCommand}\` against your server to verify.`,
-    `- The CLI never connects to your database without explicit consent. Pass \`--probe-db\` to \`${pkgRun} orm init\` if you want \`init\` to verify the server version itself.`,
+    ...(canProbe
+      ? [
+          `- The CLI never connects to your database without explicit consent. Pass \`--probe-db\` to \`${pkgRun} orm init\` if you want \`init\` to verify the server version itself.`,
+        ]
+      : []),
   ].join('\n');
 }

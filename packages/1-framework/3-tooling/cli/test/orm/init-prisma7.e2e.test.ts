@@ -19,6 +19,7 @@ import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { emitScaffoldedContract } from '../../src/orm/init-emit';
 import { importFromProject } from '../../src/orm/project-modules';
+import { declareAddedPackages, withoutFakeAdditions } from '../utils/fake-package-manager';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
@@ -45,6 +46,7 @@ let installs: (readonly string[])[];
 
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
+  declareAddedPackages(request);
   return { exitCode: 0, stderr: '' };
 };
 
@@ -253,7 +255,9 @@ describe('init on the Prisma 7 fixture, end to end', () => {
         },
       });
       expect(readProjectFile('prisma.config.ts')).toBe(fixtureFile('prisma.config.ts'));
-      expect(readProjectFile('package.json')).toBe(fixtureFile('package.json.fixture'));
+      expect(withoutFakeAdditions(readProjectFile('package.json'))).toEqual(
+        JSON.parse(fixtureFile('package.json.fixture')),
+      );
       expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(false);
       expect(existsSync(join(projectDir, 'src/prisma'))).toBe(false);
       expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);

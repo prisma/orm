@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire, findPackageJSON } from 'node:module';
-import { pathToFileURL } from 'node:url';
-import { dirname, join } from 'pathe';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { join } from 'pathe';
 import { exports as resolveExportsField } from 'resolve.exports';
 
 /** What the project resolves a module specifier to, and what importing it gave. */
@@ -14,8 +14,11 @@ export type ProjectImport =
 /** Imports a module as the project at `cwd` resolves it, not as the CLI's own location would. */
 export type ImportFromProject = (cwd: string, specifier: string) => Promise<ProjectImport>;
 
-/** Node's ESM loader adds `module-sync` to the conditions `resolve.exports` applies for `import`. */
-const IMPORT_CONDITIONS = ['module-sync'];
+/**
+ * The conditions Node's ESM loader applies by default beyond those `resolve.exports` adds for
+ * `import` (`import`, `node` and `default`).
+ */
+const IMPORT_CONDITIONS = ['module-sync', 'node-addons'];
 
 function errorCode(error: unknown): unknown {
   return error instanceof Error ? Reflect.get(error, 'code') : undefined;
@@ -49,7 +52,8 @@ function resolveExports(manifest: Record<string, unknown>, subpath: string): str
 type Resolution =
   | { readonly kind: 'not-installed' }
   | { readonly kind: 'not-exported' }
-  | { readonly kind: 'resolved'; readonly path: string };
+  | { readonly kind: 'resolved'; readonly path: string }
+  | { readonly kind: 'unreadable'; readonly cause: unknown };
 
 function resolveFromProject(cwd: string, specifier: string): Resolution {
   const { name, subpath } = splitSpecifier(specifier);
@@ -65,7 +69,15 @@ function resolveFromProject(cwd: string, specifier: string): Resolution {
   if (manifestPath === undefined) {
     return { kind: 'not-installed' };
   }
-  const manifest: unknown = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  } catch (cause) {
+    return {
+      kind: 'unreadable',
+      cause: new Error(`${manifestPath} cannot be read as JSON`, { cause }),
+    };
+  }
   if (!isRecord(manifest) || manifest['exports'] === undefined) {
     try {
       return { kind: 'resolved', path: createRequire(manifestPath).resolve(specifier) };
@@ -79,7 +91,7 @@ function resolveFromProject(cwd: string, specifier: string): Resolution {
   const target = resolveExports(manifest, subpath);
   return target === undefined
     ? { kind: 'not-exported' }
-    : { kind: 'resolved', path: join(dirname(manifestPath), target) };
+    : { kind: 'resolved', path: fileURLToPath(new URL(target, pathToFileURL(manifestPath))) };
 }
 
 /** Whether the project at `cwd` has the package `name` where Node would find it. */
@@ -102,6 +114,9 @@ export function isInstalledInProject(cwd: string, name: string): boolean {
  */
 export const importFromProject: ImportFromProject = async (cwd, specifier) => {
   const resolution = resolveFromProject(cwd, specifier);
+  if (resolution.kind === 'unreadable') {
+    return { kind: 'unloadable', cause: resolution.cause };
+  }
   if (resolution.kind !== 'resolved') {
     return resolution;
   }

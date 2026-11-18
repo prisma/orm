@@ -215,6 +215,7 @@ function planScaffold(ctx: {
     contribution.label,
     contribution.serverRequirement,
     runPrefix,
+    contribution.probe !== undefined,
   );
 
   const renames = planConfigRename(cwd, inputs, warnings);

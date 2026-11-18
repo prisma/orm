@@ -138,7 +138,9 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
   }
   const result = ProbeResultSchema(answer);
   if (result instanceof type.errors) {
-    const cause = `the probe of ${ctx.packageName} gave a malformed answer: ${result.summary}`;
+    const cause = redactUrlCredentials(
+      `the probe of ${ctx.packageName} gave a malformed answer: ${result.summary}`,
+    );
     return {
       kind: 'invalid-result',
       minVersion,
@@ -148,7 +150,9 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
     };
   }
   if (result.kind === 'driver-missing') {
-    const cause = `\`${result.driver}\` could not be loaded by ${ctx.packageName} (cause: ${result.cause})`;
+    const cause = redactUrlCredentials(
+      `\`${result.driver}\` could not be loaded by ${ctx.packageName} (cause: ${result.cause})`,
+    );
     return {
       kind: 'driver-missing',
       minVersion,
@@ -168,6 +172,15 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
     };
   }
   const { serverVersion } = result;
+  if (!/\d/.test(serverVersion)) {
+    return {
+      kind: 'version-unreadable',
+      minVersion,
+      meetsMinimum: null,
+      cause: `the probe of ${ctx.packageName} reported the version ${JSON.stringify(serverVersion)}`,
+      message: `--probe-db connected to the server, but could not read its version: the probe of ${ctx.packageName} reported the version ${JSON.stringify(serverVersion)}.`,
+    };
+  }
 
   if (minVersion === undefined) {
     return {

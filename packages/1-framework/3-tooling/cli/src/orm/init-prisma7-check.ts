@@ -63,13 +63,22 @@ export function createPrisma7SourceCheck(ctx: {
         schemaPath,
         packageName,
         reason: 'not-resolvable',
+        module: contribution.configModule,
         added,
       });
     }
 
     const { defineConfig, prisma7Schema } = imported.module;
-    if (typeof defineConfig !== 'function' || typeof prisma7Schema !== 'function') {
+    if (typeof prisma7Schema !== 'function') {
       return { outcome: 'no-source' };
+    }
+    if (typeof defineConfig !== 'function') {
+      const broken = errorInitContributionUnavailable({
+        packageName,
+        reason: 'invalid-shape',
+        detail: `${contribution.configModule} exports prisma7Schema, but not a defineConfig function`,
+      });
+      throw added === undefined ? broken : withPackagesAddedAction(broken, added, PRISMA7_CHECK);
     }
     const quickReference = contribution.prisma7QuickReference;
     if (quickReference === undefined) {

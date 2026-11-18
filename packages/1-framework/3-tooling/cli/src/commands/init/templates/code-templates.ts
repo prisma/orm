@@ -10,10 +10,15 @@ export function defaultSchemaPath(authoring: ContractSourceFormat): string {
   return `${DEFAULT_CONTRACT_SOURCE_DIR}/contract.prisma`;
 }
 
+/** A module name as a single-quoted TypeScript string literal, the quoting the configs use. */
+function singleQuoted(moduleName: string): string {
+  return `'${moduleName.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
 export function configFile(contractPath: string, configModule: string): string {
   return `import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '${configModule}';
+import { defineConfig as ormConfig } from ${singleQuoted(configModule)};
 
 export default definePrismaConfig({
   orm: ormConfig({
@@ -39,7 +44,7 @@ export function prisma7ConfigFile(
 ): string {
   return `import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig, prisma7Schema } from '${configModule}';
+import { defineConfig as ormConfig, prisma7Schema } from ${singleQuoted(configModule)};
 
 export default definePrismaConfig({
   orm: ormConfig({

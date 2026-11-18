@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import type { MountedTree, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
@@ -12,22 +21,27 @@ import {
   importFromProject,
   type ProjectImport,
 } from '../../src/orm/project-modules';
+import { declareAddedPackages } from '../utils/fake-package-manager';
 import { fixtureContribution } from '../utils/fixture-contribution';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 let projectDir: string;
 let installs: (readonly string[])[];
 let script: { readonly exitCode: number; readonly stderr: string }[];
+let declares: boolean;
 
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
-  return script.shift() ?? { exitCode: 0, stderr: '' };
+  const result = script.shift() ?? { exitCode: 0, stderr: '' };
+  if (result.exitCode === 0 && declares) declareAddedPackages(request);
+  return result;
 };
 
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-init-target-package');
   installs = [];
   script = [];
+  declares = true;
 });
 
 afterEach(() => {
@@ -81,8 +95,11 @@ function writeProjectFile(relative: string, content: string): void {
   writeFileSync(join(projectDir, relative), content, 'utf-8');
 }
 
+/** What init wrote, leaving out `package.json`, which the install itself declares packages in. */
 function projectEntries(): string[] {
-  return readdirSync(projectDir).filter((entry) => entry !== 'node_modules');
+  return readdirSync(projectDir).filter(
+    (entry) => entry !== 'node_modules' && entry !== 'package.json',
+  );
 }
 
 const STARTER = ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', '--json'];
@@ -146,6 +163,16 @@ describe('init takes the project from the target package', () => {
       });
       expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
       expect(projectEntries()).toEqual([]);
+      script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
+      const human = await harness().run(
+        STARTER.filter((arg) => arg !== '--json'),
+        { cwd: projectDir },
+      );
+      expect(human.presented?.presentation.human).toContainEqual({
+        kind: 'summary',
+        status: 'warn',
+        text: 'Nothing was written. Finish the steps above, then run `prisma orm init` again.',
+      });
     },
     timeouts.coldTransformImport,
   );
@@ -165,11 +192,11 @@ describe('init takes the project from the target package', () => {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
           meta: {
             packageName: '@prisma/orm-postgres',
-            installCommand: 'pnpm add @prisma/orm-postgres',
+            installCommand: 'pnpm add @prisma/orm-postgres pg',
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: expect.stringContaining('`pnpm add @prisma/orm-postgres`'),
+              label: expect.stringContaining('`pnpm add @prisma/orm-postgres pg`'),
             }),
           ]),
         },
@@ -225,7 +252,11 @@ describe('init takes the project from the target package', () => {
         },
       });
       expect(installs).toEqual([['add', 'dotenv', 'pg']]);
-      expect(JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'))).toEqual(manifest);
+      expect(
+        JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8')).dependencies[
+          '@prisma/orm-postgres'
+        ],
+      ).toBe('~8.0.0-rc.1');
     },
     timeouts.coldTransformImport,
   );
@@ -248,6 +279,58 @@ describe('init takes the project from the target package', () => {
 
       expect(envelopeOf(run)).toMatchObject({ error: { code: 'CLI.INIT_AUTHORING_UNSUPPORTED' } });
       expect(installs).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'gives no undo instruction when the install command changed nothing in package.json',
+    async () => {
+      declares = false;
+      writeProjectFile('package.json', `${JSON.stringify({ name: 'app' })}\n`);
+
+      const run = await harness(loadsAs({ kind: 'not-exported' })).run(STARTER, {
+        cwd: projectDir,
+      });
+
+      const envelope = envelopeOf(run);
+      expect(envelope).toMatchObject({ error: { code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE' } });
+      expect(JSON.stringify(envelope)).not.toContain('packagesAdded');
+      expect(JSON.stringify(envelope)).not.toContain('remove them with');
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'names a declared target package whose range the install rewrote, with its old range',
+    async () => {
+      const outside = mkdtempSync(join(tmpdir(), 'orm-init-declared-target-'));
+      try {
+        writeFileSync(join(outside, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
+        writeFileSync(
+          join(outside, 'package.json'),
+          `${JSON.stringify({ name: 'app', dependencies: { '@prisma/orm-postgres': '~8.0.0-rc.1' } })}\n`,
+        );
+
+        const run = await harness().run(STARTER, { cwd: outside });
+
+        expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
+        expect(envelopeOf(run)).toMatchObject({
+          ok: false,
+          error: {
+            code: 'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
+            meta: { packagesAdded: ['dotenv', 'pg'] },
+            nextActions: expect.arrayContaining([
+              expect.objectContaining({
+                label:
+                  'init installed dotenv and pg to read the init contribution of @prisma/orm-postgres; remove them with `pnpm remove dotenv pg`. It also changed the declared range of @prisma/orm-postgres, which was `~8.0.0-rc.1`; set it back in package.json.',
+              }),
+            ]),
+          },
+        });
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
     },
     timeouts.coldTransformImport,
   );
@@ -286,7 +369,7 @@ describe('init takes the project from the target package', () => {
         ok: false,
         error: {
           code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
-          why: '@prisma/orm-postgres has no `@prisma/orm-postgres/init` entrypoint, so it does not support `prisma orm init`. @prisma/orm-postgres is installed; no file was written.',
+          why: '@prisma/orm-postgres has no `@prisma/orm-postgres/init` entrypoint, so it does not support `prisma orm init`. @prisma/orm-postgres is installed; no scaffold file was written.',
           meta: {
             reason: 'no-entrypoint',
             packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
@@ -442,6 +525,59 @@ describe('init takes the project from the target package', () => {
           nextActions: expect.arrayContaining([expect.objectContaining({ label: REMOVE_ADDED })]),
         },
       });
+      expect(projectEntries()).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses a contribution whose configModule is blank, with no file written',
+    async () => {
+      const run = await harness(await postgresWith({ configModule: '  ' })).run(
+        [...STARTER, '--skip-install'],
+        { cwd: projectDir },
+      );
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+          meta: { reason: 'invalid-shape' },
+          why: expect.stringContaining('configModule'),
+        },
+      });
+      expect(projectEntries()).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'takes a mode listed twice as the only one, without asking',
+    async () => {
+      const run = await harness(await postgresWith({ authoringModes: ['psl', 'psl'] })).run(
+        ['orm', 'init', '--target', 'postgres', '--skip-install', '--yes', '--json'],
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({ authoring: 'psl' });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses a --schema-path that neither authoring mode takes before installing anything',
+    async () => {
+      const run = await harness().run(
+        ['orm', 'init', '--target', 'postgres', '--schema-path', 'db/schema.json', '--json'],
+        { cwd: projectDir },
+      );
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: { code: 'CLI.INIT_INVALID_FLAG_VALUE', meta: { flag: 'schema-path' } },
+      });
+      expect(installs).toEqual([]);
       expect(projectEntries()).toEqual([]);
     },
     timeouts.coldTransformImport,

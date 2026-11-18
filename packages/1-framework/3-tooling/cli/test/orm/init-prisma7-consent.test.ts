@@ -169,6 +169,7 @@ describe(
       const ADDED = {
         packages: ['stub-target-package', 'dotenv'],
         removeCommand: 'pnpm remove stub-target-package dotenv',
+        rewritten: [],
       };
 
       it('runs with the target and schema before any consent is asked', async () => {

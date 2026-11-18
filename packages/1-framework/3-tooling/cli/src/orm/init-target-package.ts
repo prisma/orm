@@ -26,7 +26,7 @@ import { type ImportFromProject, isInstalledInProject } from './project-modules'
 
 const InitContributionSchema = type({
   label: 'string',
-  configModule: 'string',
+  configModule: /\S/,
   peerPackages: 'string[]',
   authoringModes: type("'psl'|'typescript'").array().atLeastLength(1),
   starterContract: 'Function',
@@ -170,18 +170,11 @@ export function createTargetPackagePreparation(ctx: {
       }
       installed = deps;
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
-      const newlyDeclared = deps.filter((dep) => !declaredBefore.has(dep));
-      added =
-        newlyDeclared.length === 0
-          ? undefined
-          : {
-              packages: newlyDeclared,
-              removeCommand: formatRemoveCommand(ctx.packageManager, newlyDeclared),
-            };
+      added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
     }
 
     try {
-      const contribution = await loadContribution(ctx, packageName, ranCommand);
+      const contribution = await loadContribution(ctx, packageName, peerPackages, ranCommand);
       return { contribution, installed, added, warnings };
     } catch (error) {
       throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
@@ -197,6 +190,7 @@ async function loadContribution(
     readonly importFromProject: ImportFromProject;
   },
   packageName: string,
+  peerPackages: readonly string[],
   /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
   ranCommand: string | undefined,
 ): Promise<InitContribution> {
@@ -205,7 +199,7 @@ async function loadContribution(
     case 'not-installed':
       throw errorInitTargetPackageNotInstalled({
         packageName,
-        installCommand: installCommand(ctx.packageManager, [packageName]),
+        installCommand: installCommand(ctx.packageManager, [packageName, ...peerPackages]),
         ranCommand,
       });
     case 'not-exported':
@@ -253,26 +247,53 @@ function rejectUnparseableManifest(cwd: string): void {
   }
 }
 
-function declaredPackages(cwd: string): ReadonlySet<string> {
+/**
+ * What the install changed in `package.json`, read from the file, since a package manager can
+ * exit successfully and declare nothing; `undefined` when it changed nothing.
+ */
+function manifestChanges(
+  packageManager: PackageManager,
+  before: ReadonlyMap<string, string>,
+  after: ReadonlyMap<string, string>,
+): PackagesAdded | undefined {
+  const packages = [...after.keys()].filter((name) => !before.has(name));
+  const rewritten = [...before].flatMap(([name, range]) => {
+    const now = after.get(name);
+    return now !== undefined && now !== range ? [{ name, before: range }] : [];
+  });
+  if (packages.length === 0 && rewritten.length === 0) {
+    return undefined;
+  }
+  return {
+    packages,
+    removeCommand: formatRemoveCommand(packageManager, packages),
+    rewritten,
+  };
+}
+
+/** Every package the project's `package.json` declares, in any dependency field, with its range. */
+function declaredPackages(cwd: string): ReadonlyMap<string, string> {
   let manifest: unknown;
   try {
     manifest = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8'));
   } catch {
-    return new Set();
+    return new Map();
   }
   if (!isRecord(manifest)) {
-    return new Set();
+    return new Map();
   }
-  const names = [
+  const entries = [
     'dependencies',
     'devDependencies',
     'optionalDependencies',
     'peerDependencies',
   ].flatMap((field) => {
     const section = manifest[field];
-    return isRecord(section) ? Object.keys(section) : [];
+    return isRecord(section)
+      ? Object.entries(section).map(([name, range]) => [name, String(range)] as const)
+      : [];
   });
-  return new Set(names);
+  return new Map(entries);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -163,6 +163,40 @@ describe('probeServerVersion (FR8.3)', () => {
     });
   });
 
+  it.each(['unknown', ''])(
+    'says it could not read the version when the probe answers %j as one',
+    async (serverVersion) => {
+      const outcome = await probeServerVersion(
+        probeContext('postgres://localhost:5432/db', async () => ({
+          kind: 'server-version',
+          serverVersion,
+        })),
+      );
+
+      expect(outcome).toMatchObject({ kind: 'version-unreadable' });
+    },
+  );
+
+  it('redacts credentials in a malformed answer and in a driver-missing cause', async () => {
+    const malformed = await probeServerVersion(
+      probeContext('postgres://localhost:5432/db', async () =>
+        JSON.parse('{"kind":"postgres://alice:hunter2@db/x"}'),
+      ),
+    );
+    const missing = await probeServerVersion(
+      probeContext('postgres://localhost:5432/db', async () => ({
+        kind: 'driver-missing',
+        driver: 'pg',
+        cause: 'could not load for postgres://alice:hunter2@db/x',
+      })),
+    );
+
+    for (const outcome of [malformed, missing]) {
+      expect(outcome.message).not.toContain('hunter2');
+      expect(outcome.message).toContain('postgres://****:****@db/x');
+    }
+  });
+
   it('names the package when its probe gives a malformed answer', async () => {
     const outcome = await probeServerVersion(
       probeContext('postgres://localhost:5432/db', async () =>
@@ -230,6 +264,7 @@ describe('probeServerVersion (FR8.3)', () => {
       probeContext('mongodb://localhost:27017/db', probe, '6.0'),
     );
 
+    expect(probe).toHaveBeenCalledTimes(1);
     expect(probe).toHaveBeenCalledWith('mongodb://localhost:27017/db');
     expect(outcome.kind).toBe('ok');
   });

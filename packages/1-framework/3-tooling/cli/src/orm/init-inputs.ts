@@ -21,7 +21,12 @@ import {
   PRISMA7_CHECK,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
-import { resolveAuthoring, resolveTarget, validateSchemaPath } from '../commands/init/input-values';
+import {
+  rejectSchemaPathNoModeTakes,
+  resolveAuthoring,
+  resolveTarget,
+  validateSchemaPath,
+} from '../commands/init/input-values';
 import { prisma6SideBySideSetup } from '../commands/init/prisma6-side-by-side';
 import {
   conventionalSchemaPath,
@@ -226,14 +231,12 @@ async function askAuthoring(
   prompt: PromptSurface,
   offered: readonly ContractSourceFormat[],
 ): Promise<ContractSourceFormat> {
-  const [only] = offered;
-  if (offered.length === 1 && only !== undefined) {
-    return only;
+  const choices = AUTHORING_CHOICES.filter((choice) => offered.includes(choice.value));
+  const [only] = choices;
+  if (choices.length === 1 && only !== undefined) {
+    return only.value;
   }
-  return prompt.select<ContractSourceFormat>(
-    'How do you want to write your schema?',
-    AUTHORING_CHOICES.filter((choice) => offered.includes(choice.value)),
-  );
+  return prompt.select<ContractSourceFormat>('How do you want to write your schema?', choices);
 }
 
 /**
@@ -694,8 +697,12 @@ async function resolveStarterInputs(ctx: {
     );
   }
 
-  if (flagAuthoring !== undefined && flags.schemaPath !== undefined) {
-    validateSchemaPath(flags.schemaPath, flagAuthoring);
+  if (flags.schemaPath !== undefined) {
+    if (flagAuthoring !== undefined) {
+      validateSchemaPath(flags.schemaPath, flagAuthoring);
+    } else {
+      rejectSchemaPathNoModeTakes(flags.schemaPath);
+    }
   }
 
   const installReason: InstallReason = {
