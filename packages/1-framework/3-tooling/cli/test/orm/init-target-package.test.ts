@@ -88,7 +88,7 @@ function projectEntries(): string[] {
 const STARTER = ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', '--json'];
 
 const REMOVE_ADDED =
-  'init installed @prisma/orm-postgres and dotenv to read the init contribution of @prisma/orm-postgres; remove them with `pnpm remove @prisma/orm-postgres dotenv`.';
+  'init installed @prisma/orm-postgres, dotenv and pg to read the init contribution of @prisma/orm-postgres; remove them with `pnpm remove @prisma/orm-postgres dotenv pg`.';
 
 function writePackage(
   name: string,
@@ -119,7 +119,7 @@ describe('init takes the project from the target package', () => {
       expect(envelopeOf(run)).toMatchObject({
         diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
       });
-      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
     },
     timeouts.coldTransformImport,
   );
@@ -144,7 +144,7 @@ describe('init takes the project from the target package', () => {
         packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
         prisma7: null,
       });
-      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
       expect(projectEntries()).toEqual([]);
     },
     timeouts.coldTransformImport,
@@ -198,7 +198,7 @@ describe('init takes the project from the target package', () => {
         },
       });
       expect(JSON.stringify(envelopeOf(run))).not.toContain('--skip-install');
-      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
     },
     timeouts.coldTransformImport,
   );
@@ -240,7 +240,7 @@ describe('init takes the project from the target package', () => {
           why: '@prisma/orm-postgres has no `@prisma/orm-postgres/init` entrypoint, so it does not support `prisma orm init`. @prisma/orm-postgres is installed; no file was written.',
           meta: {
             reason: 'no-entrypoint',
-            packagesAdded: ['@prisma/orm-postgres', 'dotenv'],
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
           },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
@@ -250,7 +250,7 @@ describe('init takes the project from the target package', () => {
           ]),
         },
       });
-      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
       expect(projectEntries()).toEqual([]);
     },
     timeouts.coldTransformImport,
@@ -387,7 +387,9 @@ describe('init takes the project from the target package', () => {
         ok: false,
         error: {
           code,
-          meta: expect.objectContaining({ packagesAdded: ['@prisma/orm-postgres', 'dotenv'] }),
+          meta: expect.objectContaining({
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
+          }),
           nextActions: expect.arrayContaining([expect.objectContaining({ label: REMOVE_ADDED })]),
         },
       });

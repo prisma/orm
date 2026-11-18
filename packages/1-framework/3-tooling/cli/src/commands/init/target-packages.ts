@@ -16,7 +16,11 @@ export interface KnownTargetPackage {
   readonly label: string;
   /** The `datasource` provider of a schema the package reads, and the last Prisma version that wrote one. */
   readonly provider: { readonly name: string; readonly writtenBy: 6 | 7 };
-  /** What the printed Prisma 6 setup installs with the package, before `init` has installed it. */
+  /**
+   * The driver packages installed with the target package, which it declares as required peers.
+   * A package manager with strict peer checks refuses the package without them, and the printed
+   * Prisma 6 setup installs them before `init` has installed anything.
+   */
   readonly peerPackages: readonly string[];
 }
 
@@ -34,7 +38,7 @@ export const KNOWN_TARGET_PACKAGES = [
     label: 'PostgreSQL',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     provider: { name: 'postgresql', writtenBy: 7 },
-    peerPackages: [],
+    peerPackages: ['pg'],
   },
   {
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only

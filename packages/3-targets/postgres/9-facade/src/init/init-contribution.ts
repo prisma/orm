@@ -69,7 +69,7 @@ function readme(input: ReadmeInput): string {
 const contribution: InitContribution = {
   label: 'PostgreSQL',
   configModule,
-  peerPackages: [],
+  peerPackages: ['pg'],
   authoringModes: ['psl', 'typescript'],
   starterContract,
   contractSample,

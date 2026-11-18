@@ -94,7 +94,11 @@ export interface PreparedTargetPackage {
   readonly warnings: readonly string[];
 }
 
-export type PrepareTargetPackage = (packageName: string) => Promise<PreparedTargetPackage>;
+/** Installs `packageName` with `dotenv` and `peerPackages`, then loads its init contribution. */
+export type PrepareTargetPackage = (
+  packageName: string,
+  peerPackages: readonly string[],
+) => Promise<PreparedTargetPackage>;
 
 /**
  * The target package was installed, then could not be used. The caller adds the instruction to
@@ -119,8 +123,8 @@ export class TargetPackageInstallFailed extends Error {
 }
 
 /**
- * Installs the target package with `dotenv`, the packages every init installs, then loads the
- * package's init contribution from the project. Under `--skip-install` the package must already be
+ * Installs the target package with `dotenv`, the package every init installs, and the driver
+ * packages the caller names, then loads the package's init contribution from the project. Under `--skip-install` the package must already be
  * installed. Each refusal happens before any file is written.
  */
 export function createTargetPackagePreparation(ctx: {
@@ -130,14 +134,14 @@ export function createTargetPackagePreparation(ctx: {
   readonly install: boolean;
   readonly importFromProject: ImportFromProject;
 }): PrepareTargetPackage {
-  return async (packageName) => {
+  return async (packageName, peerPackages) => {
     rejectUnparseableManifest(ctx.cwd);
     const warnings: string[] = [];
     let installed: readonly string[] = [];
     let added: PackagesAdded | undefined;
 
     if (ctx.install) {
-      const deps = [packageName, 'dotenv'];
+      const deps = [packageName, 'dotenv', ...peerPackages];
       const declaredBefore = declaredPackages(ctx.cwd);
       const installFailure = await installProjectDependencies({
         packages: ctx.packages,

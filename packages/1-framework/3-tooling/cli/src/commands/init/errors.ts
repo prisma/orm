@@ -534,7 +534,9 @@ export const PRISMA7_CHECK: InstallReason = { kind: 'prisma7-check' };
 /** The next action that tells the user how to undo what init installed. */
 export function packagesAddedAction(added: PackagesAdded, reason: InstallReason): string {
   const pronoun = added.packages.length === 1 ? 'it' : 'them';
-  const packages = added.packages.join(' and ');
+  const last = added.packages.at(-1) ?? '';
+  const packages =
+    added.packages.length <= 1 ? last : `${added.packages.slice(0, -1).join(', ')} and ${last}`;
   const remove = `remove ${pronoun} with \`${added.removeCommand}\`.`;
   return reason.kind === 'prisma7-check'
     ? `init added ${packages} to package.json before checking; ${remove}`

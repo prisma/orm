@@ -148,7 +148,7 @@ describe('the Prisma 7 result document', () => {
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: {
           status: 'installed',
-          deps: ['@prisma/orm-postgres', 'dotenv', '@prisma/client@7'],
+          deps: ['@prisma/orm-postgres', 'dotenv', 'pg', '@prisma/client@7'],
           devDeps: [
             'prisma@latest',
             '@types/node',

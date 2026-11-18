@@ -145,10 +145,11 @@ async function prepareTarget(
   prepareTargetPackage: PrepareTargetPackage,
   target: KnownTarget,
   report: { readonly authoring: ContractSourceFormat | 'prisma7'; readonly schemaPath: string },
-  installReason: InstallReason,
+  install: { readonly reason: InstallReason; readonly peerPackages: readonly string[] },
 ): Promise<PreparedTargetPackage> {
+  const { reason: installReason, peerPackages } = install;
   try {
-    return await prepareTargetPackage(target.packageName);
+    return await prepareTargetPackage(target.packageName, peerPackages);
   } catch (error) {
     if (error instanceof TargetPackageRefusedAfterInstall) {
       throw withPackagesAddedAction(error.cause, error.added, installReason);
@@ -529,7 +530,8 @@ async function resolvePrisma7Inputs(ctx: {
     ctx.prepareTargetPackage,
     target,
     { authoring: 'prisma7', schemaPath: schema.path },
-    PRISMA7_CHECK,
+    // The driver peers install later, with the rest, as they always have on this path.
+    { reason: PRISMA7_CHECK, peerPackages: [] },
   );
   const check = await ctx.checkPrisma7Source({
     packageName: target.packageName,
@@ -712,7 +714,8 @@ async function resolveStarterInputs(ctx: {
         authoring: reportedAuthoring,
         schemaPath: flags.schemaPath ?? defaultSchemaPath(reportedAuthoring),
       },
-      installReason,
+      // The driver peers install with the package, so a strict peer check does not refuse it.
+      { reason: installReason, peerPackages: target.peerPackages },
     ));
   // The Prisma 7 path adds the undo instruction itself when it hands its preparation over.
   const added = ctx.prepared === undefined ? prepared.added : undefined;

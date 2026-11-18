@@ -116,7 +116,7 @@ describe('init installs', () => {
       expect(calls.slice(0, 3)).toEqual([
         {
           file: expect.any(String),
-          args: ['add', '@prisma/orm-postgres', 'dotenv'],
+          args: ['add', '@prisma/orm-postgres', 'dotenv', 'pg'],
           cwd: projectDir,
         },
         {
@@ -134,7 +134,7 @@ describe('init installs', () => {
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: {
           status: 'installed',
-          deps: ['@prisma/orm-postgres', 'dotenv'],
+          deps: ['@prisma/orm-postgres', 'dotenv', 'pg'],
           devDeps: ['prisma@latest', '@types/node', '@prisma/cli-engine@latest'],
         },
         contractEmitted: true,
@@ -190,7 +190,7 @@ describe('init installs', () => {
 
       expect(run.exitCode).toBe(4);
       expect(calls.map((call) => call.args)).toEqual([
-        ['add', '@prisma/orm-postgres', 'dotenv'],
+        ['add', '@prisma/orm-postgres', 'dotenv', 'pg'],
         ['add', '-D', 'prisma@latest', '@types/node'],
       ]);
       expect(run.presented?.data).toMatchObject({
@@ -275,14 +275,14 @@ describe('init installs', () => {
         diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
       });
       expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
-        'pnpm add @prisma/orm-postgres dotenv',
+        'pnpm add @prisma/orm-postgres dotenv pg',
       ]);
     },
     timeouts.coldTransformImport,
   );
 
   it(
-    'installs the target package first, then the driver its contribution names',
+    'installs the driver the Mongo package declares as a peer dependency',
     async () => {
       const run = await harness().run(
         ['orm', 'init', '--target', 'mongodb', '--authoring', 'psl'],
@@ -290,12 +290,34 @@ describe('init installs', () => {
       );
 
       expect(run.exitCode).toBe(0);
-      expect(calls.slice(0, 2).map((call) => call.args)).toEqual([
-        ['add', '@prisma/orm-mongo', 'dotenv'],
-        ['add', 'mongodb'],
-      ]);
+      expect(calls[0]).toEqual({
+        file: expect.any(String),
+        args: ['add', '@prisma/orm-mongo', 'dotenv', 'mongodb'],
+        cwd: projectDir,
+      });
+      expect(calls.filter((call) => call.args.includes('mongodb'))).toHaveLength(1);
       expect(run.presented?.data).toMatchObject({
         packagesInstalled: { deps: ['@prisma/orm-mongo', 'dotenv', 'mongodb'] },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'installs the driver the Postgres package declares as a peer dependency',
+    async () => {
+      const run = await harness().run(
+        ['orm', 'init', '--target', 'postgres', '--authoring', 'psl'],
+        {
+          cwd: projectDir,
+        },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(calls[0]).toEqual({
+        file: expect.any(String),
+        args: ['add', '@prisma/orm-postgres', 'dotenv', 'pg'],
+        cwd: projectDir,
       });
     },
     timeouts.coldTransformImport,
@@ -359,7 +381,7 @@ describe('init installs', () => {
         expect(run.exitCode).toBe(0);
         expect(calls.map((call) => call.args)).toEqual([
           ['add', '@prisma/orm-postgres', 'dotenv'],
-          ['add', '@prisma/client@7'],
+          ['add', 'pg', '@prisma/client@7'],
           ['add', '-D', 'prisma@latest', '@types/node', '@prisma/prisma7@7'],
           ['add', '-D', '@prisma/cli-engine@latest'],
         ]);
@@ -380,7 +402,8 @@ describe('init installs', () => {
 
         expect(run.exitCode).toBe(0);
         expect(calls[0]?.args).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
-        expect(calls[1]?.args).toContain('@prisma/prisma7@7');
+        expect(calls[1]?.args).toEqual(['add', 'pg']);
+        expect(calls[2]?.args).toContain('@prisma/prisma7@7');
       },
       timeouts.coldTransformImport,
     );
@@ -401,7 +424,8 @@ describe('init installs', () => {
 
         expect(run.exitCode).toBe(0);
         expect(calls[0]?.args).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
-        expect(calls[1]?.args).toContain('@prisma/prisma7@7');
+        expect(calls[1]?.args).toEqual(['add', 'pg']);
+        expect(calls[2]?.args).toContain('@prisma/prisma7@7');
       },
       timeouts.coldTransformImport,
     );
@@ -419,6 +443,7 @@ describe('init installs', () => {
         expect(run.exitCode).toBe(0);
         expect(calls.map((call) => call.args)).toEqual([
           ['add', '@prisma/orm-postgres', 'dotenv'],
+          ['add', 'pg'],
           ['add', '-D', 'prisma@latest', '@types/node'],
           ['add', '-D', '@prisma/cli-engine@latest'],
         ]);
