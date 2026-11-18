@@ -103,5 +103,10 @@ export type {
   RuntimeTransactionOptions,
   TransactionContext,
 } from '../sql-runtime';
-export { SqlRuntimeBase, withTransaction, withTransactionMembers } from '../sql-runtime';
+export {
+  SqlRuntimeBase,
+  withSavepoint,
+  withTransaction,
+  withTransactionMembers,
+} from '../sql-runtime';
 export { createToSql, type RenderedSql, type ToSqlMember } from '../to-sql';

@@ -1809,7 +1809,6 @@ async function runTransactionOn<R>(
   state: ConnectionState,
 ): Promise<R> {
   validateTransactionTimeout(options?.timeout);
-  let invalidated = false;
   let transaction: RuntimeTransaction;
   try {
     transaction = await connection.transaction(options);
@@ -1821,31 +1820,79 @@ async function runTransactionOn<R>(
     throw error;
   }
 
-  const signal = transaction.signal;
-  let rejectAbort = (_reason: unknown) => {};
-  const aborted = new Promise<never>((_, reject) => {
-    rejectAbort = reject;
-  });
-  void aborted.catch(() => undefined);
-  const onAbort = () => {
-    invalidated = true;
-    rejectAbort(signal.reason);
+  const markUnclean = (reason: unknown): void => {
+    if (!state.clean) return;
+    state.clean = false;
+    state.reason = reason;
   };
-  signal.addEventListener('abort', onAbort, { once: true });
-  if (signal.aborted) onAbort();
 
+  return runTransactionLevel(transaction, () => false, fn, {
+    onAborted: async (reason) => markUnclean(reason),
+    markUnclean,
+  });
+}
+
+const transactionLevel = Symbol('transactionLevel');
+
+interface TransactionLevel {
+  readonly transaction: RuntimeTransaction;
+  readonly isClosed: () => boolean;
+}
+
+interface TransactionLevelTarget {
+  readonly [transactionLevel]: TransactionLevel;
+}
+
+function isTransactionLevelTarget(value: object): value is TransactionLevelTarget {
+  return transactionLevel in value;
+}
+
+export async function withSavepoint<TCtx, R>(
+  txCtx: TransactionContext,
+  fn: (tx: TCtx) => PromiseLike<R>,
+  buildMembers: (txCtx: TransactionContext) => TCtx,
+): Promise<R> {
+  if (!isTransactionLevelTarget(txCtx)) {
+    throw runtimeError(
+      'RUNTIME.UNKNOWN_TRANSACTION_CONTEXT',
+      'withSavepoint takes the context that withTransaction or withSavepoint passed to its callback',
+      {},
+    );
+  }
+  const enclosing = txCtx[transactionLevel];
+  if (enclosing.isClosed()) throw transactionClosedError();
+  const savepoint = await enclosing.transaction.transaction();
+  return runTransactionLevel(savepoint, enclosing.isClosed, (tx) => fn(buildMembers(tx)), {
+    onAborted: () => savepoint.rollback().catch(() => undefined),
+    markUnclean: () => undefined,
+  });
+}
+
+interface TransactionLevelSettlement {
+  onAborted(reason: unknown): Promise<unknown>;
+  markUnclean(reason: unknown): void;
+}
+
+function guardedTransactionContext(
+  transaction: RuntimeTransaction,
+  isClosed: () => boolean,
+): TransactionContext &
+  PreparedStatementQueryTarget &
+  PreparedStatementExecuteTarget &
+  ActivitySourceTarget &
+  TransactionLevelTarget {
   async function* guardedStream<Row>(
     open: () => AsyncIterable<Row>,
   ): AsyncGenerator<Row, void, unknown> {
-    if (invalidated) {
+    if (isClosed()) {
       throw transactionClosedError();
     }
     for await (const row of open()) {
-      if (invalidated) {
+      if (isClosed()) {
         throw transactionClosedError();
       }
       yield row;
-      if (invalidated) {
+      if (isClosed()) {
         throw transactionClosedError();
       }
     }
@@ -1865,7 +1912,7 @@ async function runTransactionOn<R>(
         plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        if (invalidated) throw transactionClosedError();
+        if (isClosed()) throw transactionClosedError();
         return target.execute(plan, options);
       },
       [preparedStatementQuery]<Params, Row>(
@@ -1882,7 +1929,7 @@ async function runTransactionOn<R>(
         params: Params,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        if (invalidated) throw transactionClosedError();
+        if (isClosed()) throw transactionClosedError();
         return runPreparedExecute(target, ps, params, options);
       },
     };
@@ -1893,7 +1940,7 @@ async function runTransactionOn<R>(
       async startActivity<K extends ClientActivityKind>(
         activity: StartActivity<K>,
       ): Promise<ActivityHandle<K>> {
-        if (invalidated) throw transactionClosedError();
+        if (isClosed()) throw transactionClosedError();
         return guardedHandle(await startActivityOn(target, activity));
       },
       planContentHash(plan: HashablePlan): Promise<string> {
@@ -1918,22 +1965,40 @@ async function runTransactionOn<R>(
     };
   }
 
-  const txContext: TransactionContext &
-    PreparedStatementQueryTarget &
-    PreparedStatementExecuteTarget &
-    ActivitySourceTarget = {
+  return {
     ...guardedQueryable(transaction),
     get invalidated() {
-      return invalidated;
+      return isClosed();
     },
     [activitySource]: guardedSource(transaction),
+    [transactionLevel]: { transaction, isClosed },
   };
+}
 
-  const markUnclean = (reason: unknown): void => {
-    if (!state.clean) return;
-    state.clean = false;
-    state.reason = reason;
+async function runTransactionLevel<R>(
+  transaction: RuntimeTransaction,
+  isEnclosingClosed: () => boolean,
+  fn: (tx: TransactionContext) => PromiseLike<R>,
+  { onAborted, markUnclean }: TransactionLevelSettlement,
+): Promise<R> {
+  let invalidated = false;
+  const signal = transaction.signal;
+  let rejectAbort = (_reason: unknown) => {};
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  void aborted.catch(() => undefined);
+  const onAbort = () => {
+    invalidated = true;
+    rejectAbort(signal.reason);
   };
+  signal.addEventListener('abort', onAbort, { once: true });
+  if (signal.aborted) onAbort();
+
+  const txContext = guardedTransactionContext(
+    transaction,
+    () => invalidated || isEnclosingClosed(),
+  );
 
   let commitRequested = false;
   try {
@@ -1945,7 +2010,7 @@ async function runTransactionOn<R>(
     return result;
   } catch (error) {
     if (signal.aborted) {
-      markUnclean(signal.reason);
+      await onAborted(signal.reason);
       throw signal.reason;
     }
     if (!commitRequested) {
