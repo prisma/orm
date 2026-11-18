@@ -10,7 +10,7 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import type { PostgresPlanTargetDetails } from '../../src/core/migrations/planner-target-details';
@@ -214,7 +214,7 @@ describe('Postgres planner, a table or column whose model or field keeps its nam
     const from = userContract('a'.repeat(64), 'users', { email });
     const to = userContract('b'.repeat(64), 'app_users', { email: { column: 'email_address' } });
     const result = plan(from, to);
-    const rendered = result.plan.renderTypeScript((specifier) => specifier);
+    const rendered = result.plan.renderTypeScript(workspaceMigrationModule.postgres);
     expect(rendered).toContain('...this.renameTable({ table: "users", to: "app_users" })');
     expect(rendered).toContain(
       '...this.renameColumn({ table: "app_users", column: "email", to: "email_address" })',

@@ -7,7 +7,7 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { sqliteContractToSchema } from '../../src/core/migrations/diff-database-schema';
 import { createSqliteMigrationPlanner } from '../../src/core/migrations/planner';
@@ -269,7 +269,7 @@ describe('SQLite planner, a table or column whose model or field keeps its name'
       User: { table: 'app_users', fields: { email: { column: 'email_address' } } },
     });
     const result = success(plan(from, to));
-    const rendered = result.plan.renderTypeScript((specifier) => specifier);
+    const rendered = result.plan.renderTypeScript(workspaceMigrationModule.sqlite);
     expect(rendered).toContain('...this.renameTable({ table: "users", to: "app_users" })');
     expect(rendered).toContain(
       '...this.renameColumn({ table: "app_users", column: "email", to: "email_address" })',
