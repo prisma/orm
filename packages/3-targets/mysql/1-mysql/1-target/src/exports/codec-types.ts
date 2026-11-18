@@ -27,6 +27,7 @@ import {
   mysqlTimestampTemporalDescriptor,
   mysqlTimeTemporalDescriptor,
 } from '../core/date-time-codecs';
+import { mysqlDecimalDescriptor } from '../core/decimal-codec';
 
 const codecDescriptorMap = {
   char: mysqlSqlCharDescriptor,
@@ -37,6 +38,7 @@ const codecDescriptorMap = {
   bigint: mysqlBigintDescriptor,
   bigintnumber: mysqlBigintNumberDescriptor,
   double: mysqlDoubleDescriptor,
+  decimal: mysqlDecimalDescriptor,
   datetime: mysqlDatetimeDescriptor,
   'datetime-temporal': mysqlDatetimeTemporalDescriptor,
   'datetime-string': mysqlDatetimeStringDescriptor,

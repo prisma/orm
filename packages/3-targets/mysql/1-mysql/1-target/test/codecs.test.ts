@@ -199,3 +199,55 @@ describe('the MySQL bigint codec', () => {
     }
   });
 });
+
+describe('the MySQL number codecs name the column they cannot read', () => {
+  const column = { table: 'Counter', name: 'total' };
+
+  it.each(['9007199254740992', '-9007199254740992', '1.5'])(
+    'refuses to read %s as a bigint read as a number, naming the column',
+    async (wire) => {
+      await expect(
+        mysqlBigintNumberDescriptor.factory()(instance).fromWire(wire, { column }),
+      ).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: `Column "Counter"."total" holds ${wire}, which is not an integer within the safe integer range. mysql/bigintnumber@1 reads a JavaScript number, an integer within ±(2^53 − 1).`,
+        fix: 'Read the column as BigInt, which reads a JavaScript bigint, or keep its values within ±(2^53 − 1).',
+        meta: { codecId: 'mysql/bigintnumber@1', table: 'Counter', column: 'total' },
+      });
+    },
+  );
+
+  it('refuses to write a number outside the safe integer range, which the column would not read back', async () => {
+    await expect(
+      mysqlBigintNumberDescriptor
+        .factory()(instance)
+        .toWire(2 ** 53, {}),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message:
+        'Cannot write 9007199254740992 to a mysql/bigintnumber@1 value, which holds integers read as JavaScript numbers, within ±(2^53 − 1).',
+    });
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'refuses to write %s to a double, which MySQL and MariaDB do not store',
+    async (value) => {
+      await expect(
+        mysqlDoubleDescriptor.factory()(instance).toWire(value, {}),
+      ).rejects.toMatchObject({
+        code: 'RUNTIME.ENCODE_FAILED',
+        message: `Cannot write ${value} to a mysql/double@1 value, which holds finite numbers only: MySQL and MariaDB store no NaN or infinity.`,
+      });
+    },
+  );
+
+  it('refuses to read text that is not a double, naming the column', async () => {
+    await expect(
+      mysqlDoubleDescriptor.factory()(instance).fromWire('x', { column }),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message:
+        'Column "Counter"."total" holds "x", which is not a finite number. mysql/double@1 reads the text MySQL and MariaDB print for a double, such as 1.5 or 9.007199254740992e15.',
+    });
+  });
+});

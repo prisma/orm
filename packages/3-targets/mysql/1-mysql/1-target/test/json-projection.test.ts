@@ -2,7 +2,9 @@ import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import {
   mysqlBigintDescriptor,
+  mysqlBigintNumberDescriptor,
   mysqlDatetimeDescriptor,
+  mysqlDoubleDescriptor,
   mysqlEnumDescriptor,
   mysqlIntDescriptor,
   mysqlSqlCharDescriptor,
@@ -95,5 +97,17 @@ describe('MySQL codecs project a column into JSON as the row form reads it', () 
     expect(() =>
       mysqlIntDescriptor.projectJson(column, { codecId: 'mysql/int@1', many: true }),
     ).toThrow(expect.objectContaining({ code: 'RUNTIME.CODEC_DESCRIPTOR_ARRAY_UNSUPPORTED' }));
+  });
+});
+
+describe('MySQL number codecs project a column into JSON', () => {
+  it('renders a bigint read as a number as its decimal text, so the codec sees every digit before it checks the range', () => {
+    expect(
+      mysqlBigintNumberDescriptor.projectJson(column, { codecId: 'mysql/bigintnumber@1' }),
+    ).toEqual(CastExpr.as(column, 'CHAR'));
+  });
+
+  it('passes a double through, which both servers write into JSON as the shortest number that reads back as it', () => {
+    expect(mysqlDoubleDescriptor.projectJson(column, { codecId: 'mysql/double@1' })).toBe(column);
   });
 });

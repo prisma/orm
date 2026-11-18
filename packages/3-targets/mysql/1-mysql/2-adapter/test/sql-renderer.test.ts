@@ -114,6 +114,44 @@ describe('MySQL lowering of a select', () => {
     ]);
   });
 
+  it('writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included', () => {
+    const amount = ColumnRef.of('t', 'amount');
+    const decimalParam = (value: string) =>
+      ParamRef.of(value, {
+        codec: { codecId: 'mysql/decimal@1', typeParams: { precision: 65, scale: 30 } },
+      });
+    expect({
+      eq: sqlOf(selectId.withWhere(BinaryExpr.eq(amount, decimalParam('0.1')))),
+      in: lower(
+        selectId.withWhere(
+          BinaryExpr.in(amount, ListExpression.of([decimalParam('0.1'), decimalParam('99')])),
+        ),
+      ),
+      prepared: sqlOf(
+        selectId.withWhere(
+          BinaryExpr.eq(amount, PreparedParamRef.of('a', { codecId: 'mysql/decimal@1' })),
+        ),
+      ),
+      insert: sqlOf(
+        InsertAst.into(TableSource.named('t')).withRows([{ amount: decimalParam('1.50') }]),
+      ),
+      update: sqlOf(UpdateAst.table(TableSource.named('t')).withSet({ amount: decimalParam('2') })),
+    }).toEqual({
+      eq: 'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` = CAST(?1 AS DECIMAL(65,30))',
+      in: {
+        sql: 'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` IN (CAST(?1 AS DECIMAL(65,30)), CAST(?2 AS DECIMAL(65,30)))',
+        params: [
+          { kind: 'literal', value: '0.1' },
+          { kind: 'literal', value: '99' },
+        ],
+      },
+      prepared:
+        'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` = CAST(?1 AS DECIMAL(65,30))',
+      insert: 'INSERT INTO `t` (`amount`) VALUES (CAST(?1 AS DECIMAL(65,30)))',
+      update: 'UPDATE `t` SET `amount` = CAST(?1 AS DECIMAL(65,30))',
+    });
+  });
+
   it('refuses a param whose codec the registry lacks', () => {
     expect(() =>
       sqlOf(

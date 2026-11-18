@@ -27,10 +27,11 @@ const MYSQL_CODEC_DESCRIPTOR_KIND = 'mysql-codec' as const;
 export interface AnyMysqlCodecDescriptor extends AnyCodecDescriptor {
   readonly descriptorKind: typeof MYSQL_CODEC_DESCRIPTOR_KIND;
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr;
+  writeParameter(placeholder: string): string;
 }
 
 /**
- * A codec descriptor the MySQL target registers. `jsonProjection` writes a column into the JSON an include reads, in the form the codec's `fromWire` reads from a row.
+ * A codec descriptor the MySQL target registers. `jsonProjection` writes a column into the JSON an include reads, in the form the codec's `fromWire` reads from a row, and `writeParameter` writes a parameter of the codec into SQL.
  */
 export abstract class MysqlCodecDescriptor<P = void>
   extends CodecDescriptorImpl<P>
@@ -39,6 +40,11 @@ export abstract class MysqlCodecDescriptor<P = void>
   readonly descriptorKind = MYSQL_CODEC_DESCRIPTOR_KIND;
 
   protected abstract jsonProjection(expression: ProjectionExpr, params: P): ProjectionExpr;
+
+  /** The SQL a parameter of this codec is written as, given its placeholder `?N`: the placeholder itself, unless the server would compare the value it carries in another type than the column's. */
+  writeParameter(placeholder: string): string {
+    return placeholder;
+  }
 
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr {
     if (ref.many === true) {
@@ -94,7 +100,7 @@ export type AdaptedMysqlCodecDescriptor<D extends AnyCodecDescriptorTemplate> = 
   keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
   Pick<CodecDescriptor, 'dataType'> &
-  Pick<AnyMysqlCodecDescriptor, 'descriptorKind' | 'projectJson'>;
+  Pick<AnyMysqlCodecDescriptor, 'descriptorKind' | 'projectJson' | 'writeParameter'>;
 
 class MysqlCodecDescriptorAdapter<
   D extends AnyCodecDescriptorTemplate,
@@ -165,7 +171,9 @@ export function isMysqlCodecDescriptor(value: unknown): value is AnyMysqlCodecDe
     'factory' in value &&
     typeof value.factory === 'function' &&
     'projectJson' in value &&
-    typeof value.projectJson === 'function'
+    typeof value.projectJson === 'function' &&
+    'writeParameter' in value &&
+    typeof value.writeParameter === 'function'
   );
 }
 

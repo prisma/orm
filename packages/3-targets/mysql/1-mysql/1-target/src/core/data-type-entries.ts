@@ -1,9 +1,5 @@
 /**
- * How PSL writes a value of each of this target's data types. A quoted string is `mysql/text`; a
- * whole number is the narrowest of `mysql/int` and `mysql/bigint` that holds it, and anything else
- * has no MySQL type in this target and is refused. The `datetime`, `timestamp`, `date`, `time` and
- * `duration` tags yield the data types of those names, each read into the value its type stores.
- * ADR 254.
+ * How PSL writes a value of each of this target's data types. A quoted string is `mysql/text`; a whole number is the narrowest of `mysql/int` and `mysql/bigint` that holds it, and any other number, a larger whole number or one with digits after the point, is `mysql/decimal`. The `datetime`, `timestamp`, `date`, `time` and `duration` tags yield the data types of those names, each read into the value its type stores. ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -19,6 +15,7 @@ import {
   mysqlDateText,
   mysqlDatetime,
   mysqlDatetimeText,
+  mysqlDecimal,
   mysqlDuration,
   mysqlDurationText,
   mysqlInt,
@@ -34,6 +31,8 @@ const classifyMysqlNumber = createNumberClassifier({
     { type: mysqlInt.id, form: 'number', ...signedRange(32) },
     { type: mysqlBigint.id, form: 'text', ...signedRange(64) },
   ],
+  largerWhole: { type: mysqlDecimal.id, form: 'text' },
+  fraction: { type: mysqlDecimal.id, form: 'text' },
 });
 
 /** A tag whose body is a date, time or duration in ISO 8601, read into the value its type stores. */
@@ -64,12 +63,12 @@ export function mysqlDataTypeEntries(): Readonly<Record<string, DataTypeAuthorin
       written: {
         kind: 'plain',
         syntax: 'number',
-        types: [mysqlInt.id, mysqlBigint.id],
+        types: [mysqlInt.id, mysqlBigint.id, mysqlDecimal.id],
         classify: classifyMysqlNumber,
       },
       print: printNumber,
       documentation:
-        'A whole number, whose type is the narrowest MySQL integer type that holds it.',
+        'A number. A whole number is of the narrowest MySQL integer type that holds it, and any other number is a decimal.',
     },
     [mysqlDatetime.id]: storedTextTag(
       'datetime',

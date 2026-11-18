@@ -82,14 +82,35 @@ describe('MySQL aggregate descriptors', () => {
     });
   });
 
-  it('takes no input of a result-only codec, which no column can be authored with', () => {
-    expect(
-      descriptors.flatMap((row) =>
-        row.input.kind === 'codec' &&
-        ['mysql/bigintnumber@1', 'mysql/double@1'].includes(row.input.codecId)
-          ? [`${row.operation}:${row.input.codecId}`]
-          : [],
-      ),
-    ).toEqual([]);
+  it('sums and averages a double as a double, sums a decimal exactly as a decimal, and averages no decimal', () => {
+    expect({
+      sumDouble: resultOf('sum', 'mysql/double@1'),
+      avgDouble: resultOf('avg', 'mysql/double@1'),
+      sumDecimal: resultOf('sum', 'mysql/decimal@1'),
+      avgDecimal: resultOf('avg', 'mysql/decimal@1'),
+      maxDecimal: resultOf('max', 'mysql/decimal@1'),
+      minDouble: resultOf('min', 'mysql/double@1'),
+    }).toEqual({
+      sumDouble: 'mysql/double@1',
+      avgDouble: 'mysql/double@1',
+      sumDecimal: 'mysql/decimal@1',
+      avgDecimal: undefined,
+      maxDecimal: 'mysql/decimal@1',
+      minDouble: 'mysql/double@1',
+    });
+  });
+
+  it('reads the sum and mean of a bigint read as a number as those of any integer', () => {
+    expect({
+      sum: resultOf('sum', 'mysql/bigintnumber@1'),
+      sumBigInt: resultOf('sumBigInt', 'mysql/bigintnumber@1'),
+      avg: resultOf('avg', 'mysql/bigintnumber@1'),
+      max: resultOf('max', 'mysql/bigintnumber@1'),
+    }).toEqual({
+      sum: 'mysql/bigintnumber@1',
+      sumBigInt: 'mysql/bigint@1',
+      avg: 'mysql/double@1',
+      max: 'mysql/bigintnumber@1',
+    });
   });
 });

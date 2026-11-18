@@ -10,6 +10,8 @@ import {
   mysqlDataTypes,
   mysqlDatetime,
   mysqlDatetimeText,
+  mysqlDecimal,
+  mysqlDouble,
   mysqlEnum,
   mysqlInt,
   mysqlText,
@@ -26,6 +28,7 @@ describe('MySQL data types', () => {
       'mysql/char',
       'mysql/date',
       'mysql/datetime',
+      'mysql/decimal',
       'mysql/double',
       'mysql/duration',
       'mysql/enum',
@@ -41,6 +44,7 @@ describe('MySQL data types', () => {
   it.each([
     [mysqlInt, {}, 'int'],
     [mysqlBigint, {}, 'bigint'],
+    [mysqlDouble, {}, 'double'],
     [mysqlText, {}, 'text'],
     [mysqlVarchar, { length: 191 }, 'varchar(191)'],
     [mysqlChar, {}, 'char'],
@@ -56,6 +60,8 @@ describe('MySQL data types', () => {
     ['int', 'mysql/int', {}],
     ['integer', 'mysql/int', {}],
     ['bigint', 'mysql/bigint', {}],
+    ['double', 'mysql/double', {}],
+    ['decimal(65,30)', 'mysql/decimal', { precision: 65, scale: 30 }],
     ['varchar(191)', 'mysql/varchar', { length: 191 }],
     ['char(1)', 'mysql/char', { length: 1 }],
     ['text', 'mysql/text', {}],
@@ -69,8 +75,13 @@ describe('MySQL data types', () => {
     });
   });
 
-  it('claims no reported double, which no authoring name writes yet, so introspection reads a double column as it did before mysql/double existed', () => {
-    expect(resolveReportedSqlType(reported('double'), mysqlDataTypes)).toBeUndefined();
+  it('takes a default written as an int, a bigint or a decimal into a double', () => {
+    expect([
+      mysqlDouble.casts[mysqlInt.id]?.(7),
+      mysqlDouble.casts[mysqlBigint.id]?.('9007199254740993'),
+      mysqlDouble.casts[mysqlDecimal.id]?.('1.5'),
+    ]).toEqual([7, 9007199254740992, 1.5]);
+    expect(() => mysqlDouble.valueFrom(Number.NaN, {})).toThrow(/a finite number/);
   });
 
   it('claims no reported enum type, which is compared by its catalog text', () => {

@@ -684,10 +684,11 @@ export class MysqlSqlRenderer {
     return `?${number}`;
   }
 
-  /** A param as its numbered placeholder, refusing one whose codec the MySQL registry lacks. */
+  /** A param as its numbered placeholder, written as its codec writes a parameter, refusing one whose codec the MySQL registry lacks. */
   private renderParam(ref: AnyParamRef, ctx: RenderContext): string {
-    if (ref.codec !== undefined) this.descriptorOf(ref.codec, ctx, 'A value in this query');
-    return this.placeholder(ref, ctx);
+    const placeholder = this.placeholder(ref, ctx);
+    if (ref.codec === undefined) return placeholder;
+    return this.descriptorOf(ref.codec, ctx, 'A value in this query').writeParameter(placeholder);
   }
 
   private projectThroughCodec(
