@@ -103,12 +103,12 @@ function hashTree(dir: string): string {
   return hash.digest('hex');
 }
 
-function prisma7Templates() {
-  const { prisma7ConfigFile, prisma7QuickReference } = contribution;
-  if (prisma7ConfigFile === undefined || prisma7QuickReference === undefined) {
-    throw new Error(`${target.packageName} cannot take a Prisma 7 schema`);
+function prisma7QuickReference() {
+  const { prisma7QuickReference: quickReference } = contribution;
+  if (quickReference === undefined) {
+    throw new Error(`${target.packageName} has no Prisma 7 quick reference`);
   }
-  return { configFile: prisma7ConfigFile, quickReference: prisma7QuickReference };
+  return quickReference;
 }
 
 function prisma7Inputs(overrides: Partial<ResolvedInitInputs> = {}): ResolvedInitInputs {
@@ -122,7 +122,7 @@ function prisma7Inputs(overrides: Partial<ResolvedInitInputs> = {}): ResolvedIni
       schemaPath: 'prisma/schema.prisma',
       provider: 'postgresql',
       prisma7Config: 'prisma7.config.ts',
-      templates: prisma7Templates(),
+      quickReference: prisma7QuickReference(),
     },
     sideBySide: null,
     warnings: [],
@@ -208,7 +208,7 @@ describe('the Prisma 7 scaffold', () => {
           schemaPath: 'prisma/schema.prisma',
           provider: 'postgresql',
           prisma7Config: 'prisma7.config.mts',
-          templates: prisma7Templates(),
+          quickReference: prisma7QuickReference(),
         },
       });
 
@@ -229,7 +229,7 @@ describe('the Prisma 7 scaffold', () => {
           schemaPath: 'prisma/schema.prisma',
           provider: 'postgresql',
           prisma7Config: undefined,
-          templates: prisma7Templates(),
+          quickReference: prisma7QuickReference(),
         },
       });
 

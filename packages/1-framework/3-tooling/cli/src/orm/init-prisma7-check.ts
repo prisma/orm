@@ -1,47 +1,21 @@
-import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import { buildLoadedConfig, requireConfigSections } from '@internal/config-loader';
-import { ifDefined } from '@internal/utils/defined';
-import { CliStructuredError } from '@prisma/cli-engine/protocol';
-import { join } from 'pathe';
 import {
+  errorInitContributionUnavailable,
   errorInitPrisma7SchemaRefused,
   errorInitPrisma7SourceUnavailable,
   type PackagesAdded,
-  packagesAddedAction,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
 import { loadContractSource } from '../control-api/operations/load-contract-source';
-import { chooseAction } from '../utils/next-actions';
-import { normalizeError } from './normalize-error';
+import { withPackagesAddedAction } from './init-target-package';
+import type { ImportFromProject } from './project-modules';
 
-/** A module as the project itself resolves it; `undefined` when the project cannot resolve it. */
-export type ImportFromProject = (
-  cwd: string,
-  specifier: string,
-) => Promise<Record<string, unknown> | undefined>;
-
-export const importFromProject: ImportFromProject = async (cwd, specifier) => {
-  let resolved: string;
-  try {
-    resolved = createRequire(join(cwd, 'package.json')).resolve(specifier);
-  } catch {
-    return undefined;
-  }
-  const module: Record<string, unknown> = await import(pathToFileURL(resolved).href);
-  return module;
-};
-
-/** What the contribution writes for a project that keeps its Prisma 7 schema. */
-export interface Prisma7Templates {
-  readonly configFile: NonNullable<InitContribution['prisma7ConfigFile']>;
-  readonly quickReference: NonNullable<InitContribution['prisma7QuickReference']>;
-}
+export type Prisma7QuickReference = NonNullable<InitContribution['prisma7QuickReference']>;
 
 /** `readable`: the target package read the schema. `no-source`: it has no Prisma 7 contract source. */
 export type Prisma7SourceCheck =
-  | { readonly outcome: 'readable'; readonly templates: Prisma7Templates }
+  | { readonly outcome: 'readable'; readonly quickReference: Prisma7QuickReference }
   | { readonly outcome: 'no-source' };
 
 export type CheckPrisma7Source = (request: {
@@ -53,41 +27,17 @@ export type CheckPrisma7Source = (request: {
 }) => Promise<Prisma7SourceCheck>;
 
 /**
- * Adds the check's undo instruction to an error raised after the check installed packages, such
- * as the engine's own consent or cancellation errors, which init cannot word itself. An error with
- * no structured code becomes `CLI.UNEXPECTED`, as it would at the handler boundary.
- */
-export function withPackagesAddedAction(error: unknown, added: PackagesAdded): CliStructuredError {
-  const engineError = normalizeError(error);
-  return new CliStructuredError(engineError.code, engineError.message, {
-    severity: engineError.severity,
-    nextActions: [...engineError.nextActions, chooseAction(packagesAddedAction(added))],
-    diagnostics: engineError.diagnostics,
-    meta: { ...engineError.meta, packagesAdded: added.packages },
-    ...ifDefined('why', engineError.why),
-    ...ifDefined('where', engineError.where),
-    ...ifDefined('docsUrl', engineError.docsUrl),
-    cause: error,
-  });
-}
-
-/**
  * Finds out whether the installed target package can read the Prisma 7 schema before init changes
  * the project: loads the package's config module as the project resolves it and runs its
  * `prisma7Schema` source without writing. The CLI carries no target code, so the installed
- * package is the only one that can answer. A contribution with no `prisma7ConfigFile` cannot take
- * a Prisma 7 schema.
+ * package is the only one that can answer. A `prisma7Schema` export is the only sign that a
+ * package takes a Prisma 7 schema, and such a package must give `prisma7QuickReference`.
  */
 export function createPrisma7SourceCheck(ctx: {
   readonly cwd: string;
   readonly importFromProject: ImportFromProject;
 }): CheckPrisma7Source {
   return async ({ packageName, contribution, schemaPath, added }) => {
-    const { prisma7ConfigFile, prisma7QuickReference } = contribution;
-    if (prisma7ConfigFile === undefined || prisma7QuickReference === undefined) {
-      return { outcome: 'no-source' };
-    }
-
     const undoable = async <T>(step: () => T | Promise<T>): Promise<T> => {
       try {
         return await step();
@@ -96,8 +46,11 @@ export function createPrisma7SourceCheck(ctx: {
       }
     };
 
-    const module = await undoable(() => ctx.importFromProject(ctx.cwd, contribution.configModule));
-    if (module === undefined) {
+    const imported = await ctx.importFromProject(ctx.cwd, contribution.configModule);
+    if (imported.kind === 'unloadable') {
+      throw added === undefined ? imported.cause : withPackagesAddedAction(imported.cause, added);
+    }
+    if (imported.kind !== 'loaded') {
       throw errorInitPrisma7SourceUnavailable({
         schemaPath,
         packageName,
@@ -106,9 +59,18 @@ export function createPrisma7SourceCheck(ctx: {
       });
     }
 
-    const { defineConfig, prisma7Schema } = module;
+    const { defineConfig, prisma7Schema } = imported.module;
     if (typeof defineConfig !== 'function' || typeof prisma7Schema !== 'function') {
       return { outcome: 'no-source' };
+    }
+    const quickReference = contribution.prisma7QuickReference;
+    if (quickReference === undefined) {
+      const missing = errorInitContributionUnavailable({
+        packageName,
+        reason: 'invalid-shape',
+        detail: `${contribution.configModule} exports prisma7Schema, but the contribution has no prisma7QuickReference`,
+      });
+      throw added === undefined ? missing : withPackagesAddedAction(missing, added);
     }
 
     const config = await undoable(() => {
@@ -133,10 +95,7 @@ export function createPrisma7SourceCheck(ctx: {
         added,
       });
     }
-    return {
-      outcome: 'readable',
-      templates: { configFile: prisma7ConfigFile, quickReference: prisma7QuickReference },
-    };
+    return { outcome: 'readable', quickReference };
   };
 }
 

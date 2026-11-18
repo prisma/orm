@@ -1,5 +1,10 @@
+import { type } from 'arktype';
 import { redactUrlCredentials } from '../../utils/url-credentials';
 import type { InitContribution } from './init-contribution';
+
+const ProbeResultSchema = type({ kind: "'server-version'", serverVersion: 'string' })
+  .or({ kind: "'version-unreadable'", detail: 'string' })
+  .or({ kind: "'driver-missing'", driver: 'string', cause: 'string' });
 
 /**
  * Result of an attempted database probe (FR8.3). `kind` is the
@@ -31,7 +36,11 @@ export type ProbeOutcome =
       readonly message: string;
     }
   | {
-      readonly kind: 'connection-failed' | 'driver-missing';
+      readonly kind:
+        | 'connection-failed'
+        | 'driver-missing'
+        | 'version-unreadable'
+        | 'invalid-result';
       readonly minVersion: string | undefined;
       readonly meetsMinimum: null;
       readonly cause: string;
@@ -39,7 +48,6 @@ export type ProbeOutcome =
     };
 
 export interface ProbeContext {
-  readonly baseDir: string;
   readonly databaseUrl: string | undefined;
   readonly packageName: string;
   readonly contribution: Pick<InitContribution, 'probe' | 'serverRequirement'>;
@@ -60,7 +68,10 @@ export interface ProbeContext {
  *   *failures*", and a successful probe that finds an old server is
  *   not a failure).
  * - `no-database-url` / `connection-failed` / `driver-missing` /
- *   `unsupported` — warning by default, fatal under `--strict-probe`.
+ *   `version-unreadable` / `unsupported` — warning by default, fatal under
+ *   `--strict-probe`.
+ * - `invalid-result` — the target package's probe answered with a value of the
+ *   wrong shape, which is a defect in that package; always fatal.
  */
 export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcome> {
   const { databaseUrl, contribution } = ctx;
@@ -83,20 +94,9 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
     };
   }
 
-  let serverVersion: string;
+  let answer: unknown;
   try {
-    const result = await contribution.probe(databaseUrl);
-    if (result.kind === 'driver-missing') {
-      const cause = `\`${result.driver}\` is not installed in this project (resolved from ${ctx.baseDir}; cause: ${result.cause})`;
-      return {
-        kind: 'driver-missing',
-        minVersion,
-        meetsMinimum: null,
-        cause,
-        message: `Skipped --probe-db: ${cause}. (Run with install enabled, or install the driver yourself, then re-run \`prisma orm init --probe-db\`.)`,
-      };
-    }
-    serverVersion = result.serverVersion;
+    answer = await contribution.probe(databaseUrl);
   } catch (err) {
     const cause = redactUrlCredentials(causeMessage(err));
     return {
@@ -107,6 +107,39 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
       message: `--probe-db could not connect: ${cause}.`,
     };
   }
+
+  const result = ProbeResultSchema(answer);
+  if (result instanceof type.errors) {
+    const cause = `the probe of ${ctx.packageName} answered with a value of the wrong shape: ${result.summary}`;
+    return {
+      kind: 'invalid-result',
+      minVersion,
+      meetsMinimum: null,
+      cause,
+      message: `--probe-db failed: ${cause}.`,
+    };
+  }
+  if (result.kind === 'driver-missing') {
+    const cause = `\`${result.driver}\` could not be loaded by ${ctx.packageName} (cause: ${result.cause})`;
+    return {
+      kind: 'driver-missing',
+      minVersion,
+      meetsMinimum: null,
+      cause,
+      message: `Skipped --probe-db: ${cause}. (Run with install enabled, or install the driver yourself, then re-run \`prisma orm init --probe-db\`.)`,
+    };
+  }
+  if (result.kind === 'version-unreadable') {
+    const cause = redactUrlCredentials(result.detail);
+    return {
+      kind: 'version-unreadable',
+      minVersion,
+      meetsMinimum: null,
+      cause,
+      message: `--probe-db connected to the server, but could not read its version: ${cause}.`,
+    };
+  }
+  const { serverVersion } = result;
 
   if (minVersion === undefined) {
     return {

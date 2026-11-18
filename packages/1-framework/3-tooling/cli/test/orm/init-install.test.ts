@@ -6,8 +6,7 @@ import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
-import { importFromProject } from '../../src/orm/init-prisma7-check';
-import { importInitEntrypoint } from '../../src/orm/init-target-package';
+import { importFromProject } from '../../src/orm/project-modules';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const emit = vi.fn();
@@ -18,7 +17,6 @@ const commands: MountedTree = {
   'orm init': createInitCommand({
     emitScaffoldedContract: emit,
     importFromProject,
-    importInitEntrypoint,
   }),
 };
 const groups = BIN_GROUPS;
@@ -176,6 +174,38 @@ describe('init installs', () => {
       });
       expect(emit).not.toHaveBeenCalled();
       expect(skillCalls()).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'completes at exit 4 with the files on disk when an install after the scaffold fails',
+    async () => {
+      script = [
+        { exitCode: 0, stderr: '' },
+        { exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' },
+      ];
+
+      const run = await harness().run([...scaffoldArgv(), '--json'], { cwd: projectDir });
+
+      expect(run.exitCode).toBe(4);
+      expect(calls.map((call) => call.args)).toEqual([
+        ['add', '@prisma/orm-postgres', 'dotenv'],
+        ['add', '-D', 'prisma@latest', '@types/node'],
+      ]);
+      expect(run.presented?.data).toMatchObject({
+        filesWritten: expect.arrayContaining(['prisma.config.ts', 'src/prisma/contract.prisma']),
+        packagesInstalled: { status: 'failed' },
+      });
+      expect(envelopeOf(run)).toMatchObject({
+        diagnostics: [
+          {
+            code: 'CLI.INIT_INSTALL_FAILED',
+            meta: { filesWritten: expect.arrayContaining(['prisma.config.ts']) },
+          },
+        ],
+      });
+      expect(emit).not.toHaveBeenCalled();
     },
     timeouts.coldTransformImport,
   );

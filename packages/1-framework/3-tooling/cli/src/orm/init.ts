@@ -26,18 +26,11 @@ import {
   resolveInitInputs,
 } from './init-inputs';
 import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
-import {
-  createPrisma7SourceCheck,
-  type ImportFromProject,
-  importFromProject,
-} from './init-prisma7-check';
+import { createPrisma7SourceCheck } from './init-prisma7-check';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
-import {
-  createTargetPackagePreparation,
-  type ImportInitEntrypoint,
-  importInitEntrypoint,
-} from './init-target-package';
+import { createTargetPackagePreparation } from './init-target-package';
 import { normalizeError } from './normalize-error';
+import { type ImportFromProject, importFromProject } from './project-modules';
 
 /** Each of these is a finding on a completed run, not an error. */
 const INIT_EXIT_CODES = {
@@ -59,9 +52,12 @@ function probeWarning(
     // rather than failing at it, so --strict-probe does not escalate it.
     case 'below-minimum':
       return { warning: outcome.message, fatal: undefined };
+    case 'invalid-result':
+      return { warning: undefined, fatal: outcome.message };
     case 'no-database-url':
     case 'connection-failed':
     case 'driver-missing':
+    case 'version-unreadable':
     case 'unsupported':
       return strictProbe
         ? { warning: undefined, fatal: outcome.message }
@@ -81,7 +77,6 @@ function causeMessage(error: unknown): string {
 export interface InitCommandDependencies {
   readonly emitScaffoldedContract: typeof emitScaffoldedContract;
   readonly importFromProject: ImportFromProject;
-  readonly importInitEntrypoint: ImportInitEntrypoint;
 }
 
 export const createInitCommand = (injected: InitCommandDependencies) =>
@@ -167,7 +162,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             packages: ctx.packages,
             packageManager,
             install: !args.flags.skipInstall,
-            importInitEntrypoint: injected.importInitEntrypoint,
+            importFromProject: injected.importFromProject,
           }),
           checkPrisma7Source: createPrisma7SourceCheck({
             cwd: ctx.cwd,
@@ -394,7 +389,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // the project's own node_modules.
       if (inputs.probeDb) {
         const outcome = await probeServerVersion({
-          baseDir: ctx.cwd,
           databaseUrl: ctx.env['DATABASE_URL'],
           packageName: inputs.target.packageName,
           contribution: inputs.contribution,
@@ -416,8 +410,4 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
     },
   });
 
-export const initCommand = createInitCommand({
-  emitScaffoldedContract,
-  importFromProject,
-  importInitEntrypoint,
-});
+export const initCommand = createInitCommand({ emitScaffoldedContract, importFromProject });

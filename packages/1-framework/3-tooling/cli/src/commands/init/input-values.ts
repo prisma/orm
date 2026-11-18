@@ -1,9 +1,9 @@
+import type { ContractSourceFormat } from '@internal/config/config-types';
 import { extname, normalize } from 'pathe';
 import { errorInitAuthoringSchemaPathMismatch, errorInitInvalidFlagValue } from './errors';
-import type { AuthoringMode } from './init-contribution';
 import { findTargetByName, type KnownTarget, TARGET_SHORT_NAMES } from './target-packages';
 
-const AUTHORING_VALUES: ReadonlyMap<string, AuthoringMode> = new Map([
+const AUTHORING_VALUES: ReadonlyMap<string, ContractSourceFormat> = new Map([
   ['psl', 'psl'],
   ['typescript', 'typescript'],
   ['ts', 'typescript'],
@@ -22,7 +22,7 @@ export function resolveTarget(value: string | undefined): KnownTarget | undefine
   return mapped;
 }
 
-export function resolveAuthoring(value: string | undefined): AuthoringMode | undefined {
+export function resolveAuthoring(value: string | undefined): ContractSourceFormat | undefined {
   if (value === undefined) return undefined;
   const mapped = AUTHORING_VALUES.get(value.toLowerCase());
   if (mapped === undefined) {
@@ -42,7 +42,7 @@ export function resolveAuthoring(value: string | undefined): AuthoringMode | und
  * into a `.ts` file (or vice versa); this validator surfaces the mistake
  * as a precondition error naming both flags.
  */
-export function validateSchemaPath(value: string, authoring: AuthoringMode): string {
+export function validateSchemaPath(value: string, authoring: ContractSourceFormat): string {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
     throw errorInitInvalidFlagValue({

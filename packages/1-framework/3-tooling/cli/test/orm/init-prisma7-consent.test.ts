@@ -192,7 +192,7 @@ describe(
             },
           }),
         ).rejects.toBe(refusal);
-        expect(prepare.requests.map((target) => target.shortName)).toEqual(['postgres']);
+        expect(prepare.requests).toEqual(['@prisma/orm-postgres']);
         expect(check.requests).toEqual([
           {
             packageName: '@prisma/orm-postgres',

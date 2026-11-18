@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import type { ContractSourceFormat } from '@internal/config/config-types';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { PromptSurface } from '@prisma/cli-engine';
 import { basename, extname, join } from 'pathe';
@@ -17,7 +18,7 @@ import {
   errorInitStrictProbeWithoutProbe,
   errorInitUserAborted,
 } from '../commands/init/errors';
-import type { AuthoringMode, InitContribution } from '../commands/init/init-contribution';
+import type { InitContribution } from '../commands/init/init-contribution';
 import { resolveAuthoring, resolveTarget, validateSchemaPath } from '../commands/init/input-values';
 import { prisma6SideBySideSetup } from '../commands/init/prisma6-side-by-side';
 import {
@@ -34,11 +35,7 @@ import {
   type KnownTarget,
 } from '../commands/init/target-packages';
 import { defaultSchemaPath } from '../commands/init/templates/code-templates';
-import {
-  type CheckPrisma7Source,
-  type Prisma7Templates,
-  withPackagesAddedAction,
-} from './init-prisma7-check';
+import type { CheckPrisma7Source, Prisma7QuickReference } from './init-prisma7-check';
 import {
   CONFIG_FILE,
   generatedFilesInitReplaces,
@@ -48,6 +45,7 @@ import {
   type PreparedTargetPackage,
   type PrepareTargetPackage,
   TargetPackageInstallFailed,
+  withPackagesAddedAction,
 } from './init-target-package';
 
 /** The flag values `init` reads, after the engine has parsed them. */
@@ -68,14 +66,18 @@ export interface InitFlagValues {
  * Prisma 7 schema init points the config at.
  */
 export type InitContractSource =
-  | { readonly kind: 'starter'; readonly authoring: AuthoringMode; readonly schemaPath: string }
+  | {
+      readonly kind: 'starter';
+      readonly authoring: ContractSourceFormat;
+      readonly schemaPath: string;
+    }
   | {
       readonly kind: 'prisma7-schema';
       readonly schemaPath: string;
       readonly provider: string | undefined;
       /** The Prisma 7 config's file name once init is done; `undefined` when the project has none. */
       readonly prisma7Config: string | undefined;
-      readonly templates: Prisma7Templates;
+      readonly quickReference: Prisma7QuickReference;
     };
 
 /**
@@ -97,7 +99,7 @@ export interface ResolvedInitInputs {
   readonly target: KnownTarget;
   readonly contribution: InitContribution;
   /** `psl` on the Prisma 7 path: the schema is PSL, and no starter is written. */
-  readonly authoring: AuthoringMode;
+  readonly authoring: ContractSourceFormat;
   readonly schemaPath: string;
   readonly contractSource: InitContractSource;
   readonly sideBySide: Prisma7SideBySidePlan | null;
@@ -128,7 +130,7 @@ export class InitInstallFailedBeforeWriting extends Error {
   constructor(
     readonly failure: TargetPackageInstallFailed['failure'],
     readonly target: KnownTarget,
-    readonly authoring: AuthoringMode | 'prisma7',
+    readonly authoring: ContractSourceFormat | 'prisma7',
     readonly schemaPath: string,
   ) {
     super(failure.message);
@@ -139,10 +141,10 @@ export class InitInstallFailedBeforeWriting extends Error {
 async function prepareTarget(
   prepareTargetPackage: PrepareTargetPackage,
   target: KnownTarget,
-  report: { readonly authoring: AuthoringMode | 'prisma7'; readonly schemaPath: string },
+  report: { readonly authoring: ContractSourceFormat | 'prisma7'; readonly schemaPath: string },
 ): Promise<PreparedTargetPackage> {
   try {
-    return await prepareTargetPackage(target);
+    return await prepareTargetPackage(target.packageName);
   } catch (error) {
     if (error instanceof TargetPackageInstallFailed) {
       throw new InitInstallFailedBeforeWriting(
@@ -204,7 +206,10 @@ async function askTarget(prompt: PromptSurface): Promise<KnownTarget> {
   return chosen;
 }
 
-const AUTHORING_CHOICES: readonly { readonly value: AuthoringMode; readonly label: string }[] = [
+const AUTHORING_CHOICES: readonly {
+  readonly value: ContractSourceFormat;
+  readonly label: string;
+}[] = [
   { value: 'psl', label: 'Prisma Schema Language (.prisma)' },
   { value: 'typescript', label: 'TypeScript (.ts)' },
 ];
@@ -212,13 +217,13 @@ const AUTHORING_CHOICES: readonly { readonly value: AuthoringMode; readonly labe
 /** Asks only between the ways the target package offers; one way is taken without asking. */
 async function askAuthoring(
   prompt: PromptSurface,
-  offered: readonly AuthoringMode[],
-): Promise<AuthoringMode> {
+  offered: readonly ContractSourceFormat[],
+): Promise<ContractSourceFormat> {
   const [only] = offered;
   if (offered.length === 1 && only !== undefined) {
     return only;
   }
-  return prompt.select<AuthoringMode>(
+  return prompt.select<ContractSourceFormat>(
     'How do you want to write your schema?',
     AUTHORING_CHOICES.filter((choice) => offered.includes(choice.value)),
   );
@@ -229,7 +234,10 @@ async function askAuthoring(
  * does, so an answer the engine accepted still has to agree with the authoring
  * style.
  */
-async function askSchemaPath(prompt: PromptSurface, authoring: AuthoringMode): Promise<string> {
+async function askSchemaPath(
+  prompt: PromptSurface,
+  authoring: ContractSourceFormat,
+): Promise<string> {
   const fallback = defaultSchemaPath(authoring);
   const answer = await prompt.text('Where should the schema file go?', {
     placeholder: fallback,
@@ -256,7 +264,7 @@ function previousFacade(cwd: string, target: KnownTarget): PreviousFacade | unde
   const candidates = KNOWN_TARGET_PACKAGES.filter(
     (entry) => entry.shortName !== target.shortName,
   ).flatMap((entry) =>
-    [entry.packageName, ...entry.formerPackageNames].map((packageName) => ({
+    [entry.packageName, entry.workspacePackageName].map((packageName) => ({
       target: entry,
       packageName,
     })),
@@ -551,7 +559,7 @@ async function resolvePrisma7Inputs(ctx: {
       schema,
       target,
       prepared,
-      templates: check.templates,
+      quickReference: check.quickReference,
     });
   } catch (error) {
     throw prepared.added === undefined ? error : withPackagesAddedAction(error, prepared.added);
@@ -579,7 +587,7 @@ async function confirmPrisma7Inputs(ctx: {
   readonly schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>;
   readonly target: KnownTarget;
   readonly prepared: PreparedTargetPackage;
-  readonly templates: Prisma7Templates;
+  readonly quickReference: Prisma7QuickReference;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt, detection, schema, target, prepared } = ctx;
   const { config } = detection;
@@ -620,7 +628,7 @@ async function confirmPrisma7Inputs(ctx: {
       schemaPath: schema.path,
       provider: schema.provider,
       prisma7Config: prisma7ConfigAfterInit(detection, sideBySide),
-      templates: ctx.templates,
+      quickReference: ctx.quickReference,
     },
     sideBySide,
     warnings: [...detection.warnings, ...prepared.warnings],
@@ -654,14 +662,14 @@ async function resolveStarterInputs(ctx: {
   readonly flags: InitFlagValues;
   readonly prompt: PromptSurface;
   readonly target: KnownTarget | undefined;
-  readonly flagAuthoring: AuthoringMode | undefined;
+  readonly flagAuthoring: ContractSourceFormat | undefined;
   readonly prisma7SchemaPath: string | undefined;
   readonly warnings: readonly string[];
   /** The target package the Prisma 7 path already installed before it found no source. */
   readonly prepared: PreparedTargetPackage | undefined;
   readonly prepareTargetPackage: PrepareTargetPackage;
 }): Promise<ResolvedInitInputs> {
-  const { cwd, flags, prompt, flagAuthoring } = ctx;
+  const { flags, prompt, flagAuthoring } = ctx;
   let target: KnownTarget;
   try {
     target = ctx.target ?? (await askTarget(prompt));
@@ -675,6 +683,10 @@ async function resolveStarterInputs(ctx: {
     );
   }
 
+  if (flagAuthoring !== undefined && flags.schemaPath !== undefined) {
+    validateSchemaPath(flags.schemaPath, flagAuthoring);
+  }
+
   const reportedAuthoring = flagAuthoring ?? 'psl';
   const prepared =
     ctx.prepared ??
@@ -682,9 +694,30 @@ async function resolveStarterInputs(ctx: {
       authoring: reportedAuthoring,
       schemaPath: flags.schemaPath ?? defaultSchemaPath(reportedAuthoring),
     }));
+  // The Prisma 7 path adds the undo instruction itself when it hands its preparation over.
+  const added = ctx.prepared === undefined ? prepared.added : undefined;
+  try {
+    return await confirmStarterInputs({ ...ctx, target, prepared });
+  } catch (error) {
+    throw added === undefined ? error : withPackagesAddedAction(error, added);
+  }
+}
+
+/** The questions of a fresh init, once the target package's contribution is loaded. */
+async function confirmStarterInputs(ctx: {
+  readonly cwd: string;
+  readonly flags: InitFlagValues;
+  readonly prompt: PromptSurface;
+  readonly target: KnownTarget;
+  readonly flagAuthoring: ContractSourceFormat | undefined;
+  readonly prisma7SchemaPath: string | undefined;
+  readonly warnings: readonly string[];
+  readonly prepared: PreparedTargetPackage;
+}): Promise<ResolvedInitInputs> {
+  const { cwd, flags, prompt, flagAuthoring, target, prepared } = ctx;
   const { contribution } = prepared;
 
-  let authoring: AuthoringMode;
+  let authoring: ContractSourceFormat;
   if (flagAuthoring !== undefined) {
     if (!contribution.authoringModes.includes(flagAuthoring)) {
       throw errorInitAuthoringUnsupported({

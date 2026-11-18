@@ -2,7 +2,6 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import type { PromptSurface } from '@prisma/cli-engine';
 import { dirname, join } from 'pathe';
 import type { InitContribution } from '../../src/commands/init/init-contribution';
-import type { KnownTarget } from '../../src/commands/init/target-packages';
 import { type InitFlagValues, resolveInitInputs } from '../../src/orm/init-inputs';
 import type { CheckPrisma7Source, Prisma7SourceCheck } from '../../src/orm/init-prisma7-check';
 import type {
@@ -118,7 +117,6 @@ export const STUB_CONTRIBUTION: InitContribution = {
   envExample: () => 'DATABASE_URL="stub://localhost/mydb"\n',
   quickReference: (input) => `# Quick reference for ${input.schemaPath}\n${input.requirements}\n`,
   readme: (input) => `# ${input.projectName}\n`,
-  prisma7ConfigFile: (input) => `// Prisma 7 config for ${input.schemaPath}\n`,
   prisma7QuickReference: (input) => `# Prisma 7 quick reference for ${input.schemaPath}\n`,
 };
 
@@ -134,13 +132,13 @@ export function preparedTarget(
   };
 }
 
-/** A preparation that hands back `prepared` and records each target it is asked for. */
+/** A preparation that hands back `prepared` and records each package it is asked for. */
 export function stubPrepare(
   prepared: Partial<PreparedTargetPackage> = {},
-): PrepareTargetPackage & { readonly requests: KnownTarget[] } {
-  const requests: KnownTarget[] = [];
-  const prepare = async (target: KnownTarget) => {
-    requests.push(target);
+): PrepareTargetPackage & { readonly requests: string[] } {
+  const requests: string[] = [];
+  const prepare = async (packageName: string) => {
+    requests.push(packageName);
     return preparedTarget(prepared);
   };
   return Object.assign(prepare, { requests });
@@ -148,10 +146,7 @@ export function stubPrepare(
 
 const READABLE: Prisma7SourceCheck = {
   outcome: 'readable',
-  templates: {
-    configFile: (input) => `// Prisma 7 config for ${input.schemaPath}\n`,
-    quickReference: (input) => `# Prisma 7 quick reference for ${input.schemaPath}\n`,
-  },
+  quickReference: (input) => `# Prisma 7 quick reference for ${input.schemaPath}\n`,
 };
 
 /** A check that reports `outcome` and records each request it receives. */

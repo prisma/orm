@@ -7,8 +7,11 @@ export interface KnownTargetPackage {
   readonly shortName: string;
   readonly aliases: readonly string[];
   readonly packageName: string;
-  /** Names earlier versions of `init` installed the package under. */
-  readonly formerPackageNames: readonly string[];
+  /**
+   * The package's name inside this repository. Workspace builds name their modules with it, and
+   * older versions of `init` installed the package under it.
+   */
+  readonly workspacePackageName: string;
   /** Shown before the package is installed, so it cannot come from the package. */
   readonly label: string;
   /** The `datasource` provider of a schema the package reads, and the last Prisma version that wrote one. */
@@ -26,7 +29,7 @@ export const KNOWN_TARGET_PACKAGES = [
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     packageName: '@prisma/orm-postgres',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
-    formerPackageNames: ['@internal/postgres'],
+    workspacePackageName: '@internal/postgres',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     label: 'PostgreSQL',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
@@ -41,7 +44,7 @@ export const KNOWN_TARGET_PACKAGES = [
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     packageName: '@prisma/orm-mongo',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
-    formerPackageNames: ['@internal/mongo'],
+    workspacePackageName: '@internal/mongo',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only
     label: 'MongoDB',
     // biome-ignore lint/plugin/no-family-vocabulary: an entry of the list of known target packages, which holds names only

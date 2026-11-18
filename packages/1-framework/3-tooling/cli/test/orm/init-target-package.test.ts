@@ -7,12 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InitContribution } from '../../src/commands/init/init-contribution';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
-import { importFromProject } from '../../src/orm/init-prisma7-check';
 import {
-  type ImportInitEntrypoint,
-  type InitEntrypointImport,
-  importInitEntrypoint,
-} from '../../src/orm/init-target-package';
+  type ImportFromProject,
+  importFromProject,
+  type ProjectImport,
+} from '../../src/orm/project-modules';
 import { fixtureContribution } from '../utils/fixture-contribution';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
@@ -35,13 +34,14 @@ afterEach(() => {
   rmSync(projectDir, { recursive: true, force: true });
 });
 
-function harness(loadInit: ImportInitEntrypoint = importInitEntrypoint) {
+/** The project's own resolver, with `<package>/init` answered by `loadInit`. */
+function harness(loadInit: ImportFromProject = importFromProject) {
   const commands: MountedTree = {
     ...BIN_COMMANDS,
     'orm init': createInitCommand({
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
-      importFromProject,
-      importInitEntrypoint: loadInit,
+      importFromProject: (cwd, specifier) =>
+        specifier.endsWith('/init') ? loadInit(cwd, specifier) : importFromProject(cwd, specifier),
     }),
   };
   return createTestCli({
@@ -52,14 +52,14 @@ function harness(loadInit: ImportInitEntrypoint = importInitEntrypoint) {
   });
 }
 
-function loadsAs(result: InitEntrypointImport): ImportInitEntrypoint {
+function loadsAs(result: ProjectImport): ImportFromProject {
   return async () => result;
 }
 
 async function postgresWith(
   overrides: Partial<InitContribution>,
   omit: readonly (keyof InitContribution)[] = [],
-): Promise<ImportInitEntrypoint> {
+): Promise<ImportFromProject> {
   const real = await fixtureContribution('@prisma/orm-postgres');
   const contribution = Object.fromEntries(
     Object.entries({ ...real, ...overrides }).filter(
@@ -87,20 +87,39 @@ function projectEntries(): string[] {
 
 const STARTER = ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', '--json'];
 
+const REMOVE_ADDED =
+  'init added @prisma/orm-postgres and dotenv to package.json before checking; remove them with `pnpm remove @prisma/orm-postgres dotenv`.';
+
+function writePackage(
+  name: string,
+  manifest: Record<string, unknown>,
+  files: Record<string, string>,
+) {
+  writeProjectFile(`node_modules/${name}/package.json`, JSON.stringify({ name, ...manifest }));
+  for (const [file, content] of Object.entries(files)) {
+    writeProjectFile(`node_modules/${name}/${file}`, content);
+  }
+}
+
 describe('init takes the project from the target package', () => {
   it(
     'installs the target package before it asks anything about the project',
     async () => {
-      const run = await harness().run(
-        ['orm', 'init', '--target', 'postgres', '--authoring', 'psl'],
-        {
-          cwd: projectDir,
-        },
-      );
+      script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
 
-      expect(run.exitCode).toBe(0);
-      expect(installs[0]).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
-      expect(existsSync(join(projectDir, 'prisma.config.ts'))).toBe(true);
+      // Only the target is answered: a question asked before the install would run past the
+      // script and fail the run.
+      const run = await harness().run(['orm', 'init', '--json'], {
+        cwd: projectDir,
+        isTty: { stdin: true },
+        answers: ['postgres'],
+      });
+
+      expect(run.exitCode).toBe(4);
+      expect(envelopeOf(run)).toMatchObject({
+        diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
+      });
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
     },
     timeouts.coldTransformImport,
   );
@@ -186,7 +205,7 @@ describe('init takes the project from the target package', () => {
   it(
     'stops with no file written and says to write prisma.config.ts by hand when the package has no init entrypoint',
     async () => {
-      const run = await harness(loadsAs({ kind: 'no-entrypoint' })).run(STARTER, {
+      const run = await harness(loadsAs({ kind: 'not-exported' })).run(STARTER, {
         cwd: projectDir,
       });
 
@@ -196,11 +215,15 @@ describe('init takes the project from the target package', () => {
         error: {
           code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
           why: '@prisma/orm-postgres has no `@prisma/orm-postgres/init` entrypoint, so it does not support `prisma orm init`. @prisma/orm-postgres is installed; no file was written.',
-          meta: { reason: 'no-entrypoint' },
+          meta: {
+            reason: 'no-entrypoint',
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv'],
+          },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
               label: expect.stringContaining('Write prisma.config.ts by hand'),
             }),
+            expect.objectContaining({ label: REMOVE_ADDED }),
           ]),
         },
       });
@@ -237,18 +260,170 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
-    'refuses a contribution that gives a Prisma 7 config without its quick reference',
+    'loads an init entrypoint the package exports only under the import condition',
     async () => {
-      const run = await harness(await postgresWith({}, ['prisma7QuickReference'])).run(STARTER, {
+      writePackage(
+        '@prisma/orm-postgres',
+        { type: 'module', exports: { './init': { import: './init.mjs' } } },
+        { 'init.mjs': "export { default } from '@internal/postgres/init';\n" },
+      );
+
+      const run = await harness().run([...STARTER, '--skip-install'], { cwd: projectDir });
+
+      expect(run.exitCode).toBe(0);
+      expect(existsSync(join(projectDir, 'prisma.config.ts'))).toBe(true);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it.each([
+    [
+      'an export that names a missing file',
+      { './init': './dist/init.mjs' },
+      {},
+      'dist/init.mjs, which does not exist',
+    ],
+    [
+      'an init module that throws while it loads',
+      { './init': './init.mjs' },
+      { 'init.mjs': "import 'a-module-that-is-not-installed';\n" },
+      'a-module-that-is-not-installed',
+    ],
+  ])(
+    'names the module and the cause, with no file written, for %s',
+    async (_case, exports, files, cause) => {
+      writePackage('@prisma/orm-postgres', { type: 'module', exports }, files);
+
+      const run = await harness().run([...STARTER, '--skip-install'], { cwd: projectDir });
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+          summary: 'Could not load @prisma/orm-postgres/init',
+          why: expect.stringContaining(cause),
+          meta: { reason: 'unloadable', module: '@prisma/orm-postgres/init' },
+        },
+      });
+      expect(projectEntries()).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses --schema-path against --authoring before installing anything',
+    async () => {
+      const run = await harness().run([...STARTER, '--schema-path', 'db/schema.ts'], {
         cwd: projectDir,
       });
 
       expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: { code: 'CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH' },
+      });
+      expect(installs).toEqual([]);
+      expect(projectEntries()).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it.each([
+    [
+      'the package does not offer --authoring',
+      async () => harness(await postgresWith({ authoringModes: ['typescript'] })),
+      STARTER,
+      'CLI.INIT_AUTHORING_UNSUPPORTED',
+    ],
+    [
+      'the session cannot ask for the authoring mode',
+      async () => harness(),
+      [
+        'orm',
+        'init',
+        '--target',
+        'postgres',
+        '--schema-path',
+        'src/prisma/contract.prisma',
+        '--json',
+      ],
+      'CLI.INIT_MISSING_FLAGS',
+    ],
+    [
+      'the default export is not an init contribution',
+      async () => harness(loadsAs({ kind: 'loaded', module: { default: {} } })),
+      STARTER,
+      'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+    ],
+  ])(
+    'says what it installed and how to remove it when %s',
+    async (_case, makeHarness, argv, code) => {
+      const run = await (await makeHarness()).run(argv, { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
         error: {
-          code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
-          why: expect.stringContaining(
-            'prisma7ConfigFile and prisma7QuickReference must be given together',
-          ),
+          code,
+          meta: expect.objectContaining({ packagesAdded: ['@prisma/orm-postgres', 'dotenv'] }),
+          nextActions: expect.arrayContaining([expect.objectContaining({ label: REMOVE_ADDED })]),
+        },
+      });
+      expect(projectEntries()).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'writes no README when the contribution has none',
+    async () => {
+      writeProjectFile('src/index.ts', 'export {};\n');
+
+      const run = await harness(await postgresWith({}, ['readme'])).run(
+        [...STARTER, '--skip-install'],
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(existsSync(join(projectDir, 'README.md'))).toBe(false);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'writes .env as the body of .env.example, without its intro',
+    async () => {
+      const contribution = await fixtureContribution('@prisma/orm-postgres');
+
+      const run = await harness().run([...STARTER, '--skip-install', '--write-env'], {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(readFileSync(join(projectDir, '.env'), 'utf-8')).toBe(contribution.envExample());
+      expect(readFileSync(join(projectDir, '.env.example'), 'utf-8')).toBe(
+        `# Copy this file to \`.env\` and replace the placeholder with your real connection string.\n${contribution.envExample()}`,
+      );
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'fails --probe-db when the probe answers with the wrong shape, even without --strict-probe',
+    async () => {
+      const loadInit = await postgresWith({
+        probe: async () => JSON.parse('{"kind":"server-version"}'),
+      });
+
+      const run = await harness(loadInit).run([...STARTER, '--skip-install', '--probe-db'], {
+        cwd: projectDir,
+        env: { DATABASE_URL: 'postgres://localhost:5432/db' },
+      });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_PROBE_FAILED',
+          why: expect.stringContaining('answered with a value of the wrong shape'),
         },
       });
     },

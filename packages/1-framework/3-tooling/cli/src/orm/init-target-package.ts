@@ -1,8 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
+import { ifDefined } from '@internal/utils/defined';
 import type { PackageOperations } from '@prisma/cli-engine';
-import type { CliStructuredError } from '@prisma/cli-engine/protocol';
+import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { type } from 'arktype';
 import { join } from 'pathe';
 import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
@@ -16,90 +15,64 @@ import {
   errorInitInvalidManifest,
   errorInitTargetPackageNotInstalled,
   type PackagesAdded,
+  packagesAddedAction,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
-import type { KnownTarget } from '../commands/init/target-packages';
+import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
-
-/** What the project resolves `<package>/init` to. */
-export type InitEntrypointImport =
-  | { readonly kind: 'not-installed' }
-  | { readonly kind: 'no-entrypoint' }
-  | { readonly kind: 'loaded'; readonly module: Record<string, unknown> };
-
-export type ImportInitEntrypoint = (
-  cwd: string,
-  packageName: string,
-) => Promise<InitEntrypointImport>;
-
-function errorCode(error: unknown): unknown {
-  return error instanceof Error ? Reflect.get(error, 'code') : undefined;
-}
-
-function isInstalled(requireFromProject: NodeJS.Require, packageName: string): boolean {
-  try {
-    requireFromProject.resolve(`${packageName}/package.json`);
-    return true;
-  } catch (error) {
-    return errorCode(error) === 'ERR_PACKAGE_PATH_NOT_EXPORTED';
-  }
-}
-
-/**
- * Resolves `<package>/init` from the project folder, not from the CLI's own location: the package
- * is the one the project installed, which the config loads a moment later.
- */
-export const importInitEntrypoint: ImportInitEntrypoint = async (cwd, packageName) => {
-  const requireFromProject = createRequire(join(cwd, 'package.json'));
-  let resolved: string;
-  try {
-    resolved = requireFromProject.resolve(`${packageName}/init`);
-  } catch {
-    return {
-      kind: isInstalled(requireFromProject, packageName) ? 'no-entrypoint' : 'not-installed',
-    };
-  }
-  const module: Record<string, unknown> = await import(pathToFileURL(resolved).href);
-  return { kind: 'loaded', module };
-};
-
-const AuthoringModeSchema = type("'psl'|'typescript'");
+import { normalizeError } from './normalize-error';
+import type { ImportFromProject } from './project-modules';
 
 const InitContributionSchema = type({
   label: 'string',
   configModule: 'string',
   peerPackages: 'string[]',
-  authoringModes: AuthoringModeSchema.array().atLeastLength(1),
+  authoringModes: type("'psl'|'typescript'").array().atLeastLength(1),
   starterContract: 'Function',
   contractSample: 'Function',
   databaseFile: 'Function',
   envExample: 'Function',
   quickReference: 'Function',
-  readme: 'Function',
+  'readme?': 'Function',
   'serverRequirement?': { minVersion: 'string', checkCommand: 'string' },
   'probe?': 'Function',
-  'prisma7ConfigFile?': 'Function',
   'prisma7QuickReference?': 'Function',
 });
-
-/** What is wrong with a default export that should be an init contribution; `undefined` when nothing is. */
-function contributionProblems(value: unknown): string | undefined {
-  const checked = InitContributionSchema(value);
-  if (checked instanceof type.errors) {
-    return checked.summary;
-  }
-  if ((checked.prisma7ConfigFile === undefined) !== (checked.prisma7QuickReference === undefined)) {
-    return 'prisma7ConfigFile and prisma7QuickReference must be given together';
-  }
-  return undefined;
-}
 
 /**
  * Checks the members' presence and the data members' shapes. The functions' signatures cannot be
  * checked at run time; the package's own `satisfies InitContribution` checks them when it builds.
  */
 function isInitContribution(value: unknown): value is InitContribution {
-  return contributionProblems(value) === undefined;
+  return !(InitContributionSchema(value) instanceof type.errors);
+}
+
+function contributionProblems(value: unknown): string {
+  const checked = InitContributionSchema(value);
+  return checked instanceof type.errors ? checked.summary : 'its shape is wrong';
+}
+
+function causeMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
+/**
+ * Adds the instruction to undo what init installed to an error raised after the install, such as
+ * the engine's own consent or cancellation errors, which init cannot word itself. An error with
+ * no structured code becomes `CLI.UNEXPECTED`, as it would at the handler boundary.
+ */
+export function withPackagesAddedAction(error: unknown, added: PackagesAdded): CliStructuredError {
+  const engineError = normalizeError(error);
+  return new CliStructuredError(engineError.code, engineError.message, {
+    severity: engineError.severity,
+    nextActions: [...engineError.nextActions, chooseAction(packagesAddedAction(added))],
+    diagnostics: engineError.diagnostics,
+    meta: { ...engineError.meta, packagesAdded: added.packages },
+    ...ifDefined('why', engineError.why),
+    ...ifDefined('where', engineError.where),
+    ...ifDefined('docsUrl', engineError.docsUrl),
+    cause: error,
+  });
 }
 
 export function installCommand(packageManager: PackageManager, packageName: string): string {
@@ -116,7 +89,7 @@ export interface PreparedTargetPackage {
   readonly warnings: readonly string[];
 }
 
-export type PrepareTargetPackage = (target: KnownTarget) => Promise<PreparedTargetPackage>;
+export type PrepareTargetPackage = (packageName: string) => Promise<PreparedTargetPackage>;
 
 /** The install of the target package failed; nothing else has happened yet. */
 export class TargetPackageInstallFailed extends Error {
@@ -136,10 +109,9 @@ export function createTargetPackagePreparation(ctx: {
   readonly packages: PackageOperations;
   readonly packageManager: PackageManager;
   readonly install: boolean;
-  readonly importInitEntrypoint: ImportInitEntrypoint;
+  readonly importFromProject: ImportFromProject;
 }): PrepareTargetPackage {
-  return async (target) => {
-    const { packageName } = target;
+  return async (packageName) => {
     rejectUnparseableManifest(ctx.cwd);
     const warnings: string[] = [];
     let installed: readonly string[] = [];
@@ -171,30 +143,54 @@ export function createTargetPackagePreparation(ctx: {
             };
     }
 
-    const entrypoint = await ctx.importInitEntrypoint(ctx.cwd, packageName);
-    if (entrypoint.kind === 'not-installed') {
+    try {
+      const contribution = await loadContribution(ctx, packageName);
+      return { contribution, installed, added, warnings };
+    } catch (error) {
+      throw added === undefined ? error : withPackagesAddedAction(error, added);
+    }
+  };
+}
+
+async function loadContribution(
+  ctx: {
+    readonly cwd: string;
+    readonly packageManager: PackageManager;
+    readonly importFromProject: ImportFromProject;
+  },
+  packageName: string,
+): Promise<InitContribution> {
+  const entrypoint = await ctx.importFromProject(ctx.cwd, `${packageName}/init`);
+  switch (entrypoint.kind) {
+    case 'not-installed':
       throw errorInitTargetPackageNotInstalled({
         packageName,
         installCommand: installCommand(ctx.packageManager, packageName),
       });
-    }
-    if (entrypoint.kind === 'no-entrypoint') {
+    case 'not-exported':
       throw errorInitContributionUnavailable({
         packageName,
         reason: 'no-entrypoint',
-        problems: undefined,
+        detail: undefined,
       });
-    }
-    const contribution = entrypoint.module['default'];
-    if (!isInitContribution(contribution)) {
+    case 'unloadable':
       throw errorInitContributionUnavailable({
         packageName,
-        reason: 'invalid-shape',
-        problems: contributionProblems(contribution),
+        reason: 'unloadable',
+        detail: causeMessage(entrypoint.cause),
       });
-    }
-    return { contribution, installed, added, warnings };
-  };
+    case 'loaded':
+      break;
+  }
+  const contribution = entrypoint.module['default'];
+  if (!isInitContribution(contribution)) {
+    throw errorInitContributionUnavailable({
+      packageName,
+      reason: 'invalid-shape',
+      detail: contributionProblems(contribution),
+    });
+  }
+  return contribution;
 }
 
 /**

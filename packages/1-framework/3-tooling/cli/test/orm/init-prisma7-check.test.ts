@@ -14,8 +14,7 @@ import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
-import { type ImportFromProject, importFromProject } from '../../src/orm/init-prisma7-check';
-import { importInitEntrypoint } from '../../src/orm/init-target-package';
+import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
@@ -36,6 +35,7 @@ let projectDir: string;
 let installs: (readonly string[])[];
 let script: { readonly exitCode: number; readonly stderr: string }[];
 let loadTargetConfig: ImportFromProject;
+let loadInit: ImportFromProject;
 
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
@@ -47,6 +47,7 @@ beforeEach(() => {
   installs = [];
   script = [];
   loadTargetConfig = importFromProject;
+  loadInit = importFromProject;
 });
 
 afterEach(() => {
@@ -58,8 +59,8 @@ function harness(packageManager?: PackageManagerId) {
     ...BIN_COMMANDS,
     'orm init': createInitCommand({
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
-      importFromProject: (cwd, specifier) => loadTargetConfig(cwd, specifier),
-      importInitEntrypoint,
+      importFromProject: (cwd, specifier) =>
+        specifier.endsWith('/init') ? loadInit(cwd, specifier) : loadTargetConfig(cwd, specifier),
     }),
   };
   return createTestCli({
@@ -97,9 +98,10 @@ async function targetConfigWith(
   prisma7Schema: ((schemaPath: string) => unknown) | undefined,
 ): Promise<ImportFromProject> {
   const real = await importFromProject(projectDir, TARGET_CONFIG);
+  const defineConfig = real.kind === 'loaded' ? real.module['defineConfig'] : undefined;
   return async () => ({
-    defineConfig: real?.['defineConfig'],
-    ...(prisma7Schema === undefined ? {} : { prisma7Schema }),
+    kind: 'loaded',
+    module: { defineConfig, ...(prisma7Schema === undefined ? {} : { prisma7Schema }) },
   });
 }
 
@@ -303,9 +305,10 @@ describe('the Prisma 7 check before init changes the project', () => {
     [
       'loading the target package throws',
       'CLI.UNEXPECTED',
-      async (): Promise<ImportFromProject> => async () => {
-        throw new Error('module exploded');
-      },
+      async (): Promise<ImportFromProject> => async () => ({
+        kind: 'unloadable',
+        cause: new Error('module exploded'),
+      }),
     ],
     [
       'the source throws',
@@ -392,7 +395,7 @@ describe('the Prisma 7 check before init changes the project', () => {
     'says the target package could not be loaded when it was installed but does not resolve',
     async () => {
       copyFixture();
-      loadTargetConfig = async () => undefined;
+      loadTargetConfig = async () => ({ kind: 'not-installed' });
 
       const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
@@ -406,6 +409,58 @@ describe('the Prisma 7 check before init changes the project', () => {
               label: expect.stringMatching(/^Check that @prisma\/orm-postgres is installed/),
             }),
           ]),
+        },
+      });
+      expectProjectUnchangedApartFromTheCheckInstall();
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses --skip-install with nothing changed when the target package is not installed',
+    async () => {
+      copyFixture();
+      loadInit = async () => ({ kind: 'not-installed' });
+
+      const run = await harness().run([...prisma7Argv('--skip-install'), '--json'], {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
+          meta: { packageName: '@prisma/orm-postgres' },
+        },
+      });
+      expect(installs).toEqual([]);
+      expect(projectFile('prisma.config.ts')).toBe(fixtureFile('prisma.config.ts'));
+      expect(projectFile('package.json')).toBe(fixtureFile('package.json.fixture'));
+      expect(existsSync(join(projectDir, 'src/prisma'))).toBe(false);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses a package whose config takes a Prisma 7 schema but whose contribution has no Prisma 7 quick reference',
+    async () => {
+      copyFixture();
+      const real = await importFromProject(projectDir, '@prisma/orm-postgres/init');
+      const contribution = real.kind === 'loaded' ? real.module['default'] : undefined;
+      const { prisma7QuickReference: _dropped, ...withoutQuickReference } = Object(contribution);
+      loadInit = async () => ({ kind: 'loaded', module: { default: withoutQuickReference } });
+
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+          why: expect.stringContaining(
+            '@internal/postgres/config exports prisma7Schema, but the contribution has no prisma7QuickReference',
+          ),
+          meta: { packagesAdded: ['@prisma/orm-postgres', 'dotenv'] },
         },
       });
       expectProjectUnchangedApartFromTheCheckInstall();

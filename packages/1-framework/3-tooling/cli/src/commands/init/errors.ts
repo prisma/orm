@@ -452,26 +452,36 @@ export function errorInitTargetPackageNotInstalled(options: {
 }
 
 /**
- * The target package has no `init` entrypoint, or its default export is not an init contribution.
- * The package is installed and no file was written.
+ * The target package has no `init` entrypoint, its init module cannot be loaded, or its default
+ * export is not an init contribution. The package is installed and no file was written.
  */
 export function errorInitContributionUnavailable(options: {
   readonly packageName: string;
-  readonly reason: 'no-entrypoint' | 'invalid-shape';
-  readonly problems: string | undefined;
+  readonly reason: 'no-entrypoint' | 'unloadable' | 'invalid-shape';
+  /** What went wrong, for `unloadable` and `invalid-shape`. */
+  readonly detail: string | undefined;
 }): CliStructuredError {
-  const why =
-    options.reason === 'no-entrypoint'
-      ? `${options.packageName} has no \`${options.packageName}/init\` entrypoint, so it does not support \`prisma orm init\`.`
-      : `The default export of \`${options.packageName}/init\` is not an init contribution: ${options.problems ?? 'its shape is wrong'}.`;
+  const module = `${options.packageName}/init`;
+  const detail = options.detail ?? 'its shape is wrong';
+  const why = {
+    'no-entrypoint': `${options.packageName} has no \`${module}\` entrypoint, so it does not support \`prisma orm init\`.`,
+    unloadable: `\`${module}\` could not be loaded: ${detail}.`,
+    'invalid-shape': `The default export of \`${module}\` is not an init contribution: ${detail}.`,
+  }[options.reason];
+  const byHand = `Write prisma.config.ts by hand, importing defineConfig from ${options.packageName} as its README describes.`;
   return new CliStructuredError(
     'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
-    `${options.packageName} does not support init`,
+    options.reason === 'unloadable'
+      ? `Could not load ${module}`
+      : `${options.packageName} does not support init`,
     {
       why: `${why} ${options.packageName} is installed; no file was written.`,
-      fix: `Write prisma.config.ts by hand, importing defineConfig from ${options.packageName} as its README describes.`,
+      fix:
+        options.reason === 'unloadable'
+          ? `Reinstall ${options.packageName} with your package manager and run \`prisma orm init\` again, or ${byHand.charAt(0).toLowerCase()}${byHand.slice(1)}`
+          : byHand,
       docsUrl: docsUrlFor('CLI.INIT_CONTRIBUTION_UNAVAILABLE'),
-      meta: { packageName: options.packageName, reason: options.reason },
+      meta: { packageName: options.packageName, module, reason: options.reason },
     },
   );
 }

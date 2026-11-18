@@ -26,7 +26,7 @@ import {
 } from '../commands/init/prisma7-side-by-side';
 import { findStaleArtifacts, removeDependency } from '../commands/init/reinit-cleanup';
 import { legacySkillDirs } from '../commands/init/skill-sources';
-import { configFile } from '../commands/init/templates/code-templates';
+import { configFile, prisma7ConfigFile } from '../commands/init/templates/code-templates';
 import { envExampleContent } from '../commands/init/templates/env';
 import { requirementsBlock } from '../commands/init/templates/quick-reference';
 import {
@@ -239,12 +239,12 @@ function planScaffold(ctx: {
     files.push(
       {
         path: CONFIG_FILE,
-        content: source.templates.configFile({ schemaPath: source.schemaPath, outputDir }),
+        content: prisma7ConfigFile(source.schemaPath, outputDir, contribution.configModule),
       },
       { path: join(outputDir, 'db.ts'), content: contribution.databaseFile() },
       {
         path: QUICK_REFERENCE_FILE,
-        content: source.templates.quickReference({
+        content: source.quickReference({
           schemaPath: source.schemaPath,
           outputDir,
           cliCommand: runPrefix,
@@ -385,7 +385,8 @@ function planScaffold(ctx: {
   }
 
   // The README describes a fresh scaffold; a Prisma 7 project has its own.
-  if (source.kind === 'starter' && existsSync(join(cwd, 'src/index.ts'))) {
+  const { readme } = contribution;
+  if (source.kind === 'starter' && readme !== undefined && existsSync(join(cwd, 'src/index.ts'))) {
     if (existsSync(join(cwd, 'README.md'))) {
       warnings.push('README.md already exists; leaving it untouched.');
     } else {
@@ -395,7 +396,7 @@ function planScaffold(ctx: {
           : basename(cwd);
       files.push({
         path: 'README.md',
-        content: contribution.readme({
+        content: readme({
           projectName: sanitisePackageName(declaredName),
           contractPath: inputs.schemaPath,
           runScript: (script) => formatRunScriptCommand(packageManager, script),

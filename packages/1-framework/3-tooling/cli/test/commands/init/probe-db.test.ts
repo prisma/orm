@@ -52,7 +52,6 @@ function probeContext(
   minVersion = '14',
 ): ProbeContext {
   return {
-    baseDir: '/tmp',
     databaseUrl,
     packageName: '@example/target',
     contribution: {
@@ -145,8 +144,38 @@ describe('probeServerVersion (FR8.3)', () => {
 
     expect(outcome).toMatchObject({
       kind: 'driver-missing',
-      cause:
-        "`pg` is not installed in this project (resolved from /tmp; cause: Cannot find module 'pg')",
+      cause: "`pg` could not be loaded by @example/target (cause: Cannot find module 'pg')",
+    });
+  });
+
+  it('says it connected but could not read the version, redacting secrets', async () => {
+    const outcome = await probeServerVersion(
+      probeContext('postgres://localhost:5432/db', async () => ({
+        kind: 'version-unreadable',
+        detail: 'answered postgres://alice:hunter2@db/x with no version',
+      })),
+    );
+
+    expect(outcome).toMatchObject({
+      kind: 'version-unreadable',
+      message:
+        '--probe-db connected to the server, but could not read its version: answered postgres://****:****@db/x with no version.',
+    });
+  });
+
+  it('refuses a probe answer of the wrong shape', async () => {
+    const outcome = await probeServerVersion(
+      probeContext('postgres://localhost:5432/db', async () =>
+        // A package built without its types can answer anything.
+        JSON.parse('{"kind":"server-version"}'),
+      ),
+    );
+
+    expect(outcome).toMatchObject({
+      kind: 'invalid-result',
+      message: expect.stringContaining(
+        '--probe-db failed: the probe of @example/target answered with a value of the wrong shape',
+      ),
     });
   });
 

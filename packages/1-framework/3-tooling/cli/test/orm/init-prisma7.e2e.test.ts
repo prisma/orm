@@ -18,8 +18,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { emitScaffoldedContract } from '../../src/orm/init-emit';
-import { importFromProject } from '../../src/orm/init-prisma7-check';
-import { importInitEntrypoint } from '../../src/orm/init-target-package';
+import { importFromProject } from '../../src/orm/project-modules';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
@@ -39,7 +38,6 @@ const commands: MountedTree = {
     emitScaffoldedContract: (ctx) =>
       emitScaffoldedContract(ctx, { resolveFromBaseDir: () => CLI_PACKAGE_MANIFEST }),
     importFromProject,
-    importInitEntrypoint,
   }),
 };
 let projectDir: string;
