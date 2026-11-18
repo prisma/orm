@@ -14,6 +14,7 @@ import type {
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from './control-operation-results';
+import type { DatabasePolicies } from './database-policies';
 
 export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
   extends FamilyInstance<TFamilyId> {
@@ -65,6 +66,10 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
   signSpaces(options: {
     readonly driver: ControlDriverInstance<TFamilyId, string>;
     readonly spaces: readonly SpaceToSign[];
+    /**
+     * The database's policies as the caller read them when it checked the signature. The family compares them with the application space's marker before it writes any marker, under its lock where it has one, and writes the application space's marker only while it still records them. When they no longer hold it returns a `databasePolicies` conflict for the application space and signs nothing further.
+     */
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<readonly SpaceSignature[]>;
 
   /**
