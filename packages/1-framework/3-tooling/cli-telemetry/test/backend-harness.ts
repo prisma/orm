@@ -160,8 +160,8 @@ function runCommand(
 
 async function initializeBackendSchema(database: DevDatabase): Promise<void> {
   await runCommand(
-    'node',
-    [CLI_BIN_PATH, 'db', 'init', '--db', database.connectionString, '--json', '--no-color'],
+    'pnpm',
+    ['exec', 'prisma', 'db', 'init', '--db', database.connectionString, '--json', '--no-color'],
     {
       cwd: BACKEND_DIR,
       env: { ...process.env, DATABASE_URL: database.connectionString },
@@ -235,17 +235,16 @@ async function stopBackend(backend: BackendProcess): Promise<void> {
   });
 }
 
-// The dev Postgres' default `databaseIdleTimeoutMillis` (1000ms in
-// `@repo/test-utils`) is too aggressive for this suite: any backend
-// pg-pool connection that idles past one second between test cases
-// gets killed server-side. The driver's pool suppresses the resulting
-// 'error' event (no crash), but a statement in flight on a reaped
-// connection still rejects and fails the case.
+// Any backend pg-pool connection that idles past the dev Postgres'
+// `databaseIdleTimeoutMillis` between test cases gets killed
+// server-side. The driver's pool suppresses the resulting 'error' event
+// (no crash), but a statement in flight on a reaped connection still
+// rejects and fails the case.
 //
-// 60_000ms comfortably exceeds any single test file's wall-clock so
-// no idle connection gets reaped during a run. Teardown is fast
-// regardless — `harness.stop()` and `database.close()` don't wait on
-// idle reapers.
+// 60_000ms exceeds the `@repo/test-utils` default and comfortably
+// exceeds any single test file's wall-clock, so no idle connection gets
+// reaped during a run. Teardown is fast regardless — `harness.stop()`
+// and `database.close()` don't wait on idle reapers.
 const DEV_DB_IDLE_TIMEOUT_MS = 60_000;
 
 /**

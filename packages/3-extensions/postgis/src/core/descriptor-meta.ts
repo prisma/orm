@@ -1,7 +1,9 @@
 import { buildOperation, codecOf, toExpr } from '@internal/sql-relational-core/expression';
 import type { CodecTypes } from '../types/codec-types';
-import type { QueryOperationTypes } from '../types/operation-types';
+import type { QueryOperationTypes, QueryOperationTypesForCodecs } from '../types/operation-types';
 import { postgisAuthoringTypes } from './authoring';
+import { postgisDataTypes } from './data-types';
+import { moduleBase } from './module-base';
 import { postgisCodecRegistry } from './registry';
 
 const postgisTypeId = 'pg/geometry@1' as const;
@@ -29,7 +31,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_Distance({{self}}, {{arg0}})',
           },
         });
@@ -45,7 +46,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_DistanceSphere({{self}}, {{arg0}})',
           },
         });
@@ -65,7 +65,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_DWithin({{self}}, {{arg0}}, {{arg1}})',
           },
         });
@@ -81,7 +80,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_Contains({{self}}, {{arg0}})',
           },
         });
@@ -97,7 +95,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_Within({{self}}, {{arg0}})',
           },
         });
@@ -113,7 +110,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_Intersects({{self}}, {{arg0}})',
           },
         });
@@ -129,7 +125,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '({{self}} && {{arg0}})',
           },
         });
@@ -152,35 +147,27 @@ const postgisPackMetaBase = {
   authoring: {
     type: postgisAuthoringTypes,
   },
+  dataTypes: postgisDataTypes,
   types: {
     codecTypes: {
       codecDescriptors: Array.from(postgisCodecRegistry.values()),
       import: {
-        package: '@internal/extension-postgis/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'PostgisTypes',
       },
-      typeImports: [
-        {
-          package: '@internal/extension-postgis/codec-types',
-          named: 'Geometry',
-          alias: 'Geometry',
-        },
-      ],
     },
     queryOperationTypes: {
       import: {
-        package: '@internal/extension-postgis/operation-types',
+        package: `${moduleBase}/operation-types`,
         named: 'QueryOperationTypes',
         alias: 'PostgisQueryOperationTypes',
       },
     },
-    storage: [
-      { typeId: postgisTypeId, familyId: 'sql', targetId: 'postgres', nativeType: 'geometry' },
-    ],
   },
 } as const;
 
 export const postgisPackMeta: typeof postgisPackMetaBase & {
   readonly __codecTypes?: CodecTypes;
+  readonly __queryOperationTypes?: QueryOperationTypesForCodecs;
 } = postgisPackMetaBase;

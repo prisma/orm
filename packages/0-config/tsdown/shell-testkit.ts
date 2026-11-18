@@ -1,16 +1,15 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { publicShells } from '@internal/publish-surface/shells';
-import { init as initLexer, parse as parseModule } from 'es-module-lexer';
+import { join } from 'node:path';
+import { init as initLexer, parse as parseModule } from 'es-module-lexer/minimal';
 
 /** A tarball-install smoke-test failure with the offending command output attached. */
 class ShellTestError extends Error {}
 
 /**
- * The supply-chain cooldown a scratch project installs under. Kept in step with
- * `minimumReleaseAge` / `minimumReleaseAgeExclude` in the repo's pnpm-workspace.yaml, which a
- * scratch project outside the workspace does not inherit.
+ * The supply-chain settings a scratch project installs under. Kept in step with
+ * `minimumReleaseAge` / `minimumReleaseAgeExclude` and `trustPolicy` / `trustPolicyExclude` in
+ * the repo's pnpm-workspace.yaml, which a scratch project outside the workspace does not inherit.
  */
 const MINIMUM_RELEASE_AGE_MINUTES = 1440;
 const MINIMUM_RELEASE_AGE_EXCLUDE = [
@@ -18,7 +17,14 @@ const MINIMUM_RELEASE_AGE_EXCLUDE = [
   '@prisma/dev',
   '@prisma/streams-local',
 ] as const;
-
+const TRUST_POLICY = 'no-downgrade';
+const TRUST_POLICY_EXCLUDE = [
+  'chokidar@4.0.3',
+  'evlog@1.9.0',
+  'semver@6.3.1',
+  'undici@5.29.0',
+  'undici-types@6.21.0',
+] as const;
 export interface PackedShell {
   readonly name: string;
   readonly tarball: string;
@@ -100,6 +106,7 @@ export interface InstallOptions {
   readonly direct?: readonly string[];
   /** Extra `.npmrc` lines, e.g. `strict-peer-dependencies=true`. */
   readonly npmrc?: readonly string[];
+  readonly registryDependencies?: Readonly<Record<string, string>>;
 }
 
 export interface InstallResult {
@@ -128,7 +135,10 @@ export function tryInstallShells(
     name: 'shell-tarball-smoke',
     private: true,
     type: 'module',
-    dependencies: Object.fromEntries(direct.map((name) => [name, fileDeps[name]])),
+    dependencies: {
+      ...options.registryDependencies,
+      ...Object.fromEntries(direct.map((name) => [name, fileDeps[name]])),
+    },
   };
   writeFileSync(join(scratchDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   // pnpm 10 reads overrides and its own settings from pnpm-workspace.yaml;
@@ -150,16 +160,20 @@ export function tryInstallShells(
     const scalar = /^(true|false|\d+)$/.test(value) ? value : JSON.stringify(value);
     return `${camelKey}: ${scalar}`;
   });
-  // The repo's release-age cooldown reaches this scratch project through the
-  // outer workspace, but its exemption list does not, so a first-party pin
-  // published today fails the install. Restate both: the cooldown still
-  // defends every third-party dependency, and only the first-party packages
-  // pnpm-workspace.yaml already exempts are allowed past it.
+  // The repo's release-age cooldown and trust policy reach this scratch
+  // project through the outer workspace, but their exemption lists do not, so
+  // a first-party pin published today or a third-party release that
+  // pnpm-workspace.yaml already vouches for fails the install. Restate all
+  // four: the cooldown and the policy still defend every other dependency,
+  // and only the packages the workspace already exempts are allowed past them.
   const workspaceYaml = [
     ...(overrideLines.length > 0 ? ['overrides:', ...overrideLines] : []),
     `minimumReleaseAge: ${MINIMUM_RELEASE_AGE_MINUTES}`,
     'minimumReleaseAgeExclude:',
     ...MINIMUM_RELEASE_AGE_EXCLUDE.map((name) => `  - ${JSON.stringify(name)}`),
+    `trustPolicy: ${TRUST_POLICY}`,
+    'trustPolicyExclude:',
+    ...TRUST_POLICY_EXCLUDE.map((spec) => `  - ${JSON.stringify(spec)}`),
     ...settingLines,
   ];
   writeFileSync(
@@ -229,84 +243,9 @@ export function importSubpaths(installedPackageDir: string): string[] {
 }
 
 /**
- * The internal package names the shell map states, as a set.
- *
- * The map is itself published — `@prisma/orm-toolchain/publish-surface/shells`
- * — because emission resolves generated import specifiers through it at run
- * time. Publishing it necessarily puts every internal package name into a
- * published dist as ordinary string data. Those strings are the table's
- * subject matter, not something the dist imports, and
- * {@link findInternalImportSpecifiers} — which has no allowlist — is what
- * would catch any of them turning into a real import.
- *
- * Derived from the map instead of listed, so it stays exactly the table's
- * contents: adding an internal package cannot quietly widen the check, and
- * the allowance applies only inside {@link shellMapModules}.
- */
-const shellMapPackageNames: ReadonlySet<string> = new Set(
-  [...publicShells.values()].flatMap((shell) => [
-    ...shell.packages.map((pkg) => pkg.name),
-    ...(shell.reexports ?? []).map((reexport) => reexport.package),
-  ]),
-);
-
-/** Export subpath of the published shell map, as an exports-map key suffix. */
-const SHELL_MAP_SUBPATH = '/publish-surface/shells';
-
-/**
- * The dist files carrying the shell map in an installed package, empty for
- * every shell that does not publish it.
- *
- * Found by following the package's own exports map and then the relative
- * imports that entry reaches, rather than by matching a filename: the
- * bundler decides which chunk the table lands in, and a guessed name would
- * stop matching without anyone noticing.
- */
-function shellMapModules(installedPackageDir: string): ReadonlySet<string> {
-  const exports = readManifest(installedPackageDir)['exports'];
-  if (!isRecord(exports)) return new Set();
-  const key = Object.keys(exports).find((subpath) => subpath.endsWith(SHELL_MAP_SUBPATH));
-  if (key === undefined) return new Set();
-  const entry: unknown = exports[key];
-  // Shells emit one file per entrypoint. A conditional-exports object would
-  // mean the entry moved, and silently reading nothing would turn the whole
-  // allowance off — so say so instead.
-  if (typeof entry !== 'string') {
-    throw new ShellTestError(
-      `${installedPackageDir} exports ${key} as something other than a file`,
-    );
-  }
-
-  const found = new Set<string>();
-  const pending = [resolve(installedPackageDir, entry)];
-  while (pending.length > 0) {
-    const file = pending.pop();
-    if (file === undefined || found.has(file)) continue;
-    found.add(file);
-    const [imports] = parseModule(readFileSync(file, 'utf8'));
-    for (const record of imports) {
-      if (record.n?.startsWith('.')) pending.push(resolve(dirname(file), record.n));
-    }
-  }
-  return found;
-}
-
-/**
  * Internal package names that published dists still carry as *string
  * constants* (not import specifiers), recorded when the shells were first
  * published.
- *
- * Most are emitter input: the specifiers the emitter and the migration
- * renderers hand to their import-specifier resolver before writing a user's
- * generated contract and migration files. That resolution is configurable, but
- * its default still returns them unchanged, so the constants necessarily
- * remain in the dist; changing the default to the published names retires
- * them. The rest name internal packages inside diagnostics,
- * config-validation messages, and telemetry identifiers, which go away with
- * the `@internal/*` names themselves.
- *
- * The shell map's own contents are *not* here — see
- * {@link shellMapPackageNames} for why they are recognised as data instead.
  *
  * This is a baseline lock, not an endorsement. Anything not listed fails
  * {@link findInternalNames}, so no *new* internal name can reach a
@@ -314,36 +253,21 @@ function shellMapModules(installedPackageDir: string): ReadonlySet<string> {
  */
 export const knownInternalNamesInDist: readonly string[] = [
   '@internal/*',
-  '@internal/adapter-mongo/codec-types',
-  '@internal/adapter-postgres/operation-types',
-  '@internal/adapter-sqlite/codec-types',
   '@internal/cli',
-  '@internal/cli-telemetry',
   '@internal/cli-telemetry/sender',
   '@internal/cli/migration-cli',
   '@internal/config',
-  '@internal/config/config-validation',
   '@internal/contract/types',
   '@internal/driver-mongo/control',
   '@internal/emitter',
-  '@internal/errors/control',
   '@internal/extension-arktype-json',
-  '@internal/extension-arktype-json/codec-types',
-  '@internal/extension-paradedb/operation-types',
   '@internal/extension-pgvector',
-  '@internal/extension-pgvector/codec-types',
-  '@internal/extension-pgvector/operation-types',
   '@internal/extension-postgis',
-  '@internal/extension-postgis/codec-types',
-  '@internal/extension-postgis/operation-types',
   '@internal/family-mongo',
   '@internal/framework-components',
   '@internal/framework-components/codec',
   '@internal/framework-components/control',
   '@internal/framework-components/ir',
-  '@internal/framework-components/psl-ast',
-  '@internal/framework-components/runtime',
-  '@internal/ids',
   '@internal/middleware-cache',
   '@internal/migration-tools',
   '@internal/migration-tools/aggregate',
@@ -353,7 +277,6 @@ export const knownInternalNamesInDist: readonly string[] = [
   '@internal/mongo-orm',
   '@internal/mongo-runtime',
   '@internal/mongo/contract-builder',
-  '@internal/mongo/runtime',
   '@internal/postgres',
   '@internal/postgres/contract-builder',
   '@internal/postgres/migration',
@@ -362,10 +285,8 @@ export const knownInternalNamesInDist: readonly string[] = [
   '@internal/sql-contract/types',
   '@internal/sql-relational-core/ast',
   '@internal/sql-runtime',
-  '@internal/sqlite/migration',
-  '@internal/target-mongo/migration',
+  '@internal/target-mysql',
   '@internal/target-postgres',
-  '@internal/target-postgres/codec-types',
   '@internal/target-postgres/codecs',
   '@internal/target-postgres/errors',
   '@internal/target-sqlite',
@@ -381,15 +302,9 @@ export const knownInternalNamesInDist: readonly string[] = [
  * Scan an installed shell's dist for internal workspace package names.
  *
  * Covers every quoted string in the runtime `.mjs` files, not just import
- * specifiers, because the emitter ships import roots as ordinary string
- * constants and those land in a user's generated files. Declaration files
- * are scanned for import specifiers only — an internal name in JSDoc prose
- * is a documentation wart, not a resolution failure.
- *
- * One package publishes a table *of* internal package names, and inside the
- * modules that carry it those strings are the data rather than something the
- * dist would resolve; see {@link shellMapPackageNames}. That allowance is
- * scoped to those modules, so it cannot hide a name anywhere else.
+ * specifiers. Declaration files are scanned for import specifiers only — an
+ * internal name in JSDoc prose is a documentation wart, not a resolution
+ * failure.
  *
  * Returns offending `file: name` strings, excluding
  * {@link knownInternalNamesInDist}.
@@ -397,18 +312,15 @@ export const knownInternalNamesInDist: readonly string[] = [
 export async function findInternalNames(installedPackageDir: string): Promise<string[]> {
   await initLexer;
   const known = new Set(knownInternalNamesInDist);
-  const mapModules = shellMapModules(installedPackageDir);
   const offenders: string[] = [];
   const distDir = join(installedPackageDir, 'dist');
   for (const file of walk(distDir)) {
     if (file.endsWith('.mjs')) {
-      const carriesShellMap = mapModules.has(file);
       for (const match of readFileSync(file, 'utf8').matchAll(
         /["'`](@internal\/[^"'`\s\\]+)["'`\\]/g,
       )) {
         const name = match[1] ?? '';
         if (known.has(name)) continue;
-        if (carriesShellMap && shellMapPackageNames.has(name)) continue;
         offenders.push(`${file}: ${name}`);
       }
     } else if (file.endsWith('.d.mts')) {

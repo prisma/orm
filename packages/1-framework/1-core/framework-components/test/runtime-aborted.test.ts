@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { isRuntimeError, RUNTIME_ABORTED, runtimeAborted } from '../src/execution/runtime-error';
+import { isRuntimeError, runtimeAborted } from '../src/execution/runtime-error';
 
 describe('runtimeAborted()', () => {
-  it('exposes the canonical code constant', () => {
-    expect(RUNTIME_ABORTED).toBe('RUNTIME.ABORTED');
-  });
-
   it('produces a runtime-error envelope with code RUNTIME.ABORTED', () => {
     const err = runtimeAborted('encode');
     expect(isRuntimeError(err)).toBe(true);

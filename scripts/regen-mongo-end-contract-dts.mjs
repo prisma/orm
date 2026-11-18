@@ -1,23 +1,26 @@
 #!/usr/bin/env node
 /**
- * Regenerates a Mongo contract's `.d.ts` file by hydrating its adjacent
- * `.json` through the Mongo target serializer and re-running the emitter's
- * typedef generator. The `.json` file is left untouched so historical
- * storage hashes stay stable — only the `.d.ts` is rewritten to match the
- * post-class-flip type surface (collections carry a
- * `kind: 'mongo-collection'` discriminator, etc.).
+ * Regenerates a Mongo contract's `.d.ts` file from its adjacent `.json` the
+ * way `prisma contract emit` does: the contract is hydrated by the family of
+ * the config given by `--config` and passed to the emitter's `emit` with that
+ * config's control stack, so the codec lookup, type imports and namespace
+ * kinds match a real emit. The `.json` file is left untouched so historical
+ * storage hashes stay stable; only the `.d.ts` is rewritten.
  *
- * Purely path-generic: it writes `<arg with .json replaced by .d.ts>`
- * beside each argument, so it works unchanged whether the argument is a
- * migrations-root-wide store entry (`migrations/snapshots/<hex>/contract.json`)
- * or (pre-dedup) a per-package `end-contract.json`. Callers pass whichever
- * path is the current source of truth; the script does not resolve the
- * store itself, so there is no `writeContractSnapshot` call here — it
+ * It writes `<arg with .json replaced by .d.ts>` beside each argument,
+ * whether the argument is a migrations-root-wide store entry
+ * (`migrations/snapshots/<hex>/contract.json`) or a test fixture. A store
+ * entry gets the declarations in the store's single-line form. The script
  * overwrites the `.d.ts` unconditionally, whereas the store's writer is
- * write-if-absent for the *pair*.
+ * write-if-absent for the pair.
+ *
+ * Needs a prior `pnpm build`: it imports the packages' `dist` output.
+ *
+ * The declarations import the framework and family types from that config's
+ * `contract.typesModule`.
  *
  * Usage:
- *   node scripts/regen-mongo-end-contract-dts.mjs <path/to/contract.json>...
+ *   node scripts/regen-mongo-end-contract-dts.mjs --config <path/to/prisma.config.ts> <path/to/contract.json>...
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -30,64 +33,77 @@ async function importFromRepo(relPath) {
   return import(pathToFileURL(resolve(repoRoot, relPath)).href);
 }
 
-const prettierMod = await importFromRepo(
-  'packages/1-framework/3-tooling/emitter/node_modules/prettier/index.cjs',
-);
-const format = prettierMod.format ?? prettierMod.default?.format;
-const { generateContractDts } = await importFromRepo(
+const { emit } = await importFromRepo(
   'packages/1-framework/3-tooling/emitter/dist/exports/index.mjs',
 );
-const { mongoEmission } = await importFromRepo(
-  'packages/2-mongo-family/3-tooling/emitter/dist/exports/index.mjs',
+const { createControlStack } = await importFromRepo(
+  'packages/1-framework/1-core/framework-components/dist/control.mjs',
 );
-const { MongoTargetContractSerializer } = await importFromRepo(
-  'packages/3-mongo-target/1-mongo-target/dist/control.mjs',
+const { contractSnapshotFiles } = await importFromRepo(
+  'packages/1-framework/3-tooling/migration/dist/exports/contract-snapshot-store.mjs',
+);
+const { loadConfig } = await importFromRepo(
+  'packages/1-framework/3-tooling/config-loader/dist/exports/index.mjs',
 );
 
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.error('usage: node regen-mongo-end-contract-dts.mjs <path/to/contract.json>...');
+const [flag, configPath, ...args] = process.argv.slice(2);
+if (flag !== '--config' || configPath === undefined || args.length === 0) {
+  console.error(
+    'usage: node regen-mongo-end-contract-dts.mjs --config <path/to/prisma.config.ts> <path/to/contract.json>...',
+  );
   process.exit(1);
 }
 
-const serializer = new MongoTargetContractSerializer();
+const loaded = await loadConfig(resolve(configPath));
+if (!loaded.ok) {
+  console.error(loaded.failure.message);
+  process.exit(1);
+}
+const config = loaded.value.config;
+const typesModule = config.contract?.typesModule;
+if (typesModule === undefined) {
+  console.error(`${configPath} names no contract.typesModule`);
+  process.exit(1);
+}
+
+const stack = createControlStack({
+  family: config.family,
+  target: config.target,
+  adapter: config.adapter,
+  driver: config.driver,
+  extensions: config.extensions ?? [],
+});
+const family = config.family.create(stack);
+const serializer = config.target.contractSerializer;
 
 for (const jsonPath of args) {
-  const raw = readFileSync(jsonPath, 'utf8');
-  const json = JSON.parse(raw);
+  const json = JSON.parse(readFileSync(jsonPath, 'utf8'));
   delete json._generated;
 
-  const contract = serializer.deserializeContract(json);
-
-  const codecTypeImports = [
+  const { contractDts } = await emit(
+    family.deserializeContract(json),
+    stack,
+    config.family.emission,
     {
-      package: '@internal/adapter-mongo/codec-types',
-      named: 'CodecTypes',
-      alias: 'MongoCodecTypes',
+      serializeContract: (contract) => serializer.serializeContract(contract),
+      deserializeContract: (contractJson) => family.deserializeContract(contractJson),
+      typesModule,
+      ...(serializer.shouldPreserveEmpty
+        ? { shouldPreserveEmpty: serializer.shouldPreserveEmpty }
+        : {}),
+      ...(serializer.sortStorage ? { sortStorage: serializer.sortStorage } : {}),
     },
-  ];
-
-  const dtsRaw = generateContractDts(contract, mongoEmission, codecTypeImports, {
-    storageHash: contract.storage.storageHash,
-    profileHash: contract.profileHash,
-  });
-
-  let dts;
-  try {
-    dts = await format(dtsRaw, {
-      parser: 'typescript',
-      singleQuote: true,
-      semi: true,
-      printWidth: 100,
-    });
-  } catch (err) {
-    console.error(
-      `prettier formatting failed for ${jsonPath}; writing unformatted output. Error: ${err?.message ?? err}`,
-    );
-    dts = dtsRaw;
-  }
+  );
 
   const dtsPath = jsonPath.replace(/\.json$/, '.d.ts');
-  writeFileSync(dtsPath, dts);
+  const isStoreEntry = /\/migrations\/snapshots\/[0-9a-f]{64}\/contract\.json$/.test(
+    resolve(jsonPath),
+  );
+  writeFileSync(
+    dtsPath,
+    isStoreEntry
+      ? contractSnapshotFiles({ contractJson: json, contractDts }).contractDts
+      : contractDts,
+  );
   console.error(`regenerated ${dtsPath}`);
 }

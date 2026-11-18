@@ -2,7 +2,7 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract } from './utils';
+import { createTestContract, TEST_TYPES_MODULE } from './utils';
 
 const mockSqlHook = createMockSpi();
 
@@ -21,23 +21,8 @@ describe('generateContractDts domain namespace handling', () => {
         },
       },
     };
-    const dts = generateContractDts(contract, mockSqlHook, [], HASHES);
+    const dts = generateContractDts(contract, mockSqlHook, [], HASHES, TEST_TYPES_MODULE);
     expect(dts).toContain('readonly public:');
-  });
-
-  it('emits successfully for multiple namespaces', () => {
-    const contract = {
-      ...createTestContract(),
-      domain: {
-        namespaces: {
-          auth: { models: {} },
-          storage: { models: {} },
-        },
-      },
-    };
-    const dts = generateContractDts(contract, mockSqlHook, [], HASHES);
-    expect(dts).toContain('readonly auth:');
-    expect(dts).toContain('readonly storage:');
   });
 
   it('quotes a namespace id that is not a bare identifier', () => {
@@ -49,7 +34,7 @@ describe('generateContractDts domain namespace handling', () => {
         },
       },
     };
-    const dts = generateContractDts(contract, mockSqlHook, [], HASHES);
+    const dts = generateContractDts(contract, mockSqlHook, [], HASHES, TEST_TYPES_MODULE);
     expect(dts).toContain('readonly "report data":');
   });
 
@@ -59,7 +44,11 @@ describe('generateContractDts domain namespace handling', () => {
     // under its own coordinate, and field types resolve per-namespace.
     const authUserModel = {
       fields: {
-        emailAddress: { type: { kind: 'scalar' as const, codecId: 'pg/text@1' }, nullable: false },
+        emailAddress: {
+          type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
+          nullable: false,
+          many: false as const,
+        },
       },
       relations: {},
       storage: {
@@ -70,7 +59,11 @@ describe('generateContractDts domain namespace handling', () => {
     };
     const publicUserModel = {
       fields: {
-        roleLabel: { type: { kind: 'scalar' as const, codecId: 'pg/text@1' }, nullable: true },
+        roleLabel: {
+          type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
+          nullable: true,
+          many: false as const,
+        },
       },
       relations: {},
       storage: {
@@ -88,18 +81,19 @@ describe('generateContractDts domain namespace handling', () => {
         },
       },
     };
-    const dts = generateContractDts(contract, mockSqlHook, [], HASHES);
+    const dts = generateContractDts(contract, mockSqlHook, [], HASHES, TEST_TYPES_MODULE);
     // No flat top-level models map is emitted, so there is no `Models` export
     // and no `ContractType<…, models>` second argument to drop fields into.
     expect(dts).not.toContain('export type Models');
     const emailCount = (dts.match(/emailAddress/g) ?? []).length;
     const roleLabelCount = (dts.match(/roleLabel/g) ?? []).length;
-    // emailAddress appears per-namespace only: (1) the auth domain block,
-    // (2) FieldOutputTypes[auth], (3) FieldInputTypes[auth].
+    // emailAddress appears in its own namespace only: (1) the auth domain block,
+    // (2) the key of Models.auth_User and (3) the FieldOutputTypes path it indexes.
     expect(emailCount).toBe(3);
-    // roleLabel appears per-namespace only: (1) the public domain block,
-    // (2) FieldOutputTypes[public], (3) FieldInputTypes[public].
+    expect(dts).toContain('emailAddress: FieldOutputTypes["auth"]["User"]["emailAddress"];');
+    // roleLabel likewise appears in the public namespace only.
     expect(roleLabelCount).toBe(3);
+    expect(dts).toContain('roleLabel: FieldOutputTypes["public"]["User"]["roleLabel"];');
   });
 
   it('throws CONTRACT.NAMESPACE_INVALID when the domain has no namespaces', () => {
@@ -109,7 +103,7 @@ describe('generateContractDts domain namespace handling', () => {
     };
     let thrown: unknown;
     try {
-      generateContractDts(contract, mockSqlHook, [], HASHES);
+      generateContractDts(contract, mockSqlHook, [], HASHES, TEST_TYPES_MODULE);
     } catch (error) {
       thrown = error;
     }

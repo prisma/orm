@@ -55,17 +55,29 @@ export class RawUpdateOneCommand extends MongoAstNode {
   }
 }
 
+export interface RawUpdateManyOptions {
+  readonly bypassDocumentValidation?: boolean;
+}
+
 export class RawUpdateManyCommand extends MongoAstNode {
   readonly kind = 'rawUpdateMany' as const;
   readonly collection: string;
   readonly filter: Document;
   readonly update: Document | ReadonlyArray<Document>;
+  declare readonly bypassDocumentValidation?: boolean;
 
-  constructor(collection: string, filter: Document, update: Document | ReadonlyArray<Document>) {
+  constructor(
+    collection: string,
+    filter: Document,
+    update: Document | ReadonlyArray<Document>,
+    options?: RawUpdateManyOptions,
+  ) {
     super();
     this.collection = collection;
     this.filter = filter;
     this.update = update;
+    if (options?.bypassDocumentValidation !== undefined)
+      this.bypassDocumentValidation = options.bypassDocumentValidation;
     this.freeze();
   }
 }

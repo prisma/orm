@@ -1,4 +1,4 @@
-import type { SymbolTable } from '@internal/psl-parser';
+import type { Binder, Resolution } from '@internal/psl-parser';
 import {
   ArrayLiteralAst,
   type AttributeArgAst,
@@ -12,19 +12,22 @@ import {
   type ExpressionAst,
   FieldDeclarationAst,
   FunctionCallAst,
-  filterChildren,
-  findChildToken,
   type GenericBlockMemberAst,
-  IdentifierAst,
+  type IdentifierAst,
+  KeyValuePairAst,
+  MixinDeclarationAst,
+  MixinInclusionAst,
   ModelDeclarationAst,
   type NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
   NumberLiteralExprAst,
   ObjectLiteralExprAst,
+  PathExprAst,
   type QualifiedNameAst,
   type SourceFile,
   StringLiteralExprAst,
   type SyntaxToken,
+  TaggedLiteralExprAst,
   type TypeAnnotationAst,
   TypesBlockAst,
 } from '@internal/psl-parser/syntax';
@@ -87,8 +90,7 @@ export const semanticTokensLegend: SemanticTokensLegend = {
 export interface SemanticTokenSource {
   readonly document: DocumentAst;
   readonly sourceFile: SourceFile;
-  readonly symbolTable: SymbolTable;
-  readonly scalarTypes: readonly string[];
+  readonly binder: Binder;
 }
 
 export interface PendingSemanticToken {
@@ -99,7 +101,7 @@ export interface PendingSemanticToken {
   readonly splitMultiline: boolean;
 }
 
-type TypeReferenceKind = 'class' | 'struct' | 'type';
+type TypeReferenceKind = 'class' | 'struct' | 'type' | 'property';
 
 interface TypeReferenceClassification {
   readonly tokenType: TypeReferenceKind;
@@ -224,7 +226,7 @@ function collectCommentTokens(document: DocumentAst): readonly PendingSemanticTo
 
 function collectDeclarations(source: SemanticTokenSource, tokens: PendingSemanticToken[]): void {
   for (const declaration of source.document.declarations()) {
-    collectDeclaration(declaration, source, tokens, undefined);
+    collectDeclaration(declaration, source, tokens);
   }
 }
 
@@ -232,28 +234,26 @@ function collectDeclaration(
   declaration: DeclarationAst,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
 ): void {
   if (declaration instanceof ModelDeclarationAst) {
     addToken(declaration.keyword(), 'keyword', tokens);
     addIdentifier(declaration.name(), 'class', tokens, semanticTokenModifierBits.declaration);
-    collectBlockMembers(declaration.members(), source, tokens, namespace);
+    collectFieldBlockMembers(declaration.members(), source, tokens);
     return;
   }
 
   if (declaration instanceof CompositeTypeDeclarationAst) {
     addToken(declaration.keyword(), 'keyword', tokens);
     addIdentifier(declaration.name(), 'struct', tokens, semanticTokenModifierBits.declaration);
-    collectBlockMembers(declaration.members(), source, tokens, namespace);
+    collectFieldBlockMembers(declaration.members(), source, tokens);
     return;
   }
 
   if (declaration instanceof NamespaceDeclarationAst) {
     addToken(declaration.keyword(), 'keyword', tokens);
     addIdentifier(declaration.name(), 'namespace', tokens, semanticTokenModifierBits.declaration);
-    const nestedNamespace = declaration.name()?.name();
     for (const nested of declaration.declarations()) {
-      collectDeclaration(nested, source, tokens, nestedNamespace);
+      collectDeclaration(nested, source, tokens);
     }
     return;
   }
@@ -261,90 +261,126 @@ function collectDeclaration(
   if (declaration instanceof TypesBlockAst) {
     addToken(declaration.keyword(), 'keyword', tokens);
     for (const namedType of declaration.declarations()) {
-      collectNamedTypeDeclaration(namedType, source, tokens, namespace);
+      collectNamedTypeDeclaration(namedType, source, tokens);
+    }
+    return;
+  }
+
+  if (declaration instanceof MixinDeclarationAst) {
+    addToken(declaration.keyword(), 'keyword', tokens);
+    addToken(declaration.mixinKeyword(), 'keyword', tokens);
+    addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
+    if (FIELD_BLOCK_KEYWORDS.has(declaration.keyword()?.text ?? '')) {
+      collectFieldBlockMembers(declaration.members(), source, tokens);
+    } else {
+      collectEntryBlockMembers(declaration.members(), source, tokens);
     }
     return;
   }
 
   addToken(declaration.keyword(), 'keyword', tokens);
   addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
-  collectGenericBlockMembers(declaration.members(), source, tokens, namespace);
+  collectEntryBlockMembers(declaration.members(), source, tokens);
+}
+
+const FIELD_BLOCK_KEYWORDS: ReadonlySet<string> = new Set(['model', 'type']);
+
+type BodyMemberAst = BlockMemberAst | GenericBlockMemberAst;
+
+function collectFieldBlockMembers(
+  members: Iterable<BodyMemberAst>,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  for (const member of members) {
+    if (member instanceof MixinInclusionAst) {
+      collectInclusion(member, source, tokens);
+    } else if (member instanceof FieldDeclarationAst) {
+      collectField(member, source, tokens);
+    } else if (!(member instanceof KeyValuePairAst)) {
+      collectAttribute(member, source, tokens);
+    }
+  }
+}
+
+function collectEntryBlockMembers(
+  members: Iterable<BodyMemberAst>,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  for (const member of members) {
+    if (member instanceof MixinInclusionAst) {
+      collectInclusion(member, source, tokens);
+    } else if (member instanceof KeyValuePairAst) {
+      addIdentifier(member.key(), 'property', tokens);
+      collectExpression(member.value(), source, tokens);
+    } else if (!(member instanceof FieldDeclarationAst)) {
+      collectAttribute(member, source, tokens);
+    }
+  }
+}
+
+function collectInclusion(
+  inclusion: MixinInclusionAst,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  const name = inclusion.name();
+  if (name === undefined) return;
+  const plus = inclusion.plus();
+  const segments = identifierSegments(name);
+  for (const [index, segment] of segments.entries()) {
+    const isName = index === segments.length - 1;
+    const qualifier = isName ? undefined : source.binder.symbolForNode(segment.identifier.syntax);
+    if (!isName && qualifier?.kind !== 'namespace') continue;
+    const range = rangeForIdentifier(segment.identifier, isName ? 'type' : 'namespace');
+    tokens.push(
+      index === 0 && plus !== undefined && plus.offset < range.startOffset
+        ? createPendingSemanticToken(plus.offset, range.endOffset, isName ? 'type' : 'namespace')
+        : range,
+    );
+  }
 }
 
 function collectNamedTypeDeclaration(
   declaration: NamedTypeDeclarationAst,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
 ): void {
   addIdentifier(declaration.name(), 'type', tokens, semanticTokenModifierBits.declaration);
-  collectTypeAnnotation(declaration.typeAnnotation(), source, tokens, namespace);
-  collectAttributes(declaration.attributes(), source, tokens, namespace);
-}
-
-function collectGenericBlockMembers(
-  members: Iterable<GenericBlockMemberAst>,
-  source: SemanticTokenSource,
-  tokens: PendingSemanticToken[],
-  namespace: string | undefined,
-): void {
-  for (const member of members) {
-    if ('key' in member) {
-      addIdentifier(member.key(), 'property', tokens);
-      collectExpression(member.value(), source, tokens, namespace);
-      continue;
-    }
-    collectAttribute(member, source, tokens, namespace);
-  }
-}
-
-function collectBlockMembers(
-  members: Iterable<BlockMemberAst>,
-  source: SemanticTokenSource,
-  tokens: PendingSemanticToken[],
-  namespace: string | undefined,
-): void {
-  for (const member of members) {
-    if (member instanceof FieldDeclarationAst) {
-      collectField(member, source, tokens, namespace);
-      continue;
-    }
-    collectAttribute(member, source, tokens, namespace);
-  }
+  collectTypeAnnotation(declaration.typeAnnotation(), source, tokens);
+  collectAttributes(declaration.attributes(), source, tokens);
 }
 
 function collectField(
   field: FieldDeclarationAst,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
 ): void {
   addIdentifier(field.name(), 'property', tokens, semanticTokenModifierBits.declaration);
-  collectTypeAnnotation(field.typeAnnotation(), source, tokens, namespace);
-  collectAttributes(field.attributes(), source, tokens, namespace);
+  collectTypeAnnotation(field.typeAnnotation(), source, tokens);
+  collectAttributes(field.attributes(), source, tokens);
 }
 
 function collectTypeAnnotation(
   annotation: TypeAnnotationAst | undefined,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
 ): void {
   if (annotation === undefined) {
     return;
   }
-  collectTypeReference(annotation.name(), source, tokens, namespace);
-  collectAttributeArgList(annotation.argList(), source, tokens, namespace);
+  collectTypeReference(annotation.name(), source, tokens);
+  collectAttributeArgList(annotation.argList(), source, tokens);
 }
 
 function collectAttributes(
   attributes: Iterable<AttributeAst>,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
 ): void {
   for (const attribute of attributes) {
-    collectAttribute(attribute, source, tokens, namespace);
+    collectAttribute(attribute, source, tokens);
   }
 }
 
@@ -352,12 +388,10 @@ function collectAttribute(
   attribute: AttributeAst,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
 ): void {
-  const marker =
-    findChildToken(attribute.syntax, 'At') ?? findChildToken(attribute.syntax, 'DoubleAt');
+  const marker = 'at' in attribute ? attribute.at() : attribute.doubleAt();
   collectDecoratorName(attribute.name(), marker, tokens);
-  collectAttributeArgList(attribute.argList(), source, tokens, namespace);
+  collectAttributeArgList(attribute.argList(), source, tokens);
 }
 
 function collectDecoratorName(
@@ -378,13 +412,12 @@ function collectAttributeArgList(
   argList: AttributeArgListAst | undefined,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
 ): void {
   if (argList === undefined) {
     return;
   }
   for (const arg of argList.args()) {
-    collectAttributeArg(arg, source, tokens, namespace);
+    collectAttributeArg(arg, source, tokens);
   }
 }
 
@@ -392,18 +425,16 @@ function collectAttributeArg(
   arg: AttributeArgAst,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
 ): void {
   const name = arg.name();
   addIdentifier(name, 'property', tokens);
-  collectExpression(arg.value(), source, tokens, namespace, expressionContextForAttributeArg(name));
+  collectExpression(arg.value(), source, tokens, expressionContextForAttributeArg(name));
 }
 
 function collectExpression(
   expression: ExpressionAst | undefined,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
   context: ExpressionContext = {},
 ): void {
   if (expression === undefined) {
@@ -426,16 +457,21 @@ function collectExpression(
   }
 
   if (expression instanceof FunctionCallAst) {
-    collectTypeReference(expression.name(), source, tokens, namespace);
+    const memberPath = expression.memberPath();
+    if (memberPath === undefined) {
+      collectTypeReference(expression.name(), source, tokens);
+    } else {
+      collectMemberPath(memberPath, source, tokens);
+    }
     for (const arg of expression.args()) {
-      collectAttributeArg(arg, source, tokens, namespace);
+      collectAttributeArg(arg, source, tokens);
     }
     return;
   }
 
   if (expression instanceof ArrayLiteralAst) {
     for (const element of expression.elements()) {
-      collectExpression(element, source, tokens, namespace, context);
+      collectExpression(element, source, tokens, context);
     }
     return;
   }
@@ -443,31 +479,63 @@ function collectExpression(
   if (expression instanceof ObjectLiteralExprAst) {
     for (const field of expression.fields()) {
       addIdentifier(field.key(), 'property', tokens);
-      collectExpression(field.value(), source, tokens, namespace);
+      collectExpression(field.value(), source, tokens);
     }
     return;
   }
 
-  collectIdentifierExpression(expression, source, tokens, namespace, context);
+  if (expression instanceof TaggedLiteralExprAst) {
+    const tag = expression.tag();
+    addIdentifier(tag?.namespace(), 'namespace', tokens);
+    addIdentifier(tag?.identifier(), 'keyword', tokens);
+    addToken(expression.literal()?.token(), 'string', tokens);
+    return;
+  }
+
+  if (expression instanceof PathExprAst) {
+    collectMemberPath(expression, source, tokens);
+    return;
+  }
+
+  collectIdentifierExpression(expression, source, tokens, context);
+}
+
+/** A member path such as `address.city` names fields, one per segment. */
+function collectMemberPath(
+  path: PathExprAst,
+  source: SemanticTokenSource,
+  tokens: PendingSemanticToken[],
+): void {
+  for (const segment of path.segments()) {
+    const resolution = source.binder.symbolForNode(segment.syntax);
+    const namespace =
+      resolution?.kind === 'namespace' || resolution?.kind === 'contributedNamespace';
+    addIdentifier(segment, namespace ? 'namespace' : 'property', tokens);
+  }
 }
 
 function collectIdentifierExpression(
   identifier: IdentifierAst,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
   context: ExpressionContext,
 ): void {
   const text = identifier.name();
   if (text === undefined) {
     return;
   }
+  const resolution = source.binder.symbolForNode(identifier.syntax);
   const bareIdentifierTokenType = context.bareIdentifierTokenType;
-  if (bareIdentifierTokenType !== undefined) {
+  if (
+    (resolution === undefined ||
+      resolution.kind === 'unresolved' ||
+      resolution.kind === 'crossSpace') &&
+    bareIdentifierTokenType !== undefined
+  ) {
     tokens.push(rangeForIdentifier(identifier, bareIdentifierTokenType));
     return;
   }
-  const classification = classifyTypeReference([text], source, namespace);
+  const classification = classifyTypeReference(resolution, source.binder);
   tokens.push(
     rangeForIdentifier(identifier, classification.tokenType, classification.modifierBitset),
   );
@@ -484,7 +552,6 @@ function collectTypeReference(
   name: QualifiedNameAst | undefined,
   source: SemanticTokenSource,
   tokens: PendingSemanticToken[],
-  namespace: string | undefined,
 ): void {
   if (name === undefined) {
     return;
@@ -495,9 +562,9 @@ function collectTypeReference(
     return;
   }
 
-  const path = segments.map((segment) => segment.text);
   for (const segment of segments.slice(0, -1)) {
-    if (isKnownNamespace(segment.text, source.symbolTable)) {
+    const qualifier = source.binder.symbolForNode(segment.identifier.syntax);
+    if (qualifier?.kind === 'namespace' || qualifier?.kind === 'contributedNamespace') {
       tokens.push(rangeForIdentifier(segment.identifier, 'namespace'));
     }
   }
@@ -506,7 +573,10 @@ function collectTypeReference(
   if (finalSegment === undefined) {
     return;
   }
-  const classification = classifyTypeReference(path, source, namespace);
+  const classification = classifyTypeReference(
+    source.binder.symbolForNode(name.syntax),
+    source.binder,
+  );
   tokens.push(
     rangeForIdentifier(
       finalSegment.identifier,
@@ -517,62 +587,30 @@ function collectTypeReference(
 }
 
 function classifyTypeReference(
-  path: readonly string[],
-  source: SemanticTokenSource,
-  namespace: string | undefined,
+  resolution: Resolution | undefined,
+  binder: Binder,
 ): TypeReferenceClassification {
-  const name = path[path.length - 1];
-  if (name === undefined) {
-    return { tokenType: 'type' };
-  }
-
-  const table = source.symbolTable;
-  const namespaceName = path.length > 1 ? path[path.length - 2] : namespace;
-  const namespaceScope =
-    namespaceName !== undefined ? table.topLevel.namespaces[namespaceName] : undefined;
-
-  if (namespaceScope !== undefined) {
-    if (Object.hasOwn(namespaceScope.models, name)) {
+  switch (resolution?.kind) {
+    case 'model':
       return { tokenType: 'class' };
-    }
-    if (Object.hasOwn(namespaceScope.compositeTypes, name)) {
+    case 'compositeType':
       return { tokenType: 'struct' };
-    }
-    if (Object.hasOwn(namespaceScope.blocks, name)) {
+    case 'field':
+      return { tokenType: 'property' };
+    case 'contributedType':
+      return { tokenType: 'type', modifierBitset: semanticTokenModifierBits.defaultLibrary };
+    case 'namedType':
+      return refinesScalarType(resolution.symbol, binder)
+        ? { tokenType: 'type', modifierBitset: semanticTokenModifierBits.defaultLibrary }
+        : { tokenType: 'type' };
+    default:
       return { tokenType: 'type' };
-    }
   }
-
-  if (Object.hasOwn(table.topLevel.models, name)) {
-    return { tokenType: 'class' };
-  }
-  if (Object.hasOwn(table.topLevel.compositeTypes, name)) {
-    return { tokenType: 'struct' };
-  }
-  const namedType = table.topLevel.namedTypes[name];
-  if (namedType !== undefined) {
-    return refinesScalarType(namedType, source.scalarTypes)
-      ? { tokenType: 'type', modifierBitset: semanticTokenModifierBits.defaultLibrary }
-      : { tokenType: 'type' };
-  }
-  if (Object.hasOwn(table.topLevel.blocks, name)) {
-    return { tokenType: 'type' };
-  }
-
-  if (source.scalarTypes.includes(name)) {
-    return { tokenType: 'type', modifierBitset: semanticTokenModifierBits.defaultLibrary };
-  }
-
-  return { tokenType: 'type' };
-}
-
-function isKnownNamespace(name: string, table: SymbolTable): boolean {
-  return Object.hasOwn(table.topLevel.namespaces, name);
 }
 
 function identifierSegments(name: QualifiedNameAst): readonly IdentifierSegment[] {
   const segments: IdentifierSegment[] = [];
-  for (const identifier of filterChildren(name.syntax, IdentifierAst.cast)) {
+  for (const identifier of name.segments()) {
     const text = identifier.name();
     if (text !== undefined) {
       segments.push({ identifier, text });

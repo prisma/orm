@@ -1,6 +1,15 @@
 import { CliStructuredError } from '@internal/errors/control';
+import {
+  ACCESS_WIDENING_LEVELS,
+  CHANGE_STRATEGIES,
+  DATA_LOSS_LEVELS,
+  DATA_PROTECTION_KEYS,
+  DATABASE_POLICIES_KEYS,
+  type DeclaredDatabasePoliciesIssue,
+} from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@internal/utils/structured-error';
+import { isStructuredError } from '@internal/utils/structured-error';
 import { basename, dirname, relative } from 'pathe';
 import type { MigrationGraph } from './graph';
 
@@ -16,7 +25,7 @@ import type { MigrationGraph } from './graph';
  */
 function reemitHint(dir: string, fallback?: string): string {
   const relativeDir = relative(process.cwd(), dir);
-  const reemit = `Re-emit the package by running \`node "${relativeDir}/migration.ts"\``;
+  const reemit = `Re-emit the package by running \`node "${relativeDir}/migration.ts"\`, adding the \`--config <path>\` you gave this command, if any`;
   return fallback ? `${reemit}, ${fallback}` : `${reemit}.`;
 }
 
@@ -231,37 +240,6 @@ export function errorSameSourceAndTarget(dir: string, hash: string): MigrationTo
   );
 }
 
-export function errorAmbiguousTarget(
-  branchTips: readonly string[],
-  context?: {
-    divergencePoint: string;
-    branches: readonly {
-      tip: string;
-      edges: readonly { dirName: string; from: string; to: string }[];
-    }[];
-  },
-): MigrationToolsError {
-  const divergenceInfo = context
-    ? `\nDivergence point: ${context.divergencePoint}\nBranches:\n${context.branches.map((b) => `  → ${b.tip} (${b.edges.length} edge(s): ${b.edges.map((e) => e.dirName).join(' → ') || 'direct'})`).join('\n')}`
-    : '';
-  return new MigrationToolsError('MIGRATION.AMBIGUOUS_TARGET', 'Ambiguous migration target', {
-    why: `The migration history has diverged into multiple branches: ${branchTips.join(', ')}. This typically happens when two developers plan migrations from the same starting point.${divergenceInfo}`,
-    fix: 'Use `{bin} migration ref set <name> <hash>` to target a specific branch, delete one of the conflicting migration directories and re-run `{bin} migration plan`, or use --from <hash> to explicitly select a starting point.',
-    meta: {
-      branchTips,
-      ...(context ? { divergencePoint: context.divergencePoint, branches: context.branches } : {}),
-    },
-  });
-}
-
-export function errorNoInitialMigration(nodes: readonly string[]): MigrationToolsError {
-  return new MigrationToolsError('MIGRATION.NO_INITIAL_MIGRATION', 'No initial migration found', {
-    why: `No migration starts from the empty contract state (known hashes: ${nodes.join(', ')}). At least one migration must originate from the empty state.`,
-    fix: 'Inspect the migrations directory for corrupted migration.json files. At least one migration must start from the empty contract hash.',
-    meta: { nodes },
-  });
-}
-
 export function errorInvalidRefs(refsPath: string, reason: string): MigrationToolsError {
   return new MigrationToolsError('MIGRATION.INVALID_REFS', 'Invalid refs.json', {
     why: `refs.json at "${refsPath}" is invalid: ${reason}`,
@@ -270,10 +248,62 @@ export function errorInvalidRefs(refsPath: string, reason: string): MigrationToo
   });
 }
 
-export function errorInvalidRefFile(filePath: string, reason: string): MigrationToolsError {
+function alternatives(values: readonly string[], conjunction: 'or' | 'and' = 'or'): string {
+  const quoted = values.map((value) => JSON.stringify(value));
+  return quoted.length === 1
+    ? (quoted[0] ?? '')
+    : `${quoted.slice(0, -1).join(', ')} ${conjunction} ${quoted.at(-1)}`;
+}
+
+const REF_FILE_SHAPE =
+  'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.';
+
+type DatabasePoliciesKey = (typeof DATABASE_POLICIES_KEYS)[number];
+type DataProtectionKey = (typeof DATA_PROTECTION_KEYS)[number];
+
+const DATA_PROTECTION_VALUES: Readonly<Record<DataProtectionKey, readonly string[]>> = {
+  dataLoss: DATA_LOSS_LEVELS,
+  accessWidening: ACCESS_WIDENING_LEVELS,
+};
+
+/** How to correct each top-level key of a ref's `policies`, given its key path as printed. */
+const POLICY_KEY_FIXES: Readonly<Record<DatabasePoliciesKey, (key: string) => string>> = {
+  change: (key) =>
+    `Set ${key} to a non-empty list whose items are ${alternatives(CHANGE_STRATEGIES)}.`,
+  dataProtection: (key) =>
+    `Set ${key} to an object with ${alternatives(DATA_PROTECTION_KEYS, 'and')}, each optional.`,
+};
+
+function isOneOf<T extends string>(values: readonly T[], value: string | undefined): value is T {
+  return values.some((candidate) => candidate === value);
+}
+
+/** How to correct one invalid key of a ref's `policies`: its allowed values, or its removal when the key is not one a declaration has. */
+function policyIssueFix({ path }: DeclaredDatabasePoliciesIssue): string {
+  if (path === '') {
+    return `Set policies to an object with ${alternatives(DATABASE_POLICIES_KEYS, 'and')}, each optional.`;
+  }
+  const key = `policies.${path}`;
+  const [first, second, ...rest] = path.split('.');
+  if (/^change\[\d+\]$/.test(path)) return `Set ${key} to ${alternatives(CHANGE_STRATEGIES)}.`;
+  if (second === undefined && isOneOf(DATABASE_POLICIES_KEYS, first)) {
+    return POLICY_KEY_FIXES[first](key);
+  }
+  if (first === 'dataProtection' && rest.length === 0 && isOneOf(DATA_PROTECTION_KEYS, second)) {
+    return `Set ${key} to ${alternatives(DATA_PROTECTION_VALUES[second])}.`;
+  }
+  return `Remove ${key}.`;
+}
+
+/** `MIGRATION.INVALID_REF_FILE`; `policyIssues` are the invalid keys of the ref's `policies`, which the fix names. */
+export function errorInvalidRefFile(
+  filePath: string,
+  reason: string,
+  policyIssues: readonly DeclaredDatabasePoliciesIssue[] = [],
+): MigrationToolsError {
   return new MigrationToolsError('MIGRATION.INVALID_REF_FILE', 'Invalid ref file', {
     why: `Ref file at "${filePath}" is invalid: ${reason}`,
-    fix: 'Ensure the ref file contains valid JSON with { "hash": "<64 hex chars>", "invariants": ["..."] }.',
+    fix: policyIssues.length === 0 ? REF_FILE_SHAPE : policyIssues.map(policyIssueFix).join(' '),
     meta: { path: filePath, reason },
   });
 }
@@ -283,14 +313,6 @@ export function errorInvalidRefName(refName: string): MigrationToolsError {
     why: `Ref name "${refName}" is invalid. Names must be lowercase alphanumeric with hyphens or forward slashes (no "." or ".." segments).`,
     fix: `Use a valid ref name (e.g., "staging", "envs/production").`,
     meta: { refName },
-  });
-}
-
-export function errorNoTarget(reachableHashes: readonly string[]): MigrationToolsError {
-  return new MigrationToolsError('MIGRATION.NO_TARGET', 'No migration target could be resolved', {
-    why: `The migration history contains cycles and no target can be resolved automatically (reachable hashes: ${reachableHashes.join(', ')}). This typically happens after rollback migrations (e.g., C1→C2→C1).`,
-    fix: 'Use --from <hash> to specify the planning origin explicitly.',
-    meta: { reachableHashes },
   });
 }
 
@@ -394,23 +416,40 @@ export interface NoInvariantPathStructuralEdge {
   readonly invariants: readonly string[];
 }
 
+/** The extension space a `NO_INVARIANT_PATH` is about, and the advice for it, which only the caller can write. */
+export interface NoInvariantPathExtensionSpace {
+  readonly spaceId: string;
+  readonly why: string;
+  readonly fix: string;
+  readonly nextActions: readonly NextAction[];
+}
+
 export function errorNoInvariantPath(args: {
   readonly refName?: string;
   readonly required: readonly string[];
   readonly missing: readonly string[];
   readonly structuralPath: readonly NoInvariantPathStructuralEdge[];
+  readonly extensionSpace?: NoInvariantPathExtensionSpace;
 }): MigrationToolsError {
-  const { refName, required, missing, structuralPath } = args;
+  const { refName, required, missing, structuralPath, extensionSpace } = args;
   const refClause = refName ? `Ref "${refName}"` : 'Target';
   const missingList = missing.map((id) => JSON.stringify(id)).join(', ');
   const requiredList = required.map((id) => JSON.stringify(id)).join(', ');
   return new MigrationToolsError(
     'MIGRATION.NO_INVARIANT_PATH',
-    'No path covers the required invariants',
+    extensionSpace === undefined
+      ? 'No path covers the required invariants'
+      : `No path covers the required invariants of extension space "${extensionSpace.spaceId}"`,
     {
-      why: `${refClause} requires invariants the reachable path doesn't cover. required=[${requiredList}], missing=[${missingList}].`,
-      fix: 'Add a migration on the path that runs `dataTransform({ invariantId: "<id>", … })` for each missing invariant, or retarget the ref to a hash whose path already provides them.',
+      why:
+        extensionSpace?.why ??
+        `${refClause} requires invariants the reachable path doesn't cover. required=[${requiredList}], missing=[${missingList}].`,
+      fix:
+        extensionSpace?.fix ??
+        'Add a migration on the path that runs `dataTransform({ invariantId: "<id>", … })` for each missing invariant, or retarget the ref to a hash whose path already provides them.',
+      ...ifDefined('nextActions', extensionSpace?.nextActions),
       meta: {
+        ...ifDefined('spaceId', extensionSpace?.spaceId),
         required,
         missing,
         structuralPath,
@@ -507,6 +546,9 @@ export function errorBundleNotFoundForGraphNode(
   });
 }
 
+/**
+ * A contract at `filePath` that failed to load. When the family refused it for its contents, such as defaults its column types do not hold, the refusal's meta (`refusedDefaults`) is kept beside the file path.
+ */
 export function errorContractDeserializationFailed(
   filePath: string,
   message: string,
@@ -518,10 +560,16 @@ export function errorContractDeserializationFailed(
     {
       why: `Contract at "${filePath}" failed to deserialize: ${message}`,
       fix: reemitHint(dirname(filePath), 'or restore the directory from version control.'),
-      meta: { filePath, message },
+      meta: { ...refusalMetaOf(options?.cause), filePath, message },
       ...ifDefined('cause', options?.cause),
     },
   );
+}
+
+function refusalMetaOf(cause: unknown): Readonly<Record<string, unknown>> | undefined {
+  return isStructuredError(cause) && cause.code === 'CONTRACT.VALIDATION_FAILED'
+    ? cause.meta
+    : undefined;
 }
 
 export function errorHashNotInGraph(hash: string, graph: MigrationGraph): MigrationToolsError {
@@ -593,6 +641,23 @@ export function errorContractSnapshotHashMismatch(
       why: `The contract JSON's inner storage.storageHash ("${actualHash}") does not match the requested storage hash ("${storageHash}") for snapshot directory "${dir}".`,
       fix: 'Pass a contractJson whose storage.storageHash equals the storageHash argument passed to writeContractSnapshot — the two must agree by construction.',
       meta: { storageHash, actualHash, dir },
+    },
+  );
+}
+
+export function errorContractSnapshotContentMismatch(args: {
+  readonly storageHash: string;
+  readonly computedHash: string;
+  readonly jsonPath: string;
+}): MigrationToolsError {
+  const { storageHash, computedHash, jsonPath } = args;
+  return new MigrationToolsError(
+    'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH',
+    'Contract snapshot content does not match its hash',
+    {
+      why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. The file has been edited (or corrupted) since it was written.`,
+      fix: 'Restore migrations/snapshots/ from version control, or re-run the command that authored the migration referencing this hash to regenerate the snapshot.',
+      meta: { storageHash, computedHash, jsonPath },
     },
   );
 }

@@ -1,0 +1,316 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "roots": {
+    "CreatedAt": {
+      "model": "CreatedAt",
+      "namespace": "__unbound__"
+    },
+    "TimestampBothPhases": {
+      "model": "TimestampBothPhases",
+      "namespace": "__unbound__"
+    },
+    "TimestampOnUpdate": {
+      "model": "TimestampOnUpdate",
+      "namespace": "__unbound__"
+    },
+    "UpdatedAt": {
+      "model": "UpdatedAt",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "CreatedAt": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "CreatedAt",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "value": {
+                  "field": "value"
+                }
+              }
+            }
+          },
+          "TimestampBothPhases": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "TimestampBothPhases",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "value": {
+                  "field": "value"
+                }
+              }
+            }
+          },
+          "TimestampOnUpdate": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "TimestampOnUpdate",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "value": {
+                  "field": "value"
+                }
+              }
+            }
+          },
+          "UpdatedAt": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "value": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "UpdatedAt",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "value": {
+                  "field": "value"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "collection": {
+            "CreatedAt": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "value": {
+                      "bsonType": "date"
+                    }
+                  },
+                  "required": ["_id", "value"]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "TimestampBothPhases": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "value": {
+                      "bsonType": "date"
+                    }
+                  },
+                  "required": ["_id", "value"]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "TimestampOnUpdate": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "value": {
+                      "bsonType": "date"
+                    }
+                  },
+                  "required": ["_id", "value"]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "UpdatedAt": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "value": {
+                      "bsonType": "date"
+                    }
+                  },
+                  "required": ["_id", "value"]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            }
+          }
+        },
+        "id": "__unbound__",
+        "kind": "mongo-database"
+      }
+    },
+    "storageHash": "bd7143b1b9f46eaad50f28d21f2f3f55c7105764bd181360fc1a1894b0812187"
+  },
+  "execution": {
+    "executionHash": "3f77d8c13f1798e28c41f913f667945526e4392e73a7e5ec73d0424c49b1da0d",
+    "mutations": {
+      "defaults": [
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CreatedAt",
+            "field": "value",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "TimestampBothPhases",
+            "field": "value",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "TimestampOnUpdate",
+            "field": "value",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "UpdatedAt",
+            "field": "value",
+            "namespace": "__unbound__"
+          }
+        }
+      ]
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

@@ -1,0 +1,72 @@
+import { toModelName } from '@internal/family-sql/psl-infer';
+import { flatPslModels } from '@internal/framework-components/psl-ast';
+import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import { noColumnDefaults } from './infer-default-codec';
+import { buildPslDocumentAst } from './infer-psl-contract';
+import { noInferredDefaults } from './infer-read-defaults';
+import { createPostgresDefaultMapping } from './postgres-default-mapping';
+
+const EMPTY_FOREIGN_KEY_EXTRAS = {
+  extraRelationsByTable: new Map(),
+  crossSpaceFieldNamesByTable: new Map(),
+  danglingForeignKeysByTable: new Map(),
+};
+
+function idTable(name: string): SqlTableIR {
+  return new SqlTableIR({
+    name,
+    columns: { id: { name: 'id', typeText: 'int4', nullable: false } },
+    foreignKeys: [],
+    uniques: [],
+    indexes: [],
+    primaryKey: { columns: ['id'] },
+  });
+}
+
+/**
+ * The relation field names `contract infer` prints for an implicit
+ * many-to-many junction table whose columns `A` and `B` reference `tableA`
+ * and `tableB`, found by running infer's PSL construction on that table.
+ */
+export function junctionRelationFieldNames(
+  tableA: string,
+  tableB: string,
+): readonly [string, string] {
+  let junctionName = '_junction';
+  while (
+    [tableA, tableB].some((table) => toModelName(table).name === toModelName(junctionName).name)
+  ) {
+    junctionName = `${junctionName}x`;
+  }
+  const column = (name: string) => ({ name, typeText: 'int4', nullable: false });
+  const foreignKey = (columnName: string, referencedTable: string) => ({
+    columns: [columnName],
+    referencedTable,
+    referencedColumns: ['id'],
+  });
+  const junction = new SqlTableIR({
+    name: junctionName,
+    columns: { A: column('A'), B: column('B') },
+    foreignKeys: [foreignKey('A', tableA), foreignKey('B', tableB)],
+    uniques: [],
+    indexes: [],
+    primaryKey: { columns: ['A', 'B'] },
+  });
+  const document = buildPslDocumentAst(
+    new SqlSchemaIR({
+      tables: { [tableA]: idTable(tableA), [tableB]: idTable(tableB), [junctionName]: junction },
+    }),
+    {
+      columnTypes: () => ({ path: ['Int'], args: [], explicit: { path: ['Int4'], values: [] } }),
+      defaultMapping: createPostgresDefaultMapping(),
+      defaultOf: noInferredDefaults,
+      columnDefaults: noColumnDefaults,
+    },
+    EMPTY_FOREIGN_KEY_EXTRAS,
+  );
+  const junctionModelName = toModelName(junctionName).name;
+  const fields = flatPslModels(document).find((model) => model.name === junctionModelName)?.fields;
+  const scalarFieldCount = Object.keys(junction.columns).length;
+  const [a = '', b = ''] = (fields ?? []).slice(scalarFieldCount).map((field) => field.name);
+  return [a, b];
+}

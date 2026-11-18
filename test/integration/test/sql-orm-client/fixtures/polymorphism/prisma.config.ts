@@ -1,9 +1,12 @@
 import { defineConfig as ormConfig } from '@internal/postgres/config';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
+import { packageCopiedConfig } from '../package-copied-config';
 
-export default defineConfig({
-  orm: ormConfig({
-    contract: './contract.prisma',
-    output: 'generated',
-  }),
+export default definePrismaConfig({
+  orm: packageCopiedConfig(
+    ormConfig({
+      contract: './contract.prisma',
+      output: 'generated',
+    }),
+  ),
 });

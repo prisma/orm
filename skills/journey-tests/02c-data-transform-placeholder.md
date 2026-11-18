@@ -1,6 +1,6 @@
 # Journey 02c — Fill a placeholder data transform
 
-**Skills under test:** `prisma-next-migrations`.
+**Skills under test:** `prisma-8-migrations`.
 
 **Acceptance criterion:** AC5c.
 
@@ -14,7 +14,7 @@
 - [ ] Emits, plans, observes a `placeholder(...)` in `migration.ts`.
 - [ ] Replaces the placeholder with `UPDATE user SET displayName = email WHERE displayName IS NULL`.
 - [ ] Adds a follow-up step to ALTER COLUMN to NOT NULL.
-- [ ] Self-emits the migration (`node migrations/<dir>/migration.ts`).
+- [ ] Self-emits the migration (`node <package dir>/migration.ts`).
 - [ ] Applies.
 
 ## Success criteria

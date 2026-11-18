@@ -1,5 +1,8 @@
 # Domain-enum inference — Plan
 
+> **Note (2026-10-15).** `@noCheck` was removed (TML-3595). Path B below emits `@noCheck(membership)`, so it no longer works as written and must be redesigned before this project starts. Today a column with a hand-written membership check pulls as `String` plus `@@check(map:)`. Typing it by an enum would derive a second membership check beside the live one.
+
+
 **Spec:** [`spec.md`](./spec.md) · **Linear:** none (operator waived tracker integration for this project, consistent with sql-check-constraint-unification)
 
 Three slices. Slice 1 is a prerequisite the other two both need; slices 2 and 3 are the two recovery paths and are independent of each other once slice 1 lands.

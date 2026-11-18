@@ -25,9 +25,8 @@ import { timeouts, withClient } from '@repo/test-utils';
 import { SignJWT } from 'jose';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Contract } from '../src/contract';
 import contractJson from '../src/contract.json' with { type: 'json' };
-import { createDb } from '../src/prisma/db';
+import { contract, createDb } from '../src/prisma/db';
 
 function requireEnv(name: 'DATABASE_URL' | 'SUPABASE_JWT_SECRET'): string {
   const value = process.env[name];
@@ -65,7 +64,7 @@ function recordingMiddleware(): { middleware: SqlMiddleware; sqls: string[] } {
   const middleware: SqlMiddleware = {
     name: 'rls-recorder',
     familyId: 'sql',
-    async beforeQuery(plan) {
+    async beforeEncode(plan) {
       sqls.push(plan.sql);
     },
   };
@@ -86,9 +85,14 @@ async function runDbInit(connectionString: string, migrationsDir: string): Promi
 
   try {
     await client.connect(connectionString);
-    const result = await client.dbInit({ contract: contractJson, mode: 'apply', migrationsDir });
+    const result = await client.dbInit({
+      contract: contractJson,
+      mode: 'apply',
+      migrationsDir,
+      invocation: { cwd: process.cwd(), configPath: undefined, dbGiven: false },
+    });
     if (!result.ok) {
-      throw new Error(`dbInit apply failed: ${result.failure.summary}`);
+      throw new Error(`dbInit apply failed: ${result.failure.message}`);
     }
   } finally {
     await client.close();
@@ -352,8 +356,8 @@ describe.skipIf(!process.env['DATABASE_URL'] || !process.env['SUPABASE_JWT_SECRE
             );
           });
 
-          const db = await supabase<Contract>({
-            contractJson,
+          const db = await supabase({
+            contract,
             url: connectionString,
             jwksUrl: `${supabaseUrl}/auth/v1/.well-known/jwks.json`,
           });

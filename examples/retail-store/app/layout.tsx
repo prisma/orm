@@ -4,8 +4,8 @@ import { Navbar } from '../src/components/navbar';
 import './globals.css';
 
 export const metadata = {
-  title: 'Retail Store — Prisma Next MongoDB Demo',
-  description: 'E-commerce example app powered by Prisma Next with MongoDB',
+  title: 'Retail Store — Prisma 8 MongoDB Demo',
+  description: 'E-commerce example app powered by Prisma 8 with MongoDB',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

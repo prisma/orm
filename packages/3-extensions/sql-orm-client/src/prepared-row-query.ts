@@ -1,0 +1,76 @@
+import type { Contract } from '@internal/contract/types';
+import type { ResultType, RuntimeExecuteOptions } from '@internal/framework-components/runtime';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
+import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
+import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type {
+  BindSiteParams,
+  Declaration,
+  ParamsFromDeclaration,
+  PreparedFor,
+  PreparedStatement,
+  Runtime,
+  RuntimeQueryable,
+} from '@internal/sql-runtime';
+import { blindCast } from '@internal/utils/casts';
+import { preparedHashInput, preparedOrmCallOf } from './orm-call';
+
+export interface PreparedRowQuery<Params, Result> {
+  query(target: RuntimeQueryable, params: Params, options?: RuntimeExecuteOptions): Result;
+}
+
+/** The `prepare` member a client and its transactions offer, typed by the client's contract. */
+export interface PrepareMember<TContract extends Contract<SqlStorage>> {
+  prepare<
+    D extends Declaration<CT>,
+    Q extends SqlQueryPlan | Preparable<unknown, unknown>,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => Q,
+  ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>>;
+}
+
+export type PreparedFrom<Params, Q extends SqlQueryPlan | Preparable<unknown, unknown>> =
+  Q extends Preparable<unknown, infer Result>
+    ? PreparedRowQuery<Params, Result>
+    : PreparedFor<Params, ResultType<Q>>;
+
+export async function prepareQuery<
+  D extends Declaration<CT>,
+  Q extends SqlQueryPlan | Preparable<unknown, unknown>,
+  CT extends CodecTypesBase,
+>(
+  runtime: Pick<Runtime, 'prepare'>,
+  declaration: D,
+  callback: (params: BindSiteParams<D>) => Q,
+): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>> {
+  let description: Preparable<unknown, unknown> | undefined;
+  const statement = await runtime.prepare<D, unknown, CT>(declaration, (params) => {
+    const authored = callback(params);
+    if ('plan' in authored) {
+      description = authored;
+      return authored.plan;
+    }
+    return authored;
+  });
+  const prepared = description ? createPreparedRowQuery(description, statement) : statement;
+  return blindCast<
+    PreparedFrom<ParamsFromDeclaration<D, CT>, Q>,
+    'compositional description selects custom consumption; plain SQL preserves the declared result kind'
+  >(prepared);
+}
+
+export function createPreparedRowQuery<Params, DbRow, Result>(
+  description: Preparable<DbRow, Result>,
+  statement: PreparedStatement<Params, DbRow>,
+): PreparedRowQuery<Params, Result> {
+  return Object.freeze({
+    query(target: RuntimeQueryable, params: Params, options?: RuntimeExecuteOptions): Result {
+      const rows = (queryable: RuntimeQueryable) => statement.query(queryable, params, options);
+      const call = preparedOrmCallOf(description);
+      if (call === undefined) return description.consume(rows(target));
+      return call(target, rows, preparedHashInput(statement, params));
+    },
+  });
+}

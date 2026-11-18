@@ -84,7 +84,49 @@ describe('what the check forbids', () => {
     write('src/db.ts', `import x from '${SCOPE}contract';\n`);
     const result = run();
     assert.match(result.stderr, /dated record of past work/);
-    assert.match(result.stderr, /a name still written into user projects/);
+    assert.match(result.stderr, /retired name kept only to prove it stays gone/);
+  });
+
+  it('fails on the retired schema header, primer file, and skill directory names', () => {
+    write('src/schema.prisma', `// use ${LEGACY}\n`);
+    write('docs/quickstart.md', `Open \`${LEGACY}.md\` for the quick reference.\n`);
+    write(`skills/${LEGACY}-queries/SKILL.md`, `name: ${LEGACY}-queries\n`);
+    const result = run();
+    assert.equal(result.status, 1, `expected exit 1; stdout=${result.stdout}`);
+    assert.match(result.stderr, /src\/schema\.prisma:1:/);
+    assert.match(result.stderr, /docs\/quickstart\.md:1:/);
+    assert.match(result.stderr, new RegExp(`skills/${LEGACY}-queries/SKILL\\.md:1:`));
+  });
+
+  it('fails on every other spelling of the old name', () => {
+    const [prisma, next] = ['prisma', 'next'];
+    const cap = (word) => word[0].toUpperCase() + word.slice(1);
+    write('package.json', `{ "${prisma}${cap(next)}": { "minServerVersion": "15" } }\n`);
+    write('src/config.ts', `export interface ${cap(prisma)}${cap(next)}Config {}\n`);
+    write(
+      'src/codes.ts',
+      `export const CODE = '${prisma.toUpperCase()}_${next.toUpperCase()}_FAILED';\n`,
+    );
+    write('docs/intro.md', `Welcome to ${cap(prisma)} ${cap(next)}.\n`);
+    write('src/legacy.ts', `type C = legacy.${cap(prisma)}${cap(next)}Config;\n`);
+    write('src/import.ts', `import x from './${LEGACY}.js';\n`);
+    const result = run();
+    assert.equal(result.status, 1, `expected exit 1; stdout=${result.stdout}`);
+    assert.match(result.stderr, /package\.json:1:/);
+    assert.match(result.stderr, /src\/config\.ts:1:/);
+    assert.match(result.stderr, /src\/codes\.ts:1:/);
+    assert.match(result.stderr, /docs\/intro\.md:1:/);
+    assert.match(result.stderr, /src\/legacy\.ts:1:/);
+    assert.match(result.stderr, /src\/import\.ts:1:/);
+  });
+});
+
+describe('what the check does not mistake for the old name', () => {
+  it('passes a schema file name followed by the word "next", and Next.js', () => {
+    write('docs/infer.md', 'Writes contract.prisma next to contract.json.\n');
+    write('docs/frameworks.md', 'Use Prisma Next.js integration, or Prisma with Nextjs.\n');
+    const result = run();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
   });
 });
 
@@ -124,33 +166,69 @@ describe('what the check allows', () => {
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
   });
 
-  it('allows the bare name and the files init writes, but never the retired config file', () => {
-    write('docs/quickstart.md', `Open \`${LEGACY}.md\` for the quick reference.\n`);
-    write('src/schema.prisma', `// use ${LEGACY}\n`);
-    const clean = run();
-    assert.equal(clean.status, 0, `expected exit 0; stderr=${clean.stderr}`);
-
-    write('docs/stale.md', `Edit \`${LEGACY}.config.ts\`.\n`);
-    const stale = run();
-    assert.equal(stale.status, 1, 'expected the retired config filename to fail');
-  });
-
-  it('allows the published skill cluster', () => {
-    write(`skills/${LEGACY}-queries/SKILL.md`, `name: ${LEGACY}-queries\n`);
+  it('allows a link to an ADR whose filename carries the old name', () => {
+    write(
+      'docs/notes.md',
+      `See [ADR 211](../architecture%20docs/adrs/ADR%20211%20-%20${LEGACY}%20bin-only%20distribution.md).\n`,
+    );
     const result = run();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
   });
 
-  it('allows the roadmap narrating the move out of the old repository', () => {
-    write('ROADMAP.md', `Developed in a separate repository, \`prisma/${LEGACY}\`.\n`);
+  it('allows the third-party package published under the old name', () => {
+    write('README.md', `Prisma 8\n\n- \`@cipherstash/${LEGACY}\`: searchable encryption.\n`);
     const result = run();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
   });
 
-  it('names the roadmap task on each allowance that is meant to be temporary', () => {
-    for (const line of [`${LEGACY} init`, `skills/${LEGACY}-queries/SKILL.md`]) {
-      const allowance = allowanceFor('docs/x.md', line) ?? allowanceFor(line, line);
-      assert.match(allowance.why, /ROADMAP\.md § 3/);
-    }
+  it('allows the files that keep the retired name only to prove it stays gone', () => {
+    const proof = 'packages/1-framework/3-tooling/cli/src/commands/init/skill-sources.ts';
+    write(proof, `export const RETIRED_SKILL_NAMES = ['${LEGACY}-queries'];\n`);
+    const result = run();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(allowanceFor(proof, `'${LEGACY}-queries'`).why, /prove it stays gone/);
+  });
+
+  it('allows the gotcha logs and the shipped upgrade instructions as dated records', () => {
+    write('examples/demo/gotchas.md', `Ran \`${LEGACY} migrate\` and it failed.\n`);
+    write(
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.1-to-8.0.0-rc.2/instructions.md',
+      `- id: published-${LEGACY}-bin-retired\n`,
+    );
+    const result = run();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+  });
+
+  it('allows the archived sources of a release’s upgrade instructions as dated records', () => {
+    const archived =
+      'upgrade-instructions/releases/8.0.0-rc.1-to-8.0.0-rc.2/sources/rename/app/instructions.md';
+    write(archived, `Rename \`// use ${LEGACY}\` to the current directive.\n`);
+    const result = run();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(allowanceFor(archived, `// use ${LEGACY}`).why, /dated record/);
+  });
+
+  it('allows a pending upgrade fragment to name what it renames from', () => {
+    const fragment = 'upgrade-instructions/pending/some-rename/app/instructions.md';
+    const oldType = ['Prisma', 'Next', 'Config'].join('');
+    write(fragment, `Rename \`${oldType}\` to \`PrismaConfig\`.\n`);
+    const result = run();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+  });
+
+  it('allows the Prisma 8 skill to say once that it was formerly called by the old name', () => {
+    const skill = 'skills/prisma-8/SKILL.md';
+    const formerName = ['Prisma', 'Next'].join(' ');
+    write(skill, `description: Queries (Prisma 8, formerly ${formerName}).\n`);
+    const result = run();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(allowanceFor(skill, `(Prisma 8, formerly ${formerName})`).why, /former name/);
+  });
+
+  it('fails on any other mention of the old name in the Prisma 8 skill', () => {
+    const formerName = ['Prisma', 'Next'].join(' ');
+    write('skills/prisma-8/SKILL.md', `Run ${formerName} commands, formerly ${formerName}.\n`);
+    const result = run();
+    assert.equal(result.status, 1, `expected exit 1; stdout=${result.stdout}`);
   });
 });

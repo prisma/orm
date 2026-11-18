@@ -1,10 +1,10 @@
 {
   "name": "@prisma/orm-toolchain",
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma Next dev/build tooling: the ORM command family, emitter, config-loader, language server, telemetry, vite plugin",
+  "description": "Prisma 8 dev/build tooling: the ORM command family, emitter, config-loader, language server, telemetry, vite plugin",
   "files": [
     "dist"
   ],
@@ -14,7 +14,7 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-framework": "workspace:8.0.0-rc.8",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
     "@vercel/detect-agent": "^1.2.4",
     "arktype": "catalog:",
     "c12": "^3.3.4",
@@ -29,26 +29,26 @@
     "prettier": "^3.9.6",
     "string-width": "^8.2.2",
     "strip-ansi": "^7.2.0",
+    "tinyglobby": "catalog:",
     "vscode-languageserver": "catalog:",
     "vscode-languageserver-textdocument": "catalog:",
     "wrap-ansi": "^10.0.0"
   },
   "devDependencies": {
-    "@internal/cli": "workspace:8.0.0-rc.8",
-    "@internal/cli-telemetry": "workspace:8.0.0-rc.8",
-    "@internal/config-loader": "workspace:8.0.0-rc.8",
-    "@internal/emitter": "workspace:8.0.0-rc.8",
-    "@internal/language-server": "workspace:8.0.0-rc.8",
-    "@internal/migration-tools": "workspace:8.0.0-rc.8",
-    "@internal/publish-surface": "workspace:8.0.0-rc.8",
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
-    "@internal/vite-plugin-contract-emit": "workspace:8.0.0-rc.8",
+    "@internal/cli": "workspace:8.0.0-rc.24",
+    "@internal/cli-telemetry": "workspace:8.0.0-rc.24",
+    "@internal/config-loader": "workspace:8.0.0-rc.24",
+    "@internal/emitter": "workspace:8.0.0-rc.24",
+    "@internal/language-server": "workspace:8.0.0-rc.24",
+    "@internal/migration-tools": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@internal/vite-plugin-contract-emit": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "@prisma/cli-engine": "0.3.0",
+    "@prisma/cli-engine": "0.10.0",
     "typescript": ">=5.9",
     "vite": "^7.0.0 || ^8.0.0"
   },
@@ -91,9 +91,6 @@
     "./migration-tools/ref-resolution": "./dist/migration-tools__ref-resolution.mjs",
     "./migration-tools/refs": "./dist/migration-tools__refs.mjs",
     "./migration-tools/spaces": "./dist/migration-tools__spaces.mjs",
-    "./publish-surface": "./dist/publish-surface.mjs",
-    "./publish-surface/import-roots": "./dist/publish-surface__import-roots.mjs",
-    "./publish-surface/shells": "./dist/publish-surface__shells.mjs",
     "./vite-plugin-contract-emit": "./dist/vite-plugin-contract-emit.mjs",
     "./package.json": "./package.json"
   },

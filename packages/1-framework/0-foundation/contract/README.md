@@ -1,12 +1,12 @@
 # @internal/contract
 
-> **Internal package.** This package is an implementation detail of Prisma Next and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
+> **Internal package.** This package is an implementation detail of Prisma 8 and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
 
-Core contract data types and JSON schemas for Prisma Next.
+Core contract data types and JSON schemas for Prisma 8.
 
 ## Overview
 
-This package provides the foundational type definitions for Prisma Next data contracts:
+This package provides the foundational type definitions for Prisma 8 data contracts:
 
 - **Contract data types**: The canonical description of an application's data model and storage layout (`ContractBase`, `DocumentContract`, `Source`, `FieldType`)
 - **Plan metadata**: Target-family-agnostic plan metadata (`PlanMeta`). The plan markers themselves (`QueryPlan`, `ExecutionPlan`) live in `@internal/framework-components/runtime`; family-specific plans (`SqlExecutionPlan`, `MongoExecutionPlan`) live in their respective domains. Per [ADR 205](../../../../docs/architecture%20docs/adrs/ADR%20205%20-%20Execution%20metadata%20lives%20on%20AST.md), execution metadata (codec IDs, projection refs, parameter descriptors) lives on the family AST when one is present, not on `PlanMeta`.
@@ -55,6 +55,7 @@ For SQL contracts, use `@internal/sql-contract-ts/schema-sql` instead.
 - `./testing`: Test helpers for creating contract fixtures
 - `./validate-contract`: Contract structure validation
 - `./validate-domain`: Domain model validation
+- `./validate-storage`: Validation of the value objects in storage (`validateStorageValueObjects`)
 
 ## Type System
 
@@ -66,13 +67,13 @@ For SQL contracts, use `@internal/sql-contract-ts/schema-sql` instead.
 
 ## Related Subsystems
 
-- [Data Contract](../../../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)
-- [Contract Emitter & Types](../../../../../docs/architecture%20docs/subsystems/2.%20Contract%20Emitter%20&%20Types.md)
+- [Data Contract](../../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)
+- [Contract Emitter & Types](../../../../docs/architecture%20docs/subsystems/2.%20Contract%20Emitter%20&%20Types.md)
 
 ## Related ADRs
 
-- [ADR 001 - Migrations as Edges](../../../../../docs/architecture%20docs/adrs/ADR%20001%20-%20Migrations%20as%20Edges.md)
-- [ADR 004 - Storage Hash vs Profile Hash](../../../../../docs/architecture%20docs/adrs/ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md)
-- [ADR 010 - Canonicalization Rules](../../../../../docs/architecture%20docs/adrs/ADR%20010%20-%20Canonicalization%20Rules.md)
-- [ADR 021 - Contract Marker Storage](../../../../../docs/architecture%20docs/adrs/ADR%20021%20-%20Contract%20Marker%20Storage.md)
-- [ADR 185 - SPI types live at the lowest consuming layer](../../../../../docs/architecture%20docs/adrs/ADR%20185%20-%20SPI%20types%20live%20at%20the%20lowest%20consuming%20layer.md)
+- [ADR 001 - Migrations as Edges](../../../../docs/architecture%20docs/adrs/ADR%20001%20-%20Migrations%20as%20Edges.md)
+- [ADR 004 - Storage Hash vs Profile Hash](../../../../docs/architecture%20docs/adrs/ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md)
+- [ADR 010 - Canonicalization Rules](../../../../docs/architecture%20docs/adrs/ADR%20010%20-%20Canonicalization%20Rules.md)
+- [ADR 021 - Contract Marker Storage](../../../../docs/architecture%20docs/adrs/ADR%20021%20-%20Contract%20Marker%20Storage.md)
+- [ADR 185 - SPI types live at the lowest consuming layer](../../../../docs/architecture%20docs/adrs/ADR%20185%20-%20SPI%20types%20live%20at%20the%20lowest%20consuming%20layer.md)

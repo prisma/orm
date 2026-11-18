@@ -95,7 +95,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Emit contract.json + contract.d.ts [empty database, no contract yet]
-> prisma-next contract emit
+> prisma contract emit
 
 
 
@@ -127,7 +127,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Emit contract.json + contract.d.ts [empty database, no contract yet]
-> prisma-next contract emit
+> prisma contract emit
 
 
 
@@ -159,7 +159,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Emit contract.json + contract.d.ts [empty database, no contract yet]
-> prisma-next contract emit
+> prisma contract emit
 
 
 
@@ -191,8 +191,8 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Emit contract.json + contract.d.ts [empty database, no contract yet]
-> prisma-next contract emit
-prisma-next contract emit → Emit your contract artifacts
+> prisma contract emit
+prisma contract emit → Emit your contract artifacts
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json

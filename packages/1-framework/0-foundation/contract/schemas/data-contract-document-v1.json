@@ -1,8 +1,8 @@
 {
   "$id": "https://prisma.dev/schemas/data-contract-document-v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Prisma Next Data Contract Document v1",
-  "description": "Schema for Prisma Next contract.json files for Document target family (mongo, firestore, etc.)",
+  "title": "Prisma 8 Data Contract Document v1",
+  "description": "Schema for Prisma 8 contract.json files for Document target family (mongo, firestore, etc.)",
   "type": "object",
   "additionalProperties": false,
   "properties": {

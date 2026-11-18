@@ -1,0 +1,192 @@
+[
+  {
+    "id": "table.Post",
+    "label": "Create table Post",
+    "summary": "Creates table Post with its columns, primary key and unique constraints",
+    "operationClass": "additive",
+    "target": {
+      "id": "mysql",
+      "details": {
+        "objectType": "table",
+        "name": "Post"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Post\" does not exist",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?) = 0 AS result",
+        "params": [
+          "Post"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"Post\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Post\"",
+        "sql": "CREATE TABLE `Post` (\n  `authorId` int NOT NULL,\n  `id` int NOT NULL AUTO_INCREMENT,\n  `title` varchar(191) NOT NULL,\n  PRIMARY KEY (`id`)\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Post\" exists",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?) > 0 AS result",
+        "params": [
+          "Post"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"Post\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.User",
+    "label": "Create table User",
+    "summary": "Creates table User with its columns, primary key and unique constraints",
+    "operationClass": "additive",
+    "target": {
+      "id": "mysql",
+      "details": {
+        "objectType": "table",
+        "name": "User"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"User\" does not exist",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?) = 0 AS result",
+        "params": [
+          "User"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"User\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"User\"",
+        "sql": "CREATE TABLE `User` (\n  `email` varchar(191) NOT NULL,\n  `id` int NOT NULL AUTO_INCREMENT,\n  `role` enum('USER','ADMIN') NOT NULL,\n  PRIMARY KEY (`id`),\n  CONSTRAINT `User_email_key` UNIQUE (`email`)\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"User\" exists",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?) > 0 AS result",
+        "params": [
+          "User"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"User\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "index.Post.Post_authorId_idx_e47547ed",
+    "label": "Create index Post_authorId_idx_e47547ed on Post",
+    "summary": "Creates index Post_authorId_idx_e47547ed on Post",
+    "operationClass": "additive",
+    "target": {
+      "id": "mysql",
+      "details": {
+        "objectType": "index",
+        "name": "Post_authorId_idx_e47547ed",
+        "table": "Post"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Post_authorId_idx_e47547ed\" is missing",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?) = 0 AS result",
+        "params": [
+          "Post",
+          "Post_authorId_idx_e47547ed"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"Post_authorId_idx_e47547ed\" on \"Post\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Post_authorId_idx_e47547ed\"",
+        "sql": "CREATE INDEX `Post_authorId_idx_e47547ed` ON `Post` (`authorId`)"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Post_authorId_idx_e47547ed\" exists",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?) > 0 AS result",
+        "params": [
+          "Post",
+          "Post_authorId_idx_e47547ed"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"Post_authorId_idx_e47547ed\" on \"Post\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Post.Post_authorId_fkey",
+    "label": "Add foreign key Post_authorId_fkey on Post",
+    "summary": "Adds foreign key Post_authorId_fkey on Post referencing User",
+    "operationClass": "additive",
+    "target": {
+      "id": "mysql",
+      "details": {
+        "objectType": "foreignKey",
+        "name": "Post_authorId_fkey",
+        "table": "Post"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure foreign key \"Post_authorId_fkey\" is missing",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = ?) = 0 AS result",
+        "params": [
+          "Post",
+          "Post_authorId_fkey",
+          "FOREIGN KEY"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "foreign key \"Post_authorId_fkey\" on \"Post\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add foreign key \"Post_authorId_fkey\"",
+        "sql": "ALTER TABLE `Post` ADD CONSTRAINT `Post_authorId_fkey` FOREIGN KEY (`authorId`) REFERENCES `User` (`id`)"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify foreign key \"Post_authorId_fkey\" exists",
+        "sql": "SELECT (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = ? AND CONSTRAINT_TYPE = ?) > 0 AS result",
+        "params": [
+          "Post",
+          "Post_authorId_fkey",
+          "FOREIGN KEY"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "foreign key \"Post_authorId_fkey\" on \"Post\""
+        }
+      }
+    ]
+  }
+]

@@ -4,19 +4,22 @@ import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { typescriptContract } from '@internal/sql-contract-ts/config-types';
 import postgres from '@internal/target-postgres/control';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import { contract } from './contract';
 
 // This config uses postgres target but we'll manually modify the emitted contract
 // to have mysql target to test target mismatch
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
     driver: postgresDriver,
     extensions: [],
-    contract: typescriptContract(contract, 'output/contract.json'),
+    contract: {
+      ...typescriptContract(contract, 'output/contract.json'),
+      typesModule: '@internal/postgres/contract-types',
+    },
     db: {
       connection: '{{DB_URL}}',
     },

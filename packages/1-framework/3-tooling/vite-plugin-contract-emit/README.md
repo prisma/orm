@@ -1,6 +1,6 @@
 # @internal/vite-plugin-contract-emit
 
-Vite plugin for automatic Prisma Next contract artifact emission during development.
+Vite plugin for automatic Prisma 8 contract artifact emission during development.
 
 ## Overview
 
@@ -123,10 +123,10 @@ graph TD
 ## Examples
 
 - `examples/prisma-8-demo` — plain Vite + React SPA, covers TS-first and PSL-first contracts. Run `pnpm dev`, edit `prisma/contract.ts`, watch the artifacts regenerate.
-- `examples/react-router-demo` — React Router v7 Framework Mode (SSR). The plugin runs alongside `@react-router/dev/vite`; a `loader` and an `action` exercise the Prisma Next runtime on the server, and a smoke test proves a PSL edit re-emits the contract without a manual command. See `examples/react-router-demo/test/react-router.smoke.e2e.test.ts` for the validation flow.
+- `examples/react-router-demo` — React Router v7 Framework Mode (SSR). The plugin runs alongside `@react-router/dev/vite`; a `loader` and an `action` exercise the Prisma 8 runtime on the server, and a smoke test proves a PSL edit re-emits the contract without a manual command. See `examples/react-router-demo/test/react-router.smoke.e2e.test.ts` for the validation flow.
 
 ## Related
 
-- [ADR 032 — Dev Auto-Emit Integration](../../../../../docs/architecture%20docs/adrs/ADR%20032%20-%20Dev%20Auto%20Emit%20Integration.md)
-- [ADR 008 — Dev Auto-Emit, CI Explicit Emit](../../../../../docs/architecture%20docs/adrs/ADR%20008%20-%20Dev%20Auto%20Emit%20CI%20Explicit%20Emit.md)
-- [Subsystem: Contract Emitter & Types](../../../../../docs/architecture%20docs/subsystems/2.%20Contract%20Emitter%20&%20Types.md)
+- [ADR 032 — Dev Auto-Emit Integration](../../../../docs/architecture%20docs/adrs/ADR%20032%20-%20Dev%20Auto%20Emit%20Integration.md)
+- [ADR 008 — Dev Auto-Emit, CI Explicit Emit](../../../../docs/architecture%20docs/adrs/ADR%20008%20-%20Dev%20Auto%20Emit%20CI%20Explicit%20Emit.md)
+- [Subsystem: Contract Emitter & Types](../../../../docs/architecture%20docs/subsystems/2.%20Contract%20Emitter%20&%20Types.md)

@@ -1,6 +1,6 @@
 # @prisma/orm-extension-paradedb
 
-BM25 full-text search indexes for Prisma Next on PostgreSQL, powered by [ParadeDB](https://paradedb.com).
+BM25 full-text search indexes for Prisma 8 on PostgreSQL, powered by [ParadeDB](https://paradedb.com).
 
 ```bash
 pnpm add @prisma/orm-extension-paradedb

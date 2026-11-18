@@ -20,7 +20,6 @@ import { describe, expect, it } from 'vitest';
 import { fixtureAppDir, runOnEngine, withTempDir } from './utils/cli-test-helpers';
 import { runDbInit } from './utils/db-init-test-helpers';
 import {
-  consentTokenFor,
   type DbUpdateTestSetup,
   runDbUpdate,
   runDbUpdateAllowFailure,
@@ -68,12 +67,7 @@ withTempDir(({ createTempDir }) => {
 
           await swapToVariant(testSetup, 'contract-add-fk.ts');
 
-          const run = await runDbUpdate(testSetup, [
-            '--config',
-            configPath,
-            '--confirm',
-            consentTokenFor(connectionString),
-          ]);
+          const run = await runDbUpdate(testSetup, ['--config', configPath]);
           expect(run.exitCode).toBe(0);
 
           await withClient(connectionString, async (client) => {
@@ -115,12 +109,7 @@ withTempDir(({ createTempDir }) => {
 
           await swapToVariant(testSetup, 'contract-add-required-unique.ts');
 
-          const run = await runDbUpdate(testSetup, [
-            '--config',
-            configPath,
-            '--confirm',
-            consentTokenFor(connectionString),
-          ]);
+          const run = await runDbUpdate(testSetup, ['--config', configPath]);
           expect(run.exitCode).toBe(0);
 
           await withClient(connectionString, async (client) => {
@@ -167,12 +156,7 @@ withTempDir(({ createTempDir }) => {
 
           await swapToVariant(testSetup, 'contract-add-required-unique.ts');
 
-          const run = await runDbUpdateAllowFailure(testSetup, [
-            '--config',
-            configPath,
-            '--confirm',
-            consentTokenFor(connectionString),
-          ]);
+          const run = await runDbUpdateAllowFailure(testSetup, ['--config', configPath]);
           expect(run.exitCode).not.toBe(0);
 
           await withClient(connectionString, async (client) => {

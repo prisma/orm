@@ -118,6 +118,10 @@ test('the HAVING surface admits only operations with a plain SQL form', () => {
 });
 
 test('HAVING comparands read nullability off the declared row', () => {
-  expectTypeOf(baseHaving.count()).toEqualTypeOf<HavingComparisonMethods<number>>();
-  expectTypeOf(baseHaving.sum('views')).toEqualTypeOf<HavingComparisonMethods<number | null>>();
+  expectTypeOf(baseHaving.count()).toEqualTypeOf<
+    HavingComparisonMethods<number, 'pg/int8number@1'>
+  >();
+  expectTypeOf(baseHaving.sum('views')).toEqualTypeOf<
+    HavingComparisonMethods<number | null, 'pg/int8number@1'>
+  >();
 });

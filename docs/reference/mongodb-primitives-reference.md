@@ -1,6 +1,6 @@
 # MongoDB Primitives Reference
 
-Reference document for the MongoDB / document family PoC. Describes how MongoDB structures data, its type system, query model, and key abstractions — with an emphasis on how these map (or don't) to SQL concepts that the Prisma Next architecture currently assumes.
+Reference document for the MongoDB / document family PoC. Describes how MongoDB structures data, its type system, query model, and key abstractions — with an emphasis on how these map (or don't) to SQL concepts that the Prisma 8 architecture currently assumes.
 
 ---
 
@@ -45,7 +45,7 @@ By default, MongoDB does not enforce any schema on a collection. Any document wi
 
 However, MongoDB supports **server-side JSON Schema validation** using the `$jsonSchema` operator. When validation rules are added to a collection, MongoDB can be configured to either reject or warn on documents that don't match the schema. This uses JSON Schema draft 4 with some MongoDB-specific extensions (e.g. `bsonType` instead of `type`).
 
-This is relevant because Prisma Next's contract model assumes a defined schema. For MongoDB, the contract would represent the expected document structure even though MongoDB itself doesn't strictly require it.
+This is relevant because Prisma 8's contract model assumes a defined schema. For MongoDB, the contract would represent the expected document structure even though MongoDB itself doesn't strictly require it.
 
 ---
 
@@ -82,7 +82,7 @@ In SQL, types are declared at the column level and enforced by the database engi
 
 In MongoDB, types are **per-value, per-document**. A field named `age` could be a number in one document and a string in another. Server-side validation via `$jsonSchema` can enforce type consistency, but it's opt-in.
 
-For the Prisma Next contract, this means the document contract's field type declarations represent the expected/intended types, not database-enforced constraints.
+For the Prisma 8 contract, this means the document contract's field type declarations represent the expected/intended types, not database-enforced constraints.
 
 ---
 
@@ -182,7 +182,7 @@ The choice depends on which side is queried more frequently and whether the arra
 
 This is a critical difference from SQL. MongoDB does **not** enforce referential integrity. There is no `FOREIGN KEY` constraint, no `ON DELETE CASCADE`, no database-level guarantee that a referenced document exists. Referential integrity is entirely the application's responsibility.
 
-For Prisma Next, this means the contract can declare relations, but enforcement and cascading behavior must be handled by the runtime or application layer, not the database.
+For Prisma 8, this means the contract can declare relations, but enforcement and cascading behavior must be handled by the runtime or application layer, not the database.
 
 ### Resolving references: $lookup
 
@@ -291,7 +291,7 @@ Unlike SQL's `SET col = value`, MongoDB uses **update operators** to modify spec
 | `$pop` | Remove first or last array element | `{ $pop: { "tags": 1 } }` |
 | `$currentDate` | Set field to current date | `{ $currentDate: { "updatedAt": true } }` |
 
-This operator model is significantly different from SQL's update semantics. Prisma Next's mutation operations would need to map to these operators rather than generating `SET` clauses.
+This operator model is significantly different from SQL's update semantics. Prisma 8's mutation operations would need to map to these operators rather than generating `SET` clauses.
 
 ---
 
@@ -430,7 +430,7 @@ db.posts.aggregate([
 
 SQL is **declarative** — you describe what you want and the query planner decides how to get it. Aggregation pipelines are **imperative** — the developer specifies the exact sequence of transformations. The order of stages affects both correctness and performance. Placing `$match` early is critical because only the first `$match` can use indexes.
 
-For Prisma Next, this means the "lowering" step for a document adapter is fundamentally different from SQL. Instead of producing a SQL string from an AST, the adapter produces a pipeline (an array of stage objects) from the query plan.
+For Prisma 8, this means the "lowering" step for a document adapter is fundamentally different from SQL. Instead of producing a SQL string from an AST, the adapter produces a pipeline (an array of stage objects) from the query plan.
 
 ---
 
@@ -554,7 +554,7 @@ db.activeUsers.find({ lastLogin: { $gt: lastWeek } })
 
 ---
 
-## 13. Implications for Prisma Next
+## 13. Implications for Prisma 8
 
 Key architectural considerations that emerge from these primitives:
 
@@ -568,7 +568,7 @@ Key architectural considerations that emerge from these primitives:
 
 5. **Types are per-value, not per-column.** The contract declares expected types, but MongoDB doesn't enforce them. Runtime validation may be needed where SQL databases would enforce types at the storage level.
 
-6. **Cursors, not result sets.** `find()` returns a streaming cursor. The driver integration needs to handle cursor iteration, which aligns well with Prisma Next's streaming/async iterable result model.
+6. **Cursors, not result sets.** `find()` returns a streaming cursor. The driver integration needs to handle cursor iteration, which aligns well with Prisma 8's streaming/async iterable result model.
 
 7. **Single-document atomicity covers many use cases.** Operations on embedded data are atomic without transactions. The runtime should leverage this — many operations that require transactions in SQL may not need them in MongoDB.
 

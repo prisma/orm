@@ -1,8 +1,9 @@
-import type { Contract, NamespaceId } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { NamespaceId } from '@internal/contract/types';
+import type { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { expectTypeOf, test } from 'vitest';
-import type { Collection } from '../src/collection';
+import { Collection } from '../src/collection';
+import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import type {
   CreateInput,
@@ -10,330 +11,9 @@ import type {
   InferRootRow,
   ResolvedCreateInput,
   VariantCreateInput,
+  VariantModelRow,
 } from '../src/types';
-
-interface PolyStorage {
-  readonly tables: {
-    readonly tasks: {
-      columns: {
-        readonly id: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: false;
-        };
-        readonly title: {
-          readonly nativeType: 'text';
-          readonly codecId: 'pg/text@1';
-          readonly nullable: false;
-        };
-        readonly type: {
-          readonly nativeType: 'text';
-          readonly codecId: 'pg/text@1';
-          readonly nullable: false;
-        };
-        readonly severity: {
-          readonly nativeType: 'text';
-          readonly codecId: 'pg/text@1';
-          readonly nullable: true;
-        };
-        readonly project_id: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: true;
-        };
-        readonly parent_id: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: true;
-        };
-        readonly assignee_id: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: true;
-        };
-      };
-      primaryKey: { columns: readonly ['id'] };
-      uniques: readonly [];
-      indexes: readonly [];
-      foreignKeys: readonly [];
-    };
-    readonly features: {
-      columns: {
-        readonly id: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: false;
-        };
-        readonly priority: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: false;
-        };
-        readonly assignee_id: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: true;
-        };
-      };
-      primaryKey: { columns: readonly ['id'] };
-      uniques: readonly [];
-      indexes: readonly [];
-      foreignKeys: readonly [];
-    };
-    readonly assignees: {
-      columns: {
-        readonly id: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: false;
-        };
-        readonly name: {
-          readonly nativeType: 'text';
-          readonly codecId: 'pg/text@1';
-          readonly nullable: false;
-        };
-      };
-      primaryKey: { columns: readonly ['id'] };
-      uniques: readonly [];
-      indexes: readonly [];
-      foreignKeys: readonly [];
-    };
-    readonly plain_model: {
-      columns: {
-        readonly id: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: false;
-        };
-        readonly name: {
-          readonly nativeType: 'text';
-          readonly codecId: 'pg/text@1';
-          readonly nullable: false;
-        };
-      };
-      primaryKey: { columns: readonly ['id'] };
-      uniques: readonly [];
-      indexes: readonly [];
-      foreignKeys: readonly [];
-    };
-    readonly projects: {
-      columns: {
-        readonly id: {
-          readonly nativeType: 'int4';
-          readonly codecId: 'pg/int4@1';
-          readonly nullable: false;
-        };
-        readonly name: {
-          readonly nativeType: 'text';
-          readonly codecId: 'pg/text@1';
-          readonly nullable: false;
-        };
-      };
-      primaryKey: { columns: readonly ['id'] };
-      uniques: readonly [];
-      indexes: readonly [];
-      foreignKeys: readonly [];
-    };
-  };
-  readonly storageHash: string;
-}
-
-type R = Record<string, never>;
-
-type PolyModels = {
-  readonly Task: {
-    readonly fields: {
-      readonly id: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-        readonly nullable: false;
-      };
-      readonly title: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        readonly nullable: false;
-      };
-      readonly type: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        readonly nullable: false;
-      };
-      readonly projectId: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-        readonly nullable: true;
-      };
-      readonly parentId: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-        readonly nullable: true;
-      };
-    };
-    readonly relations: {
-      readonly subtasks: {
-        readonly to: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Task' };
-        readonly cardinality: '1:N';
-        readonly on: {
-          readonly localFields: readonly ['id'];
-          readonly targetFields: readonly ['parentId'];
-        };
-      };
-    };
-    readonly storage: {
-      readonly table: 'tasks';
-      readonly fields: {
-        readonly id: { readonly column: 'id' };
-        readonly title: { readonly column: 'title' };
-        readonly type: { readonly column: 'type' };
-        readonly projectId: { readonly column: 'project_id' };
-        readonly parentId: { readonly column: 'parent_id' };
-      };
-    };
-    readonly discriminator: { readonly field: 'type' };
-    readonly variants: {
-      readonly Bug: { readonly value: 'bug' };
-      readonly Feature: { readonly value: 'feature' };
-    };
-  };
-  readonly Bug: {
-    readonly fields: {
-      readonly severity: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        readonly nullable: true;
-      };
-      readonly assigneeId: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-        readonly nullable: true;
-      };
-    };
-    readonly relations: {
-      readonly assignee: {
-        readonly to: {
-          readonly namespace: '__unbound__' & NamespaceId;
-          readonly model: 'Assignee';
-        };
-        readonly cardinality: 'N:1';
-        readonly on: {
-          readonly localFields: readonly ['assigneeId'];
-          readonly targetFields: readonly ['id'];
-        };
-      };
-    };
-    readonly storage: {
-      readonly table: 'tasks';
-      readonly fields: {
-        readonly severity: { readonly column: 'severity' };
-        readonly assigneeId: { readonly column: 'assignee_id' };
-      };
-    };
-    readonly base: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Task' };
-  };
-  readonly Feature: {
-    readonly fields: {
-      readonly priority: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-        readonly nullable: false;
-      };
-      readonly assigneeId: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-        readonly nullable: true;
-      };
-    };
-    readonly relations: {
-      readonly assignee: {
-        readonly to: {
-          readonly namespace: '__unbound__' & NamespaceId;
-          readonly model: 'Assignee';
-        };
-        readonly cardinality: 'N:1';
-        readonly on: {
-          readonly localFields: readonly ['assigneeId'];
-          readonly targetFields: readonly ['id'];
-        };
-      };
-    };
-    readonly storage: {
-      readonly table: 'features';
-      readonly fields: {
-        readonly priority: { readonly column: 'priority' };
-        readonly assigneeId: { readonly column: 'assignee_id' };
-      };
-    };
-    readonly base: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Task' };
-  };
-  readonly Assignee: {
-    readonly fields: {
-      readonly id: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-        readonly nullable: false;
-      };
-      readonly name: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        readonly nullable: false;
-      };
-    };
-    readonly relations: R;
-    readonly storage: {
-      readonly table: 'assignees';
-      readonly fields: {
-        readonly id: { readonly column: 'id' };
-        readonly name: { readonly column: 'name' };
-      };
-    };
-  };
-  readonly PlainModel: {
-    readonly fields: {
-      readonly id: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-        readonly nullable: false;
-      };
-      readonly name: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        readonly nullable: false;
-      };
-    };
-    readonly relations: R;
-    readonly storage: {
-      readonly table: 'plain_model';
-      readonly fields: {
-        readonly id: { readonly column: 'id' };
-        readonly name: { readonly column: 'name' };
-      };
-    };
-  };
-  readonly Project: {
-    readonly fields: {
-      readonly id: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-        readonly nullable: false;
-      };
-      readonly name: {
-        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-        readonly nullable: false;
-      };
-    };
-    readonly relations: {
-      readonly tasks: {
-        readonly to: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Task' };
-        readonly cardinality: '1:N';
-        readonly on: {
-          readonly localFields: readonly ['id'];
-          readonly targetFields: readonly ['projectId'];
-        };
-      };
-    };
-    readonly storage: {
-      readonly table: 'projects';
-      readonly fields: {
-        readonly id: { readonly column: 'id' };
-        readonly name: { readonly column: 'name' };
-      };
-    };
-  };
-};
-
-type PolyContract = Omit<Contract<PolyStorage & SqlStorage>, 'domain'> & {
-  readonly domain: {
-    readonly namespaces: {
-      readonly __unbound__: { readonly models: PolyModels };
-    };
-  };
-};
+import type { PolyContract, PolyModels } from './fixtures/poly-contract';
 
 test('InferRootRow for polymorphic base returns discriminated union', () => {
   type TaskRow = InferRootRow<PolyContract, 'Task'>;
@@ -420,28 +100,28 @@ test('ResolvedCreateInput for non-polymorphic model equals CreateInput', () => {
 });
 
 test('VariantCreateInput includes base + variant fields minus discriminator', () => {
-  type BugCreate = VariantCreateInput<PolyContract, 'Task', 'Bug'>;
+  type BugCreate = VariantCreateInput<PolyContract, 'Task', 'bug'>;
   expectTypeOf<BugCreate>().toHaveProperty('title');
   expectTypeOf<BugCreate>().toHaveProperty('severity');
   expectTypeOf<BugCreate>().not.toHaveProperty('type');
 });
 
 test('VariantCreateInput for MTI variant includes base + variant fields minus discriminator', () => {
-  type FeatureCreate = VariantCreateInput<PolyContract, 'Task', 'Feature'>;
+  type FeatureCreate = VariantCreateInput<PolyContract, 'Task', 'feature'>;
   expectTypeOf<FeatureCreate>().toHaveProperty('title');
   expectTypeOf<FeatureCreate>().toHaveProperty('priority');
   expectTypeOf<FeatureCreate>().not.toHaveProperty('type');
 });
 
 test('ResolvedCreateInput with variant name equals VariantCreateInput', () => {
-  type Resolved = ResolvedCreateInput<PolyContract, 'Task', 'Bug'>;
-  type Direct = VariantCreateInput<PolyContract, 'Task', 'Bug'>;
+  type Resolved = ResolvedCreateInput<PolyContract, 'Task', 'bug'>;
+  type Direct = VariantCreateInput<PolyContract, 'Task', 'bug'>;
   expectTypeOf<Resolved>().toEqualTypeOf<Direct>();
 });
 
 // ---------------------------------------------------------------------------
 // Include narrowing: a polymorphic-target relation surfaces the variant union
-// by default, and `r.variant('X')` narrows the included value to variant X.
+// by default, and `r.variant('x')` narrows the included value to variant X.
 // ---------------------------------------------------------------------------
 
 type RowOfCollection<TCollection> = TCollection extends { all(): infer R }
@@ -453,14 +133,16 @@ type RowOfCollection<TCollection> = TCollection extends { all(): infer R }
 declare const projects: Collection<PolyContract, 'Project'>;
 
 test('include of a polymorphic-target relation types the value as the variant union', () => {
-  type Included = RowOfCollection<ReturnType<typeof projects.include<'tasks'>>>['tasks'];
+  const withTasks = projects.include('tasks');
+  type Included = RowOfCollection<typeof withTasks>['tasks'];
   expectTypeOf<Included>().toExtend<readonly unknown[]>();
   type Element = Included[number];
   expectTypeOf<Element['type']>().toEqualTypeOf<'bug' | 'feature'>();
 });
 
 test('include without refinement narrows each variant exclusively by discriminator', () => {
-  type Included = RowOfCollection<ReturnType<typeof projects.include<'tasks'>>>['tasks'];
+  const withTasks = projects.include('tasks');
+  type Included = RowOfCollection<typeof withTasks>['tasks'];
   const element = {} as unknown as Included[number];
   if (element.type === 'bug') {
     expectTypeOf<typeof element>().toHaveProperty('severity');
@@ -474,8 +156,8 @@ test('include without refinement narrows each variant exclusively by discriminat
   }
 });
 
-test('r.variant("Bug") on an include refinement narrows the value to the Bug variant', () => {
-  const refined = projects.include('tasks', (tasks) => tasks.variant('Bug'));
+test('r.variant("bug") on an include refinement narrows the value to the Bug variant', () => {
+  const refined = projects.include('tasks', (tasks) => tasks.variant('bug'));
   type Included = RowOfCollection<typeof refined>['tasks'];
   type Element = Included[number];
   expectTypeOf<Element['type']>().toEqualTypeOf<'bug'>();
@@ -483,8 +165,8 @@ test('r.variant("Bug") on an include refinement narrows the value to the Bug var
   expectTypeOf<Element>().not.toHaveProperty('priority');
 });
 
-test('r.variant("Feature") on an include refinement narrows the value to the Feature variant', () => {
-  const refined = projects.include('tasks', (tasks) => tasks.variant('Feature'));
+test('r.variant("feature") on an include refinement narrows the value to the Feature variant', () => {
+  const refined = projects.include('tasks', (tasks) => tasks.variant('feature'));
   type Included = RowOfCollection<typeof refined>['tasks'];
   type Element = Included[number];
   expectTypeOf<Element['type']>().toEqualTypeOf<'feature'>();
@@ -493,13 +175,13 @@ test('r.variant("Feature") on an include refinement narrows the value to the Fea
 });
 
 // ---------------------------------------------------------------------------
-// Variant-aware predicate accessor: inside `t.variant('X').where(...)` the
+// Variant-aware predicate accessor: inside `t.variant('x').where(...)` the
 // predicate model exposes variant X's fields (MTI variant columns included).
 // ---------------------------------------------------------------------------
 
-test('where after variant("Feature") exposes the MTI variant field on the predicate model', () => {
+test('where after variant("feature") exposes the MTI variant field on the predicate model', () => {
   projects.include('tasks', (tasks) =>
-    tasks.variant('Feature').where((task) => {
+    tasks.variant('feature').where((task) => {
       expectTypeOf(task).toHaveProperty('priority');
       expectTypeOf(task).toHaveProperty('title');
       return task.priority.gte(3);
@@ -507,9 +189,9 @@ test('where after variant("Feature") exposes the MTI variant field on the predic
   );
 });
 
-test('where after variant("Bug") exposes the Bug variant field and rejects the other variant field', () => {
+test('where after variant("bug") exposes the Bug variant field and rejects the other variant field', () => {
   projects.include('tasks', (tasks) =>
-    tasks.variant('Bug').where((task) => {
+    tasks.variant('bug').where((task) => {
       expectTypeOf(task).toHaveProperty('severity');
       // @ts-expect-error priority belongs to the Feature variant, not Bug
       task.priority;
@@ -530,13 +212,13 @@ test('where without a variant exposes only base fields on the predicate model', 
 });
 
 // ---------------------------------------------------------------------------
-// Variant-declared relations: `t.variant('X').where(...)` exposes a relation
+// Variant-declared relations: `t.variant('x').where(...)` exposes a relation
 // declared on variant X, alongside relations declared on the base model.
 // ---------------------------------------------------------------------------
 
-test('where after variant("Feature") exposes the MTI variant relation and keeps a base relation', () => {
+test('where after variant("feature") exposes the MTI variant relation and keeps a base relation', () => {
   projects.include('tasks', (tasks) =>
-    tasks.variant('Feature').where((task) => {
+    tasks.variant('feature').where((task) => {
       expectTypeOf(task).toHaveProperty('assignee');
       expectTypeOf(task).toHaveProperty('subtasks');
       return task.assignee.some();
@@ -544,9 +226,9 @@ test('where after variant("Feature") exposes the MTI variant relation and keeps 
   );
 });
 
-test('where after variant("Bug") exposes the STI variant relation', () => {
+test('where after variant("bug") exposes the STI variant relation', () => {
   projects.include('tasks', (tasks) =>
-    tasks.variant('Bug').where((task) => {
+    tasks.variant('bug').where((task) => {
       expectTypeOf(task).toHaveProperty('assignee');
       return task.assignee.some();
     }),
@@ -565,22 +247,52 @@ test('where without a variant does not expose the variant-declared relation', ()
 
 // ---------------------------------------------------------------------------
 // `first()` mirrors `where()`: its callback predicate is variant-aware, so
-// `t.variant('X').first(t => t.variantField…)` exposes variant X's fields.
+// `t.variant('x').first(t => t.variantField…)` exposes variant X's fields.
 // ---------------------------------------------------------------------------
 
 declare const tasks: Collection<PolyContract, 'Task'>;
+declare const plainModels: Collection<PolyContract, 'PlainModel'>;
 declare const executionContext: ExecutionContext<PolyContract>;
 
-test('first after variant("Feature") exposes the MTI variant field on the predicate model', () => {
-  tasks.variant('Feature').first((task) => {
+test('prepared terminals retain variant unions, narrowing and nested projections', () => {
+  const all = tasks.prepared.all();
+  expectTypeOf(all.consume).returns.toEqualTypeOf<
+    AsyncIterableResult<InferRootRow<PolyContract, 'Task'>>
+  >();
+  const selected = tasks.variant('bug');
+  const first = selected.prepared.first((task) => {
+    expectTypeOf(task.severity).not.toBeNever();
+    // @ts-expect-error priority belongs to the other variant
+    task.priority;
+    return task.severity.eq('high');
+  });
+  expectTypeOf(first.consume).returns.toEqualTypeOf<
+    Promise<RowOfCollection<typeof selected> | null>
+  >();
+  type Selected = RowOfCollection<typeof selected>;
+  expectTypeOf<Selected['type']>().toEqualTypeOf<'bug'>();
+  expectTypeOf<Selected>().toHaveProperty('severity');
+  expectTypeOf<Selected>().not.toHaveProperty('priority');
+  const nested = projects.select('name').include('tasks', (tasks) => tasks.variant('feature'));
+  const nestedAll = nested.prepared.all();
+  expectTypeOf(nestedAll.consume).returns.toEqualTypeOf<
+    AsyncIterableResult<RowOfCollection<typeof nested>>
+  >();
+  expectTypeOf<
+    RowOfCollection<typeof nested>['tasks'][number]['type']
+  >().toEqualTypeOf<'feature'>();
+});
+
+test('first after variant("feature") exposes the MTI variant field on the predicate model', () => {
+  tasks.variant('feature').first((task) => {
     expectTypeOf(task).toHaveProperty('priority');
     expectTypeOf(task).toHaveProperty('title');
     return task.priority.gte(3);
   });
 });
 
-test('first after variant("Bug") exposes the Bug variant field and rejects the other variant field', () => {
-  tasks.variant('Bug').first((task) => {
+test('first after variant("bug") exposes the Bug variant field and rejects the other variant field', () => {
+  tasks.variant('bug').first((task) => {
     expectTypeOf(task).toHaveProperty('severity');
     // @ts-expect-error priority belongs to the Feature variant, not Bug
     task.priority;
@@ -599,19 +311,19 @@ test('first without a variant exposes only base fields on the predicate model', 
 
 // ---------------------------------------------------------------------------
 // `orderBy()` mirrors `where()`/`first()`: its selector is variant-aware, so
-// `t.variant('X').orderBy(t => t.variantField…)` exposes variant X's fields.
+// `t.variant('x').orderBy(t => t.variantField…)` exposes variant X's fields.
 // ---------------------------------------------------------------------------
 
-test('orderBy after variant("Feature") exposes the MTI variant field on the selector model', () => {
-  tasks.variant('Feature').orderBy((task) => {
+test('orderBy after variant("feature") exposes the MTI variant field on the selector model', () => {
+  tasks.variant('feature').orderBy((task) => {
     expectTypeOf(task).toHaveProperty('priority');
     expectTypeOf(task).toHaveProperty('title');
     return task.priority.asc();
   });
 });
 
-test('orderBy after variant("Bug") exposes the Bug variant field and rejects the other variant field', () => {
-  tasks.variant('Bug').orderBy((task) => {
+test('orderBy after variant("bug") exposes the Bug variant field and rejects the other variant field', () => {
+  tasks.variant('bug').orderBy((task) => {
     expectTypeOf(task).toHaveProperty('severity');
     // @ts-expect-error priority belongs to the Feature variant, not Bug
     task.priority;
@@ -628,9 +340,9 @@ test('orderBy without a variant exposes only base fields on the selector model',
   });
 });
 
-test('orderBy after variant("Feature") on an include refinement exposes the MTI variant field', () => {
+test('orderBy after variant("feature") on an include refinement exposes the MTI variant field', () => {
   projects.include('tasks', (tasks) =>
-    tasks.variant('Feature').orderBy((task) => {
+    tasks.variant('feature').orderBy((task) => {
       expectTypeOf(task).toHaveProperty('priority');
       return task.priority.desc();
     }),
@@ -638,14 +350,25 @@ test('orderBy after variant("Feature") on an include refinement exposes the MTI 
 });
 
 test('createModelAccessor with a selected variant returns a variant-aware accessor', () => {
-  const task = createModelAccessor(executionContext, '__unbound__', 'Task', 'Feature');
+  const task = createModelAccessor(
+    executionContext,
+    '__unbound__',
+    'Task',
+    createCollectionTables(executionContext.contract, '__unbound__', 'Task'),
+    'feature',
+  );
   expectTypeOf(task).toHaveProperty('priority');
   expectTypeOf(task).toHaveProperty('title');
   task.priority.gte(3);
 });
 
 test('createModelAccessor without a selected variant returns the base accessor', () => {
-  const task = createModelAccessor(executionContext, '__unbound__', 'Task');
+  const task = createModelAccessor(
+    executionContext,
+    '__unbound__',
+    'Task',
+    createCollectionTables(executionContext.contract, '__unbound__', 'Task'),
+  );
   expectTypeOf(task).toHaveProperty('title');
   // @ts-expect-error priority is an MTI variant field, absent without a selected variant
   task.priority;
@@ -657,20 +380,20 @@ test('createModelAccessor without a selected variant returns the base accessor',
 // possible runtime variant.
 // ---------------------------------------------------------------------------
 
-test('include after variant("Feature") uses the MTI variant relation owner', () => {
-  const included = tasks.variant('Feature').include('assignee');
+test('include after variant("feature") uses the MTI variant relation owner', () => {
+  const included = tasks.variant('feature').include('assignee');
   type Assignee = RowOfCollection<typeof included>['assignee'];
   expectTypeOf<Assignee>().toEqualTypeOf<DefaultModelRow<PolyContract, 'Assignee'> | null>();
 });
 
-test('include after variant("Bug") uses the STI variant relation owner', () => {
-  const included = tasks.variant('Bug').include('assignee');
+test('include after variant("bug") uses the STI variant relation owner', () => {
+  const included = tasks.variant('bug').include('assignee');
   type Assignee = RowOfCollection<typeof included>['assignee'];
   expectTypeOf<Assignee>().toEqualTypeOf<DefaultModelRow<PolyContract, 'Assignee'> | null>();
 });
 
-test('include after variant("Feature") keeps an unshadowed base relation', () => {
-  const included = tasks.variant('Feature').include('subtasks');
+test('include after variant("feature") keeps an unshadowed base relation', () => {
+  const included = tasks.variant('feature').include('subtasks');
   type Subtasks = RowOfCollection<typeof included>['subtasks'];
   expectTypeOf<Subtasks>().toExtend<readonly unknown[]>();
   expectTypeOf<Subtasks[number]['type']>().toEqualTypeOf<'bug' | 'feature'>();
@@ -681,17 +404,87 @@ test('include without narrowing rejects a variant-declared relation', () => {
   tasks.include('assignee');
 });
 
-declare const taskVariantName: 'Bug' | 'Feature';
+declare const taskVariantValue: 'bug' | 'feature';
+
+test('variant accepts a declared discriminator value', () => {
+  const bugs = tasks.variant('bug');
+  expectTypeOf<RowOfCollection<typeof bugs>['type']>().toEqualTypeOf<'bug'>();
+});
+
+test('variant rejects a variant model name', () => {
+  // @ts-expect-error variant() takes a discriminator value, not a model name
+  tasks.variant('Bug');
+});
+
+test('variant rejects an undeclared discriminator value', () => {
+  // @ts-expect-error 'epic' is not a declared discriminator value of Task
+  tasks.variant('epic');
+});
+
+test('variant cannot be called on a non-polymorphic receiver', () => {
+  // @ts-expect-error PlainModel declares no discriminator values
+  plainModels.variant('bug');
+});
+
+test('variant can be called on a collection with no variant selected', () => {
+  const ordered = tasks.orderBy((task) => task.id.desc());
+  expectTypeOf(ordered.variant('bug')).not.toBeNever();
+  expectTypeOf(tasks.variant(taskVariantValue)).not.toBeNever();
+});
+
+test('variant cannot be called on a collection with a variant selected', () => {
+  const bugs = tasks.variant('bug');
+  // @ts-expect-error a variant is already selected; select from the base collection
+  bugs.variant('feature');
+  // @ts-expect-error a variant is already selected, even when it is a union
+  tasks.variant(taskVariantValue).variant('bug');
+});
+
+class TaskCollection extends Collection<PolyContract, 'Task'> {
+  bugs() {
+    return this.variant('bug');
+  }
+}
+
+declare const taskCollection: TaskCollection;
+
+test('a variant helper result rejects a second variant selection', () => {
+  const bugs = taskCollection.bugs();
+  expectTypeOf(bugs.where((task) => task.severity.eq('high'))).not.toBeNever();
+  // @ts-expect-error bugs() already selected a variant
+  bugs.variant('feature');
+});
+
+test('a zero-argument custom helper exposes the variant row and create input', () => {
+  const bugs = taskCollection.bugs();
+  expectTypeOf<RowOfCollection<typeof bugs>>().toEqualTypeOf<
+    VariantModelRow<PolyContract, 'Task', 'bug'>
+  >();
+  type BugsState =
+    typeof bugs extends Collection<PolyContract, 'Task', infer _Row, infer State> ? State : never;
+  expectTypeOf<BugsState['variantValue']>().toEqualTypeOf<'bug'>();
+});
+
+test('create() on a zero-argument custom helper takes the variant create input', () => {
+  const bugs = taskCollection.bugs();
+  expectTypeOf(bugs.create({ id: 1, title: 'Crash', severity: 'high' })).resolves.toEqualTypeOf<
+    VariantModelRow<PolyContract, 'Task', 'bug'>
+  >();
+  // @ts-expect-error priority belongs to the Feature variant
+  bugs.create({ id: 1, title: 'Crash', severity: 'high', priority: 1 });
+  // @ts-expect-error the discriminator is set by the variant, not by the caller
+  bugs.create({ id: 1, title: 'Crash', severity: 'high', type: 'bug' });
+});
 
 test('include after union-valued narrowing keeps an unshadowed base relation', () => {
-  const included = tasks.variant(taskVariantName).include('subtasks');
+  const included = tasks.variant(taskVariantValue).include('subtasks');
   type Subtasks = RowOfCollection<typeof included>['subtasks'];
   expectTypeOf<Subtasks>().toExtend<readonly unknown[]>();
 });
 
 test('include after union-valued narrowing rejects variant-owned relations', () => {
   // @ts-expect-error union-valued variant state exposes no variant-owned includes
-  tasks.variant(taskVariantName).include('assignee');
+  tasks.variant(taskVariantValue).include('assignee');
 });
 
 type CollisionModels = Omit<PolyModels, 'Task' | 'Bug' | 'Feature'> & {
@@ -726,6 +519,7 @@ type CollisionModels = Omit<PolyModels, 'Task' | 'Bug' | 'Feature'> & {
       readonly owner: {
         readonly to: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Task' };
         readonly cardinality: 'N:1';
+        readonly nullable: true;
         readonly on: {
           readonly localFields: readonly ['assigneeId'];
           readonly targetFields: readonly ['id'];
@@ -751,7 +545,7 @@ type CollisionContract = Omit<PolyContract, 'domain'> & {
 declare const collisionTasks: Collection<CollisionContract, 'Task'>;
 
 test('singleton variant include chooses its shadowing target and cardinality', () => {
-  const included = collisionTasks.variant('Feature').include('owner');
+  const included = collisionTasks.variant('feature').include('owner');
   type Owner = RowOfCollection<typeof included>['owner'];
   expectTypeOf<Owner>().not.toExtend<readonly unknown[]>();
   expectTypeOf<NonNullable<Owner>>().toHaveProperty('title');
@@ -759,19 +553,19 @@ test('singleton variant include chooses its shadowing target and cardinality', (
 
 test('union-valued narrowing rejects a base relation shadowed by one possible variant', () => {
   // @ts-expect-error Feature shadows owner, so the base owner relation is not common-safe
-  collisionTasks.variant(taskVariantName).include('owner');
+  collisionTasks.variant(taskVariantValue).include('owner');
 });
 
 test('non-navigable variant declaration shadows a same-named base relation', () => {
   // @ts-expect-error Bug declares blocked as non-navigable and must not fall back to Task.blocked
-  collisionTasks.variant('Bug').include('blocked');
+  collisionTasks.variant('bug').include('blocked');
 });
 
 test('singleton variant keeps a base relation not declared by that variant', () => {
-  collisionTasks.variant('Feature').include('blocked');
+  collisionTasks.variant('feature').include('blocked');
 });
 
 test('union-valued narrowing rejects a base relation shadowed by a non-navigable member', () => {
   // @ts-expect-error Bug shadows blocked, so it is unsafe for Bug | Feature state
-  collisionTasks.variant(taskVariantName).include('blocked');
+  collisionTasks.variant(taskVariantValue).include('blocked');
 });

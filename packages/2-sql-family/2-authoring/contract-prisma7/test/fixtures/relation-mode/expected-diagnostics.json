@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_RELATION_MODE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 3,
+    "message": "relationMode = \"prisma\" is not supported: the contract declares the foreign keys its relations need, and in this mode Prisma 7 creates none. Removing relationMode, or setting it to \"foreignKeys\", makes Prisma 7's next migration add those foreign keys, and that migration fails if any existing row breaks one."
+  }
+]

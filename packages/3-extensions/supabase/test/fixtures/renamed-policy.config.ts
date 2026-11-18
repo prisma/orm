@@ -6,23 +6,27 @@ import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
+import { workspaceTypesModule } from '@repo/test-utils';
 import supabasePack from '../../src/exports/pack';
 
 // Variant contract state for the skeleton e2e (renamed-policy). Emitted through the
 // real pipeline via this package's `emit` script — never hand-edited.
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
     driver: postgresDriver,
     extensions: [supabasePack],
-    contract: prismaContract('./renamed-policy/contract.prisma', {
-      output: 'renamed-policy/contract.json',
-      target: postgresPackRef,
-      createNamespace: postgresCreateNamespace,
-    }),
+    contract: {
+      ...prismaContract('./renamed-policy/contract.prisma', {
+        output: 'renamed-policy/contract.json',
+        target: postgresPackRef,
+        createNamespace: postgresCreateNamespace,
+      }),
+      typesModule: workspaceTypesModule.postgres,
+    },
     migrations: {
       dir: 'migrations',
     },

@@ -13,7 +13,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   user 2: id = 'a85d5d75a3a886cb61eb3a0e', bio with text=null
 //   user 3: id = 'a7fe5dac91ab6b0f529430c5', bio with text='Hello World'
 //
-// Prisma-next expression of optional-relation filter operators:
+// Prisma 8 expression of optional-relation filter operators:
 //   bio: { isNot: null }    → where(u => u.bio.some())
 //   bio: { is: null }       → where(u => u.bio.none())
 //   bio: null               → where(u => u.bio.none())

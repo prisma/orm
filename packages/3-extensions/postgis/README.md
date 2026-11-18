@@ -1,6 +1,6 @@
 # @internal/extension-postgis
 
-Geospatial data for Prisma Next on PostgreSQL, powered by [PostGIS](https://postgis.net).
+Geospatial data for Prisma 8 on PostgreSQL, powered by [PostGIS](https://postgis.net).
 
 Model points, lines, and polygons as first-class columns, query them with a type-safe DSL (`distance`, `containment`, `intersection`, `bounding-box`), and let the framework handle the wire format, SRID metadata, and `CREATE EXTENSION postgis` for you.
 
@@ -9,7 +9,7 @@ Model points, lines, and polygons as first-class columns, query them with a type
 - **`Geometry` column type** — store Points, LineStrings, Polygons, and their Multi-\* variants as a single `geometry` column. Optional SRID parameter (e.g. `Geometry(4326)` for WGS84 lng/lat) flows through to `contract.d.ts` and DDL.
 - **GeoJSON-shaped runtime values** — read and write geometries as plain `{ type, coordinates }` objects. No PostGIS-specific client APIs to learn.
 - **Seven query operations** on geometry columns: `distance`, `distanceSphere`, `dwithin`, `contains`, `within`, `intersects`, `intersectsBbox`.
-- **Automatic `CREATE EXTENSION`** — the control descriptor declares `postgis` as a database dependency, so `prisma db init` ensures the server has it enabled before the first migration runs.
+- **Automatic `CREATE EXTENSION`** — the pack's contract declares the `postgis` extension, so `prisma db init` and `prisma db migrate` create it if it is missing, and `prisma db sign` adopts a database that already has it in any schema on the connection's search path, such as a Supabase project's `extensions` schema.
 - **Both authoring paths** — works with PSL schemas and the TypeScript contract builder.
 
 ## Prerequisites
@@ -29,16 +29,11 @@ A complete five-step example — see [`examples/prisma-8-postgis-demo`](../../..
 **1. Register the extension in `prisma.config.ts`:**
 
 ```typescript
-import { defineConfig } from '@internal/cli/config-types';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import sql from '@internal/family-sql/control';
-import postgres from '@internal/target-postgres/control';
+import { defineConfig } from '@internal/postgres/config';
 import postgis from '@internal/extension-postgis/control';
 
 export default defineConfig({
-  family: sql,
-  target: postgres,
-  adapter: postgresAdapter,
+  contract: './prisma/schema.prisma',
   extensions: [postgis],
 });
 ```
@@ -46,14 +41,14 @@ export default defineConfig({
 **2. Declare a geometry column in your schema (PSL):**
 
 ```prisma
-// use prisma-next
+// use prisma-8
 
 types {
   WgsGeometry = postgis.Geometry(4326)
 }
 
 model Cafe {
-  id       Char(36)    @id @default(uuid())
+  id       Uuid        @id @onCreate(uuid())
   name     String
   location WgsGeometry
   @@map("cafe")
@@ -72,12 +67,15 @@ pnpm prisma db init         # CREATE EXTENSION postgis + CREATE TABLE
 ```typescript
 // src/prisma/db.ts
 import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import postgis from '@internal/extension-postgis/runtime';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = postgres<Contract>({
-  contractJson,
+export const contract = contractFromJson<Contract>(contractJson);
+
+export const db = postgres({
+  contract,
   extensions: [postgis],
   url: process.env['DATABASE_URL']!,
 });
@@ -92,7 +90,7 @@ import { db } from './prisma/db';
 const ferryBuilding = point(-122.3937, 37.7955, 4326);
 
 // Five nearest cafes, with their distance in metres.
-const closest = await db.runtime().execute(
+const closest = await db.query(
   db.sql.cafe
     .select('id', 'name')
     .select('meters', (f, fns) => fns.distanceSphere(f.location, ferryBuilding))
@@ -106,7 +104,7 @@ const closest = await db.runtime().execute(
 
 ### PSL
 
-`postgis.Geometry(srid)` declares an SRID-constrained `geometry` column. Aliasing it via a `types {}` block keeps the SRID in one place when you have several geometry fields.
+`postgis.Geometry(srid)` declares an SRID-constrained `geometry` column. Aliasing it via a `types {}` block keeps the SRID in one place when you have several geometry fields. The alias is expanded into each column, so every column stores its own `srid` and the contract does not store the alias.
 
 ```prisma
 types {
@@ -114,7 +112,7 @@ types {
 }
 
 model Route {
-  id   Char(36)    @id @default(uuid())
+  id   Uuid        @id @onCreate(uuid())
   name String
   path WgsGeometry        // LineStrings, polygons, points — all valid runtime values
   @@map("route")
@@ -279,5 +277,5 @@ The end-to-end demo in [`examples/prisma-8-postgis-demo`](../../../examples/pris
 ## References
 
 - [PostGIS documentation](https://postgis.net/docs/)
-- [Prisma Next Architecture Overview](../../../docs/Architecture%20Overview.md)
+- [Prisma 8 Architecture Overview](../../../docs/Architecture%20Overview.md)
 - [Extension Packs Guide](../../../docs/reference/Extension-Packs-Naming-and-Layout.md)

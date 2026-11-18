@@ -1,0 +1,30 @@
+/**
+ * Shared encode/decode constants and codec id literals for the five SQL base codecs (`sql/char@1`, `sql/varchar@1`, `sql/int@1`, `sql/float@1`, `sql/text@1`).
+ *
+ * The codec implementations live in `sql-codecs.ts` (TML-2357). This module retains only the conversion helpers the codec methods compose with — keeping a single source of truth for non-trivial conversions while the codec methods provide the framework-required `Promise<…>` boundary.
+ */
+
+import { withoutTrailing } from '@internal/utils/text';
+
+export const SQL_CHAR_CODEC_ID = 'sql/char@1' as const;
+export const SQL_VARCHAR_CODEC_ID = 'sql/varchar@1' as const;
+export const SQL_INT_CODEC_ID = 'sql/int@1' as const;
+export const SQL_FLOAT_CODEC_ID = 'sql/float@1' as const;
+export const SQL_TEXT_CODEC_ID = 'sql/text@1' as const;
+export const SQL_RAW_CODEC_ID = 'sql/raw@1' as const;
+
+export const sqlCharEncode = (value: string): string => value;
+/** A `character` value as the database returns it, without the spaces that pad it to its length. Only spaces pad it, so a trailing tab or newline is part of the value. */
+export const sqlCharDecode = (wire: string): string => withoutTrailing(wire, ' ');
+
+export const sqlVarcharEncode = (value: string): string => value;
+export const sqlVarcharDecode = (wire: string): string => wire;
+
+export const sqlIntEncode = (value: number): number => value;
+export const sqlIntDecode = (wire: number): number => wire;
+
+export const sqlFloatEncode = (value: number): number => value;
+export const sqlFloatDecode = (wire: number): number => wire;
+
+export const sqlTextEncode = (value: string): string => value;
+export const sqlTextDecode = (wire: string): string => wire;

@@ -5,11 +5,11 @@ import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
 const users = [
-  { _id: '02d25579a73a72373fa4e846', email: 'Pete.Kassulke82520@fox-min.com', age: 20 },
-  { _id: 'a85d5d75a3a886cb61eb3a0e', email: 'Sam.Dickinson32909@memorableparticular.org', age: 45 },
-  { _id: 'a7fe5dac91ab6b0f529430c5', email: 'Kyla_Crist96556@cancollaboration.biz', age: 60 },
+  { id: '02d25579a73a72373fa4e846', email: 'Pete.Kassulke82520@fox-min.com', age: 20 },
+  { id: 'a85d5d75a3a886cb61eb3a0e', email: 'Sam.Dickinson32909@memorableparticular.org', age: 45 },
+  { id: 'a7fe5dac91ab6b0f529430c5', email: 'Kyla_Crist96556@cancollaboration.biz', age: 60 },
   {
-    _id: '40b15492abe23e6fce736dad',
+    id: '40b15492abe23e6fce736dad',
     email: 'Arielle.Oberbrunner94321@fulljuggernaut.org',
     age: 60,
   },
@@ -27,7 +27,7 @@ describe('ports/prisma/functional/0-legacy-ports/aggregate-raw', () => {
     () =>
       withLegacyAggregateRaw(async ({ client, db, contract }) => {
         await db.User.createAll(users as unknown as Parameters<typeof db.User.createAll>[0]);
-        const raw = mongo<Contract>({ contract, mongoClient: client, dbName: 'test' });
+        const raw = mongo({ contract, mongoClient: client, dbName: 'test' });
         const result = await (await raw.runtime())
           .query(
             raw.raw
@@ -52,7 +52,7 @@ describe('ports/prisma/functional/0-legacy-ports/aggregate-raw', () => {
     () =>
       withLegacyAggregateRaw(async ({ client, db, contract }) => {
         await db.User.createAll(users as unknown as Parameters<typeof db.User.createAll>[0]);
-        const raw = mongo<Contract>({ contract, mongoClient: client, dbName: 'test' });
+        const raw = mongo({ contract, mongoClient: client, dbName: 'test' });
         const result = await (await raw.runtime())
           .query(
             raw.raw

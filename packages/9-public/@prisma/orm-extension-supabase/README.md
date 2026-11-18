@@ -1,10 +1,12 @@
 # @prisma/orm-extension-supabase
 
-Supabase's own database schema, its platform roles, and a role-binding runtime for Prisma Next.
+Supabase's own database schema, its platform roles, and a role-binding runtime for Prisma 8.
 
 ```bash
 pnpm add @prisma/orm-extension-supabase
 ```
+
+`pg` and `@types/pg` are peer dependencies, as they are of `@prisma/orm-postgres`: the `pg.Pool` an application passes to `supabase({ pg })` is the application's own.
 
 ## Entrypoints
 

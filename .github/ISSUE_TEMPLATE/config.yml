@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/prisma/prisma/security/advisories/new
+    url: https://github.com/prisma/orm/security/advisories/new
     about: |
       Please report security issues privately via GitHub Private Vulnerability Reporting.
       Do NOT file a public issue for security reports. See SECURITY.md for the full policy
@@ -15,7 +15,7 @@ contact_links:
       and feature requests.
 
   - name: Contributing guide
-    url: https://github.com/prisma/prisma/blob/main/CONTRIBUTING.md
+    url: https://github.com/prisma/orm/blob/main/CONTRIBUTING.md
     about: |
       First time contributing? Read CONTRIBUTING.md for setup, the test command set,
       DCO signoff, and PR expectations.

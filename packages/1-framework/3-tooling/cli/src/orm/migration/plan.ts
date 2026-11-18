@@ -1,24 +1,39 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Text, TreeNode } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { join } from 'pathe';
+import { join, resolve } from 'pathe';
+import { createControlClient } from '../../control-api/client';
 import type { ContractSpaceSeedPhaseRecord } from '../../control-api/operations/contract-space-seed-phase';
 import type { MigrationPlanResult } from '../../control-api/operations/migration-plan';
 import { executeMigrationPlanCommand } from '../../control-api/operations/migration-plan';
+import { renamedAndDeleted } from '../../control-api/statements/resolve-statements';
+import { statementFlag } from '../../control-api/statements/statement-flag';
+import { convertAndDelete, isStatementVerb } from '../../control-api/statements/statement-text';
+import type { CreateControlClient } from '../../control-api/types';
+import { errorConvertAndDelete } from '../../utils/cli-errors';
+import {
+  RECORDED_CONTRACT_REF_FORMS,
+  RECORDED_OR_EMPTY_CONTRACT_REF_FORMS,
+} from '../../utils/contract-ref-forms';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
-import { ormConfigSection } from '../config-section';
+import { plannerWarningText } from '../../utils/planner-warning-text';
+import {
+  type CliInvocation,
+  cliCommand,
+  cliInvocation,
+  selfEmitCommand,
+} from '../../utils/printed-command';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
-import {
-  appMigrationsDirFor,
-  contractPathFor,
-  displayPath,
-  migrationsDirFor,
-  projectConfigPathFor,
-} from './paths';
+import { promptPlanQuestions } from '../plan-question-prompt';
+import { appliedStatementBlocks } from '../statement-blocks';
+import { migrationPlanStatementVerbs } from '../statement-verbs';
+import { appMigrationsDirFor, contractPathFor, displayPath, migrationsDirFor } from './paths';
 
 function hashRow(label: string, hash: string | null): { label: string; value: Text } {
   return {
@@ -53,25 +68,46 @@ function outcomeFields(result: MigrationPlanResult, migrationsRelative: string):
   };
 }
 
-function operationNodes(result: MigrationPlanResult): readonly TreeNode[] {
-  return result.operations.map((operation) =>
+function operationNodes(operations: MigrationPlanResult['operations']): readonly TreeNode[] {
+  return operations.map((operation) =>
     operation.operationClass === 'destructive'
       ? { label: operation.label, status: 'warn' }
       : { label: operation.label },
   );
 }
 
+/**
+ * One tree root per written package: the auto-baseline package first (when
+ * this run wrote one), then the app-space package. A baseline-only run has
+ * no `dir`, so the app-space root falls back to `baselineDir`.
+ */
+function operationRoots(result: MigrationPlanResult): readonly TreeNode[] {
+  const baselineOperations = result.baselineOperations ?? [];
+  return [
+    ...(baselineOperations.length > 0 && result.baselineDir !== undefined
+      ? [{ label: result.baselineDir, children: operationNodes(baselineOperations) }]
+      : []),
+    ...(result.operations.length > 0
+      ? [
+          {
+            label: result.dir ?? result.baselineDir ?? 'operations',
+            children: operationNodes(result.operations),
+          },
+        ]
+      : []),
+  ];
+}
+
 function operationBlocks(result: MigrationPlanResult): readonly Block[] {
-  if (result.operations.length === 0) {
+  const written = [...(result.baselineOperations ?? []), ...result.operations];
+  if (written.length === 0) {
     return [];
   }
-  const destructive = result.operations.some(
-    (operation) => operation.operationClass === 'destructive',
-  );
+  const destructive = written.some((operation) => operation.operationClass === 'destructive');
   return [
     {
       kind: 'tree',
-      roots: [{ label: result.dir ?? 'operations', children: operationNodes(result) }],
+      roots: operationRoots(result),
     },
     ...(destructive
       ? [
@@ -104,52 +140,115 @@ function previewBlocks(result: MigrationPlanResult): readonly Block[] {
   ];
 }
 
+function originNoticeBlocks(result: MigrationPlanResult): readonly Block[] {
+  if (result.fromDefaulted !== true) {
+    return [];
+  }
+  return [
+    {
+      kind: 'summary',
+      status: 'info',
+      tone: 'muted',
+      text: 'No db ref set — planning from an empty database. Run db init, db update, or db sign if a database already exists.',
+    },
+  ];
+}
+
+function temporaryValueBlocks(result: MigrationPlanResult): readonly Block[] {
+  return result.temporaryValues.map(
+    ({ field, value }): Block => ({
+      kind: 'summary',
+      status: 'warn',
+      text: `Field "${field}" gets the temporary value ${value} where existing data has none. To choose the value, plan again with ${statementFlag({ verb: 'backfill', text: field })}.`,
+    }),
+  );
+}
+
+function warningBlocks(result: MigrationPlanResult): readonly Block[] {
+  return [
+    ...(result.warnings ?? []),
+    ...(result.plannerWarnings ?? []).map(plannerWarningText),
+  ].map((text): Block => ({ kind: 'summary', status: 'warn', text }));
+}
+
 function planBlocks(result: MigrationPlanResult, migrationsRelative: string): readonly Block[] {
   const outcome = outcomeFields(result, migrationsRelative);
   if (result.noOp) {
-    return [{ kind: 'summary', status: 'ok', text: 'No changes detected' }, outcome];
+    return [
+      ...warningBlocks(result),
+      {
+        kind: 'summary',
+        status: 'ok',
+        text: result.appliedStatements.length > 0 ? result.summary : 'No changes detected',
+      },
+      ...appliedStatementBlocks(result.appliedStatements),
+      outcome,
+    ];
   }
   if (result.pendingPlaceholders === true) {
-    return [{ kind: 'summary', status: 'warn', text: result.summary }, outcome];
+    return [
+      ...warningBlocks(result),
+      { kind: 'summary', status: 'warn', text: result.summary },
+      ...originNoticeBlocks(result),
+      ...operationBlocks(result),
+      ...temporaryValueBlocks(result),
+      ...appliedStatementBlocks(result.appliedStatements),
+      outcome,
+    ];
   }
   return [
-    { kind: 'summary', status: 'ok', text: result.summary },
+    ...warningBlocks(result),
+    {
+      kind: 'summary',
+      status: result.operations.length === 0 ? 'warn' : 'ok',
+      text: result.summary,
+    },
+    ...originNoticeBlocks(result),
     ...operationBlocks(result),
+    ...temporaryValueBlocks(result),
+    ...appliedStatementBlocks(result.appliedStatements),
     outcome,
     ...previewBlocks(result),
   ];
 }
 
-function planNextActions(
-  result: MigrationPlanResult,
-  migrationsRelative: string,
-): readonly NextAction[] {
-  if (result.pendingPlaceholders === true) {
-    const migrationTs = join(result.dir ?? '<dir>', 'migration.ts');
-    return [
-      {
-        kind: 'edit-file',
-        label: `Replace each placeholder(...) call in ${migrationTs} with your query`,
-      },
-      runCommandAction(
-        'Run it to self-emit ops.json and attest the package',
-        `node "${migrationTs}"`,
-      ),
-    ];
-  }
-  const written = [
+function writtenDirs(result: MigrationPlanResult, migrationsRelative: string): readonly string[] {
+  const dirs = [
     ...(result.baselineDir === undefined ? [] : [result.baselineDir]),
     ...(result.dir === undefined ? [] : [result.dir]),
     ...result.emittedExtensionDirs.map((entry) =>
       join(migrationsRelative, entry.spaceId, entry.dirName),
     ),
   ];
+  return [...new Set(dirs)];
+}
+
+function planNextActions(
+  result: MigrationPlanResult,
+  migrationsRelative: string,
+  invocation: CliInvocation,
+): readonly NextAction[] {
+  if (result.pendingPlaceholders === true) {
+    const stubFiles = (result.placeholderDirs ?? []).map((dir) => join(dir, 'migration.ts'));
+    const migrationTs = stubFiles.at(-1) ?? join('<dir>', 'migration.ts');
+    return [
+      {
+        kind: 'edit-file',
+        label: `Replace each placeholder(...) call in ${stubFiles.join(' and ') || migrationTs} with your query`,
+      },
+      runCommandAction(
+        'Run it to self-emit ops.json and attest the package',
+        selfEmitCommand(invocation, resolve(invocation.cwd, migrationTs)),
+      ),
+    ];
+  }
+  const written = writtenDirs(result, migrationsRelative);
   if (written.length === 0) {
     return [];
   }
   return [
     { kind: 'edit-file', label: `Review ${written.join(' and ')}` },
-    runCommandAction('Apply the migration', '{bin} db migrate'),
+    runCommandAction('Apply the migration', cliCommand(invocation, 'db migrate')),
   ];
 }
 
@@ -161,9 +260,10 @@ function planPresentations(inputs: {
   readonly from: string | undefined;
   readonly to: string | undefined;
   readonly name: string | undefined;
+  readonly invocation: CliInvocation;
 }): Presentations {
   return {
-    stdout: () => [],
+    stdout: () => valueLines(writtenDirs(inputs.document, inputs.migrationsRelative)),
     human: (): readonly Block[] => [
       {
         kind: 'fields',
@@ -179,93 +279,127 @@ function planPresentations(inputs: {
       ...planBlocks(inputs.document, inputs.migrationsRelative),
     ],
     json: () => inputs.document,
-    next: () => planNextActions(inputs.document, inputs.migrationsRelative),
+    next: () => planNextActions(inputs.document, inputs.migrationsRelative, inputs.invocation),
   };
 }
 
-export const migrationPlanCommand = defineOrmCommand({
-  help: {
-    summary: 'Plan a migration from contract changes',
-    description:
-      'Compares the emitted contract against the latest on-disk migration state\n' +
-      'and produces a new migration package with the required operations.\n' +
-      'Offline — does not consult the database.',
-    examples: [
-      'migration plan',
-      // biome-ignore lint/plugin/no-family-vocabulary: a migration slug a user would plausibly type, not a schema concept
-      'migration plan --name add-users-table',
-      'migration plan --to <migration-dir>^ --name rollback',
-      'migration plan --json',
-    ],
-  },
-  args: {
-    flags: {
-      name: flag.string({ brief: 'Name slug for the migration directory', placeholder: 'slug' }),
-      from: flag.string({
-        brief:
-          'Starting contract reference (hash, prefix, ref name, migration dir name, <dir>^, @empty, or ./path)',
-        placeholder: 'contract',
-      }),
-      to: flag.string({
-        brief:
-          'Destination contract reference; defaults to the emitted contract. Same grammar as --from',
-        placeholder: 'contract',
-      }),
+export function createMigrationPlanCommand(createClient: CreateControlClient) {
+  return defineOrmCommand({
+    help: {
+      summary: 'Plan a migration from contract changes',
+      description:
+        'Compares the emitted contract against the latest on-disk migration state\n' +
+        'and produces a new migration package with the required operations.\n' +
+        'On an empty migrations directory a baseline package is derived from the\n' +
+        '`db` ref first. A plan that would lose data is written only once you say\n' +
+        'what each such operation means: --rename to keep the data under a new\n' +
+        'name, or --delete to let it go. Where nobody can answer, the command\n' +
+        'refuses and lists every question. Offline — does not consult the database.',
+      examples: [
+        'migration plan',
+        // biome-ignore lint/plugin/no-family-vocabulary: a migration slug a user would plausibly type, not a schema concept
+        'migration plan --name add-users-table',
+        'migration plan --to <migration-dir>^ --name rollback',
+        'migration plan --rename Profile:User --delete Legacy',
+        'migration plan --json',
+      ],
     },
-  },
-  needs: { config: ormConfigSection },
-  handler: async (args, ctx) => {
-    const seeded = (record: ContractSpaceSeedPhaseRecord): void => {
-      if (record.action !== 'updated') {
-        return;
-      }
-      const step = `Seed contract space ${record.spaceId}`;
-      ctx.report({ kind: 'step-started', step, id: record.spaceId });
-      ctx.report({
-        kind: 'step-finished',
-        step,
-        id: record.spaceId,
-        outcome: 'ok',
-        data: { newHash: record.newHash, newMigrationDirs: record.newMigrationDirs },
-      });
-    };
-
-    const planned = await executeMigrationPlanCommand(
-      {
-        config: ctx.config,
-        cwd: ctx.cwd,
-        configPath: projectConfigPathFor(ctx.cwd),
-        ...ifDefined('name', args.flags.name),
-        ...ifDefined('from', args.flags.from),
-        ...ifDefined('to', args.flags.to),
-      },
-      Date.now(),
-      { onSeeded: seeded },
-    );
-    if (!planned.ok) {
-      return notOk(normalizeError(planned.failure));
-    }
-
-    ctx.report({
-      kind: 'message',
-      severity: 'verbose',
-      text: `Total time: ${planned.value.timings.total}ms`,
-    });
-
-    const contractPath = contractPathFor(ctx.config, ctx.cwd);
-    return ok(
-      ctx.present(
-        { data: planned.value },
-        planPresentations({
-          document: planned.value,
-          contractPath: contractPath === undefined ? '(unset)' : displayPath(contractPath, ctx.cwd),
-          appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config, ctx.cwd), ctx.cwd),
-          migrationsRelative: displayPath(migrationsDirFor(ctx.config, ctx.cwd), ctx.cwd),
-          from: args.flags.from,
-          to: args.flags.to,
-          name: args.flags.name,
+    args: {
+      flags: {
+        name: flag.string({ brief: 'Name slug for the migration directory', placeholder: 'slug' }),
+        from: flag.string({
+          brief: `Starting contract reference (${RECORDED_OR_EMPTY_CONTRACT_REF_FORMS})`,
+          placeholder: 'contract',
         }),
-      ),
-    );
-  },
-});
+        to: flag.string({
+          brief: `Destination contract reference (${RECORDED_CONTRACT_REF_FORMS}); defaults to the emitted contract`,
+          placeholder: 'contract',
+        }),
+      },
+    },
+    statements: migrationPlanStatementVerbs,
+    needs: { config: ormConfigSection },
+    handler: async (args, ctx) => {
+      const seeded = (record: ContractSpaceSeedPhaseRecord): void => {
+        if (record.action !== 'updated') {
+          return;
+        }
+        const step = `Seed contract space ${record.spaceId}`;
+        ctx.report({ kind: 'step-started', step, id: record.spaceId });
+        ctx.report({
+          kind: 'step-finished',
+          step,
+          id: record.spaceId,
+          outcome: 'ok',
+          data: { newHash: record.newHash, newMigrationDirs: record.newMigrationDirs },
+        });
+      };
+      const conflicting = convertAndDelete(
+        ctx.statements
+          .values()
+          .flatMap(({ verb, text }) => (isStatementVerb(verb) ? [{ verb, text }] : [])),
+      );
+      if (conflicting !== undefined) {
+        return notOk(normalizeError(errorConvertAndDelete(conflicting)));
+      }
+      const contradicted = renamedAndDeleted(
+        ctx.statements
+          .values()
+          .flatMap(({ verb, text }) => (isStatementVerb(verb) ? [{ verb, text }] : [])),
+      );
+      if (contradicted !== undefined) return notOk(normalizeError(contradicted));
+      const planned = await executeMigrationPlanCommand(
+        {
+          config: ctx.config,
+          cwd: ctx.cwd,
+          ...ifDefined('configPath', ctx.configPath),
+          ...ifDefined('name', args.flags.name),
+          ...ifDefined('from', args.flags.from),
+          ...ifDefined('to', args.flags.to),
+          statements: (['rename', 'convert', 'backfill'] as const).flatMap((verb) =>
+            ctx.statements.take(verb).map(({ text }) => ({ verb, text })),
+          ),
+          answerQuestions: promptPlanQuestions(ctx.prompt, ctx.statements),
+          client: createClient({
+            family: ctx.config.family,
+            target: ctx.config.target,
+            adapter: ctx.config.adapter,
+            ...ifDefined('driver', ctx.config.driver),
+            extensions: ctx.config.extensions ?? [],
+          }),
+        },
+        Date.now(),
+        { onSeeded: seeded },
+      );
+      if (!planned.ok) {
+        return notOk(normalizeError(planned.failure));
+      }
+
+      ctx.report({
+        kind: 'message',
+        severity: 'verbose',
+        text: `Total time: ${planned.value.timings.total}ms`,
+      });
+
+      const contractPath = contractPathFor(ctx.config);
+      return ok(
+        ctx.present(
+          { data: planned.value },
+          planPresentations({
+            document: planned.value,
+            contractPath:
+              contractPath === undefined ? '(unset)' : displayPath(contractPath, ctx.cwd),
+            appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config), ctx.cwd),
+            migrationsRelative: displayPath(migrationsDirFor(ctx.config), ctx.cwd),
+            from: args.flags.from,
+            to: args.flags.to,
+            name: args.flags.name,
+            invocation: cliInvocation(ctx, undefined),
+          }),
+        ),
+      );
+    },
+  });
+}
+
+export const migrationPlanCommand = createMigrationPlanCommand(createControlClient);

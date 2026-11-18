@@ -1,0 +1,13 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id    Int    @id @default(autoincrement())
+  title String @db.VarChar(200)
+}
+
+model User {
+  id String @id @default(uuid())
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 17,
+    "message": "Relation field \"Post.author\": @relation argument \"onDelete\" is not supported; Prisma 8 enforces no referential actions on MongoDB. The Prisma 6 client emulates referential actions, so removing \"onDelete: Cascade\" also changes the Prisma 6 app: its client then applies Restrict, its default for a required relation, so deleting a User that still has Post documents fails with P2014. Handle related documents in application code, then remove \"onDelete\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 17,
+    "message": "Relation field \"Post.author\": @relation argument \"onUpdate\" is not supported; Prisma 8 enforces no referential actions on MongoDB. The Prisma 6 client emulates referential actions, so removing \"onUpdate: Restrict\" also changes the Prisma 6 app: its client then applies Cascade, its default, so changing the field a Post refers to in a User updates the key in its Post documents. Handle related documents in application code, then remove \"onUpdate\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 23,
+    "message": "Relation field \"Comment.author\": @relation argument \"onUpdate\" is not supported; Prisma 8 enforces no referential actions on MongoDB. Removing \"onUpdate: Cascade\" leaves the Prisma 6 app as it is: Cascade is already what the Prisma 6 client does for this relation. Handle related documents in application code, then remove \"onUpdate\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 23,
+    "message": "Relation field \"Comment.author\": @relation argument \"onDelete\" is not supported; Prisma 8 enforces no referential actions on MongoDB. Removing \"onDelete: SetNull\" leaves the Prisma 6 app as it is: SetNull is already what the Prisma 6 client does for this relation. Handle related documents in application code, then remove \"onDelete\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 29,
+    "message": "Relation field \"Like.user\": @relation argument \"map\" is not supported; it names a foreign key constraint, and MongoDB has none. Remove \"map\"; the Prisma 6 app has no foreign key on MongoDB either, so nothing changes there."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 35,
+    "message": "Relation field \"Reaction.user\": @relation argument \"onDelete\" is not supported; Prisma 8 enforces no referential actions on MongoDB. The Prisma 6 client emulates referential actions, so removing \"onDelete: Cascade\" also changes the Prisma 6 app: its client then applies SetNull, its default for an optional relation, so deleting a User sets the key to null in its Reaction documents. Handle related documents in application code, then remove \"onDelete\"."
+  }
+]

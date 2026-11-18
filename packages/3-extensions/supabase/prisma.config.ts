@@ -4,20 +4,24 @@ import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    contract: prismaContract('src/contract/contract.prisma', {
-      target: postgres,
-      createNamespace: postgresCreateNamespace,
-      defaultControlPolicy: 'external',
-    }),
+    contract: {
+      ...prismaContract('src/contract/contract.prisma', {
+        target: postgres,
+        createNamespace: postgresCreateNamespace,
+        defaultControlPolicy: 'external',
+      }),
+      typesModule: '#contract-types',
+    },
     migrations: {
       dir: 'migrations',
+      module: '@internal/target-postgres/migration',
     },
   }),
 });

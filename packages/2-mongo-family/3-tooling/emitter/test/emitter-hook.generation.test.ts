@@ -8,12 +8,14 @@ import {
   namespacedMongoStorageFromCollections,
 } from './fixtures/create-mongo-contract';
 
+const TYPES_MODULE = '@acme/orm-db/contract-types';
+
 const testHashes = { storageHash: 'test-storage-hash', profileHash: 'test-profile-hash' };
 
 describe('mongoEmission.generateContractTypes', () => {
   it('generates Contract and TypeMaps exports', () => {
     const contract = createMongoContract();
-    const types = generateContractDts(contract, mongoEmission, [], testHashes);
+    const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
     expect(types).toContain(
       'export type Contract = MongoContractWithTypeMaps<ContractBase, TypeMaps>',
     );
@@ -24,31 +26,37 @@ describe('mongoEmission.generateContractTypes', () => {
 
   it('generates hash type aliases', () => {
     const contract = createMongoContract();
-    const types = generateContractDts(contract, mongoEmission, [], testHashes);
+    const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
     expect(types).toContain('StorageHashBase<"test-storage-hash">');
     expect(types).toContain('ProfileHashBase<"test-profile-hash">');
   });
 
   it('generates concrete execution hash when provided', () => {
     const contract = createMongoContract();
-    const types = generateContractDts(contract, mongoEmission, [], {
-      ...testHashes,
-      executionHash: 'test-exec-hash',
-    });
+    const types = generateContractDts(
+      contract,
+      mongoEmission,
+      [],
+      {
+        ...testHashes,
+        executionHash: 'test-exec-hash',
+      },
+      TYPES_MODULE,
+    );
     expect(types).toContain('ExecutionHashBase<"test-exec-hash">');
   });
 
   it('generates generic execution hash when not provided', () => {
     const contract = createMongoContract();
-    const types = generateContractDts(contract, mongoEmission, [], testHashes);
+    const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
     expect(types).toContain('ExecutionHashBase<string>');
   });
 
   it('includes framework imports', () => {
     const contract = createMongoContract();
-    const types = generateContractDts(contract, mongoEmission, [], testHashes);
-    expect(types).toContain("from '@internal/mongo-contract'");
-    expect(types).toContain("from '@internal/contract/types'");
+    const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
+    expect(types).toContain("from '@acme/orm-db/contract-types'");
+    expect(types).not.toContain('@internal/');
     expect(types).toContain('MongoContractWithTypeMaps');
     expect(types).toContain('MongoTypeMaps');
     expect(types).toContain('StorageHashBase');
@@ -60,27 +68,33 @@ describe('mongoEmission.generateContractTypes', () => {
     const contract = createMongoContract();
     const codecImports: TypesImportSpec[] = [
       {
-        package: '@internal/adapter-mongo/codec-types',
+        package: '@internal/target-mongo/codec-types',
         named: 'CodecTypes',
         alias: 'MongoCodecTypes',
       },
     ];
-    const types = generateContractDts(contract, mongoEmission, codecImports, testHashes);
+    const types = generateContractDts(
+      contract,
+      mongoEmission,
+      codecImports,
+      testHashes,
+      TYPES_MODULE,
+    );
     expect(types).toContain(
-      "import type { CodecTypes as MongoCodecTypes } from '@internal/adapter-mongo/codec-types'",
+      "import type { CodecTypes as MongoCodecTypes } from '@internal/target-mongo/codec-types'",
     );
     expect(types).toContain('export type CodecTypes = MongoCodecTypes');
   });
 
   it('generates empty CodecTypes when no codec imports', () => {
     const contract = createMongoContract();
-    const types = generateContractDts(contract, mongoEmission, [], testHashes);
+    const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
     expect(types).toContain('export type CodecTypes = Record<string, never>');
   });
 
   it('generates contract header fields', () => {
     const contract = createMongoContract();
-    const types = generateContractDts(contract, mongoEmission, [], testHashes);
+    const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
     expect(types).toContain('readonly target: "mongo"');
     expect(types).not.toContain('schemaVersion');
     expect(types).toContain('readonly profileHash: ProfileHash');
@@ -90,7 +104,7 @@ describe('mongoEmission.generateContractTypes', () => {
     const contract = createMongoContract({
       roots: { users: crossRef('User'), posts: crossRef('Post') },
     });
-    const types = generateContractDts(contract, mongoEmission, [], testHashes);
+    const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
     expect(types).toContain(
       'readonly users: { readonly namespace: "__unbound__" & NamespaceId; readonly model: "User" }',
     );
@@ -105,17 +119,32 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-              name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-              bio: { nullable: true, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              name: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
+              bio: {
+                nullable: true,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: {
+              fields: { _id: { field: '_id' }, name: { field: 'name' }, bio: { field: 'bio' } },
+              collection: 'users',
+            },
           },
         },
         storage: namespacedMongoStorageFromCollections({ users: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain(
         'readonly _id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/objectId@1" } }',
       );
@@ -127,12 +156,53 @@ describe('mongoEmission.generateContractTypes', () => {
       );
     });
 
+    it('emits mixed scalar-list outer and element nullability exactly', () => {
+      const contract = createMongoContract({
+        models: {
+          Lists: {
+            fields: {
+              nullableElements: {
+                nullable: false,
+                many: { elementNullable: true },
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
+              nullableList: {
+                nullable: true,
+                many: { elementNullable: false },
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
+            },
+            relations: {},
+            storage: {
+              fields: {
+                nullableElements: { field: 'nullableElements' },
+                nullableList: { field: 'nullableList' },
+              },
+              collection: 'lists',
+            },
+          },
+        },
+        storage: namespacedMongoStorageFromCollections({ lists: {} }),
+      });
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
+      expect(types).toContain(
+        'readonly nullableElements: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: { readonly elementNullable: true } }',
+      );
+      expect(types).toContain(
+        'readonly nullableList: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: { readonly elementNullable: false } }',
+      );
+    });
+
     it('generates model relations without strategy', () => {
       const contract = createMongoContract({
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               posts: {
@@ -141,26 +211,38 @@ describe('mongoEmission.generateContractTypes', () => {
                 on: { localFields: ['_id'], targetFields: ['authorId'] },
               },
             },
-            storage: { collection: 'users' },
+            storage: { fields: { _id: { field: '_id' } }, collection: 'users' },
           },
           Post: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-              authorId: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              authorId: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               author: {
                 to: crossRef('User'),
                 cardinality: 'N:1',
+                nullable: false,
                 on: { localFields: ['authorId'], targetFields: ['_id'] },
               },
             },
-            storage: { collection: 'posts' },
+            storage: {
+              fields: { _id: { field: '_id' }, authorId: { field: 'authorId' } },
+              collection: 'posts',
+            },
           },
         },
         storage: namespacedMongoStorageFromCollections({ users: {}, posts: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain(
         'readonly to: { readonly namespace: "__unbound__" & NamespaceId; readonly model: "Post" }',
       );
@@ -175,16 +257,51 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: { fields: { _id: { field: '_id' } }, collection: 'users' },
           },
         },
         storage: namespacedMongoStorageFromCollections({ users: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain('readonly collection: "users"');
+    });
+
+    it('generates the stored name of each field', () => {
+      const contract = createMongoContract({
+        models: {
+          User: {
+            fields: {
+              id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              displayName: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
+            },
+            relations: {},
+            storage: {
+              collection: 'users',
+              fields: { id: { field: '_id' }, displayName: { field: 'display_name' } },
+            },
+          },
+        },
+        storage: namespacedMongoStorageFromCollections({ users: {} }),
+      });
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
+      expect(types).toContain(
+        'readonly storage: { readonly collection: "users"; readonly fields: { readonly id: { readonly field: "_id" }; readonly displayName: { readonly field: "display_name" } } }',
+      );
     });
 
     it('generates embedded model storage as empty record', () => {
@@ -192,28 +309,37 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               addresses: { to: crossRef('Address'), cardinality: '1:N' },
             },
             storage: {
+              fields: { _id: { field: '_id' } },
               collection: 'users',
               relations: { addresses: { field: 'addresses' } },
             },
           },
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
-            storage: {},
+            storage: { fields: { street: { field: 'street' } } },
             owner: 'User',
           },
         },
         storage: namespacedMongoStorageFromCollections({ users: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain('readonly Address: { readonly fields:');
       expect(types).toContain('readonly owner: "User"');
     });
@@ -223,25 +349,33 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           Post: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               comments: { to: crossRef('Comment'), cardinality: '1:N' },
             },
-            storage: { collection: 'posts' },
+            storage: { fields: { _id: { field: '_id' } }, collection: 'posts' },
           },
           Comment: {
             fields: {
-              text: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              text: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
-            storage: {},
+            storage: { fields: { text: { field: 'text' } } },
             owner: 'Post',
           },
         },
         storage: namespacedMongoStorageFromCollections({ posts: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain('readonly owner: "Post"');
     });
 
@@ -250,37 +384,60 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           Task: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-              type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              type: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
-            storage: { collection: 'tasks' },
+            storage: {
+              fields: { _id: { field: '_id' }, type: { field: 'type' } },
+              collection: 'tasks',
+            },
             discriminator: { field: 'type' },
-            variants: { Bug: { value: 'bug' }, Feature: { value: 'feature' } },
+            variants: { bug: crossRef('Bug'), feature: crossRef('Feature') },
           },
           Bug: {
             fields: {
-              severity: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              severity: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
-            storage: { collection: 'tasks' },
+            storage: { fields: { severity: { field: 'severity' } }, collection: 'tasks' },
             base: crossRef('Task'),
           },
           Feature: {
             fields: {
-              priority: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              priority: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
-            storage: { collection: 'tasks' },
+            storage: { fields: { priority: { field: 'priority' } }, collection: 'tasks' },
             base: crossRef('Task'),
           },
         },
         storage: namespacedMongoStorageFromCollections({ tasks: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain('discriminator: { readonly field: "type" }');
-      expect(types).toContain('readonly Bug: { readonly value: "bug" }');
-      expect(types).toContain('readonly Feature: { readonly value: "feature" }');
+      expect(types).toContain(
+        'readonly bug: { readonly namespace: "__unbound__" & NamespaceId; readonly model: "Bug" }',
+      );
+      expect(types).toContain(
+        'readonly feature: { readonly namespace: "__unbound__" & NamespaceId; readonly model: "Feature" }',
+      );
       expect(types).toContain(
         'base: { readonly namespace: "__unbound__" & NamespaceId; readonly model: "Task" }',
       );
@@ -291,28 +448,37 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               addresses: { to: crossRef('Address'), cardinality: '1:N' },
             },
             storage: {
+              fields: { _id: { field: '_id' } },
               collection: 'users',
               relations: { addresses: { field: 'addresses' } },
             },
           },
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
-            storage: {},
+            storage: { fields: { street: { field: 'street' } } },
             owner: 'User',
           },
         },
         storage: namespacedMongoStorageFromCollections({ users: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain(
         'readonly relations: { readonly addresses: { readonly field: "addresses" } }',
       );
@@ -324,7 +490,7 @@ describe('mongoEmission.generateContractTypes', () => {
       const contract = createMongoContract({
         storage: namespacedMongoStorageFromCollections({ users: {}, posts: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain('readonly namespaces:');
       expect(types).toContain('readonly entries:');
       expect(types).toContain('readonly collection:');
@@ -343,7 +509,7 @@ describe('mongoEmission.generateContractTypes', () => {
           },
         }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain('readonly users: { readonly indexes:');
       expect(types).toContain('readonly fields: { readonly email: 1 }');
       expect(types).toContain('readonly options: { readonly unique: true }');
@@ -354,7 +520,7 @@ describe('mongoEmission.generateContractTypes', () => {
 
     it('generates empty collections map under the default namespace', () => {
       const contract = createMongoContract({ storage: namespacedMongoStorageFromCollections({}) });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain('readonly entries:');
       expect(types).toContain('readonly collection: Record<string, never>');
     });
@@ -366,41 +532,59 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: { fields: { _id: { field: '_id' } }, collection: 'users' },
           },
         },
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-              city: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
+              city: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
         storage: namespacedMongoStorageFromCollections({ users: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain('export type AddressOutput =');
       expect(types).toContain('export type AddressInput =');
       expect(types).not.toMatch(/export type Address =/);
     });
 
-    it('emits valueObjects descriptor on ContractBase', () => {
+    it('emits value objects in the storage namespace entries, and nowhere else', () => {
       const contract = createMongoContract({
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
-      expect(types).toContain('readonly valueObjects:');
-      expect(types).toContain('readonly Address: { readonly fields:');
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
+      expect(types).toContain(
+        'readonly entries: { readonly collection: Record<string, never>; readonly valueObject: { readonly Address: { readonly fields: { readonly street: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } } } } } }',
+      );
+      expect(types).not.toContain('readonly valueObjects:');
     });
 
     it('emits model field with valueObject kind', () => {
@@ -408,59 +592,94 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
               homeAddress: {
                 nullable: true,
-                type: { kind: 'valueObject', name: 'Address' },
+                many: false,
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: '__unbound__',
+                  entityKind: 'valueObject',
+                  entityName: 'Address',
+                },
               },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: {
+              fields: { _id: { field: '_id' }, homeAddress: { field: 'homeAddress' } },
+              collection: 'users',
+            },
           },
         },
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
         storage: namespacedMongoStorageFromCollections({ users: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain(
-        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" } }',
+        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "__unbound__"; readonly entityKind: "valueObject"; readonly entityName: "Address" } }',
       );
     });
 
-    it('handles many: true on value object model fields', () => {
+    it('handles list value object model fields', () => {
       const contract = createMongoContract({
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
               previousAddresses: {
                 nullable: false,
-                type: { kind: 'valueObject', name: 'Address' },
-                many: true,
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: '__unbound__',
+                  entityKind: 'valueObject',
+                  entityName: 'Address',
+                },
+                many: { elementNullable: false },
               },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: {
+              fields: { _id: { field: '_id' }, previousAddresses: { field: 'previousAddresses' } },
+              collection: 'users',
+            },
           },
         },
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
         storage: namespacedMongoStorageFromCollections({ users: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain(
-        'readonly previousAddresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: true }',
+        'readonly previousAddresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "__unbound__"; readonly entityKind: "valueObject"; readonly entityName: "Address" }; readonly many: { readonly elementNullable: false } }',
       );
     });
 
@@ -469,27 +688,93 @@ describe('mongoEmission.generateContractTypes', () => {
         valueObjects: {
           NavItem: {
             fields: {
-              label: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              label: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
               children: {
                 nullable: false,
-                type: { kind: 'valueObject', name: 'NavItem' },
-                many: true,
+                type: {
+                  kind: 'valueObject',
+                  plane: 'storage',
+                  namespaceId: '__unbound__',
+                  entityKind: 'valueObject',
+                  entityName: 'NavItem',
+                },
+                many: { elementNullable: false },
               },
             },
           },
         },
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
       expect(types).toContain('export type NavItemOutput =');
       expect(types).toContain('export type NavItemInput =');
-      expect(types).toContain('readonly children: ReadonlyArray<NavItemOutput>');
-      expect(types).toContain('readonly children: ReadonlyArray<NavItemInput>');
+      expect(types).toContain(
+        'export type NavItemOutput = ValueObjectOutputTypes["__unbound__"]["NavItem"];',
+      );
+      expect(types).toContain(
+        'readonly children: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly plane: "storage"; readonly namespaceId: "__unbound__"; readonly entityKind: "valueObject"; readonly entityName: "NavItem" }; readonly many: { readonly elementNullable: false } }',
+      );
     });
 
-    it('omits valueObjects when none exist', () => {
+    it('omits value objects when none exist', () => {
       const contract = createMongoContract();
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
-      expect(types).not.toContain('valueObjects');
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
+      expect(types).not.toMatch(/valueObject/i);
+    });
+
+    it('types an enum member of a value object by the storage value set it names', () => {
+      const storage = namespacedMongoStorageFromCollections({});
+      const contract = createMongoContract({
+        storage: {
+          ...storage,
+          namespaces: {
+            __unbound__: {
+              id: '__unbound__',
+              entries: {
+                collection: {},
+                valueSet: { Kind: { kind: 'valueSet', values: ['home', 'work'] } },
+              },
+            },
+          },
+        },
+        valueObjects: {
+          Address: {
+            fields: {
+              kind: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                valueSet: {
+                  plane: 'storage',
+                  entityKind: 'valueSet',
+                  namespaceId: '__unbound__',
+                  entityName: 'Kind',
+                },
+              },
+            },
+          },
+        },
+      });
+      const types = generateContractDts(
+        contract,
+        mongoEmission,
+        [],
+        testHashes,
+        TYPES_MODULE,
+        undefined,
+        {
+          get: () => undefined,
+          renderOutputTypeFor: () => undefined,
+          renderValueLiteralFor: (_id, value) =>
+            typeof value === 'string' ? JSON.stringify(value) : undefined,
+        },
+      );
+      expect(types).toContain(
+        'type FieldTypeOverrides = { readonly __unbound__: { readonly valueObjects: { readonly Address: { readonly kind: { readonly output: "home" | "work"; readonly input: "home" | "work" } } } } };',
+      );
     });
 
     it('emits nullable value object type alias field', () => {
@@ -497,13 +782,22 @@ describe('mongoEmission.generateContractTypes', () => {
         valueObjects: {
           Address: {
             fields: {
-              zip: { nullable: true, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              zip: {
+                nullable: true,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
-      expect(types).toContain('readonly zip: CodecTypes["mongo/string@1"]["output"] | null');
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
+      expect(types).toContain(
+        'readonly zip: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } }',
+      );
+      expect(types).toContain(
+        'export type AddressOutput = ValueObjectOutputTypes["__unbound__"]["Address"];',
+      );
     });
 
     it('emits FieldInputTypes alongside FieldOutputTypes', () => {
@@ -511,20 +805,43 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-              name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              name: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
-            storage: { collection: 'users' },
+            storage: {
+              fields: { _id: { field: '_id' }, name: { field: 'name' } },
+              collection: 'users',
+            },
           },
         },
         storage: namespacedMongoStorageFromCollections({ users: {} }),
       });
-      const types = generateContractDts(contract, mongoEmission, [], testHashes);
-      expect(types).toContain('export type FieldOutputTypes =');
-      expect(types).toContain('export type FieldInputTypes =');
-      expect(types).toContain('CodecTypes["mongo/objectId@1"]["input"]');
-      expect(types).toContain('CodecTypes["mongo/string@1"]["input"]');
+      const types = generateContractDts(contract, mongoEmission, [], testHashes, TYPES_MODULE);
+      expect(types).toContain(
+        "export type FieldOutputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"output\", ContractBase['storage']['namespaces']>;",
+      );
+      expect(types).toContain(
+        "export type FieldInputTypes = FieldTypesFromDomain<ContractBase['domain']['namespaces'], CodecTypes, ParameterizedOutputTypeFunctions, FieldTypeOverrides, \"input\", ContractBase['storage']['namespaces']>;",
+      );
     });
+  });
+});
+
+describe('mongoEmission.getFamilyImports', () => {
+  it('imports the family types from the module it is given', () => {
+    expect(mongoEmission.getFamilyImports('@acme/orm-db/contract-types')).toEqual(
+      ['MongoCollection', 'MongoContractWithTypeMaps', 'MongoTypeMaps', 'RelationKeys'].map(
+        (symbol) => ({ moduleSpecifier: '@acme/orm-db/contract-types', symbol, typeOnly: true }),
+      ),
+    );
   });
 });

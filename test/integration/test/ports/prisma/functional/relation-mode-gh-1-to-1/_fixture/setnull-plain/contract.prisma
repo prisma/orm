@@ -1,8 +1,11 @@
+// use prisma-8
+
 model UserOneToOne {
   id              String @id
   profile         ProfileOneToOne?
   profileOptional ProfileOptionalOneToOne?
   enabled         Boolean?
+  @@map("userOneToOne")
 }
 
 model ProfileOneToOne {
@@ -10,6 +13,7 @@ model ProfileOneToOne {
   user    UserOneToOne      @relation(fields: [userId], references: [id])
   userId  String            @unique
   enabled Boolean?
+  @@map("profileOneToOne")
 }
 
 model ProfileOptionalOneToOne {
@@ -17,4 +21,5 @@ model ProfileOptionalOneToOne {
   user    UserOneToOne?     @relation(fields: [userId], references: [id], onUpdate: SetNull, onDelete: SetNull)
   userId  String?           @unique
   enabled Boolean?
+  @@map("profileOptionalOneToOne")
 }

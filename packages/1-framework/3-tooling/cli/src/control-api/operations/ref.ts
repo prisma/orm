@@ -2,36 +2,39 @@
  * Policy cores of the `ref set` / `ref delete` / `ref list` commands: resolve the reference, and write or read the refs index.
  */
 
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
+import type { DeclaredDatabasePolicies } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
 } from '@internal/migration-tools/contract-snapshot-store';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { findLatestMigration, isGraphNode } from '@internal/migration-tools/migration-graph';
+import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import { parseContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry } from '@internal/migration-tools/refs';
 import {
+  advanceRef,
   deleteRef,
   readRefs,
   validateRefName,
   validateRefValue,
-  writeRef,
 } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import {
-  CliStructuredError,
+  type CliStructuredError,
   errorFileNotFound,
   errorRefSetBundleNotFound,
   errorRefSetEmptySentinel,
   errorRefSetHashNotInGraph,
   errorRuntime,
-  errorUnexpected,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
 import { resolveMigrationPaths } from '../../utils/command-helpers';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 export interface RefSetResult {
@@ -39,6 +42,7 @@ export interface RefSetResult {
   readonly ref: string;
   readonly hash: string;
   readonly invariants: readonly string[];
+  readonly policies?: DeclaredDatabasePolicies;
 }
 
 export interface RefDeleteResult {
@@ -52,19 +56,10 @@ export interface RefListResult {
   readonly refs: Record<string, RefEntry>;
 }
 
-function mapError(error: unknown): CliStructuredError {
-  if (MigrationToolsError.is(error)) {
-    return error;
-  }
-  return errorUnexpected(error instanceof Error ? error.message : String(error));
-}
-
 export interface RefOperationOptions {
-  readonly config: PrismaNextConfig;
+  readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** `--config` as the user wrote it, used only to locate the migrations directory and for display. */
-  readonly configPath?: string;
 }
 
 function cliErrorInvalidRefName(name: string): CliStructuredError {
@@ -85,11 +80,7 @@ export async function executeRefSetCommand(
 
   const config = options.config;
   try {
-    const { migrationsDir, refsDir } = resolveMigrationPaths(
-      options.configPath,
-      config,
-      options.cwd,
-    );
+    const { migrationsDir, refsDir } = resolveMigrationPaths(config, options.cwd);
     const loaded = await buildReadAggregate(config, { migrationsDir });
     if (!loaded.ok) {
       return notOk(loaded.failure);
@@ -113,8 +104,7 @@ export async function executeRefSetCommand(
       return notOk(errorRefSetEmptySentinel(resolvedHash));
     }
     if (!isGraphNode(resolvedHash, graph)) {
-      const graphTip = findLatestMigration(graph)?.to ?? null;
-      return notOk(errorRefSetHashNotInGraph(resolvedHash, [...graph.nodes].sort(), graphTip));
+      return notOk(errorRefSetHashNotInGraph(resolvedHash, [...graph.nodes].sort()));
     }
 
     const matchingBundle = bundles.find((bundle) => bundle.metadata.to === resolvedHash);
@@ -127,7 +117,7 @@ export async function executeRefSetCommand(
       'contract.json',
     );
     try {
-      await readContractSnapshotJson(migrationsDir, resolvedHash);
+      await readContractSnapshotJson(migrationsDir, resolvedHash, snapshotVerifierFor(config));
     } catch (readError) {
       if (
         MigrationToolsError.is(readError) &&
@@ -143,12 +133,16 @@ export async function executeRefSetCommand(
       throw readError;
     }
 
-    const entry: RefEntry = { hash: resolvedHash, invariants: [] };
-    await writeRef(refsDir, name, entry);
-    return ok({ ok: true as const, ref: name, hash: resolvedHash, invariants: [] });
+    const written = await advanceRef(refsDir, name, resolvedHash);
+    return ok({
+      ok: true as const,
+      ref: name,
+      hash: written.hash,
+      invariants: written.invariants,
+      ...ifDefined('policies', written.policies),
+    });
   } catch (error) {
-    if (error instanceof CliStructuredError) return notOk(error);
-    return notOk(mapError(error));
+    return notOk(errorFromCaught(error, (message) => message));
   }
 }
 
@@ -157,12 +151,11 @@ export async function executeRefDeleteCommand(
   options: RefOperationOptions,
 ): Promise<Result<RefDeleteResult, CliStructuredError>> {
   try {
-    const { refsDir } = resolveMigrationPaths(options.configPath, options.config, options.cwd);
+    const { refsDir } = resolveMigrationPaths(options.config, options.cwd);
     await deleteRef(refsDir, name);
     return ok({ ok: true as const, ref: name, deleted: true as const });
   } catch (error) {
-    if (error instanceof CliStructuredError) return notOk(error);
-    return notOk(mapError(error));
+    return notOk(errorFromCaught(error, (message) => message));
   }
 }
 
@@ -170,11 +163,10 @@ export async function executeRefListCommand(
   options: RefOperationOptions,
 ): Promise<Result<RefListResult, CliStructuredError>> {
   try {
-    const { refsDir } = resolveMigrationPaths(options.configPath, options.config, options.cwd);
+    const { refsDir } = resolveMigrationPaths(options.config, options.cwd);
     const refs = await readRefs(refsDir);
     return ok({ ok: true as const, refs });
   } catch (error) {
-    if (error instanceof CliStructuredError) return notOk(error);
-    return notOk(mapError(error));
+    return notOk(errorFromCaught(error, (message) => message));
   }
 }

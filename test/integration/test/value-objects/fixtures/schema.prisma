@@ -1,8 +1,11 @@
+// use prisma-8
+
 model Shop {
   id       Int    @id
   name     String
   location Address
   notes    Address?
+  @@map("shop")
 }
 
 type Address {

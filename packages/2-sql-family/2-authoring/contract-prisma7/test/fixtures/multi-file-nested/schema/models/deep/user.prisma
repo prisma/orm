@@ -1,0 +1,5 @@
+model User {
+  id    Int @id
+  topId Int
+  top   Top @relation(fields: [topId], references: [id])
+}

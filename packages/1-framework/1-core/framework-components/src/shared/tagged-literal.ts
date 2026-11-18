@@ -1,0 +1,224 @@
+import { tsQuotedTextSource, tsTemplateText } from '@internal/ts-render';
+
+/**
+ * `text` is the canonical value of the literal. Every failure `offset` is an
+ * index into the resolved body the function was given, including `too-large`,
+ * whose limit is measured on the canonical text.
+ */
+export type TaggedLiteralCanonicalization =
+  | { readonly ok: true; readonly text: string }
+  | {
+      readonly ok: false;
+      readonly reason: 'nul' | 'too-large';
+      readonly offset: number;
+    };
+
+export const TAGGED_LITERAL_MAX_BYTES = 65536;
+
+/** The message a tagged literal's canonicalization failure is reported with, in PSL and in TypeScript. */
+export function describeTaggedLiteralFailure(reason: 'nul' | 'too-large'): string {
+  switch (reason) {
+    case 'nul':
+      return 'Tagged literals must not contain NUL characters.';
+    case 'too-large':
+      return `Tagged literal exceeds ${TAGGED_LITERAL_MAX_BYTES} bytes.`;
+  }
+}
+
+const PSL_BACKTICK_ESCAPES: ReadonlySet<string> = new Set(['`', '\\']);
+const TEMPLATE_TAG_ESCAPES: ReadonlySet<string> = new Set(['`', '\\', '$']);
+
+/** The escapes a PSL backtick string resolves: `` \` `` and `\\`. PSL has no interpolation, so `${` is ordinary text. */
+export function resolvePslBacktickEscapes(raw: string): string {
+  return resolveEscapes(raw, PSL_BACKTICK_ESCAPES);
+}
+
+/** The escapes a TypeScript template tag resolves: the PSL two plus `\$`, the only way to write `${` in a template literal. */
+export function resolveTemplateTagEscapes(raw: string): string {
+  return resolveEscapes(raw, TEMPLATE_TAG_ESCAPES);
+}
+
+/** Every other backslash sequence is kept as written, both characters, so a SQL body may contain `E'\n'` unchanged. */
+function resolveEscapes(raw: string, escapes: ReadonlySet<string>): string {
+  let out = '';
+  let i = 0;
+  while (i < raw.length) {
+    const ch = raw.charAt(i);
+    const next = raw.charAt(i + 1);
+    if (ch === '\\' && escapes.has(next)) {
+      out += next;
+      i += 2;
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
+const BLANK_LINE = /^[ \t]*$/;
+const LEADING_INDENT = /^[ \t]*/;
+const LINE_BREAK = /\r\n|\r|\n/g;
+
+interface Line {
+  readonly text: string;
+  /** Where `text` starts in the resolved input. */
+  readonly start: number;
+}
+
+/**
+ * Turns the escape-resolved body of a tagged literal into its canonical text:
+ * newlines become `\n`, every blank line before the first non-blank line and
+ * after the last one is dropped, common leading whitespace is removed, internal
+ * blank lines become empty, and no trailing newline is added. The result is its
+ * own canonical text. Fails on a NUL character or when the result is larger
+ * than 65536 UTF-8 bytes.
+ */
+export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCanonicalization {
+  const nul = resolved.indexOf('\0');
+  if (nul !== -1) {
+    return { ok: false, reason: 'nul', offset: nul };
+  }
+  const lines = splitLines(resolved);
+  while (lines.length > 0 && BLANK_LINE.test(lines[0]?.text ?? '')) {
+    lines.shift();
+  }
+  while (lines.length > 0 && BLANK_LINE.test(lines.at(-1)?.text ?? '')) {
+    lines.pop();
+  }
+  const indent = commonIndent(lines);
+  const bodyLines = lines.map((line) =>
+    BLANK_LINE.test(line.text)
+      ? { text: '', start: line.start }
+      : { text: line.text.slice(indent), start: line.start + indent },
+  );
+  const excess = offsetWhereBytesExceed(bodyLines, TAGGED_LITERAL_MAX_BYTES);
+  if (excess !== undefined) {
+    return { ok: false, reason: 'too-large', offset: excess };
+  }
+  return { ok: true, text: bodyLines.map((line) => line.text).join('\n') };
+}
+
+function splitLines(text: string): Line[] {
+  const lines: Line[] = [];
+  let start = 0;
+  for (const match of text.matchAll(LINE_BREAK)) {
+    lines.push({ text: text.slice(start, match.index), start });
+    start = match.index + match[0].length;
+  }
+  lines.push({ text: text.slice(start), start });
+  return lines;
+}
+
+function commonIndent(lines: readonly Line[]): number {
+  let indent = Number.POSITIVE_INFINITY;
+  for (const line of lines) {
+    if (BLANK_LINE.test(line.text)) continue;
+    indent = Math.min(indent, LEADING_INDENT.exec(line.text)?.[0].length ?? 0);
+  }
+  return Number.isFinite(indent) ? indent : 0;
+}
+
+/** The resolved-body offset of the first character that pushes the text past `limit` bytes. */
+function offsetWhereBytesExceed(lines: readonly Line[], limit: number): number | undefined {
+  let bytes = 0;
+  for (const [index, line] of lines.entries()) {
+    if (index > 0) {
+      bytes += 1;
+      if (bytes > limit) return line.start;
+    }
+    let offsetInLine = 0;
+    for (const char of line.text) {
+      bytes += utf8Length(char.codePointAt(0) ?? 0);
+      if (bytes > limit) return line.start + offsetInLine;
+      offsetInLine += char.length;
+    }
+  }
+  return undefined;
+}
+
+function utf8Length(codePoint: number): number {
+  if (codePoint < 0x80) return 1;
+  if (codePoint < 0x800) return 2;
+  if (codePoint < 0x10000) return 3;
+  return 4;
+}
+
+function escapeQuotedText(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
+}
+
+/**
+ * The PSL text of a tagged literal holding `text`: the backtick form, or the double-quote form when the text holds a
+ * backtick, which reads better than escaping each backtick. A multi-line text starts on the line after the opening
+ * backtick, so indentation a printer adds to an enclosing block is common to every line and the canonicalization
+ * removes it. The literal's canonical text is `text` again only when {@link printedTaggedLiteralReadsBack} holds; text
+ * with leading indentation or a carriage return, for example, does not read back. ADR 129.
+ */
+export function printTaggedLiteral(tag: string, text: string): string {
+  if (text.includes('`')) return `${tag}"${escapeQuotedText(text)}"`;
+  const fenced = text.replace(/\\(?=\\|$)/g, '\\\\');
+  return isPrintedOnOwnLines(text) ? `${tag}\`\n${fenced}\n\`` : `${tag}\`${fenced}\``;
+}
+
+function isPrintedOnOwnLines(text: string): boolean {
+  return !text.includes('`') && text.includes('\n');
+}
+
+/** Whether the literal {@link printTaggedLiteral} prints for `text` has `text` as its canonical text. */
+export function printedTaggedLiteralReadsBack(text: string): boolean {
+  const resolvedBody = isPrintedOnOwnLines(text) ? `\n${text}\n` : text;
+  const canonical = canonicalizeTaggedLiteralBody(resolvedBody);
+  return canonical.ok && canonical.text === text;
+}
+
+/**
+ * TypeScript source for `text` in generated code: a template literal with `tag`, or `tsQuotedTextSource(text)`. It
+ * writes a template only when the tag's TypeScript function canonicalizes its text as `canonicalizeTaggedLiteralBody`
+ * does and that leaves `text` unchanged, which holds for `sql`. It also falls back when a line ends in a space or a
+ * tab, which editors strip on save, and when `text` holds a character a template would carry unescaped and invisible.
+ * A multi-line template's lines sit one level deeper than the line it opens on.
+ */
+export function tsTaggedTemplateSource(
+  tag: string,
+  text: string,
+): { readonly source: string; readonly usesTag: boolean } {
+  if (!templateHoldsUnchanged(text)) return { source: tsQuotedTextSource(text), usesTag: false };
+  const escaped = tsTemplateText(text);
+  if (!text.includes('\n')) return { source: `${tag}\`${escaped}\``, usesTag: true };
+  const body = escaped
+    .split('\n')
+    .map((line) => (line.length === 0 ? line : `  ${line}`))
+    .join('\n');
+  return { source: `${tag}\`\n${body}\n\``, usesTag: true };
+}
+
+const WHITESPACE_ONLY_LINE = /^\s+$/;
+const TRAILING_SPACE_OR_TAB = /[ \t]$/;
+
+function templateHoldsUnchanged(text: string): boolean {
+  const canonical = canonicalizeTaggedLiteralBody(text);
+  if (!canonical.ok || canonical.text !== text) return false;
+  const lines = text.split('\n');
+  const indentTreatsAsBlank = (line: string) =>
+    WHITESPACE_ONLY_LINE.test(line) && !BLANK_LINE.test(line);
+  if (lines.some((line) => indentTreatsAsBlank(line) || TRAILING_SPACE_OR_TAB.test(line))) {
+    return false;
+  }
+  return !holdsCharacterThatNeedsAnEscape(text);
+}
+
+function holdsCharacterThatNeedsAnEscape(text: string): boolean {
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    const isControl = (code < 0x20 && char !== '\n' && char !== '\t') || code === 0x7f;
+    const isLineOrParagraphSeparator = code === 0x2028 || code === 0x2029;
+    const isLoneSurrogate = code >= 0xd800 && code <= 0xdfff;
+    if (isControl || isLineOrParagraphSeparator || isLoneSurrogate) return true;
+  }
+  return false;
+}

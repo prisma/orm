@@ -17,7 +17,7 @@ import { afterAll } from 'vitest';
  * Each ported suite authors its schema as PSL (`_fixtures/<suite>/contract.prisma`)
  * and emits a `contract.json`/`contract.d.ts`. The harness:
  *   1. reuses one PGlite dev database server for each contract used by the test file and clears rows per test,
- *   2. **pushes the contract to the database** through prisma-next's own
+ *   2. **pushes the contract to the database** through Prisma 8's own
  *      plan → apply path (the same mechanism `prisma db init` uses) — no
  *      hand-written DDL, so the materialised schema can never drift from the
  *      contract under test,
@@ -119,6 +119,8 @@ async function pushContract(connectionString: string, contractJson: unknown): Pr
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       // Execute-only push (no TypeScript scaffold rendered), so this is cosmetic;
@@ -170,7 +172,7 @@ export async function withPostgresPort<TContract extends Contract<SqlStorage>>(
   const storageHash = base.storage.storageHash;
   let database = databases.get(storageHash);
   if (database === undefined) {
-    database = await createDevDatabase({ databaseIdleTimeoutMillis: 30_000 });
+    database = await createDevDatabase();
     try {
       await pushContract(database.connectionString, options.contractJson);
     } catch (error) {
@@ -182,7 +184,7 @@ export async function withPostgresPort<TContract extends Contract<SqlStorage>>(
     await clearRows(database.connectionString);
   }
 
-  const client = postgres<TContract>({
+  const client = postgres({
     contract,
     url: database.connectionString,
     verifyMarker: false,

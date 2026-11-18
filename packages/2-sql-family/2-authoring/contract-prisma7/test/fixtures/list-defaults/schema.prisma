@@ -1,0 +1,16 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Lists {
+  id       Int        @id
+  bl       Bytes[]    @default(["aGVsbG8=", "d29ybGQ="])
+  blEmpty  Bytes[]    @default([])
+  dl       DateTime[] @default(["2024-01-01T00:00:00.000Z", "2024-01-02T03:04:05.123+02:00"])
+  dlEmpty  DateTime[] @default([])
+  tzl      DateTime[] @default(["2024-01-02T03:04:05.000Z"]) @db.Timestamptz(6)
+  datel    DateTime[] @default(["2024-01-02T03:04:05.000Z"]) @db.Date
+  timel    DateTime[] @default(["1970-01-01T12:34:56.000Z"]) @db.Time(6)
+  timetzl  DateTime[] @default(["1970-01-01T12:34:56.000Z"]) @db.Timetz(6)
+  ts6l     DateTime[] @default(["2024-01-02T03:04:05.123456Z"]) @db.Timestamp(6)
+}

@@ -142,28 +142,34 @@ describe('GroupedQuery.annotate (read-typed)', () => {
 
 describe('InsertQuery.annotate (write-typed)', () => {
   test('accepts a write-only annotation', () => {
-    db.public.users.insert([{ name: 'Alice' }]).annotate(auditAnnotation({ actor: 'system' }));
+    db.public.users
+      .insert([{ id: 1, name: 'Alice', email: 'a@b.com' }])
+      .annotate(auditAnnotation({ actor: 'system' }));
   });
 
   test('accepts a both-kind annotation', () => {
-    db.public.users.insert([{ name: 'Alice' }]).annotate(otelAnnotation({ traceId: 't' }));
+    db.public.users
+      .insert([{ id: 1, name: 'Alice', email: 'a@b.com' }])
+      .annotate(otelAnnotation({ traceId: 't' }));
   });
 
   test('rejects a read-only annotation (negative)', () => {
-    // @ts-expect-error - cache declares applicableTo: ['read'], not 'write'
-    db.public.users.insert([{ name: 'Alice' }]).annotate(cacheAnnotation({ ttl: 60 }));
+    db.public.users
+      .insert([{ id: 1, name: 'Alice', email: 'a@b.com' }])
+      // @ts-expect-error - cache declares applicableTo: ['read'], not 'write'
+      .annotate(cacheAnnotation({ ttl: 60 }));
   });
 
   test('rejects a mix containing a read-only annotation (negative)', () => {
     db.public.users
-      .insert([{ name: 'Alice' }])
+      .insert([{ id: 1, name: 'Alice', email: 'a@b.com' }])
       // @ts-expect-error - cache declares applicableTo: ['read'], not 'write'
       .annotate(auditAnnotation({ actor: 'system' }), cacheAnnotation({ ttl: 60 }));
   });
 
   test('chainable: .annotate() before .returning preserves the resulting row type', () => {
     const plan = db.public.users
-      .insert([{ name: 'Alice' }])
+      .insert([{ id: 1, name: 'Alice', email: 'a@b.com' }])
       .annotate(auditAnnotation({ actor: 'system' }))
       .returning('id', 'name')
       .build();

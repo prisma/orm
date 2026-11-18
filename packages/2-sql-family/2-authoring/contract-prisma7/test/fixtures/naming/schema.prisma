@@ -1,0 +1,20 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+model UserProfile {
+  id        Int    @id
+  firstName String @map("first_name")
+  Bio       String
+
+  @@map("user_profiles")
+}
+
+model Keep {
+  Id Int @id
+}

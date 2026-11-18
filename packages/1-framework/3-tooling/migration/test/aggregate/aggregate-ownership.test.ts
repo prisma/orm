@@ -84,6 +84,17 @@ describe('ContractSpaceAggregate ownership queries', () => {
     expect(aggregate.declaringSpaces(inPublic('orphan_table'))).toEqual([]);
   });
 
+  it('namespaceDeclaringSpaces returns every space that declares the namespace', () => {
+    const app = makeSpace('app', { public: { table: { app_user: {} } }, billing: { table: {} } });
+    const auth = makeSpace('supabase', { auth: { table: { users: {} } }, public: { table: {} } });
+    const aggregate = makeAggregate(app, [auth]);
+
+    expect(aggregate.namespaceDeclaringSpaces('public')).toEqual(['app', 'supabase']);
+    expect(aggregate.namespaceDeclaringSpaces('auth')).toEqual(['supabase']);
+    expect(aggregate.namespaceDeclaringSpaces('billing')).toEqual(['app']);
+    expect(aggregate.namespaceDeclaringSpaces('ledger')).toEqual([]);
+  });
+
   it('does not conflate the same bare entity name declared in a different namespace', () => {
     // `app` declares `users` in `tenant_a`; a live `users` table sitting in
     // `tenant_b` is a genuine orphan, not something `app` owns — the oracle

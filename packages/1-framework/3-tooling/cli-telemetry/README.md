@@ -1,17 +1,17 @@
 # `@internal/cli-telemetry`
 
-Anonymous CLI usage telemetry client for Prisma Next. Runs in a
+Anonymous CLI usage telemetry client for Prisma 8. Runs in a
 detached child process at command start, never blocks the parent,
 and silently swallows every error in the sending path.
 
 ## Responsibilities
 
-- **User config store.** Read/write `$XDG_CONFIG_HOME/prisma-next/config.json`
+- **User config store.** Read/write `$XDG_CONFIG_HOME/prisma-8/config.json`
   (or platform equivalent), holding the consent flag (`enableTelemetry`) and
   the per-installation random UUID (`installationId`). Atomic writes;
   unknown fields preserved.
 - **Gating.** Pure-function resolution over the two opt-out env vars
-  (`PRISMA_NEXT_DISABLE_TELEMETRY`, `DO_NOT_TRACK=1`), the stored
+  (`PRISMA_DISABLE_TELEMETRY`, `DO_NOT_TRACK=1`), the stored
   preference, and the default-off fallback when the file is missing.
 - **Sanitization.** Project the parent's parsed commander result into
   the command name plus the array of flag names; never values, never
@@ -28,7 +28,7 @@ and silently swallows every error in the sending path.
 
 The endpoint URL is a module-level constant pinned to the deployed
 backend. For local-development testing, set
-`PRISMA_NEXT_TELEMETRY_ENDPOINT` to override the destination URL
+`PRISMA_TELEMETRY_ENDPOINT` to override the destination URL
 (used by the integration tests to spin up a mock HTTP server on an
 ephemeral port). This is an integration-testing affordance, not a
 public knob: do not surface it in user-facing docs.

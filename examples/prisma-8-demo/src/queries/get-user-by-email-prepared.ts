@@ -1,8 +1,8 @@
 import { db } from '../prisma/db';
 
 export async function getUserByEmailPrepared(emails: readonly string[]) {
-  const ps = await db.prepare({ email: 'pg/text@1' }, (sql, params) =>
-    sql.public.user
+  const ps = await db.prepare({ email: 'pg/text@1' }, (params) =>
+    db.sql.public.user
       .select('id', 'email', 'displayName', 'createdAt', 'kind')
       .where((f, fns) => fns.eq(f.email, params.email))
       .limit(1)

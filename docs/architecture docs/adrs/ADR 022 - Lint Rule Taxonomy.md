@@ -1,5 +1,7 @@
 # ADR 022 — Lint rule taxonomy & configuration model
 
+> **Update — the hook is removed.** The middleware hook `beforeExecute` this ADR describes no longer exists. [ADR 271](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md) replaced it with lifecycle events and interceptors on a tree of activities.
+
 ## Context
 
 Guardrails are first-class in Prisma Next and must be consistent, configurable, and machine readable. Multiple query lanes can produce Plans, and violations must reference rule IDs in a stable taxonomy. Different environments need different defaults and override behavior without code changes.

@@ -1,0 +1,34 @@
+import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
+import type { ControlExtensionDescriptor } from '@prisma/orm-framework/components/control';
+import {
+  defineConfig as defineFrameworkConfig,
+  type PrismaConfig,
+} from '@prisma/orm-framework/config/config-types';
+import postgresPack from '@prisma/orm-target-postgres/target/pack';
+import { postgresCreateNamespace } from '@prisma/orm-target-postgres/target/types';
+import { adapter, driver, family, migrationModule, target, typesModule } from './components';
+
+export interface StandinConfigOptions {
+  readonly contract: string;
+  readonly output: string;
+  readonly extensions?: readonly ControlExtensionDescriptor<'sql', 'postgres'>[];
+}
+
+export function defineConfig(options: StandinConfigOptions): PrismaConfig<'sql', 'postgres'> {
+  return defineFrameworkConfig({
+    family,
+    target,
+    adapter,
+    driver,
+    extensions: options.extensions ?? [],
+    contract: {
+      ...prismaContract(options.contract, {
+        output: options.output,
+        target: postgresPack,
+        createNamespace: postgresCreateNamespace,
+      }),
+      typesModule,
+    },
+    migrations: { module: migrationModule },
+  });
+}

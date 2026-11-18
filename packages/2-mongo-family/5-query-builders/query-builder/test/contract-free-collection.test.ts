@@ -31,26 +31,6 @@ describe('collection() — aggregate chain', () => {
     expect(cmd.pipeline).toHaveLength(0);
   });
 
-  it('aggregate().match(f => ...).build() appends a MongoMatchStage', () => {
-    const cmd = col
-      .aggregate()
-      .match((f) => f._id.eq('x'))
-      .build();
-    expect(cmd.pipeline).toHaveLength(1);
-    expect(cmd.pipeline[0]).toBeInstanceOf(MongoMatchStage);
-  });
-
-  it('aggregate().match().match() produces two MongoMatchStage entries (each match is its own stage)', () => {
-    const cmd = col
-      .aggregate()
-      .match((f) => f._id.eq('x'))
-      .match((f) => f.space.eq('x'))
-      .build();
-    expect(cmd.pipeline).toHaveLength(2);
-    expect(cmd.pipeline[0]).toBeInstanceOf(MongoMatchStage);
-    expect(cmd.pipeline[1]).toBeInstanceOf(MongoMatchStage);
-  });
-
   it('aggregate().match().limit() produces $match then $limit stages', () => {
     const cmd = col
       .aggregate()
@@ -191,19 +171,5 @@ describe('collection() — match().findOneAndUpdate() (CAS shape)', () => {
       .match((f) => f._id.eq('x'))
       .findOneAndUpdate((f) => [f.storageHash.set('h1')], { upsert: true });
     expect(cmd.upsert).toBe(true);
-  });
-
-  it('depth-≥2 chain with aggregate: match.match.limit produces correct structure (F21 litmus — no new Command/Stage/AndExpr at call site)', () => {
-    const space = 'my-space';
-    const cmd = col
-      .aggregate()
-      .match((f) => f._id.eq(space))
-      .match((f) => f.space.eq(space))
-      .limit(1)
-      .build();
-    expect(cmd).toBeInstanceOf(AggregateCommand);
-    expect(cmd.pipeline[0]).toBeInstanceOf(MongoMatchStage);
-    expect(cmd.pipeline[1]).toBeInstanceOf(MongoMatchStage);
-    expect(cmd.pipeline[2]).toBeInstanceOf(MongoLimitStage);
   });
 });

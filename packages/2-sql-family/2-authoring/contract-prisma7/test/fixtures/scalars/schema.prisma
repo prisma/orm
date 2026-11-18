@@ -1,0 +1,38 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+model Scalars {
+  string       String
+  stringOpt    String?
+  stringList   String[]
+  boolean      Boolean
+  booleanOpt   Boolean?
+  booleanList  Boolean[]
+  int          Int        @id
+  intOpt       Int?
+  intList      Int[]
+  bigInt       BigInt
+  bigIntOpt    BigInt?
+  bigIntList   BigInt[]
+  float        Float
+  floatOpt     Float?
+  floatList    Float[]
+  decimal      Decimal
+  decimalOpt   Decimal?
+  decimalList  Decimal[]
+  dateTime     DateTime
+  dateTimeOpt  DateTime?
+  dateTimeList DateTime[]
+  json         Json
+  jsonOpt      Json?
+  jsonList     Json[]
+  bytes        Bytes
+  bytesOpt     Bytes?
+  bytesList    Bytes[]
+}

@@ -19,14 +19,14 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Subject: an unmapped Postgres error (SQLSTATE 42P10 — "no unique or exclusion
 // constraint matching the ON CONFLICT specification") surfaced from an upsert
-// becomes a user-facing structured error (Prisma P2039 → prisma-next:
+// becomes a user-facing structured error (Prisma P2039 → Prisma 8:
 // SqlQueryError with sqlState '42P10').
 //
 // Setup: after schema push, drop the unique index on `email` to simulate
 // schema drift (the contract still declares `@unique`, the DB does not have
 // the constraint). A subsequent upsert targeting `email` fails with 42P10.
 //
-// In prisma-next the unique index name is managed (content-hashed prefix),
+// In Prisma 8 the unique index name is managed (content-hashed prefix),
 // so we discover the actual index name at runtime from pg_indexes rather than
 // hard-coding "User_email_key" as upstream does.
 //
@@ -61,6 +61,8 @@ async function pushContract(connectionString: string): Promise<void> {
       schema,
       policy: INIT_ADDITIVE_POLICY,
       fromContract: null,
+      origin: null,
+      statements: [],
       frameworkComponents,
       spaceId: APP_SPACE_ID,
       snapshotsImportPath: '../../snapshots',
@@ -106,7 +108,7 @@ describe('ports/prisma/functional/issues-unmapped-driver-error-user-facing', () 
         await pushContract(connectionString);
 
         await withClient(connectionString, async (client) => {
-          // prisma-next emits @unique as an ALTER TABLE ... ADD CONSTRAINT (backed index),
+          // Prisma 8 emits @unique as an ALTER TABLE ... ADD CONSTRAINT (backed index),
           // so we must DROP the constraint rather than DROP INDEX directly.
           const result = await client.query<{ conname: string }>(
             `SELECT conname FROM pg_constraint
@@ -127,7 +129,7 @@ describe('ports/prisma/functional/issues-unmapped-driver-error-user-facing', () 
           capabilities: { ...base.capabilities, returning: { enabled: true } },
         } as PortContract;
 
-        const db = postgres<PortContract>({ contract, url: connectionString, verifyMarker: false });
+        const db = postgres({ contract, url: connectionString, verifyMarker: false });
         const runtime = await db.connect();
         try {
           const error = await db.orm.public.User.upsert({

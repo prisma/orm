@@ -1,0 +1,18 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id      Int     @id
+  email   String
+  legacy  String? @ignore
+  things  LegacyThing[] @ignore
+}
+
+model LegacyThing {
+  id     Int  @id
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  @@ignore
+}

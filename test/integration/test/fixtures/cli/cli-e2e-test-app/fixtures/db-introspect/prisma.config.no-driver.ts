@@ -4,7 +4,7 @@ import postgres from '@internal/target-postgres/control';
 import { contract } from './contract';
 
 // This config does not include driver
-// Manually create config without defineConfig to bypass validation (testing error case)
+// Manually create config without definePrismaConfig to bypass validation (testing error case)
 export default {
   family: sql,
   target: postgres,
@@ -13,9 +13,11 @@ export default {
   extensions: [],
   contract: {
     source: {
+      format: 'typescript',
       load: async () => ({ ok: true, value: contract }),
     },
     output: 'output/contract.json',
+    typesModule: '@internal/postgres/contract-types',
   },
   db: {
     connection: '{{DB_URL}}', // Placeholder to be replaced in tests

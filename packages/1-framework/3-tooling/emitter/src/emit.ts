@@ -1,11 +1,12 @@
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
-import { type EmissionSpi, keepInternalSpecifiers } from '@internal/framework-components/emission';
+import type { EmissionSpi } from '@internal/framework-components/emission';
 import { ifDefined } from '@internal/utils/defined';
 import { format } from 'prettier';
 import { getEmittedArtifactPaths } from './artifact-paths';
 import type { EmitOptions, EmitResult, EmitStackInput } from './emit-types';
 import { generateContractDts } from './generate-contract-dts';
+import { requireToOneRelationNullability } from './require-relation-nullability';
 
 const SCHEMA_VERSION = '1';
 
@@ -18,9 +19,15 @@ export async function emit(
   if (options.outputJsonPath !== undefined) {
     getEmittedArtifactPaths(options.outputJsonPath);
   }
+  requireToOneRelationNullability(contract);
 
-  const { codecTypeImports, queryOperationTypeImports, aggregateDescriptors, codecDescriptors } =
-    stack;
+  const {
+    codecTypeImports,
+    queryOperationTypeImports,
+    parameterizedOutputTypeImports,
+    aggregateDescriptors,
+    codecDescriptors,
+  } = stack;
 
   const { storageHash } = contract.storage;
   const executionHash = contract.execution?.executionHash;
@@ -47,8 +54,10 @@ export async function emit(
 
   const generateOptions = {
     ...ifDefined('queryOperationTypeImports', queryOperationTypeImports),
+    ...ifDefined('parameterizedOutputTypeImports', parameterizedOutputTypeImports),
     ...ifDefined('aggregateDescriptors', aggregateDescriptors),
     ...ifDefined('codecDescriptors', codecDescriptors),
+    ...ifDefined('supportsNamespaces', options.supportsNamespaces),
   };
 
   const contractTypeHashes = {
@@ -57,13 +66,13 @@ export async function emit(
     profileHash,
   };
   const contractDtsRaw = generateContractDts(
-    contract,
+    options.deserializeContract(canonicalized),
     targetFamily,
     codecTypeImports ?? [],
     contractTypeHashes,
+    options.typesModule,
     generateOptions,
     stack.codecLookup,
-    options.resolveImportSpecifier ?? keepInternalSpecifiers,
   );
   const contractDts = await format(contractDtsRaw, {
     parser: 'typescript',

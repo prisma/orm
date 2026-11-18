@@ -1,0 +1,116 @@
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import mongoAdapter from '@internal/adapter-mongo/control';
+import type { ContractSourceContext } from '@internal/cli/config-types';
+import { enrichContract } from '@internal/cli/control-api';
+import type { SerializeContract } from '@internal/contract/hashing';
+import type { Contract as FrameworkContract } from '@internal/contract/types';
+import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
+import { createControlStack } from '@internal/framework-components/control';
+import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import { mongoContract } from '@internal/mongo-contract-psl/provider';
+import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
+import mongoTargetPack from '@internal/target-mongo/pack';
+import { timeouts } from '@repo/test-utils';
+import { dirname, join } from 'pathe';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { emit } from '../../../utils/emit';
+import type { Contract } from './_fixture/generated/contract';
+import emittedContractJson from './_fixture/generated/contract.json' with { type: 'json' };
+
+const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), '_fixture');
+const attributesFixtureDir = join(dirname(fileURLToPath(import.meta.url)), '_fixture-attributes');
+
+const mongoStack = createControlStack({
+  family: mongoFamilyDescriptor,
+  target: mongoTargetDescriptor,
+  adapter: mongoAdapter,
+});
+
+const sourceContext: ContractSourceContext = {
+  composedExtensions: [],
+  defaultNamespaceId: mongoStack.target.defaultNamespaceId,
+  composedExtensionContracts: new Map(),
+  authoringContributions: mongoStack.authoringContributions,
+  codecLookup: mongoStack.codecLookup,
+  dataTypes: mongoStack.dataTypes,
+  controlMutationDefaults: mongoStack.controlMutationDefaults,
+  generatorFunctions: mongoStack.generatorFunctions,
+  resolvedInputs: [],
+  capabilities: mongoStack.capabilities,
+};
+
+const serializeContract: SerializeContract = (contract) =>
+  mongoTargetDescriptor.contractSerializer.serializeContract(contract as MongoTargetContract);
+
+async function emitNormalized(contract: FrameworkContract): Promise<Record<string, unknown>> {
+  const familyInstance = mongoFamilyDescriptor.create(mongoStack);
+  const normalized = familyInstance.deserializeContract(
+    enrichContract(contract, [mongoTargetDescriptor, mongoAdapter]),
+  );
+  const emitted = await emit(normalized, mongoStack, mongoFamilyDescriptor.emission, {
+    serializeContract,
+    ...mongoContractCanonicalizationHooks,
+  });
+  return JSON.parse(emitted.contractJson) as Record<string, unknown>;
+}
+
+describe('Mongo date generators from PSL and TS', () => {
+  it(
+    'emit the same contract, execution section and hash included',
+    async () => {
+      const pslPath = join(fixtureDir, 'contract.prisma');
+      const pslResult = await mongoContract(pslPath, {
+        target: mongoTargetPack,
+      }).source.load({
+        ...sourceContext,
+        resolvedInputs: [pslPath],
+      });
+      if (!pslResult.ok) throw new Error(JSON.stringify(pslResult.failure));
+      const { contract: tsContract } = (await import(
+        pathToFileURL(join(fixtureDir, 'contract.ts')).href
+      )) as { readonly contract: FrameworkContract };
+
+      const fromPsl = await emitNormalized(pslResult.value);
+      const fromTs = await emitNormalized(tsContract);
+
+      expect(fromPsl['execution']).toEqual(emittedContractJson.execution);
+      expect(fromTs['execution']).toEqual(fromPsl['execution']);
+      expect(fromTs).toEqual(fromPsl);
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'emit the same contract from the gen calls of the facade as from @onCreate(now()) and @onUpdate(now())',
+    async () => {
+      const pslPath = join(attributesFixtureDir, 'contract.prisma');
+      const pslResult = await mongoContract(pslPath, {
+        target: mongoTargetPack,
+      }).source.load({
+        ...sourceContext,
+        resolvedInputs: [pslPath],
+      });
+      if (!pslResult.ok) throw new Error(JSON.stringify(pslResult.failure));
+      const { contract: tsContract } = (await import(
+        pathToFileURL(join(attributesFixtureDir, 'contract.ts')).href
+      )) as { readonly contract: FrameworkContract };
+
+      const fromPsl = await emitNormalized(pslResult.value);
+      const fromTs = await emitNormalized(tsContract);
+
+      expect(fromPsl['execution']).toEqual(emittedContractJson.execution);
+      expect(fromTs['execution']).toEqual(fromPsl['execution']);
+      expect(fromTs).toEqual(fromPsl);
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it('types the emitted execution refs with the collection and stored names', () => {
+    type Refs = Contract['execution']['mutations']['defaults'][number]['ref'];
+    expectTypeOf<Refs['entry']>().toEqualTypeOf<'counters' | 'events' | 'posts'>();
+    expectTypeOf<Refs['field']>().toEqualTypeOf<
+      'createdAt' | 'touchedAt' | 'updatedAt' | 'updated_at'
+    >();
+    expectTypeOf<Refs['namespace']>().toEqualTypeOf<'__unbound__'>();
+  });
+});

@@ -1,9 +1,7 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import { db } from '../prisma/db';
 
-export async function ormClientBm25TopMatches(query: string, limit: number, runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.Item.where((item) => item.description.paradeDbMatch(query))
+export async function ormClientBm25TopMatches(query: string, limit: number) {
+  return db.orm.public.Item.where((item) => item.description.paradeDbMatch(query))
     .orderBy((item) => item.id.paradeDbScore().desc())
     .limit(limit)
     .all();

@@ -10,8 +10,8 @@ import {
   rawSql,
   unique,
 } from '@prisma/orm-postgres/target/migration';
-import type { Contract as End } from '../../snapshots/b1643ad5e63c8896f80a44f59430cefd17a44554e3b5458121bf1bc87a89bbc0/contract';
-import endContract from '../../snapshots/b1643ad5e63c8896f80a44f59430cefd17a44554e3b5458121bf1bc87a89bbc0/contract.json' with {
+import type { Contract as End } from '../../snapshots/fc039db97d116c1f5e6e56af25521c69e05232b49dc6e0058c9e3d3fb93eb263/contract';
+import endContract from '../../snapshots/fc039db97d116c1f5e6e56af25521c69e05232b49dc6e0058c9e3d3fb93eb263/contract.json' with {
   type: 'json',
 };
 
@@ -30,6 +30,7 @@ export default class M extends Migration<never, End> {
           {
             description: 'verify extension "vector" is not already enabled',
             sql: "SELECT NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')",
+            expectation: { expects: 'absent', object: 'extension "vector"' },
           },
         ],
         execute: [
@@ -42,6 +43,7 @@ export default class M extends Migration<never, End> {
           {
             description: 'confirm extension "vector" is enabled',
             sql: "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')",
+            expectation: { expects: 'present', object: 'extension "vector"' },
           },
         ],
       }),
@@ -84,6 +86,10 @@ export default class M extends Migration<never, End> {
         ],
         constraints: [
           primaryKey(['id']),
+          checkExpression(
+            'user_address_shape_69432dc1',
+            '"address" IS NULL OR jsonb_path_match("address", \'strict $.type() == "null" || ($.type() == "object" && exists($.keyvalue() ? (@.key == "city" && (@.value.type() == "string"))) && exists($.keyvalue() ? (@.key == "country" && (@.value.type() == "string"))) && exists($.keyvalue() ? (@.key == "street" && (@.value.type() == "string"))) && !exists($.keyvalue() ? (@.key == "zip" && !(@.value.type() == "null" || (@.value.type() == "string")))) && !exists($.keyvalue() ? (@.key != "city" && @.key != "country" && @.key != "street" && @.key != "zip")))\') IS TRUE',
+          ),
           checkExpression('user_kind_check_836d43ef', "\"kind\" IN ('admin', 'user')"),
         ],
       }),
@@ -94,16 +100,13 @@ export default class M extends Migration<never, End> {
           col('createdAt', 'timestamptz', { notNull: true, default: fn('now()') }),
           col('embedding', 'vector(1536)'),
           col('id', 'uuid', { notNull: true }),
-          col('priority', 'text', { notNull: true, default: lit('low') }),
+          col('priority', 'int4', { notNull: true, default: lit(0) }),
           col('title', 'text', { notNull: true }),
           col('userId', 'uuid', { notNull: true }),
         ],
         constraints: [
           primaryKey(['id']),
-          checkExpression(
-            'post_priority_check_09b41aa0',
-            "\"priority\" IN ('low', 'high', 'urgent')",
-          ),
+          checkExpression('post_priority_check_b236ace9', '"priority" IN (0, 1, 2)'),
         ],
       }),
       this.createTable({
@@ -118,7 +121,10 @@ export default class M extends Migration<never, End> {
           col('type', 'text', { notNull: true }),
           col('userId', 'uuid', { notNull: true }),
         ],
-        constraints: [primaryKey(['id'])],
+        constraints: [
+          primaryKey(['id']),
+          checkExpression('task_type_check_cda3f5e7', "\"type\" IN ('bug', 'feature')"),
+        ],
       }),
       this.createTable({
         schema: 'public',

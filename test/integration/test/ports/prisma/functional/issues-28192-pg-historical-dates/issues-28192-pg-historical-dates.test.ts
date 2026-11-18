@@ -10,7 +10,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // round-trip correctly through the ORM — the date, timestamp, and timestamptz fields
 // all preserve the original Date value.
 //
-// In prisma-next the three columns carry representation-explicit codecs:
+// In Prisma 8 the three columns carry representation-explicit codecs:
 // `pg/date-temporal@1` reads a `Temporal.PlainDate`, `pg/timestamp-temporal@1` a
 // `Temporal.PlainDateTime`, and `pg/timestamptz-temporal@1` a `Temporal.Instant`. Each parses
 // PostgreSQL's own text rather than going through a `Date`.

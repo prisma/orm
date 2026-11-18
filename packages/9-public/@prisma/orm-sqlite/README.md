@@ -2,9 +2,8 @@
 
 The one package a SQLite application installs. It wires the framework, the SQL family, and the SQLite target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
 
-```jsonc
-// package.json
-{ "dependencies": { "@prisma/orm-sqlite": "0.16.0" } }
+```sh
+pnpm add @prisma/orm-sqlite
 ```
 
 ```
@@ -17,6 +16,8 @@ The one package a SQLite application installs. It wires the framework, the SQL f
 
 The driver is Node's built-in `node:sqlite`, so there is no native module to compile.
 
+`temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands, loads it as a fallback `Temporal` when the runtime has none, and a project that already installs it for its own code has one copy. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
+
 ## Entrypoints
 
 | Namespace | Surface |
@@ -24,10 +25,11 @@ The driver is Node's built-in `node:sqlite`, so there is no native module to com
 | `/runtime` | `sqlite(path)` — the lazy query client |
 | `/static` | statically composed runtime for pre-wired deployments |
 | `/config` | `defineConfig` for `prisma.config.ts` |
+| `/contract-types` | the types a generated `contract.d.ts` imports |
 | `/contract-builder` | `defineContract` and SQLite contract authoring |
 | `/migration`, `/control` | migration planning and the control client |
 
-Generated contract files import their types from the facade, so an application never has to depend on a package it did not install:
+A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
 
 | Namespace | Forwards |
 | --- | --- |

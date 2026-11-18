@@ -5,13 +5,13 @@ import type {
 } from '@internal/framework-components/control';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
-import { defineConfig, type PrismaNextConfig } from '../src/config-types';
+import { defineConfig, type PrismaConfig } from '../src/config-types';
 
 const mockHook = {
   id: 'sql',
   generateStorageType: () => '{}',
   generateModelStorageType: () => '{}',
-  getFamilyImports: () => [] as string[],
+  getFamilyImports: () => [],
   getFamilyTypeAliases: () => '',
   getTypeMapsExpression: () => 'never',
   getContractWrapper: (base: string, tm: string) =>
@@ -20,12 +20,13 @@ const mockHook = {
 
 function createSourceProvider(overrides: Record<string, unknown> = {}) {
   return {
+    format: 'typescript',
     load: async () => ok({ targetFamily: 'sql' } as Contract),
     ...overrides,
   };
 }
 
-function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextConfig {
+function createValidConfig(overrides: Record<string, unknown> = {}): PrismaConfig {
   return {
     family: {
       kind: 'family',
@@ -40,6 +41,7 @@ function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextC
       kind: 'target',
       familyId: 'sql',
       targetId: 'postgres',
+      defaultNamespaceId: 'public',
       id: 'postgres',
       version: '0.0.1',
       manifest: {},
@@ -75,7 +77,7 @@ function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextC
     },
     extensions: [],
     ...overrides,
-  } as PrismaNextConfig;
+  } as PrismaConfig;
 }
 
 describe('defineConfig', () => {
@@ -111,8 +113,32 @@ describe('defineConfig', () => {
     expect(result.contract?.output).toBe('custom/contract.json');
   });
 
+  it('preserves the module generated contract types import from', () => {
+    const config = createValidConfig({
+      contract: { source: createSourceProvider(), typesModule: '@acme/orm-db/contract-types' },
+    });
+
+    expect(defineConfig(config).contract).toEqual({
+      source: config.contract?.source,
+      output: 'src/prisma/contract.json',
+      typesModule: '@acme/orm-db/contract-types',
+    });
+  });
+
+  it('preserves the module rendered migration files import from', () => {
+    const config = createValidConfig({
+      contract: { source: createSourceProvider() },
+      migrations: { dir: 'db', module: '@acme/orm-db/migration' },
+    });
+
+    expect(defineConfig(config).migrations).toEqual({
+      dir: 'db',
+      module: '@acme/orm-db/migration',
+    });
+  });
+
   it('does not validate structure — invalid shapes pass through for the loader to diagnose', () => {
-    const invalidConfig = { family: null } as unknown as PrismaNextConfig;
+    const invalidConfig = { family: null } as unknown as PrismaConfig;
     expect(() => defineConfig(invalidConfig)).not.toThrow();
   });
 });

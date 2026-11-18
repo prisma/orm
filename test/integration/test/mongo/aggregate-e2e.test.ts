@@ -13,6 +13,7 @@ import {
   hasMigrations,
   issueOutcome,
   type MigrationRunnerPerSpaceOptions,
+  planOriginOf,
 } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
@@ -77,11 +78,22 @@ function buildAppContract(): MongoContract {
       models: {
         User: {
           fields: {
-            _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-            email: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+            _id: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            },
+            email: {
+              nullable: false,
+              many: false,
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            },
           },
           relations: {},
-          storage: { collection: 'users' },
+          storage: {
+            collection: 'users',
+            fields: { _id: { field: '_id' }, email: { field: 'email' } },
+          },
         },
       },
     }),
@@ -97,6 +109,7 @@ function buildAppContract(): MongoContract {
                 indexes: [
                   {
                     kind: 'mongo-index' as const,
+                    name: 'email_1',
                     keys: [{ field: 'email', direction: 1 as const }],
                     unique: true,
                   },
@@ -125,6 +138,8 @@ function planFor(
     schema: contractToMongoSchemaIR(fromContract),
     policy: ALL_POLICY,
     fromContract,
+    origin: planOriginOf(fromContract),
+    statements: [],
     frameworkComponents: [],
     snapshotsImportPath: '../../snapshots',
   });
@@ -146,9 +161,7 @@ function createInstance() {
 
 function makeRunner() {
   if (!hasMigrations(mongoTargetDescriptor)) throw new Error('expected migrations capability');
-  return mongoTargetDescriptor.migrations.createRunner(
-    createMongoFamilyInstance({} as unknown as Parameters<typeof createMongoFamilyInstance>[0]),
-  );
+  return mongoTargetDescriptor.migrations.createRunner(createInstance());
 }
 
 describe('Mongo contract-space aggregate e2e', {

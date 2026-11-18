@@ -1,4 +1,4 @@
-import { createModelAccessor } from '@internal/sql-orm-client';
+import { createCollectionTables, createModelAccessor } from '@internal/sql-orm-client';
 import {
   BinaryExpr,
   ColumnRef,
@@ -13,7 +13,12 @@ describe('createModelAccessor (pgvector extension)', () => {
   const context = getTestContext();
 
   it('cosineDistance accepts a raw vector value and produces a ParamRef on arg0', () => {
-    const post = createModelAccessor(context, 'public', 'Post');
+    const post = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      createCollectionTables(context.contract, 'public', 'Post'),
+    );
     const result = post['embedding']!.cosineDistance([1, 2, 3]) as unknown as Record<
       string,
       unknown
@@ -30,8 +35,18 @@ describe('createModelAccessor (pgvector extension)', () => {
   });
 
   it('cosineDistance accepts another vector column and produces a ColumnRef on arg0 (cross-column composition)', () => {
-    const post = createModelAccessor(context, 'public', 'Post');
-    const otherPost = createModelAccessor(context, 'public', 'Post');
+    const post = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      createCollectionTables(context.contract, 'public', 'Post'),
+    );
+    const otherPost = createModelAccessor(
+      context,
+      'public',
+      'Post',
+      createCollectionTables(context.contract, 'public', 'Post'),
+    );
 
     const result = post['embedding']!.cosineDistance(otherPost['embedding']!) as unknown as Record<
       string,
@@ -49,7 +64,12 @@ describe('createModelAccessor (pgvector extension)', () => {
 
   describe('extension operations', () => {
     it('attaches cosineDistance to vector field, not to text field', () => {
-      const accessor = createModelAccessor(context, 'public', 'Post');
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'Post',
+        createCollectionTables(context.contract, 'public', 'Post'),
+      );
       const embedding = accessor['embedding'] as unknown as Record<string, unknown>;
       const title = accessor['title'] as unknown as Record<string, unknown>;
 
@@ -58,7 +78,12 @@ describe('createModelAccessor (pgvector extension)', () => {
     });
 
     it('cosineDistance() returns expression result with comparison and ordering methods', () => {
-      const accessor = createModelAccessor(context, 'public', 'Post');
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'Post',
+        createCollectionTables(context.contract, 'public', 'Post'),
+      );
       const embedding = accessor['embedding'] as unknown as Record<
         string,
         (...args: unknown[]) => unknown
@@ -75,7 +100,12 @@ describe('createModelAccessor (pgvector extension)', () => {
     });
 
     it('cosineDistance().lt() produces BinaryExpr(lt, OperationExpr, ParamRef)', () => {
-      const accessor = createModelAccessor(context, 'public', 'Post');
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'Post',
+        createCollectionTables(context.contract, 'public', 'Post'),
+      );
       const embedding = accessor['embedding'] as unknown as Record<
         string,
         (...args: unknown[]) => unknown
@@ -103,7 +133,12 @@ describe('createModelAccessor (pgvector extension)', () => {
     });
 
     it('cosineDistance().asc() produces OrderByItem', () => {
-      const accessor = createModelAccessor(context, 'public', 'Post');
+      const accessor = createModelAccessor(
+        context,
+        'public',
+        'Post',
+        createCollectionTables(context.contract, 'public', 'Post'),
+      );
       const embedding = accessor['embedding'] as unknown as Record<
         string,
         (...args: unknown[]) => unknown

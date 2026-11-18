@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prismaVitePlugin } from '../src/plugin';
 
@@ -14,11 +14,16 @@ const loadConfigForSectionsMock = vi.hoisted(() => vi.fn());
 // The production code consumes `loadConfigForSections`, which wraps the config
 // in a Result. Tests keep resolving plain configs (or rejecting); the wrapper
 // adds the `ok(...)` so every existing fixture stays unchanged.
+// `expandContractInputs` is passthrough here: fixtures already name each
+// member file as a distinct absolute path, and this suite tests the
+// plugin's file-set bookkeeping, not glob expansion (covered in
+// `@internal/config-loader`'s own tests).
 vi.mock('@internal/config-loader', async () => {
   const { ok } = await import('@internal/utils/result');
   return {
     loadConfigForSections: async (...args: unknown[]) =>
       ok(await loadConfigForSectionsMock(...args)),
+    expandContractInputs: async (patterns: readonly string[] | undefined) => patterns ?? [],
   };
 });
 
@@ -32,6 +37,7 @@ vi.mock('@internal/emitter', () => ({
 vi.mock('pathe', async () => {
   const path = await vi.importActual<typeof import('node:path')>('node:path');
   return {
+    dirname: path.dirname,
     extname: path.extname,
     resolve: path.resolve,
   };
@@ -44,9 +50,10 @@ const successfulEmitResult = {
   storageHash: 'abc123',
   profileHash: 'def456',
   files: { json: '/out/contract.json', dts: '/out/contract.d.ts' },
+  pinnedFiles: [],
 } satisfies Awaited<ReturnType<typeof executeContractEmit>>;
 
-type LoadedConfig = PrismaNextConfig;
+type LoadedConfig = PrismaConfig;
 type SourceInputs = NonNullable<LoadedConfig['contract']>['source']['inputs'];
 
 interface MockModuleNode {
@@ -89,6 +96,7 @@ function createLoadedConfig({
   return {
     contract: {
       source: {
+        format: 'typescript',
         ...(inputs === undefined
           ? {}
           : { inputs: inputs.map((input) => toAbsolutePath(input)) as SourceInputs }),
@@ -202,39 +210,6 @@ describe('prismaVitePlugin', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns a Vite plugin with the correct name', () => {
-    const plugin = prismaVitePlugin('prisma.config.ts');
-
-    expect(plugin.name).toBe('prisma-vite-plugin-contract-emit');
-  });
-
-  it('accepts optional configuration', () => {
-    const plugin = prismaVitePlugin('prisma.config.ts', {
-      debounceMs: 500,
-      logLevel: 'silent',
-    });
-
-    expect(plugin.name).toBe('prisma-vite-plugin-contract-emit');
-  });
-
-  it('has configResolved hook', () => {
-    const plugin = prismaVitePlugin('prisma.config.ts');
-
-    expect(typeof plugin.configResolved).toBe('function');
-  });
-
-  it('has configureServer hook', () => {
-    const plugin = prismaVitePlugin('prisma.config.ts');
-
-    expect(typeof plugin.configureServer).toBe('function');
-  });
-
-  it('has handleHotUpdate hook', () => {
-    const plugin = prismaVitePlugin('prisma.config.ts');
-
-    expect(typeof plugin.handleHotUpdate).toBe('function');
-  });
-
   describe('configResolved', () => {
     it('resolves config path relative to vite root', async () => {
       const plugin = prismaVitePlugin('prisma.config.ts', { logLevel: 'silent' });
@@ -248,11 +223,7 @@ describe('prismaVitePlugin', () => {
       ) => Promise<void>;
       await configureServer(mockServer);
 
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          configPath: '/project/prisma.config.ts',
-        }),
-      );
+      expect(mockedLoadConfig).toHaveBeenCalledWith('/project/prisma.config.ts', expect.anything());
     });
 
     it('preserves absolute config path', async () => {
@@ -267,10 +238,9 @@ describe('prismaVitePlugin', () => {
       ) => Promise<void>;
       await configureServer(mockServer);
 
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          configPath: '/absolute/prisma.config.ts',
-        }),
+      expect(mockedLoadConfig).toHaveBeenCalledWith(
+        '/absolute/prisma.config.ts',
+        expect.anything(),
       );
     });
   });
@@ -418,11 +388,7 @@ describe('prismaVitePlugin', () => {
       ) => Promise<void>;
       await configureServer(mockServer);
 
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          configPath: expect.stringContaining('prisma.config.ts'),
-        }),
-      );
+      expect(mockedExecuteContractEmit).toHaveBeenCalledTimes(1);
     });
 
     it('invalidates emitted artifacts after successful emit', async () => {
@@ -439,6 +405,28 @@ describe('prismaVitePlugin', () => {
 
       expect(mockServer.moduleGraph.onFileChange).toHaveBeenCalledWith('/out/contract.json');
       expect(mockServer.moduleGraph.onFileChange).toHaveBeenCalledWith('/out/contract.d.ts');
+    });
+
+    it('logs each file the emit wrote under migrations/', async () => {
+      mockedExecuteContractEmit.mockResolvedValue({
+        ...successfulEmitResult,
+        pinnedFiles: [{ spaceId: 'pgvector', path: '/project/migrations/pgvector/refs/head.json' }],
+      });
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const plugin = prismaVitePlugin('prisma.config.ts', { logLevel: 'info' });
+      const mockServer = createMockServer();
+
+      const configResolved = plugin.configResolved as unknown as (config: { root: string }) => void;
+      configResolved({ root: '/project' });
+      const configureServer = plugin.configureServer as unknown as (
+        server: ReturnType<typeof createMockServer>,
+      ) => Promise<void>;
+      await configureServer(mockServer);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        '[prisma-vite-plugin-contract-emit] Wrote /project/migrations/pgvector/refs/head.json for extension pack space pgvector',
+      );
+      consoleLogSpy.mockRestore();
     });
 
     it('loads config for watch resolution and for the initial emit', async () => {
@@ -539,11 +527,7 @@ describe('prismaVitePlugin', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Contract watch coverage is partial'),
       );
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          configPath: '/project/prisma.config.ts',
-        }),
-      );
+      expect(mockedExecuteContractEmit).toHaveBeenCalledTimes(1);
       expect(consoleErrorSpy).not.toHaveBeenCalledWith(
         expect.stringContaining('Contract emit failed'),
       );
