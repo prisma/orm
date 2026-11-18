@@ -1852,13 +1852,10 @@ export async function withSavepoint<TCtx, R>(
   fn: (tx: TCtx) => PromiseLike<R>,
   buildMembers: (txCtx: TransactionContext) => TCtx,
 ): Promise<R> {
-  if (!isTransactionLevelTarget(txCtx)) {
-    throw runtimeError(
-      'RUNTIME.UNKNOWN_TRANSACTION_CONTEXT',
-      'withSavepoint takes the context that withTransaction or withSavepoint passed to its callback',
-      {},
-    );
-  }
+  invariant(
+    isTransactionLevelTarget(txCtx),
+    'withSavepoint takes the context that withTransaction or withSavepoint passed to its callback',
+  );
   const enclosing = txCtx[transactionLevel];
   if (enclosing.isClosed()) throw transactionClosedError();
   const savepoint = await enclosing.transaction.transaction();

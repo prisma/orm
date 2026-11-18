@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SqlMiddleware } from '../src/middleware/sql-middleware';
 import { type TransactionContext, withSavepoint, withTransaction } from '../src/sql-runtime';
-import { createSetup, type HookEvent, rawPlan } from './transaction-activity-fixtures';
+import {
+  createSetup,
+  finalized,
+  type HookEvent,
+  rawPlan,
+  rejectsWith,
+  transactionIds,
+} from './transaction-activity-fixtures';
 
 const statementB = rawPlan('insert b');
 const statementC = rawPlan('insert c');
@@ -15,16 +22,6 @@ const trace = (events: readonly HookEvent[]) =>
         /^(SAVEPOINT|RELEASE|ROLLBACK|begin|commit|rollback|release|destroy|insert)/.test(name),
     )
     .join(', ');
-
-const finalized = (events: readonly HookEvent[]) =>
-  events
-    .map((event) => event.name)
-    .filter((name) => name.startsWith('finalized:'))
-    .map((name) => name.slice('finalized:'.length))
-    .join(', ');
-
-const rejectsWith = (work: Promise<unknown>, code: string) =>
-  expect(work).rejects.toMatchObject({ code: `RUNTIME.${code}` });
 
 const build = (ctx: TransactionContext) => ({ ctx });
 
@@ -204,8 +201,7 @@ describe('withSavepoint', () => {
 
     await rejectsWith(run, 'TRANSACTION_TIMEOUT');
     await rejectsWith(nested, 'TRANSACTION_TIMEOUT');
-    const savepointId = events.filter((event) => event.name === 'started:transaction')[1]?.activity
-      ?.id;
+    const savepointId = transactionIds(events)[1];
     expect(
       events.filter((event) => event.activity?.id === savepointId).map((event) => event.name),
     ).toEqual([
@@ -224,9 +220,8 @@ describe('withSavepoint', () => {
         query: (plan) => tx.query(plan),
         execute: (plan) => tx.execute(plan),
       };
-      await rejectsWith(
-        withSavepoint(foreign, async () => 1, build),
-        'UNKNOWN_TRANSACTION_CONTEXT',
+      await expect(withSavepoint(foreign, async () => 1, build)).rejects.toThrow(
+        'withSavepoint takes the context that withTransaction or withSavepoint passed to its callback',
       );
     });
   });

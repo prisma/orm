@@ -19,14 +19,16 @@ To offer nested transactions, add a `transaction` member built with `withSavepoi
 function buildTransactionContext(txCtx: TransactionContext): PostgresTransactionContext<TContract, TCollections> {
   return withTransactionMembers(txCtx, {
     ...members(txCtx),
-    transaction: (fn) => withSavepoint(txCtx, fn, buildTransactionContext),
+    transaction: <R>(
+      fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    ) => withSavepoint(txCtx, fn, buildTransactionContext),
   });
 }
 
 return withTransaction(runtime, (txCtx) => fn(buildTransactionContext(txCtx)), options);
 ```
 
-`withSavepoint` takes only the context that `withTransaction` or `withSavepoint` passed to its callback; any other object is rejected with `RUNTIME.UNKNOWN_TRANSACTION_CONTEXT`.
+`withSavepoint` takes only the context that `withTransaction` or `withSavepoint` passed to its callback; any other object fails an internal invariant.
 
 To keep the context without nested transactions, type it without the member:
 
