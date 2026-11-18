@@ -30,7 +30,7 @@ return {
 };
 ```
 
-The direct form wraps the exported helper result: `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` from `@internal/target-postgres/codecs`, and `field.column(sqliteBigintNumberColumn())` from `@internal/target-sqlite/codecs`. Both forms preserve the same codec and application type.
+The direct form wraps the exported helper result: `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` from `@internal/target-postgres/codecs`, and `field.column(sqliteIntegerColumn())` from `@internal/target-sqlite/codecs`. Both forms preserve the same codec and application type.
 
 ## Validation and Warnings
 

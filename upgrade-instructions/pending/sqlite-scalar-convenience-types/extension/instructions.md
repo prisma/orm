@@ -95,6 +95,17 @@ WHERE "price" IS NOT NULL
 
 Set each row it returns to a decimal, such as `UPDATE "product" SET "price" = '0' WHERE "price" = '';`, or make the field optional and set it to `NULL`.
 
+Stored text that is a decimal but has leading zeros or a minus sign on zero, such as `"0012.50"` or `"-0"`, stays as it is and still reads. An equality filter no longer finds it: the codec now writes a value, and compares a filter value, without the leading zeros or the minus sign on zero, so a filter for `"0012.50"` looks for `"12.50"`. This query returns those rows:
+
+```sql
+SELECT rowid, "price"
+FROM "product"
+WHERE ltrim("price", '-') GLOB '0[0-9]*'
+   OR ("price" GLOB '-*' AND ltrim("price", '-0.') = '');
+```
+
+Set each row it returns to the same number without the leading zeros or the minus sign on zero, such as `UPDATE "product" SET "price" = '12.50' WHERE "price" = '0012.50';`.
+
 A `Decimal` field can be compared for equality only. Text compares by its characters, so `"1.5"` and `"1.50"` are different values, and ordering, the text filter `like` and aggregates such as `sum` and `max` are not offered; code that used them on a `Decimal` field no longer type-checks. A `Decimal` default may be written as text, `@default("12.50")`, or as a whole number, `@default(3)`. A number with a fraction, such as `@default(1.5)`, is refused when the contract is emitted, with `Expected a quoted string or a number that sqlite/decimal can hold; got sqlite/real`: write it as text, `@default("1.5")`.
 
 Leave the `contract.prisma` copy inside each migration folder under `migrations/` as it is: it records the schema that migration was planned from.
@@ -146,7 +157,7 @@ WHERE "quantity" IS NOT NULL
   );
 ```
 
-Set each row it returns to an integer within the range, such as `UPDATE "line_item" SET "quantity" = CAST(round("quantity") AS INTEGER) WHERE typeof("quantity") = 'real';`. A project whose rows the query does not return needs no change.
+Set each row it returns to an integer within the range. A fraction inside the range can be rounded, such as `UPDATE "line_item" SET "quantity" = CAST(round("quantity") AS INTEGER) WHERE typeof("quantity") = 'real' AND abs("quantity") <= 9007199254740991;`. A value outside the range cannot be repaired by a cast, which stops at the 64-bit limit and stays outside the range: set it to the value the application means, or change the field to `BigInt`, which reads the full 64-bit range. Run the query again afterward; the upgrade is done when it returns no rows. A project whose rows the query does not return needs no change.
 
 ## `ts-renamed-sqlite-column-helpers`
 

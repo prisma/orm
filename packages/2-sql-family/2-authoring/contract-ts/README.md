@@ -241,7 +241,7 @@ export const contract = defineContract(
 );
 ```
 
-The direct form imports the column helper: `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` on PostgreSQL, and `field.column(sqliteBigintNumberColumn())` imported from `@internal/target-sqlite/codecs` on SQLite. Both forms select the same codecs and application types and store the same column.
+The direct form imports the column helper: `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` on PostgreSQL, and `field.column(sqliteIntegerColumn())` imported from `@internal/target-sqlite/codecs` on SQLite. Both forms select the same codecs and application types and store the same column.
 
 ### Constraint Placement
 
