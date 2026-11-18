@@ -41,7 +41,7 @@ export type JoinSource<Row extends ScopeTable, Alias extends string> = {
   buildAst(): AnyFromSource;
 };
 
-export type DefaultScope<Name extends string, Table extends StorageTable, ColumnInputs = never> = {
+export type DefaultScope<Name extends string, Table extends StorageTable, ColumnInputs> = {
   topLevel: StorageTableToScopeTable<Table, ColumnInputs>;
   namespaces: {
     [K in Name]: StorageTableToScopeTable<Table, ColumnInputs>;
@@ -49,7 +49,7 @@ export type DefaultScope<Name extends string, Table extends StorageTable, Column
 };
 
 /** The table's columns as scope fields, each carrying its resolved input type from `ColumnInputs` when the contract provides one. */
-export type StorageTableToScopeTable<T extends StorageTable, ColumnInputs = never> = {
+export type StorageTableToScopeTable<T extends StorageTable, ColumnInputs> = {
   [K in keyof T['columns']]: StorageColumnScopeField<
     T['columns'][K],
     [ColumnInputs] extends [never] ? never : K extends keyof ColumnInputs ? ColumnInputs[K] : never
