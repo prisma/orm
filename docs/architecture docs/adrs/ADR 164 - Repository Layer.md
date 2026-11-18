@@ -120,7 +120,7 @@ For includes on a database that cannot run the one-query include:
 - **Rewrite the one-query include so the correlation sits in the subquery's own `WHERE`, and check each array's length against `COUNT(*)`.** Rejected: it builds every aggregate twice per level of nesting, recognises a shortened array only by matching error text, and cannot express `distinct`, paged scalar includes or `combine`.
 - **One query that joins parents and children, with duplicates removed in memory.** Rejected: paging per parent cannot be written, and several to-many includes multiply the rows returned.
 - **A loader that reads every child row and pages, removes duplicates and aggregates in memory.** Rejected: it reads rows the caller did not ask for, and it matches rows on the foreign key column's text, which is wrong under a case-insensitive collation. The per-relation statements page, remove duplicates and aggregate in SQL, and match rows on decoded identity values.
-- **Run a read with includes in a transaction.** Rejected: the transactions the ORM opens run at READ COMMITTED, where each statement still sees the latest committed data. It would cost two more round trips and hold a connection, and change nothing.
+- **Run a read with includes in a transaction at REPEATABLE READ, so that all its statements see one snapshot.** Rejected: it costs two more round trips and holds a connection for the whole read, on every read with includes, to remove an inconsistency the ORMs that load relations the same way also accept. A transaction at READ COMMITTED, the level of the transactions the ORM opens itself, would not help: each statement there still sees the latest committed data.
 
 ## Related ADRs
 

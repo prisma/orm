@@ -121,3 +121,7 @@ Two changes were made after prisma/orm#31082 entered the merge queue, which reje
 
 - `packages/3-targets/mysql/2-mariadb/2-adapter/test/control-adapter.live.test.ts` compares the control session's isolation level with the server's default, where it hard-coded `REPEATABLE-READ` (automated review of prisma/orm#31082).
 - `@prisma/orm-mariadb` gains the `contract-builder` entry that the Postgres, SQLite and MySQL packages have, so a MariaDB contract can be written in TypeScript.
+
+## `createMysqlDefineConfig` is the one factory for extending targets outside its own entry (close-out review, 2026-11-18)
+
+Factories that a target extending MySQL uses go in their own entry, as `createMysqlDefineContract` does in `./define-contract`. `createMysqlDefineConfig` stays in `./config`, beside the `defineConfig` applications import, because it was published there first. Move it to `./define-config` in the next breaking release.

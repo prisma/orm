@@ -232,8 +232,6 @@ The runner's `execute({ driver, perSpaceOptions })` takes every space's plan in 
 
 Either way the failure's payload names the space that failed (`failingSpace`) and says whether the database changed (`databaseUnchanged`). The CLI's `why` names the space when it is not the application's own.
 
-A target does not declare its atomicity as a fixed property. The migrations capability has no field such as `applyAtomicity: 'all-spaces' | 'per-space'`. Each failed apply already reports what it left in `databaseUnchanged`, so code that read such a field would only repeat that report. And "per space" would wrongly suggest that each space applies all or nothing, when only its marker write is atomic and the operations that ran stay applied.
-
 **Cross-space ordering**: extension spaces alphabetical-by-spaceId first, app-space last. The convention is sufficient for v1 (a formal cross-space dependency graph is deferred), and matches the implicit dependency direction — application schema may reference extension-provided types (`Encrypted<String>` → `eql_v2_encrypted`), so extension types must exist before the app's `CREATE TABLE` runs.
 
 ### Disjoint per-space ownership: schema-prune
@@ -275,6 +273,8 @@ $ prisma-next migrate     # ✗ MIGRATION.EXTENSION_DESCRIPTOR_NOT_FOUND
 ```
 
 `migrate` (authoring-time) needs the descriptor to read the extension's *current* state for diffing. Apply-time (`db init` / `db update`) and verify-time (`db verify`) do not. `contract emit` also writes the pinned files from the descriptors ([ADR 312](ADR%20312%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md)), so a project that never runs `migrate` can still sign and verify.
+
+**A declared atomicity.** A target does not declare whether an apply is atomic across spaces; each failed apply reports what it left in `databaseUnchanged`, so code that read a field such as `applyAtomicity: 'all-spaces' | 'per-space'` would only repeat that report. And "per space" would wrongly suggest that each space applies all or nothing, when only its marker write is atomic and the operations that ran stay applied.
 
 ### Verifier integrity checks
 
