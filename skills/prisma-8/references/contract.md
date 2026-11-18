@@ -541,7 +541,7 @@ Infer captures indexes at full fidelity — expression, partial (`where:`), uniq
 ## Checklist
 
 - [ ] Read `prisma.config.ts` and identified the contract source (path string ending in `.prisma` or `.ts`) and the installed `extensions: [...]`.
-- [ ] All user-authored imports resolve to `@prisma/orm-<target>/<subpath>` (e.g. `@prisma/orm-postgres/config`) or `@prisma/orm-extension-<name>/<subpath>`. No imports from `@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*` or `@prisma/orm-toolchain` in user files.
+- [ ] All user-authored imports resolve to `@prisma/orm-<target>/<subpath>` (e.g. `@prisma/orm-postgres/config`) or `@prisma/orm-extension-<name>/<subpath>`, apart from `definePrismaConfig` in `prisma.config.ts`, which comes from `@prisma/cli-engine`. No imports from `@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*` or `@prisma/orm-toolchain` in user files.
 - [ ] Edited the contract source (`contract.prisma` or `contract.ts`), not an emitted artefact.
 - [ ] For new extension namespaces: added the package, imported its control descriptor (`@prisma/orm-extension-<name>/control`), added it to `extensions: [...]` in `ormConfig({...})` (and the matching pack descriptor to `defineContract({extensions: {...}})` if using the TS builder).
 - [ ] `prisma.config.ts` is the envelope form — `definePrismaConfig({ orm: ormConfig({...}) })` — not a flat `defineConfig({...})`.

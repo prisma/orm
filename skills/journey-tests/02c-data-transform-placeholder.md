@@ -19,7 +19,7 @@
 ## Success criteria
 
 - [ ] No `placeholder(...)` is left in `migration.ts`.
-- [ ] The data transform has a `check`, and no `rawSql` step, `db.raw.sql` query or `fns.raw` expression writes rows.
+- [ ] The data transform has a `check`. Both `check` and `run` are SQL query builder queries: neither uses a `db.raw.sql` query or an `fns.raw` expression, and no `rawSql` step writes rows.
 - [ ] Self-emit completed without `MIGRATION.UNFILLED_PLACEHOLDER`, and `ops.json` changed after the TS edit.
 - [ ] `db migrate` completed without an error.
-- [ ] Existing rows have a non-null `displayName`.
+- [ ] Every existing row's `displayName` equals its `email`.

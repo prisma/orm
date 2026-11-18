@@ -366,6 +366,45 @@ describe('findProseNames', () => {
       [10, 13],
     );
   });
+
+  it('reads a summary line as prose even when it repeats a detection pattern', () => {
+    const content = [
+      '---',
+      'changes:',
+      '  - id: first',
+      '    summary: |',
+      '      @internal/adapter-postgres/column-types',
+      '    detection:',
+      '      matches:',
+      '        - "@internal/adapter-postgres/column-types"',
+      '---',
+      '',
+    ].join('\n');
+    assert.deepEqual(
+      findProseNames(content, entriesOf).map((record) => record.line),
+      [5],
+    );
+  });
+
+  it('exempts every line of a multi-line detection value', () => {
+    const content = [
+      '---',
+      'changes:',
+      '  - id: first',
+      '    detection:',
+      '      matches:',
+      '        - >-',
+      "          from '@internal/adapter-postgres/column-types'",
+      "          |from '@internal/postgres/runtime'",
+      '    summary: Import it from `@internal/postgres/runtime`.',
+      '---',
+      '',
+    ].join('\n');
+    assert.deepEqual(
+      findProseNames(content, entriesOf).map((record) => record.line),
+      [9],
+    );
+  });
 });
 
 describe('prose scopes', () => {

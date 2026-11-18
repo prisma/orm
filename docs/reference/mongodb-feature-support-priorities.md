@@ -1,6 +1,6 @@
 # MongoDB Feature Support Priorities
 
-A prioritized inventory of MongoDB features and their support in Prisma ORM 7 and earlier, based on input from MongoDB's Node.js Driver team. The *Prisma ORM status* columns describe Prisma 7, not Prisma 8, so this is not a list of Prisma 8's gaps: it was design input, and features marked "Unsupported" or "Partial" were opportunities for Prisma 8 to deliver a Mongo-native experience. For what Prisma 8 does on MongoDB, see [the MongoDB user promise](mongodb-user-promise.md) and the [MongoDB Family subsystem](../architecture%20docs/subsystems/10.%20MongoDB%20Family.md).
+A prioritized inventory of MongoDB features and their support in Prisma ORM 6, based on input from MongoDB's Node.js Driver team. The *Prisma ORM status* columns describe Prisma ORM 6, the last release before Prisma 8 that supported MongoDB, not Prisma 8, so this is not a list of Prisma 8's gaps: it was design input, and features marked "Unsupported" or "Partial" were opportunities for Prisma 8 to deliver a Mongo-native experience. For what Prisma 8 does on MongoDB, see [the MongoDB user promise](mongodb-user-promise.md) and the [MongoDB Family subsystem](../architecture%20docs/subsystems/10.%20MongoDB%20Family.md).
 
 ## High priority
 

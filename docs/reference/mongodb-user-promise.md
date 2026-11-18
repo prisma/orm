@@ -4,7 +4,7 @@ What does Prisma 8 offer a MongoDB user, and why would they choose it over the `
 
 See also: [MongoDB primitives reference](mongodb-primitives-reference.md), [MongoDB Family subsystem](../architecture%20docs/subsystems/10.%20MongoDB%20Family.md).
 
-**External input**: The MongoDB Node.js Driver team provided a [feature gap analysis](mongodb-feature-support-priorities.md) of Prisma 7 and a [user journey narrative](mongodb-user-journey.md) that informed this document.
+**External input**: The MongoDB Node.js Driver team provided a [feature gap analysis](mongodb-feature-support-priorities.md) of Prisma ORM 6 and a [user journey narrative](mongodb-user-journey.md) that informed this document.
 
 ---
 
@@ -28,9 +28,16 @@ A TypeScript developer building an application backed by MongoDB. They want to m
 
 #### What this looks like
 
-From `examples/mongo-demo/src/contract.prisma`:
+Adapted from `examples/mongo-demo/src/contract.prisma`:
 
 ```prisma
+enum UserRole {
+  @@type("mongo/string@1")
+  Admin  = "admin"
+  Author = "author"
+  Reader = "reader"
+}
+
 type Address {
   street  String
   city    String
@@ -42,6 +49,7 @@ model User {
   id      ObjectId @id @map("_id")
   name    String
   email   String
+  role    UserRole
   address Address?   // embedded: stored inside the user document
   posts   Post[]     // referenced: stored in the posts collection
   @@map("users")
@@ -51,6 +59,9 @@ model Post {
   id        ObjectId @id @map("_id")
   title     String
   kind      String
+  views     Int
+  tags      String[]
+  createdAt DateTime
   authorId  ObjectId
   author    User @relation(fields: [authorId], references: [id])
   @@discriminator(kind)
@@ -113,7 +124,7 @@ console.log(user?.address?.city);
 
 The key behaviors:
 
-- **Embedded documents are always loaded**, because they are part of the parent document.
+- **Embedded documents need no `include`**, because they are part of the parent document. A `select` still limits the fields returned, so `select('name')` leaves out `address`.
 - **References are loaded only when included.** `include` takes the relation name and loads one level; there is no refinement callback, so the included documents cannot be filtered, ordered or limited.
 - **The ORM's `where` takes an object of equalities or a filter expression.** For comparisons, `$in` and boolean composition, pass a filter built with `MongoFieldFilter` (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `nin`, `isNull`, `isNotNull`) and combine filters with `.and(...)`, `.not()` and `MongoOrExpr.of([...])`. These name fields as strings, so the field names are not checked at compile time. There is no callback form of `where` and no `ilike`, `contains` or list operators such as `has`.
 

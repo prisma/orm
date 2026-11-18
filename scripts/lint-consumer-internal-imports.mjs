@@ -50,7 +50,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import matter from 'gray-matter';
 import {
   comparePrecedence,
   PENDING,
@@ -216,29 +215,24 @@ export function publishedNamesOnLine(line) {
   return names;
 }
 
-/** Every string a guide's `detection` blocks hold; a line repeating one of them is a pattern, not prose. */
-function detectionPatterns(content) {
-  let data;
-  try {
-    ({ data } = matter(content));
-  } catch {
-    return [];
+/** The indexes of the frontmatter lines inside a `detection` block, the key's own line included; they hold patterns, not prose. */
+function detectionLines(lines) {
+  const frontmatterEnd = lines[0]?.trim() === '---' ? lines.indexOf('---', 1) : -1;
+  const inside = new Set();
+  let keyIndent = -1;
+  for (let i = 1; i < frontmatterEnd; i++) {
+    const line = lines[i];
+    const indent = line.search(/\S/);
+    if (indent === -1) continue;
+    if (keyIndent !== -1 && indent > keyIndent) {
+      inside.add(i);
+      continue;
+    }
+    const key = /^(\s*(?:-\s+)?)detection:/.exec(line);
+    keyIndent = key ? key[1].length : -1;
+    if (key) inside.add(i);
   }
-  const changes = Array.isArray(data?.changes) ? data.changes : [];
-  return changes.flatMap((change) =>
-    change !== null && typeof change === 'object' && change.detection
-      ? Object.values(change.detection)
-          .flat()
-          .filter((value) => typeof value === 'string')
-      : [],
-  );
-}
-
-function asYamlScalar(line) {
-  const text = line.trim().replace(/^-\s+/, '');
-  if (text.startsWith("'") && text.endsWith("'")) return text.slice(1, -1).replaceAll("''", "'");
-  if (text.startsWith('"') && text.endsWith('"')) return text.slice(1, -1);
-  return text.replace(/^[A-Za-z]+:\s*/, '');
+  return inside;
 }
 
 /**
@@ -267,13 +261,12 @@ export function publishedEntries(scanDir, packageName) {
 
 /** One record per prose line naming an internal package or a published entry that does not exist. */
 export function findProseNames(content, entriesOf) {
-  const patterns = detectionPatterns(content);
   const lines = content.split('\n');
-  const frontmatterEnd = lines[0]?.trim() === '---' ? lines.indexOf('---', 1) : -1;
+  const patterns = detectionLines(lines);
   const records = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (i < frontmatterEnd && patterns.includes(asYamlScalar(line))) continue;
+    if (patterns.has(i)) continue;
     const internal = [...new Set(line.match(INTERNAL_NAME) ?? [])];
     const unpublished = publishedNamesOnLine(line).filter((specifier) => {
       const packageName = specifier.split('/').slice(0, 2).join('/');
