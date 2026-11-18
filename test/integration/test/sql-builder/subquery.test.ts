@@ -20,6 +20,20 @@ describe('integration: subqueries', { timeout: timeouts.databaseOperation }, () 
     expect(rows.map((r) => r.name)).toEqual(['Alice', 'Bob', 'Charlie']);
   });
 
+  it('EXISTS correlates on an outer top-level field the inner table also has', async () => {
+    const d = db();
+    const rows = await runtime().query(
+      d.public.users
+        .select('id', 'name')
+        .where((f, fns) =>
+          fns.exists(d.public.posts.select('id').where((pf, pfns) => pfns.eq(pf.user_id, f.id))),
+        )
+        .orderBy('id')
+        .build(),
+    );
+    expect(rows.map((r) => r.name)).toEqual(['Alice', 'Bob', 'Charlie']);
+  });
+
   it('IN with subquery and parameters in both parent and subquery', async () => {
     // Users whose id is IN the set of user_ids from posts with views > 50
     // Then further filter parent to name != 'Bob'

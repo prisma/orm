@@ -41,7 +41,7 @@ describe('a MariaDB client with no database', () => {
         .build(),
     );
     expect({ sql, driverCreated: driverCreate.mock.calls.length }).toEqual({
-      sql: 'SELECT `id` AS `id` FROM `User` WHERE `role` = ?1',
+      sql: 'SELECT `id` AS `id` FROM `User` WHERE `User`.`role` = ?1',
       driverCreated: 0,
     });
   });

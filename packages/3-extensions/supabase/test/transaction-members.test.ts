@@ -90,7 +90,7 @@ function underRole(
   ];
 }
 
-const selectByName = 'SELECT "id" AS "id" FROM "public"."profile" WHERE "username" = $1';
+const selectByName = 'SELECT "id" AS "id" FROM "public"."profile" WHERE "profile"."username" = $1';
 
 afterEach(() => {
   recorded.statements.length = 0;
