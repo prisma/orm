@@ -56,10 +56,12 @@ describe('lowerSqlPlan', () => {
     const originalPlan = buildLiteralPlan();
     const plan = lowerSqlPlan(adapter, testContract, originalPlan);
 
-    expect({ plan, frozen: Object.isFrozen(plan) }).toEqual({
-      plan: { sql: expect.any(String), params: [42], ast: originalPlan.ast, meta },
-      frozen: true,
-    });
+    expect({
+      params: plan.params,
+      sameAst: plan.ast === originalPlan.ast,
+      sameMeta: plan.meta === meta,
+      frozen: Object.isFrozen(plan),
+    }).toEqual({ params: [42], sameAst: true, sameMeta: true, frozen: true });
   });
 
   it('throws RUNTIME.PREPARE_BIND_ON_ADHOC when a bind-site slot reaches the ad-hoc path', () => {
