@@ -604,6 +604,22 @@ describe('connect and disconnect on a variant stored in its own table', () => {
 });
 
 describe('disconnect on a variant', () => {
+  it('adds no Update for an explicit empty list of criteria', () => {
+    expect(
+      [
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('bug').disconnect([]),
+        }),
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => tasks.variant('bug').disconnect([]),
+        }),
+      ].map((graph) => printGraph(graph)),
+    ).toEqual([
+      ['n1 Find task_comments where id = 1', 'result: n1'].join('\n'),
+      ['n1 Find projects_tbl where id = 1', 'result: n1'].join('\n'),
+    ]);
+  });
+
   it('unlinks the parent only when the linked row is of the variant, on a variant stored in the base table', () => {
     expect(
       printGraph(

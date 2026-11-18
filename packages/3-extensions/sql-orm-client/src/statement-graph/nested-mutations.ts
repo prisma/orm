@@ -624,9 +624,9 @@ function addChildOwned(
     relation.on.targetFields,
   );
   const unlink = Object.fromEntries(targetColumns.map((column) => [column, null]));
-  const criteria = mutation.criteria ?? [];
+  const { criteria } = mutation;
   const wheres =
-    criteria.length === 0
+    criteria === undefined
       ? [variantWhere(contract, mutation.state, undefined)]
       : criteria.map((criterion) => requiredCriterion(context, related, name, mutation, criterion));
   for (const where of wheres) {

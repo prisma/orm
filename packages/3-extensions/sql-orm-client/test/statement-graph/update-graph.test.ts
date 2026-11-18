@@ -161,6 +161,12 @@ describe('updateFirstGraph with relation operations', () => {
       );
     });
 
+    it('adds no Update for an explicit empty list of criteria', () => {
+      expect(printUpdate({ invitedUsers: (invited: Mutator) => invited.disconnect([]) })).toBe(
+        ['n1 Find users where id = 1', 'result: n1'].join('\n'),
+      );
+    });
+
     it('sets the key to null on every child of the parent, or on those the criterion matches', () => {
       expect(printUpdate({ invitedUsers: (invited: Mutator) => invited.disconnect() })).toBe(
         [

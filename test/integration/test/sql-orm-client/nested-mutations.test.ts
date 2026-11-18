@@ -157,6 +157,18 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           { id: 3, name: 'Carol', email: 'carol@example.com', invitedById: 1 },
         ]);
 
+        const empty = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .update({ invitedUsers: (invited) => invited.disconnect([]) });
+        expect(empty).toEqual({ id: 1, name: 'Alice' });
+        expect(
+          await runtime.query('select id, invited_by_id from users where id <> 1 order by id'),
+        ).toEqual([
+          { id: 2, invited_by_id: 1 },
+          { id: 3, invited_by_id: 1 },
+        ]);
+
         runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
