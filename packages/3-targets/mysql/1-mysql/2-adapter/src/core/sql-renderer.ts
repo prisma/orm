@@ -73,7 +73,7 @@ interface RenderContext {
   readonly uses: { groupConcat: boolean };
   /** While an insert is written: its table's alias, and the name a column of the table is qualified with instead, since MySQL's `INSERT` takes no table alias. */
   readonly insertInto?: { readonly alias: string; readonly name: string };
-  /** While an update or delete is written after its target: the target's qualified name, which a subquery reads through a derived table. */
+  /** While an update or delete is written after its target: the target's qualified name, which its `SET` and `WHERE` may not read on MySQL. */
   readonly writtenTable?: string;
 }
 
@@ -194,6 +194,11 @@ export class MysqlSqlRenderer {
   /** Why an ordered JSON array is refused, or `undefined` where the renderer builds it, as MySQL's does. */
   protected orderedJsonArrayRefusal(): string | undefined {
     return undefined;
+  }
+
+  /** Why an update or delete whose `SET` or `WHERE` reads `table`, the table it writes, is refused, or `undefined` where the database runs it. MySQL refuses it with error 1093. The only form MySQL accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes deadlock; the renderer does not write it. */
+  protected writtenTableReadRefusal(table: string): string | undefined {
+    return `${this.target.displayName} cannot run an UPDATE or DELETE whose filter reads the table being written, ${table}`;
   }
 
   /** Puts `GROUP_CONCAT_HINT` on the outermost `SELECT`; a statement without one would leave `GROUP_CONCAT` at the session's limit, which can cut an array after an element and still read as JSON, so it is refused. */
@@ -320,7 +325,6 @@ export class MysqlSqlRenderer {
     return `DELETE FROM ${target}${where}`;
   }
 
-  /** MySQL refuses a subquery that reads the table an update or delete writes (error 1093), unless it reads it through a derived table, which MySQL materialises. The subquery's conditions stay outside the derived table, where they can see the written row. */
   private writing(table: TableSource, ctx: RenderContext): RenderContext {
     return { ...ctx, writtenTable: this.qualifyTable(table, ctx) };
   }
@@ -410,8 +414,10 @@ export class MysqlSqlRenderer {
     switch (source.kind) {
       case 'table-source': {
         const qualified = this.qualifyTable(source, ctx);
-        if (qualified !== ctx.writtenTable) return this.renderTableSource(source, ctx);
-        return `(SELECT * FROM ${qualified}) AS ${quoteIdentifier(source.alias ?? source.name)}`;
+        const refusal =
+          qualified === ctx.writtenTable ? this.writtenTableReadRefusal(qualified) : undefined;
+        if (refusal !== undefined) throw this.unsupported('write-reads-written-table', refusal);
+        return this.renderTableSource(source, ctx);
       }
       case 'derived-table-source':
         return `(${this.renderSelect(source.query, ctx)}) AS ${quoteIdentifier(source.alias)}`;
