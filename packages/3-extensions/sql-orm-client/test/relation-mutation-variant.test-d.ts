@@ -152,6 +152,27 @@ describe('variant() on the mutator of a polymorphic target', () => {
     expectTypeOf(update).toExtend<ProjectUpdate>();
   });
 
+  test('updateAll on the variant mutator rejects the discriminator', () => {
+    const update: ProjectUpdate = {
+      // @ts-expect-error
+      tasks: (tasks) => tasks.variant('feature').updateAll({ type: 'bug' }),
+    };
+
+    expectTypeOf(update).toExtend<ProjectUpdate>();
+  });
+
+  test('an updateAll descriptor rejects the discriminator in its data', () => {
+    const update: ProjectUpdate = {
+      // @ts-expect-error
+      tasks: (tasks) => ({
+        ...tasks.variant('feature').updateAll({ title: 'Seen' }),
+        data: { type: 'bug' },
+      }),
+    };
+
+    expectTypeOf(update).toExtend<ProjectUpdate>();
+  });
+
   test('where, updateAll and deleteAll on the variant mutator are refused in create() and on to-one relations', () => {
     const inCreate: ProjectCreate = {
       name: 'Launch',
