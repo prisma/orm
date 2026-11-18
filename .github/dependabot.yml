@@ -130,3 +130,11 @@ updates:
           - patch
           - minor
           - major
+    ignore:
+      # These releases make the publish, preview release and telemetry deploy
+      # workflows fail before any job starts. CI passed because it uses the
+      # shared setup action, which pins older versions.
+      - dependency-name: "jdx/mise-action"
+        versions: ["5.2.6"]
+      - dependency-name: "pnpm/action-setup"
+        versions: ["6.1.1"]
