@@ -435,3 +435,65 @@ describe('executeDbUpdate --dry-run under permitted', () => {
     expect(result.ok ? result.value.permitted : result.failure).toEqual(['dataLoss']);
   });
 });
+
+describe('executeDbUpdate, one setting permitted beside the other', () => {
+  const askedVerbs = (asked: readonly (readonly PlanQuestion[])[]) =>
+    asked.map((questions) =>
+      questions.map(({ verbs }) => (verbs.includes('allow') ? 'allow' : 'delete')),
+    );
+
+  it('still asks about the access change when only data loss is permitted', async () => {
+    const { result, executed, asked } = await update({
+      policies: { dataProtection: { dataLoss: 'data-loss-permitted' } },
+      changesAccess: true,
+    });
+
+    expect({ ok: result.ok, executed, asked: askedVerbs(asked) }).toEqual({
+      ok: true,
+      executed: 1,
+      asked: [['allow']],
+    });
+  });
+
+  it('still asks about the loss when only access changes are permitted', async () => {
+    const { result, executed, asked } = await update({
+      policies: { dataProtection: { accessWidening: 'access-widening-permitted' } },
+      changesAccess: true,
+    });
+
+    expect({ ok: result.ok, executed, asked: askedVerbs(asked) }).toEqual({
+      ok: true,
+      executed: 1,
+      asked: [['delete']],
+    });
+  });
+});
+
+describe('executeDbUpdate --permit-policy-change, the permitted level', () => {
+  const production = (dataLoss: 'data-loss-permitted' | 'data-loss-with-consent'): NamedRef => ({
+    name: 'production',
+    hash: DESTINATION_HASH,
+    invariants: [],
+    policies: { dataProtection: { dataLoss } },
+  });
+
+  it("asks nothing when the ref's level is permitted, whatever the marker records", async () => {
+    const { result, executed, asked } = await update({
+      policies: DATA_LOSS_FORBIDDEN,
+      ref: production('data-loss-permitted'),
+      permitPolicyChange: true,
+    });
+
+    expect({ ok: result.ok, executed, asked }).toEqual({ ok: true, executed: 1, asked: [[]] });
+  });
+
+  it("asks when the ref's level is with-consent, though the marker records permitted", async () => {
+    const { asked } = await update({
+      policies: { dataProtection: { dataLoss: 'data-loss-permitted' } },
+      ref: production('data-loss-with-consent'),
+      permitPolicyChange: true,
+    });
+
+    expect(asked.map((questions) => questions.length)).toEqual([1]);
+  });
+});

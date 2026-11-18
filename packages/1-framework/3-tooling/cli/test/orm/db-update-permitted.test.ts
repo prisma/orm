@@ -119,4 +119,37 @@ describe('db update --dry-run on a database whose data protection policy permits
       },
     });
   });
+
+  it('marks only the permitted setting answered, and still lists what an apply asks about the other', async () => {
+    mocks.dbUpdate.mockResolvedValue(ok({ ...permittedPlan(), permitted: ['dataLoss'] }));
+
+    const human = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+    const json = await harness().run(['db', 'update', '--dry-run', '--json'], { cwd: projectDir });
+
+    expect({
+      asks: human.presented?.presentation.human.filter((block) =>
+        JSON.stringify(block).includes('An apply asks about'),
+      ),
+      data: json.presented?.data,
+    }).toMatchObject({
+      asks: [
+        {
+          kind: 'tree',
+          roots: [
+            {
+              label: 'An apply asks about',
+              children: [{ label: 'Disable row-level security: --allow User' }],
+            },
+          ],
+        },
+      ],
+      data: {
+        dataLoss: [{ text: 'User.legacy', answered: true }],
+        accessChanges: [{ text: 'User', answered: false }],
+      },
+    });
+  });
 });
