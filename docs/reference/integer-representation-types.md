@@ -49,7 +49,7 @@ return {
 };
 ```
 
-For direct per-column declarations, use `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` on PostgreSQL, and `field.column(sqliteBigintNumberColumn())` on SQLite. Both forms select the same codecs and application types.
+For direct per-column declarations, use `field.column(pgInt8NumberColumn())` or `field.column(pgUnboundedIntColumn())` on PostgreSQL, and `field.column(sqliteIntegerColumn())` on SQLite. Both forms select the same codecs and application types.
 
 Introspection chooses a codec for a reported type from the target's own table of codecs, which names only the original codecs, so PostgreSQL `int8` and `numeric` and SQLite `integer` in type position keep their existing codecs and introspection remains unambiguous. Authoring availability does not make a reverse-introspection claim.
 
