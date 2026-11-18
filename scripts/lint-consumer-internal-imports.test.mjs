@@ -529,6 +529,9 @@ describe('publishedNamesOnLine', () => {
       ['@prisma/orm-postgres'],
     );
     assert.deepEqual(publishedNamesOnLine('Never `@prisma/orm-family-*`.'), []);
+    assert.deepEqual(publishedNamesOnLine('Import `@prisma/orm-postgres/config_`.'), [
+      '@prisma/orm-postgres/config_',
+    ]);
   });
 
   it('skips placeholders and prefixes', () => {
@@ -576,6 +579,9 @@ describe('publishedEntries', () => {
           './runtime': null,
           './features/*': './f/*.mjs',
           './features/internal/*': null,
+          './features/*.private': null,
+          './conditional': { import: './c.mjs', default: null },
+          './excluded': { import: null, default: null },
         },
       }),
     );
@@ -584,6 +590,9 @@ describe('publishedEntries', () => {
     assert.equal(entries.has('@prisma/orm-x/runtime'), false);
     assert.equal(entries.has('@prisma/orm-x/features/a'), true);
     assert.equal(entries.has('@prisma/orm-x/features/internal/a'), false);
+    assert.equal(entries.has('@prisma/orm-x/features/a.private'), false);
+    assert.equal(entries.has('@prisma/orm-x/conditional'), true);
+    assert.equal(entries.has('@prisma/orm-x/excluded'), false);
   });
 
   it('resolves prose against real manifests: a real export passes, a made-up one and an unknown package fail', () => {

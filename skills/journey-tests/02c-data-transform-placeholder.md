@@ -6,7 +6,7 @@
 
 ## Setup
 
-The `User` table holds at least one row, created before the migration is planned. Every row has a non-null `email`.
+The `User` table has an `id` column and holds at least one row, created before the migration is planned. Every row has a non-null `email`.
 
 ## Prompt
 

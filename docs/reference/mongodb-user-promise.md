@@ -84,7 +84,7 @@ The contract captures:
 #### What the contract guarantees
 
 - **Type derivation**: every model has TypeScript types, and ORM inputs and results are derived from them.
-- **Server-side validation**: migrations give each managed collection a `$jsonSchema` validator built from the contract, so writes that bypass Prisma 8 are checked too. A collection whose control policy is `tolerated`, `external` or `observed` gets no validator.
+- **Server-side validation**: migrations give each managed collection a `$jsonSchema` validator built from the contract, so writes that bypass Prisma 8 are checked too. A collection whose control policy is `tolerated`, `external` or `observed` gets no validator, and neither does any collection of a contract read from a Prisma 6 schema.
 - **Cross-family consistency**: a SQL contract and a MongoDB contract share one model, so a tool can traverse the models and relations of either.
 
 #### Existing databases

@@ -208,7 +208,10 @@ export function publishedNamesOnLine(line) {
   const names = [];
   for (const match of line.matchAll(PUBLISHED_NAME)) {
     let name = match[0].replace(/^(@prisma\/[^@/]+(?:\/[^@]*)?)@.*$/, '$1').replace(/[.!?]+$/, '');
-    name = name.replace(/([^-/*])[*_]+$/, '$1');
+    const opening = line[match.index - 1];
+    if (opening === '*' || opening === '_') {
+      while (name.endsWith(opening)) name = name.slice(0, -1);
+    }
     if (!name.includes('<')) name = name.replace(/>+$/, '');
     if (PLACEHOLDER.test(name)) continue;
     if (line[match.index - 1] === '/') name = name.split('/').slice(0, 2).join('/');
@@ -237,6 +240,13 @@ function detectionLines(lines) {
   return inside;
 }
 
+/** Whether an export target, under some condition, names a file; `null` excludes the subpath. */
+function resolvesToAFile(target) {
+  if (typeof target === 'string') return true;
+  if (target === null || typeof target !== 'object') return false;
+  return Object.values(target).some(resolvesToAFile);
+}
+
 /**
  * The published entries a package declares, as `@prisma/orm-x/<subpath>`, or
  * `undefined` when the package is not in the repository. A bare package name
@@ -258,7 +268,7 @@ export function publishedEntries(scanDir, packageName) {
     const [before, after] = specifierOf(key).split('*');
     wildcards.push({ before, after, target });
   }
-  wildcards.sort((a, b) => b.before.length - a.before.length);
+  wildcards.sort((a, b) => b.before.length - a.before.length || b.after.length - a.after.length);
   const targetOf = (specifier) => {
     if (exact.has(specifier)) return exact.get(specifier);
     const match = wildcards.find(
@@ -269,7 +279,7 @@ export function publishedEntries(scanDir, packageName) {
     );
     return match?.target ?? null;
   };
-  return { has: (specifier) => targetOf(specifier) !== null };
+  return { has: (specifier) => resolvesToAFile(targetOf(specifier)) };
 }
 
 /** One record per prose line naming an internal package or a published entry that does not exist. */
