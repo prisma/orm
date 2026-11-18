@@ -71,7 +71,7 @@ A table, collection or column can be shared. SQL variants stored in their base's
 
 One rename is planned for the storage, not one per model or field. A name the rename frees may be used by a new object in the same plan.
 
-When only some of the objects move, or objects from elsewhere join them, the storage is being split or merged. That is a data migration, which a plan does not write. No rename is planned, and the plan is the storage diff with its questions, as for any table that is dropped and created. When a statement asks for such a rename, as `--rename Bug:Defect` does for a variant stored in its base's table when `Defect` has a table of its own, the statement is refused: renaming the table would move every other variant's rows with it.
+When only some of the objects move, or objects from elsewhere join them, the storage is being split or merged. That is a data migration, which a plan does not write. No rename is planned, and the plan is the storage diff, with a question for each model or field whose data it drops. When a statement asks for such a rename, as `--rename Bug:Defect` does for a variant stored in its base's table when `Defect` has a table of its own, the statement is refused: renaming the table would move every other variant's rows with it.
 
 A pair is made only when the control policy is `managed` for the old table under the origin contract and for the new table under the destination contract.
 
@@ -79,7 +79,7 @@ A pair is made only when the control policy is `managed` for the old table under
 
 A pair with the same coordinate plans what a rename statement for the same two stored names plans. The companion renames (primary keys, unique constraints, foreign keys, indexes and checks whose names come from the table or column name), the rendering in `migration.ts` and the checks at apply time are the same code.
 
-- **A stored name and something else change together.** The rename is applied to the planner's working copy of the start schema first, and the diff then sees the renamed object. A changed column type becomes an alteration of the renamed column, with its usual question.
+- **A stored name and something else change together.** The rename is applied to the planner's working copy of the start schema first, and the diff then sees the renamed object. A changed column type becomes an alteration of the renamed column, which asks a question only when the type change can lose data, as it would on its own.
 - **A model's `@@map` changes and a field rename statement is given.** The table is renamed first, then the column on the renamed table.
 - **A field is removed in the same change.** Its question names it by its origin model and field, `User.nick`, as after a statement rename, and `--delete User.nick` answers it.
 - **Enum members.** A member that keeps its name and changes its stored value has the value replaced in every column the enum types. Values that shift along a chain (`ACTIVE` takes `archived` while `ARCHIVED` takes `old`) are rewritten last value first. A new member may take a value an existing member gives up.
