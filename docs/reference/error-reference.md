@@ -181,7 +181,7 @@ On the Prisma 7 path of `prisma orm init`, the target package's Prisma 7 contrac
 
 ### CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE
 
-On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or the config module its contribution names could not be loaded from the project (`reason: not-resolvable`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without a Prisma 7 source is not an error: init warns and runs as a fresh init. Nothing is written apart from the target package and `dotenv` the check installed, and the next actions give the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `packagesAdded` (the packages the project did not declare before the check).
+On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or the config module its contribution names could not be found from the project (`reason: not-resolvable`), or was found but could not be loaded because its file is missing or it throws while loading (`reason: unloadable`, with the module in `module` and the cause in `why`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without a Prisma 7 source is not an error: init warns and runs as a fresh init. Nothing is written apart from the target package and `dotenv` the check installed, and the next actions give the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `packagesAdded` (the packages the project did not declare before the check).
 
 ### CLI.INIT_PRISMA7_TARGET_MISMATCH
 
@@ -189,7 +189,7 @@ On the Prisma 7 path of `prisma orm init`, `--target` names a different database
 
 ### CLI.INIT_PROBE_FAILED
 
-`prisma orm init --probe-db --strict-probe` was run and the database probe could not complete (no `DATABASE_URL`, network or auth error, driver not installed). Without `--strict-probe` these surface as warnings; strict mode escalates them to fatal. Scaffolded files are already on disk when this fires. Maps to init exit code 2 (PRECONDITION). Payload: `filesWritten`, `cause`.
+`prisma orm init --probe-db --strict-probe` was run and the database probe could not complete. Every case needs `--strict-probe`; without it each is a warning and init succeeds. The cases: `DATABASE_URL` is not set; the target package's probe could not connect (a network or authentication error, or the probe threw); its driver could not be loaded; it connected but could not read the server's version; it gave a malformed answer; or the target package has no probe. A server older than the stated minimum is never this error, only a warning. Scaffolded files are already on disk when this fires. Maps to init exit code 2 (PRECONDITION). Payload: `filesWritten`, `cause`.
 
 ### CLI.INIT_REINIT_NEEDS_FORCE
 
