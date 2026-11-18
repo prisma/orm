@@ -5,11 +5,17 @@ import type { NoInvariantPathStructuralEdge } from '@internal/migration-tools/er
 import type { MigrationEdge, MigrationGraph } from '@internal/migration-tools/graph';
 import { APP_SPACE_ID, spaceMigrationDirectory } from '@internal/migration-tools/spaces';
 import { ifDefined } from '@internal/utils/defined';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import type { NextAction } from '@internal/utils/structured-error';
 import { relative, resolve } from 'pathe';
 import type { ControlClient } from '../control-api/types';
 import { migrationsDirFor } from '../orm/migration/paths';
-import { CliStructuredError, errorRuntime } from './cli-errors';
+import {
+  CliStructuredError,
+  errorContractTypesModuleMissing,
+  errorMigrationModuleMissing,
+  errorRuntime,
+} from './cli-errors';
 import {
   hasUrlScheme,
   passwordQueryValues,
@@ -18,6 +24,20 @@ import {
 } from './url-credentials';
 
 const PASSWORD_QUERY_KEY = /password/i;
+
+export function contractTypesModuleOf(config: {
+  readonly contract?: { readonly typesModule?: string };
+}): Result<string, CliStructuredError> {
+  const module = config.contract?.typesModule;
+  return module === undefined ? notOk(errorContractTypesModuleMissing()) : ok(module);
+}
+
+export function migrationModuleOf(config: {
+  readonly migrations?: { readonly module?: string };
+}): Result<string, CliStructuredError> {
+  const module = config.migrations?.module;
+  return module === undefined ? notOk(errorMigrationModuleMissing()) : ok(module);
+}
 
 /**
  * Resolves the absolute path to contract.json from the config.

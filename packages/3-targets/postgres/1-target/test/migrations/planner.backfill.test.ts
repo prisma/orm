@@ -8,7 +8,7 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import { postgresContractToSchema } from '../../src/core/migrations/postgres-contract-to-schema';
@@ -238,7 +238,7 @@ describe('the backfill slots', () => {
     if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
     const slots = [
       ...result.plan
-        .renderTypeScript((specifier) => specifier)
+        .renderTypeScript(workspaceMigrationModule.postgres)
         .matchAll(/placeholder\("([^"]+)"\)/g),
     ].map((match) => match[1]);
 
@@ -263,7 +263,7 @@ describe('the backfill slots', () => {
       snapshotsImportPath: '../../snapshots',
     });
     if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
-    const source = result.plan.renderTypeScript((specifier) => specifier);
+    const source = result.plan.renderTypeScript(workspaceMigrationModule.postgres);
 
     expect(
       [...source.matchAll(/backfillsColumn: \{[^}]+\}/g)].map((match) => match[0]).sort(),

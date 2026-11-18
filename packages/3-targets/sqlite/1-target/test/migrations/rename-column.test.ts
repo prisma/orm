@@ -14,6 +14,7 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { columnExistsAst, columnNameTakenAst } from '../../src/contract-free/checks';
 import { sqliteContractToSchema } from '../../src/core/migrations/diff-database-schema';
@@ -286,7 +287,7 @@ describe('SQLite planner, field statements', () => {
     const to = profileContract('b'.repeat(64), { columns: EMAIL_RENAMED, objects });
     const result = plan(from, to, [renameEmail]);
     if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
-    expect(result.plan.renderTypeScript((specifier) => specifier)).toContain(
+    expect(result.plan.renderTypeScript(workspaceMigrationModule.sqlite)).toContain(
       '...this.renameColumn({ table: "Profile", column: "email", to: "emailAddress" })',
     );
     const planned = await Promise.all(result.plan.operations);

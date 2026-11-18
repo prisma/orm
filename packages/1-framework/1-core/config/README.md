@@ -44,11 +44,24 @@ const config = defineConfig({
       load: async (_context) =>
         /* Result<Contract, ContractSourceDiagnostics> */ null as never,
     },
+    typesModule: '@internal/postgres/contract-types',
   },
+  migrations: { module: '@internal/postgres/migration' },
 });
 
 const issues = collectConfigIssues(config);
 ```
+
+### The modules generated files import
+
+The CLI writes `contract.d.ts` beside the contract and a `migration.ts` into each migration folder. Two config members name the modules those files import from:
+
+- `contract.typesModule`: the module `contract.d.ts` imports the framework's and the family's contract types from.
+- `migrations.module`: the module `migration.ts` imports `Migration`, `MigrationCLI` and the target's operation helpers from.
+
+A target package's `defineConfig` sets both to modules of that package. A config assembled by hand sets them itself. A command that writes one of these files stops when the member it needs is missing.
+
+Each names a module the way a package is imported (`pkg/sub`, `@scope/pkg/sub`), or by a `#` import declared in the `imports` of the package that holds the generated files. The config is refused when either is empty or is a path or URL: generated files are written into more than one folder, and a path resolves from at most one of them.
 
 Every source states the language of its inputs in `source.format`: `'psl'` or `'typescript'`. `collectConfigIssues` reports a missing `format` and any other value as an issue on `contract.source.format`. Tooling that reads the inputs itself, such as `contract format` and the language server, reads only a `'psl'` source's inputs.
 

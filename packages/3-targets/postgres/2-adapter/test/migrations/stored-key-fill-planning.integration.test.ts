@@ -30,6 +30,7 @@ import postgresPack from '@internal/target-postgres/pack';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   controlAdapter,
@@ -225,7 +226,9 @@ describe('Postgres planner, value object field fills', { concurrent: false }, ()
     from: Contract<SqlStorage>,
     to: Contract<SqlStorage>,
   ): Promise<SqlMigrationPlan<PostgresPlanTargetDetails>> {
-    const fills = [...result.plan.renderTypeScript((specifier) => specifier).matchAll(FILL_CALL)];
+    const fills = [
+      ...result.plan.renderTypeScript(workspaceMigrationModule.postgres).matchAll(FILL_CALL),
+    ];
     const settled = await Promise.allSettled(result.plan.operations);
     let fill = 0;
     const operations = await Promise.all(

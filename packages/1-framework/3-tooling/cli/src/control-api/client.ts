@@ -24,10 +24,6 @@ import {
   hasPslContractInfer,
   hasSchemaView,
 } from '@internal/framework-components/control';
-import {
-  type ImportSpecifierResolver,
-  keepInternalSpecifiers,
-} from '@internal/framework-components/emission';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { blindCast } from '@internal/utils/casts';
@@ -35,6 +31,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
+import { errorContractTypesModuleMissing } from '../utils/cli-errors';
 import { contractValidationMeta } from '../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../utils/framework-components';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
@@ -623,6 +620,9 @@ class ControlClientImpl implements ControlClient {
 
   async emit(options: EmitOptions): Promise<EmitResult> {
     const { onProgress, contractConfig } = options;
+    if (!contractConfig.typesModule) {
+      throw errorContractTypesModuleMissing();
+    }
 
     // Ensure initialized (creates stack and family instance)
     // emit() does NOT require a database connection
@@ -696,7 +696,7 @@ class ControlClientImpl implements ControlClient {
         });
       }
 
-      const result = await this.emitArtifacts(deserializedContract, keepInternalSpecifiers);
+      const result = await this.emitArtifacts(deserializedContract, contractConfig.typesModule);
 
       onProgress?.({
         action: 'emit',
@@ -732,6 +732,9 @@ class ControlClientImpl implements ControlClient {
   }
 
   async renderContractDts(options: RenderContractDtsOptions): Promise<RenderContractDtsResult> {
+    if (!options.typesModule) {
+      throw errorContractTypesModuleMissing();
+    }
     this.init();
     if (!this.familyInstance) {
       throw new InternalError('Family instance was not initialized. This is a bug.');
@@ -750,10 +753,7 @@ class ControlClientImpl implements ControlClient {
     }
 
     try {
-      const { contractDts } = await this.emitArtifacts(
-        contract,
-        options.resolveImportSpecifier ?? keepInternalSpecifiers,
-      );
+      const { contractDts } = await this.emitArtifacts(contract, options.typesModule);
       return ok({ contractDts });
     } catch (error) {
       return notOk({
@@ -767,7 +767,7 @@ class ControlClientImpl implements ControlClient {
 
   private emitArtifacts(
     contract: Contract,
-    resolveImportSpecifier: ImportSpecifierResolver,
+    typesModule: string,
   ): ReturnType<typeof emitContractArtifacts> {
     const familyInstance = this.familyInstance;
     if (!familyInstance) {
@@ -777,7 +777,7 @@ class ControlClientImpl implements ControlClient {
     return emitContractArtifacts(contract, this.stack!, this.options.family.emission, {
       serializeContract: (c) => contractSerializer.serializeContract(c),
       deserializeContract: (json) => familyInstance.deserializeContract(json),
-      resolveImportSpecifier,
+      typesModule,
       ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
       ...ifDefined('sortStorage', contractSerializer.sortStorage),
       ...ifDefined('supportsNamespaces', this.options.target.supportsNamespaces),

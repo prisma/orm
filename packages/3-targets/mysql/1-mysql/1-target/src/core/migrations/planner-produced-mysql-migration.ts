@@ -3,17 +3,14 @@ import type {
   MigrationPlanWithAuthoringSurface,
   OpFactoryCall,
 } from '@internal/framework-components/control';
-import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import type { MigrationMeta } from '@internal/migration-tools/migration';
 import { MysqlMigrationBase } from './mysql-migration';
 import type { Op } from './operations';
 import { renderOps } from './render-ops';
 import { renderCallsToTypeScript } from './render-typescript';
 
-/** The target a planner plans for: the id its operations and migrations carry, and the facade module its `migration.ts` imports from. */
 export interface MysqlMigrationTarget<TargetId extends string> {
   readonly targetId: TargetId;
-  readonly migrationModule: string;
 }
 
 export interface MysqlMigrationDestinationInfo {
@@ -27,7 +24,6 @@ export class TypeScriptRenderableMysqlMigration<TargetId extends string = 'mysql
   implements MigrationPlanWithAuthoringSurface
 {
   readonly targetId: TargetId;
-  readonly #migrationModule: string;
   readonly #calls: readonly OpFactoryCall[];
   readonly #meta: MigrationMeta;
   readonly #destination: MysqlMigrationDestinationInfo;
@@ -47,7 +43,6 @@ export class TypeScriptRenderableMysqlMigration<TargetId extends string = 'mysql
   }) {
     super();
     this.targetId = options.target.targetId;
-    this.#migrationModule = options.target.migrationModule;
     this.#calls = options.calls;
     this.#meta = options.meta;
     this.#spaceId = options.spaceId;
@@ -73,13 +68,12 @@ export class TypeScriptRenderableMysqlMigration<TargetId extends string = 'mysql
     return this.#spaceId;
   }
 
-  renderTypeScript(resolveImportSpecifier: ImportSpecifierResolver): string {
+  renderTypeScript(migrationModule: string): string {
     return renderCallsToTypeScript(this.#calls, {
       from: this.#meta.from,
       to: this.#meta.to,
       snapshotsImportPath: this.#snapshotsImportPath,
-      resolveImportSpecifier,
-      migrationModule: this.#migrationModule,
+      migrationModule,
     });
   }
 }

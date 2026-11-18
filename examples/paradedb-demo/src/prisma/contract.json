@@ -172,15 +172,6 @@
       "id": "paradedb",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "queryOperationTypes": {
-          "import": {
-            "alias": "ParadeDbQueryOperationTypes",
-            "named": "QueryOperationTypes",
-            "package": "@internal/extension-paradedb/operation-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

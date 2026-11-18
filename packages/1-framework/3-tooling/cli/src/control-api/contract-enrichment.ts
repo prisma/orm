@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type { Contract } from '@internal/contract/types';
 import {
   mergeCapabilityMatrices,
@@ -15,7 +16,7 @@ function sortDeep(value: unknown): unknown {
   if (!isPlainObject(value)) {
     return value;
   }
-  const entries = Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
+  const entries = Object.entries(value).sort(([a], [b]) => compareCodeUnits(a, b));
   const next: Record<string, unknown> = {};
   for (const [key, child] of entries) {
     next[key] = sortDeep(child);
@@ -27,15 +28,33 @@ function sortDeepTyped<T>(value: T): T {
   return sortDeep(value) as T;
 }
 
-/**
- * The keys of a pack's `types` metadata that a contract carries. Any other key stays out of the contract, such as the `storage` list that a pack built for an earlier framework still declares.
- */
-const CONTRACT_TYPES_KEYS: ReadonlySet<string> = new Set([
-  'aggregateDescriptors',
-  'codecTypes',
-  'operationTypes',
-  'queryOperationTypes',
+const TYPE_IMPORT_MEMBERS_THE_EMITTER_READS_FROM_THE_DESCRIPTOR = [
+  'import',
+  'typeImports',
+  'parameterizedOutputTypes',
+];
+const CODEC_MEMBERS_HOLDING_FUNCTIONS = ['controlPlaneHooks', 'codecDescriptors'];
+
+const CONTRACT_TYPES_KEYS_WITH_OMITTED_MEMBERS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['aggregateDescriptors', new Set<string>()],
+  [
+    'codecTypes',
+    new Set([
+      ...TYPE_IMPORT_MEMBERS_THE_EMITTER_READS_FROM_THE_DESCRIPTOR,
+      ...CODEC_MEMBERS_HOLDING_FUNCTIONS,
+    ]),
+  ],
+  ['operationTypes', new Set(['import'])],
+  ['queryOperationTypes', new Set(['import'])],
 ]);
+
+function contractTypesEntry(key: string, value: unknown): [string, unknown] | undefined {
+  const omitted = CONTRACT_TYPES_KEYS_WITH_OMITTED_MEMBERS.get(key);
+  if (omitted === undefined) return undefined;
+  if (!isPlainObject(value)) return [key, value];
+  const kept = Object.entries(value).filter(([member]) => !omitted.has(member));
+  return kept.length > 0 ? [key, Object.fromEntries(kept)] : undefined;
+}
 
 function extractExtensionPackMeta(
   component: TargetBoundComponentDescriptor<string, string>,
@@ -51,20 +70,12 @@ function extractExtensionPackMeta(
   if (capabilities) {
     base['capabilities'] = capabilities;
   }
-  if (types) {
-    const carried = Object.fromEntries(
-      Object.entries(types).filter(([key]) => CONTRACT_TYPES_KEYS.has(key)),
-    );
-    if (types.codecTypes) {
-      const {
-        controlPlaneHooks: _,
-        codecDescriptors: _cd,
-        ...cleanedCodecTypes
-      } = types.codecTypes;
-      base['types'] = { ...carried, codecTypes: cleanedCodecTypes };
-    } else {
-      base['types'] = carried;
-    }
+  const carried = Object.entries(types ?? {}).flatMap(([key, value]) => {
+    const entry = contractTypesEntry(key, value);
+    return entry === undefined ? [] : [entry];
+  });
+  if (carried.length > 0) {
+    base['types'] = Object.fromEntries(carried);
   }
   return base;
 }

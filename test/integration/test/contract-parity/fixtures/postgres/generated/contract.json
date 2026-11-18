@@ -2431,15 +2431,6 @@
       "id": "arktype-json",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "ArktypeJsonTypes",
-            "named": "CodecTypes",
-            "package": "@internal/extension-arktype-json/codec-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

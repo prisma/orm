@@ -1,15 +1,5 @@
-import {
-  type ImportSpecifierResolver,
-  keepInternalSpecifiers,
-} from '@internal/framework-components/emission';
 import { dirname } from 'pathe';
-import {
-  type AuthoringId,
-  schemaSample,
-  type TargetId,
-  targetEntrypoint,
-  targetPackageName,
-} from './code-templates';
+import { type AuthoringId, schemaSample, type TargetId, targetEntrypoint } from './code-templates';
 import { MIN_SERVER_VERSION, TARGET_LABEL } from './env';
 import { renderTemplate } from './render';
 
@@ -31,18 +21,18 @@ export function quickReferenceMd(
   authoring: AuthoringId,
   schemaPath: string,
   pkgRun: string,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string,
 ): string {
   const schemaDir = dirname(schemaPath);
-  const pkg = targetPackageName(target, resolveImportSpecifier);
+  const pkg = targetPackage;
   const vars: TemplateVars = {
     schemaPath,
     schemaDir,
     dbImportPath: `./${schemaDir}/db`,
     pkgRun,
     pkg,
-    configEntrypoint: targetEntrypoint(target, 'config', resolveImportSpecifier),
-    schemaSample: schemaSample(target, authoring, resolveImportSpecifier),
+    configEntrypoint: targetEntrypoint(targetPackage, 'config'),
+    schemaSample: schemaSample(target, authoring, targetPackage),
     requirements: requirementsBlock(target, pkgRun),
   };
   const templateFile = `quick-reference-${target}.md`;
@@ -92,15 +82,15 @@ export function prisma7QuickReferenceMd(
   outputDir: string,
   pkgRun: string,
   prisma7Config: string | undefined,
-  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+  targetPackage: string,
 ): string {
   const vars: Record<(typeof prisma7Variables)[number], string> = {
     schemaPath,
     outputDir,
     dbImportPath: `./${outputDir}/db`,
     pkgRun,
-    pkg: targetPackageName(target, resolveImportSpecifier),
-    configEntrypoint: targetEntrypoint(target, 'config', resolveImportSpecifier),
+    pkg: targetPackage,
+    configEntrypoint: targetEntrypoint(targetPackage, 'config'),
     requirements: requirementsBlock(target, pkgRun),
     prisma7ConfigSentence:
       prisma7Config === undefined

@@ -29,7 +29,6 @@ export function createAdapter(): SqlControlAdapter<'mysql'> {
 export function createPlanner() {
   return createMysqlMigrationPlanner(createAdapter(), {
     targetId: mysql.targetId,
-    migrationModule: '@internal/mysql/migration',
   });
 }
 

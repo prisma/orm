@@ -11,6 +11,7 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import type { PostgresPlanTargetDetails } from '../../src/core/migrations/planner-target-details';
@@ -220,7 +221,7 @@ describe('Postgres planner, field statements', () => {
     const result = success(plan(from, to, [renameEmail]));
     const rendered =
       '...this.renameColumn({ table: "Profile", column: "email", to: "emailAddress" })';
-    expect(result.plan.renderTypeScript((specifier) => specifier)).toContain(rendered);
+    expect(result.plan.renderTypeScript(workspaceMigrationModule.postgres)).toContain(rendered);
 
     const startJson = jsonOf(from);
     const endJson = jsonOf(to);

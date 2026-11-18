@@ -14,10 +14,10 @@ import { createMysqlDefineConfig } from '../../src/config/define-config';
 const mariadbMeta = { ...mysqlPackRef, targetId: 'mariadb', id: 'mariadb' } as const;
 
 const mariadbComponents = {
+  family: sql,
   pack: mariadbMeta satisfies TargetPackRef<'sql', 'mariadb'>,
   target: createMysqlControlTargetDescriptor({
     descriptorMeta: mariadbMeta,
-    migrationModule: '@internal/mariadb/migration',
   }),
   adapter: {
     ...mysqlAdapter,
@@ -29,6 +29,8 @@ const mariadbComponents = {
     target: { targetId: 'mariadb', displayName: 'MariaDB' },
     checkViolationErrors: [4025],
   }),
+  typesModule: '@acme/mariadb/contract-types',
+  migrationModule: '#migration-helpers',
 };
 
 describe('createMysqlDefineConfig', () => {
@@ -45,6 +47,8 @@ describe('createMysqlDefineConfig', () => {
       driver: config.driver,
       output: config.contract?.output,
       inputs: config.contract?.source.inputs,
+      typesModule: config.contract?.typesModule,
+      migrations: config.migrations,
     }).toEqual({
       family: sql,
       target: mariadbComponents.target,
@@ -52,6 +56,8 @@ describe('createMysqlDefineConfig', () => {
       driver: mariadbComponents.driver,
       output: './prisma/contract.json',
       inputs: ['./prisma/contract.prisma'],
+      typesModule: '@acme/mariadb/contract-types',
+      migrations: { module: '#migration-helpers' },
     });
   });
 

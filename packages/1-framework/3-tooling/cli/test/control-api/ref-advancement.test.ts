@@ -15,7 +15,7 @@ import {
   preflightRefAdvancement,
 } from '../../src/control-api/operations/ref-advancement';
 import type { RenderContractDtsResult } from '../../src/control-api/render-contract-dts';
-import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
+import { createTestProjectDir } from '../utils/test-project-dir';
 
 const HASH_A = `${'a'.repeat(64)}`;
 const PROFILE_HASH = `${'c'.repeat(64)}`;
@@ -159,13 +159,14 @@ describe('preflightRefAdvancement', () => {
 
   beforeEach(() => {
     projectDir = createTestProjectDir('preflight-ref-advancement');
-    writeProjectManifest(projectDir);
     contractJsonPath = join(projectDir, 'output', 'contract.json');
   });
 
   afterEach(async () => {
     await rm(projectDir, { recursive: true, force: true });
   });
+  const TYPES_MODULE = '@acme/orm-db/contract-types';
+  const config = { contract: { typesModule: TYPES_MODULE } };
   const RENDERED = '// rendered\nexport type Contract = { rendered: true };\n';
 
   function fakeClient(result: RenderContractDtsResult) {
@@ -179,15 +180,36 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      projectDir,
+      config,
       client,
     });
 
     expect(result).toEqual(ok({ contract: contractJson, contractDts: RENDERED }));
     expect(client.renderContractDts).toHaveBeenCalledWith({
       contract: contractJson,
-      resolveImportSpecifier: expect.any(Function),
+      typesModule: TYPES_MODULE,
     });
+  });
+
+  it('refuses a config that names no contract types module without rendering', async () => {
+    const client = fakeClient(ok({ contractDts: RENDERED }));
+
+    const result = await preflightRefAdvancement({
+      name: 'db',
+      contractJson,
+      contractJsonPath,
+      config: { contract: {} },
+      client,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.toEnvelope()).toMatchObject({
+        code: 'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
+        why: expect.stringContaining('Config.contract.typesModule is not set'),
+      });
+    }
+    expect(client.renderContractDts).not.toHaveBeenCalled();
   });
 
   it('refuses an invalid ref name without rendering', async () => {
@@ -197,7 +219,7 @@ describe('preflightRefAdvancement', () => {
       name: 'Invalid Name',
       contractJson,
       contractJsonPath,
-      projectDir,
+      config,
       client,
     });
 
@@ -221,7 +243,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      projectDir,
+      config,
       client,
     });
 
@@ -248,7 +270,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      projectDir,
+      config,
       client,
     });
 
