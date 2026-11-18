@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { withSeededDatabase } from '../live-database';
@@ -42,6 +43,43 @@ const lowest = {
 } as const;
 
 const lowestRead = { ...lowest, amount: DECIMAL_TINY, price: '-0.50' };
+
+const itemsDatabase = [
+  'CREATE TABLE `Drawer` (`id` int NOT NULL, PRIMARY KEY (`id`))',
+  'CREATE TABLE `Item` (`id` int NOT NULL, `on` tinyint(1) NOT NULL, `data` longblob NOT NULL, `doc` json NOT NULL, `extra` json NULL, `drawerId` int NOT NULL, PRIMARY KEY (`id`))',
+  'INSERT INTO `Drawer` VALUES (1)',
+] as const;
+
+/** Long enough that TO_BASE64 breaks its text into lines of 76 characters. */
+const LONG_BYTES = new Uint8Array(Array.from({ length: 300 }, (_, index) => (index * 7) % 256));
+
+const items = [
+  {
+    id: 1,
+    on: true,
+    data: new Uint8Array(),
+    doc: { b: [1, null, 'it\'s "quoted" 🙂'], a: { nested: true }, n: -12.5 },
+    extra: null,
+    drawerId: 1,
+  },
+  {
+    id: 2,
+    on: false,
+    data: new Uint8Array([0xc3, 0x28]),
+    doc: [1, 'two', {}, []],
+    extra: 'text',
+    drawerId: 1,
+  },
+  { id: 3, on: true, data: LONG_BYTES, doc: 'a string document', extra: 0, drawerId: 1 },
+  { id: 4, on: false, data: new Uint8Array([0]), doc: true, extra: [], drawerId: 1 },
+] as const satisfies readonly {
+  id: number;
+  on: boolean;
+  data: Uint8Array;
+  doc: JsonValue;
+  extra: JsonValue;
+  drawerId: number;
+}[];
 
 export function describeOrmScalarTypes(server: LiveServer): void {
   describe(`${server.displayName} reads and writes the scalar convenience types through the ORM`, {
@@ -181,6 +219,137 @@ export function describeOrmScalarTypes(server: LiveServer): void {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Measure.create({ ...measure, amount: '-0' });
         expect(await db.orm.Measure.select('amount').all()).toEqual([{ amount: PADDED_ZERO }]);
+      });
+    });
+  });
+
+  describe(`${server.displayName} reads and writes Boolean, Bytes and Json through the ORM`, {
+    timeout: timeouts.databaseOperation,
+  }, () => {
+    it('writes and reads each type at its edges', async (test) => {
+      await withSeededDatabase(test, server, itemsDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        await db.orm.Item.createAll([...items]);
+        const rows = await db.orm.Item.orderBy((item) => item.id.asc()).all();
+        expectTypeOf(rows[0]?.on).toEqualTypeOf<boolean | undefined>();
+        expectTypeOf(rows[0]?.data).toEqualTypeOf<Uint8Array | undefined>();
+        expectTypeOf(rows[0]?.doc).toEqualTypeOf<JsonValue | undefined>();
+        expectTypeOf(rows[0]?.extra).toEqualTypeOf<JsonValue | null | undefined>();
+        expect(rows).toEqual(items);
+        expect(rows.map((row) => row.data.constructor)).toEqual(items.map(() => Uint8Array));
+      });
+    });
+
+    it('reads JSON null as null, as it reads SQL NULL, though only SQL NULL is NULL to the server', async (test) => {
+      await withSeededDatabase(
+        test,
+        server,
+        [
+          ...itemsDatabase,
+          `INSERT INTO \`Item\` VALUES (1, 1, '', 'null', 'null', 1), (2, 0, '', '{}', NULL, 1)`,
+        ],
+        async (url) => {
+          await using db = server.client({ url, verifyMarker: false });
+          expect({
+            rows: await db.orm.Item.orderBy((item) => item.id.asc())
+              .select('id', 'doc', 'extra')
+              .all(),
+            sqlNull: await db.orm.Item.where({ extra: null }).select('id').all(),
+          }).toEqual({
+            rows: [
+              { id: 1, doc: null, extra: null },
+              { id: 2, doc: {}, extra: null },
+            ],
+            sqlNull: [{ id: 2 }],
+          });
+        },
+      );
+    });
+
+    it('refuses to write a value its column does not hold', async (test) => {
+      await withSeededDatabase(test, server, itemsDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        const [item] = items;
+        const write = (changes: Record<string, unknown>) =>
+          db.orm.Item.create({ ...item, ...changes } as never);
+        await expect(write({ on: 1 })).rejects.toMatchObject({
+          code: 'RUNTIME.ENCODE_FAILED',
+          message: expect.stringContaining('Cannot write 1 to '),
+        });
+        await expect(write({ data: '00ff' })).rejects.toMatchObject({
+          code: 'RUNTIME.ENCODE_FAILED',
+        });
+        await expect(write({ doc: { when: new Date(0) } })).rejects.toMatchObject({
+          code: 'RUNTIME.ENCODE_FAILED',
+          message: expect.stringContaining('Cannot write Date at when to '),
+        });
+        await expect(write({ doc: [1, Number.NaN] })).rejects.toMatchObject({
+          code: 'RUNTIME.ENCODE_FAILED',
+        });
+        expect(await db.orm.Item.all()).toEqual([]);
+      });
+    });
+
+    it('refuses to read a tinyint(1) holding a value other than 0 or 1, from a row and through an include, naming the column', async (test) => {
+      await withSeededDatabase(
+        test,
+        server,
+        [...itemsDatabase, "INSERT INTO `Item` VALUES (1, 2, '', '{}', NULL, 1)"],
+        async (url) => {
+          await using db = server.client({ url, verifyMarker: false });
+          const refusal = {
+            code: 'RUNTIME.DECODE_FAILED',
+            message: expect.stringContaining(
+              'Column "Item"."on" holds 2, which is not 0 or 1. mysql/boolean@1 reads 0 as false and 1 as true.',
+            ),
+          };
+          await expect(db.orm.Item.select('id', 'on').all()).rejects.toMatchObject(refusal);
+          await expect(db.orm.Drawer.include('items').all()).rejects.toMatchObject(refusal);
+        },
+      );
+    });
+
+    it('filters a boolean and bytes by equality, and orders bytes bytewise', async (test) => {
+      await withSeededDatabase(test, server, itemsDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        await db.orm.Item.createAll([...items]);
+        const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
+          (await rows).map((row) => row.id);
+        expect({
+          on: await ids(
+            db.orm.Item.where((item) => item.on.eq(true))
+              .orderBy((item) => item.id.asc())
+              .select('id')
+              .all(),
+          ),
+          off: await ids(
+            db.orm.Item.where({ on: false })
+              .orderBy((item) => item.id.asc())
+              .select('id')
+              .all(),
+          ),
+          bytes: await ids(
+            db.orm.Item.where((item) => item.data.eq(new Uint8Array([0xc3, 0x28])))
+              .select('id')
+              .all(),
+          ),
+          byBytes: await ids(
+            db.orm.Item.orderBy((item) => item.data.asc())
+              .select('id')
+              .all(),
+          ),
+        }).toEqual({ on: [1, 3], off: [2, 4], bytes: [2], byBytes: [1, 4, 3, 2] });
+      });
+    });
+
+    it('reads each type through an include as it reads it from a row', async (test) => {
+      await withSeededDatabase(test, server, itemsDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        await db.orm.Item.createAll([...items]);
+        const drawer = await db.orm.Drawer.include('items', (item) =>
+          item.orderBy((row) => row.id.asc()),
+        ).first({ id: 1 });
+        expect(drawer).toEqual({ id: 1, items });
       });
     });
   });

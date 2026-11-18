@@ -16,8 +16,16 @@
       "model": "Counter",
       "namespace": "__unbound__"
     },
+    "Drawer": {
+      "model": "Drawer",
+      "namespace": "__unbound__"
+    },
     "Event": {
       "model": "Event",
+      "namespace": "__unbound__"
+    },
+    "Item": {
+      "model": "Item",
       "namespace": "__unbound__"
     },
     "Measure": {
@@ -214,6 +222,43 @@
               "table": "Counter"
             }
           },
+          "Drawer": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "items": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "drawerId"
+                  ]
+                },
+                "to": {
+                  "model": "Item",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Drawer"
+            }
+          },
           "Event": {
             "fields": {
               "accountId": {
@@ -298,6 +343,94 @@
               },
               "namespaceId": "__unbound__",
               "table": "Feature"
+            }
+          },
+          "Item": {
+            "fields": {
+              "data": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/longblob@1",
+                  "kind": "scalar"
+                }
+              },
+              "doc": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "drawerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "extra": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mysql/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "on": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/boolean@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "drawer": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "drawerId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Drawer",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "data": {
+                  "column": "data"
+                },
+                "doc": {
+                  "column": "doc"
+                },
+                "drawerId": {
+                  "column": "drawerId"
+                },
+                "extra": {
+                  "column": "extra"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "on": {
+                  "column": "on"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Item"
             }
           },
           "Measure": {
@@ -856,6 +989,23 @@
               },
               "uniques": []
             },
+            "Drawer": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Event": {
               "columns": {
                 "accountId": {
@@ -951,6 +1101,77 @@
                 }
               ],
               "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Item": {
+              "columns": {
+                "data": {
+                  "codecId": "mysql/longblob@1",
+                  "dataType": "mysql/longblob",
+                  "nullable": false
+                },
+                "doc": {
+                  "codecId": "mysql/json@1",
+                  "dataType": "mysql/json",
+                  "nullable": false
+                },
+                "drawerId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "extra": {
+                  "codecId": "mysql/json@1",
+                  "dataType": "mysql/json",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "on": {
+                  "codecId": "mysql/boolean@1",
+                  "dataType": "mysql/boolean",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Item_drawerId_idx_a3d701ce"
+                  },
+                  "source": {
+                    "columns": [
+                      "drawerId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Item"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Drawer"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "drawerId"
+                  ],
+                  "name": "Item_drawerId_idx_a3d701ce",
+                  "prefix": "Item_drawerId_idx",
+                  "unique": false
+                }
+              ],
               "primaryKey": {
                 "columns": [
                   "id"
@@ -1371,7 +1592,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "173b901b3b9c85893bae9aea02bbbe6211142fbf63fbaf53365df10b2cb59140"
+    "storageHash": "06055398bd134b7aafe3ba14312f92986c9ed9f8de2f6cc8b215afd28bd49050"
   },
   "capabilities": {
     "sql": {

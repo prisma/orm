@@ -94,3 +94,18 @@ model Measure {
   shelf   Shelf              @relation(fields: [shelfId], references: [id])
   shelfId Int
 }
+
+model Drawer {
+  id    Int    @id
+  items Item[]
+}
+
+model Item {
+  id       Int     @id
+  on       Boolean
+  data     Bytes
+  doc      Json
+  extra    Json?
+  drawer   Drawer  @relation(fields: [drawerId], references: [id])
+  drawerId Int
+}

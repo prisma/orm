@@ -179,6 +179,10 @@ describe('introspecting a MariaDB database made by hand', {
       \`price\` decimal(10,2) NOT NULL DEFAULT '-0.5',
       \`label\` text DEFAULT NULL,
       \`name\` varchar(40) NOT NULL DEFAULT 'it''s',
+      \`on\` tinyint(1) NOT NULL DEFAULT 1,
+      \`data\` longblob NOT NULL DEFAULT X'00ff',
+      \`doc\` json NOT NULL DEFAULT '{"a": "it''s", "b": [1, null]}',
+      \`extra\` longtext COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(\`extra\`)),
       PRIMARY KEY (\`id\`)
     )`;
     await withMysqlDatabase(
@@ -191,12 +195,56 @@ describe('introspecting a MariaDB database made by hand', {
             amount: measure['amount']?.resolvedDefault,
             price: measure['price']?.resolvedDefault,
             ratio: measure['ratio']?.resolvedDefault,
+            on: measure['on']?.resolvedDefault,
+            data: measure['data']?.resolvedDefault,
+            doc: measure['doc']?.resolvedDefault,
+            types: ['on', 'data', 'doc', 'extra'].map((name) => measure[name]?.typeText),
             issues: mariadb.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
           }).toEqual({
             amount: { kind: 'literal', value: `1.5${'0'.repeat(29)}` },
             price: { kind: 'literal', value: '-0.50' },
             ratio: { kind: 'literal', value: 0.25 },
+            on: { kind: 'literal', value: true },
+            data: { kind: 'literal', value: '00FF' },
+            doc: { kind: 'literal', value: { a: "it's", b: [1, null] } },
+            types: ['tinyint(1)', 'longblob', 'json', 'json'],
             issues: [],
+          });
+        }),
+      SERVER,
+    );
+  });
+
+  it('reads a longtext column as json only when MariaDB gave it the column check json_valid makes', async (test) => {
+    const ddl = `CREATE TABLE \`Docs\` (
+      \`id\` int NOT NULL,
+      \`doc\` json,
+      \`plain\` longtext,
+      \`binCollated\` longtext COLLATE utf8mb4_bin,
+      \`tableChecked\` longtext,
+      \`otherCheck\` longtext CHECK (octet_length(\`otherCheck\`) < 100),
+      PRIMARY KEY (\`id\`),
+      CONSTRAINT \`docs_json\` CHECK (json_valid(\`tableChecked\`))
+    )`;
+    await withMysqlDatabase(
+      test,
+      ({ url }) =>
+        withTables(url, [ddl], async (driver) => {
+          const columns = (await introspect(driver)).tables['Docs']?.columns ?? {};
+          expect(
+            Object.fromEntries(
+              Object.entries(columns).map(([name, column]) => [
+                name,
+                [column.typeText, column.storedType?.id],
+              ]),
+            ),
+          ).toEqual({
+            id: ['int', 'mysql/int'],
+            doc: ['json', 'mysql/json'],
+            plain: ['longtext', undefined],
+            binCollated: ['longtext', undefined],
+            tableChecked: ['longtext', undefined],
+            otherCheck: ['longtext', undefined],
           });
         }),
       SERVER,

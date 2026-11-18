@@ -187,6 +187,10 @@ describe('introspecting a MySQL database made by hand', {
       \`price\` decimal(10,2) NOT NULL DEFAULT '-0.5',
       \`label\` text NULL,
       \`name\` varchar(40) NOT NULL DEFAULT 'it''s',
+      \`on\` tinyint(1) NOT NULL DEFAULT TRUE,
+      \`data\` longblob NOT NULL DEFAULT (X'00FF'),
+      \`doc\` json NOT NULL DEFAULT ('{"a": "it''s", "b": [1, null]}'),
+      \`extra\` json NULL,
       PRIMARY KEY (\`id\`)
     )`;
     await withMysqlDatabase(test, ({ url }) =>
@@ -197,11 +201,17 @@ describe('introspecting a MySQL database made by hand', {
           amount: measure['amount']?.resolvedDefault,
           price: measure['price']?.resolvedDefault,
           ratio: measure['ratio']?.resolvedDefault,
+          on: measure['on']?.resolvedDefault,
+          data: measure['data']?.resolvedDefault,
+          doc: measure['doc']?.resolvedDefault,
           issues: mysql.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
         }).toEqual({
           amount: { kind: 'literal', value: `1.5${'0'.repeat(29)}` },
           price: { kind: 'literal', value: '-0.50' },
           ratio: { kind: 'literal', value: 0.25 },
+          on: { kind: 'literal', value: true },
+          data: { kind: 'literal', value: '00FF' },
+          doc: { kind: 'literal', value: { a: "it's", b: [1, null] } },
           issues: [],
         });
       }),
