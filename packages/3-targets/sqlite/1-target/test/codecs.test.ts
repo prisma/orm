@@ -110,17 +110,64 @@ describe('SQLite codecs read the value an include carries', () => {
   );
 
   it.each([
-    ['sqlite/real@1', real, 'abc'],
-    ['sqlite/real@1', real, new Uint8Array([0x00, 0xff])],
-    ['sql/float@1', sqlFloat, 'abc'],
-    ['sql/float@1', sqlFloat, new Uint8Array([0x00, 0xff])],
+    ['sqlite/real@1', real],
+    ['sql/float@1', sqlFloat],
   ])(
-    '%s refuses %j, which a REAL column outside a STRICT table can hold',
-    async (codecId, codec, wire) => {
-      await expect(codec.fromWire(wire as never, ctx)).rejects.toMatchObject({
+    '%s refuses text, which a REAL column outside a STRICT table can hold',
+    async (codecId, codec) => {
+      await expect(codec.fromWire('abc' as never, ctx)).rejects.toMatchObject({
         code: 'RUNTIME.DECODE_FAILED',
         message: `${codecId} wire value must be a number, or the text Infinity or -Infinity`,
       });
     },
   );
+
+  it.each([
+    ['sqlite/real@1', real, new Uint8Array([0x00, 0xff]), "x'00FF'"],
+    ['sqlite/real@1', real, ['35'], "x'35'"],
+    ['sql/float@1', sqlFloat, new Uint8Array([0x00, 0xff]), "x'00FF'"],
+    ['sql/float@1', sqlFloat, ['35'], "x'35'"],
+  ])('%s refuses the blob %j', async (codecId, codec, wire, received) => {
+    await expect(codec.fromWire(wire as never, ctx)).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `A ${codecId} value is bytes ${received}, which is not a number. ${codecId} reads a number, or the text Infinity or -Infinity.`,
+      meta: { codecId, received },
+    });
+  });
+
+  it.each([
+    ['sqlite/real@1', real],
+    ['sql/float@1', sqlFloat],
+  ])(
+    '%s reads an integer outside the safe range as the nearest number',
+    async (_codecId, codec) => {
+      expect(await codec.fromWire(2n ** 60n + 1n, ctx)).toBe(2 ** 60);
+    },
+  );
+
+  it.each([
+    ['sqlite/integer@1', integer],
+    ['sql/int@1', sqlInt],
+  ])(
+    '%s reads an exact integer within the safe range and refuses one outside it',
+    async (codecId, codec) => {
+      expect(await codec.fromWire(-9007199254740991n, ctx)).toBe(-9007199254740991);
+      await expect(codec.fromWire(9007199254740993n, ctx)).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: `A ${codecId} value is 9007199254740993, which is not an integer within the safe integer range. ${codecId} reads integers from -9007199254740991 to 9007199254740991.`,
+        meta: { codecId, received: '9007199254740993' },
+      });
+    },
+  );
+
+  it('shows the first 100 characters of a stored value it cannot read', async () => {
+    const long = 'a'.repeat(150);
+    await expect(integer.fromWire(long, ctx)).rejects.toMatchObject({
+      message: `A sqlite/integer@1 value is "${'a'.repeat(100)}", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      meta: { received: 'a'.repeat(100) },
+    });
+    await expect(integer.fromWire(new Uint8Array(80), ctx)).rejects.toMatchObject({
+      meta: { received: `x'${'0'.repeat(100)}'` },
+    });
+  });
 });

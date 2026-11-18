@@ -10,7 +10,7 @@
  * - **`sum` of integers does not widen.** An `INTEGER` sum that exceeds a 64-bit integer raises `integer overflow` rather than promoting to a float, so the result is an integer or it is nothing. That raise is the bound `sumBigInt` is offered within — a declared limit of the target, not a gap in it. A sum of small integers is free to exceed 2^53 while remaining a perfectly good SQLite integer, which `sqlite/bigint@1` carries exactly and `sqlite/bigintnumber@1` refuses rather than rounds. `sqlite/integer@1` checks the same range, so `sqlite/bigintnumber@1` stays only because the aggregate result types every emitted SQLite `contract.d.ts` records name it.
  * - **`sum` and `avg` coerce rather than refuse.** Over `TEXT` or `BLOB`, SQLite reads a leading number where it can and 0 otherwise, so `sum` over a column of words is `0.0` and over a column of numerals is their total — a result whose very storage class depends on the rows. No descriptor claims those pairs: an aggregate whose result cannot be typed from the schema is one this target declines to offer, and the conformance suite pins the list of pairs left unclaimed for that reason.
  *
- * Result identity is declared; lowering hooks build the expression. A descriptor whose result is an integer wider than a JS number casts the aggregate to text (`castResultToText`) so the value survives the driver's numeric reads and the range error is the codec's own; a lossless variant computes with the SQL aggregate its bare namesake uses, since its name is not the database's. A hook returns an expression and nothing else, so which codec the result carries stays the descriptor's to declare.
+ * Result identity is declared; lowering hooks build the expression. A descriptor whose result is an integer wider than a JS number casts the aggregate to text (`castResultToText`), the decimal text both integer codecs read, so the range error is the codec's own; a lossless variant computes with the SQL aggregate its bare namesake uses, since its name is not the database's. A hook returns an expression and nothing else, so which codec the result carries stays the descriptor's to declare.
  */
 
 import type { ValueInputAggregateDescriptor } from '@internal/framework-components/components';
@@ -55,10 +55,9 @@ const preservesInput = <const Operation extends AggregateFn, const Input extends
 /**
  * Render the aggregate as text.
  *
- * SQLite computes an aggregate into an INTEGER, and the driver reads an integer
- * no JS number can hold as an error rather than a value — so an aggregate whose
- * result is a wide integer leaves the database through this cast, which is the
- * form both integer codecs read anyway. The hook builds the expression and
+ * SQLite computes an aggregate into an INTEGER. An aggregate whose result is a
+ * wide integer leaves the database through this cast, as the decimal text both
+ * integer codecs read exactly. The hook builds the expression and
  * nothing else: which codec the result carries is the descriptor's `output` to
  * declare, not this function's to choose.
  *
@@ -71,7 +70,7 @@ const castResultToText =
   ({ expr }) =>
     CastExpr.as(new AggregateExpr(operation, expr), 'text');
 
-/** The integer results wider than the driver's numeric reads: one read exactly, one read as a `number` and guarded against the safe range. Both leave the database as text. */
+/** The integer results wider than a JS `number`: one read exactly, one read as a `number` and guarded against the safe range. Both leave the database as text. */
 const WIDE_INTEGER_CODECS: readonly string[] = [
   SQLITE_BIGINT_CODEC_ID,
   SQLITE_BIGINT_NUMBER_CODEC_ID,

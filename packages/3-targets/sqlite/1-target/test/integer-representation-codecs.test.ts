@@ -1,6 +1,7 @@
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
 import { AggregateExpr, CastExpr } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { hexJsonProjectionOr } from '../src/core/blob-json-projection';
 import { SQLITE_BIGINT_NUMBER_CODEC_ID } from '../src/core/codec-ids';
 import {
   sqliteBigintDescriptor,
@@ -20,6 +21,22 @@ const wrongTyped = (value: unknown): never => value as never;
 
 describe('sqlite/bigint@1 number wire values', () => {
   const codec = sqliteBigintDescriptor.factory()(instanceCtx);
+
+  it('reads the exact integer the driver returns at both 64-bit extremes', async () => {
+    expect(await codec.fromWire(9223372036854775807n, {})).toBe(9223372036854775807n);
+    expect(await codec.fromWire(-9223372036854775808n, {})).toBe(-9223372036854775808n);
+  });
+
+  it.each([
+    [new Uint8Array([0x35]), "x'35'"],
+    [['35'], "x'35'"],
+  ])('refuses the blob %j a row or an include carries', async (wire, received) => {
+    await expect(codec.fromWire(wire as never, {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `A sqlite/bigint@1 value is bytes ${received}, which is not an integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.`,
+      meta: { codecId: 'sqlite/bigint@1', received },
+    });
+  });
 
   it('reads a safe-integer number wire value exactly', async () => {
     expect(await codec.fromWire(42, {})).toBe(42n);
@@ -194,17 +211,24 @@ describe('sqlite/bigintnumber@1', () => {
     });
   });
 
-  // An aggregate whose result this codec carries reaches the projection already
-  // cast to text, so the driver never reads a wide integer off the wire. The
-  // projection has to answer with the codec's canonical JSON form whatever
-  // expression it is handed.
-  it('projects a text-cast aggregate as text', () => {
+  it('projects a text-cast aggregate as text, and a blob as the array of its hex text', () => {
     const lowered = CastExpr.as(new AggregateExpr('count', undefined), 'text');
     expect(
       sqliteBigintNumberDescriptor.projectJson(lowered, {
         codecId: SQLITE_BIGINT_NUMBER_CODEC_ID,
       }),
-    ).toEqual(CastExpr.as(lowered, 'TEXT'));
+    ).toEqual(hexJsonProjectionOr(lowered, CastExpr.as(lowered, 'TEXT')));
+  });
+
+  it.each([
+    [new Uint8Array([0x35]), "x'35'"],
+    [['35'], "x'35'"],
+  ])('refuses the blob %j a row or an include carries', async (wire, received) => {
+    await expect(codec.fromWire(wire as never, {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `A sqlite/bigintnumber@1 value is bytes ${received}, which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      meta: { codecId: 'sqlite/bigintnumber@1', received },
+    });
   });
 
   it('carries the numeric ordering traits', () => {

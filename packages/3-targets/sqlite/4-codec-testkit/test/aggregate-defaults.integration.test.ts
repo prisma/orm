@@ -217,10 +217,10 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     expect(await codec.fromWire(wire, {})).toBe(10.333333333333334);
   });
 
-  // A wide integer result leaves the database as text, because `node:sqlite`
-  // reads an integer no JS number can hold as an error rather than a value. The
-  // lowering is what renders the cast — and it renders only that: the codec the
-  // descriptor declared is still the codec the registry resolves.
+  // A wide integer result leaves the database as text, the form both integer
+  // codecs read exactly. The lowering is what renders the cast — and it renders
+  // only that: the codec the descriptor declared is still the codec the registry
+  // resolves.
   describe('integer results are lowered to text', () => {
     it('lowers every reachable wide-integer result but a BigIntNumber column extremum', () => {
       const inputs: ReadonlyArray<string | undefined> = [

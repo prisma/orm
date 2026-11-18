@@ -38,6 +38,9 @@ function blobHexText(value: unknown): string | undefined {
   return typeof hex === 'string' ? hex : undefined;
 }
 
+/** The first 100 characters of a stored value, as an error shows it. */
+const shown = (text: string): string => text.slice(0, 100);
+
 /**
  * A stored value a codec cannot read, named by its column where the read knows it, as in `Column "account"."active" holds 2, which is not 0 or 1. sqlite/boolean@1 reads 0 as false and 1 as true.`
  */
@@ -50,12 +53,13 @@ export function errorColumnUnreadable(options: {
 }): StructuredError {
   const { codecId, received, column, notA, reads } = options;
   const hex = blobHexText(received);
+  const receivedText = hex !== undefined ? `x'${shown(hex)}'` : shown(String(received));
   const shownReceived =
     hex !== undefined
-      ? `bytes x'${hex}'`
+      ? `bytes ${receivedText}`
       : typeof received === 'string'
-        ? JSON.stringify(received)
-        : String(received);
+        ? JSON.stringify(receivedText)
+        : receivedText;
   const holder =
     column === undefined
       ? `A ${codecId} value is ${shownReceived}`
@@ -67,7 +71,7 @@ export function errorColumnUnreadable(options: {
       meta: {
         codecId,
         ...(column === undefined ? {} : { table: column.table, column: column.name }),
-        received: hex !== undefined ? `x'${hex}'` : String(received),
+        received: receivedText,
       },
     },
   );

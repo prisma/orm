@@ -135,8 +135,13 @@ describe('a SQLite REAL column holding an infinity, read through a relation incl
     await expect(includePoints(2)).rejects.toMatchObject(REAL_REFUSAL);
   });
 
-  it('refuses a blob in a REAL column, through a flat read and through an include', async () => {
-    await expect(readPoints([5])).rejects.toMatchObject(REAL_REFUSAL);
-    await expect(includePoints(3)).rejects.toThrow('JSON cannot hold BLOB values');
+  it('refuses a blob in a REAL column, naming the column, through a flat read and through an include', async () => {
+    const message =
+      'Column "float_points"."real" holds bytes x\'00FF\', which is not a number. sqlite/real@1 reads a number, or the text Infinity or -Infinity.';
+    await expect(readPoints([5])).rejects.toMatchObject({ code: 'RUNTIME.DECODE_FAILED', message });
+    await expect(includePoints(3)).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      cause: { code: 'RUNTIME.DECODE_FAILED', message },
+    });
   });
 });

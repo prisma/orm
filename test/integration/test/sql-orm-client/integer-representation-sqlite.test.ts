@@ -22,10 +22,9 @@ import contractJson from './fixtures/integer-representation-sqlite/generated/con
  * storage read as a JS number. Boundary values only — a value inside the safe
  * range proves nothing about the guard.
  *
- * The decode guard is proven through an include: the nested-document path
- * carries the column as a canonical JSON number, which is where a stored
- * out-of-range INTEGER reaches the codec (a flat read of such a value is
- * refused by `node:sqlite` before any codec runs).
+ * The decode guard is proven on a row read, where the driver hands a stored
+ * out-of-range INTEGER to the codec as an exact `bigint`, and through an
+ * include, where the nested-document path carries it as decimal text.
  */
 
 /** 2^53 − 1, the largest integer a JS number holds exactly. */
@@ -168,6 +167,29 @@ describe('integration/integer representation type on sqlite', () => {
     database!.exec('delete from int_repr_samples where id = 10');
   });
 
+  it('reading a stored value past the safe range in a row raises RUNTIME.DECODE_FAILED naming the column', async () => {
+    database!.exec('insert into int_repr_meters (id, peak) values (11, 9007199254740993)');
+
+    const shape = await rejectionShape(
+      db![UNBOUND_NAMESPACE_ID].Meter.select('id', 'peak')
+        .where((meter) => meter.id.eq(11))
+        .all(),
+    );
+    expect(shape).toEqual({
+      name: 'StructuredError',
+      message: `Column "int_repr_meters"."peak" holds 9007199254740993, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      code: 'RUNTIME.DECODE_FAILED',
+      meta: {
+        codecId: 'sqlite/integer@1',
+        table: 'int_repr_meters',
+        column: 'peak',
+        received: '9007199254740993',
+      },
+    });
+
+    database!.exec('delete from int_repr_meters where id = 11');
+  });
+
   it('writing past the safe range through BigInt(as: number) raises RUNTIME.ENCODE_FAILED', async () => {
     const shape = await rejectionShape(
       db![UNBOUND_NAMESPACE_ID].Meter.create({ id: 20, peak: FIRST_UNSAFE }),
@@ -260,7 +282,7 @@ describe('integration/integer representation type on sqlite', () => {
       });
     });
 
-    it('an integer past the safe range fails in node:sqlite, naming no column, at the top level, and in the codec through an include', async () => {
+    it('names the table and column for an integer past the safe range, at the top level and through an include', async () => {
       database!.exec(
         `insert into int_repr_samples (id, meter_id, reading, rank) values (32, 30, 0, ${PAST_SAFE})`,
       );
@@ -270,9 +292,15 @@ describe('integration/integer representation type on sqlite', () => {
         include: await rejectionShape(includedRank()),
       }).toEqual({
         topLevel: {
-          name: 'RangeError',
-          message: `Value is too large to be represented as a JavaScript number: ${PAST_SAFE}`,
-          code: 'ERR_OUT_OF_RANGE',
+          name: 'StructuredError',
+          message: `Column "int_repr_samples"."rank" holds ${PAST_SAFE}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+          code: 'RUNTIME.DECODE_FAILED',
+          meta: {
+            codecId: 'sqlite/integer@1',
+            table: 'int_repr_samples',
+            column: 'rank',
+            received: PAST_SAFE,
+          },
         },
         include: {
           name: 'RuntimeError',

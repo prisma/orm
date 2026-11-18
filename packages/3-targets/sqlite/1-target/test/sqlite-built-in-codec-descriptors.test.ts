@@ -201,20 +201,16 @@ describe('SQLite built-in codec descriptors', () => {
     expect({
       real: sqliteRealDescriptor.projectJson(expression, refFor(sqliteRealDescriptor)),
       sqlFloat: sqliteSqlFloatDescriptor.projectJson(expression, refFor(sqliteSqlFloatDescriptor)),
-    }).toEqual({ real: infinityAsText, sqlFloat: infinityAsText });
+    }).toEqual({ real: blobAsHexOr(infinityAsText), sqlFloat: blobAsHexOr(infinityAsText) });
     expect({
       dataType: sqliteSqlFloatDescriptor.dataType,
       paramsSchema: sqliteSqlFloatDescriptor.paramsSchema,
     }).toEqual({ dataType: sqliteReal.id, paramsSchema: sqliteReal.params });
-    // An INTEGER reaching JSON as a number does not survive the int64 range.
-    expect(sqliteBigintDescriptor.projectJson(expression, refFor(sqliteBigintDescriptor))).toEqual(
-      CastExpr.as(expression, 'TEXT'),
-    );
-    // The canonical JSON is the decimal text every codec of sqlite/integer
-    // carries, whichever storage class the projected expression holds. The two
-    // codecs that read a `number` from a row refuse a blob there, so they carry
-    // a blob as its hex text too, where the cast would spell its bytes as digits.
+    // An INTEGER reaching JSON as a number does not survive the int64 range, so every codec of
+    // sqlite/integer carries it as decimal text. Each refuses a blob in a row, so each carries a blob
+    // as its hex text too, where the cast would spell its bytes as digits.
     expect({
+      bigint: sqliteBigintDescriptor.projectJson(expression, refFor(sqliteBigintDescriptor)),
       integer: sqliteIntegerDescriptor.projectJson(expression, refFor(sqliteIntegerDescriptor)),
       sqlInt: sqliteSqlIntDescriptor.projectJson(expression, refFor(sqliteSqlIntDescriptor)),
       bigintNumber: sqliteBigintNumberDescriptor.projectJson(
@@ -224,7 +220,8 @@ describe('SQLite built-in codec descriptors', () => {
     }).toEqual({
       integer: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
       sqlInt: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
-      bigintNumber: CastExpr.as(expression, 'TEXT'),
+      bigint: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
+      bigintNumber: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
     });
   });
 

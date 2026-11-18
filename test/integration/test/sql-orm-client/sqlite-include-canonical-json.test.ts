@@ -294,9 +294,8 @@ describe('integration/sqlite include canonical JSON', () => {
   });
 
   // A sum is a value SQLite computes, so it leaves the database as an INTEGER
-  // rather than the text a bigint column stores — and `node:sqlite` refuses an
-  // integer a JS number cannot hold. The target's descriptor answers with the
-  // cast that makes the wire form text, which is what the bigint codec reads.
+  // rather than the text a bigint column stores. The target's descriptor answers
+  // with the cast that makes the wire form text, which the bigint codec reads.
   it('carries a top-level sumBigInt past 2^53 through the ORM', async () => {
     const stats = await readings!.aggregate((aggregate) => ({
       total: aggregate.sumBigInt('counter'),
