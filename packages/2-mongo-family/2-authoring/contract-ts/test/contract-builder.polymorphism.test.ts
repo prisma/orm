@@ -1,16 +1,16 @@
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, index, model } from '../src/contract-builder';
-import { mongoFamilyPack, mongoTargetPack } from './mongo-test-packs';
+import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 describe('mongo contract builder — polymorphic index scoping', () => {
   it('scopes variant indexes to the discriminator value and leaves base indexes untouched', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()),
       },
       indexes: [index({ title: 1 })],
       discriminator: {
@@ -26,7 +26,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        severity: field.string(),
+        severity: field.scalar(type.String()),
       },
       indexes: [index({ severity: 1 }, { unique: true })],
     });
@@ -35,7 +35,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        priority: field.string(),
+        priority: field.scalar(type.String()),
       },
       indexes: [index({ priority: 1 }, { unique: true })],
     });
@@ -73,9 +73,9 @@ describe('mongo contract builder — polymorphic index scoping', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()),
       },
       indexes: [index({ title: 1 })],
       discriminator: {
@@ -91,7 +91,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        severity: field.string(),
+        severity: field.scalar(type.String()),
       },
       indexes: [index({ severity: 1 }, { unique: true, name: 'bug_severity' })],
     });
@@ -100,7 +100,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        priority: field.string(),
+        priority: field.scalar(type.String()),
       },
       indexes: [index({ priority: 1 }, { unique: true })],
     });
@@ -133,7 +133,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
   it('refuses sibling variant indexes on the same keys that both go unnamed, asking for a name', () => {
     const Task = model('Task', {
       collection: 'tasks',
-      fields: { _id: field.objectId(), type: field.string() },
+      fields: { _id: field.scalar(type.ObjectId()), type: field.scalar(type.String()) },
       discriminator: {
         field: 'type',
         variants: { Bug: { value: 'bug' }, Feature: { value: 'feature' } },
@@ -143,7 +143,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       model(name, {
         collection: 'tasks',
         base: Task,
-        fields: { severity: field.string() },
+        fields: { severity: field.scalar(type.String()) },
         indexes: [index({ severity: 1 })],
       });
 
@@ -161,7 +161,12 @@ describe('mongo contract builder — polymorphic index scoping', () => {
   it('names the written positions of two indexes with one name when an earlier index was merged away', () => {
     const User = model('User', {
       collection: 'users',
-      fields: { _id: field.objectId(), a: field.string(), b: field.string(), c: field.string() },
+      fields: {
+        _id: field.scalar(type.ObjectId()),
+        a: field.scalar(type.String()),
+        b: field.scalar(type.String()),
+        c: field.scalar(type.String()),
+      },
       indexes: [
         index({ a: 1 }, { unique: true }),
         index({ a: 1 }),
@@ -181,8 +186,8 @@ describe('mongo contract builder — polymorphic index scoping', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
       },
       discriminator: {
         field: 'type',
@@ -197,7 +202,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        severity: field.string(),
+        severity: field.scalar(type.String()),
       },
       indexes: [index({ severity: 1 }, { unique: true, name: 'bug_severity' })],
     });
@@ -206,7 +211,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        severity: field.string(),
+        severity: field.scalar(type.String()),
       },
       indexes: [index({ severity: 1 }, { unique: true, name: 'feature_severity' })],
     });
@@ -244,9 +249,9 @@ describe('mongo contract builder — polymorphic index scoping', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()),
       },
       discriminator: {
         field: 'type',
@@ -258,7 +263,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        severity: field.string(),
+        severity: field.scalar(type.String()),
       },
       indexes: [index({ severity: 1 }, { partialFilterExpression: { active: true } })],
     });
@@ -289,8 +294,8 @@ describe('mongo contract builder — polymorphic index scoping', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
       },
       discriminator: {
         field: 'type',
@@ -302,7 +307,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        severity: field.string(),
+        severity: field.scalar(type.String()),
       },
       indexes: [index({ severity: 1 }, { partialFilterExpression: { type: 'bug' } })],
     });
@@ -333,9 +338,9 @@ describe('mongo contract builder — polymorphic index scoping', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
-        title: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
+        title: field.scalar(type.String()),
       },
       discriminator: {
         field: 'type',
@@ -347,7 +352,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        severity: field.string(),
+        severity: field.scalar(type.String()),
       },
       indexes: [index({ title: 1 })],
     });
@@ -373,8 +378,8 @@ describe('mongo contract builder — polymorphic index scoping', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
       },
       discriminator: {
         field: 'type',
@@ -386,7 +391,7 @@ describe('mongo contract builder — polymorphic index scoping', () => {
       collection: 'tasks',
       base: Task,
       fields: {
-        severity: field.string(),
+        severity: field.scalar(type.String()),
       },
       indexes: [index({ severity: 1 }, { partialFilterExpression: { type: 'feature' } })],
     });
@@ -416,8 +421,8 @@ describe('mongo contract builder — discriminator values', () => {
     const Task = model('Task', {
       collection: 'tasks',
       fields: {
-        _id: field.objectId(),
-        type: field.string(),
+        _id: field.scalar(type.ObjectId()),
+        type: field.scalar(type.String()),
       },
       discriminator: {
         field: 'type',

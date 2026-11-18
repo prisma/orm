@@ -1,6 +1,12 @@
 # @internal/postgres
 
-One-package Postgres setup for Prisma 8. Install this single package to get config, runtime, and all transitive type dependencies.
+One-package Postgres setup for Prisma 8. Install this package and the `pg` driver to get config, runtime, and all transitive type dependencies. `pg` and `@types/pg` are peer dependencies, so the application declares them itself.
+
+Callback isolation is configured with factory `transactionOptions` and `transaction(fn, options?)`, using `PostgresTransactionOptions`. Import `{ IsolationLevel }` from `@prisma/orm-postgres/runtime` or `@prisma/orm-postgres/serverless` and use `IsolationLevel.Serializable` in either option position. Both entries share the same const object; string literals remain accepted. Pooled and serverless clients share all four isolation literals; PostgreSQL treats ReadUncommitted as ReadCommitted. See [transaction isolation](../../../../docs/reference/transaction-options.md) for precedence, validation and explicit-only defaults.
+
+Native callback timeout integration cases run with `POSTGRES_TIMEOUT_TEST_URL` through this package's normal test script; without it they skip.
+
+Both entries also accept callback `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. See [callback timeouts](../../../../docs/reference/transaction-options.md#timeout) for bounds, cleanup and timing limitations.
 
 Two runtime entry points create three kinds of object:
 
@@ -73,7 +79,7 @@ Inside a request, `db` does everything the `db` from `postgres()` does: `db.orm`
 
 ### `@internal/postgres/config`
 
-Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional db/migrations/extensions config.
+Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
 
 #### A PSL source with a default control policy
 
@@ -126,7 +132,7 @@ export default definePrismaConfig({
 
 What the project needs around that file:
 
-- A `package.json` that depends on `@prisma/orm-postgres` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `@prisma/cli-engine` is not a direct dependency of the project: `prisma/config` re-exports `definePrismaConfig` from it, and the generated `contract.d.ts` imports only `@prisma/orm-postgres/...`. `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports; without one it imports workspace-internal names that are not published.
+- A `package.json` that depends on `@prisma/orm-postgres`, `pg` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `@prisma/cli-engine` is not a direct dependency of the project: `prisma/config` re-exports `definePrismaConfig` from it, and the generated `contract.d.ts` imports only `@prisma/orm-postgres/...`. `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports; without one it imports workspace-internal names that are not published.
 - `db.connection` is the same database URL Prisma 7 has in its own `prisma.config.ts` (`datasource.url`). Prisma 8 does not read Prisma 7's config, so pass it here too, usually from the same `DATABASE_URL` variable.
 - The Prisma 7 schema stays as Prisma 7 wants it: the `datasource` block carries `provider` only. Prisma 7 rejects `url` in the schema (it moved to `prisma.config.ts`), and this source ignores it.
 - The commands print prose to the terminal. When stdout is a pipe or a file, it receives only the command's plain data lines, such as one line per migration. Pass `--json` to get JSON.
@@ -291,6 +297,12 @@ export default class M extends Migration {
 }
 MigrationCLI.run(import.meta.url, M);
 ```
+
+`defineConfig` names this module in `migrations.module`, the module rendered migration files import from.
+
+### `@internal/postgres/contract-types`
+
+Re-exports, as types only, the framework contract types, the SQL family contract types and the Postgres codec and operation types: everything a generated `contract.d.ts` imports. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-postgres/contract-types`.
 
 ### `@internal/postgres/family`
 

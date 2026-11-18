@@ -40,6 +40,15 @@ test('prepared predicate positions preserve codec identity, scalar shape, nullab
   collection.where((user) => user.id.neq(params.optional));
   // @ts-expect-error nullable ordering operands remain unsupported
   collection.where((user) => user.id.gt(params.optional));
+  collection.where((user) => user.id.gt(user.invitedById));
+  collection.where((user) => user.id.gte(user.invitedById));
+  collection.where((user) => user.id.lt(user.invitedById));
+  collection.where((user) => user.invitedById.lte(user.invitedById));
+  collection.where((user) => user.posts.some((post) => post.views.lt(user.invitedById)));
+  // @ts-expect-error nullable column of a different codec
+  collection.where((user) => user.email.gt(user.invitedById));
+  // @ts-expect-error nullable prepared parameter on a nullable receiver
+  collection.where((user) => user.invitedById.lte(params.optional));
   // @ts-expect-error nullable list member
   collection.where((user) => user.id.in([params.id, params.optional]));
   // @ts-expect-error wrong codec in a fixed list

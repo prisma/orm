@@ -56,7 +56,7 @@ type MembersAccessorMap<Members extends readonly EnumMember<string, unknown>[]> 
 // breaking nominal type identity across chunk boundaries. A string constant
 // survives .d.mts de-duplication because string equality is preserved by value.
 // Mirrors the FILTER_EXPR_BRAND pattern in mongo-query-ast/filter-expressions.ts.
-export const ENUM_TYPE_HANDLE_BRAND = '__prismaNextEnumTypeHandle__';
+export const ENUM_TYPE_HANDLE_BRAND = '__prismaEnumTypeHandle__';
 
 /** Authoring handle returned by `enumType()`. Generic over the ordered value tuple so `const Role = enumType(...)` retains literal types. */
 export interface EnumTypeHandle<

@@ -259,7 +259,7 @@ export class InsertQueryImpl<
     );
   }
 
-  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>> {
+  buildAst(): InsertAst {
     if (this.#rows.length === 0) {
       throw structuredError(
         'ORM.MUTATION_DATA_MISSING',
@@ -278,21 +278,19 @@ export class InsertQueryImpl<
       ),
     );
 
-    let ast = InsertAst.into(this.#tableSource).withRows(paramRows);
+    const ast = InsertAst.into(this.#tableSource).withRows(paramRows);
 
-    if (this.#returningColumns.length > 0) {
-      ast = ast.withReturning(
-        buildReturningProjections(
-          this.#tableName,
-          this.#returningColumns,
-          this.#rowFields,
-          this.ctx,
-        ),
-      );
+    if (this.#returningColumns.length === 0) {
+      return ast;
     }
+    return ast.withReturning(
+      buildReturningProjections(this.#tableName, this.#returningColumns, this.#rowFields, this.ctx),
+    );
+  }
 
+  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>> {
     return buildQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>(
-      ast,
+      this.buildAst(),
       this.ctx,
       this.#annotations,
     );
@@ -402,24 +400,22 @@ export class UpdateQueryImpl<
     );
   }
 
-  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>> {
-    let ast = UpdateAst.table(this.#tableSource)
+  buildAst(): UpdateAst {
+    const ast = UpdateAst.table(this.#tableSource)
       .withSet(this.#setExpressions)
       .withWhere(combineWhereExprs(this.#whereExprs));
 
-    if (this.#returningColumns.length > 0) {
-      ast = ast.withReturning(
-        buildReturningProjections(
-          this.#tableName,
-          this.#returningColumns,
-          this.#rowFields,
-          this.ctx,
-        ),
-      );
+    if (this.#returningColumns.length === 0) {
+      return ast;
     }
+    return ast.withReturning(
+      buildReturningProjections(this.#tableName, this.#returningColumns, this.#rowFields, this.ctx),
+    );
+  }
 
+  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>> {
     return buildQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>(
-      ast,
+      this.buildAst(),
       this.ctx,
       this.#annotations,
     );
@@ -519,28 +515,26 @@ export class DeleteQueryImpl<
     );
   }
 
-  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>> {
+  buildAst(): DeleteAst {
     const whereExpr = combineWhereExprs(
       this.#whereCallbacks.map((cb) =>
         evaluateWhere(cb, this.#scope, this.ctx.queryOperationTypes, this.ctx.rawCodecInferer),
       ),
     );
 
-    let ast = DeleteAst.from(this.#tableSource).withWhere(whereExpr);
+    const ast = DeleteAst.from(this.#tableSource).withWhere(whereExpr);
 
-    if (this.#returningColumns.length > 0) {
-      ast = ast.withReturning(
-        buildReturningProjections(
-          this.#tableName,
-          this.#returningColumns,
-          this.#rowFields,
-          this.ctx,
-        ),
-      );
+    if (this.#returningColumns.length === 0) {
+      return ast;
     }
+    return ast.withReturning(
+      buildReturningProjections(this.#tableName, this.#returningColumns, this.#rowFields, this.ctx),
+    );
+  }
 
+  build(): SqlQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>> {
     return buildQueryPlan<ResolveRow<RowType, QC['codecTypes'], QC['resolvedColumnOutputTypes']>>(
-      ast,
+      this.buildAst(),
       this.ctx,
       this.#annotations,
     );

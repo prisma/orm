@@ -9,7 +9,7 @@ export interface NewEvent {
 }
 
 /**
- * Inserts an event through the raw SQL lane, since the ORM cannot write to MySQL yet. Each value is a parameter its column's codec encodes, so `startsAt` is written in UTC, and `createdAt` takes the database's `now()` default.
+ * Inserts an event through the raw SQL lane. Each value is a parameter its column's codec encodes, so `startsAt` is written in UTC, and `createdAt` takes the database's `now()` default.
  */
 export async function createEvent(db: Db, event: NewEvent): Promise<void> {
   await db.execute(

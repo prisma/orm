@@ -42,7 +42,7 @@ describe('mongoSchemaToView', () => {
       validatorFieldLabels(
         branch({ _id: { bsonType: 'objectId' }, name: { bsonType: ['null', 'string'] } }, ['_id']),
       ),
-    ).toEqual(['_id: objectId (required)', 'name: null,string']);
+    ).toEqual(['_id: objectId (required)', 'name: null | string']);
   });
 
   it('shows the fields of every root model of a shared collection', () => {
@@ -66,7 +66,7 @@ describe('mongoSchemaToView', () => {
           branch({ _id: { bsonType: 'objectId' }, value: { bsonType: ['null', 'int'] } }, ['_id']),
         ],
       }),
-    ).toEqual(['_id: objectId (required)', 'value: string,null,int']);
+    ).toEqual(['_id: objectId (required)', 'value: string | null | int']);
   });
 });
 

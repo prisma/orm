@@ -25,12 +25,10 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { CollectionMethodReceiver } from '@internal/sql-relational-core/collection-methods';
 import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
-import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { InternalError } from '@internal/utils/internal-error';
 import type { SimplifyDeep } from '@internal/utils/simplify-deep';
-import type { Simplify } from '@internal/utils/types';
 import { createAggregateBuilder, isAggregateSelector } from './aggregate-builder';
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
@@ -47,13 +45,10 @@ import {
   assertLockCapability,
   assertReturningCapability,
   columnOfCallerField,
-  getModelAndVariantFieldColumns,
   getModelFieldColumns,
-  getOwnFieldColumns,
   hasCompleteUniqueKey,
   isToOneCardinality,
-  type PolymorphismInfo,
-  type PolymorphismVariantInfo,
+  type ResolvedRelation,
   resolveIncludeRelation,
   resolveInsertConflictColumns,
   resolveModelTableName,
@@ -64,9 +59,7 @@ import {
   consumeFirstRow,
   describeCollectionFirst,
   describeCollectionFirstOrThrow,
-  describeCollectionQuery,
   describeCollectionRows,
-  dispatchCollectionRows,
   runQuery,
 } from './collection-dispatch';
 import type {
@@ -86,7 +79,7 @@ import {
   collectionMethodTable,
   createCollectionMethods,
 } from './collection-methods';
-import { assertModelFieldNames, mapModelDataToStorageRow } from './collection-runtime';
+import { assertModelFieldNames } from './collection-runtime';
 import {
   type CollectionTables,
   createCollectionTables,
@@ -133,29 +126,13 @@ import {
   isIncludeCombine,
   isIncludeScalar,
 } from './include-descriptors';
+import { assertPreparableIncludes } from './include-strategy';
 import { assertLockCompatible } from './lock-guards';
 import { createModelAccessor, createModelCallbackTools } from './model-accessor';
-import {
-  buildRowIdentityFilterFromRow,
-  executeNestedCreateMutation,
-  executeNestedUpdateMutation,
-  hasNestedMutationCallbacks,
-} from './mutation-executor';
-import {
-  createAllGraph,
-  createAllVariantGraph,
-  deleteAllGraph,
-  deleteFirstGraph,
-  updateAllGraph,
-  updateFirstGraph,
-  upsertGraph,
-  type VariantCreateRow,
-} from './mutation-graph/collection-graphs';
-import { Graph } from './mutation-graph/graph';
-import { executeGraph, queryGraph } from './mutation-graph/run-graph';
 import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import {
   asPreparedOrmCall,
+  type CallHashInput,
   modelHashInput,
   type OrmCall,
   ormResults,
@@ -168,7 +145,22 @@ import {
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import { compileAggregate, type InsertConflictSkip } from './query-plan';
-import type { AliasedTable } from './table-scope';
+import { parseMutationInput } from './relation-mutations';
+import type { RelationCollection } from './relation-mutator';
+import {
+  createAllGraph,
+  createAllVariantGraph,
+  createGraph,
+  deleteAllGraph,
+  deleteFirstGraph,
+  updateAllGraph,
+  updateFirstGraph,
+  upsertGraph,
+} from './statement-graph/collection-graphs';
+import { Graph } from './statement-graph/graph';
+import { describeCollectionRead } from './statement-graph/read-graph';
+import { executeGraph, queryGraph } from './statement-graph/run-graph';
+import { mtiCreateContextOf, updateValuesOf } from './statement-graph/storage-rows';
 import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
@@ -213,44 +205,6 @@ import { normalizeWhereArg } from './where-interop';
 import { assertBulkWriteIgnoresNothing, assertRelationUpdateIgnoresNothing } from './write-guards';
 
 type Annotations = ReadonlyMap<string, AnnotationValue<unknown, OperationKind>>;
-
-function applyCreateDefaults(
-  ctx: CollectionContext<Contract<SqlStorage>>,
-  namespaceId: string,
-  tableName: string,
-  rows: Record<string, unknown>[],
-  defaultValueCache = new Map<string, unknown>(),
-): void {
-  for (const row of rows) {
-    const applied = ctx.context.applyMutationDefaults({
-      op: 'create',
-      entry: tableName,
-      namespace: namespaceId,
-      values: row,
-      defaultValueCache,
-    });
-    for (const def of applied) {
-      row[def.field] = def.value;
-    }
-  }
-}
-
-function applyUpdateDefaults(
-  ctx: CollectionContext<Contract<SqlStorage>>,
-  namespaceId: string,
-  tableName: string,
-  values: Record<string, unknown>,
-): void {
-  const applied = ctx.context.applyMutationDefaults({
-    op: 'update',
-    entry: tableName,
-    namespace: namespaceId,
-    values,
-  });
-  for (const def of applied) {
-    values[def.field] = def.value;
-  }
-}
 
 type WhereDirectInput = WhereArg;
 
@@ -305,36 +259,30 @@ type WriteConfigure = (meta: MetaBuilder<'write'>) => void;
 export interface CreateConflictOptions<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  NsId extends string = never,
 > {
   readonly onConflict: 'skip';
-  readonly conflictOn?: readonly (keyof DefaultModelRow<TContract, ModelName> & string)[];
+  readonly conflictOn?: readonly (keyof DefaultModelRow<TContract, ModelName, NsId> & string)[];
 }
 
-function splitCreateArguments<TContract extends Contract<SqlStorage>, ModelName extends string>(
-  optionsOrConfigure: CreateConflictOptions<TContract, ModelName> | WriteConfigure | undefined,
+function splitCreateArguments<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+>(
+  optionsOrConfigure:
+    | CreateConflictOptions<TContract, ModelName, NsId>
+    | WriteConfigure
+    | undefined,
   configure: WriteConfigure | undefined,
 ): {
-  options: CreateConflictOptions<TContract, ModelName> | undefined;
+  options: CreateConflictOptions<TContract, ModelName, NsId> | undefined;
   configureCallback: WriteConfigure | undefined;
 } {
   if (typeof optionsOrConfigure === 'function') {
     return { options: undefined, configureCallback: optionsOrConfigure };
   }
   return { options: optionsOrConfigure, configureCallback: configure };
-}
-
-type MtiVariantInfo = Simplify<PolymorphismVariantInfo & { readonly strategy: 'mti' }>;
-
-function isMtiVariantInfo(variant: PolymorphismVariantInfo | undefined): variant is MtiVariantInfo {
-  return variant?.strategy === 'mti';
-}
-
-interface MtiCreateContext {
-  polyInfo: PolymorphismInfo;
-  variant: MtiVariantInfo;
-  baseFieldToColumn: Readonly<Record<string, string>>;
-  variantFieldToColumn: Readonly<Record<string, string>>;
-  mergedFieldToColumn: Readonly<Record<string, string>>;
 }
 
 /** What `fragment` reads from the collection it is called on: its contract, its model and its query state. */
@@ -593,9 +541,11 @@ export class CollectionBase<
 
   whereUnique<Self>(
     this: Self,
-    criterion: UniqueConstraintCriterion<TContract, ModelName>,
+    criterion: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>,
   ): UniquelyFiltered<Self>;
-  whereUnique(criterion: UniqueConstraintCriterion<TContract, ModelName>): UniquelyFiltered<this> {
+  whereUnique(
+    criterion: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>,
+  ): UniquelyFiltered<this> {
     if (this.includeRefinementMode) {
       throw ormError(
         'ORM.INCLUDE_INVALID',
@@ -1099,8 +1049,8 @@ export class CollectionBase<
    */
   select<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     S extends CollectionTypeState = State,
     R = Row,
@@ -1111,15 +1061,15 @@ export class CollectionBase<
     TContract,
     ModelName,
     SimplifyDeep<
-      Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
-        IncludedRelationsForRow<TContract, ModelName, R>
+      Pick<DefaultModelRow<TContract, ModelName, State['nsId']>, Fields[number]> &
+        IncludedRelationsForRow<TContract, ModelName, R, State['nsId']>
     >,
     S
   >;
   select<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(
     ...fields: Fields
@@ -1127,15 +1077,15 @@ export class CollectionBase<
     TContract,
     ModelName,
     SimplifyDeep<
-      Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
-        IncludedRelationsForRow<TContract, ModelName, Row>
+      Pick<DefaultModelRow<TContract, ModelName, State['nsId']>, Fields[number]> &
+        IncludedRelationsForRow<TContract, ModelName, Row, State['nsId']>
     >,
     State
   >;
   select<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(
     ...fields: Fields
@@ -1143,8 +1093,8 @@ export class CollectionBase<
     TContract,
     ModelName,
     SimplifyDeep<
-      Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
-        IncludedRelationsForRow<TContract, ModelName, Row>
+      Pick<DefaultModelRow<TContract, ModelName, State['nsId']>, Fields[number]> &
+        IncludedRelationsForRow<TContract, ModelName, Row, State['nsId']>
     >,
     State
   > {
@@ -1158,8 +1108,8 @@ export class CollectionBase<
 
     return this.#cloneWithRow<
       SimplifyDeep<
-        Pick<DefaultModelRow<TContract, ModelName>, Fields[number]> &
-          IncludedRelationsForRow<TContract, ModelName, Row>
+        Pick<DefaultModelRow<TContract, ModelName, State['nsId']>, Fields[number]> &
+          IncludedRelationsForRow<TContract, ModelName, Row, State['nsId']>
       >,
       State
     >({
@@ -1358,14 +1308,20 @@ export class CollectionBase<
    */
   cursor<Self extends HasOrderBy & WithoutUniqueFilter<Self>>(
     this: Self,
-    cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+    cursorValues: Partial<
+      Record<keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string, unknown>
+    >,
   ): Self;
   cursor<Self extends HasOrderBy>(
     this: Self & HasNoUniqueFilter,
-    cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+    cursorValues: Partial<
+      Record<keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string, unknown>
+    >,
   ): Self;
   cursor(
-    cursorValues: Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>,
+    cursorValues: Partial<
+      Record<keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string, unknown>
+    >,
   ): this {
     assertCursorCompatibleOrder(this.state.orderBy);
     const mappedCursor = mapCursorValuesToColumns(
@@ -1394,22 +1350,22 @@ export class CollectionBase<
    */
   distinct<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     Self extends WithoutUniqueFilter<Self>,
   >(this: Self, ...fields: Fields): Self;
   distinct<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     Self,
   >(this: Self & HasNoUniqueFilter, ...fields: Fields): Self;
   distinct<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(...fields: Fields): this {
     const distinctFields = mapFieldsToColumns(
@@ -1443,8 +1399,8 @@ export class CollectionBase<
    */
   distinctOn<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     Self extends HasOrderBy & WithoutUniqueFilter<Self>,
   >(
@@ -1453,8 +1409,8 @@ export class CollectionBase<
   ): Self;
   distinctOn<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
     Self extends HasOrderBy,
   >(
@@ -1463,8 +1419,8 @@ export class CollectionBase<
   ): Self;
   distinctOn<
     Fields extends readonly [
-      keyof DefaultModelRow<TContract, ModelName> & string,
-      ...(keyof DefaultModelRow<TContract, ModelName> & string)[],
+      keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string,
+      ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(
     ...fields: TContract['capabilities'] extends { postgres: { distinctOn: true } } ? Fields : never
@@ -1627,10 +1583,10 @@ export class CollectionBase<
   ): AsyncIterableResult<CollectionRowOf<this>>;
   all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<unknown> {
     const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'all');
-    const query = describeCollectionQuery<Row>(this.#descriptionOptions());
+    const query = describeCollectionRead<Row>(this.#descriptionOptions());
     return streamOrmCall(
       this.ctx.runtime,
-      this.#readCall('all', annotations, query.plan, ormResults.rows),
+      this.#readCall('all', annotations, query.hashInput, ormResults.rows),
       query.rows,
     );
   }
@@ -1647,6 +1603,7 @@ export class CollectionBase<
     > = {
       aggregate: (fn, configure) => this.#preparedAggregate(fn, configure),
       all: (configure) => {
+        assertPreparableIncludes(this.contract, this.state, 'all');
         const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'all');
         const description = describeCollectionRows<Row>(this.#descriptionOptions());
         return asPreparedOrmCall(
@@ -1655,6 +1612,7 @@ export class CollectionBase<
         );
       },
       first: (filter, configure) => {
+        assertPreparableIncludes(this.contract, this.state, 'first');
         const scoped = this.#forFirst(filter);
         const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'first');
         const description = describeCollectionFirst<Row>(scoped.#descriptionOptions());
@@ -1664,6 +1622,7 @@ export class CollectionBase<
         );
       },
       firstOrThrow: (filter, configure) => {
+        assertPreparableIncludes(this.contract, this.state, 'firstOrThrow');
         const scoped = this.#forFirst(filter);
         const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'firstOrThrow');
         const description = describeCollectionFirstOrThrow<Row>(scoped.#descriptionOptions());
@@ -1720,10 +1679,10 @@ export class CollectionBase<
   #readCall<Result>(
     method: string,
     annotations: Annotations | undefined,
-    plan: () => SqlQueryPlan,
+    hashInput: CallHashInput,
     accepts: (value: unknown) => value is Result,
   ): OrmCall<Result> {
-    return { method, annotations, hashInput: planHashInput(plan), accepts };
+    return { method, annotations, hashInput, accepts };
   }
 
   #writeCall<Result>(
@@ -1782,10 +1741,10 @@ export class CollectionBase<
   ): Promise<unknown> {
     const scoped = this.#forFirst(filter);
     const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'first');
-    const query = describeCollectionQuery<Row>(scoped.#descriptionOptions());
+    const query = describeCollectionRead<Row>(scoped.#descriptionOptions());
     return runOrmCall(
       this.ctx.runtime,
-      this.#readCall('first', annotations, query.plan, ormResults.rowOrNull<Row>),
+      this.#readCall('first', annotations, query.hashInput, ormResults.rowOrNull<Row>),
       (queryable) => consumeFirstRow(query.rows(queryable)),
     );
   }
@@ -1805,10 +1764,10 @@ export class CollectionBase<
   ): Promise<unknown> {
     const scoped = this.#forFirst(filter);
     const annotations = this.#collectAnnotationsFromMeta(configure, 'read', 'firstOrThrow');
-    const query = describeCollectionQuery<Row>(scoped.#descriptionOptions());
+    const query = describeCollectionRead<Row>(scoped.#descriptionOptions());
     return runOrmCall(
       this.ctx.runtime,
-      this.#readCall('firstOrThrow', annotations, query.plan, ormResults.row<Row>),
+      this.#readCall('firstOrThrow', annotations, query.hashInput, ormResults.row<Row>),
       (queryable) => query.rows(queryable).firstOrThrow(),
     );
   }
@@ -1849,7 +1808,7 @@ export class CollectionBase<
       this.#readCall(
         'aggregate',
         annotations,
-        () => description.plan,
+        planHashInput(() => description.plan),
         ormResults.row<AggregateResult<Spec>>,
       ),
       (queryable) => runQuery(queryable, description),
@@ -2005,53 +1964,39 @@ export class CollectionBase<
       | ResolvedCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>
       | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
   ): Promise<Row> {
-    if (
-      hasNestedMutationCallbacks(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        blindCast<
-          Record<string, unknown>,
-          'create overload inputs are model-field records inspected for relation callbacks'
-        >(data),
-      )
-    ) {
-      const createdRow = await executeNestedCreateMutation({
-        context: this.ctx.context,
-        runtime: queryable,
-        namespaceId: this.namespaceId,
-        modelName: this.modelName,
-        data: blindCast<
-          MutationCreateInput<Contract<SqlStorage>, string>,
-          'nested callback detection selects the relation-mutation create input'
-        >(data),
-      });
-
-      const identityCriterion = buildRowIdentityFilterFromRow(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        createdRow,
-      );
-      const reloaded = await this.#reloadMutationRowByIdentity(queryable, identityCriterion);
-      if (!reloaded) {
-        throw ormError(
-          'ORM.MUTATION_ROW_MISSING',
-          `create() for model "${this.modelName}" did not return a row`,
-          { meta: { operation: 'create', model: this.modelName } },
-        );
-      }
-      return reloaded;
-    }
-
-    const rows = await this.#createAllRows([
+    const parsed = parseMutationInput(
+      this.contract,
+      this.namespaceId,
+      this.modelName,
       blindCast<
-        ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>,
-        'absence of nested callbacks selects the scalar create overload input'
+        MutationCreateInput<Contract<SqlStorage>, string>,
+        'create overload inputs are model-field records whose relation fields are callbacks'
       >(data),
-    ])(queryable);
-    const created = rows[0];
-    if (created) {
+      this.#relatedCollection,
+    );
+    const rows =
+      mtiCreateContextOf(this.#descriptionOptions()) === undefined
+        ? queryGraph<Row>(
+            createGraph(this.#descriptionOptions(), parsed),
+            this.#on(queryable),
+            this.#descriptionOptions(),
+          ).toArray()
+        : this.#createAllRows(
+            [
+              blindCast<
+                ResolvedScalarCreateInput<
+                  TContract,
+                  ModelName,
+                  State['variantValue'],
+                  State['nsId']
+                >,
+                'a create on an MTI variant has no nested callbacks, which createAll() refuses'
+              >(data),
+            ],
+            'create()',
+          )(queryable);
+    const [created] = await rows;
+    if (created !== undefined) {
       return created;
     }
 
@@ -2104,7 +2049,9 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
-    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    optionsOrConfigure?:
+      | CreateConflictOptions<TContract, ModelName, State['nsId']>
+      | WriteConfigure,
     configure?: WriteConfigure,
   ): AsyncIterableResult<CollectionRowOf<Self>>;
   createAll(
@@ -2114,7 +2061,9 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
-    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    optionsOrConfigure?:
+      | CreateConflictOptions<TContract, ModelName, State['nsId']>
+      | WriteConfigure,
     configure?: WriteConfigure,
   ): AsyncIterableResult<CollectionRowOf<this>>;
   createAll(
@@ -2124,7 +2073,9 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
-    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    optionsOrConfigure?:
+      | CreateConflictOptions<TContract, ModelName, State['nsId']>
+      | WriteConfigure,
     configure?: WriteConfigure,
   ): AsyncIterableResult<unknown> {
     assertLockCompatible(this.state, 'mutation');
@@ -2134,7 +2085,7 @@ export class CollectionBase<
     return streamOrmCall(
       this.ctx.runtime,
       this.#writeCall('createAll', annotations, ormResults.rows<Row>),
-      this.#createAllRows(data, conflictSkip),
+      this.#createAllRows(data, 'createAll()', conflictSkip),
     );
   }
 
@@ -2145,6 +2096,7 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
+    method: 'create()' | 'createAll()',
     conflictSkip?: InsertConflictSkip,
   ): (queryable: RuntimeQueryable) => AsyncIterableResult<Row> {
     if (data.length === 0) {
@@ -2156,37 +2108,26 @@ export class CollectionBase<
       readonly Record<string, unknown>[],
       'resolved create inputs are model-field records for storage mapping'
     >(data);
-    const mtiContext = this.#resolveMtiCreateContext();
+    const mtiContext = mtiCreateContextOf(this.#descriptionOptions());
     if (mtiContext) {
-      assertReturningCapability(this.contract, 'createAll()');
+      assertReturningCapability(this.contract, method);
       const variantTable = requireVariantTable(this.state.tables, mtiContext.variant.value);
       const graph = createAllVariantGraph(
         this.#descriptionWithoutIncludes(),
         variantTable,
-        mtiContext.variant.modelName,
-        this.#variantCreateRows(rows, mtiContext, variantTable),
+        mtiContext,
+        rows,
       );
       return (queryable) =>
         queryGraph(graph, this.#on(queryable), this.#descriptionWithoutIncludes());
     }
 
-    const graph = createAllGraph(
-      this.#descriptionOptions(),
-      this.#createValues(rows),
-      conflictSkip,
-      'rows',
-    );
+    const graph = createAllGraph(this.#descriptionOptions(), rows, conflictSkip, 'rows');
     return (queryable) => queryGraph(graph, this.#on(queryable), this.#descriptionOptions());
   }
 
-  #createValues(rows: readonly Record<string, unknown>[]): Record<string, unknown>[] {
-    const mappedRows = this.#mapCreateRows(rows);
-    applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, mappedRows);
-    return mappedRows;
-  }
-
   #resolveConflictSkip(
-    options: CreateConflictOptions<TContract, ModelName> | undefined,
+    options: CreateConflictOptions<TContract, ModelName, State['nsId']> | undefined,
     method: string,
   ): InsertConflictSkip | undefined {
     if (options === undefined) return undefined;
@@ -2233,7 +2174,7 @@ export class CollectionBase<
   }
 
   #refuseOnMtiVariant(method: string, message: string): void {
-    if (!this.#resolveMtiCreateContext()) return;
+    if (!mtiCreateContextOf(this.#descriptionOptions())) return;
     throw ormError('ORM.OPERATION_UNSUPPORTED', message, {
       meta: {
         method,
@@ -2251,135 +2192,6 @@ export class CollectionBase<
       this.modelName,
       this.state.variantValue,
     )[1];
-  }
-
-  #resolveMtiCreateContext(): MtiCreateContext | null {
-    const variantValue = this.state.variantValue;
-    if (!variantValue) return null;
-
-    const polyInfo = resolvePolymorphismInfo(this.contract, this.namespaceId, this.modelName);
-    if (!polyInfo) return null;
-
-    const variant = polyInfo.variants.get(variantValue);
-    if (!isMtiVariantInfo(variant)) return null;
-
-    const baseFieldToColumn = getModelFieldColumns(this.contract, this.namespaceId, this.modelName);
-    const variantFieldToColumn = getOwnFieldColumns(
-      this.contract,
-      variant.namespaceId,
-      variant.modelName,
-    );
-
-    return {
-      polyInfo,
-      variant,
-      baseFieldToColumn,
-      variantFieldToColumn,
-      mergedFieldToColumn: getModelAndVariantFieldColumns(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        variant.value,
-      ),
-    };
-  }
-
-  #variantCreateRows(
-    data: readonly Record<string, unknown>[],
-    mtiCtx: MtiCreateContext,
-    variantTable: AliasedTable,
-  ): VariantCreateRow[] {
-    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, mergedFieldToColumn } =
-      mtiCtx;
-    const baseFieldColumns = new Set(Object.values(baseFieldToColumn));
-    const variantFieldColumns = new Set(Object.values(variantFieldToColumn));
-    const defaultValueCache = new Map<string, unknown>();
-
-    return data.map((row) => {
-      const allMapped: Record<string, unknown> = {};
-      for (const [fieldName, value] of Object.entries(row)) {
-        if (value === undefined) continue;
-        allMapped[
-          columnOfCallerField(
-            this.contract,
-            this.namespaceId,
-            mergedFieldToColumn,
-            variant.modelName,
-            fieldName,
-          )
-        ] = value;
-      }
-      allMapped[polyInfo.discriminatorColumn] = variant.value;
-
-      const baseRow: Record<string, unknown> = {};
-      const variantRow: Record<string, unknown> = {};
-      for (const [column, value] of Object.entries(allMapped)) {
-        if (baseFieldColumns.has(column) || column === polyInfo.discriminatorColumn) {
-          baseRow[column] = value;
-        }
-        if (variantFieldColumns.has(column)) {
-          variantRow[column] = value;
-        }
-      }
-
-      applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, [baseRow], defaultValueCache);
-      applyCreateDefaults(
-        this.ctx,
-        variantTable.storage.namespaceId,
-        variantTable.storage.tableName,
-        [variantRow],
-        defaultValueCache,
-      );
-      return { base: baseRow, variant: variantRow };
-    });
-  }
-
-  #mapCreateRows(data: readonly Record<string, unknown>[]): Record<string, unknown>[] {
-    const variantValue = this.state.variantValue;
-    if (!variantValue) {
-      return data.map((row) =>
-        mapModelDataToStorageRow(this.contract, this.namespaceId, this.modelName, row),
-      );
-    }
-
-    const polyInfo = resolvePolymorphismInfo(this.contract, this.namespaceId, this.modelName);
-    if (!polyInfo) {
-      return data.map((row) =>
-        mapModelDataToStorageRow(this.contract, this.namespaceId, this.modelName, row),
-      );
-    }
-
-    const variant = polyInfo.variants.get(variantValue);
-    if (!variant) {
-      return data.map((row) =>
-        mapModelDataToStorageRow(this.contract, this.namespaceId, this.modelName, row),
-      );
-    }
-
-    const mergedFieldToColumn = getModelAndVariantFieldColumns(
-      this.contract,
-      this.namespaceId,
-      this.modelName,
-      variant.value,
-    );
-
-    return data.map((row) => {
-      const mapped: Record<string, unknown> = {};
-      for (const [fieldName, value] of Object.entries(row)) {
-        if (value === undefined) continue;
-        mapped[
-          columnOfCallerField(
-            this.contract,
-            variant.namespaceId,
-            mergedFieldToColumn,
-            variant.modelName,
-            fieldName,
-          )
-        ] = value;
-      }
-      mapped[polyInfo.discriminatorColumn] = variant.value;
-      return mapped;
-    });
   }
 
   /**
@@ -2414,7 +2226,9 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
-    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    optionsOrConfigure?:
+      | CreateConflictOptions<TContract, ModelName, State['nsId']>
+      | WriteConfigure,
     configure?: WriteConfigure,
   ): Promise<number> {
     assertLockCompatible(this.state, 'mutation');
@@ -2437,12 +2251,7 @@ export class CollectionBase<
       readonly Record<string, unknown>[],
       'resolved create-and-count inputs are model-field records for storage mapping'
     >(data);
-    const graph = createAllGraph(
-      this.#descriptionWithoutIncludes(),
-      this.#createValues(rows),
-      conflictSkip,
-      'count',
-    );
+    const graph = createAllGraph(this.#descriptionWithoutIncludes(), rows, conflictSkip, 'count');
     return this.#countCall(call, graph);
   }
 
@@ -2490,24 +2299,24 @@ export class CollectionBase<
     this: Self,
     input: {
       create: ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>;
-      update: ScalarUpdateInput<TContract, ModelName>;
-      conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
+      update: ScalarUpdateInput<TContract, ModelName, State['nsId']>;
+      conflictOn?: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>;
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<CollectionRowOf<Self>>;
   async upsert(
     input: {
       create: ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>;
-      update: ScalarUpdateInput<TContract, ModelName>;
-      conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
+      update: ScalarUpdateInput<TContract, ModelName, State['nsId']>;
+      conflictOn?: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>;
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<CollectionRowOf<this>>;
   async upsert(
     input: {
       create: ResolvedScalarCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>;
-      update: ScalarUpdateInput<TContract, ModelName>;
-      conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
+      update: ScalarUpdateInput<TContract, ModelName, State['nsId']>;
+      conflictOn?: UniqueConstraintCriterion<TContract, ModelName, State['nsId']>;
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<unknown> {
@@ -2515,24 +2324,6 @@ export class CollectionBase<
     this.#assertNotMtiVariant('upsert()');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'upsert');
 
-    const mappedCreateRows = this.#mapCreateRows([
-      blindCast<
-        Record<string, unknown>,
-        'resolved upsert create input is a model-field record for storage mapping'
-      >(input.create),
-    ]);
-    const createValues = mappedCreateRows[0] ?? {};
-    applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, [createValues]);
-    const updateValues = mapModelDataToStorageRow(
-      this.contract,
-      this.namespaceId,
-      this.modelName,
-      input.update,
-    );
-    const hasUpdateValues = Object.keys(updateValues).length > 0;
-    if (hasUpdateValues) {
-      applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, updateValues);
-    }
     const conflictColumns = resolveUpsertConflictColumns(
       this.contract,
       this.namespaceId,
@@ -2552,8 +2343,11 @@ export class CollectionBase<
 
     const graph = upsertGraph(
       this.#descriptionOptions(),
-      createValues,
-      updateValues,
+      blindCast<
+        Record<string, unknown>,
+        'resolved upsert create input is a model-field record for storage mapping'
+      >(input.create),
+      input.update,
       conflictColumns,
     );
     return runOrmCall(
@@ -2631,56 +2425,26 @@ export class CollectionBase<
     queryable: RuntimeQueryable,
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
   ): Promise<Row | null> {
-    if (
-      hasNestedMutationCallbacks(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        blindCast<
-          Record<string, unknown>,
-          'update input is a model-field record inspected for relation callbacks'
-        >(data),
-      )
-    ) {
-      assertRelationUpdateIgnoresNothing(this.state, this.modelName);
-      const updatedRow = await executeNestedUpdateMutation({
-        context: this.ctx.context,
-        runtime: queryable,
-        namespaceId: this.namespaceId,
-        modelName: this.modelName,
-        tables: this.state.tables,
-        filters: this.state.filters,
-        data: blindCast<
-          MutationUpdateInput<Contract<SqlStorage>, string>,
-          'nested callback detection selects the relation-mutation update input'
-        >(data),
-      });
-      if (!updatedRow) {
-        return null;
-      }
-
-      const identityCriterion = buildRowIdentityFilterFromRow(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        updatedRow,
-      );
-      return this.#reloadMutationRowByIdentity(queryable, identityCriterion);
-    }
-
-    assertModelFieldNames(
+    const input = blindCast<
+      MutationUpdateInput<Contract<SqlStorage>, string>,
+      'update input is a model-field record whose relation fields are callbacks'
+    >(data);
+    const parsed = parseMutationInput(
       this.contract,
       this.namespaceId,
       this.modelName,
-      blindCast<Record<string, unknown>, 'scalar update input is a model-field record'>(data),
+      input,
+      this.#relatedCollection,
     );
-    const values = this.#updateValues(
-      blindCast<
-        ScalarUpdateInput<TContract, ModelName, State['nsId']>,
-        'absence of nested callbacks selects the scalar update input'
-      >(data),
+    if (parsed.relationMutations.length > 0) {
+      assertRelationUpdateIgnoresNothing(this.state, this.modelName);
+    }
+    assertModelFieldNames(this.contract, this.namespaceId, this.modelName, parsed.scalarData);
+    const graph = updateFirstGraph(
+      this.#descriptionOptions(),
+      parsed.scalarData,
+      parsed.relationMutations,
     );
-    const graph = updateFirstGraph(this.#descriptionOptions(), values);
     return consumeFirstRow(queryGraph<Row>(graph, this.#on(queryable), this.#descriptionOptions()));
   }
 
@@ -2721,7 +2485,11 @@ export class CollectionBase<
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAll');
     assertLockCompatible(this.state, 'mutation');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll');
-    const graph = updateAllGraph(this.#descriptionOptions(), this.#updateValues(data), 'rows');
+    const graph = updateAllGraph(
+      this.#descriptionOptions(),
+      updateValuesOf(this.#descriptionOptions(), data),
+      'rows',
+    );
     return this.#rowsCall('updateAll', annotations, graph);
   }
 
@@ -2767,10 +2535,10 @@ export class CollectionBase<
   ): Promise<number> {
     assertBulkWriteIgnoresNothing(this.state, this.modelName, 'updateAndCount');
     assertLockCompatible(this.state, 'mutation');
-    const values = this.#updateValues(data);
+    const values = updateValuesOf(this.#descriptionOptions(), data);
     const graph =
       Object.keys(values).length === 0
-        ? new Graph()
+        ? new Graph(this.contract)
         : updateAllGraph(this.#descriptionWithoutIncludes(), values, 'count');
     const annotations = this.#collectAnnotationsFromMeta(configure, 'write', 'updateAndCount');
     return this.#countCall(this.#writeCall('updateAndCount', annotations, ormResults.count), graph);
@@ -2864,62 +2632,6 @@ export class CollectionBase<
     return { ...this.#descriptionOptions(), state: { ...this.state, includes: [] } };
   }
 
-  #updateValues(
-    data: ScalarUpdateInput<TContract, ModelName, State['nsId']>,
-  ): Record<string, unknown> {
-    const values = mapModelDataToStorageRow(this.contract, this.namespaceId, this.modelName, data);
-    if (Object.keys(values).length > 0) {
-      applyUpdateDefaults(this.ctx, this.namespaceId, this.tableName, values);
-    }
-    return values;
-  }
-
-  async #reloadMutationRowByIdentity(
-    queryable: RuntimeQueryable,
-    criterion: Record<string, unknown>,
-  ): Promise<Row | null> {
-    return this.#reloadMutationRowByCriterion(queryable, criterion, 'row identity');
-  }
-
-  async #reloadMutationRowByCriterion(
-    queryable: RuntimeQueryable,
-    criterion: Record<string, unknown>,
-    criterionLabel: string,
-  ): Promise<Row | null> {
-    const whereExpr = shorthandToWhereExpr(
-      this.ctx.context,
-      this.namespaceId,
-      this.modelName,
-      blindCast<
-        ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
-        'mutation reload criterion contains resolved fields for this model'
-      >(criterion),
-      this.state.tables.root,
-    );
-    if (!whereExpr) {
-      throw new InternalError(
-        `Failed to build ${criterionLabel} filter for mutation result on model "${this.modelName}"`,
-      );
-    }
-
-    const resultState: CollectionState = {
-      ...emptyState(this.state.tables),
-      filters: [whereExpr],
-      includes: this.state.includes,
-      selectedFields: this.state.selectedFields,
-      limit: 1,
-    };
-
-    const rows = await dispatchCollectionRows<Row>({
-      context: this.ctx.context,
-      runtime: queryable,
-      state: resultState,
-      modelName: this.modelName,
-      namespaceId: this.namespaceId,
-    });
-    return rows[0] ?? null;
-  }
-
   #assertIncludeRefinementMode(action: string): void {
     if (this.includeRefinementMode) {
       return;
@@ -2988,6 +2700,14 @@ export class CollectionBase<
       }),
     );
   }
+
+  #relatedCollection = (
+    relation: ResolvedRelation,
+  ): RelationCollection<Contract<SqlStorage>, string> =>
+    this.#createCollection(relation.to, {
+      namespaceId: relation.toNamespace,
+      includeRefinementMode: false,
+    });
 
   #createCollection<
     ModelNameInner extends string,

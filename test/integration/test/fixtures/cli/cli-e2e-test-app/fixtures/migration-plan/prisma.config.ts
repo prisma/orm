@@ -18,9 +18,11 @@ export default definePrismaConfig({
       },
       output: 'output/contract.json',
       types: 'output/contract.d.ts',
+      typesModule: '@internal/postgres/contract-types',
     },
     migrations: {
       dir: 'migrations',
+      module: '@internal/postgres/migration',
     },
   }),
 });

@@ -4,6 +4,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import {
   FillStoredKeyCall,
+  MIGRATION_MODULE,
   RemoveStoredKeyCall,
   RenameStoredKeyCall,
 } from '../../src/core/migrations/op-factory-call';
@@ -274,7 +275,7 @@ describe('fillStoredKey', () => {
       'this.fillStoredKey({ schema: "app", table: "place", column: "point", path: "$.country", value: placeholder("GeoPoint.country:value") })',
     );
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/postgres/migration', symbol: 'placeholder' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' },
     ]);
     await expect(call.toOp()).rejects.toMatchObject({
       code: 'MIGRATION.UNFILLED_PLACEHOLDER',

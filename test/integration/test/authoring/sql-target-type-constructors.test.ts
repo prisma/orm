@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
 import sqlFamily from '@internal/family-sql/control';
@@ -15,12 +15,19 @@ const databasesDirectory = join(import.meta.dirname, '../../../../packages/3-tar
 /** `0-shared` holds packages several databases share, not a database (ADR 314). */
 const SHARED_FOLDER = '0-shared';
 
+function targetManifestPaths(directory: string): string[] {
+  const manifest = join(directory, '1-target', 'package.json');
+  if (existsSync(manifest)) return [manifest];
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^\d+-/.test(entry.name))
+    .flatMap((entry) => targetManifestPaths(join(directory, entry.name)));
+}
+
 const targetPackageNames = readdirSync(databasesDirectory)
   .filter((folder) => folder !== SHARED_FOLDER)
-  .map((database): string => {
-    const manifest: { readonly name: string } = JSON.parse(
-      readFileSync(join(databasesDirectory, database, '1-target', 'package.json'), 'utf8'),
-    );
+  .flatMap((database) => targetManifestPaths(join(databasesDirectory, database)))
+  .map((manifestPath): string => {
+    const manifest: { readonly name: string } = JSON.parse(readFileSync(manifestPath, 'utf8'));
     return manifest.name;
   });
 
@@ -52,6 +59,7 @@ describe.each(['pack', 'control'] as const)('every SQL target %s', (entryPoint) 
     async (name) => {
       const targets = await sqlTargetComponents(entryPoint);
       expect(targets.map(({ name }) => name).sort()).toEqual([
+        '@internal/target-mariadb',
         '@internal/target-mysql',
         '@internal/target-postgres',
         '@internal/target-sqlite',

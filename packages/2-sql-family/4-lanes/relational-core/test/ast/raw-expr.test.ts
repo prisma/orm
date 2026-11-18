@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { type AnyExpression, type ExprVisitor, ParamRef, RawExpr } from '../../src/exports/ast';
-import { col, lit, param } from './test-helpers';
+import {
+  type AnyExpression,
+  BinaryExpr,
+  DeleteAst,
+  type ExprVisitor,
+  InsertAst,
+  ParamRef,
+  RawExpr,
+  type SelectAst,
+  UpdateAst,
+} from '../../src/exports/ast';
+import { col, lit, param, returning, simpleSelect, table } from './test-helpers';
 
 describe('ast/RawExpr', () => {
   const returnsSpec = { codecId: 'pg/text@1', nullable: false } as const;
@@ -122,6 +132,84 @@ describe('ast/RawExpr', () => {
     const collected = expr.collectParamRefs();
     expect(collected).toContain(ref1);
     expect(collected).toContain(ref3);
+  });
+
+  it('folds an embedded select part through the select folder arm', () => {
+    const select = simpleSelect('user', ['id']);
+    const expr = new RawExpr({ parts: ['exists (', select, ')'], returns: returnsSpec });
+
+    const visited: SelectAst[] = [];
+    const result = expr.fold<string[]>({
+      empty: [],
+      combine: (a, b) => [...a, ...b],
+      select: (ast) => {
+        visited.push(ast);
+        return ['select'];
+      },
+    });
+
+    expect(result).toEqual(['select']);
+    expect(visited).toEqual([select]);
+  });
+
+  it('folds an embedded select part to empty when no select folder arm is provided', () => {
+    const expr = new RawExpr({
+      parts: ['exists (', simpleSelect('user', ['id']), ')'],
+      returns: returnsSpec,
+    });
+
+    expect(expr.fold<string[]>({ empty: [], combine: (a, b) => [...a, ...b] })).toEqual([]);
+  });
+
+  it('collects param refs inside an embedded select in template order', () => {
+    const before = param(1, 'before');
+    const inside = param(2, 'inside');
+    const after = param(3, 'after');
+    const select = simpleSelect('user', ['id']).withWhere(BinaryExpr.eq(col('user', 'id'), inside));
+    const expr = new RawExpr({
+      parts: [before, ' in (', select, ') and ', after],
+      returns: returnsSpec,
+    });
+
+    expect(expr.collectParamRefs()).toEqual([before, inside, after]);
+  });
+
+  it('folds embedded mutation parts through the mutation folder arm', () => {
+    const insert = InsertAst.into(table('user'))
+      .withRows([{ email: param(1, 'x') }])
+      .withReturning(returning('user', ['id']));
+    const update = UpdateAst.table(table('user'))
+      .withSet({ email: param(2, 'y') })
+      .withReturning(returning('user', ['id']));
+    const remove = DeleteAst.from(table('user')).withReturning(returning('user', ['id']));
+    const expr = new RawExpr({
+      parts: ['(', insert, ') (', update, ') (', remove, ')'],
+      returns: returnsSpec,
+    });
+
+    const result = expr.fold<string[]>({
+      empty: [],
+      combine: (a, b) => [...a, ...b],
+      select: () => ['select'],
+      mutation: (ast) => [ast.kind],
+    });
+
+    expect(result).toEqual(['insert', 'update', 'delete']);
+  });
+
+  it('collects param refs inside an embedded mutation in template order', () => {
+    const before = param(1, 'before');
+    const inside = param(2, 'inside');
+    const after = param(3, 'after');
+    const insert = InsertAst.into(table('user'))
+      .withRows([{ email: inside }])
+      .withReturning(returning('user', ['id']));
+    const expr = new RawExpr({
+      parts: [before, ' in (with a as (', insert, ') select id from a) and ', after],
+      returns: returnsSpec,
+    });
+
+    expect(expr.collectParamRefs()).toEqual([before, inside, after]);
   });
 
   it('preserves empty-string parts from back-to-back interpolations', () => {

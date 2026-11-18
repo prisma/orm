@@ -30,7 +30,7 @@ import sqlitePack from '@internal/target-sqlite/pack';
 import { createSqliteMigrationPlanner } from '@internal/target-sqlite/planner';
 import type { SqlitePlanTargetDetails } from '@internal/target-sqlite/planner-target-details';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
-import { timeouts } from '@repo/test-utils';
+import { timeouts, workspaceMigrationModule } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   controlAdapter,
@@ -229,7 +229,9 @@ describe('SQLite planner, value object field fills', {
     from: Contract<SqlStorage>,
     to: Contract<SqlStorage>,
   ): Promise<SqlMigrationPlan<SqlitePlanTargetDetails>> {
-    const fills = [...result.plan.renderTypeScript((specifier) => specifier).matchAll(FILL_CALL)];
+    const fills = [
+      ...result.plan.renderTypeScript(workspaceMigrationModule.sqlite).matchAll(FILL_CALL),
+    ];
     const settled = await Promise.allSettled(result.plan.operations);
     let fill = 0;
     const operations = await Promise.all(

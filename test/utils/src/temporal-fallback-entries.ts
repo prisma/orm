@@ -17,13 +17,17 @@ export interface TemporalFallbackTarget {
     readonly dir: string;
     readonly minimumEntries: number;
   };
+  /** The exports maps yield more application entries than this, so a broken exports map fails. Defaults to 100. */
+  readonly minimumApplicationEntries?: number;
   /** Application entries the exports maps must yield, as `<package> <subpath>`. */
   readonly expectedApplicationEntries: readonly string[];
   /** Every entry that loads `temporal-polyfill`, as `<package> <subpath>`. */
   readonly entriesThatLoadThePolyfill: readonly string[];
   /** A Temporal codec to decode, from the target package's `./target/codecs` entry. */
   readonly decode: {
-    readonly lookupFactory: string;
+    readonly exportName: string;
+    /** The expression that gives the codec, from the export and the codec id's literal. */
+    readonly codecOf: (codecIdLiteral: string) => string;
     readonly codecId: string;
     readonly contractValue: string;
     readonly decoded: string;
@@ -151,7 +155,7 @@ export function describeTemporalFallbackEntries(target: TemporalFallbackTarget):
 
   describe(`which published ${target.name} entries load temporal-polyfill`, () => {
     it('the exports maps yield application entries to check', () => {
-      expect(applicationEntries.length).toBeGreaterThan(100);
+      expect(applicationEntries.length).toBeGreaterThan(target.minimumApplicationEntries ?? 100);
       expect(applicationEntries.map(nameOf)).toEqual(
         expect.arrayContaining([...target.expectedApplicationEntries]),
       );
@@ -233,11 +237,11 @@ export function describeTemporalFallbackEntries(target: TemporalFallbackTarget):
 
   const { decode } = target;
   const decodeATimestamp = `
-    const { ${decode.lookupFactory} } = ${importOf(targetPackage, './target/codecs')};
+    const { ${decode.exportName} } = ${importOf(targetPackage, './target/codecs')};
     const before = typeof globalThis.Temporal;
     let decoded;
     try {
-      const codec = ${decode.lookupFactory}().get(${JSON.stringify(decode.codecId)});
+      const codec = ${decode.codecOf(JSON.stringify(decode.codecId))};
       decoded = String(
         codec.fromDataTypeValue(codec.dataType.fromContract(${JSON.stringify(decode.contractValue)}, {})),
       );

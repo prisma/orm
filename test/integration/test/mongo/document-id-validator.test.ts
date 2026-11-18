@@ -5,15 +5,15 @@ import { type Db, ObjectId } from 'mongodb';
 import { expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-const contract = defineContract({}, ({ field, model }) => ({
+const contract = defineContract({}, ({ field, model, type }) => ({
   models: {
     Note: model('Note', {
       collection: 'notes',
-      fields: { text: field.string() },
+      fields: { text: field.scalar(type.String()) },
     }),
     Tag: model('Tag', {
       collection: 'tags',
-      fields: { _id: field.string(), label: field.string() },
+      fields: { _id: field.scalar(type.String()), label: field.scalar(type.String()) },
     }),
   },
 }));

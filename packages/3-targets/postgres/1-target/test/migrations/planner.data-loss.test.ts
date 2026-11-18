@@ -9,7 +9,7 @@ import {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { expectDataLossMatchesDestructive } from '@repo/test-utils/data-loss-expectations';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
@@ -573,7 +573,7 @@ describe('Postgres planner, convert and backfill statements', () => {
       'Set NOT NULL on "User"."age" (widening)',
     ]);
     expect(result.dataLoss).toEqual([]);
-    const rendered = result.plan.renderTypeScript((specifier) => specifier);
+    const rendered = result.plan.renderTypeScript(workspaceMigrationModule.postgres);
     expect(rendered).toContain(
       'this.alterColumnType({ schema: "public", table: "User", column: "age", type: "int4", using: placeholder("User.age:convert") })',
     );

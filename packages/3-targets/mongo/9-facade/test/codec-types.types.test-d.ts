@@ -15,6 +15,6 @@ type TypeScriptContractCodecTypes = ExtractMongoCodecTypes<
   MongoContractResult<{ readonly extensions: { readonly probe: ExtensionWithOneCodec } }>
 >;
 
-test('a TypeScript contract carries the target`s codec types for every built-in codec', () => {
+test('the MongoDB builder`s copy of the codec types, which a TypeScript contract carries, equals the target`s CodecTypes', () => {
   expectTypeOf<Omit<TypeScriptContractCodecTypes, 'probe/text@1'>>().toEqualTypeOf<CodecTypes>();
 });

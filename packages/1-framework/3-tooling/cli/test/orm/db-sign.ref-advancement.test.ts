@@ -8,7 +8,7 @@ import {
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
-import { writeRef } from '@internal/migration-tools/refs';
+import { readRef, writeRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
 import { notOk, ok } from '@internal/utils/result';
 import { join } from 'pathe';
@@ -25,10 +25,10 @@ import {
   mocks,
   ormConfig,
   projectDir,
-  RENDERED_CONTRACT_DTS,
   refHashOf,
   refsDirOf,
   resetMocks,
+  SNAPSHOT_CONTRACT_DTS,
   signedSpace,
 } from './db-sign-fixtures';
 
@@ -52,7 +52,7 @@ describe('db sign', () => {
         storage: { storageHash: HASH_A },
         target: 'postgres',
       });
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('still advances db when --db names the database', async () => {
@@ -191,6 +191,28 @@ describe('db sign', () => {
       });
     });
 
+    it('keeps the invariants and policies of the refs it advances', async () => {
+      const dir = await projectDir();
+      const declared = {
+        invariants: ['split-user-name'],
+        policies: { change: ['migrate'] as const },
+      };
+      await writeRef(refsDirOf(dir), 'db', { hash: HASH_PREVIOUS, ...declared });
+      await writeRef(refsDirOf(dir, 'pgvector'), 'db', { hash: HASH_PREVIOUS, ...declared });
+      mocks.dbSign.mockResolvedValue(
+        ok({ spaces: [signedSpace('app', HASH_A), signedSpace('pgvector', HASH_EXT)] }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(0);
+      expect(await readRef(refsDirOf(dir), 'db')).toEqual({ hash: HASH_A, ...declared });
+      expect(await readRef(refsDirOf(dir, 'pgvector'), 'db')).toEqual({
+        hash: HASH_EXT,
+        ...declared,
+      });
+    });
+
     it('advances only the refs of the spaces that were signed', async () => {
       const dir = await projectDir();
       mocks.dbSign.mockResolvedValue(
@@ -228,10 +250,10 @@ describe('db sign', () => {
       expect(run.exitCode).toBe(0);
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
         contract: { storage: { storageHash: HASH_A }, target: 'postgres' },
-        resolveImportSpecifier: expect.any(Function),
+        typesModule: '@acme/orm-db/contract-types',
       });
       const storeDir = contractSnapshotDir(join(dir, 'migrations'), HASH_A);
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('refuses before verifying or signing when the contract types cannot be rendered', async () => {

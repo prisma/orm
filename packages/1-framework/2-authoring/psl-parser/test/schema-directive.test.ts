@@ -1,52 +1,52 @@
 import { describe, expect, it } from 'vitest';
-import { isPrismaNextSchema, renameLegacyDirective } from '../src/schema-directive';
+import { isPrisma8Schema, renameLegacyDirective } from '../src/schema-directive';
 
-describe('isPrismaNextSchema', () => {
+describe('isPrisma8Schema', () => {
   it('accepts a schema whose first line is the directive', () => {
-    expect(isPrismaNextSchema('// use prisma-8\nmodel User {\n  id Int @id\n}\n')).toBe(true);
+    expect(isPrisma8Schema('// use prisma-8\nmodel User {\n  id Int @id\n}\n')).toBe(true);
   });
 
   it('accepts the directive earlier releases wrote', () => {
-    expect(isPrismaNextSchema('// use prisma-next\nmodel User {\n  id Int @id\n}\n')).toBe(true);
-    expect(isPrismaNextSchema('  //  use   prisma-next  \n')).toBe(true);
-    expect(isPrismaNextSchema('// use prisma-nextgen\n')).toBe(false);
+    expect(isPrisma8Schema('// use prisma-next\nmodel User {\n  id Int @id\n}\n')).toBe(true);
+    expect(isPrisma8Schema('  //  use   prisma-next  \n')).toBe(true);
+    expect(isPrisma8Schema('// use prisma-nextgen\n')).toBe(false);
   });
 
   it('accepts the directive with no schema body', () => {
-    expect(isPrismaNextSchema('// use prisma-8')).toBe(true);
+    expect(isPrisma8Schema('// use prisma-8')).toBe(true);
   });
 
   it('accepts leading blank lines and indentation before the directive', () => {
-    expect(isPrismaNextSchema('\n\n  // use prisma-8\nmodel User {}\n')).toBe(true);
+    expect(isPrisma8Schema('\n\n  // use prisma-8\nmodel User {}\n')).toBe(true);
   });
 
   it('accepts trailing spaces after the directive', () => {
-    expect(isPrismaNextSchema('// use prisma-8   \n')).toBe(true);
+    expect(isPrisma8Schema('// use prisma-8   \n')).toBe(true);
   });
 
   it('accepts flexible spacing inside the comment', () => {
-    expect(isPrismaNextSchema('//use prisma-8\n')).toBe(true);
-    expect(isPrismaNextSchema('//   use   prisma-8\n')).toBe(true);
+    expect(isPrisma8Schema('//use prisma-8\n')).toBe(true);
+    expect(isPrisma8Schema('//   use   prisma-8\n')).toBe(true);
   });
 
   it('rejects a token attached to the directive name', () => {
     for (const suffix of ['2', 'gen']) {
-      expect(isPrismaNextSchema(`// use prisma-8${suffix}\n`)).toBe(false);
+      expect(isPrisma8Schema(`// use prisma-8${suffix}\n`)).toBe(false);
     }
   });
 
   it('rejects a directive that is not the first content of the file', () => {
-    expect(isPrismaNextSchema('model User {}\n// use prisma-8\n')).toBe(false);
+    expect(isPrisma8Schema('model User {}\n// use prisma-8\n')).toBe(false);
   });
 
   it('rejects a block-comment form', () => {
-    expect(isPrismaNextSchema('/* use prisma-8 */\n')).toBe(false);
+    expect(isPrisma8Schema('/* use prisma-8 */\n')).toBe(false);
   });
 
   it('rejects unmarked and empty documents', () => {
-    expect(isPrismaNextSchema('model User {\n  id Int @id\n}\n')).toBe(false);
-    expect(isPrismaNextSchema('')).toBe(false);
-    expect(isPrismaNextSchema('// use prisma\n')).toBe(false);
+    expect(isPrisma8Schema('model User {\n  id Int @id\n}\n')).toBe(false);
+    expect(isPrisma8Schema('')).toBe(false);
+    expect(isPrisma8Schema('// use prisma\n')).toBe(false);
   });
 });
 

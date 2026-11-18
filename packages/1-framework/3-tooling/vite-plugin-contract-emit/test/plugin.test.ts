@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prismaVitePlugin } from '../src/plugin';
 
@@ -53,7 +53,7 @@ const successfulEmitResult = {
   pinnedFiles: [],
 } satisfies Awaited<ReturnType<typeof executeContractEmit>>;
 
-type LoadedConfig = PrismaNextConfig;
+type LoadedConfig = PrismaConfig;
 type SourceInputs = NonNullable<LoadedConfig['contract']>['source']['inputs'];
 
 interface MockModuleNode {
@@ -223,11 +223,7 @@ describe('prismaVitePlugin', () => {
       ) => Promise<void>;
       await configureServer(mockServer);
 
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectDir: '/project',
-        }),
-      );
+      expect(mockedLoadConfig).toHaveBeenCalledWith('/project/prisma.config.ts', expect.anything());
     });
 
     it('preserves absolute config path', async () => {
@@ -242,10 +238,9 @@ describe('prismaVitePlugin', () => {
       ) => Promise<void>;
       await configureServer(mockServer);
 
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectDir: '/absolute',
-        }),
+      expect(mockedLoadConfig).toHaveBeenCalledWith(
+        '/absolute/prisma.config.ts',
+        expect.anything(),
       );
     });
   });
@@ -393,11 +388,7 @@ describe('prismaVitePlugin', () => {
       ) => Promise<void>;
       await configureServer(mockServer);
 
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectDir: expect.any(String),
-        }),
-      );
+      expect(mockedExecuteContractEmit).toHaveBeenCalledTimes(1);
     });
 
     it('invalidates emitted artifacts after successful emit', async () => {
@@ -536,11 +527,7 @@ describe('prismaVitePlugin', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Contract watch coverage is partial'),
       );
-      expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          projectDir: '/project',
-        }),
-      );
+      expect(mockedExecuteContractEmit).toHaveBeenCalledTimes(1);
       expect(consoleErrorSpy).not.toHaveBeenCalledWith(
         expect.stringContaining('Contract emit failed'),
       );

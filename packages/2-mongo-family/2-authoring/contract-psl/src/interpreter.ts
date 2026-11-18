@@ -14,7 +14,6 @@ import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/con
 import type {
   AuthoringContributions,
   AuthoringEntityContext,
-  AuthoringTypeConstructorDescriptor,
   DataTypeSupport,
   ParsedPslExtensionBlock,
   WrittenValue,
@@ -71,7 +70,6 @@ import {
   diagnosticSource,
   interpretExtensionBlocks,
   isContributedTypeChoice,
-  mapPslDiagnostics,
   nodePslSpan,
   type PslDiagnosticCollector,
   refuseRepeatedTypeAliasAttributes,
@@ -101,6 +99,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { type DeprecatedTypeNameWarner, deprecatedTypeNameWarner } from './deprecated-type-names';
 import {
   interpretFieldAttribute,
   interpretModelAttribute,
@@ -148,43 +147,12 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly authoringContributions?: AuthoringContributions;
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
-  /** Receives a warning for each field typed with a deprecated scalar name. */
+  /** Receives a warning for each field, value object member or type alias typed with a deprecated scalar name. */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
 }
 
-/**
- * Reports `PSL_DEPRECATED_SCALAR_NAME` at the type of a field whose scalar name is a deprecated alias, naming the replacement. The alias resolves to the same codec, so the contract does not change.
- */
-function deprecatedScalarWarner(input: {
-  readonly sources: PslSources;
-  readonly reportWarning: ((diagnostic: ContractSourceDiagnostic) => void) | undefined;
-}): (field: FieldSymbol, descriptor: AuthoringTypeConstructorDescriptor) => void {
-  const { reportWarning } = input;
-  if (reportWarning === undefined) return () => {};
-  return (field, descriptor) => {
-    if (descriptor.deprecated === undefined) {
-      return;
-    }
-    const typeNode = field.node.typeAnnotation()?.name()?.syntax ?? field.node.syntax;
-    const [warning] = mapPslDiagnostics(
-      [
-        {
-          code: 'PSL_DEPRECATED_SCALAR_NAME',
-          message: `Scalar type "${field.typeName}" is deprecated and will be removed; use "${descriptor.deprecated.replacement}".`,
-          ...diagnosticSource(input.sources, typeNode).at(),
-        },
-      ],
-      input.sources,
-    );
-    if (warning !== undefined) reportWarning({ ...warning, severity: 'warning' });
-  };
-}
-
 interface ScalarNames {
-  readonly warnDeprecated: (
-    field: FieldSymbol,
-    descriptor: AuthoringTypeConstructorDescriptor,
-  ) => void;
+  readonly warnDeprecated: DeprecatedTypeNameWarner;
 }
 
 /** What resolving a field's type reports to. */
@@ -948,6 +916,7 @@ function resolveNonRelationField(
     invariant(typeAlias !== undefined, 'A contributed type alias always resolves');
     return fieldOfTypeAlias(field, typeAlias);
   }
+  scalarNames.warnDeprecated(field, path.join('.'), descriptor);
   if (call === undefined && !isBareTypeConstructor(descriptor)) {
     reportTypeConstructorNotCalled({
       entityLabel,
@@ -960,14 +929,24 @@ function resolveNonRelationField(
     return undefined;
   }
 
-  if (call === undefined) scalarNames.warnDeprecated(field, descriptor);
-  return {
-    field: {
-      type: scalarTypeOfConstructor(descriptor, call),
-      nullable: field.optional,
-      many: field.list ? { elementNullable: field.elementOptional } : false,
-    },
-  };
+  const type = scalarTypeOfConstructor({
+    descriptor,
+    call,
+    codecLookup,
+    diagnostics: context.diagnostics,
+    source,
+    entityLabel,
+    dataTypes: context.dataTypes,
+  });
+  return type === undefined
+    ? undefined
+    : {
+        field: {
+          type,
+          nullable: field.optional,
+          many: field.list ? { elementNullable: field.elementOptional } : false,
+        },
+      };
 }
 
 function processEnumDeclarations(input: {
@@ -1118,9 +1097,8 @@ export function interpretPslDocumentToMongoContract(
     diagnostics,
     dataTypes: input.dataTypes,
   };
-  const scalarNames: ScalarNames = {
-    warnDeprecated: deprecatedScalarWarner({ sources, reportWarning: input.reportWarning }),
-  };
+  const warnDeprecated = deprecatedTypeNameWarner({ sources, reportWarning: input.reportWarning });
+  const scalarNames: ScalarNames = { warnDeprecated };
   const { binder } = input;
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
     symbolTable,
@@ -1211,6 +1189,7 @@ export function interpretPslDocumentToMongoContract(
     dataTypes: input.dataTypes,
     codecLookup: input.codecLookup,
     authoringTypes: input.authoringContributions?.type,
+    warnDeprecated,
   });
 
   const polymorphism = collectPolymorphismDeclarations({

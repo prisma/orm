@@ -12,7 +12,7 @@ it(
     const client = new Client({ connectionString: database.connectionString });
     await client.connect();
     await client.query(`
-    create table tasks (id int4 primary key, title text, type text, severity text, project_id int4, reporter_id int4, bug_assignee_person_id int4);
+    create table tasks (id int4 primary key, title text, type text, severity text, project_id int4, reporter_id int4, pinned_by_id int4 unique, bug_assignee_person_id int4);
     create table features (id int4 primary key, priority int4, feature_assignee_person_id int4);
     create table epics (id int4 primary key, scope text);
     insert into tasks (id, title, type, severity) values (1, 'Bug', 'bug', 'critical'), (2, 'Feature', 'feature', null);

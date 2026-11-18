@@ -9,6 +9,7 @@ import type { CodecTypes, ParameterizedOutputTypesForTypeParams } from '../types
 import type { QueryOperationTypes, QueryOperationTypesForCodecs } from '../types/operation-types';
 import { pgvectorAuthoringTypes } from './authoring';
 import { pgvectorDataTypes } from './data-types';
+import { moduleBase } from './module-base';
 import { pgvectorCodecRegistry } from './registry';
 
 const pgvectorTypeId = 'pg/vector@1' as const;
@@ -75,26 +76,26 @@ const pgvectorPackMetaBase = {
     codecTypes: {
       codecDescriptors: Array.from(pgvectorCodecRegistry.values()),
       import: {
-        package: '@internal/extension-pgvector/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'PgVectorTypes',
       },
       parameterizedOutputTypes: {
-        package: '@internal/extension-pgvector/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'ParameterizedOutputTypesForTypeParams',
         alias: 'PgVectorParameterizedOutputTypes',
       },
     },
     operationTypes: {
       import: {
-        package: '@internal/extension-pgvector/operation-types',
+        package: `${moduleBase}/operation-types`,
         named: 'OperationTypes',
         alias: 'PgVectorOperationTypes',
       },
     },
     queryOperationTypes: {
       import: {
-        package: '@internal/extension-pgvector/operation-types',
+        package: `${moduleBase}/operation-types`,
         named: 'QueryOperationTypes',
         alias: 'PgVectorQueryOperationTypes',
       },

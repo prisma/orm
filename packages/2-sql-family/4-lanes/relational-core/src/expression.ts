@@ -7,8 +7,17 @@ import { invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import type { CodecRef } from './ast/codec-types';
 import type { SqlStatementStats } from './ast/driver-types';
-import type { AnyExpression as AstExpression, RawQueryColumn, RawSqlLiteral } from './ast/types';
+import type {
+  AnyExpression as AstExpression,
+  DeleteAst,
+  InsertAst,
+  RawPart,
+  RawQueryColumn,
+  RawSqlLiteral,
+  UpdateAst,
+} from './ast/types';
 import { OperationExpr, ParamRef, RawExpr, RawQueryAst } from './ast/types';
+import type { Subquery } from './functions';
 import { planFromAst, type SqlQueryPlan } from './plan';
 
 export type ScopeField = {
@@ -26,15 +35,21 @@ export type ScopeField = {
    * Optional {@link CodecRef} derived from contract storage at scope construction time. Builder paths that mint column-bound `ParamRef` / `ProjectionItem` nodes stamp this slot onto the AST so encode/decode dispatch resolves through `contractCodecs.forCodecRef`. Leave `undefined` when the scope was built without contract storage (rare — tests, ad-hoc scopes).
    */
   codec?: CodecRef;
+  /**
+   * Type-only: the value type the contract resolves for the column this field reads, such as an enum's member union. Comparisons type a raw operand against it instead of the codec's broader `input` type. Never set at runtime.
+   */
+  input?: unknown;
 };
 
-/** A storage column as a scope field: its codec id, its nullability, and `many` for a list column. */
+/** A storage column as a scope field: its codec id, its nullability, `many` for a list column, and the column's resolved `input` type when the contract provides one. */
 export type StorageColumnScopeField<
   Column extends { readonly codecId: string; readonly nullable: boolean },
+  Input = never,
 > = {
   codecId: Column['codecId'];
   nullable: Column['nullable'];
-} & (Column extends { many: true } ? { many: true } : Record<never, never>);
+} & (Column extends { many: true } ? { many: true } : Record<never, never>) &
+  ([Input] extends [never] ? Record<never, never> : { input?: Input });
 
 export type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
 
@@ -90,6 +105,16 @@ export type CodecExpression<
 > =
   | Expression<{ codecId: CodecId; nullable: Nullable; many?: never }>
   | CodecValue<CodecId, Nullable, CT>;
+
+/**
+ * An operand of a comparison against `CodecId`: an expression of that codec, or a raw value.
+ *
+ * A raw value is typed as `Input`, which a comparison infers from the `input` of a column operand and otherwise defaults to the codec's `input` type. `NoInfer` keeps the raw value itself from widening `Input`, so a literal that is not one of an enum column's members is rejected.
+ */
+export type ComparisonOperand<CodecId extends string, Nullable extends boolean, Input> =
+  | Expression<{ codecId: CodecId; nullable: Nullable; many?: never; input?: Input }>
+  | NoInfer<Input>
+  | NullSuffix<Nullable>;
 
 /**
  * A list-typed expression: an {@link Expression} whose element codec is
@@ -340,16 +365,31 @@ export type RawSqlStatementTag = (
 /** Interpolations that occupy a single position in the parts list. */
 type RawExprInterpolation = Expression<ScopeField> | ParamRef | RawSqlLiteral;
 
-/** Interpolations a raw template accepts; a {@link RawRowQuery} splices its own parts in. */
-export type RawSqlInterpolation = RawExprInterpolation | RawRowQuery;
+export declare const RowReturningStatementMarker: unique symbol;
 
-function resolveInterpolation(
-  adapter: RawCodecInferer,
-  value: RawExprInterpolation,
-): AstExpression | ParamRef {
-  if (isExpression(value)) {
-    return value.buildAst();
-  }
+export type RowReturningStatement<RowType extends Record<string, ScopeField>> = {
+  readonly [RowReturningStatementMarker]?: RowType;
+  buildAst(): InsertAst | UpdateAst | DeleteAst;
+};
+
+/**
+ * Interpolations a raw template accepts. A {@link RawRowQuery} splices its own
+ * parts in; a builder query or a row-returning builder mutation lands as one
+ * statement AST part.
+ */
+export type RawSqlInterpolation =
+  | RawExprInterpolation
+  | RawRowQuery
+  | Subquery<Record<string, ScopeField>>
+  | RowReturningStatement<Record<string, ScopeField>>;
+
+type BuildableInterpolation = Exclude<RawSqlInterpolation, ParamRef | RawSqlLiteral>;
+
+function isBuildable(value: RawSqlInterpolation): value is BuildableInterpolation {
+  return isExpression(value);
+}
+
+function resolveInterpolation(adapter: RawCodecInferer, value: ParamRef | RawSqlLiteral): ParamRef {
   if (value instanceof ParamRef) {
     return value;
   }
@@ -370,30 +410,36 @@ function resolveInterpolation(
   );
 }
 
-function isRawRowQuery(value: unknown): value is RawRowQuery {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'buildAst' in value &&
-    typeof value.buildAst === 'function' &&
-    'build' in value &&
-    typeof value.build === 'function'
-  );
+function templatePart(adapter: RawCodecInferer, value: RawSqlInterpolation): RawPart[] {
+  if (!isBuildable(value)) {
+    return [resolveInterpolation(adapter, value)];
+  }
+  const ast = value.buildAst();
+  if (ast instanceof RawQueryAst) {
+    return [...ast.parts];
+  }
+  if (isMutationAst(ast) && (ast.returning?.length ?? 0) === 0) {
+    throw runtimeError(
+      'RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION',
+      `an embedded ${ast.kind} must return rows: call \`.returning(...)\` on the builder before interpolating it`,
+      { kind: ast.kind },
+    );
+  }
+  return [ast];
+}
+
+function isMutationAst(ast: { readonly kind: string }): ast is InsertAst | UpdateAst | DeleteAst {
+  return ast.kind === 'insert' || ast.kind === 'update' || ast.kind === 'delete';
 }
 
 function templateParts(
   adapter: RawCodecInferer,
   strings: TemplateStringsArray,
   values: readonly RawSqlInterpolation[],
-): Array<string | AstExpression> {
-  const parts: Array<string | AstExpression> = [strings[0] ?? ''];
+): RawPart[] {
+  const parts: RawPart[] = [strings[0] ?? ''];
   values.forEach((value, i) => {
-    if (isRawRowQuery(value)) {
-      parts.push(...value.buildAst().parts);
-    } else {
-      parts.push(resolveInterpolation(adapter, value));
-    }
-    parts.push(strings[i + 1] ?? '');
+    parts.push(...templatePart(adapter, value), strings[i + 1] ?? '');
   });
   return parts;
 }
@@ -421,7 +467,7 @@ function resolveRowSpec(spec: RawRowSpec): Record<string, RawQueryColumn> {
 }
 
 /**
- * Create a tagged-template builder for raw SQL. The returned tag accepts SQL string fragments interleaved with typed {@link Expression}, {@link ParamRef}, row-returning {@link RawRowQuery}, or bare {@link RawSqlLiteral} interpolations. Call `.returns(spec)` on the result to obtain a typed {@link Expression} whose AST is a {@link RawExpr}.
+ * Create a tagged-template builder for raw SQL. The returned tag accepts SQL string fragments interleaved with typed {@link Expression}, {@link ParamRef}, row-returning {@link RawRowQuery}, builder query ({@link Subquery}), row-returning builder mutation ({@link RowReturningStatement}), or bare {@link RawSqlLiteral} interpolations. Call `.returns(spec)` on the result to obtain a typed {@link Expression} whose AST is a {@link RawExpr}.
  *
  * Supplied with a {@link RawPlanContext}, the tag also terminates in statement position: `.returnsRow(spec)` and `.affectedCount()` mint a {@link SqlQueryPlan} whose AST is a {@link RawQueryAst}. The context is stated once, here, so authoring sites carry nothing but the template and its terminator.
  *
@@ -442,7 +488,7 @@ export function createRawSql(adapter: RawCodecInferer, planContext?: RawPlanCont
 }
 
 class RawSqlBuilderImpl implements RawSqlBuilder {
-  constructor(protected readonly parts: readonly (string | AstExpression | ParamRef)[]) {}
+  constructor(protected readonly parts: readonly RawPart[]) {}
 
   returns<S extends string>(spec: S): Expression<{ codecId: S; nullable: false }>;
   returns<S extends string, N extends boolean = false>(spec: {
@@ -465,7 +511,7 @@ class RawSqlBuilderImpl implements RawSqlBuilder {
 
 class RawSqlStatementBuilderImpl extends RawSqlBuilderImpl implements RawSqlStatementBuilder {
   constructor(
-    parts: readonly (string | AstExpression | ParamRef)[],
+    parts: readonly RawPart[],
     private readonly planContext: RawPlanContext,
   ) {
     super(parts);

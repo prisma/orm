@@ -23,10 +23,8 @@ pnpm --filter <pkg> lint        # biome check --error-on-warnings, per touched p
 
 ```bash
 pnpm lint:deps              # when imports/exports/architectural structure changes
-pnpm test:packages          # when source or test code changes (almost always)
-pnpm test:integration       # when changes affect PGlite / PG / mongo paths
-# when a command's behaviour changes: every integration and e2e file that runs that command, before queueing (F44)
-pnpm test:e2e               # when changes affect emit / migrate / run cycle
+pnpm --filter <pkg> test    # each package whose source or tests changed
+# when changes affect PGlite / PG / mongo paths, the emit / migrate / run cycle, or a command's behaviour: the integration and e2e files that cover them (F44)
 pnpm fixtures:check         # when IR / emitter / serialiser changes
 pnpm check:upgrade-coverage --mode pr --prev <PR base sha> --head HEAD   # when packages/3-extensions/** or examples/** change
 ```
@@ -47,7 +45,8 @@ A brief may add gates specific to the work:
 ### Cadence
 
 - **Per-commit** (during the dispatch): typecheck and any grep gates the brief specifies.
-- **End-of-dispatch**: typecheck, the touched packages' tests and lint, `lint:deps`, and brief-specified gates. Workspace-wide `pnpm test:packages` and `pnpm test:integration` run once per slice, before the PR opens, not per dispatch (lsp-go-to-definition, 2026-09-30: per-dispatch full suites cost hours).
+- **End-of-dispatch**: typecheck, the touched packages' tests and lint, `lint:deps`, and brief-specified gates.
+- **Every package, integration and e2e test must pass before the PR merges.** Locally you run your own packages' tests and the files that cover your change; CI runs the full suites, because the machine is shared ([`running-tests.mdc`](../../.agents/rules/running-tests.mdc)).
 - **The orchestrator picks the gate.** It does not ask the operator to confirm an inferred gate list; it writes the gate into the plan and states it.
 - **Orchestrator-side post-dispatch**: re-run the grep gates independently; spot-check the diff for spec compliance; run intent-validation.
 
@@ -75,7 +74,7 @@ In addition to the canonical slice DoD:
 ### PR-side items
 
 - [ ] Linear issue moved to `Ready to be merged` (the team's terminal-before-merge state).
-- [ ] PR title carries Linear ticket prefix (e.g. `tml-XXXX:`).
+- [ ] PR title is in conventional-commit form (`type(scope): description`); the Linear ticket is in the description.
 - [ ] PR description follows `drive-pr-description` shape (decision-led, narrative).
 - [ ] PR linked to its Linear issue via GitHub integration (auto-close on merge works).
 - [ ] No `projects/` references in long-lived files added by the slice (per the doc-maintenance rule; grep gate in [`grep-library.md`](./grep-library.md)).
@@ -96,7 +95,7 @@ In addition to the canonical slice DoD:
 
 The orchestrator MUST walk the slice spec's `## Slice Definition of Done` checklist verbatim before handing off to the PR-opening skill, marking each item ✓ / ✗ / N/A-with-rationale. A `READY FOR PR` reviewer verdict in `reviews/code-review.md` covers reviewer-scope items (typically SDoD1-SDoD3 + the validation-gate items) but **does not** cover items the reviewer cannot see — manual-QA (the QA-side items above), `projects/`-reference scrubs in long-lived files, or any other team-specific overlay item. Treating "reviewer SATISFIED" as proxy for "DoD satisfied" is a known orchestrator failure mode in this codebase; the explicit checklist walk is the calibration that prevents it.
 
-- [ ] **Sync `origin/main` before the final validation + push** (added 2026-05-30 retro). Merge/rebase `origin/main` into the branch, then re-run the always-run gates, *before* opening the PR. A branch that validated green against a stale base can still red-fail CI when a sibling change on `main` moved a shared shape (a status row gaining a field, an output envelope changing). Catching this locally costs one merge; catching it in CI costs a babysit round. See [`failure-modes.md § F14`](./failure-modes.md#f14-dispatch-reports-validation-green-but-ci-is-red-dispatch-gates-didnt-mirror-ci).
+- [ ] **Sync `origin/main` before the final validation + push** (added 2026-05-30 retro). Merge `origin/main` into the branch *before* opening the PR; for a stacked PR, merge `main` into its base branch first, then the base into the child. Then re-run tests as [`running-tests.mdc`](../../.agents/rules/running-tests.mdc) says for a merge of `main`. A branch that validated green against a stale base can still red-fail CI when a sibling change on `main` moved a shared shape (a status row gaining a field, an output envelope changing). Catching this locally costs one merge; catching it in CI costs a babysit round. See [`failure-modes.md § F14`](./failure-modes.md#f14-dispatch-reports-validation-green-but-ci-is-red-dispatch-gates-didnt-mirror-ci).
 
 ## Project-DoD overlay
 

@@ -13,7 +13,7 @@ test('type.* has a helper for every PSL type constructor', () => {
 test('field.namedType takes only an enum handle', () => {
   defineContract({}, ({ type, field }) => {
     // @ts-expect-error a codec instance is written with field.column
-    field.namedType(type.sql.String(5));
+    field.namedType(type.sql.Varchar(5));
     // @ts-expect-error a type alias name is written as a constant
     field.namedType('Slug');
     return { models: {} };
@@ -58,8 +58,8 @@ test('a type helper requires its required arguments and not its optional ones', 
   defineContract({}, ({ type }) => {
     // @ts-expect-error sql.Char takes a required length
     type.sql.Char();
-    // @ts-expect-error sql.String takes a required length
-    type.sql.String();
+    // @ts-expect-error sql.Varchar takes a required length
+    type.sql.Varchar();
     expectTypeOf(type.sql.Char(36).typeParams).toEqualTypeOf<{ readonly length: 36 }>();
     expectTypeOf(type.Char().codecId).toEqualTypeOf<'sql/char@1'>();
     expectTypeOf(type.TimestampTemporal().codecId).toEqualTypeOf<'pg/timestamp-temporal@1'>();

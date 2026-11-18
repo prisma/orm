@@ -2,9 +2,9 @@
 
 Which model tier should this dispatch run on? Per [`docs/drive/principles/decomposition-and-cost.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/decomposition-and-cost.md), the cost-vs-capability decision is dispatch-shape-dependent, not size-dependent. A judgment-heavy M dispatch belongs on the orchestrator tier; a mechanical M dispatch belongs on the cheap tier.
 
-## Operator override (2026-09-24)
+## Operator override (2026-09-24, changed 2026-11-18)
 
-Every subagent dispatch in this repo runs on **Opus**: implementers, reviewers, and spikes. Pass `model: "opus"` explicitly on every dispatch. The routing table below records the earlier trial of cheaper tiers and is kept for history; it does not govern dispatches until the operator lifts this override.
+Orchestrator sessions run on **Fable** at medium effort. Reviewer dispatches run on **Opus** at high effort: the in-loop reviewer, design reviews, and both passes of `/drive-code-review`. Implementer and spike dispatches run on **Opus** at medium effort. Always use the latest version of each model. Pass the model and the effort explicitly on every dispatch. The routing table below records the earlier trial of cheaper tiers and is kept for history; it does not govern dispatches until the operator lifts this override.
 
 ## Routing table
 
@@ -16,7 +16,7 @@ Every subagent dispatch in this repo runs on **Opus**: implementers, reviewers, 
 | Spike (read, count, structure findings) | Sonnet or composer-2.5 |
 | Architect-class finding remediation (single discipline, narrow surface) | Sonnet by default; **composer-2.5 when the brief is precise and a sibling dispatch already established the pattern** |
 | Voice-aware doc edits (skill / README / matcher updates with explicit insertion points and an established voice to match) | composer-2.5 |
-| Long-running validation gate runs (typecheck, test:packages) | Whichever tier the parent dispatch chose (no model dispatch — just bash) |
+| Long-running validation gate runs (typecheck, the touched packages' tests) | Whichever tier the parent dispatch chose (no model dispatch — just bash) |
 
 ## Confidence notes
 

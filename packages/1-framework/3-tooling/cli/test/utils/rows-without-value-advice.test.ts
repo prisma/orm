@@ -19,7 +19,9 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           conflicts: undefined,
-          rowsWithoutValue: [{ field: 'Item.note', reason: 'nullValues', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false },
+          ],
           databaseStorageHash: DATABASE,
         },
         FROM_PROJECT,
@@ -36,17 +38,17 @@ describe('the advice for rows a required field has no value for', () => {
           ...runnerFailed,
           conflicts: undefined,
           rowsWithoutValue: [
-            { field: 'My Model.code', reason: 'newField', rows: 3 },
-            { field: 'My Model.role', reason: 'newField', rows: 3 },
-            { field: 'My Model.code', reason: 'newField', rows: 3 },
-            { field: undefined, reason: 'nullValues', rows: 3 },
+            { field: 'My Model.code', reason: 'newField', rows: 3, discriminator: false },
+            { field: 'My Model.role', reason: 'newField', rows: 3, discriminator: false },
+            { field: 'My Model.code', reason: 'newField', rows: 3, discriminator: false },
+            { field: undefined, reason: 'nullValues', rows: 3, discriminator: false },
           ],
           databaseStorageHash: DATABASE,
         },
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill 'My Model.code' --backfill 'My Model.role'\`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\`. Or: Make the field optional in the contract source.`,
+      `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill 'My Model.code' --backfill 'My Model.role'\`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\`. Or: Make the fields optional in the contract source.`,
     );
   });
 
@@ -56,7 +58,9 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           conflicts: undefined,
-          rowsWithoutValue: [{ field: undefined, reason: 'nullValues', rows: 3 }],
+          rowsWithoutValue: [
+            { field: undefined, reason: 'nullValues', rows: 3, discriminator: false },
+          ],
         },
         FROM_PROJECT,
       ).fix,
@@ -64,7 +68,9 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           conflicts: undefined,
-          rowsWithoutValue: [{ field: undefined, reason: 'newField', rows: 3 }],
+          rowsWithoutValue: [
+            { field: undefined, reason: 'newField', rows: 3, discriminator: false },
+          ],
         },
         FROM_PROJECT,
       ).fix,
@@ -80,7 +86,9 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           conflicts: undefined,
-          rowsWithoutValue: [{ field: 'Item.code', reason: 'newField', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.code', reason: 'newField', rows: 3, discriminator: false },
+          ],
         },
         FROM_PROJECT,
       ).fix,
@@ -91,8 +99,8 @@ describe('the advice for rows a required field has no value for', () => {
 
   it('on db migrate, keeps the statements of the failed migration and adds a backfill for every field that needs one', () => {
     const rowsWithoutValue = [
-      { field: 'Item.role', reason: 'newField', rows: 3 },
-      { field: 'Item.code', reason: 'newField', rows: 3 },
+      { field: 'Item.role', reason: 'newField', rows: 3, discriminator: false },
+      { field: 'Item.code', reason: 'newField', rows: 3, discriminator: false },
     ] as const;
     const replan = `\`migrations/app/20261012T1200_note\` (copy any code you wrote in its migration.ts first), plan it again with \`{bin} migration plan --from ${FROM} --name note --backfill Item.role --backfill Item.code\`, adding any other statements you planned it with, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and run \`{bin} db migrate\``;
     expect([
@@ -101,7 +109,7 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           rowsWithoutValue: [
-            { field: 'Item.role', reason: 'nullValues', rows: 3 },
+            { field: 'Item.role', reason: 'nullValues', rows: 3, discriminator: false },
             rowsWithoutValue[1],
           ],
           failedMigration,
@@ -109,7 +117,7 @@ describe('the advice for rows a required field has no value for', () => {
         FROM_PROJECT,
       ).fix,
     ]).toEqual([
-      `To keep the field required, delete ${replan}. Or: Make the field optional in the contract source, and plan it again.`,
+      `To keep the fields required, delete ${replan}. Or: Make the fields optional in the contract source, and plan it again.`,
       `The migration also adds a required field the existing rows have no value for, so setting values is not enough. Delete ${replan}.`,
     ]);
     expect(
@@ -117,8 +125,8 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           rowsWithoutValue: [
-            { field: 'Item.note', reason: 'nullValues', rows: 3 },
-            { field: 'Item.nick', reason: 'nullValues', rows: 3 },
+            { field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false },
+            { field: 'Item.nick', reason: 'nullValues', rows: 3, discriminator: false },
           ],
         },
         FROM_PROJECT,
@@ -133,7 +141,9 @@ describe('the advice for rows a required field has no value for', () => {
       migrateError(
         {
           ...runnerFailed,
-          rowsWithoutValue: [{ field: 'Item.note', reason: 'nullValues', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false },
+          ],
           failedMigration,
         },
         FROM_PROJECT,
@@ -147,7 +157,9 @@ describe('the advice for rows a required field has no value for', () => {
     const error = migrateError(
       {
         ...runnerFailed,
-        rowsWithoutValue: [{ field: 'Item.note', reason: 'nullValues', rows: 3 }],
+        rowsWithoutValue: [
+          { field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false },
+        ],
         failedMigration,
       },
       FROM_PROJECT,
@@ -165,11 +177,11 @@ describe('the advice for rows a required field has no value for', () => {
   it('never says a migration is planned again with "its other statements", which the CLI does not store', () => {
     const fixes = (
       [
-        [{ field: 'Item.note', reason: 'nullValues', rows: 3 }],
-        [{ field: 'Item.code', reason: 'newField', rows: 3 }],
+        [{ field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false }],
+        [{ field: 'Item.code', reason: 'newField', rows: 3, discriminator: false }],
         [
-          { field: 'Item.note', reason: 'nullValues', rows: 3 },
-          { field: 'Item.code', reason: 'newField', rows: 3 },
+          { field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false },
+          { field: 'Item.code', reason: 'newField', rows: 3, discriminator: false },
         ],
       ] as const
     ).map(
@@ -184,7 +196,9 @@ describe('the advice for rows a required field has no value for', () => {
       migrateError(
         {
           ...runnerFailed,
-          rowsWithoutValue: [{ field: 'Item.note', reason: 'nullValues', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false },
+          ],
           failedMigration,
         },
         { cwd: '/work', configPath: 'app/prisma.config.ts', dbGiven: false },
@@ -201,7 +215,9 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           conflicts: undefined,
-          rowsWithoutValue: [{ field: 'Item.note', reason: 'newField', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.note', reason: 'newField', rows: 3, discriminator: false },
+          ],
         },
         withConfig,
       ).fix,
@@ -209,7 +225,9 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           conflicts: undefined,
-          rowsWithoutValue: [{ field: 'Item.note', reason: 'nullValues', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false },
+          ],
         },
         withConfig,
       ).fix,
@@ -224,7 +242,9 @@ describe('the advice for rows a required field has no value for', () => {
       migrateError(
         {
           ...runnerFailed,
-          rowsWithoutValue: [{ field: 'Item.note', reason: 'backfillMissedRows', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.note', reason: 'backfillMissedRows', rows: 3, discriminator: false },
+          ],
           ...(failed === undefined ? {} : { failedMigration: failed }),
         },
         { cwd: '/work', configPath: 'app/prisma.config.ts', dbGiven: false },
@@ -241,7 +261,9 @@ describe('the advice for rows a required field has no value for', () => {
       migrateError(
         {
           ...runnerFailed,
-          rowsWithoutValue: [{ field: 'Item.note', reason: 'backfillMissedRows', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.note', reason: 'backfillMissedRows', rows: 3, discriminator: false },
+          ],
         },
         withDb,
       ).fix,
@@ -250,15 +272,70 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           conflicts: undefined,
-          rowsWithoutValue: [{ field: 'Item.note', reason: 'newField', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.note', reason: 'newField', rows: 3, discriminator: false },
+          ],
         },
         withDb,
       ).fix,
     ]).toEqual([
       'The backfill step of field "Item.note" left those rows without a value. Make its run fill every row in the migration.ts of the failed migration, run that file with node, and re-run `{bin} db migrate --config app/prisma.config.ts --db <url>`.',
-      'Fix the issue and re-run `{bin} db migrate --to <contract> --config app/prisma.config.ts --db <url>`.',
+      'Resolve the cause the failure names, then re-run `{bin} db migrate --config app/prisma.config.ts --db <url>`.',
       'Plan it with `{bin} migration plan --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate --config app/prisma.config.ts --db <url>`. Or: Make the field optional in the contract source.',
     ]);
+  });
+
+  it('offers no optional field for a discriminator, which the contract cannot make optional, on db update and db migrate', () => {
+    const rowsWithoutValue = [
+      { field: 'Task.type', reason: 'newField', rows: 3, discriminator: true },
+    ] as const;
+    expect([
+      dbUpdateError(
+        { ...runnerFailed, conflicts: undefined, rowsWithoutValue, databaseStorageHash: DATABASE },
+        FROM_PROJECT,
+      ).nextActions?.map(({ label }) => label),
+      migrateError({ ...runnerFailed, rowsWithoutValue, failedMigration }, FROM_PROJECT).nextActions
+        ?.length,
+    ]).toEqual([
+      [
+        `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill Task.type\`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\``,
+      ],
+      1,
+    ]);
+  });
+
+  it('names only the fields that are not discriminators when it offers to make fields optional', () => {
+    const rowsWithoutValue = [
+      { field: 'Task.type', reason: 'newField', rows: 3, discriminator: true },
+      { field: 'Task.dueAt', reason: 'newField', rows: 3, discriminator: false },
+    ] as const;
+    const replan = `\`migrations/app/20261012T1200_note\` (copy any code you wrote in its migration.ts first), plan it again with \`{bin} migration plan --from ${FROM} --name note --backfill Task.type --backfill Task.dueAt\`, adding any other statements you planned it with, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and run \`{bin} db migrate\``;
+    expect([
+      dbUpdateError(
+        { ...runnerFailed, conflicts: undefined, rowsWithoutValue, databaseStorageHash: DATABASE },
+        FROM_PROJECT,
+      ).fix,
+      migrateError({ ...runnerFailed, rowsWithoutValue, failedMigration }, FROM_PROJECT).fix,
+      migrateError({ ...runnerFailed, rowsWithoutValue }, FROM_PROJECT).fix,
+    ]).toEqual([
+      `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill Task.type --backfill Task.dueAt\`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\`. Or: Make field "Task.dueAt" optional in the contract source.`,
+      `To keep the fields required, delete ${replan}. Or: Make field "Task.dueAt" optional in the contract source, and plan it again.`,
+      'Make field "Task.dueAt" optional in the contract source, and plan the migration again.',
+    ]);
+  });
+
+  it('on db migrate with no failed migration found, offers no optional field when the only field is a discriminator', () => {
+    expect(
+      migrateError(
+        {
+          ...runnerFailed,
+          rowsWithoutValue: [
+            { field: 'Task.type', reason: 'newField', rows: 3, discriminator: true },
+          ],
+        },
+        FROM_PROJECT,
+      ).fix,
+    ).toBe('Resolve the cause the failure names, then re-run `{bin} db migrate`.');
   });
 
   it('never mentions schema drift', () => {
@@ -267,7 +344,9 @@ describe('the advice for rows a required field has no value for', () => {
         {
           ...runnerFailed,
           conflicts: undefined,
-          rowsWithoutValue: [{ field: 'Item.note', reason: 'nullValues', rows: 3 }],
+          rowsWithoutValue: [
+            { field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false },
+          ],
         },
         FROM_PROJECT,
       ).fix,
@@ -277,7 +356,9 @@ describe('the advice for rows a required field has no value for', () => {
   it('wins over the precheck advice when the failed precheck is the one that found the rows, on every command', () => {
     const rows = {
       ...runnerFailed,
-      rowsWithoutValue: [{ field: 'Item.note', reason: 'nullValues', rows: 3 }],
+      rowsWithoutValue: [
+        { field: 'Item.note', reason: 'nullValues', rows: 3, discriminator: false },
+      ],
       databaseStorageHash: DATABASE,
       failedMigration,
     } as const;
@@ -299,7 +380,9 @@ describe('the advice for rows a required field has no value for', () => {
   });
 
   it('says "that row" when one row has no value', () => {
-    const rowsWithoutValue = [{ field: 'Item.note', reason: 'nullValues', rows: 1 }] as const;
+    const rowsWithoutValue = [
+      { field: 'Item.note', reason: 'nullValues', rows: 1, discriminator: false },
+    ] as const;
     expect([
       dbUpdateError({ ...runnerFailed, conflicts: undefined, rowsWithoutValue }, FROM_PROJECT)
         .nextActions?.[0]?.label,

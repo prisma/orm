@@ -5,7 +5,7 @@ import {
   collectMutationDefaultGenerators,
   type MutationDefaults,
 } from '@internal/framework-components/runtime';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type { MongoQueryExecutor, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import {
   MongoAggFieldRef,
   MongoAggOperator,
@@ -15,7 +15,6 @@ import {
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { createMongoCollection } from '../src/collection';
-import type { MongoQueryExecutor } from '../src/executor';
 import { collectionContext } from './collection-context';
 import type { Contract } from './fixtures/stored-names-contract';
 import storedNamesContractJson from './fixtures/stored-names-contract.json';

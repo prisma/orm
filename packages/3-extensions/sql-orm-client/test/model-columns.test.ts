@@ -15,7 +15,7 @@ import {
   getColumnsReadOnTable,
   getModelFieldColumns,
 } from '../src/collection-contract';
-import { compileInsertReturning, compileUpdateReturning } from '../src/query-plan-mutations';
+import { insertAst, returningProjection, updateAst } from '../src/mutation-statements';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { field, model, rel } from './contract-builder';
@@ -208,24 +208,17 @@ describe('a query with no select reads only the model columns', () => {
   });
 
   it('in RETURNING', () => {
-    const insert = compileInsertReturning(
+    const posts = tablesForTable(contract, 'posts');
+    const returning = returningProjection(contract, 'Post', posts.root, undefined);
+    const insert = insertAst(
       contract,
-      'public',
-      'Post',
-      'posts',
+      posts.root,
       [{ id: 1, title: 'A', user_id: 1 }],
       undefined,
-    );
-    const update = compileUpdateReturning(
-      contract,
-      'Post',
-      tablesForTable(contract, 'posts'),
-      { title: 'B' },
-      [],
-      undefined,
-    );
-    for (const plan of [insert, update]) {
-      expect(returningOf(plan.ast)).toEqual(['id', 'title', 'user_id']);
+    ).withReturning(returning);
+    const update = updateAst(contract, posts, { title: 'B' }, undefined).withReturning(returning);
+    for (const ast of [insert, update]) {
+      expect(returningOf(ast)).toEqual(['id', 'title', 'user_id']);
     }
   });
 });

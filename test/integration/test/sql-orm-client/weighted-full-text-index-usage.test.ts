@@ -18,6 +18,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { Contract } from '../sql-builder/fixtures/generated/contract';
 import { type PlannedIndex, plannedExpressionIndexes } from '../sql-builder/full-text-index-ddl';
 import { setupIntegrationTest, timeouts } from '../sql-builder/setup';
+import { contextFor, type IncludeStrategy, includeStrategies } from './helpers';
 import { withPlanRecording } from './runtime-helpers';
 
 const QUERY = 'zebra';
@@ -43,7 +44,7 @@ class DocumentCollection extends Collection<Contract, 'Document'> {
 describe('ORM search over a weighted full-text index', {
   timeout: timeouts.databaseOperation,
 }, () => {
-  const { runtime, client, contract, context, lower } = setupIntegrationTest();
+  const { runtime, client, contract, lower } = setupIntegrationTest();
 
   let searchIndex: PlannedIndex;
 
@@ -66,7 +67,7 @@ describe('ORM search over a weighted full-text index', {
     await client().query('SET enable_seqscan = off');
   }, timeouts.spinUpPpgDev);
 
-  function ormClient() {
+  function ormClient(strategy: IncludeStrategy = 'join') {
     const captured: SqlQueryPlan<unknown>[] = [];
     const real = runtime();
     const recording = withPlanRecording(real, (plan) => {
@@ -74,7 +75,7 @@ describe('ORM search over a weighted full-text index', {
     });
     const db = orm({
       runtime: recording,
-      context: context(),
+      context: contextFor(contract(), strategy),
       collections: { Document: DocumentCollection },
     }).public;
     return { db, captured };
@@ -160,34 +161,37 @@ describe('ORM search over a weighted full-text index', {
     expect(await explainedIndexes(captured[1])).toContain(searchIndex.name);
   });
 
-  it('searches a related table under its alias, in a relation filter and an include', async () => {
-    const { db, captured } = ormClient();
-    const q = websearchToTsquery(QUERY);
+  it.each(includeStrategies)(
+    'searches a related table under its alias, in a relation filter and an include (%s)',
+    async (strategy) => {
+      const { db, captured } = ormClient(strategy);
+      const q = websearchToTsquery(QUERY);
 
-    const rows = await db.Document.select('id')
-      .where((d) =>
-        d.children.some((_child, { fns, indexes }) =>
-          fns.fullTextMatches(indexes.documents_search, q),
-        ),
-      )
-      .include('children', (children) =>
-        children
-          .select('id')
-          .where((_child, { fns, indexes }) => fns.fullTextMatches(indexes.documents_search, q)),
-      )
-      .orderBy((d) => d.id.asc())
-      .all();
+      const rows = await db.Document.select('id')
+        .where((d) =>
+          d.children.some((_child, { fns, indexes }) =>
+            fns.fullTextMatches(indexes.documents_search, q),
+          ),
+        )
+        .include('children', (children) =>
+          children
+            .select('id')
+            .where((_child, { fns, indexes }) => fns.fullTextMatches(indexes.documents_search, q)),
+        )
+        .orderBy((d) => d.id.asc())
+        .all();
 
-    expect(rows).toEqual([
-      { id: 56, children: [{ id: 356 }] },
-      { id: 88, children: [{ id: 388 }] },
-      { id: 145, children: [{ id: 445 }] },
-      { id: 185, children: [{ id: 485 }] },
-      { id: 234, children: [{ id: 534 }] },
-      { id: 282, children: [{ id: 582 }] },
-    ]);
-    expect(await explainedIndexes(captured[0])).toContain(searchIndex.name);
-  });
+      expect(rows).toEqual([
+        { id: 56, children: [{ id: 356 }] },
+        { id: 88, children: [{ id: 388 }] },
+        { id: 145, children: [{ id: 445 }] },
+        { id: 185, children: [{ id: 485 }] },
+        { id: 234, children: [{ id: 534 }] },
+        { id: 282, children: [{ id: 582 }] },
+      ]);
+      expect(await explainedIndexes(captured.at(-1))).toContain(searchIndex.name);
+    },
+  );
 
   it('does not use the index for a search that restates the fields in one group', async () => {
     const { db, captured } = ormClient();

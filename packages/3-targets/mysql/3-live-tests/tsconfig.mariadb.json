@@ -1,0 +1,15 @@
+{
+  "extends": ["@repo/tsconfig/base"],
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "paths": { "#live-types": ["./test/types/mariadb.ts"] }
+  },
+  "include": ["test/**/*.ts"],
+  "exclude": [
+    "dist",
+    "test/mysql/**",
+    "test/rendered-statements.test.ts",
+    "test/recording-driver.ts"
+  ]
+}

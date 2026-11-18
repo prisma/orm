@@ -35,7 +35,7 @@ The reasoning behind each decision in [`spec.md`](./spec.md), the facts it rests
 
 ## 3. MariaDB is a separate target that extends MySQL
 
-**Decision.** A `mariadb` target that subclasses the MySQL target, adapter and facade and overrides what differs. Built after MySQL. Will asked for the research to be done and the decision made; these are its findings.
+**Decision.** A `mariadb` target that subclasses the MySQL target, adapter and facade and overrides what differs. Built after MySQL. MySQL and MariaDB share `packages/3-targets/mysql/`, in `1-mysql/` and `2-mariadb/`. A package imports only from lower-numbered folders. Numbers compare only between folders in the same parent. Will asked for the research to be done and the decision made; these are its findings.
 
 **Why.** Several differences are not capabilities. They change data types, introspection or the shape of SQL, which the target owns:
 

@@ -127,7 +127,7 @@ describe('TS and PSL authoring parity with real packs', () => {
         extensions: { pgvector: pgvectorPack },
       },
       ({ type, field, model }) => {
-        const ShortName = field.column(type.sql.String(35));
+        const ShortName = field.column(type.sql.Varchar(35));
         const Embedding1536 = field.column(type.pgvector.Vector(1536));
 
         return {
@@ -147,7 +147,7 @@ describe('TS and PSL authoring parity with real packs', () => {
     );
 
     const interpreted = interpretWithRealPacks(`types {
-  ShortName = sql.String(length: 35)
+  ShortName = sql.Varchar(length: 35)
   Embedding1536 = pgvector.Vector(1536)
 }
 
@@ -215,7 +215,7 @@ model Post {
           Document: model('Document', {
             fields: {
               id: field.column(int4Column).id({ name: 'document_pkey' }),
-              shortName: field.column(type.sql.String(35)).unique({
+              shortName: field.column(type.sql.Varchar(35)).unique({
                 name: 'document_short_name_key',
               }),
               embedding: field.column(type.pgvector.Vector(1536)).optional(),
@@ -229,7 +229,7 @@ model Post {
 
     const interpreted = interpretWithRealPacks(`model Document {
   id Int @id(map: "document_pkey")
-  shortName sql.String(length: 35) @unique(map: "document_short_name_key")
+  shortName sql.Varchar(length: 35) @unique(map: "document_short_name_key")
   embedding pgvector.Vector(length: 1536)?
 }
 `);

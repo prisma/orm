@@ -847,11 +847,11 @@ describe('SQL contract validators', () => {
 
     it('rejects an N:M relation whose through.parentColumns and on.localFields differ in length', () => {
       const c = manyToManyContract({
-        on: { localFields: [], targetFields: ['user_id'] },
-        through: consistentThrough,
+        on: { localFields: ['id'], targetFields: ['user_id'] },
+        through: { ...consistentThrough, parentColumns: ['user_id', 'user_id'] },
       });
       expect(() => validateSqlContractFully(c)).toThrow(
-        /through\.parentColumns \(1\) with on\.localFields \(0\) of differing length/,
+        /through\.parentColumns \(2\) with on\.localFields \(1\) of differing length/,
       );
     });
 
@@ -1262,6 +1262,38 @@ describe('SQL contract validators', () => {
           postgres: {
             id: 'postgres',
             version: '0.0.1',
+          },
+        },
+      });
+      expect(() => validateSqlContractFully(c)).not.toThrow();
+    });
+
+    it('accepts an extension record that still names the modules its types are imported from', () => {
+      const c = createContract<SqlStorage>({
+        storage: unboundTables({ user: table({ id: col('pg/int4', 'pg/int4@1') }) }),
+        extensions: {
+          pgvector: {
+            kind: 'extension',
+            id: 'pgvector',
+            familyId: 'sql',
+            targetId: 'postgres',
+            version: '0.0.1',
+            types: {
+              codecTypes: {
+                import: {
+                  package: '@prisma/orm-extension-pgvector/codec-types',
+                  named: 'CodecTypes',
+                  alias: 'PgVectorTypes',
+                },
+              },
+              queryOperationTypes: {
+                import: {
+                  package: '@prisma/orm-extension-pgvector/operation-types',
+                  named: 'QueryOperationTypes',
+                  alias: 'PgVectorQueryOperationTypes',
+                },
+              },
+            },
           },
         },
       });

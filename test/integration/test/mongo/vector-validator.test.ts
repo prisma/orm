@@ -4,11 +4,11 @@ import { timeouts } from '@repo/test-utils';
 import { expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-const contract = defineContract({}, ({ field, model }) => ({
+const contract = defineContract({}, ({ field, model, type }) => ({
   models: {
     Item: model('Item', {
       collection: 'items',
-      fields: { _id: field.objectId(), embedding: field.vector() },
+      fields: { _id: field.scalar(type.ObjectId()), embedding: field.scalar(type.Vector()) },
     }),
   },
 }));

@@ -4,7 +4,7 @@
  * - Every `*Call` class constructs with literal args, is frozen, computes its
  *   label + operationClass, lowers to the matching runtime op via `toOp()`,
  *   and emits the expected TypeScript expression + import requirements.
- * - Import requirements always reference `@internal/target-mongo/migration`
+ * - Import requirements always reference `MIGRATION_MODULE`
  *   and the factory's own symbol — a regression guard against accidentally
  *   widening the import surface.
  * - Optional-args variants (`CreateIndexCall` with/without options,
@@ -28,6 +28,7 @@ import {
   CreateIndexCall,
   DropCollectionCall,
   DropIndexCall,
+  MIGRATION_MODULE,
   RenameCollectionCall,
 } from '../src/core/migrations/op-factory-call';
 
@@ -125,6 +126,25 @@ describe('Mongo call classes', () => {
       );
     });
 
+    it('CollModCall carries checkDocuments into the operation and the rendered call', () => {
+      const meta = {
+        id: 'validator.users.update',
+        label: 'Update validator on users',
+        operationClass: 'widening',
+        checkDocuments: true,
+      } as const;
+      const call = new CollModCall(
+        'users',
+        { validator: { $jsonSchema: { type: 'object' } } },
+        meta,
+      );
+
+      expect(call.toOp()).toEqual(
+        collMod('users', { validator: { $jsonSchema: { type: 'object' } } }, meta),
+      );
+      expect(call.renderTypeScript()).toContain('checkDocuments: true');
+    });
+
     it('CollModCall honors caller-supplied meta.label and meta.operationClass and passes meta through toOp', () => {
       const call = new CollModCall(
         'users',
@@ -158,7 +178,7 @@ describe('Mongo call classes', () => {
         'createIndex("users", [{ field: "email", direction: 1 }], { name: "email_1", unique: true })',
       );
       expect(call.importRequirements()).toEqual([
-        { moduleSpecifier: '@internal/target-mongo/migration', symbol: 'createIndex' },
+        { moduleSpecifier: MIGRATION_MODULE, symbol: 'createIndex' },
       ]);
     });
 
@@ -182,7 +202,7 @@ describe('Mongo call classes', () => {
         'dropIndex("users", [{ field: "legacy", direction: 1 }], { name: "User_legacy_key", unique: true })',
       );
       expect(call.importRequirements()).toEqual([
-        { moduleSpecifier: '@internal/target-mongo/migration', symbol: 'dropIndex' },
+        { moduleSpecifier: MIGRATION_MODULE, symbol: 'dropIndex' },
       ]);
     });
 
@@ -191,7 +211,7 @@ describe('Mongo call classes', () => {
 
       expect(call.renderTypeScript()).toBe('createCollection("users")');
       expect(call.importRequirements()).toEqual([
-        { moduleSpecifier: '@internal/target-mongo/migration', symbol: 'createCollection' },
+        { moduleSpecifier: MIGRATION_MODULE, symbol: 'createCollection' },
       ]);
     });
 
@@ -208,7 +228,7 @@ describe('Mongo call classes', () => {
 
       expect(call.renderTypeScript()).toBe('dropCollection("users")');
       expect(call.importRequirements()).toEqual([
-        { moduleSpecifier: '@internal/target-mongo/migration', symbol: 'dropCollection' },
+        { moduleSpecifier: MIGRATION_MODULE, symbol: 'dropCollection' },
       ]);
     });
 
@@ -217,7 +237,7 @@ describe('Mongo call classes', () => {
 
       expect(call.renderTypeScript()).toBe('renameCollection("profiles", "users")');
       expect(call.importRequirements()).toEqual([
-        { moduleSpecifier: '@internal/target-mongo/migration', symbol: 'renameCollection' },
+        { moduleSpecifier: MIGRATION_MODULE, symbol: 'renameCollection' },
       ]);
     });
 
@@ -228,7 +248,7 @@ describe('Mongo call classes', () => {
         'collMod("users", { validator: { $jsonSchema: { type: "object" } } })',
       );
       expect(call.importRequirements()).toEqual([
-        { moduleSpecifier: '@internal/target-mongo/migration', symbol: 'collMod' },
+        { moduleSpecifier: MIGRATION_MODULE, symbol: 'collMod' },
       ]);
     });
 

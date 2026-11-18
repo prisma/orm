@@ -2,6 +2,8 @@
 
 > **Partially superseded by the S5 CLI cutover (2026-08).** The `prisma-next` bin distribution described below is retired: the bin-only shim package is deleted, the facades declare no launcher bins, and `@prisma/orm-toolchain` publishes the `orm` command family (`@prisma/orm-toolchain/cli`) with no bin. The user-facing command is the unified `prisma` binary of `@prisma/cli` (the prisma-cli repository), which mounts the family. The package split and facade structure below stand.
 
+> **Partially superseded by [ADR 323](ADR%20323%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md) (2026-11).** The emitter no longer picks an import root by reading the application's manifest, and a decomposed install is no longer read from it. The config names the modules generated files import from, and the target package (the facade) puts them there. The statement under "Who each package is for" that "nothing configures this", and the sentence under "Decomposing a facade" that "the emitter reads that from the manifest", describe the earlier mechanism. The rule that generated code imports only from packages the application depends on directly stands.
+
 ## Decision
 
 An application that uses Prisma Next against Postgres installs **one** package:
@@ -25,17 +27,16 @@ That facade pulls in everything else — the framework, the SQL family, the Post
 └── @prisma/orm-toolchain       CLI (bin), emitter, config-loader, LSP
 ```
 
-Every published package lives under the single `@prisma` scope, apart from the unscoped bin shim. The full public surface is **17 packages** — 3 database facades, 6 extension packs, 7 platform packages, the bin shim, and nothing else. Every other workspace package is `"private": true`: it exists for code organization and layering guardrails, and reaches npm only as a subpath entrypoint of a published package (for example, the SQL runtime is importable as `@prisma/orm-family-sql/runtime`).
+Every published package lives under the single `@prisma` scope. Every other workspace package is `"private": true`: it exists for code organization and layering guardrails, and reaches npm only as a subpath entrypoint of a published package (for example, the SQL runtime is importable as `@prisma/orm-family-sql/runtime`).
 
 | Published package | Role |
 |---|---|
-| `prisma-next` | bin-only shim carrying the `prisma-next` command (ADR 211 mechanics) |
-| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mongo` | database facades — an app installs exactly one |
-| `@prisma/orm-extension-postgis`, `-pgvector`, `-paradedb`, `-supabase`, `-arktype-json`, `-middleware-cache` | optional capability packs, additive installs |
+| `@prisma/orm-postgres`, `orm-sqlite`, `orm-mysql`, `orm-mariadb`, `orm-mongo` | database facades — an app installs exactly one |
+| `@prisma/orm-extension-postgis`, `-pgvector`, `-paradedb`, `-supabase`, `-arktype-json`, `-middleware-cache`, `@prisma/orm-postgres-contrib` | optional capability packs, additive installs |
 | `@prisma/orm-framework` | target-agnostic runtime: contract, components, authoring surface |
 | `@prisma/orm-toolchain` | dev/build tooling: CLI (carries the bin), emitter, config-loader, language server, telemetry, vite plugin |
 | `@prisma/orm-family-sql`, `@prisma/orm-family-mongo` | family domains |
-| `@prisma/orm-target-postgres`, `orm-target-sqlite`, `orm-target-mongo` | concrete targets, each exposing `/target`, `/adapter`, `/driver` entrypoints |
+| `@prisma/orm-target-postgres`, `orm-target-sqlite`, `orm-target-mysql`, `orm-target-mariadb`, `orm-target-mongo` | concrete targets, each exposing `/target`, `/adapter`, `/driver` entrypoints; `orm-target-mariadb` publishes only MariaDB's own packages and depends on `orm-target-mysql` for the MySQL packages it extends |
 
 ## What an application depends on
 
@@ -163,7 +164,7 @@ packages/9-public/
 
 ## Consequences
 
-- The npm registry carries 17 Prisma Next packages, each with a stated audience; internals are structurally absent rather than "present but discouraged".
+- Every Prisma Next package on the npm registry has a stated audience; internals are structurally absent rather than "present but discouraged".
 - Generated code and documentation reference only published names; the private workspace names cannot leak because they do not resolve outside the repo. Those names are `@internal/*`, with `@repo/*` for the repository's own tooling — two scopes that cannot be mistaken for a published `@prisma/*` name, which the single old scope could not offer once it stopped matching what shipped.
 - Extension packs peer-depend on target packages (e.g. `@prisma/orm-target-postgres`), which are always installed — directly or via a facade — so peer resolution is satisfied in both the facade and decomposed configurations.
 - Publishing remains a lockstep, whole-train operation; the release process is unchanged apart from the package list.

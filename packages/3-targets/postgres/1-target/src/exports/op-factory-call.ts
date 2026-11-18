@@ -30,6 +30,7 @@ export {
   DropTableCall,
   EnableRowLevelSecurityCall,
   FillStoredKeyCall,
+  MIGRATION_MODULE,
   RawSqlCall,
   RemoveStoredKeyCall,
   RemoveStoredValueCall,

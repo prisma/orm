@@ -242,9 +242,9 @@ describe('every detection in the MongoDB required-extensions notes', () => {
     `{"targetFamily": "mongo", ${'"x": 1, '.repeat(120_000)}}`,
   ];
   const patterns = [APP_NOTE, EXTENSION_NOTE].flatMap((note) =>
-    guideChanges(note).flatMap((change) =>
-      patternsOf(change).map((pattern) => ({ id: change.id, pattern })),
-    ),
+    guideChanges(note)
+      .filter((change) => change.detection?.matches !== undefined)
+      .flatMap((change) => patternsOf(change).map((pattern) => ({ id: change.id, pattern }))),
   );
 
   it.each(adversarial.map((input, index) => ({ index, input })))(

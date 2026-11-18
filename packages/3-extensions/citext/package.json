@@ -1,7 +1,7 @@
 {
   "name": "@internal/extension-citext",
   "private": true,
-  "version": "8.0.0-rc.23",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,26 +16,26 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.23",
-    "@internal/family-sql": "workspace:8.0.0-rc.23",
-    "@internal/framework-components": "workspace:8.0.0-rc.23",
-    "@internal/migration-tools": "workspace:8.0.0-rc.23",
-    "@internal/sql-contract": "workspace:8.0.0-rc.23",
-    "@internal/sql-relational-core": "workspace:8.0.0-rc.23",
-    "@internal/sql-runtime": "workspace:8.0.0-rc.23",
-    "@internal/target-postgres": "workspace:8.0.0-rc.23"
+    "@internal/contract": "workspace:8.0.0-rc.24",
+    "@internal/family-sql": "workspace:8.0.0-rc.24",
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/migration-tools": "workspace:8.0.0-rc.24",
+    "@internal/sql-contract": "workspace:8.0.0-rc.24",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.24",
+    "@internal/sql-runtime": "workspace:8.0.0-rc.24",
+    "@internal/target-postgres": "workspace:8.0.0-rc.24"
   },
   "devDependencies": {
-    "@internal/adapter-postgres": "workspace:8.0.0-rc.23",
-    "@internal/cli": "workspace:8.0.0-rc.23",
-    "@internal/driver-postgres": "workspace:8.0.0-rc.23",
-    "@internal/postgres": "workspace:8.0.0-rc.23",
-    "@internal/postgres-codec-testkit": "workspace:8.0.0-rc.23",
-    "@internal/sql-contract-ts": "workspace:8.0.0-rc.23",
-    "@prisma/cli-engine": "0.9.0",
-    "@repo/test-utils": "workspace:8.0.0-rc.23",
-    "@repo/tsconfig": "workspace:8.0.0-rc.23",
-    "@repo/tsdown": "workspace:8.0.0-rc.23",
+    "@internal/adapter-postgres": "workspace:8.0.0-rc.24",
+    "@internal/cli": "workspace:8.0.0-rc.24",
+    "@internal/driver-postgres": "workspace:8.0.0-rc.24",
+    "@internal/postgres": "workspace:8.0.0-rc.24",
+    "@internal/postgres-codec-testkit": "workspace:8.0.0-rc.24",
+    "@internal/sql-contract-ts": "workspace:8.0.0-rc.24",
+    "@prisma/cli-engine": "0.10.0",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -59,6 +59,9 @@
     "./pack": "./dist/pack.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
+  },
+  "imports": {
+    "#contract-types": "./src/contract-types.ts"
   },
   "engines": {
     "node": ">=24"

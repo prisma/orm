@@ -1,8 +1,10 @@
 import type { MutationDefaults } from '@internal/framework-components/runtime';
 import type { MongoContract } from '@internal/mongo-contract';
-import type { MongoExecutionContext } from '@internal/mongo-query-ast/execution';
+import type {
+  MongoExecutionContext,
+  MongoQueryExecutor,
+} from '@internal/mongo-query-ast/execution';
 import type { MongoCollectionContext } from '../src/collection';
-import type { MongoQueryExecutor } from '../src/executor';
 
 const noCodecs = { get: () => undefined, has: () => false };
 const noMutationDefaults: MutationDefaults = { applyMutationDefaults: () => [] };

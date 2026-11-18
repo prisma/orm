@@ -27,13 +27,17 @@ import {
 } from './binding';
 import { mongoError } from './mongo-errors';
 import type { MongoTargetId } from './mongo-target-id';
+import { type MongoPrepareMember, prepareMongoQuery } from './prepared-row-query';
 
 type UnboundEnums<TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>> =
   MongoStaticContext<TContract>['enums'];
 
+/**
+ * A MongoDB client. `prepare` opens no connection, so a client with no binding can prepare; run the handle against `await db.runtime()`. Declarations are checked against the contract's codec types.
+ */
 export interface MongoClient<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
-> {
+> extends MongoPrepareMember<TContract> {
   readonly orm: MongoOrmClient<TContract>;
   readonly query: MongoStaticContext<TContract>['query'];
   readonly raw: MongoRawClient<TContract>;
@@ -214,6 +218,13 @@ export default function mongo<
 
     runtime(): Promise<MongoRuntime> {
       return getRuntime();
+    },
+
+    async prepare(declaration, callback) {
+      if (closed) {
+        throw closedError();
+      }
+      return prepareMongoQuery(createRuntime().runtime, declaration, callback);
     },
 
     async close(): Promise<void> {

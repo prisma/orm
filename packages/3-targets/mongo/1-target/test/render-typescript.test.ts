@@ -1,4 +1,5 @@
 import type { CollModOptions } from '@internal/mongo-query-ast/control';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
   CollModCall,
@@ -15,6 +16,7 @@ const META = {
   from: FROM_HEX,
   to: TO_HEX,
   snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+  migrationModule: workspaceMigrationModule.mongo,
 } as const;
 
 const renderTypeScript = (
@@ -34,7 +36,7 @@ describe('renderCallsToTypeScript', () => {
     const output = renderTypeScript(calls);
 
     expect(output).toContain(
-      "import { Migration, MigrationCLI, createIndex } from '@internal/target-mongo/migration';",
+      "import { Migration, MigrationCLI, createIndex } from '@internal/mongo/migration';",
     );
     expect(output).toContain('override get operations()');
     expect(output).toContain('export default M;');
@@ -83,6 +85,7 @@ describe('renderCallsToTypeScript', () => {
       from: META.to,
       to: META.to,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.mongo,
     });
 
     expect(output).toContain(
@@ -202,9 +205,7 @@ describe('renderCallsToTypeScript', () => {
 
     expect(output).toContain('createCollection');
     expect(output).toContain('createIndex');
-    const importLine = output
-      .split('\n')
-      .find((l) => l.includes('@internal/target-mongo/migration'));
+    const importLine = output.split('\n').find((l) => l.includes('@internal/mongo/migration'));
     expect(importLine).toContain('createCollection');
     expect(importLine).toContain('createIndex');
   });
@@ -216,6 +217,7 @@ describe('renderCallsToTypeScript', () => {
       from: null,
       to: META.to,
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: workspaceMigrationModule.mongo,
     });
 
     expect(output).toContain('class M extends Migration<never, End> {');
@@ -236,7 +238,7 @@ describe('renderCallsToTypeScript', () => {
     const output = renderTypeScript([]);
 
     expect(output).toContain(
-      "import { Migration, MigrationCLI } from '@internal/target-mongo/migration';",
+      "import { Migration, MigrationCLI } from '@internal/mongo/migration';",
     );
     expect(output).toContain('return [');
     expect(output).toContain('];');

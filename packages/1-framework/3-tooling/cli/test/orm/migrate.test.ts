@@ -38,6 +38,7 @@ const mocks = {
   close: vi.fn(),
 };
 const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /** The command tree mounted over a control-client double instead of the real client. */
 const commands = createBinCommands(
@@ -150,6 +151,7 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(cwd, 'contract.json'),
+      typesModule: '@acme/orm-db/contract-types',
     },
     migrations: { dir: 'migrations' },
     ...overrides,
@@ -238,13 +240,13 @@ describe('migrate', () => {
       });
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
         contract: expect.objectContaining({ storage: { storageHash: C2, namespaces: {} } }),
-        resolveImportSpecifier: expect.any(Function),
+        typesModule: '@acme/orm-db/contract-types',
       });
       expect(mocks.renderContractDts.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.migrate.mock.invocationCallOrder[0]!,
       );
       const storeDir = contractSnapshotDir(join(cwd, 'migrations'), C2);
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('refuses before applying when the contract types cannot be rendered', async () => {

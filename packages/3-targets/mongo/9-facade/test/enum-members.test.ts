@@ -1,7 +1,14 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { createMongoCollection, type MongoQueryExecutor, mongoOrm } from '@internal/mongo-orm';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { defineContract, enumType, field, member, model } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  field,
+  member,
+  model,
+  type,
+} from '../src/exports/contract-builder';
 import mongoStatic from '../src/static/mongo-static';
 
 const TextLevel = enumType(
@@ -29,7 +36,7 @@ const contract = defineContract({
     Reading: model('Reading', {
       collection: 'readings',
       fields: {
-        _id: field.objectId(),
+        _id: field.scalar(type.ObjectId()),
         text: field.namedType(TextLevel),
         int32: field.namedType(Int32Level),
         double: field.namedType(DoubleLevel),
@@ -37,7 +44,7 @@ const contract = defineContract({
     }),
     Note: model('Note', {
       collection: 'notes',
-      fields: { _id: field.objectId(), level: field.namedType(TextLevel) },
+      fields: { _id: field.scalar(type.ObjectId()), level: field.namedType(TextLevel) },
     }),
   },
 });

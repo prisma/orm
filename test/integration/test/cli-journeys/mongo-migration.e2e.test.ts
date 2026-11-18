@@ -25,6 +25,7 @@
  *     the live database.
  */
 
+import { execFileSync } from 'node:child_process';
 import {
   copyFileSync,
   mkdirSync,
@@ -149,6 +150,24 @@ function findMigrationDirBySlug(ctx: JourneyContext, slugFragment: string): stri
   return join(migrationsDir, match);
 }
 
+const SINGLE_LINE_DECLARATIONS_SCRIPT = `
+import { readFileSync } from 'node:fs';
+import { singleLineDeclarations } from '@prisma/orm-mongo/migration-tools/contract-snapshot-store';
+process.stdout.write(singleLineDeclarations(readFileSync(0, 'utf-8')));
+`;
+
+/**
+ * The store's single-line form of `text`, computed in a child process: loading the published package into this
+ * process beside the CLI's own copy makes the CLI refuse to run with `RUNTIME.MULTIPLE_ORM_COPIES`.
+ */
+function singleLineDeclarations(text: string): string {
+  return execFileSync(
+    process.execPath,
+    ['--input-type=module', '--eval', SINGLE_LINE_DECLARATIONS_SCRIPT],
+    { cwd: import.meta.dirname, input: text, encoding: 'utf-8' },
+  );
+}
+
 /** Path to a `migrations/snapshots/<hex>/contract.{json,d.ts}` store entry. */
 function contractSnapshotPath(
   ctx: JourneyContext,
@@ -193,9 +212,9 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
       readFileSync(join(migrationDir, 'migration.json'), 'utf-8'),
     ) as { to: string };
 
-    // The store canonicalizes JSON (compact, sorted keys), while the
-    // emitted project artifact is pretty-printed — compare parsed content,
-    // not bytes.
+    // The store canonicalizes JSON (compact, sorted keys) and writes the
+    // declarations on one line, while the emitted project artifacts are
+    // pretty-printed.
     expect(
       JSON.parse(
         readFileSync(contractSnapshotPath(ctx, draftManifest.to, 'contract.json'), 'utf-8'),
@@ -203,7 +222,7 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
     ).toEqual(JSON.parse(readFileSync(join(ctx.outputDir, 'contract.json'), 'utf-8')));
     expect(
       readFileSync(contractSnapshotPath(ctx, draftManifest.to, 'contract.d.ts'), 'utf-8'),
-    ).toBe(readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8'));
+    ).toBe(singleLineDeclarations(readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8')));
 
     // Plan leaves a draft migration; self-emit by running migration.ts in-process to
     // produce `ops.json` and the attested `migration.json`.
@@ -274,14 +293,14 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
       migrationHash: string;
     };
 
-    // The store canonicalizes JSON (compact, sorted keys), while the
-    // emitted project artifact is pretty-printed — compare parsed content,
-    // not bytes.
+    // The store canonicalizes JSON (compact, sorted keys) and writes the
+    // declarations on one line, while the emitted project artifacts are
+    // pretty-printed.
     expect(
       JSON.parse(readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.json'), 'utf-8')),
     ).toEqual(JSON.parse(readFileSync(join(ctx.outputDir, 'contract.json'), 'utf-8')));
     expect(readFileSync(contractSnapshotPath(ctx, manifest.to, 'contract.d.ts'), 'utf-8')).toBe(
-      readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8'),
+      singleLineDeclarations(readFileSync(join(ctx.outputDir, 'contract.d.ts'), 'utf-8')),
     );
 
     const ops = JSON.parse(readFileSync(join(migrationDir, 'ops.json'), 'utf-8'));
