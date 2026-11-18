@@ -27,8 +27,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - '(?<![\w$])(?:keepDataEdit|swapsValues)(?![\w$])'
-        - '\.keepData(?![\w$])'
+        - '(?<![\w$])(?:keepDataEdit|keepData|swapsValues)(?![\w$])'
 ---
 
 # A changed stored name is a rename in the SQL family's planning
