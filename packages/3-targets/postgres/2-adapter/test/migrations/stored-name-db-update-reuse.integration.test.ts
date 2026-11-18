@@ -80,7 +80,7 @@ describe('Postgres db update, an old name used again after a rename by hand', {
         {
           kind: 'unsupportedOperation',
           summary: 'Cannot rename table "users" to "app_users": the database has both tables',
-          why: 'The table of model "public.User" changes from "users" to "app_users", and the database has both table "users" and table "app_users". The rename may have been half done by hand, or something created table "app_users" before db update ran: then move the rows of table "app_users" into table "users", or drop table "app_users", and run again. Or table "users" was renamed to "app_users" by hand and the name "users" used again for another table: then rename or drop table "users", and run again.',
+          why: 'The table of model "public.User" changes from "users" to "app_users", and the database has both table "users" and table "app_users". The rename may have been half done by hand, or something created table "app_users" before db update ran: then move any rows of table "app_users" into table "users" and drop table "app_users", and run again. Or table "users" was renamed to "app_users" by hand and the name "users" used again for another table: then rename or drop table "users", and run again.',
           location: { namespaceId: 'public', entityKind: 'table', entityName: 'users' },
         },
       ]);
@@ -110,7 +110,7 @@ describe('Postgres db update, an old name used again after a rename by hand', {
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename column "users"."email" to "email_address": the database has both columns',
-          why: 'The column of field "public.User.email" changes from "email" to "email_address", and table "users" in the database has both column "email" and column "email_address". The rename may have been half done by hand, or something created column "email_address" before db update ran: then move the values of column "email_address" into column "email", or drop column "email_address", and run again. Or column "email" was renamed to "email_address" by hand and the name "email" used again for another column: then rename or drop column "email", and run again.',
+          why: 'The column of field "public.User.email" changes from "email" to "email_address", and table "users" in the database has both column "email" and column "email_address". The rename may have been half done by hand, or something created column "email_address" before db update ran: then move any values of column "email_address" into column "email" and drop column "email_address", and run again. Or column "email" was renamed to "email_address" by hand and the name "email" used again for another column: then rename or drop column "email", and run again.',
           location: {
             namespaceId: 'public',
             entityKind: 'table',
