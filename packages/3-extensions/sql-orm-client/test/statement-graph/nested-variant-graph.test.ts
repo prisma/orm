@@ -881,7 +881,7 @@ describe('the discriminator in update data', () => {
     expect(runtime.executions).toEqual([]);
   });
 
-  it('is refused in nested updateAll data, with and without variant()', () => {
+  it('is refused in nested updateAll and update data, with and without variant()', () => {
     const errors = [
       (tasks: VariantMutator & FilteredMutator) => tasks.updateAll({ type: 'bug' }),
       (tasks: VariantMutator & FilteredMutator) =>
@@ -889,6 +889,8 @@ describe('the discriminator in update data', () => {
       (tasks: VariantMutator) => tasks.variant('feature').updateAll({ type: 'bug' }),
       (tasks: VariantMutator) =>
         tasks.variant('bug').where({ title: 'Crash' }).updateAll({ type: 'feature' }),
+      (tasks: VariantMutator) =>
+        tasks.variant('bug').where({ title: 'Crash' }).update({ type: 'feature' }),
     ].map((tasks) => thrownBy(() => updateOf('Project', { tasks })));
 
     expect(errors).toMatchObject(errors.map(() => refusal));

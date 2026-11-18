@@ -2662,7 +2662,11 @@ type RelationMutationCallback<
               RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
               TargetNs
             >,
-      RelationWritesOf<Context, Cardinality, HasJunctionThrough<TContract, ModelName, RelName, NsId>>,
+      RelationWritesOf<
+        Context,
+        Cardinality,
+        HasJunctionThrough<TContract, ModelName, RelName, NsId>
+      >,
       RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
       TargetNs,
       RelationConflictActions<TContract, ModelName, RelName, NsId>

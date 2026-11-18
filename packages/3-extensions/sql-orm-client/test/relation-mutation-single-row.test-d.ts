@@ -15,7 +15,7 @@ test('a to-many relation updates or deletes one row after where()', () => {
   const update: UserUpdate = {
     posts: (posts) => {
       expectTypeOf(posts.where({ id: 1 }).update({ title: 'New' })).toEqualTypeOf<
-        RelationMutationUpdate<Contract, 'Post'>
+        RelationMutationUpdate<Contract, 'Post', 'public'>
       >();
       expectTypeOf(posts.where({ id: 1 }).delete()).toEqualTypeOf<RelationMutationDelete>();
       return [
