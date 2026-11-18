@@ -323,6 +323,35 @@ describe('init installs', () => {
     timeouts.coldTransformImport,
   );
 
+  it(
+    'leaves out of the first install what the project already declares, and installs it later',
+    async () => {
+      writeFileSync(
+        join(projectDir, 'package.json'),
+        `${JSON.stringify({
+          name: 'app',
+          devDependencies: { dotenv: '^16.0.0' },
+          peerDependencies: { pg: '^8.20.0' },
+        })}\n`,
+        'utf-8',
+      );
+
+      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
+
+      expect(run.exitCode).toBe(0);
+      expect(calls.map((call) => call.args)).toEqual([
+        ['add', '@prisma/orm-postgres'],
+        ['add', 'dotenv', 'pg'],
+        ['add', '-D', 'prisma@latest', '@types/node'],
+        ['add', '-D', '@prisma/cli-engine@latest'],
+      ]);
+      expect(run.presented?.data).toMatchObject({
+        packagesInstalled: { deps: ['@prisma/orm-postgres', 'dotenv', 'pg'] },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
   describe('--skip-install', () => {
     it(
       'installs nothing and emits nothing',
@@ -385,6 +414,25 @@ describe('init installs', () => {
           ['add', '-D', 'prisma@latest', '@types/node', '@prisma/prisma7@7'],
           ['add', '-D', '@prisma/cli-engine@latest'],
         ]);
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'leaves a declared dotenv out of the check install and installs it with the rest',
+      async () => {
+        writePrisma7Project({
+          name: 'app',
+          devDependencies: { prisma: '^7.4.0' },
+          dependencies: { '@prisma/client': '^7.4.0', dotenv: '^16.0.0' },
+        });
+
+        const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls[0]?.args).toEqual(['add', '@prisma/orm-postgres']);
+        expect(calls[1]?.args).toEqual(['add', 'dotenv', 'pg']);
+        expect(calls[2]?.args).toContain('@prisma/prisma7@7');
       },
       timeouts.coldTransformImport,
     );

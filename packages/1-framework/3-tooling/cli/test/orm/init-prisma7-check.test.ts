@@ -212,6 +212,7 @@ describe('the Prisma 7 check before init changes the project', () => {
           meta: { packagesAdded: ['@prisma/orm-postgres'] },
         },
       });
+      expect(installs).toEqual([['add', '@prisma/orm-postgres']]);
     },
     timeouts.coldTransformImport,
   );

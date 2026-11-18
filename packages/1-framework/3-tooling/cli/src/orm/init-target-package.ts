@@ -127,7 +127,8 @@ export class TargetPackageInstallFailed extends Error {
 
 /**
  * Installs the target package with `dotenv`, the package every init installs, and the driver
- * packages the caller names, then loads the package's init contribution from the project. Under `--skip-install` the package must already be
+ * packages the caller names, leaving out those the project already declares, then loads the
+ * package's init contribution from the project. Under `--skip-install` the package must already be
  * installed. Each refusal happens before any file is written.
  */
 export function createTargetPackagePreparation(ctx: {
@@ -145,8 +146,14 @@ export function createTargetPackagePreparation(ctx: {
     let ranCommand: string | undefined;
 
     if (ctx.install) {
-      const deps = [packageName, 'dotenv', ...peerPackages];
       const declaredBefore = declaredPackages(ctx.cwd);
+      // Asking again for a package the project declares rewrites its declared range, which a
+      // refusal later would leave behind; the later install puts those in place instead. The
+      // target package stays, since init must load its contribution now.
+      const deps = [
+        packageName,
+        ...['dotenv', ...peerPackages].filter((dep) => !declaredBefore.has(dep)),
+      ];
       const installFailure = await installProjectDependencies({
         packages: ctx.packages,
         cwd: ctx.cwd,
@@ -254,7 +261,12 @@ function declaredPackages(cwd: string): ReadonlySet<string> {
   if (!isRecord(manifest)) {
     return new Set();
   }
-  const names = ['dependencies', 'devDependencies', 'optionalDependencies'].flatMap((field) => {
+  const names = [
+    'dependencies',
+    'devDependencies',
+    'optionalDependencies',
+    'peerDependencies',
+  ].flatMap((field) => {
     const section = manifest[field];
     return isRecord(section) ? Object.keys(section) : [];
   });
