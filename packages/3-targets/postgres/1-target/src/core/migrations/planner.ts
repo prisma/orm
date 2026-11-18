@@ -69,6 +69,7 @@ import {
   resolvePostgresNodeIssueCreationFactoryName,
 } from './control-policy';
 import { buildPostgresPlanDiff } from './diff-database-schema';
+import { droppedRelationNames } from './dropped-relation-names';
 import { pairCheckRenames, pairIndexRenames } from './index-and-check-renames';
 import {
   coalesceSubtreeIssues,
@@ -89,6 +90,8 @@ import {
   DropTableCall,
   RawSqlCall,
   type RenameColumnCall,
+  RenameConstraintCall,
+  RenameIndexCall,
   RenamePostgresRlsPolicyCall,
   RenameSchemaCall,
   type RenameTableCall,
@@ -536,32 +539,38 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       fieldEventPostgresCalls,
       options.contract,
     );
+    const ddlSchemaOf = (name: string) =>
+      name === UNBOUND_NAMESPACE_ID
+        ? resolveDdlSchemaForNamespaceStorage(options.contract.storage, UNBOUND_NAMESPACE_ID)
+        : name;
     const ordered = movePolicyDropsBeforeBlockedDdl(
       withChecksAroundTypeChanges({
         calls: result.value.calls,
         expected: expectedSchema,
         actual: schema,
-        ddlSchemaOf: (name) =>
-          name === UNBOUND_NAMESPACE_ID
-            ? resolveDdlSchemaForNamespaceStorage(options.contract.storage, UNBOUND_NAMESPACE_ID)
-            : name,
+        ddlSchemaOf,
       }),
       schemaDiffPartition.kept,
     );
-    const onAlreadyRenamedTable = (call: {
-      readonly schemaName: string;
-      readonly tableName: string;
-    }) =>
-      statements.value.alreadyRenamedTables.some(
-        (table) =>
-          call.schemaName === emissionSchemaForNamespace(options.contract, table.namespaceId) &&
-          call.tableName === table.table,
+    const droppedByStructural = droppedRelationNames(ordered.structural, schema, ddlSchemaOf);
+    const beforeStructural = (call: PostgresOpFactoryCall) => {
+      if (!(call instanceof RenameConstraintCall || call instanceof RenameIndexCall)) return false;
+      const renamedTo =
+        call instanceof RenameConstraintCall ? call.newConstraintName : call.newIndexName;
+      return (
+        !droppedByStructural(call.schemaName, renamedTo) &&
+        statements.value.alreadyRenamedTables.some(
+          (table) =>
+            call.schemaName === emissionSchemaForNamespace(options.contract, table.namespaceId) &&
+            call.tableName === table.table,
+        )
       );
+    };
     const calls = [
       ...statements.value.calls,
-      ...renamePartition.kept.filter(onAlreadyRenamedTable),
+      ...renamePartition.kept.filter(beforeStructural),
       ...ordered.structural,
-      ...renamePartition.kept.filter((call) => !onAlreadyRenamedTable(call)),
+      ...renamePartition.kept.filter((call) => !beforeStructural(call)),
       ...ordered.policyCalls,
       ...fieldEventPartition.kept,
     ];

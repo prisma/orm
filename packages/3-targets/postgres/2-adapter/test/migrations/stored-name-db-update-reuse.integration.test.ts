@@ -65,6 +65,26 @@ describe('Postgres db update, an old name used again after a rename by hand', {
     expect(await labelsOf(await plan(to, to))).toEqual([]);
   });
 
+  it('renames the constraints of a table renamed by hand after a drop frees their new names', {
+    timeout: testTimeout,
+  }, async () => {
+    const to = userContract('app_users', { email: 'email', name: 'name' });
+    await start(origin);
+    await driver.query('alter table "users" rename to "app_users"');
+    await driver.query('create table "stale" (id text)');
+    await driver.query('create index "app_users_pkey" on "stale" (id)');
+
+    const result = await plan(origin, to);
+
+    expect(await labelsOf(result)).toEqual([
+      'Drop table "stale"',
+      'Rename primary key "users_pkey" to "app_users_pkey" on "app_users"',
+    ]);
+    await apply(result, to);
+    expect(await rows('select id, email, name from "app_users" order by id')).toEqual(USERS);
+    expect(await labelsOf(await plan(to, to))).toEqual([]);
+  });
+
   describe('for an object the contract does not have', () => {
     it('refuses a table, naming the reuse, and plans nothing once the reused table is dropped', {
       timeout: testTimeout,
