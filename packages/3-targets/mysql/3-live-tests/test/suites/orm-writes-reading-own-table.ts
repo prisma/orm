@@ -54,7 +54,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
   const refused = {
     refused: {
       code: 'RUNTIME.AST_UNSUPPORTED',
-      message: `${server.displayName} cannot run an UPDATE or DELETE whose filter reads the table being written, \`Task\``,
+      message: `${server.displayName} cannot run an UPDATE or DELETE whose filter or values read the table being written, \`Task\``,
     },
   };
 

@@ -198,7 +198,7 @@ export class MysqlSqlRenderer {
 
   /** Why an update or delete whose `SET` or `WHERE` reads `table`, the table it writes, is refused, or `undefined` where the database runs it. MySQL refuses it with error 1093. The only form MySQL accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes deadlock; the renderer does not write it. */
   protected writtenTableReadRefusal(table: string): string | undefined {
-    return `${this.target.displayName} cannot run an UPDATE or DELETE whose filter reads the table being written, ${table}`;
+    return `${this.target.displayName} cannot run an UPDATE or DELETE whose filter or values read the table being written, ${table}`;
   }
 
   /** Puts `GROUP_CONCAT_HINT` on the outermost `SELECT`; a statement without one would leave `GROUP_CONCAT` at the session's limit, which can cut an array after an element and still read as JSON, so it is refused. */
@@ -229,8 +229,13 @@ export class MysqlSqlRenderer {
     }
   }
 
-  private unsupported(feature: string, message: string): Error {
+  private unsupported(
+    feature: string,
+    message: string,
+    guidance?: { readonly why: string; readonly fix: string },
+  ): Error {
     return mysqlError('RUNTIME.AST_UNSUPPORTED', message, {
+      ...guidance,
       meta: { target: this.target.targetId, feature },
     });
   }
@@ -416,7 +421,12 @@ export class MysqlSqlRenderer {
         const qualified = this.qualifyTable(source, ctx);
         const refusal =
           qualified === ctx.writtenTable ? this.writtenTableReadRefusal(qualified) : undefined;
-        if (refusal !== undefined) throw this.unsupported('write-reads-written-table', refusal);
+        if (refusal !== undefined) {
+          throw this.unsupported('write-reads-written-table', refusal, {
+            why: `${this.target.displayName} refuses such a statement with its error 1093. The only form it accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes deadlock.`,
+            fix: "Read the keys of the rows with a query first, then update or delete them by key through the base model's collection.",
+          });
+        }
         return this.renderTableSource(source, ctx);
       }
       case 'derived-table-source':

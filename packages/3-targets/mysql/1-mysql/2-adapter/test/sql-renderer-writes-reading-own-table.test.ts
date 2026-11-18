@@ -17,19 +17,20 @@ import {
 import { createMysqlBuiltinCodecLookup } from '@internal/target-mysql/codecs';
 import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
 import { describe, expect, it } from 'vitest';
-import { MysqlSqlRenderer } from '../src/core/sql-renderer';
+import { type MysqlContract, MysqlSqlRenderer } from '../src/core/sql-renderer';
 
 const renderer = new MysqlSqlRenderer(
   createMysqlBuiltinCodecLookup(),
   mysqlTargetDescriptorMetaRuntime,
 );
-const sqlOf = (ast: AnyQueryAst) => renderer.render(ast, undefined).sql;
-const refusalOf = (ast: AnyQueryAst) => {
+const sqlOf = (ast: AnyQueryAst, contract?: MysqlContract) => renderer.render(ast, contract).sql;
+const refusalOf = (ast: AnyQueryAst, contract?: MysqlContract) => {
   try {
-    sqlOf(ast);
+    sqlOf(ast, contract);
     return undefined;
   } catch (error) {
-    return { code: Object(error).code, message: Object(error).message, meta: Object(error).meta };
+    const { code, message, why, fix, meta } = Object(error);
+    return { code, message, why, fix, meta };
   }
 };
 
@@ -44,7 +45,9 @@ describe('MySQL lowering of an update or delete whose statement reads the writte
   const refusal = {
     code: 'RUNTIME.AST_UNSUPPORTED',
     message:
-      'MySQL cannot run an UPDATE or DELETE whose filter reads the table being written, `task`',
+      'MySQL cannot run an UPDATE or DELETE whose filter or values read the table being written, `task`',
+    why: 'MySQL refuses such a statement with its error 1093. The only form it accepts reads the table through a derived table, which copies the table and locks every row it copies, so concurrent writes deadlock.',
+    fix: "Read the keys of the rows with a query first, then update or delete them by key through the base model's collection.",
     meta: { target: 'mysql', feature: 'write-reads-written-table' },
   };
 
@@ -97,6 +100,31 @@ describe('MySQL lowering of an update or delete whose statement reads the writte
       nested: refusal,
       unaliased: refusal,
       set: refusal,
+    });
+  });
+
+  it('refuses a read of the written table in its own namespace, and renders a read of a table of the same name in another namespace', () => {
+    const qualifiedBy = (database: string) => ({
+      qualifyTable: (name: string) => `\`${database}\`.\`${name}\``,
+    });
+    const twoDatabases = {
+      storage: { namespaces: { app: qualifiedBy('app'), archive: qualifiedBy('archive') } },
+    } as unknown as MysqlContract;
+    const archivedChildrenOf = (namespaceId: string) =>
+      SelectAst.from(TableSource.named('task', 'task_2', namespaceId))
+        .withProjection([ProjectionItem.of('_exists', ColumnRef.of('task_2', 'parentId'))])
+        .withWhere(childOf('task_2', 'task'));
+    const deleteLeaves = (namespaceId: string) =>
+      DeleteAst.from(TableSource.named('task', undefined, 'app')).withWhere(
+        ExistsExpr.notExists(archivedChildrenOf(namespaceId)),
+      );
+    expect({
+      other: sqlOf(deleteLeaves('archive'), twoDatabases),
+      same: refusalOf(deleteLeaves('app'), twoDatabases),
+    }).toEqual({
+      other:
+        'DELETE FROM `app`.`task` WHERE NOT EXISTS (SELECT `task_2`.`parentId` AS `_exists` FROM `archive`.`task` AS `task_2` WHERE `task_2`.`parentId` = `task`.`id`)',
+      same: { ...refusal, message: refusal.message.replace('`task`', '`app`.`task`') },
     });
   });
 
