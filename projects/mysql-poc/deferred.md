@@ -114,3 +114,10 @@ Where `deleteAll()` must read the rows before deleting them (rows returned on a 
 ## A stored column whose name starts with `__prisma_` can clash with an internal alias
 
 The ORM client names its internal projection aliases with the prefix `__prisma_` (`__prisma_page_rn`, `__prisma_parent_key_<n>`, `__prisma_aggregate`, and on `main` before this project `__prisma_distinct_rn` and `__prisma_polymorphic_discriminator`). Nothing rejects a stored column with such a name, so a table that has one can return a wrong value for it. The fix is one check where contract column names are validated, covering every alias. Raised by the automated review of prisma/orm#31058; not fixed there because it is not specific to per-relation includes.
+
+## Rides along in the close-out pull request (2026-11-18)
+
+Two changes were made after prisma/orm#31082 entered the merge queue, which rejects pushes. Both are commits on the local branch `aida-20/tml-3697-mariadb-runtime` and go into the project's next pull request:
+
+- `packages/3-targets/mysql/2-mariadb/2-adapter/test/control-adapter.live.test.ts` compares the control session's isolation level with the server's default, where it hard-coded `REPEATABLE-READ` (automated review of prisma/orm#31082).
+- `@prisma/orm-mariadb` gains the `contract-builder` entry that the Postgres, SQLite and MySQL packages have, so a MariaDB contract can be written in TypeScript.
