@@ -96,7 +96,7 @@ raises rather than rounding:
 ```text
 impressionCount — BigInt, and the total is 2^53 + 1000:
   sum('impressionCount')        refused — this is the guard working:
-    RUNTIME.DECODE_FAILED: sqlite/bigintnumber@1 value must be an integer within the safe integer range, got 9007199254741992
+    RUNTIME.DECODE_FAILED: A sqlite/bigintnumber@1 value is "9007199254741992", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.
   sumBigInt('impressionCount')  9007199254741992n (bigint)
 ```
 
