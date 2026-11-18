@@ -8,9 +8,11 @@ import {
   type AnyCodecDescriptor,
   type Codec,
   type CodecLookupWithDescriptors,
-  createDataTypeLookup,
-  emptyCodecLookup,
+  dataType,
+  readJsonString,
 } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { jsonValue, mapBlock } from '@internal/psl-parser';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -19,6 +21,8 @@ import {
   describeUnsupportedMongoAttribute,
   mongoAttributeSpecs,
 } from '../src/mongo-attribute-specs';
+import { mongoTestStack } from '../src/test';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
 
 const originalCwd = process.cwd();
 const tempDirs: string[] = [];
@@ -31,26 +35,32 @@ const mongoScalarAuthoringTypes = {
   },
 } as const;
 
+const stringType = dataType('mongo/string', {
+  read: (json) => readJsonString('mongo/string', json),
+});
+
 const stringCodec: Codec = {
   id: 'mongo/string@1',
-  encode: async (value: unknown) => value,
-  decode: async (wire: unknown) => wire,
-  encodeJson: (value) => value as JsonValue,
-  decodeJson: (json) => json,
+  dataType: stringType,
+  toWire: async (value: unknown) => value,
+  fromWire: async (wire: unknown) => wire,
+  toDataTypeValue: (value) => stringType.valueFrom(value as JsonValue, {}),
+  fromDataTypeValue: (value) => value.value,
 };
 
 function codecLookupOf(codec: Codec): CodecLookupWithDescriptors {
   return {
-    ...emptyCodecLookup,
-    get: (id) => (id === codec.id ? codec : undefined),
+    ...mongoCodecLookup,
+    get: (id) => (id === codec.id ? codec : mongoCodecLookup.get(id)),
     descriptorFor: (id) =>
       id === codec.id
         ? ({
+            ...mongoCodecLookup.descriptorFor(id),
             codecId: id,
             traits: ['equality'],
             factory: () => () => codec,
           } as unknown as AnyCodecDescriptor)
-        : undefined,
+        : mongoCodecLookup.descriptorFor(id),
   };
 }
 
@@ -84,10 +94,9 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
     composedExtensions: [],
     defaultNamespaceId: '__unbound__',
     composedExtensionContracts: new Map(),
-    dataTypes: { entries: {}, lookup: createDataTypeLookup([]) },
+    dataTypes: mongoDataTypeSupport,
     authoringContributions: {
       dataTypes: {},
-      field: {},
       type: mongoScalarAuthoringTypes,
       entityTypes: {},
       pslBlockDescriptors: {},
@@ -95,11 +104,12 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
       attributeSpecs: mongoAttributeSpecs,
     },
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
-    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
+    codecLookup: mongoCodecLookup,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     resolvedInputs: [],
     capabilities: {},
     ...overrides,
@@ -117,6 +127,7 @@ describe('mongoContract provider helper', () => {
 
   it('exposes watch inputs from schema path', () => {
     const config = mongoContract('./schema.prisma', {
+      ...mongoTestStack,
       output: 'output/contract.json',
     });
 
@@ -125,12 +136,12 @@ describe('mongoContract provider helper', () => {
   });
 
   it('tags the source as PSL', () => {
-    const config = mongoContract('./schema.prisma');
+    const config = mongoContract('./schema.prisma', mongoTestStack);
     expect(config.source.format).toBe('psl');
   });
 
   it('errors naming the configured pattern when resolvedInputs is empty', async () => {
-    const contract = mongoContract('./schema.prisma');
+    const contract = mongoContract('./schema.prisma', mongoTestStack);
     const result = await contract.source.load(createMongoTestContext());
 
     expect(result.ok).toBe(false);
@@ -162,7 +173,7 @@ model User {
     );
 
     process.chdir(cwdDir);
-    const contract = mongoContract('./schema.prisma');
+    const contract = mongoContract('./schema.prisma', mongoTestStack);
     const result = await contract.source.load(
       createMongoTestContext({ resolvedInputs: [schemaPath] }),
     );
@@ -189,7 +200,7 @@ model User {
     const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-'));
     tempDirs.push(tempDir);
     const missingSchemaPath = join(tempDir, 'missing.prisma');
-    const contract = mongoContract('./missing.prisma');
+    const contract = mongoContract('./missing.prisma', mongoTestStack);
     const result = await contract.source.load(
       createMongoTestContext({ resolvedInputs: [missingSchemaPath] }),
     );
@@ -229,7 +240,7 @@ model User {
     );
 
     const baseContributions = createMongoTestContext().authoringContributions;
-    const contract = mongoContract('./schema.prisma');
+    const contract = mongoContract('./schema.prisma', mongoTestStack);
     const result = await contract.source.load(
       createMongoTestContext({
         resolvedInputs: [schemaPath],
@@ -280,7 +291,7 @@ model User {
       'utf-8',
     );
 
-    const result = await mongoContract('./schema.prisma').source.load(
+    const result = await mongoContract('./schema.prisma', mongoTestStack).source.load(
       createMongoTestContext({ resolvedInputs: [schemaPath] }),
     );
 
@@ -339,7 +350,7 @@ model User {
       tempDirs.push(dir);
       const { user, post, excluded } = await writeMultiFileFixture(dir);
 
-      const contract = mongoContract('./schema.prisma');
+      const contract = mongoContract('./schema.prisma', mongoTestStack);
       const result = await contract.source.load(
         createMongoTestContext({ resolvedInputs: [user, post, excluded] }),
       );
@@ -354,7 +365,7 @@ model User {
       const dir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-membership-'));
       tempDirs.push(dir);
       const { user, post } = await writeMultiFileFixture(dir);
-      const contract = mongoContract('./schema.prisma');
+      const contract = mongoContract('./schema.prisma', mongoTestStack);
 
       const forward = await contract.source.load(
         createMongoTestContext({ resolvedInputs: [user, post] }),
@@ -375,7 +386,7 @@ model User {
       const a = join(dir, 'a.prisma');
       await writeFile(a, 'model A {\n  id ObjectId @id @map("_id")\n}\n', 'utf-8');
 
-      const contract = mongoContract('./schema.prisma');
+      const contract = mongoContract('./schema.prisma', mongoTestStack);
       const result = await contract.source.load(createMongoTestContext({ resolvedInputs: [a] }));
 
       expect(result.ok).toBe(false);
@@ -389,5 +400,23 @@ model User {
         ]),
       );
     });
+  });
+});
+
+describe('mongoContract without a target pack', () => {
+  it.each([
+    ['no options', undefined],
+    ['options without target', { output: 'out/contract.json' }],
+  ])('refuses %s with the pack to pass', (_, options) => {
+    expect(() =>
+      mongoContract('./schema.prisma', options as unknown as Parameters<typeof mongoContract>[1]),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message:
+          'mongoContract("./schema.prisma") needs the MongoDB target pack, which the contract records.',
+        meta: { schemaPath: './schema.prisma', reason: 'target-pack-missing' },
+      }),
+    );
   });
 });

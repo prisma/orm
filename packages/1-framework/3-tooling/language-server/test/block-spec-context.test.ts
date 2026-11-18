@@ -3,6 +3,7 @@ import type {
   DataTypeSupport,
 } from '@internal/framework-components/authoring';
 import { createDataTypeLookup, dataType } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   type BlockSpecContext,
   blockAttribute,
@@ -19,7 +20,7 @@ import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
 import { testBinder } from './helpers/binder';
 
-const fixtureExpression = dataType('fixture/expression', {});
+const fixtureExpression = dataType('fixture/expression', { read: (json) => json });
 
 const fixtureDataTypes: DataTypeSupport = {
   entries: {
@@ -30,6 +31,7 @@ const fixtureDataTypes: DataTypeSupport = {
     },
   },
   lookup: createDataTypeLookup([fixtureExpression]),
+  dataTypeOfCodec: () => undefined,
 };
 
 function recordingDescriptors(seen: BlockSpecContext[]): AuthoringPslBlockDescriptorNamespace {
@@ -85,11 +87,13 @@ function completeAt(markedSource: string, dataTypes: DataTypeSupport | undefined
     candidates: {
       scalarTypes: [],
       pslBlockDescriptors,
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       symbolTable,
       binder: testBinder({
         sources,
         symbolTable,
         pslBlockDescriptors,
+        generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
         ...(dataTypes === undefined ? {} : { dataTypes }),
       }),
       ...(dataTypes === undefined ? {} : { dataTypes }),

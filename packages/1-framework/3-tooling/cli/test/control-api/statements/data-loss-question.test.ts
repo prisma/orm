@@ -16,6 +16,31 @@ const drop = {
 } as const;
 
 describe('dataLossQuestion for data no model names', () => {
+  it('says a type change changes the type of the data and can change or lose its values', () => {
+    const question = dataLossQuestion(
+      {
+        operationIndex: 0,
+        label: 'Cast field age in collection users from string to int',
+        subject: { kind: 'storage', name: 'users.age' },
+        loss: 'typeChange',
+      },
+      {
+        origin,
+        destination,
+        statements: [],
+        canConvert: false,
+        originKnown: false,
+        temporaryValues: [],
+      },
+    );
+
+    expect({ question: question.question, verbs: question.verbs }).toEqual({
+      question:
+        'Cast field age in collection users from string to int would change the type of "users.age", named by its storage name because the origin contract is unknown, and can change or lose its values. --delete keeps the field and lets the database cast its values, which can change or lose some.',
+      verbs: ['delete'],
+    });
+  });
+
   it('says no model of a known origin contract stores it', () => {
     const question = dataLossQuestion(drop, {
       origin,
@@ -23,6 +48,7 @@ describe('dataLossQuestion for data no model names', () => {
       statements: [],
       canConvert: true,
       originKnown: true,
+      temporaryValues: [],
     });
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({
@@ -39,6 +65,7 @@ describe('dataLossQuestion for data no model names', () => {
       statements: [],
       canConvert: true,
       originKnown: false,
+      temporaryValues: [],
     });
 
     expect(question.question).toBe(
@@ -68,6 +95,7 @@ describe('dataLossQuestion verbs', () => {
         statements: [],
         canConvert: true,
         originKnown: true,
+        temporaryValues: [],
       },
     );
   }
@@ -99,9 +127,16 @@ describe('dataLossQuestion verbs', () => {
         statements: [{ verb: 'rename', text: 'User.nickname:User.handle' }],
         canConvert: true,
         originKnown: true,
+        temporaryValues: [],
       },
     );
     expect(question.verbs).toEqual(['delete']);
+  });
+
+  it('asks again for the new name when rename is typed with the old name only', () => {
+    expect(
+      questionFor('nickname', destinationWithoutNickname).validate('rename', 'User.nickname'),
+    ).toBe('rename needs the new name: type rename User.nickname:User.<new name>.');
   });
 
   it('writes the rename form of a field with its model, as a field rename is written', () => {
@@ -139,6 +174,7 @@ describe('dataLossQuestion for a type change', () => {
       statements,
       canConvert,
       originKnown: true,
+      temporaryValues: [],
     });
   }
 
@@ -160,10 +196,11 @@ describe('dataLossQuestion for a type change', () => {
         statements: [],
         canConvert: true,
         originKnown: true,
+        temporaryValues: [],
       },
     );
     expect(rebuild.question).toBe(
-      'Recreate table User would change the type of field "User.age" and can change or lose its values.',
+      'Recreate table User would change the type of field "User.age" and can change or lose its values. --convert writes a conversion for you to fill in; --delete keeps the field and lets the database cast its values, which can change or lose some.',
     );
   });
 
@@ -206,6 +243,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
       statements: [],
       canConvert: true,
       originKnown: true,
+      temporaryValues: [],
     });
     expect({ verbs: question.verbs, question: question.question }).toEqual({
       verbs: ['delete'],
@@ -221,6 +259,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
       statements: [{ verb: 'rename', text: 'Profile:Person' }],
       canConvert: true,
       originKnown: true,
+      temporaryValues: [],
     });
     expect({
       subject: question.subject,
@@ -230,7 +269,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
     }).toEqual({
       subject: 'Person.nickname',
       verbs: ['rename', 'delete'],
-      forms: { rename: 'Person.nickname:Person.<new name>' },
+      forms: { rename: 'Person.nickname:Person.alias' },
       accepted: undefined,
     });
   });
@@ -264,7 +303,14 @@ describe('dataLossQuestion with advice from the target', () => {
         loss: 'drop',
         keepDataAdvice: 'To keep its data, move it by hand.',
       },
-      { origin: users, destination: users, statements: [], canConvert: true, originKnown: true },
+      {
+        origin: users,
+        destination: users,
+        statements: [],
+        canConvert: true,
+        originKnown: true,
+        temporaryValues: [],
+      },
     );
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({

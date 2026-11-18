@@ -1,7 +1,7 @@
 import type { RelationPredicate, ShorthandWhereFilter } from '@prisma/orm-postgres/orm-client';
 import { expectTypeOf, test } from 'vitest';
-import { createOrmClient } from '../src/orm-client/client';
 import type { Contract } from '../src/prisma/contract';
+import { db as demoDb } from '../src/prisma/db';
 
 const userId = '00000000-0000-0000-0000-000000000001';
 
@@ -14,7 +14,7 @@ function userByIdPredicate(id: string): RelationPredicate<Contract, 'public', 'U
 }
 
 test('shorthand and predicate helpers return reusable User where filters', () => {
-  const db = createOrmClient(null as never);
+  const db = demoDb.orm.public;
   const shorthandUsers = db.User.where(userById(userId));
   const predicateUsers = db.User.where(userByIdPredicate(userId));
 
@@ -30,7 +30,7 @@ test('invalid shorthand fields fail where the filter is constructed', () => {
     };
   }
 
-  const db = createOrmClient(null as never);
+  const db = demoDb.orm.public;
   db.User.where(invalidUserById(userId));
 });
 
@@ -40,6 +40,6 @@ test('invalid predicate fields fail where the filter is constructed', () => {
     return (user) => user.userId.eq(id);
   }
 
-  const db = createOrmClient(null as never);
+  const db = demoDb.orm.public;
   db.User.where(invalidUserByIdPredicate(userId));
 });

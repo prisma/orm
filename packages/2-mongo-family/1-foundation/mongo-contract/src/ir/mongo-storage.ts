@@ -6,11 +6,13 @@ import {
   type Storage,
 } from '@internal/framework-components/ir';
 import type { MongoCollection, MongoCollectionInput } from './mongo-collection';
+import type { MongoValueObject, MongoValueObjectInput } from './mongo-value-object';
 import type { MongoValueSet, MongoValueSetInput } from './mongo-value-set';
 
 export type MongoNamespaceEntries = Readonly<Record<string, Readonly<Record<string, unknown>>>> & {
   readonly collection?: Readonly<Record<string, MongoCollection>>;
   readonly valueSet?: Readonly<Record<string, MongoValueSet>>;
+  readonly valueObject?: Readonly<Record<string, MongoValueObject>>;
 };
 
 export interface MongoNamespaceCollectionsInput {
@@ -18,6 +20,7 @@ export interface MongoNamespaceCollectionsInput {
   readonly entries: Readonly<Record<string, Readonly<Record<string, unknown>>>> & {
     readonly collection?: Readonly<Record<string, MongoCollectionInput>>;
     readonly valueSet?: Readonly<Record<string, MongoValueSetInput>>;
+    readonly valueObject?: Readonly<Record<string, MongoValueObjectInput>>;
   };
 }
 

@@ -234,7 +234,7 @@
                 },
                 "datetime": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "nullable": false
                 },
                 "id": {
@@ -253,7 +253,7 @@
                 },
                 "json": {
                   "codecId": "sqlite/json@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/json",
                   "nullable": false
                 },
                 "real": {
@@ -265,7 +265,9 @@
                   "codecId": "sql/varchar@1",
                   "dataType": "sqlite/character-varying",
                   "nullable": false,
-                  "typeRef": "ShortText"
+                  "typeParams": {
+                    "length": 255
+                  }
                 },
                 "sqlFloat": {
                   "codecId": "sql/float@1",
@@ -310,26 +312,19 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "6515756055b17590a23a99f06ae0ac6cf3b2dc642eeea25f10c3ad4a4d085607",
-    "types": {
-      "ShortText": {
-        "codecId": "sql/varchar@1",
-        "dataType": "sqlite/character-varying",
-        "kind": "codec-instance",
-        "typeParams": {
-          "length": 255
-        }
-      }
-    }
+    "storageHash": "65449fc3c32073124545aa03d9f5643e0f9343f6574e4256e5d66b718786f47f"
   },
   "capabilities": {
     "sql": {
       "foreignKeys": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "limit": true,
       "orderBy": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true
     }
   },

@@ -8,7 +8,9 @@ import type {
   MongoModelsMap,
   MongoUnboundFieldInputTypes,
   MongoUnboundFieldOutputTypes,
+  OwnFieldStoredAs,
 } from '@internal/mongo-contract';
+import type { MongoPreparedParamRef } from '@internal/mongo-value';
 
 type Simplify<T> = T extends unknown ? { [K in keyof T]: T[K] } : never;
 
@@ -215,9 +217,31 @@ export type MongoWhereFilter<
       readonly codecId: infer CId extends string & keyof TCodecTypes;
     };
   }
-    ? TCodecTypes[CId]['output']
+    ? WhereScalarValue<
+        MongoModelsMap<TContract>[ModelName]['fields'][K],
+        TCodecTypes[CId]['output'],
+        CId
+      >
     : unknown;
 };
+
+type WhereScalarValue<Field, Element, CodecId extends string> =
+  | (Field extends { readonly many: { readonly elementNullable: infer ElementNullable } }
+      ? Element | readonly (ElementNullable extends true ? Element | null : Element)[]
+      : Element)
+  | (Field extends { readonly nullable: true } ? null : never)
+  | MongoPreparedParamRef<CodecId, WherePlaceholderNullable<Field>>;
+
+/**
+ * A placeholder on a list field stands for one item, which is never `null`: a `null` there means the field is not a list, which a placeholder cannot say.
+ */
+type WherePlaceholderNullable<Field> = Field extends {
+  readonly many: { readonly elementNullable: boolean };
+}
+  ? false
+  : Field extends { readonly nullable: true }
+    ? boolean
+    : false;
 
 export type MongoIncludeSpec<
   TContract extends MongoContract,
@@ -281,9 +305,15 @@ type GeneratedOnCreateFields<
     }
   > extends infer Matched
     ? Matched extends { readonly ref: { readonly field: infer Field extends string } }
-      ? Field
+      ? OwnFieldStoredAs<TContract, ModelName, Field>
       : never
     : never;
+
+/** The field stored as `_id`, which MongoDB fills when a create leaves it out. */
+type DocumentIdField<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+> = OwnFieldStoredAs<TContract, ModelName, '_id'>;
 
 /**
  * Fields a document may leave out: nullable ones, which read back as `null`. The create input makes them optional, as the SQL ORM client does for nullable columns.
@@ -301,7 +331,10 @@ type NullableFields<
 type OptionalOnCreate<
   TContract extends MongoContract,
   ModelName extends string & keyof MongoModelsMap<TContract>,
-> = '_id' | GeneratedOnCreateFields<TContract, ModelName> | NullableFields<TContract, ModelName>;
+> =
+  | DocumentIdField<TContract, ModelName>
+  | GeneratedOnCreateFields<TContract, ModelName>
+  | NullableFields<TContract, ModelName>;
 
 export type CreateInput<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
@@ -335,7 +368,7 @@ type DiscriminatorField<
   : never;
 
 // TODO(TML-2229): VariantModelRow flows through ResolvedOutputRow, so variant
-// domain fields use output types. Only the _id pick uses ResolvedInputRow.
+// domain fields use output types. Only the document id pick uses ResolvedInputRow.
 // When input/output types diverge (parameterized codecs), this needs an
 // input-side VariantModelRow.
 export type VariantCreateInput<
@@ -351,7 +384,7 @@ export type VariantCreateInput<
   Partial<
     Pick<
       ResolvedInputRow<TContract, ModelName>,
-      '_id' & keyof ResolvedInputRow<TContract, ModelName>
+      DocumentIdField<TContract, ModelName> & keyof ResolvedInputRow<TContract, ModelName>
     >
   > &
   Partial<

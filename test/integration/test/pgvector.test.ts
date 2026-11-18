@@ -1,5 +1,8 @@
 import pgvector from '@internal/extension-pgvector/runtime';
-import { extractCodecTypeImports } from '@internal/framework-components/control';
+import {
+  extractCodecTypeImports,
+  extractParameterizedOutputTypeImports,
+} from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { getSqlDescriptorBundle, pgvectorExtensionDescriptor } from '../utils/framework-components';
 
@@ -9,29 +12,39 @@ describe('pgvector extension pack integration', () => {
     expect(pgvectorExtensionDescriptor.version).toBe('0.0.1');
   });
 
-  it('extracts codec type imports from descriptors', () => {
+  it('extracts codec type imports from descriptors, adapter first', () => {
     const { target, adapter, extensions } = getSqlDescriptorBundle({
       extensions: [pgvectorExtensionDescriptor],
     });
 
-    const codecTypeImports = extractCodecTypeImports([target, adapter, ...extensions]);
-    expect(codecTypeImports.length).toBe(17);
-    // Adapter codec types come first
-    expect(codecTypeImports[0]).toEqual({
-      package: '@internal/target-postgres/codec-types',
-      named: 'CodecTypes',
-      alias: 'PgTypes',
+    expect(extractCodecTypeImports([target, adapter, ...extensions])).toEqual([
+      { package: '@internal/target-postgres/codec-types', named: 'CodecTypes', alias: 'PgTypes' },
+      { package: '@internal/target-postgres/codec-types', named: 'JsonValue', alias: 'JsonValue' },
+      {
+        package: '@internal/extension-pgvector/codec-types',
+        named: 'CodecTypes',
+        alias: 'PgVectorTypes',
+      },
+    ]);
+  });
+
+  it('extracts the parameterized output type functions, adapter first', () => {
+    const { target, adapter, extensions } = getSqlDescriptorBundle({
+      extensions: [pgvectorExtensionDescriptor],
     });
-    expect(codecTypeImports).toContainEqual({
-      package: '@internal/extension-pgvector/codec-types',
-      named: 'CodecTypes',
-      alias: 'PgVectorTypes',
-    });
-    expect(codecTypeImports).toContainEqual({
-      package: '@internal/extension-pgvector/codec-types',
-      named: 'Vector',
-      alias: 'Vector',
-    });
+
+    expect(extractParameterizedOutputTypeImports([target, adapter, ...extensions])).toEqual([
+      {
+        package: '@internal/target-postgres/codec-types',
+        named: 'ParameterizedOutputTypesForTypeParams',
+        alias: 'PgParameterizedOutputTypes',
+      },
+      {
+        package: '@internal/extension-pgvector/codec-types',
+        named: 'ParameterizedOutputTypesForTypeParams',
+        alias: 'PgVectorParameterizedOutputTypes',
+      },
+    ]);
   });
 
   it('descriptor contributes the pg/vector@1 codec descriptor', () => {

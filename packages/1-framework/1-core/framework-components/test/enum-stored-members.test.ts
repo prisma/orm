@@ -45,3 +45,18 @@ describe('duplicateStoredMembers', () => {
     ]);
   });
 });
+
+describe('duplicateStoredMembers with the data type equality key', () => {
+  it("pairs members the data type's equality holds equal, though their stored forms differ", () => {
+    expect(
+      duplicateStoredMembers(
+        [
+          { name: 'Half', stored: '0.5' },
+          { name: 'AlsoHalf', stored: '0.50' },
+          { name: 'Whole', stored: '1' },
+        ],
+        (json) => String(Number(json)),
+      ),
+    ).toEqual([{ earlier: 'Half', later: 'AlsoHalf', stored: '0.50', earlierStored: '0.5' }]);
+  });
+});

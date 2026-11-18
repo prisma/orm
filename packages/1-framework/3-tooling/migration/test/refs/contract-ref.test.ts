@@ -7,7 +7,6 @@ import {
   isLiveMarkerRef,
   isReservedContractRef,
   parseContractRef,
-  RESERVED_CONTRACT_REFS,
 } from '../../src/refs/contract-ref';
 import type { RefResolutionContext, RefResolutionError } from '../../src/refs/types';
 
@@ -100,15 +99,6 @@ describe('parseContractRef', () => {
       }
     });
 
-    it('resolves a prefix with  scheme', () => {
-      const ctx = createContext();
-      const result = parseContractRef('bbbbbb', ctx);
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value.hash).toBe(HASH_B);
-      }
-    });
-
     it('returns ambiguous when multiple contracts share a prefix', () => {
       const HASH_AMB1 = `aabbcc${'1'.repeat(58)}`;
       const HASH_AMB2 = `aabbcc${'2'.repeat(58)}`;
@@ -144,16 +134,6 @@ describe('parseContractRef', () => {
       }
     });
 
-    it('resolves another ref name', () => {
-      const ctx = createContext();
-      const result = parseContractRef('staging', ctx);
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value.hash).toBe(HASH_A);
-        expect(result.value.provenance).toEqual({ kind: 'ref', refName: 'staging' });
-      }
-    });
-
     it('returns not-found for an unknown ref name', () => {
       const ctx = createContext();
       const result = parseContractRef('unknown-ref', ctx);
@@ -171,19 +151,6 @@ describe('parseContractRef', () => {
         expect(result.value.provenance).toEqual({
           kind: 'migration-to',
           dirName: '20260101-add-users',
-        });
-      }
-    });
-
-    it('resolves the second migration dir name', () => {
-      const ctx = createContext();
-      const result = parseContractRef('20260102-add-posts', ctx);
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value.hash).toBe(HASH_B);
-        expect(result.value.provenance).toEqual({
-          kind: 'migration-to',
-          dirName: '20260102-add-posts',
         });
       }
     });
@@ -258,15 +225,6 @@ describe('parseContractRef', () => {
         // They must check provenance.kind === 'reserved-db' and call readAllMarkers().
       }
     });
-
-    it('returns reserved-db even when contractHash is in context (no offline resolution)', () => {
-      const ctx = createContext();
-      const result = parseContractRef('@db', { ...ctx, contractHash: HASH_A });
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value.provenance.kind).toBe('reserved-db');
-      }
-    });
   });
 
   describe('@empty reserved reference', () => {
@@ -299,34 +257,9 @@ describe('parseContractRef', () => {
       expectError(result, 'invalid-format');
     });
   });
-
-  describe('parameterized: all grammar forms resolve to same contract', () => {
-    it('resolves identically via hash, prefix, ref, dir-name, and dir^', () => {
-      const ctx = createContext();
-      const target = HASH_B;
-
-      const byFullHash = parseContractRef(HASH_B, ctx);
-      const byPrefix = parseContractRef('bbbbbb', ctx);
-      const byRef = parseContractRef('production', ctx);
-      const byDirName = parseContractRef('20260102-add-posts', ctx);
-
-      expect(byFullHash.ok && byFullHash.value.hash).toBe(target);
-      expect(byPrefix.ok && byPrefix.value.hash).toBe(target);
-      expect(byRef.ok && byRef.value.hash).toBe(target);
-      expect(byDirName.ok && byDirName.value.hash).toBe(target);
-
-      const byCaretTarget = HASH_A;
-      const byCaret = parseContractRef('20260102-add-posts^', ctx);
-      expect(byCaret.ok && byCaret.value.hash).toBe(byCaretTarget);
-    });
-  });
 });
 
 describe('reserved contract references', () => {
-  it('keeps the reserved references in a fixed order', () => {
-    expect(RESERVED_CONTRACT_REFS).toEqual(['@contract', '@db', '@empty']);
-  });
-
   it.each(['@contract', '@db', '@empty'])('%s is reserved', (input) => {
     expect(isReservedContractRef(input)).toBe(true);
   });

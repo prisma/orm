@@ -1,13 +1,15 @@
 import type { PlanMeta } from '@internal/contract/types';
 import type {
   ActivityContext,
+  ClientActivity,
+  ClientActivityEnded,
   CrossFamilyMiddleware,
   ExecutionPlan,
   StatementActivity,
   StatementEnded,
 } from '@internal/framework-components/runtime';
 import { vi } from 'vitest';
-import type { CacheEntry, CacheStore } from '../src/cache-store';
+import type { CachedValue, CacheEntry, CacheStore } from '../src/cache-store';
 
 export interface MockExec extends ExecutionPlan {
   readonly statement: string;
@@ -49,6 +51,7 @@ export function makeCtx(overrides?: Partial<ActivityContext>): ActivityContext {
 }
 
 type Rows = readonly Record<string, unknown>[];
+type Value = CachedValue;
 
 /**
  * A versioned in-memory store for middleware tests that matches `meta` by value. It keeps a version
@@ -57,7 +60,7 @@ type Rows = readonly Record<string, unknown>[];
  * key the store has never seen.
  */
 export function spyStore() {
-  const inner = new Map<string, Rows>();
+  const inner = new Map<string, Value>();
   const entryMeta = new Map<string, string>();
   const versions = new Map<string, number>();
   const metaVersions = new Map<string, number>();
@@ -70,7 +73,7 @@ export function spyStore() {
     entryMeta.delete(key);
   };
   const getSpy = vi.fn(
-    async (target: Parameters<CacheStore['get']>[0]): Promise<CacheEntry<unknown, Rows>> => {
+    async (target: Parameters<CacheStore['get']>[0]): Promise<CacheEntry<unknown, Value>> => {
       const value = inner.get(target.key);
       return {
         key: target.key,
@@ -80,7 +83,7 @@ export function spyStore() {
       };
     },
   );
-  const setSpy = vi.fn(async (entry: CacheEntry<unknown, Rows>, value: Rows) => {
+  const setSpy = vi.fn(async (entry: CacheEntry<unknown, Value>, value: Value) => {
     if (entry.version !== versionOf(entry.key, entry.meta)) {
       return false;
     }
@@ -104,8 +107,15 @@ export function spyStore() {
       }
     }
   });
-  const store: CacheStore<unknown, Rows> = { get: getSpy, set: setSpy, unset: unsetSpy };
-  return { ...store, getSpy, setSpy, unsetSpy, inner, versions };
+  const store: CacheStore<unknown, Value> = { get: getSpy, set: setSpy, unset: unsetSpy };
+  /** Stores statement rows under `key`, as a read the middleware cached does. */
+  const setRows = (key: string, rows: Rows) => inner.set(key, { kind: 'statement-rows', rows });
+  /** The statement rows stored under `key`, or what is stored there when it is not rows. */
+  const rowsAt = (key: string) => {
+    const value = inner.get(key);
+    return value?.kind === 'statement-rows' ? value.rows : value;
+  };
+  return { ...store, getSpy, setSpy, unsetSpy, inner, versions, setRows, rowsAt };
 }
 
 export async function drain<T>(iter: AsyncIterable<T>): Promise<T[]> {
@@ -159,4 +169,36 @@ export async function runMiss(
     await mw.onRow?.(row, exec, ctx);
   }
   await endStatement(mw, exec, ctx, { rowCount: rows.length });
+}
+
+/** A client activity, such as an ORM call, carrying `annotations`. */
+export function makeCall(
+  annotations: Record<string, unknown> = {},
+  contentHash: () => Promise<string> = async () => 'call-hash',
+): ClientActivity {
+  return {
+    id: 'call',
+    kind: 'orm-call',
+    contentHash,
+    annotations: new Map(Object.entries(annotations)) as ClientActivity['annotations'],
+  };
+}
+
+/** Runs the middleware's `activityEnded` for a client activity. */
+export async function endCall(
+  mw: CrossFamilyMiddleware,
+  activity: ClientActivity,
+  ctx: ActivityContext,
+  ended: Partial<Pick<ClientActivityEnded, 'outcome' | 'source'>> & { readonly result?: unknown },
+): Promise<void> {
+  await mw.activityEnded?.(
+    activity,
+    {
+      kind: activity.kind,
+      outcome: ended.outcome ?? 'succeeded',
+      source: ended.source ?? 'client',
+      ...('result' in ended ? { result: ended.result } : {}),
+    },
+    ctx,
+  );
 }

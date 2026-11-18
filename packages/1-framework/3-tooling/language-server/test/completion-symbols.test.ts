@@ -1,4 +1,5 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { buildSymbolTable, createBinder } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -31,6 +32,7 @@ function fields(
     scalarTypes: [],
     defaultNamespaceId: 'public',
     pslBlockDescriptors: {},
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
   });
   const { binder } = createBinder({
     sources,

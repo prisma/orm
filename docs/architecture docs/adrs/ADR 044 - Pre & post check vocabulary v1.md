@@ -96,6 +96,8 @@ Each check has an ID and parameters. IDs are case sensitive. All parameters are 
 
 ## Idempotency mapping (ties to ADR 038)
 
+> The runners detect an applied operation with its postchecks, not its prechecks. See [ADR 038](ADR%20038%20-%20Operation%20idempotency%20classification%20&%20enforcement.md).
+
 Pre checks below can imply already applied when true
 
 - **tableExists** for createTable ops

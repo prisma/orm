@@ -2,7 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract } from './utils';
+import { createTestContract, TEST_TYPES_MODULE } from './utils';
 
 const HASHES = {
   storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
@@ -40,9 +40,10 @@ const sqlSpi = createMockSpi();
 
 const mongoSpi = createMockSpi({
   id: 'mongo',
-  getFamilyImports: () => [
-    "import type { MongoCollection, MongoContractWithTypeMaps, MongoTypeMaps, RelationKeys } from '@internal/mongo-contract';",
-  ],
+  getFamilyImports: (typesModule) =>
+    ['MongoCollection', 'MongoContractWithTypeMaps', 'MongoTypeMaps', 'RelationKeys'].map(
+      (symbol) => ({ moduleSpecifier: typesModule, symbol, typeOnly: true }),
+    ),
 });
 
 function modelsBlock(dts: string): string {
@@ -56,7 +57,7 @@ describe('Models namespace and models constant emission', () => {
     const contract = sqlContract({
       public: { Item: { fields: { id: int() }, relations: {}, storage: {} } },
     });
-    const dts = generateContractDts(contract, sqlSpi, [], HASHES);
+    const dts = generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE);
     const modelsStart = dts.indexOf('export namespace Models');
     const typeMapsStart = dts.indexOf('export type TypeMaps');
     expect(dts.indexOf('export type FieldInputTypes')).toBeLessThan(modelsStart);
@@ -76,11 +77,13 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Item = {
-          id: CodecTypes["pg/int4@1"]["output"];
-          label: CodecTypes["pg/text@1"]["output"] | null;
+          id: FieldOutputTypes["public"]["Item"]["id"];
+          label: FieldOutputTypes["public"]["Item"]["label"];
           readonly [RelationKeys]?: never;
         };
       }
@@ -217,12 +220,14 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_User = {
-          id: CodecTypes["pg/int4@1"]["output"];
-          managerId: CodecTypes["pg/int4@1"]["output"];
-          mentorId: CodecTypes["pg/int4@1"]["output"] | null;
+          id: FieldOutputTypes["public"]["User"]["id"];
+          managerId: FieldOutputTypes["public"]["User"]["managerId"];
+          mentorId: FieldOutputTypes["public"]["User"]["mentorId"];
           posts: public_Post[];
           tags: public_Tag[];
           manager: public_User;
@@ -231,19 +236,19 @@ describe('Models namespace and models constant emission', () => {
           readonly [RelationKeys]?: "posts" | "tags" | "manager" | "mentor" | "profile";
         };
         export type public_Post = {
-          id: CodecTypes["pg/int4@1"]["output"];
-          authorId: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Post"]["id"];
+          authorId: FieldOutputTypes["public"]["Post"]["authorId"];
           author: public_User;
           readonly [RelationKeys]?: "author";
         };
         export type public_Tag = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Tag"]["id"];
           users: public_User[];
           readonly [RelationKeys]?: "users";
         };
         export type public_Profile = {
-          id: CodecTypes["pg/int4@1"]["output"];
-          userId: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Profile"]["id"];
+          userId: FieldOutputTypes["public"]["Profile"]["userId"];
           user: public_User;
           readonly [RelationKeys]?: "user";
         };
@@ -284,15 +289,17 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_User = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["User"]["id"];
           readonly [RelationKeys]?: never;
         };
         export type unbound_Audit = {
-          id: CodecTypes["pg/int4@1"]["output"];
-          actorId: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["__unbound__"]["Audit"]["id"];
+          actorId: FieldOutputTypes["__unbound__"]["Audit"]["actorId"];
           actor: public_User | null;
           readonly [RelationKeys]?: "actor";
         };
@@ -345,26 +352,28 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    const dts = generateContractDts(contract, sqlSpi, [], HASHES, { supportsNamespaces: false });
+    const dts = generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE, {
+      supportsNamespaces: false,
+    });
     expect(modelsBlock(dts)).toMatchInlineSnapshot(`
       "export namespace Models {
         export type User = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["__unbound__"]["User"]["id"];
           tasks: AnyTask[];
           readonly [RelationKeys]?: "tasks";
         };
         export type Task = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["__unbound__"]["Task"]["id"];
           kind: "bug";
-          userId: CodecTypes["pg/int4@1"]["output"];
+          userId: FieldOutputTypes["__unbound__"]["Task"]["userId"];
           user: User;
           readonly [RelationKeys]?: "user";
         };
         export type Bug = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["__unbound__"]["Task"]["id"];
           kind: "bug";
-          userId: CodecTypes["pg/int4@1"]["output"];
-          severity: CodecTypes["pg/int4@1"]["output"];
+          userId: FieldOutputTypes["__unbound__"]["Task"]["userId"];
+          severity: FieldOutputTypes["__unbound__"]["Bug"]["severity"];
           user: User;
           readonly [RelationKeys]?: "user";
         };
@@ -378,7 +387,7 @@ describe('Models namespace and models constant emission', () => {
         AnyTask: Models.AnyTask;
       };"
     `);
-    expect(modelsBlock(dts)).not.toContain('unbound');
+    expect(modelsBlock(dts)).not.toMatch(/\bunbound_[A-Z]/);
   });
 
   it('keeps the namespace segment when the target declares nothing about namespaces', () => {
@@ -388,7 +397,7 @@ describe('Models namespace and models constant emission', () => {
       },
     });
     for (const options of [undefined, {}, { supportsNamespaces: true }]) {
-      const dts = generateContractDts(contract, sqlSpi, [], HASHES, options);
+      const dts = generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE, options);
       expect(dts).toContain('export type unbound_User = {');
       expect(dts).toContain('  __unbound__: {\n    User: Models.unbound_User;\n  };');
     }
@@ -475,35 +484,37 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Task = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Task"]["id"];
           type: "bug" | "feature";
-          projectId: CodecTypes["pg/int4@1"]["output"] | null;
+          projectId: FieldOutputTypes["public"]["Task"]["projectId"];
           project: public_Project | null;
           readonly [RelationKeys]?: "project";
         };
         export type public_Bug = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Task"]["id"];
           type: "bug";
-          projectId: CodecTypes["pg/int4@1"]["output"] | null;
-          severity: CodecTypes["pg/text@1"]["output"];
+          projectId: FieldOutputTypes["public"]["Task"]["projectId"];
+          severity: FieldOutputTypes["public"]["Bug"]["severity"];
           project: public_Project | null;
           readonly [RelationKeys]?: "project";
         };
         export type public_Feature = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Task"]["id"];
           type: "feature";
-          projectId: CodecTypes["pg/int4@1"]["output"] | null;
-          priority: CodecTypes["pg/int4@1"]["output"];
-          ownerId: CodecTypes["pg/int4@1"]["output"] | null;
+          projectId: FieldOutputTypes["public"]["Task"]["projectId"];
+          priority: FieldOutputTypes["public"]["Feature"]["priority"];
+          ownerId: FieldOutputTypes["public"]["Feature"]["ownerId"];
           project: public_Project | null;
           owner: public_Project | null;
           readonly [RelationKeys]?: "project" | "owner";
         };
         export type public_Project = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Project"]["id"];
           readonly [RelationKeys]?: never;
         };
         export type public_AnyTask = public_Bug | public_Feature;
@@ -549,28 +560,28 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    const dts = generateContractDts(contract, sqlSpi, [], HASHES);
+    const dts = generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE);
     expect(dts).toContain(
       'readonly variants: { readonly b: { readonly namespace: "b" & NamespaceId; readonly model: "Epic" }; readonly c: { readonly namespace: "c" & NamespaceId; readonly model: "Epic" } }',
     );
     expect(modelsBlock(dts)).toMatchInlineSnapshot(`
       "export namespace Models {
         export type a_Task = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["a"]["Task"]["id"];
           type: "b" | "c";
           readonly [RelationKeys]?: never;
         };
         export type a_AnyTask = b_Epic | c_Epic;
         export type b_Epic = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["a"]["Task"]["id"];
           type: "b";
-          points: CodecTypes["pg/int4@1"]["output"];
+          points: FieldOutputTypes["b"]["Epic"]["points"];
           readonly [RelationKeys]?: never;
         };
         export type c_Epic = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["a"]["Task"]["id"];
           type: "c";
-          goal: CodecTypes["pg/text@1"]["output"];
+          goal: FieldOutputTypes["c"]["Epic"]["goal"];
           readonly [RelationKeys]?: never;
         };
       }
@@ -656,25 +667,27 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Task = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Task"]["id"];
           type: "bug";
-          projectId: CodecTypes["pg/int4@1"]["output"];
+          projectId: FieldOutputTypes["public"]["Task"]["projectId"];
           project: public_Project;
           readonly [RelationKeys]?: "project";
         };
         export type public_Bug = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Task"]["id"];
           type: "bug";
-          projectId: CodecTypes["pg/int4@1"]["output"];
-          bugProjectId: CodecTypes["pg/int4@1"]["output"] | null;
+          projectId: FieldOutputTypes["public"]["Task"]["projectId"];
+          bugProjectId: FieldOutputTypes["public"]["Bug"]["bugProjectId"];
           project: public_Project | null;
           readonly [RelationKeys]?: "project";
         };
         export type public_Project = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Project"]["id"];
           readonly [RelationKeys]?: never;
         };
         export type public_AnyTask = public_Bug;
@@ -731,19 +744,21 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Task = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Task"]["id"];
           type: "bug";
-          note: CodecTypes["pg/text@1"]["output"];
+          note: FieldOutputTypes["public"]["Task"]["note"];
           readonly [RelationKeys]?: never;
         };
         export type public_Bug = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Task"]["id"];
           type: "bug";
-          note: CodecTypes["pg/text@1"]["output"] | null;
-          severity: CodecTypes["pg/text@1"]["output"];
+          note: FieldOutputTypes["public"]["Bug"]["note"];
+          severity: FieldOutputTypes["public"]["Bug"]["severity"];
           readonly [RelationKeys]?: never;
         };
         export type public_AnyTask = public_Bug;
@@ -836,30 +851,32 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Task = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Task"]["id"];
           type: "bug";
-          projectId: CodecTypes["pg/int4@1"]["output"];
+          projectId: FieldOutputTypes["public"]["Task"]["projectId"];
           project: public_Project;
           readonly [RelationKeys]?: "project";
         };
         export type public_Bug = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Task"]["id"];
           type: "bug";
-          projectId: CodecTypes["pg/int4@1"]["output"];
+          projectId: FieldOutputTypes["public"]["Task"]["projectId"];
           project: public_Project;
           readonly [RelationKeys]?: "project";
         };
         export type public_Project = {
-          id: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Project"]["id"];
           tasks: public_AnyTask[];
           readonly [RelationKeys]?: "tasks";
         };
         export type public_Comment = {
-          id: CodecTypes["pg/int4@1"]["output"];
-          taskId: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Comment"]["id"];
+          taskId: FieldOutputTypes["public"]["Comment"]["taskId"];
           task: public_AnyTask;
           readonly [RelationKeys]?: "task";
         };
@@ -905,17 +922,19 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Order = {
-          id: CodecTypes["pg/int4@1"]["output"];
-          customerId: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Order"]["id"];
+          customerId: FieldOutputTypes["public"]["Order"]["customerId"];
           lines: public_Line[];
           readonly [RelationKeys]?: "lines";
         };
         export type public_Line = {
-          id: CodecTypes["pg/int4@1"]["output"];
-          orderId: CodecTypes["pg/int4@1"]["output"];
+          id: FieldOutputTypes["public"]["Line"]["id"];
+          orderId: FieldOutputTypes["public"]["Line"]["orderId"];
           readonly [RelationKeys]?: never;
         };
       }
@@ -978,27 +997,29 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(modelsBlock(generateContractDts(contract, mongoSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, mongoSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type unbound_User = {
-          _id: CodecTypes["mongo/objectId@1"]["output"];
-          name: CodecTypes["mongo/string@1"]["output"];
+          _id: FieldOutputTypes["__unbound__"]["User"]["_id"];
+          name: FieldOutputTypes["__unbound__"]["User"]["name"];
           addresses: unbound_Address[];
           tasks: unbound_Task[];
           readonly [RelationKeys]?: "tasks";
         };
         export type unbound_Task = {
-          _id: CodecTypes["mongo/objectId@1"]["output"];
-          title: CodecTypes["mongo/string@1"]["output"];
-          assigneeId: CodecTypes["mongo/objectId@1"]["output"] | null;
-          authorId: CodecTypes["mongo/objectId@1"]["output"];
+          _id: FieldOutputTypes["__unbound__"]["Task"]["_id"];
+          title: FieldOutputTypes["__unbound__"]["Task"]["title"];
+          assigneeId: FieldOutputTypes["__unbound__"]["Task"]["assigneeId"];
+          authorId: FieldOutputTypes["__unbound__"]["Task"]["authorId"];
           home: unbound_Address;
           assignee: unbound_User | null;
           author: unbound_User | null;
           readonly [RelationKeys]?: "assignee" | "author";
         };
         export type unbound_Address = {
-          street: CodecTypes["mongo/string@1"]["output"];
+          street: FieldOutputTypes["__unbound__"]["Address"]["street"];
         };
       }
 
@@ -1017,7 +1038,7 @@ describe('Models namespace and models constant emission', () => {
       a_b: { C: { fields: { id: int() }, relations: {}, storage: {} } },
       a: { b_C: { fields: { id: int() }, relations: {}, storage: {} } },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_TYPE_NAME_COLLISION',
         message: expect.stringContaining('a_b.C'),
@@ -1040,7 +1061,7 @@ describe('Models namespace and models constant emission', () => {
         AnyTask: { fields: { id: int() }, relations: {}, storage: {} },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_TYPE_NAME_COLLISION',
         meta: { memberName: 'public_AnyTask', sources: ['public.AnyTask', 'public.Any<Task>'] },
@@ -1052,7 +1073,7 @@ describe('Models namespace and models constant emission', () => {
     const contract = sqlContract({
       'my-schema': { Item: { fields: { id: int() }, relations: {}, storage: {} } },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_TYPE_NAME_INVALID',
         meta: { memberName: 'my-schema_Item', source: 'my-schema.Item' },
@@ -1077,7 +1098,7 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_RELATION_TARGET_MISSING',
         meta: {
@@ -1106,7 +1127,7 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_RELATION_TARGET_MISSING',
         meta: {
@@ -1124,7 +1145,7 @@ describe('Models namespace and models constant emission', () => {
         Bug: { fields: { id: int() }, relations: {}, base: ref('Ghost'), storage: {} },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_BASE_MISSING',
         message: expect.stringContaining('public.Bug'),
@@ -1146,7 +1167,7 @@ describe('Models namespace and models constant emission', () => {
         Bug: { fields: {}, relations: {}, base: ref('Task'), storage: {} },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_VARIANT_MISSING',
         message: expect.stringContaining('public.Task'),

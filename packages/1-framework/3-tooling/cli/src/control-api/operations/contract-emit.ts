@@ -7,9 +7,13 @@ import { abortable } from '@internal/utils/abortable';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
 import { dirname, join } from 'pathe';
-import { errorContractConfigMissing } from '../../utils/cli-errors';
+import { migrationsDirFor } from '../../orm/migration/paths';
+import {
+  errorContractConfigMissing,
+  errorContractTypesModuleMissing,
+} from '../../utils/cli-errors';
 import { queueEmitByOutput } from '../../utils/emit-queue';
-import { createProjectSpecifierResolver } from '../../utils/project-import-root';
+import { toExtensionInputs } from '../../utils/extension-pack-inputs';
 import { publishContractArtifactPair } from '../../utils/publish-contract-artifact-pair';
 import { validateContractDeps } from '../../utils/validate-contract-deps';
 import type {
@@ -18,10 +22,12 @@ import type {
   ControlActionName,
   OnControlProgress,
 } from '../types';
+import { runContractSpaceSeedPhase } from './contract-space-seed-phase';
 import {
   loadContractSourceWithStack,
   requireContractConfig,
   requireSourceProvider,
+  withWarningFindings,
 } from './load-contract-source';
 import { validateLoadedContract } from './validate-loaded-contract';
 
@@ -53,6 +59,12 @@ function endSpan(
  * (`@internal/vite-plugin-contract-emit`). New callers must go through this
  * function rather than re-implementing load → emit → publish.
  *
+ * Before publishing, it writes each composed extension pack's pinned files
+ * under `migrations/<space-id>/`, as `migration plan` does, so a project
+ * that never plans a migration can still sign its database, and returns
+ * each path it wrote there. An `outputPath` writes the contract somewhere
+ * other than the project, so it writes no pinned files.
+ *
  * The whole flow (load config → resolve source → emit bytes → atomic publish)
  * is serialized per output JSON path via `queueEmitByOutput`. Concurrent calls
  * for the same output line up FIFO; the user-visible outcome is "last
@@ -69,14 +81,7 @@ export async function executeContractEmit(
   options: ContractEmitOptions,
   dependencies: ContractEmitDependencies = defaultContractEmitDependencies,
 ): Promise<ContractEmitResult> {
-  const {
-    config,
-    cwd,
-    projectDir,
-    outputPath,
-    signal = new AbortController().signal,
-    onProgress,
-  } = options;
+  const { config, cwd, outputPath, signal = new AbortController().signal, onProgress } = options;
   const unlessAborted = abortable(signal);
   const contractConfig = requireContractConfig(config);
 
@@ -90,6 +95,10 @@ export async function executeContractEmit(
   }
 
   requireSourceProvider(contractConfig);
+  const { typesModule } = contractConfig;
+  if (typesModule === undefined) {
+    throw errorContractTypesModuleMissing();
+  }
 
   let outputPaths: ReturnType<typeof getEmittedArtifactPaths>;
   try {
@@ -103,9 +112,9 @@ export async function executeContractEmit(
 
   return queueEmitByOutput(outputJsonPath, async () => {
     startSpan(onProgress, 'resolveSource', 'Resolving contract source...');
-    const sourceWarnings: ContractSourceDiagnostic[] = [];
     let stack: ControlStack;
     let contract: Contract;
+    let sourceWarnings: readonly ContractSourceDiagnostic[];
     try {
       stack = createControlStack(config);
       const loaded = await loadContractSourceWithStack({
@@ -113,12 +122,11 @@ export async function executeContractEmit(
         source: contractConfig.source,
         signal,
         cwd,
-        reportWarning: (diagnostic) => {
-          sourceWarnings.push(diagnostic);
-        },
       });
-      if (!loaded.ok) throw loaded.failure.error;
-      contract = loaded.value;
+      if (!loaded.ok) {
+        throw withWarningFindings(loaded.failure.error, loaded.failure.warnings, cwd);
+      }
+      ({ contract, warnings: sourceWarnings } = loaded.value);
     } catch (error) {
       endSpan(onProgress, 'resolveSource', 'error');
       throw error;
@@ -146,14 +154,7 @@ export async function executeContractEmit(
           outputJsonPath,
           serializeContract,
           deserializeContract: (json) => familyInstance.deserializeContract(json),
-          // Which package names the generated files may import is decided by
-          // the nearest manifest above the file being written — the package
-          // that will import it, and the same directory `validateContractDeps`
-          // resolves against below. A caller that knows the project directory
-          // names it instead.
-          resolveImportSpecifier: createProjectSpecifierResolver(
-            projectDir ?? dirname(outputJsonPath),
-          ),
+          typesModule,
           ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
           ...ifDefined('sortStorage', contractSerializer.sortStorage),
           ...ifDefined('supportsNamespaces', config.target.supportsNamespaces),
@@ -165,6 +166,22 @@ export async function executeContractEmit(
     }
     endSpan(onProgress, 'emit', 'ok');
 
+    signal.throwIfAborted();
+    const pinnedFiles =
+      outputPath === undefined
+        ? (
+            await unlessAborted(
+              runContractSpaceSeedPhase({
+                migrationsDir: migrationsDirFor(config, cwd),
+                extensions: toExtensionInputs(config.extensions ?? []),
+                signal,
+              }),
+            )
+          ).seeded.flatMap(({ spaceId, writtenPaths }) =>
+            writtenPaths.map((path) => ({ spaceId, path })),
+          )
+        : [];
+
     await unlessAborted(mkdir(dirname(outputJsonPath), { recursive: true }));
     await publishContractArtifactPair({
       outputJsonPath,
@@ -175,7 +192,14 @@ export async function executeContractEmit(
     });
 
     const validationWarning = validateContractDeps(
-      emitResult.contractDts,
+      [
+        typesModule,
+        ...[
+          ...(stack.codecTypeImports ?? []),
+          ...(stack.queryOperationTypeImports ?? []),
+          ...(stack.parameterizedOutputTypeImports ?? []),
+        ].map((spec) => spec.package),
+      ],
       dirname(outputDtsPath),
     ).warning;
 
@@ -187,6 +211,7 @@ export async function executeContractEmit(
         json: outputJsonPath,
         dts: outputDtsPath,
       },
+      pinnedFiles,
       ...ifDefined('validationWarning', validationWarning),
       ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
     };

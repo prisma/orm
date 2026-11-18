@@ -53,6 +53,8 @@ A User model as an aggregate root with a referenced relation (Post) and an embed
 }
 ```
 
+> Every model's `storage` now also records each field's stored name in `fields`, embedded models included (see [ADR 172](ADR%20172%20-%20Contract%20domain-storage%20separation.md)). This example predates that and leaves `fields` out.
+
 Three things to notice:
 
 1. **`roots`** maps ORM accessor names to models — `db.users` and `db.posts` are the entry points. Address is not in `roots` because it's only reachable through User.

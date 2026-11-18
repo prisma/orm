@@ -176,7 +176,7 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
       strategy: 'declared-state',
       appliedStatements: [],
       dataLoss: [],
-      accessWidening: [],
+      accessChanges: [],
       temporaryValues: [],
       migrationEdges: [
         buildFabricatedMigrationEdge({

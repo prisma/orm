@@ -1,10 +1,13 @@
 {
   "name": "@prisma/orm-extension-supabase",
-  "version": "8.0.0-rc.17",
+  "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
   "description": "Supabase auth schema, RLS policies, and request-scoped roles for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist"
   ],
@@ -14,27 +17,27 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.17",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.17",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.17",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.17",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "catalog:",
-    "@types/pg": "catalog:",
     "arktype": "^2.2.2",
-    "jose": "^6",
-    "pg": "catalog:"
+    "jose": "^6"
   },
   "devDependencies": {
-    "@internal/extension-supabase": "workspace:8.0.0-rc.17",
-    "@repo/tsconfig": "workspace:8.0.0-rc.17",
-    "@repo/tsdown": "workspace:8.0.0-rc.17",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.17",
+    "@internal/extension-supabase": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.24",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.17",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.24",
+    "@types/pg": "^8.20.0",
+    "pg": "^8.22.0",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

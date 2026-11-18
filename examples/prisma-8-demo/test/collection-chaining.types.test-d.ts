@@ -1,23 +1,20 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import {
-  type Filtered,
-  type Ordered,
-  orm,
-  type QueryFragment,
-  type UniquelyFiltered,
+import type {
+  Filtered,
+  Ordered,
+  QueryFragment,
+  UniquelyFiltered,
 } from '@prisma/orm-postgres/orm-client';
-import type { ExecutionContext } from '@prisma/orm-postgres/relational-core/query-lane-context';
+import type { PostgresClient } from '@prisma/orm-postgres/runtime';
 import { expectTypeOf, test } from 'vitest';
-import { createOrmClient } from '../src/orm-client/client';
 import type { PostCollection, UserCollection } from '../src/orm-client/collections';
 import type { Contract } from '../src/prisma/contract.d';
 import { db as demoDb } from '../src/prisma/db';
 
-declare const runtime: Runtime;
+declare const plainDb: PostgresClient<Contract>;
 declare const search: string | undefined;
 
-const db = createOrmClient(runtime);
-const plain = orm({ runtime, context: demoDb.context as ExecutionContext<Contract> }).public;
+const db = demoDb.orm.public;
+const plain = plainDb.orm.public;
 
 export const classChain = db.User.admins().newestFirst().limit(10);
 export const classChainAfterInclude = db.User.include('posts').admins();

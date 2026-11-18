@@ -1,3 +1,4 @@
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -24,6 +25,7 @@ function help(markedBlock: string) {
     candidates: {
       binder: testBinder({ sources, symbolTable, pslBlockDescriptors: blockValueDescriptors }),
       pslBlockDescriptors: blockValueDescriptors,
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       symbolTable,
     },
   });

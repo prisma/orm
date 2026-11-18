@@ -12,7 +12,16 @@ A `sql` literal writes a value of the data type `sql/expression` ([ADR 268](../a
 - `@@check(expression:)`;
 - a policy block's `using` and `withCheck`.
 
-A `json` literal writes a value of the target's JSON type and is taken by `@default`.
+The other tags write a default value of a type whose text has its own grammar, and are taken by `@default`:
+
+| Tag | Data type | Registered by |
+| --- | --- | --- |
+| `json` | `pg/json`; `sqlite/json` | each SQL target |
+| `date`, `time`, `timetz`, `timestamp`, `timestamptz`, `interval` | the Postgres type of the same name | the Postgres target |
+| `bytea` | `pg/bytea`; the body is the hex text PostgreSQL prints, `` bytea`\x68656c6c6f` `` | the Postgres target |
+| `datetime` | `sqlite/datetime` | the SQLite target |
+
+A quoted string on a column of one of these types is refused with `PSL_VALUE_TYPE_INCOMPATIBLE`, and the message shows the tag to write, as in ``Expected timestamptz`...`; write timestamptz`2024-01-01T00:00:00Z` ``.
 
 ## What the parser does
 
@@ -22,11 +31,11 @@ The parser (`packages/1-framework/2-authoring/psl-parser/src/parse.ts`) produces
 
 ## How specs take a tagged literal
 
-The tags are not a registry of their own. They come from the data type authoring entries in the spec context's `dataTypes`: `AttributeSpecContext.dataTypes` (`packages/1-framework/2-authoring/psl-parser/src/attribute-spec/spec-context.ts`) for attributes and `BlockSpecContext.dataTypes` (`src/block-spec/types.ts`) for blocks. An entry whose written form is `{ kind: 'tag', tag }` registers that tag. The SQL family registers `sql`, the tag of `sql/expression`, which it defines in `packages/2-sql/1-core/contract/src/sql-expression.ts`. Every SQL target registers `json`, and no component registers a prefixed tag.
+The tags are not a registry of their own. They come from the data type authoring entries in the spec context's `dataTypes`: `AttributeSpecContext.dataTypes` (`packages/1-framework/2-authoring/psl-parser/src/attribute-spec/spec-context.ts`) for attributes and `BlockSpecContext.dataTypes` (`src/block-spec/types.ts`) for blocks. An entry whose written form is `{ kind: 'tag', tag }` registers that tag. The SQL family registers `sql`, the tag of `sql/expression`, which it defines in `packages/2-sql-family/1-core/contract/src/sql-expression.ts`. Every SQL target registers `json`; the Postgres target registers the date and time tags and `bytea`, and the SQLite target `datetime`. No component registers a prefixed tag.
 
 Two combinators take a tagged literal:
 
-- `dataTypeValue(dataType, ctx.dataTypes)` (`src/attribute-spec/combinators/data-type-value.ts`) takes a value of one data type. It reads any literal, applies the cast rule while parsing, and reports refusals at the written value. The six raw-SQL places use it with `sql/expression`: `indexModelSpec` and `checkModelSpec` in `packages/2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts`, `postgresFullTextIndexSpec` and the policy specs in `packages/3-targets/3-targets/postgres/src/core/`. It carries `tags` and `documentation` for tooling.
+- `dataTypeValue(dataType, ctx.dataTypes)` (`src/attribute-spec/combinators/data-type-value.ts`) takes a value of one data type. It reads any literal, applies the cast rule while parsing, and reports refusals at the written value. The six raw-SQL places use it with `sql/expression`: `indexModelSpec` and `checkModelSpec` in `packages/2-sql-family/2-authoring/contract-psl/src/sql-attribute-specs.ts`, `postgresFullTextIndexSpec` and the policy specs in `packages/3-targets/postgres/1-target/src/core/`. It carries `tags` and `documentation` for tooling.
 - `taggedLiteral(tags, { documentation })` (`src/attribute-spec/combinators/tagged-literal.ts`) parses any tag and yields `{ tag, canonicalization, span }`. `@default` uses it, wrapped in `writtenScalar` (`src/attribute-spec/combinators/written-scalar.ts`), which yields the literal as a written scalar with its span for lowering to read, because its receiving type comes from the column: its value is a `oneOf` of the plain scalars, the registered default functions (`funcCall`), one `taggedLiteral` arm per distinct tag documentation, and a list arm (`scalarDefaultArms` in `sql-attribute-specs.ts`). A `dbgenerated(...)` call is intercepted before the arms are tried (`defaultValueArm`) and reported as `PSL_UNKNOWN_DEFAULT_FUNCTION`.
 
 The diagnostics:
@@ -37,7 +46,7 @@ The diagnostics:
 - An argument that is not a literal at a raw-SQL place, such as an identifier, is `PSL_INVALID_ATTRIBUTE_SYNTAX`, ``Expected sql`...`; got an identifier``.
 - A `@default` `sql` text that is exactly `now()` or `autoincrement()`, or that fails the default SQL check, is `PSL_INVALID_DEFAULT_SQL`. A single value on a list column is `PSL_DEFAULT_LIST_EXPECTED`; a value the column's codec refuses is `PSL_INVALID_DEFAULT_LITERAL`.
 
-`PSL_DEFAULT_LIST_EXPECTED` and `PSL_INVALID_DEFAULT_LITERAL` are declared in `packages/2-sql/2-authoring/contract-psl/src/data-type-default.ts`, and `PSL_INVALID_DEFAULT_SQL` in `psl-column-resolution.ts`. The others are declared in `framework-components/src/shared/psl-extension-block.ts`.
+`PSL_DEFAULT_LIST_EXPECTED` and `PSL_INVALID_DEFAULT_LITERAL` are declared in `packages/2-sql-family/2-authoring/contract-psl/src/data-type-default.ts`, and `PSL_INVALID_DEFAULT_SQL` in `psl-column-resolution.ts`. The others are declared in `framework-components/src/shared/psl-extension-block.ts`.
 
 ## What the language server does
 
@@ -59,7 +68,7 @@ It leaves a backtick string token byte-identical, including its line breaks and 
 - Parser: `packages/1-framework/2-authoring/psl-parser/test/parse-tagged-literal.test.ts`.
 - Combinators: `packages/1-framework/2-authoring/psl-parser/test/attribute-spec-combinators.tagged-literal.test.ts` and `attribute-spec-combinators.data-type-value.test.ts`.
 - Canonicalization: `packages/1-framework/1-core/framework-components/test/tagged-literal.test.ts`.
-- Interpreter: `packages/2-sql/2-authoring/contract-psl/test/interpreter.defaults.tagged-literal.test.ts` and `interpreter.sql-expression-places.test.ts`; Postgres: `packages/3-targets/3-targets/postgres/test/psl-full-text-index.test.ts` and `psl-policy-predicates.test.ts`.
+- Interpreter: `packages/2-sql-family/2-authoring/contract-psl/test/interpreter.defaults.tagged-literal.test.ts` and `interpreter.sql-expression-places.test.ts`; Postgres: `packages/3-targets/postgres/1-target/test/psl-full-text-index.test.ts` and `psl-policy-predicates.test.ts`.
 - Language server: `packages/1-framework/3-tooling/language-server/test/completion-provider.test.ts` and `semantic-tokens.test.ts`.
 - Diagnostics fixtures: `test/integration/test/authoring/diagnostics/removed-dbgenerated/` and the parity pair `test/integration/test/authoring/parity/default-sql-literal/`.
 

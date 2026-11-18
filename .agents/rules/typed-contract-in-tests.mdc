@@ -37,7 +37,21 @@ expect(rows.map((r) => r['id'] as number)).toEqual([6, 7, 8, 9, 10]);  // Needs 
 
 ## The Solution
 
-Import the typed `Contract` from the fixtures directory:
+Import the typed `Contract` from the fixtures directory and name it where the JSON enters. A test that builds a client passes the JSON through the target's `contractFromJson` and gives the result to the client, which infers the contract type from it:
+
+```typescript
+// ✅ CORRECT: the client infers Contract from the typed value
+import postgres from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
+import type { Contract } from './fixtures/contract.d';
+import contractJson from './fixtures/contract.json' with { type: 'json' };
+
+const db = postgres({ contract: contractFromJson<Contract>(contractJson), url });
+```
+
+Never write the type argument on the client (`postgres<Contract>(...)`): the clients take only `{ contract }`.
+
+A test that needs a contract without a client validates the JSON with `validateSqlContractFully`:
 
 ```typescript
 // ✅ CORRECT: Typed contract provides full inference

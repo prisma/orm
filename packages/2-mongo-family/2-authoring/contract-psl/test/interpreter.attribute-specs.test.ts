@@ -1,11 +1,11 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
+import { mongoCodecLookup } from '@internal/mongo-contract/test';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
+import { mongoDataTypeSupport } from './mongo-type-lookups';
 
-const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
+const scalarTypes: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
   ['Int32', 'mongo/int32@1'],
   ['ObjectId', 'mongo/objectId@1'],
@@ -13,9 +13,9 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
 
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
-    scalarTypeCodecIds,
-    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
-    dataTypes: EMPTY_DATA_TYPES,
+    scalarTypes,
+    codecLookup: mongoCodecLookup,
+    dataTypes: mongoDataTypeSupport,
     defaultFunctionRegistry: new Map(),
   });
 }
@@ -75,17 +75,14 @@ model Event {
 });
 
 describe('field-level @id and @unique are interpreted against their specs', () => {
-  it('rejects an argument on @id and no longer counts the field as the id', () => {
+  it('rejects an argument on @id', () => {
     const diagnostics = diagnosticsOf(`
       model Item {
         id   ObjectId @id("primary") @map("_id")
         name String
       }
     `);
-    expect(diagnostics.map((d) => d.code)).toEqual([
-      'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      'PSL_MISSING_ID_FIELD',
-    ]);
+    expect(diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_ATTRIBUTE_SYNTAX']);
   });
 
   it('rejects an argument on @unique and declares no index for it', () => {
@@ -168,7 +165,7 @@ describe('unknown attribute names diagnose against the registered namespace', ()
     ]);
   });
 
-  it('points @updatedAt at the temporal.updatedAt() preset', () => {
+  it('points @updatedAt at @onCreate(now()) @onUpdate(now()) and temporal.UpdatedAt', () => {
     expect(
       diagnosticsOf(`
         model Item {
@@ -180,12 +177,12 @@ describe('unknown attribute names diagnose against the registered namespace', ()
       expect.objectContaining({
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
         message:
-          'Field "Item.updatedAt" uses unsupported attribute "@updatedAt". To fill the timestamp on create and update, use `temporal.updatedAt()` as the field type.',
+          'Field "Item.updatedAt" uses unsupported attribute "@updatedAt". Use @onCreate(now()) @onUpdate(now()), or type the field temporal.UpdatedAt.',
       }),
     ]);
   });
 
-  it('points @default(now()) at the temporal.createdAt() preset', () => {
+  it('points @default(now()) at @onCreate(now())', () => {
     expect(
       diagnosticsOf(`
         model Item {
@@ -198,7 +195,7 @@ describe('unknown attribute names diagnose against the registered namespace', ()
       expect.objectContaining({
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
         message:
-          'Field "Item.createdAt" uses unsupported attribute "@default". To fill the timestamp on create, use `temporal.createdAt()` as the field type.',
+          'Field "Item.createdAt" uses unsupported attribute "@default". Use @onCreate(now()) instead; MongoDB has no database defaults.',
       }),
       expect.objectContaining({
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
@@ -230,13 +227,13 @@ describe('unknown attribute names diagnose against the registered namespace', ()
     expect(
       diagnosticsOf(`
         type Address {
-          street String @map("s")
+          street String
         }
         model Item {
           id      ObjectId @id @map("_id")
           email   String   @unique
           owner   Owner    @relation(fields: [ownerId], references: [id])
-          ownerId ObjectId
+          ownerId ObjectId @map("owner_id")
           address Address
           @@map("items")
           @@index([sort(email, Desc)])

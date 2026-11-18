@@ -84,7 +84,7 @@ describe('contract infer — cross-space FK into the Supabase pack', () => {
       try {
         await client.connect(connectionString);
         const schema = await client.introspect({});
-        const ast = client.inferPslContract(schema);
+        const ast = await client.inferPslContract(schema);
         if (!ast) {
           throw new Error('Expected inferPslContract to return a PSL document');
         }
@@ -103,7 +103,7 @@ describe('contract infer — cross-space FK into the Supabase pack', () => {
         expect(relationField?.typeContractSpaceId).toBe('supabase');
         expect(profileModel?.fields.some((f) => f.typeName === 'Users')).toBe(false);
 
-        const printed = printPsl(ast);
+        const printed = printPsl(ast, { pslBlockDescriptors: client.getPslBlockDescriptors() });
         expect(printed).toMatch(/\buser\s+supabase:auth\.AuthUser\b/);
         expect(printed).toContain(
           '@relation(fields: [userId], references: [id], onDelete: Cascade',

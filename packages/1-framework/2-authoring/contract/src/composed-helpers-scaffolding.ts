@@ -7,7 +7,7 @@ import { instantiateAuthoringEntityType } from '@internal/framework-components/a
 
 /**
  * Family-agnostic merge / instantiation scaffolding for pack-bag-driven
- * authoring contributions. The per-namespace shape (`field`, `type`,
+ * authoring contributions. The per-namespace shape (`type`,
  * `entityTypes`) is parameterized by the discriminator key so each
  * namespace can reuse the same extractor + cross-pack merger without
  * re-deriving the template per family. Call sites flatten merged
@@ -29,7 +29,7 @@ export type UnionToIntersection<U> = (U extends unknown ? (value: U) => void : n
   ? I
   : never;
 
-export type AuthoringNamespaceKey = 'field' | 'type' | 'entityTypes';
+export type AuthoringNamespaceKey = 'type' | 'entityTypes';
 
 export type ExtractAuthoringNamespaceFromPack<
   Pack,
@@ -63,9 +63,7 @@ export type MergeExtensionAuthoringNamespaces<
     : EmptyNamespace;
 
 /**
- * Entity-helper shape derivation. Mirrors `FieldHelpersFromNamespace` /
- * `TypeHelpersFromNamespace` in the SQL package: leaf descriptors become
- * callable helpers; nested namespaces recurse.
+ * Entity-helper shape derivation. Mirrors `TypeHelpersFromNamespace` in the SQL package: leaf descriptors become callable helpers; nested namespaces recurse.
  */
 type ExtractFactoryInputAndOutput<Descriptor extends AuthoringEntityTypeDescriptor> =
   Descriptor['output'] extends {

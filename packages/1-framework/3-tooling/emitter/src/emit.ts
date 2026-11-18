@@ -1,6 +1,6 @@
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
-import { type EmissionSpi, keepInternalSpecifiers } from '@internal/framework-components/emission';
+import type { EmissionSpi } from '@internal/framework-components/emission';
 import { ifDefined } from '@internal/utils/defined';
 import { format } from 'prettier';
 import { getEmittedArtifactPaths } from './artifact-paths';
@@ -21,8 +21,13 @@ export async function emit(
   }
   requireToOneRelationNullability(contract);
 
-  const { codecTypeImports, queryOperationTypeImports, aggregateDescriptors, codecDescriptors } =
-    stack;
+  const {
+    codecTypeImports,
+    queryOperationTypeImports,
+    parameterizedOutputTypeImports,
+    aggregateDescriptors,
+    codecDescriptors,
+  } = stack;
 
   const { storageHash } = contract.storage;
   const executionHash = contract.execution?.executionHash;
@@ -49,6 +54,7 @@ export async function emit(
 
   const generateOptions = {
     ...ifDefined('queryOperationTypeImports', queryOperationTypeImports),
+    ...ifDefined('parameterizedOutputTypeImports', parameterizedOutputTypeImports),
     ...ifDefined('aggregateDescriptors', aggregateDescriptors),
     ...ifDefined('codecDescriptors', codecDescriptors),
     ...ifDefined('supportsNamespaces', options.supportsNamespaces),
@@ -64,9 +70,9 @@ export async function emit(
     targetFamily,
     codecTypeImports ?? [],
     contractTypeHashes,
+    options.typesModule,
     generateOptions,
     stack.codecLookup,
-    options.resolveImportSpecifier ?? keepInternalSpecifiers,
   );
   const contractDts = await format(contractDtsRaw, {
     parser: 'typescript',

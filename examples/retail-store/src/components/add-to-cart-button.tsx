@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 
 interface AddToCartButtonProps {
   product: {
-    _id: string;
+    id: string;
     name: string;
     brand: string;
     price: { amount: number; currency: string };
@@ -27,7 +27,7 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productId: product._id,
+          productId: product.id,
           name: product.name,
           brand: product.brand,
           amount: 1,

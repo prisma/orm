@@ -6,12 +6,12 @@ This example mirrors `examples/prisma-8-demo` (the Node demo), minus pgvector �
 
 ## What this example demonstrates
 
-- **Serverless client `postgres`** at module scope, built once per isolate via `postgresServerless<Contract>({ contractJson, middleware })`. It holds no database connection.
+- **Serverless client `postgres`** at module scope, built once per isolate via `postgresServerless({ contract, middleware })`, where `contract` is `contractFromJson<Contract>(contractJson)` from `@prisma/orm-postgres/static`. The streaming client is built from the same `contract` value, so the contract is validated once. It holds no database connection.
 - **Connection `db`**, opened in each request via `await using db = await postgres.connect({ url: env.HYPERDRIVE.connectionString })`. `db` has the members of a `postgres()` client except `connect`. The `[Symbol.asyncDispose]` ensures the underlying `pg.Client` is `end()`-ed when the `fetch` handler returns.
 - **All query surfaces** through the connection `db`:
-  - SQL DSL: `db.runtime().query(db.sql.public.user.select(...).build())`
+  - SQL DSL: `db.query(db.sql.public.user.select(...).build())`
   - Default ORM client: `db.orm.public.Post.where({ userId }).limit(10).all()`
-  - Custom ORM client with collection classes: `createOrmClient(db).User.newestFirst().limit(10).all()`, built from `db.runtime()` and `db.context`
+  - Custom collection classes: `db.orm.public.User.newestFirst().limit(10).all()`. The classes are passed once as `collections` to `postgresServerless(...)`, and every connection's `db.orm` and `tx.orm` carry them
   - Transactions: `db.transaction(async (tx) => …)`
 - **Cursor early-break** over a streamed result set (`for await … break`). Cursors are off by default; only the `/cursor/large` route opens its connection from a separate serverless client, `streamingPostgres`, with `cursor: { batchSize: 100 }`. The integration test runs the same read through a connection from `postgres` and checks that the server sends the whole result before the first row.
 
@@ -21,7 +21,7 @@ Routes implemented in [`src/worker.ts`](src/worker.ts):
 | ------------------- | ----------------- | -------------------------------------------------------- |
 | `GET /health`       | —                 | DB-free liveness check                                   |
 | `GET /sql/users`    | SQL DSL           | `db.sql.public.user.select(...).limit(?)`                       |
-| `GET /orm/users`    | Custom ORM client | `User.newestFirst().limit(?)`                             |
+| `GET /orm/users`    | `db.orm` (custom) | `User.newestFirst().limit(?)`                             |
 | `GET /orm/posts`    | `db.orm`          | `Post.where({ userId }).orderBy(...).limit(?)`            |
 | `GET /tx/commit`    | `db.transaction`  | INSERT post + UPDATE user atomically                     |
 | `GET /tx/rollback`  | `db.transaction`  | Throws inside the body; verifies ROLLBACK propagates     |
@@ -38,7 +38,7 @@ examples/prisma-8-cloudflare-worker/
 │   ├── worker.ts                       # `fetch` handler — all routes
 │   ├── prisma/db.ts                    # Serverless clients (postgresServerless)
 │   ├── prisma/contract.{json,d.ts}     # Emitted by `pnpm emit`
-│   └── orm-client/                     # ORM extensions (collections + factory)
+│   └── orm-client/                     # Custom collection classes
 ├── scripts/
 │   ├── setup-schema.ts                 # `prisma db init`, then the pg_stat_statements extension
 │   ├── seed.ts                         # Empty the tables, then insert sample users + posts

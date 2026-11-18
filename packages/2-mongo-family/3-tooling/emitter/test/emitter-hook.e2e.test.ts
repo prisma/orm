@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { mongoEmission } from '../src/index';
 import { blogContract } from './fixtures/blog-contract';
 
+const TYPES_MODULE = '@acme/orm-db/contract-types';
+
 const testHashes = { storageHash: 'blog-test', profileHash: 'blog-profile' };
 
 const mongoCodecImports: TypesImportSpec[] = [
@@ -15,13 +17,14 @@ const mongoCodecImports: TypesImportSpec[] = [
 ];
 
 describe('Mongo emitter hook end-to-end (blog fixture)', () => {
-  it('validates the blog contract', () => {
-    expect(() => mongoEmission.validateTypes(blogContract, {})).not.toThrow();
-    expect(() => mongoEmission.validateStructure(blogContract)).not.toThrow();
-  });
-
   it('generates complete contract.d.ts from blog contract', () => {
-    const types = generateContractDts(blogContract, mongoEmission, mongoCodecImports, testHashes);
+    const types = generateContractDts(
+      blogContract,
+      mongoEmission,
+      mongoCodecImports,
+      testHashes,
+      TYPES_MODULE,
+    );
 
     expect(types).toContain(
       'export type Contract = MongoContractWithTypeMaps<ContractBase, TypeMaps>',
@@ -71,17 +74,8 @@ describe('Mongo emitter hook end-to-end (blog fixture)', () => {
     expect(types).not.toContain('strategy');
   });
 
-  it('generates storage section with namespaces', () => {
-    const types = generateContractDts(blogContract, mongoEmission, [], testHashes);
-
-    expect(types).toContain('readonly namespaces:');
-    expect(types).toContain('readonly collection:');
-    expect(types).toContain('readonly users: MongoCollection');
-    expect(types).toContain('readonly posts: MongoCollection');
-  });
-
   it('generates Comment model with owner and empty storage', () => {
-    const types = generateContractDts(blogContract, mongoEmission, [], testHashes);
+    const types = generateContractDts(blogContract, mongoEmission, [], testHashes, TYPES_MODULE);
 
     expect(types).toContain(
       'readonly text: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } }',

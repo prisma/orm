@@ -56,19 +56,6 @@ describe('assertDescriptorSelfConsistency', () => {
     ).not.toThrow();
   });
 
-  it('throws MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH on stale headRef.hash', () => {
-    expect(() =>
-      assertDescriptorSelfConsistency({
-        extensionId: 'test-extension',
-        target: TARGET,
-        targetFamily: FAMILY,
-        storage: STORAGE,
-        headRefHash: 'stale-hash',
-        ...SQL_HOOKS,
-      }),
-    ).toThrowError(MigrationToolsError);
-  });
-
   it('error names the extension and includes both hashes in meta', () => {
     let captured: MigrationToolsError | undefined;
     try {

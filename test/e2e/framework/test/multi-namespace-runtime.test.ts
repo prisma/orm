@@ -21,6 +21,8 @@ import { Pool } from 'pg';
 import { describe, expect, it } from 'vitest';
 import { createControlClientForTests, withE2eMigrationsDir } from './utils';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 const postgresContractSerializer = new PostgresContractSerializer();
 
 function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
@@ -171,12 +173,13 @@ describe('multi-namespace runtime', () => {
         try {
           await withE2eMigrationsDir(async (migrationsDir) => {
             const init = await controlClient.dbInit({
+              invocation: TEST_INVOCATION,
               contract: contractJson,
               mode: 'apply',
               migrationsDir,
             });
             if (!init.ok) {
-              throw new Error(`dbInit failed: ${init.failure.summary}`);
+              throw new Error(`dbInit failed: ${init.failure.message}`);
             }
           });
         } finally {

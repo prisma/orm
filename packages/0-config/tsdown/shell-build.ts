@@ -1,18 +1,18 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { platformEntrypointOf } from '@internal/publish-surface/import-roots';
+import { platformEntrypointOf } from '@internal/publish-surface/platform-entrypoints';
 import {
   excludedSubpaths,
   publicShells,
   type ShellDefinition,
   type ShellName,
 } from '@internal/publish-surface/shells';
-import { init as initLexer, parse as parseModule } from 'es-module-lexer';
+import { init as initLexer, parse as parseModule } from 'es-module-lexer/minimal';
 import type { UserConfig } from 'tsdown';
 import { defineConfig } from './base.ts';
 
 /** A shell build configuration or mapping-table inconsistency. */
-class ShellConfigError extends Error {}
+export class ShellConfigError extends Error {}
 
 /**
  * Peers every shell declares by hand rather than deriving from the packages it
@@ -212,6 +212,7 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
     entry,
     copy: (shell.copy ?? []).map((pattern) => ({ from: resolve(repoRoot, pattern) })),
     skipNodeModulesBundle: false,
+    define: publishedModuleBaseDefine(shellName, internals),
     external: (id: string) => /^[@a-zA-Z]/.test(id) && !id.startsWith('@internal/'),
     dts: { enabled: true, sourcemap: true },
     exports: {
@@ -224,6 +225,32 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
       'build:done': () => assertAggregatesComplete(shellName, shellDir, aggregates),
     },
   });
+}
+
+export const PUBLISHED_MODULE_BASE_PREFIX = '__PRISMA_PUBLISHED_MODULE_BASE__';
+
+export function publishedModuleBaseIdentifier(name: string): string {
+  return `${PUBLISHED_MODULE_BASE_PREFIX}${name
+    .replace(/^@internal\//, '')
+    .toUpperCase()
+    .replaceAll(/[^A-Z0-9]/g, '_')}`;
+}
+
+function publishedModuleBaseDefine(
+  shellName: ShellName,
+  internals: readonly InternalPackage[],
+): Record<string, string> {
+  const define: Record<string, string> = {};
+  for (const pkg of internals) {
+    const identifier = publishedModuleBaseIdentifier(pkg.name);
+    if (define[identifier] !== undefined) {
+      throw new ShellConfigError(
+        `${shellName} bundles two packages whose module base identifier is ${identifier}`,
+      );
+    }
+    define[identifier] = JSON.stringify(pkg.entry === '' ? shellName : `${shellName}/${pkg.entry}`);
+  }
+  return define;
 }
 
 /**
@@ -340,23 +367,31 @@ function crossShellRewritePlugin(shellName: ShellName) {
       if (target.shell === shellName) return null;
       return { id: target.id, external: true };
     },
-    // The dts bundler leaves inline `import("@internal/...")` type
-    // references (copied verbatim from the internal declaration files) in the
-    // emitted output; rewrite them to published specifiers. Same-shell
-    // references become self-references, which TypeScript resolves through
-    // the shell's own exports map.
     generateBundle(_options: unknown, bundle: Record<string, { type: string; code?: string }>) {
       for (const [fileName, output] of Object.entries(bundle)) {
         if (!fileName.endsWith('.d.mts') || output.type !== 'chunk') continue;
         if (typeof output.code !== 'string') continue;
-        output.code = output.code.replace(
-          /import\((["'])(@internal\/[^"')]+)\1\)/g,
-          (_match, quote: string, source: string) =>
-            `import(${quote}${publicSpecifier(source, shellName).id}${quote})`,
-        );
+        output.code = rewriteInternalModuleNames(output.code, shellName);
       }
     },
   };
+}
+
+/**
+ * The dts bundler leaves inline `import("@internal/...")` type references (copied verbatim from the internal declaration files) in the emitted output, and keeps `declare module "@internal/..."` augmentations verbatim. This rewrites both to published specifiers. Same-shell references become self-references, which TypeScript resolves through the shell's own exports map. An `@internal/` module with no public mapping throws `ShellConfigError`.
+ */
+export function rewriteInternalModuleNames(declarations: string, shellName: ShellName): string {
+  return declarations
+    .replace(
+      /import\((["'])(@internal\/[^"')]+)\1\)/g,
+      (_match, quote: string, source: string) =>
+        `import(${quote}${publicSpecifier(source, shellName).id}${quote})`,
+    )
+    .replace(
+      /declare module (["'])(@internal\/[^"']+)\1/g,
+      (_match, quote: string, source: string) =>
+        `declare module ${quote}${publicSpecifier(source, shellName).id}${quote}`,
+    );
 }
 
 function readAllInternalPackages(repoRoot: string): Map<string, InternalPackage> {

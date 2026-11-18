@@ -20,7 +20,6 @@ import type { CodecInstanceContext } from './codec-types';
 export type ColumnTypeDescriptor<TCodecId extends string = string> = {
   readonly codecId: TCodecId;
   readonly typeParams?: Record<string, unknown> | undefined;
-  readonly typeRef?: string;
   /**
    * Storage-plane value-set ref, set by an authoring path that resolves a
    * field's type against a value-set-deriving entity (e.g. a PSL entity-ref

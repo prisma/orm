@@ -141,6 +141,7 @@ export function prisma6Contract(
             documents,
             seedDiagnostics,
             binding: options.binding,
+            generatorFunctions: context.generatorFunctions,
             authoringContributions: context.authoringContributions,
             codecLookup: context.codecLookup,
             dataTypes: context.dataTypes,

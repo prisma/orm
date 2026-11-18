@@ -1,7 +1,7 @@
 const DIRECTIVE = /^(\s*\/\/ *use +)(prisma-8|prisma-next)( *)(?!\S)/;
 const LEGACY_NAME = 'prisma-next';
 
-export function isPrismaNextSchema(text: string): boolean {
+export function isPrisma8Schema(text: string): boolean {
   return DIRECTIVE.test(text);
 }
 

@@ -48,7 +48,7 @@ describe('ports/prisma/functional/decimal-list', () => {
     () =>
       withDecimalList(async ({ db }) => {
         await db.public.User.create({
-          decimals: ['12.3', '45.6'] as Numeric<65, 30>[],
+          decimals: ['12.3', '45.6'],
         });
       }),
     timeouts.spinUpPpgDev,

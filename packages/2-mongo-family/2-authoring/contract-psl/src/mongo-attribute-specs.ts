@@ -20,6 +20,7 @@ import {
   fieldAttribute,
   fieldRef,
   funcCall,
+  generatorAttributeSpec,
   identifier,
   int,
   interpretAttribute,
@@ -33,6 +34,7 @@ import {
   record,
   referencedFieldRef,
   str,
+  writtenScalar,
 } from '@internal/psl-parser';
 import type { FieldAttributeAst, ModelAttributeAst, PslSources } from '@internal/psl-parser/syntax';
 
@@ -67,16 +69,13 @@ function buildFieldAttributeCtx(input: {
 }
 
 const UNLOWERED_FIELD_ATTRIBUTE_HINTS: ReadonlyMap<string, string> = new Map([
-  [
-    'updatedAt',
-    'To fill the timestamp on create and update, use `temporal.updatedAt()` as the field type.',
-  ],
+  ['updatedAt', 'Use @onCreate(now()) @onUpdate(now()), or type the field temporal.UpdatedAt.'],
 ]);
 
-const DEFAULT_NOW_HINT =
-  'To fill the timestamp on create, use `temporal.createdAt()` as the field type.';
+const DEFAULT_NOW_HINT = 'Use @onCreate(now()) instead; MongoDB has no database defaults.';
 
-function unloweredAttributeHint(attribute: ResolvedAttribute): string | undefined {
+/** The hint for an attribute MongoDB PSL does not lower, naming what to write instead. */
+export function unloweredAttributeHint(attribute: ResolvedAttribute): string | undefined {
   if (attribute.name === 'default' && attribute.args[0]?.value.replace(/\s/g, '') === 'now()') {
     return DEFAULT_NOW_HINT;
   }
@@ -176,10 +175,18 @@ export const mapFieldSpec = fieldAttribute('map', {
   positional: [{ key: 'name', type: str(), documentation: 'The key stored in MongoDB documents.' }],
 });
 export const idFieldSpec = fieldAttribute('id', {
-  documentation: 'Identifies the document’s primary-key field.',
+  documentation:
+    'Marks the field stored as `_id`, the document’s id. The field must be stored as `_id`: name it `_id` or add `@map("_id")`. A model may leave `@id` out; its documents still get an ObjectId `_id`.',
 });
+const indexMapArg = {
+  type: optional(str()),
+  documentation:
+    'The name MongoDB stores the index under. Without it, the index is named after its keys and directions, such as `email_1`.',
+};
+
 export const uniqueFieldSpec = fieldAttribute('unique', {
   documentation: 'Requires values in this field to be unique across the collection.',
+  named: { map: indexMapArg },
 });
 
 export const relationFieldSpec = fieldAttribute('relation', {
@@ -227,8 +234,9 @@ export function baseModelSpec() {
       },
       {
         key: 'value',
-        type: str(),
-        documentation: 'The discriminator value identifying this variant.',
+        type: writtenScalar(str()),
+        documentation:
+          "The discriminator value identifying this variant, a value of the discriminator field's type.",
       },
     ],
   });
@@ -325,6 +333,7 @@ function buildIndexModelSpec(name: 'index' | 'unique') {
       },
     ],
     named: {
+      map: indexMapArg,
       type: {
         type: optional(
           oneOf(num(1), num(-1), str('text'), str('2dsphere'), str('2d'), str('hashed')),
@@ -377,6 +386,7 @@ function buildTextIndexModelSpec() {
       },
     ],
     named: {
+      map: indexMapArg,
       filter: {
         type: optional(json()),
         documentation: 'A JSON partial-filter expression limiting which documents are indexed.',
@@ -420,5 +430,7 @@ export const mongoAttributeSpecs = {
     unique: staticFieldSpec(uniqueFieldSpec),
     map: staticFieldSpec(mapFieldSpec),
     relation: staticFieldSpec(relationFieldSpec),
+    onCreate: generatorAttributeSpec('onCreate'),
+    onUpdate: generatorAttributeSpec('onUpdate'),
   },
 } as const satisfies AttributeSpecNamespace;

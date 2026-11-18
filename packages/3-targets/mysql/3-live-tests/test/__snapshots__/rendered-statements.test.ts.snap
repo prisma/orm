@@ -1,0 +1,829 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the statements MySQL live tests send > reads includes through the ORM 1`] = `
+{
+  "awkwardText": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`Author\`.\`id\` AS \`id\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('body', \`notes__rows\`.\`body\`, 'summary', \`notes__rows\`.\`summary\`) ORDER BY \`notes__rows\`.\`notes__order_0\` ASC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`notes\` FROM (SELECT \`Note\`.\`body\` AS \`body\`, \`Note\`.\`summary\` AS \`summary\`, \`Note\`.\`id\` AS \`notes__order_0\` FROM \`Note\` WHERE \`Note\`.\`authorId\` = \`Author\`.\`id\` ORDER BY \`Note\`.\`id\` ASC) AS \`notes__rows\`) AS \`notes\` FROM \`Author\` WHERE \`Author\`.\`id\` = ?1 LIMIT 1",
+      },
+    ],
+  },
+  "combined": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          3,
+        ],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`User\`.\`id\` AS \`id\`, (SELECT JSON_OBJECT('rows', \`posts__combine__rows\`.\`posts\`, 'count', \`posts__combine__count\`.\`posts\`) AS \`posts\` FROM (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('title', \`posts__rows\`.\`title\`) ORDER BY \`posts__rows\`.\`posts__order_0\` ASC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`posts\` FROM (SELECT \`Post\`.\`title\` AS \`title\`, \`Post\`.\`title\` AS \`posts__order_0\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\` ORDER BY \`Post\`.\`title\` ASC LIMIT 2) AS \`posts__rows\`) AS \`posts__combine__rows\` INNER JOIN (SELECT JSON_OBJECT('value', CAST(COUNT(*) AS CHAR)) AS \`posts\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\`) AS \`posts__combine__count\` ON TRUE) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` <= ?1 ORDER BY \`User\`.\`id\` ASC",
+      },
+    ],
+  },
+  "countTwoLevels": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          3,
+        ],
+        "sql": "SELECT \`Post\`.\`id\` AS \`id\`, (SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('email', \`author__rows\`.\`email\`, 'posts', \`author__rows\`.\`posts\`)), JSON_ARRAY()) AS \`author\` FROM (SELECT \`User\`.\`email\` AS \`email\`, (SELECT JSON_OBJECT('value', CAST(COUNT(*) AS CHAR)) AS \`posts\` FROM \`Post\` AS \`Post_2\` WHERE \`Post_2\`.\`authorId\` = \`User\`.\`id\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = \`Post\`.\`authorId\`) AS \`author__rows\`) AS \`author\` FROM \`Post\` WHERE \`Post\`.\`id\` >= ?1 ORDER BY \`Post\`.\`id\` ASC",
+      },
+    ],
+  },
+  "enumMember": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          4,
+        ],
+        "sql": "SELECT \`Post\`.\`id\` AS \`id\`, (SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('role', \`author__rows\`.\`role\`)), JSON_ARRAY()) AS \`author\` FROM (SELECT \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = \`Post\`.\`authorId\`) AS \`author__rows\`) AS \`author\` FROM \`Post\` WHERE \`Post\`.\`id\` >= ?1 ORDER BY \`Post\`.\`id\` ASC",
+      },
+    ],
+  },
+  "exactValues": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`Account\`.\`id\` AS \`id\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('id', CAST(\`events__rows\`.\`id\` AS CHAR), 'at', \`events__rows\`.\`at\`) ORDER BY \`events__rows\`.\`events__order_0\` DESC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`events\` FROM (SELECT \`Event\`.\`id\` AS \`id\`, \`Event\`.\`at\` AS \`at\`, \`Event\`.\`id\` AS \`events__order_0\` FROM \`Event\` WHERE \`Event\`.\`accountId\` = \`Account\`.\`id\` ORDER BY \`Event\`.\`id\` DESC) AS \`events__rows\`) AS \`events\` FROM \`Account\` WHERE \`Account\`.\`id\` = ?1 LIMIT 1",
+      },
+    ],
+  },
+  "ordered": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`User\`.\`id\` AS \`id\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('title', \`posts__rows\`.\`title\`) ORDER BY \`posts__rows\`.\`posts__order_0\` DESC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`posts\` FROM (SELECT \`Post\`.\`title\` AS \`title\`, \`Post\`.\`title\` AS \`posts__order_0\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\` ORDER BY \`Post\`.\`title\` DESC) AS \`posts__rows\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`User\`.\`id\` AS \`id\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('title', \`posts__rows\`.\`title\`) ORDER BY \`posts__rows\`.\`posts__order_0\` ASC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`posts\` FROM (SELECT \`Post\`.\`title\` AS \`title\`, \`Post\`.\`title\` AS \`posts__order_0\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\` ORDER BY \`Post\`.\`title\` ASC) AS \`posts__rows\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+    ],
+  },
+  "paged": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`User\`.\`id\` AS \`id\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('title', \`posts__rows\`.\`title\`) ORDER BY \`posts__rows\`.\`posts__order_0\` ASC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`posts\` FROM (SELECT \`Post\`.\`title\` AS \`title\`, \`Post\`.\`title\` AS \`posts__order_0\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\` ORDER BY \`Post\`.\`title\` ASC LIMIT 1 OFFSET 1) AS \`posts__rows\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+    ],
+  },
+  "reduced": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, (SELECT JSON_OBJECT('value', CAST(COUNT(*) AS CHAR)) AS \`posts\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, (SELECT JSON_OBJECT('value', CAST(SUM(\`Post\`.\`id\`) AS CHAR)) AS \`posts\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, (SELECT JSON_OBJECT('value', CAST(SUM(\`Post\`.\`id\`) AS DOUBLE) / COUNT(\`Post\`.\`id\`)) AS \`posts\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, (SELECT JSON_OBJECT('value', MIN(\`Post\`.\`title\`)) AS \`posts\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, (SELECT JSON_OBJECT('value', MAX(\`Post\`.\`title\`)) AS \`posts\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+    ],
+  },
+  "sumBigInt": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`Account\`.\`id\` AS \`id\`, (SELECT JSON_OBJECT('value', CAST(SUM(\`Event\`.\`id\`) AS CHAR)) AS \`events\` FROM \`Event\` WHERE \`Event\`.\`accountId\` = \`Account\`.\`id\`) AS \`events\` FROM \`Account\` WHERE \`Account\`.\`id\` = ?1 LIMIT 1",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`Account\`.\`id\` AS \`id\`, (SELECT JSON_OBJECT('value', CAST(SUM(\`Event\`.\`id\`) AS CHAR)) AS \`events\` FROM \`Event\` WHERE \`Event\`.\`accountId\` = \`Account\`.\`id\`) AS \`events\` FROM \`Account\` WHERE \`Account\`.\`id\` = ?1 LIMIT 1",
+      },
+    ],
+  },
+  "threeLevels": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          2,
+        ],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`User\`.\`id\` AS \`id\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('title', \`posts__rows\`.\`title\`, 'author', \`posts__rows\`.\`author\`) ORDER BY \`posts__rows\`.\`posts__order_0\` ASC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`posts\` FROM (SELECT \`Post\`.\`title\` AS \`title\`, (SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('email', \`author__rows\`.\`email\`, 'posts', \`author__rows\`.\`posts\`)), JSON_ARRAY()) AS \`author\` FROM (SELECT \`User_2\`.\`email\` AS \`email\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('id', \`posts__rows_2\`.\`id\`) ORDER BY \`posts__rows_2\`.\`posts__order_0\` DESC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`posts\` FROM (SELECT \`Post_2\`.\`id\` AS \`id\`, \`Post_2\`.\`id\` AS \`posts__order_0\` FROM \`Post\` AS \`Post_2\` WHERE \`Post_2\`.\`authorId\` = \`User_2\`.\`id\` ORDER BY \`Post_2\`.\`id\` DESC) AS \`posts__rows_2\`) AS \`posts\` FROM \`User\` AS \`User_2\` WHERE \`User_2\`.\`id\` = \`Post\`.\`authorId\`) AS \`author__rows\`) AS \`author\`, \`Post\`.\`id\` AS \`posts__order_0\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\` ORDER BY \`Post\`.\`id\` ASC) AS \`posts__rows\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+    ],
+  },
+  "toOne": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [],
+        "sql": "SELECT \`Post\`.\`id\` AS \`id\`, \`Post\`.\`title\` AS \`title\`, (SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('id', \`author__rows\`.\`id\`, 'email', \`author__rows\`.\`email\`)), JSON_ARRAY()) AS \`author\` FROM (SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`email\` AS \`email\` FROM \`User\` WHERE \`User\`.\`id\` = \`Post\`.\`authorId\`) AS \`author__rows\`) AS \`author\` FROM \`Post\` ORDER BY \`Post\`.\`id\` ASC",
+      },
+    ],
+  },
+  "twoLevels": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`User\`.\`id\` AS \`id\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('title', \`posts__rows\`.\`title\`, 'author', \`posts__rows\`.\`author\`) ORDER BY \`posts__rows\`.\`posts__order_0\` DESC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`posts\` FROM (SELECT \`Post\`.\`title\` AS \`title\`, (SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('email', \`author__rows\`.\`email\`)), JSON_ARRAY()) AS \`author\` FROM (SELECT \`User_2\`.\`email\` AS \`email\` FROM \`User\` AS \`User_2\` WHERE \`User_2\`.\`id\` = \`Post\`.\`authorId\`) AS \`author__rows\`) AS \`author\`, \`Post\`.\`id\` AS \`posts__order_0\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\` ORDER BY \`Post\`.\`id\` DESC) AS \`posts__rows\`) AS \`posts\` FROM \`User\` ORDER BY \`User\`.\`id\` ASC",
+      },
+    ],
+  },
+  "wholeRows": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('authorId', \`posts__rows\`.\`authorId\`, 'id', \`posts__rows\`.\`id\`, 'title', \`posts__rows\`.\`title\`) ORDER BY \`posts__rows\`.\`posts__order_0\` DESC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`posts\` FROM (SELECT \`Post\`.\`authorId\` AS \`authorId\`, \`Post\`.\`id\` AS \`id\`, \`Post\`.\`title\` AS \`title\`, \`Post\`.\`title\` AS \`posts__order_0\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\` ORDER BY \`Post\`.\`title\` DESC) AS \`posts__rows\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+      {
+        "params": [],
+        "sql": "SELECT \`Post\`.\`authorId\` AS \`authorId\`, \`Post\`.\`id\` AS \`id\`, \`Post\`.\`title\` AS \`title\`, (SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('email', \`author__rows\`.\`email\`, 'id', \`author__rows\`.\`id\`, 'role', \`author__rows\`.\`role\`)), JSON_ARRAY()) AS \`author\` FROM (SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = \`Post\`.\`authorId\`) AS \`author__rows\`) AS \`author\` FROM \`Post\` ORDER BY \`Post\`.\`id\` ASC",
+      },
+    ],
+  },
+}
+`;
+
+exports[`the statements MySQL live tests send > reads through the ORM and the SQL builder 1`] = `
+{
+  "aggregate": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          2,
+        ],
+        "sql": "SELECT COUNT(*) AS \`count\`, SUM(\`Post\`.\`authorId\`) AS \`total\`, CAST(SUM(\`Post\`.\`authorId\`) AS DOUBLE) / COUNT(\`Post\`.\`authorId\`) AS \`mean\`, MIN(\`Post\`.\`title\`) AS \`first\`, MAX(\`Post\`.\`title\`) AS \`last\` FROM \`Post\` WHERE \`Post\`.\`id\` >= ?1",
+      },
+    ],
+  },
+  "bigintExpression": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          9007199254740993n,
+        ],
+        "sql": "SELECT \`id\` AS \`id\` FROM \`Counter\` WHERE \`big\` + 0 = ?1",
+      },
+    ],
+  },
+  "bigintFilter": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          9007199254740993n,
+        ],
+        "sql": "SELECT \`Counter\`.\`id\` AS \`id\`, \`Counter\`.\`big\` AS \`big\` FROM \`Counter\` WHERE \`Counter\`.\`big\` = ?1 ORDER BY \`Counter\`.\`id\` ASC",
+      },
+    ],
+  },
+  "builder": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "ADMIN",
+        ],
+        "sql": "SELECT \`id\` AS \`id\`, \`email\` AS \`email\` FROM \`User\` WHERE \`role\` = ?1 ORDER BY \`id\` ASC",
+      },
+    ],
+  },
+  "derivedJoinParams": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "ADMIN",
+          "Delta",
+        ],
+        "sql": "SELECT \`email\` AS \`email\`, \`title\` AS \`title\` FROM \`User\` INNER JOIN (SELECT \`authorId\` AS \`authorId\`, \`title\` AS \`title\` FROM \`Post\` WHERE \`title\` = ?2) AS \`titled\` ON \`User\`.\`id\` = \`titled\`.\`authorId\` WHERE \`User\`.\`role\` = ?1",
+      },
+    ],
+  },
+  "distinctInclude": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "b@example.com",
+          "Beta",
+        ],
+        "sql": "SELECT \`User\`.\`role\` AS \`role\`, (SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT('title', \`posts__rows\`.\`title\`)), JSON_ARRAY()) AS \`posts\` FROM (SELECT \`Post\`.\`title\` AS \`title\` FROM \`Post\` WHERE (\`Post\`.\`authorId\` = \`User\`.\`id\` AND \`Post\`.\`title\` = ?2)) AS \`posts__rows\`) AS \`posts\` FROM (SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, ROW_NUMBER() OVER (PARTITION BY \`User\`.\`role\` ORDER BY \`User\`.\`role\` ASC) AS \`__prisma_distinct_rn\` FROM \`User\` WHERE \`User\`.\`email\` = ?1) AS \`User\` WHERE \`User\`.\`__prisma_distinct_rn\` = 1",
+      },
+    ],
+  },
+  "enumExtremes": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [],
+        "sql": "SELECT MIN(\`User\`.\`role\`) AS \`least\`, MAX(\`User\`.\`role\`) AS \`greatest\` FROM \`User\`",
+      },
+      {
+        "params": [],
+        "sql": "SELECT \`User\`.\`role\` AS \`role\` FROM \`User\` ORDER BY \`User\`.\`role\` ASC LIMIT 1",
+      },
+    ],
+  },
+  "filtered": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "ADMIN",
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`email\` AS \`email\` FROM \`User\` WHERE \`User\`.\`role\` = ?1 ORDER BY \`User\`.\`email\` ASC LIMIT 2",
+      },
+    ],
+  },
+  "first": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          3,
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`email\` AS \`email\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+    ],
+  },
+  "groupBy": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [],
+        "sql": "SELECT \`Post\`.\`authorId\` AS \`authorId\`, COUNT(*) AS \`posts\`, MAX(\`Post\`.\`id\`) AS \`newest\` FROM \`Post\` GROUP BY \`Post\`.\`authorId\`",
+      },
+    ],
+  },
+  "joinParams": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "Beta",
+          "ADMIN",
+        ],
+        "sql": "SELECT \`email\` AS \`email\`, \`title\` AS \`title\` FROM \`User\` INNER JOIN \`Post\` ON (\`User\`.\`id\` = \`Post\`.\`authorId\` AND \`User\`.\`role\` = ?2) WHERE \`Post\`.\`title\` = ?1",
+      },
+    ],
+  },
+  "marker": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "_prisma_marker",
+        ],
+        "sql": "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\` FROM \`User\` WHERE \`User\`.\`id\` = ?1 LIMIT 1",
+      },
+    ],
+  },
+  "offsets": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` ORDER BY \`User\`.\`id\` ASC LIMIT 18446744073709551615 OFFSET 2",
+      },
+      {
+        "params": [],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` ORDER BY \`User\`.\`id\` ASC LIMIT 2 OFFSET 1",
+      },
+    ],
+  },
+}
+`;
+
+exports[`the statements MySQL live tests send > runs raw SQL 1`] = `
+{
+  "embeddedSelect": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "Copy of ",
+          10,
+          "ADMIN",
+          14,
+        ],
+        "sql": "INSERT INTO Post (id, title, authorId) SELECT c.id, CONCAT(?1, c.title), c.authorId FROM (SELECT \`Post\`.\`id\` + ?2 AS \`id\`, \`Post\`.\`title\` AS \`title\`, \`Post\`.\`authorId\` AS \`authorId\` FROM \`Post\` INNER JOIN \`User\` ON \`User\`.\`id\` = \`Post\`.\`authorId\` WHERE \`User\`.\`role\` = ?3) AS c WHERE c.id < ?4",
+      },
+      {
+        "params": [
+          10,
+        ],
+        "sql": "SELECT \`id\` AS \`id\`, \`title\` AS \`title\`, \`authorId\` AS \`authorId\` FROM \`Post\` WHERE \`id\` > ?1 ORDER BY \`id\` ASC",
+      },
+    ],
+  },
+  "inTransaction": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          500,
+        ],
+        "sql": "WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < ?1) SELECT n, REPEAT('x', 4000) AS pad FROM s",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT ?1 AS m",
+      },
+    ],
+  },
+  "integers": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          10,
+          9,
+          10,
+          9,
+          5,
+          9007199254740993n,
+          1n,
+        ],
+        "sql": "SELECT ?1 < ?2 AS lt, GREATEST(?3, ?4) AS greatest, CAST(JSON_ARRAY(?5) AS CHAR) AS arr, CAST(?6 AS SIGNED) + ?7 AS sum",
+      },
+      {
+        "params": [
+          9,
+        ],
+        "sql": "SELECT id FROM Post WHERE title > ?1 ORDER BY id",
+      },
+    ],
+  },
+  "limits": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          2,
+        ],
+        "sql": "SELECT id FROM Post ORDER BY id LIMIT ?1",
+      },
+      {
+        "params": [
+          2,
+          1,
+        ],
+        "sql": "SELECT id FROM Post ORDER BY id LIMIT ?1 OFFSET ?2",
+      },
+      {
+        "params": [
+          1,
+          2,
+        ],
+        "sql": "SELECT id FROM Post ORDER BY id LIMIT ?1, ?2",
+      },
+    ],
+  },
+}
+`;
+
+exports[`the statements MySQL live tests send > runs work in transactions 1`] = `
+{
+  "connectionIdentity": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [],
+        "sql": "SELECT CONNECTION_ID() AS id",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`email\` AS \`email\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+    ],
+  },
+  "implicitAndExplicit": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          10,
+          "implicit@example.com",
+          "USER",
+        ],
+        "sql": "INSERT INTO \`User\` (\`id\`, \`email\`, \`role\`) VALUES (?1, ?2, ?3)",
+      },
+      {
+        "params": [
+          10,
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`email\` AS \`email\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+      {
+        "params": [
+          11,
+          "explicit@example.com",
+          "ADMIN",
+        ],
+        "sql": "INSERT INTO \`User\` (\`id\`, \`email\`, \`role\`) VALUES (?1, ?2, ?3)",
+      },
+      {
+        "params": [
+          11,
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\`, \`User\`.\`email\` AS \`email\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+    ],
+  },
+}
+`;
+
+exports[`the statements MySQL live tests send > writes through the ORM 1`] = `
+{
+  "create": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "a@example.com",
+          "USER",
+        ],
+        "sql": "INSERT INTO \`User\` (\`email\`, \`role\`) VALUES (?1, ?2)",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+    ],
+  },
+  "createAllByDatetime": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "2024-01-02 03:04:05.678",
+          "later",
+          "2024-01-02 03:04:05.123",
+          "earlier",
+        ],
+        "sql": "INSERT INTO \`Tick\` (\`at\`, \`label\`) VALUES (?1, ?2), (?3, ?4)",
+      },
+      {
+        "params": [
+          "2024-01-02 03:04:05.678",
+          "2024-01-02 03:04:05.123",
+        ],
+        "sql": "SELECT \`Tick\`.\`at\` AS \`at\`, \`Tick\`.\`label\` AS \`label\` FROM \`Tick\` WHERE \`Tick\`.\`at\` IN (?1, ?2)",
+      },
+    ],
+  },
+  "createAllChunked": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": 3600,
+        "sql": "INSERT INTO \`User\` (\`id\`, \`email\`, \`role\`) VALUES (?1, ?2, ?3), (?4, ?5, ?6), (?7, ?8, ?9), (?10, ?11, ?12), (?13, ?14, ?15), (?16, ?17, ?18), (?19, ?20, ?21), (?22, ?23, ?24), (?25, ?26, ?27), (?28, …",
+        "sqlLength": 26541,
+      },
+      {
+        "params": 500,
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` IN (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?…",
+        "sqlLength": 3004,
+      },
+      {
+        "params": 500,
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` IN (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?…",
+        "sqlLength": 3004,
+      },
+      {
+        "params": 200,
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` IN (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?…",
+        "sqlLength": 1204,
+      },
+    ],
+  },
+  "createAllExplicit": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          10,
+          "c@example.com",
+          "USER",
+          11,
+          "d@example.com",
+          "USER",
+        ],
+        "sql": "INSERT INTO \`User\` (\`id\`, \`email\`, \`role\`) VALUES (?1, ?2, ?3), (?4, ?5, ?6)",
+      },
+      {
+        "params": [
+          10,
+          11,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` IN (?1, ?2)",
+      },
+      {
+        "params": [
+          "e@example.com",
+          "USER",
+        ],
+        "sql": "INSERT INTO \`User\` (\`email\`, \`role\`) VALUES (?1, ?2)",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+    ],
+  },
+  "createAllGenerated": {
+    "outcome": "ORM.CAPABILITY_MISSING",
+    "statements": [],
+  },
+  "createAndCount": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "a@example.com",
+          "USER",
+          "b@example.com",
+          "ADMIN",
+        ],
+        "sql": "INSERT INTO \`User\` (\`email\`, \`role\`) VALUES (?1, ?2), (?3, ?4)",
+      },
+    ],
+  },
+  "createWithAuthor": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "b@example.com",
+          "ADMIN",
+        ],
+        "sql": "INSERT INTO \`User\` (\`email\`, \`role\`) VALUES (?1, ?2)",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+      {
+        "params": [
+          "Third",
+          1,
+        ],
+        "sql": "INSERT INTO \`Post\` (\`title\`, \`authorId\`) VALUES (?1, ?2)",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`Post\`.\`authorId\` AS \`authorId\`, \`Post\`.\`id\` AS \`id\`, \`Post\`.\`title\` AS \`title\` FROM \`Post\` WHERE \`Post\`.\`id\` = ?1",
+      },
+    ],
+  },
+  "createWithId": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          0,
+          "zero@example.com",
+          "USER",
+        ],
+        "sql": "INSERT INTO \`User\` (\`id\`, \`email\`, \`role\`) VALUES (?1, ?2, ?3)",
+      },
+      {
+        "params": [
+          0,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+    ],
+  },
+  "createWithPosts": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "a@example.com",
+          "USER",
+        ],
+        "sql": "INSERT INTO \`User\` (\`email\`, \`role\`) VALUES (?1, ?2)",
+      },
+      {
+        "params": [
+          "First",
+          1,
+          "Second",
+        ],
+        "sql": "INSERT INTO \`Post\` (\`title\`, \`authorId\`) VALUES (?1, ?2), (?3, ?2)",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\`, (SELECT CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('title', \`posts__rows\`.\`title\`) ORDER BY \`posts__rows\`.\`posts__order_0\` ASC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`posts\` FROM (SELECT \`Post\`.\`title\` AS \`title\`, \`Post\`.\`id\` AS \`posts__order_0\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = \`User\`.\`id\` ORDER BY \`Post\`.\`id\` ASC) AS \`posts__rows\`) AS \`posts\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+    ],
+  },
+  "updateAllDeleteAll": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`Post\`.\`id\` AS \`id\` FROM \`Post\` WHERE \`Post\`.\`authorId\` = ?1",
+      },
+      {
+        "params": [
+          "Edited",
+          1,
+          1,
+        ],
+        "sql": "UPDATE \`Post\` SET \`title\` = ?1 WHERE (\`Post\`.\`authorId\` = ?2 AND \`Post\`.\`id\` = ?3)",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`Post\`.\`id\` AS \`id\`, \`Post\`.\`title\` AS \`title\` FROM \`Post\` WHERE \`Post\`.\`id\` = ?1",
+      },
+      {
+        "params": [
+          "Edited",
+        ],
+        "sql": "SELECT \`Post\`.\`id\` AS \`id\` FROM \`Post\` WHERE \`Post\`.\`title\` = ?1 ORDER BY \`Post\`.\`id\` ASC",
+      },
+      {
+        "params": [
+          "Edited",
+          1,
+        ],
+        "sql": "DELETE FROM \`Post\` WHERE (\`Post\`.\`title\` = ?1 AND \`Post\`.\`id\` = ?2)",
+      },
+      {
+        "params": [
+          2,
+        ],
+        "sql": "DELETE FROM \`Post\` WHERE \`Post\`.\`authorId\` = ?1",
+      },
+      {
+        "params": [],
+        "sql": "SELECT \`Post\`.\`authorId\` AS \`authorId\`, \`Post\`.\`id\` AS \`id\`, \`Post\`.\`title\` AS \`title\` FROM \`Post\`",
+      },
+    ],
+  },
+  "updateUpsertDelete": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`id\` AS \`id\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+      {
+        "params": [
+          "ADMIN",
+          1,
+          1,
+        ],
+        "sql": "UPDATE \`User\` SET \`role\` = ?1 WHERE (\`User\`.\`id\` = ?2 AND \`User\`.\`id\` = ?3)",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+      {
+        "params": [
+          "a@example.com",
+          "USER",
+          "ADMIN",
+        ],
+        "sql": "INSERT INTO \`User\` (\`email\`, \`role\`) VALUES (?1, ?2) AS \`new\` ON DUPLICATE KEY UPDATE \`role\` = ?3",
+      },
+      {
+        "params": [
+          "a@example.com",
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`email\` = ?1",
+      },
+      {
+        "params": [
+          "b@example.com",
+          "USER",
+        ],
+        "sql": "INSERT INTO \`User\` (\`email\`, \`role\`) VALUES (?1, ?2) AS \`new\` ON DUPLICATE KEY UPDATE \`email\` = \`new\`.\`email\`",
+      },
+      {
+        "params": [
+          "b@example.com",
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`email\` = ?1",
+      },
+      {
+        "params": [
+          "ADMIN",
+          "USER",
+        ],
+        "sql": "UPDATE \`User\` SET \`role\` = ?1 WHERE \`User\`.\`role\` = ?2",
+      },
+      {
+        "params": [
+          1,
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`id\` = ?1",
+      },
+      {
+        "params": [
+          1,
+          1,
+        ],
+        "sql": "DELETE FROM \`User\` WHERE (\`User\`.\`id\` = ?1 AND \`User\`.\`id\` = ?2)",
+      },
+      {
+        "params": [],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`role\` AS \`role\` FROM \`User\`",
+      },
+    ],
+  },
+  "upsertByCase": {
+    "outcome": "answered",
+    "statements": [
+      {
+        "params": [
+          "B@Example.com",
+          "USER",
+          "USER",
+        ],
+        "sql": "INSERT INTO \`User\` (\`email\`, \`role\`) VALUES (?1, ?2) AS \`new\` ON DUPLICATE KEY UPDATE \`role\` = ?3",
+      },
+      {
+        "params": [
+          "B@Example.com",
+        ],
+        "sql": "SELECT \`User\`.\`email\` AS \`email\`, \`User\`.\`id\` AS \`id\`, \`User\`.\`role\` AS \`role\` FROM \`User\` WHERE \`User\`.\`email\` = ?1",
+      },
+    ],
+  },
+}
+`;

@@ -7,19 +7,12 @@ import {
   MongoUnwindStage,
   MongoVectorSearchStage,
 } from '@internal/mongo-query-ast/execution';
-import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { computePipelineResultShape } from '../src/pipeline-result-shape';
 import { contractModelToMongoResultShape } from '../src/result-shape';
-import type { TContract } from './fixtures/test-contract';
-import { testContractJson } from './fixtures/test-contract';
+import { testContract } from './fixtures/test-contract';
 
-const contract = blindCast<
-  TContract,
-  'query-builder fixture JSON carries domain.namespaces envelope'
->(testContractJson);
-
-const orderModel = contract.domain.namespaces.__unbound__!.models['Order'];
+const orderModel = testContract.domain.namespaces.__unbound__!.models['Order'];
 const orderShape = contractModelToMongoResultShape(orderModel);
 
 describe('computePipelineResultShape', () => {

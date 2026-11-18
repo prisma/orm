@@ -107,3 +107,24 @@ When using an exception:
 - Keep the exception local to that package only.
 - Add a short comment in `tsdown.config.ts` explaining why it cannot use auto-exports.
 - Keep `package.json#exports` minimal and explicit.
+
+## A package's published module base
+
+A package that names its own modules, such as the modules its type declarations name or the ones its `defineConfig` puts in the config, reads its published module base from a global of its own and appends the subpath. The module base is the published package's name plus the entry the package is published under in `packages/0-shared/publish-surface/src/shells.ts`: `@prisma/orm-postgres` for `@internal/postgres`, which has no entry, `@prisma/orm-target-postgres/target` for `@internal/target-postgres`, and `@prisma/orm-postgres-contrib/citext` for `@internal/extension-citext`.
+
+The global is `__PRISMA_PUBLISHED_MODULE_BASE__` followed by the workspace name without `@internal/`, upper-cased, with every other character replaced by `_`: `__PRISMA_PUBLISHED_MODULE_BASE__TARGET_POSTGRES` for `@internal/target-postgres`, `__PRISMA_PUBLISHED_MODULE_BASE__ADAPTER_POSTGRES` for `@internal/adapter-postgres`. The shell build (`@repo/tsdown/shell-build`) defines one for each internal package it bundles, derived from that table, so two packages bundled into one published package each get their own. Nothing else defines it, so the package falls back to its workspace name when its own build or its source runs inside this repository:
+
+```ts
+declare const __PRISMA_PUBLISHED_MODULE_BASE__TARGET_POSTGRES: string | undefined;
+
+export const moduleBase =
+  typeof __PRISMA_PUBLISHED_MODULE_BASE__TARGET_POSTGRES === 'string'
+    ? __PRISMA_PUBLISHED_MODULE_BASE__TARGET_POSTGRES
+    : '@internal/target-postgres';
+```
+
+Write this check in each package's own source. The shell build defines a package's constant only in the shell that bundles that package. A package may read another package's constant, declared and checked the same way in its own source, only when the shells table maps both into the same published package: the Postgres adapter names the Postgres target's codec types from `__PRISMA_PUBLISHED_MODULE_BASE__TARGET_POSTGRES`, and both are bundled into `@prisma/orm-target-postgres`. Never import a base from another package: the imported code may be built into another published package, and it returns its value there.
+
+The workspace build must not define it. The shell build bundles the workspace build's `dist`, so a value substituted there could not be replaced with the published one. See `packages/3-targets/postgres/1-target/src/core/module-base.ts`.
+
+Cases in `all-shells-tarball.test.ts` in `@prisma/orm-framework` check this on every pull request: that no published package's built code still holds an identifier starting `__PRISMA_PUBLISHED_MODULE_BASE__`; that every module a published target or extension package's components name is an export of that package; that every type declaration in the config a target package's `defineConfig` returns names its `contract-types` export; and that no type declaration in any published package's built or declaration files names an `@internal/` module.

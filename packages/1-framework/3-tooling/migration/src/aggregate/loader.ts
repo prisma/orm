@@ -6,6 +6,7 @@ import { errorSpaceHeadRefMissing, MigrationToolsError } from '../errors';
 import { readMigrationsDir } from '../io';
 import {
   type ContractSpaceHeadRef,
+  contractSpaceHeadRefPath,
   readContractSpaceHeadRef,
 } from '../read-contract-space-head-ref';
 import { HEAD_REF_NAME, type RefLoadProblem, readRefsTolerant } from '../refs';
@@ -222,7 +223,14 @@ async function readHeadRefTolerant(
     if (!isToleratedRefHeadReadError(error)) {
       throw error;
     }
-    return { headRef: null, problem: { refName: HEAD_REF_NAME, detail: detailOf(error) } };
+    return {
+      headRef: null,
+      problem: {
+        refName: HEAD_REF_NAME,
+        path: contractSpaceHeadRefPath(migrationsDir, spaceId),
+        detail: detailOf(error),
+      },
+    };
   }
 }
 

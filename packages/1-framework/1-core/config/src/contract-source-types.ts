@@ -1,7 +1,10 @@
 import type { Contract } from '@internal/contract/types';
 import type { DataTypeSupport } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
-import type { CapabilityMatrix } from '@internal/framework-components/components';
+import type {
+  CapabilityMatrix,
+  GeneratorFunctionRegistry,
+} from '@internal/framework-components/components';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -49,6 +52,8 @@ export interface ContractSourceContext {
   /** The stack's data types with their authoring entries, so a written value can be read and cast into a receiving type. ADR 254. */
   readonly dataTypes: DataTypeSupport;
   readonly controlMutationDefaults: ControlMutationDefaults;
+  /** The stack's generator functions, which `@onCreate(fn())` and `@onUpdate(fn())` resolve through. */
+  readonly generatorFunctions: GeneratorFunctionRegistry;
   /**
    * The flat, expanded, deduped, sorted member file list — every
    * `source.inputs` glob resolved to the files it currently matches. A glob

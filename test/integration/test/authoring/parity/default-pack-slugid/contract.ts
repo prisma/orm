@@ -1,16 +1,16 @@
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import { textColumn } from '@internal/adapter-postgres/column-types';
+import { defineContract } from '@internal/postgres/contract-builder';
+import { slugidDefaultsPack } from './packs';
 
-export const contract = defineContract({
-  models: {
-    User: model('User', {
-      fields: {
-        id: field
-          .generated({
-            type: { codecId: 'pg/text@1' },
-            generated: { kind: 'generator', id: 'slugid' },
-          })
-          .id(),
-      },
-    }).sql({ table: 'user' }),
-  },
-});
+export const contract = defineContract(
+  { extensions: { 'slugid-defaults': slugidDefaultsPack } },
+  ({ field, gen, model }) => ({
+    models: {
+      User: model('User', {
+        fields: {
+          id: field.column(textColumn).id().onCreate(gen.slugid()),
+        },
+      }).sql({ table: 'user' }),
+    },
+  }),
+);

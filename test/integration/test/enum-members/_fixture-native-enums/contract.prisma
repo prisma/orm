@@ -13,8 +13,8 @@ native_enum Unused {
 
 enum Priority {
   @@type("pg/int8@1")
-  Low  = "1"
-  High = "10"
+  Low  = 1
+  High = 10
 }
 
 model Ticket {

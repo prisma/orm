@@ -1,0 +1,250 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "roots": {
+    "events": {
+      "model": "Event",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Event": {
+            "fields": {
+              "at": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "atText": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-instant-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdOn": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "day": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "dayValue": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "exactAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date-instant@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "lasts": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/duration-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "opensAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/time-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "opensValue": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/time-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "events",
+              "fields": {
+                "at": {
+                  "field": "at"
+                },
+                "atText": {
+                  "field": "atText"
+                },
+                "createdOn": {
+                  "field": "createdOn"
+                },
+                "day": {
+                  "field": "day"
+                },
+                "dayValue": {
+                  "field": "dayValue"
+                },
+                "exactAt": {
+                  "field": "exactAt"
+                },
+                "id": {
+                  "field": "_id"
+                },
+                "lasts": {
+                  "field": "lasts"
+                },
+                "opensAt": {
+                  "field": "opensAt"
+                },
+                "opensValue": {
+                  "field": "opensValue"
+                },
+                "updatedAt": {
+                  "field": "updatedAt"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "collection": {
+            "events": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "at": {
+                      "bsonType": "date"
+                    },
+                    "atText": {
+                      "bsonType": "date"
+                    },
+                    "createdOn": {
+                      "bsonType": "date"
+                    },
+                    "day": {
+                      "bsonType": "date"
+                    },
+                    "dayValue": {
+                      "bsonType": "date"
+                    },
+                    "exactAt": {
+                      "bsonType": "date"
+                    },
+                    "lasts": {
+                      "bsonType": "string"
+                    },
+                    "opensAt": {
+                      "bsonType": "string"
+                    },
+                    "opensValue": {
+                      "bsonType": "string"
+                    },
+                    "updatedAt": {
+                      "bsonType": "date"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "at",
+                    "atText",
+                    "createdOn",
+                    "day",
+                    "dayValue",
+                    "exactAt",
+                    "lasts",
+                    "opensAt",
+                    "opensValue",
+                    "updatedAt"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            }
+          }
+        },
+        "id": "__unbound__",
+        "kind": "mongo-database"
+      }
+    },
+    "storageHash": "63c8b5d76c812326c10d96bad63565af57c3b63d14b04c1cd396edbdd9fb3e6c"
+  },
+  "execution": {
+    "executionHash": "acc6b78d47b7b8d2e3ed4791e1129ff7e18d806cbbca5a8ffaff8031a2fee190",
+    "mutations": {
+      "defaults": [
+        {
+          "onCreate": {
+            "id": "dateStringNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "events",
+            "field": "createdOn",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "events",
+            "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        }
+      ]
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

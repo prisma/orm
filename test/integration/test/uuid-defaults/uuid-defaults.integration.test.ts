@@ -14,17 +14,20 @@ import {
   model,
 } from '@internal/postgres/contract-builder';
 import postgresClient from '@internal/postgres/runtime';
+import { contractFromJson } from '@internal/postgres/static';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
+import { timeouts, withClient, withDevDatabase, workspaceTypesModule } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emit } from '../../utils/emit';
 import { createIntegrationTestDir } from '../utils/cli-test-helpers';
+
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
 
 const schema = `// use prisma-8
 
@@ -110,7 +113,12 @@ async function initAndVerify(
   const client = createClient();
   try {
     await client.connect(connectionString);
-    const init = await client.dbInit({ contract: contractJson, mode: 'apply', migrationsDir });
+    const init = await client.dbInit({
+      invocation: TEST_INVOCATION,
+      contract: contractJson,
+      mode: 'apply',
+      migrationsDir,
+    });
     if (!init.ok) return { init: init.failure };
     const verified = await client.dbVerify({
       contract: postgres.contractSerializer.deserializeContract(contractJson),
@@ -181,6 +189,7 @@ function emitPsl(testDir: string, source: string) {
         createNamespace: postgresCreateNamespace,
       }).source,
       output: join(testDir, 'contract.json'),
+      typesModule: workspaceTypesModule.postgres,
     },
   });
 }
@@ -412,7 +421,7 @@ model T {
         );
         expect(result).toEqual({ ...initializedAndVerified, stored: storedKeyRows });
 
-        const db = postgresClient({ contractJson });
+        const db = postgresClient({ contract: contractFromJson(contractJson) });
         try {
           expect(accessorAgainst(db.enums['public']?.['Key'], storedKeyRows)).toEqual(
             accessorAgreeing,
@@ -424,35 +433,25 @@ model T {
       timeouts.spinUpPpgDev,
     );
 
-    it('in a PSL enum, refuse a member written in upper case or braces, because pg/uuid@1 reads only the stored form', async () => {
+    it('in a PSL enum, store a member written in upper case or braces as Postgres prints it, as a default is', async () => {
       const emitted = await emitPsl(
         testDir,
         `// use prisma-8
 
 enum Key {
   @@type("pg/uuid@1")
-  Upper  = "A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"
-  Braced = "{b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}"
+  A = "A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"
+  B = "{b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}"
 }
 
 model T {
-  id Int @id
+  id  Int @id
+  key Key
 }
 `,
       );
-
-      const reason =
-        'pg/uuid@1 JSON value must be a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12';
-      expect(emitted.ok ? [] : emitted.failure.diagnostics?.diagnostics).toEqual([
-        expect.objectContaining({
-          code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "Key" member "Upper" was rejected by codec "pg/uuid@1": ${reason}`,
-        }),
-        expect.objectContaining({
-          code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "Key" member "Braced" was rejected by codec "pg/uuid@1": ${reason}`,
-        }),
-      ]);
+      if (!emitted.ok) throw new Error(JSON.stringify(emitted.failure, null, 2));
+      expect(emittedKeyEnum(JSON.parse(emitted.value.contractJson))).toEqual(storedKeyEnum);
     });
   },
   timeouts.spinUpPpgDev,

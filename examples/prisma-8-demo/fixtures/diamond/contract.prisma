@@ -1,7 +1,7 @@
 // use prisma-8
 
 model user {
-  id     Char(36)  @id @default(uuid())
+  id     Char(36)  @id @onCreate(uuid())
   email  String
   phone  String?
   avatar String?

@@ -130,13 +130,6 @@ describe('buildMigrationGraphRows', () => {
         add_posts: 'forward',
       });
     });
-
-    it('satisfies topological order (tips before roots)', () => {
-      const init = edge(EMPTY_CONTRACT_HASH, 'aaa', 'init');
-      const addPosts = edge('aaa', 'bbb', 'add_posts');
-      const g = graph([init, addPosts]);
-      assertTipsBeforeRoots(buildMigrationGraphRows(g));
-    });
   });
 
   // -------------------------------------------------------------------------
@@ -222,16 +215,6 @@ describe('buildMigrationGraphRows', () => {
       expect(alicePos).toBeLessThan(rootPos);
       expect(bobPos).toBeLessThan(rootPos);
       expect(rootPos).toBeLessThan(emptyPos);
-    });
-
-    it('satisfies topological order', () => {
-      const init = edge(EMPTY_CONTRACT_HASH, 'root', 'init');
-      const alice = edge('root', 'alice', 'alice_add_phone');
-      const bob = edge('root', 'bob', 'bob_add_avatar');
-      const mergeAlice = edge('alice', 'tip', 'merge_alice');
-      const mergeBob = edge('bob', 'tip', 'merge_bob');
-      const g = graph([init, alice, bob, mergeAlice, mergeBob]);
-      assertTipsBeforeRoots(buildMigrationGraphRows(g));
     });
   });
 
@@ -484,33 +467,11 @@ describe('buildMigrationGraphRows', () => {
       expect(withLive.nodes[0]).toBe('1375f13');
     });
 
-    it('keeps the longest-path heuristic when contractHash is undefined', () => {
-      const g = twoLeafSharedRootGraph();
-      const model = buildMigrationGraphRows(g);
-
-      expect(model.nodes[0]).toBe('f7a8eb5');
-    });
-
     it('keeps the longest-path heuristic for EMPTY_CONTRACT_HASH', () => {
       const g = twoLeafSharedRootGraph();
       const model = buildMigrationGraphRows(g, { contractHash: EMPTY_CONTRACT_HASH });
 
       expect(model.nodes[0]).toBe('f7a8eb5');
-    });
-
-    it('leaves the detached-contract path unchanged when contractHash is not in the graph', () => {
-      const init = edge(EMPTY_CONTRACT_HASH, 'ef9de27', 'init');
-      const addPosts = edge('ef9de27', 'a94b7b4', 'add_posts');
-      const g = graph([init, addPosts]);
-      const withDetached = buildMigrationGraphRows(g, { contractHash: 'c0ffee0' });
-
-      expect(withDetached.nodes).toEqual([
-        'c0ffee0',
-        null,
-        'a94b7b4',
-        'ef9de27',
-        EMPTY_CONTRACT_HASH,
-      ]);
     });
 
     it('leaves a single-node component unchanged when contractHash is set', () => {

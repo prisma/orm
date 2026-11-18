@@ -7,8 +7,10 @@ import type {
   MigrationPlanOperation,
   MigrationRunner,
   MigrationRunnerPerSpaceOptions,
+  SchemaDiffIssue,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
+import { migrationRunnerFailure, schemaCheckWhy } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
@@ -17,7 +19,7 @@ import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
-import { ok } from '@internal/utils/result';
+import { notOk, ok } from '@internal/utils/result';
 import { createSqlContract } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -166,6 +168,24 @@ function recordingMigrations() {
   return { runnerCalls, migrations };
 }
 
+/** A runner whose schema check after apply fails with `issues`. */
+function schemaCheckFailingMigrations(issues: readonly SchemaDiffIssue[]) {
+  const runner: MigrationRunner<'sql', 'postgres'> = {
+    execute: async () =>
+      notOk(
+        migrationRunnerFailure(
+          'MIGRATION.SCHEMA_VERIFY_FAILED',
+          'Database schema does not satisfy contract',
+          { why: schemaCheckWhy(issues), meta: { schemaIssues: issues, failingSpace: 'app' } },
+        ),
+      ),
+  };
+  return blindCast<
+    TargetMigrationsCapability<'sql', 'postgres', ControlFamilyInstance<'sql', unknown>>,
+    'executeMigrate only creates a runner'
+  >({ createRunner: () => runner });
+}
+
 function migrateOptions(args: {
   readonly migrationsDir: string;
   readonly markers: ReadonlyMap<string, ContractMarkerRecord>;
@@ -179,6 +199,7 @@ function migrateOptions(args: {
 }) {
   return {
     driver: fakeDriver(),
+    invocation: { cwd: '/work/app', configPath: undefined, dbGiven: false },
     familyInstance: fakeFamily(args.markers),
     contract: APP_CONTRACT,
     migrations: args.migrations,
@@ -186,11 +207,77 @@ function migrateOptions(args: {
     migrationsDir: args.migrationsDir,
     extensions: args.extensions ?? [],
     targetId: 'postgres' as const,
-    ...(args.refHash === undefined ? {} : { refHash: args.refHash }),
+    ...(args.refHash === undefined
+      ? {}
+      : { target: { kind: 'hash' as const, hash: args.refHash } }),
   };
 }
 
 describe('executeMigrate runner schedule', () => {
+  function withPolicyChange(options: ReturnType<typeof migrateOptions>, hash: string) {
+    return {
+      ...options,
+      target: {
+        kind: 'ref' as const,
+        ref: {
+          name: 'production',
+          hash,
+          invariants: [],
+          policies: { change: ['migrate' as const] },
+        },
+      },
+      permitPolicyChange: true,
+    };
+  }
+
+  it('records the policies a ref at the empty contract declares on a database with no marker', async () => {
+    const migrationsDir = await migrationsDirWithOneAppEdge();
+    const { runnerCalls, migrations } = recordingMigrations();
+
+    const result = await executeMigrate(
+      withPolicyChange(
+        migrateOptions({ migrationsDir, markers: new Map(), migrations }),
+        EMPTY_CONTRACT_HASH,
+      ),
+    );
+
+    expect({ summary: result.ok && result.value.summary, runnerCalls }).toEqual({
+      summary: 'Policies updated: change: migrate',
+      runnerCalls: [['app']],
+    });
+  });
+
+  it('lists every loaded space when a run only records policies', async () => {
+    const migrationsDir = await migrationsDirWithOneAppEdge();
+    await addAllExternalSpace(migrationsDir);
+    const { runnerCalls, migrations } = recordingMigrations();
+
+    const result = await executeMigrate(
+      withPolicyChange(
+        migrateOptions({
+          migrationsDir,
+          markers: new Map([
+            ['app', markerAt(APP_HEAD)],
+            [EXTERNAL_SPACE, markerAt(EXTERNAL_HEAD)],
+          ]),
+          migrations,
+          extensions: [allExternalExtension()],
+        }),
+        APP_HEAD,
+      ),
+    );
+
+    expect({
+      summary: result.ok && result.value.summary,
+      spaces: result.ok && result.value.perSpace.map((entry) => entry.spaceId),
+      runnerCalls,
+    }).toEqual({
+      summary: 'Policies updated: change: migrate',
+      spaces: expect.arrayContaining(['app', EXTERNAL_SPACE]),
+      runnerCalls: [['app']],
+    });
+  });
+
   it('leaves a database with no marker alone when the target is the empty contract', async () => {
     const migrationsDir = await migrationsDirWithOneAppEdge();
     const { runnerCalls, migrations } = recordingMigrations();
@@ -260,5 +347,39 @@ describe('executeMigrate runner schedule', () => {
 
     expect(result.ok).toBe(true);
     expect(runnerCalls).toEqual([[EXTERNAL_SPACE, 'app']]);
+  });
+
+  it('reports a failed schema check with the runner code and meta, the issues in its why, and how to plan the migration again', async () => {
+    const migrationsDir = await migrationsDirWithOneAppEdge();
+    const issue: SchemaDiffIssue = {
+      path: ['public', 'event', 'id'],
+      expected: { id: 'id', nodeKind: 'sql-column', isEqualTo: () => false, children: () => [] },
+    };
+
+    const result = await executeMigrate(
+      migrateOptions({
+        migrationsDir,
+        markers: new Map(),
+        migrations: schemaCheckFailingMigrations([issue]),
+      }),
+    );
+
+    expect(
+      result.ok
+        ? undefined
+        : {
+            code: result.failure.code,
+            message: result.failure.message,
+            why: result.failure.why,
+            meta: result.failure.meta,
+            replans: result.failure.fix?.includes('plan it again with'),
+          },
+    ).toEqual({
+      code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
+      message: 'Database schema does not satisfy contract',
+      why: 'The schema check after apply found: missing: public/event/id.',
+      meta: { schemaIssues: [issue], failingSpace: 'app' },
+      replans: true,
+    });
   });
 });

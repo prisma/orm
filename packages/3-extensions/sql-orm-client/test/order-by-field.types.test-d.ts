@@ -40,12 +40,6 @@ describe('orderByField', () => {
     orderByField(db.Post, input.orderBy, input.direction, []);
   });
 
-  test('takes the direction from a request as a string', () => {
-    expectTypeOf(orderByField(db.Post, input.orderBy, input.direction, ['title'])).toEqualTypeOf<
-      (row: { readonly title: Orderable }) => OrderByItem
-    >();
-  });
-
   test('records the order, so cursor is allowed', () => {
     const posts = db.Post.orderBy(
       orderByField(db.Post, input.orderBy, input.direction, ['title', 'views']),

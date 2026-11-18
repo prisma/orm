@@ -2,7 +2,6 @@ import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import {
   BROKEN_CODEC_ID,
-  CODEC_ARG_SPAN,
   ENCODE_FOLDING_CODEC_ID,
   enumBlock,
   FOLDING_CODEC_ID,
@@ -141,7 +140,12 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
       makeContext(diagnostics),
     );
 
-    expect(diagnostics).toEqual([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message: 'enum "Priority" member "low": Expected a quoted string',
+      }),
+    ]);
     expect(handle).toBeUndefined();
   });
 
@@ -174,7 +178,7 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     });
   });
 
-  it('an explicit null member reaches the codec and its rejection is reported', () => {
+  it('a json`null` member reaches the codec and its refusal is reported', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
       enumBlock({ name: 'Odd', values: { none: null }, typeCodecId: JSON_CODEC_ID }),
@@ -184,8 +188,8 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     expect(handle).toBeUndefined();
     expect(diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_EXTENSION_INVALID_VALUE',
-        message: expect.stringContaining('rejected by codec'),
+        code: 'PSL_VALUE_REFUSED',
+        message: 'enum "Odd" member "none": expected a non-null JSON value',
       }),
     ]);
   });
@@ -200,25 +204,6 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     expect(handle).toBeUndefined();
     expect(diagnostics).toEqual([
       expect.objectContaining({ code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC' }),
-    ]);
-  });
-
-  it('reports a known codec whose data type no component registers', () => {
-    const diagnostics: unknown[] = [];
-    const handle = factory(
-      enumBlock({ name: 'Role', values: { admin: 'admin' }, typeCodecId: 'test/orphan@1' }),
-      makeContext(diagnostics),
-    );
-
-    expect(handle).toBeUndefined();
-    expect(diagnostics).toEqual([
-      {
-        code: 'PSL_EXTENSION_INVALID_VALUE',
-        message:
-          'enum "Role" @@type codec "test/orphan@1" represents data type "test/unregistered", which no component registers',
-        sourceId: 'schema.prisma',
-        span: CODEC_ARG_SPAN,
-      },
     ]);
   });
 

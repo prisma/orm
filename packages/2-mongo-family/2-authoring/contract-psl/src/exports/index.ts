@@ -1,8 +1,3 @@
-export {
-  deriveJsonSchema,
-  derivePolymorphicJsonSchema,
-  type FieldValueSets,
-} from '../derive-json-schema';
 export { describeUnresolvedMongoType } from '../describe-unresolved-type';
 export {
   type InterpretPslDocumentToMongoContractInput,

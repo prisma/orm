@@ -127,7 +127,7 @@ type SqlContract = Contract<SqlStorage, SqlModelStorage>;
 
 This unified layout replaces the former structural split in `ContractIR`: the `storage.tables` section is now `contract.storage`, and the `models` section with its mix of domain and storage fields is now `contract.models` with domain and `model.storage` cleanly separated.
 
-**Mongo** — the top-level block holds collection metadata; the per-model bridge is just a collection name:
+**Mongo** — the top-level block holds collection metadata; the per-model bridge is the collection name and the key each field is stored under:
 
 ```ts
 type MongoStorage = StorageBase & {
@@ -136,6 +136,7 @@ type MongoStorage = StorageBase & {
 
 type MongoModelStorage = {
   readonly collection?: string;
+  readonly fields: Record<string, { readonly field: string }>;
   readonly relations?: Record<string, { readonly field: string }>;
 };
 

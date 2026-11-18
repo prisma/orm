@@ -19,8 +19,8 @@
 import { Collection } from '@internal/sql-orm-client';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
-import { blindCast } from '@internal/utils/casts';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { withPlanRecording } from '../sql-orm-client/runtime-helpers';
 import { type PlannedIndex, plannedExpressionIndexes } from './full-text-index-ddl';
 import { setupIntegrationTest, timeouts } from './setup';
 
@@ -221,15 +221,8 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
   it('uses the index for the ORM predicate ordered by rank', async () => {
     const captured: SqlQueryPlan<unknown>[] = [];
     const real = runtime();
-    const recording = blindCast<
-      typeof real,
-      'a recording proxy over the suite runtime; the collection only queries through it'
-    >({
-      ...real,
-      query: ((plan: SqlQueryPlan<unknown>, options?: Parameters<typeof real.query>[1]) => {
-        captured.push(plan);
-        return real.query(plan, options);
-      }) satisfies (...args: never[]) => unknown,
+    const recording = withPlanRecording(real, (plan) => {
+      if (!('sql' in plan)) captured.push(plan);
     });
 
     const comments = new Collection({ runtime: recording, context: context() }, 'Comment', {

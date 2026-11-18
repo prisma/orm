@@ -19,8 +19,10 @@
 //   Project  --tasks(1:N)--> Task
 //   Ticket   --owner(N:1)--> User
 //   Person   <--reporter(N:1)-- Task
+//   Person   --pinnedTask(1:1)--> Task
 //   Person   <--assignee(N:1)-- Bug (STI) / Feature (MTI)
 //   TaskComment <--comments(1:N)-- Task
+//   Label   --tasks(M:N, through TaskLabel)--> Task
 
 model Task {
   id         Int    @id @default(autoincrement())
@@ -28,10 +30,13 @@ model Task {
   type       String
   projectId  Int?   @map("project_id")
   reporterId Int?   @map("reporter_id")
+  pinnedById Int?   @unique @map("pinned_by_id")
 
-  project  Project?     @relation(fields: [projectId], references: [id])
-  reporter Person?      @relation(fields: [reporterId], references: [id])
+  project  Project?      @relation(fields: [projectId], references: [id])
+  reporter Person?       @relation("Reporter", fields: [reporterId], references: [id])
+  pinnedBy Person?       @relation("PinnedTask", fields: [pinnedById], references: [id])
   comments TaskComment[]
+  labels   Label[]
 
   @@discriminator(type)
   @@map("tasks")
@@ -120,7 +125,8 @@ model Person {
   id   Int    @id @default(autoincrement())
   name String
 
-  tasks Task[]
+  tasks      Task[] @relation("Reporter")
+  pinnedTask Task?  @relation("PinnedTask")
 
   @@map("people")
 }
@@ -133,4 +139,24 @@ model TaskComment {
   task Task? @relation(fields: [taskId], references: [id])
 
   @@map("task_comments")
+}
+
+model Label {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  tasks Task[]
+
+  @@map("labels")
+}
+
+model TaskLabel {
+  taskId  Int @map("task_id")
+  labelId Int @map("label_id")
+
+  task  Task  @relation(fields: [taskId], references: [id])
+  label Label @relation(fields: [labelId], references: [id])
+
+  @@id([taskId, labelId])
+  @@map("task_labels")
 }

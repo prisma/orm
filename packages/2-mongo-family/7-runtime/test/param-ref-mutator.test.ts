@@ -275,11 +275,12 @@ describe('createMongoParamRefMutator', () => {
       }
     });
 
-    it('keeps the name, codec id and collection of a parameter it replaces', () => {
+    it('keeps the name, codec id, collection and nullability of a parameter it replaces', () => {
       const ref = new MongoParamRef('Alice', {
         name: 'profile.name',
         codecId: 'mongo/string@1',
         collection: 'users',
+        nullable: true,
       });
       const draft: MongoLoweredDraft = {
         kind: 'insertOne',
@@ -295,6 +296,7 @@ describe('createMongoParamRefMutator', () => {
           name: 'profile.name',
           codecId: 'mongo/string@1',
           collection: 'users',
+          nullable: true,
         }),
       ]);
     });
@@ -338,26 +340,6 @@ describe('createMongoParamRefMutator', () => {
       if (updated.kind === 'insertOne') {
         expect((updated.document['name'] as MongoParamRef).value).toBe('Bob');
         expect((updated.document['role'] as MongoParamRef).value).toBe('moderator');
-      }
-    });
-
-    it('preserves codecId and name on replaced MongoParamRef nodes', () => {
-      const ref = new MongoParamRef('Alice', { codecId: 'encrypt', name: 'nameParam' });
-      const draft: MongoLoweredDraft = {
-        kind: 'insertOne',
-        collection: 'users',
-        document: { name: ref },
-      };
-      const mutator = createMongoParamRefMutator(draft);
-      const [entry] = [...mutator.entries()];
-      mutator.replaceValues([{ ref: entry!.ref, newValue: 'EncryptedBob' }]);
-
-      const updated = mutator.currentDraft();
-      if (updated.kind === 'insertOne') {
-        const nameRef = updated.document['name'] as MongoParamRef;
-        expect(nameRef.value).toBe('EncryptedBob');
-        expect(nameRef.codecId).toBe('encrypt');
-        expect(nameRef.name).toBe('nameParam');
       }
     });
 

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { executeStatement, streamStatement } from '../src/execution/run-with-middleware';
 import type {
+  Activity,
   ActivityContext,
   ActivityEndedResult,
-  RuntimeActivity,
   RuntimeMiddleware,
 } from '../src/execution/runtime-middleware';
 import {
@@ -139,7 +139,7 @@ describe('statement activity lifecycle', () => {
 
   describe('the statement activity', () => {
     it('describes the plan, what the caller asked for, and the plan annotations', async () => {
-      const activities: RuntimeActivity[] = [];
+      const activities: Activity[] = [];
       const observer: RuntimeMiddleware<MockExec> = {
         name: 'observer',
         async activityStarted(activity) {
@@ -211,8 +211,7 @@ describe('statement activity lifecycle', () => {
     });
 
     it('passes the same activity and context to every hook', async () => {
-      const seen: Array<{ readonly activity?: RuntimeActivity; readonly ctx: ActivityContext }> =
-        [];
+      const seen: Array<{ readonly activity?: Activity; readonly ctx: ActivityContext }> = [];
       const observer: RuntimeMiddleware<MockExec> = {
         name: 'observer',
         async activityStarted(activity, ctx) {

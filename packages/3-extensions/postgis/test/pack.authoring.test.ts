@@ -12,7 +12,7 @@ describe('postgis pack authoring contributions', () => {
       postgis: {
         Geometry: {
           kind: 'typeConstructor',
-          args: [{ kind: 'number', name: 'srid', integer: true, optional: true }],
+          args: [{ kind: 'value', dataType: 'pg/int4', name: 'srid', optional: true }],
           output: {
             codecId: 'pg/geometry@1',
             typeParams: { srid: { kind: 'arg', index: 0 } },

@@ -11,7 +11,11 @@ export function funcCall<
   const Name extends string,
   Ctx extends AttributeCtx,
   const Signature extends FuncCallSig<Ctx>,
->(name: Name, sig: Signature & FuncCallSig<Ctx>): FuncCallArgType<Name, Ctx, Signature> {
+>(
+  name: Name,
+  sig: Signature & FuncCallSig<Ctx>,
+  options: { readonly label?: string } = {},
+): FuncCallArgType<Name, Ctx, Signature> {
   return {
     kind: 'funcCall',
     label: `${name}()`,
@@ -24,7 +28,11 @@ export function funcCall<
       const span = nodePslSpan(guard.value.syntax, ctx.sources);
       const bound = interpretArgs(
         guard.value.args(),
-        { name, positional: sig.positional ?? [], named: sig.named ?? {} },
+        {
+          label: options.label ?? `Attribute "${name}"`,
+          positional: sig.positional ?? [],
+          named: sig.named ?? {},
+        },
         ctx,
         span,
         guard.value.syntax,

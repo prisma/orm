@@ -524,7 +524,7 @@ describe('createBinder() reporting an inclusion', () => {
   it.each([
     ['a model', 'model Target {\n}', 'Target'],
     ['a composite type', 'type Target {\n}', 'Target'],
-    ['a named type', 'types {\n  Target = String\n}', 'Target'],
+    ['a type alias', 'types {\n  Target = String\n}', 'Target'],
     ['an enum', 'enum Target {\n}', 'Target'],
     ['another block', 'policy Target {\n}', 'Target'],
     ['a namespace', 'namespace Target {\n}', 'Target'],

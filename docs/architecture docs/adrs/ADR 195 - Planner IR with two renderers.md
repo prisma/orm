@@ -2,12 +2,14 @@
 
 > **Note (2026-10-07).** A MongoDB validator change and a change-stream image setting are now classed `widening` whatever they change, because neither removes a document; the planner no longer runs `classifyValidatorUpdate`. The planner still chooses the class where it depends on the origin: a Postgres type change is `widening` when it keeps every value and `destructive` otherwise, so `AlterColumnTypeCall` carries a computed `operationClass` too.
 
+> **Note (2026-10-16).** The planner is no longer the only site with origin context. A migration carries its start contract ([ADR 232](ADR%20232%20-%20A%20migration%20is%20authored%20against%20its%20start%20and%20end%20contract%20snapshots.md)), and a hand-written Postgres migration reads the column there, after renames made earlier in the same migration. `this.setDefault` takes no `operationClass` and derives it the way the planner does: `widening` when the column has a default, and `additive` otherwise. `this.alterColumnType` reads whether the column has an `autoincrement()` default, so it also changes the sequence the column owns, and refuses a conversion with `using` to the type the column already has. See [ADR 038](ADR%20038%20-%20Operation%20idempotency%20classification%20&%20enforcement.md).
+
 ## At a glance
 
 The planner diffs two contracts and determines that a unique ascending index on `users.email` needs to be created. Rather than directly constructing the full operation ([ADR 188](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md)), it produces an IR node:
 
 ```ts
-const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { unique: true });
+const call = new CreateIndexCall('users', [{ field: 'email', direction: 1 }], { name: 'email_1', unique: true });
 ```
 
 Two renderers interpret this node.
@@ -16,7 +18,7 @@ The **operation renderer** calls the `createIndex` factory function and produces
 
 ```ts
 renderOps([call]);
-// → [{ id: 'index.users.create(email:1)', operationClass: 'additive',
+// → [{ id: 'index.users.create(email_1)', operationClass: 'additive',
 //      precheck: [...], execute: [...], postcheck: [...] }]
 ```
 
@@ -25,7 +27,7 @@ The **TypeScript renderer** produces a line of source code that calls the same f
 ```ts
 renderCallsToTypeScript([call], meta);
 // → ...
-//   createIndex('users', [{ field: 'email', direction: 1 }], { unique: true })
+//   createIndex('users', [{ field: 'email', direction: 1 }], { name: 'email_1', unique: true })
 //   ...
 ```
 

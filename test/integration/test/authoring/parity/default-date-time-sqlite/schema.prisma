@@ -2,7 +2,7 @@
 
 model T {
   id      Int      @id
-  instant DateTime @default("2024-01-01T01:00:00.500+01:00")
+  instant DateTime @default(datetime`2024-01-01T01:00:00.500+01:00`)
 
   @@map("t")
 }

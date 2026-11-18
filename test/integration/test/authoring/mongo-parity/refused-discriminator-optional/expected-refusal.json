@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.ARGUMENT_INVALID",
+    "message": "Discriminator field \"Task.type\" must be required, but it is optional. Remove .optional()."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
+      "message": "Discriminator field \"type\" on model \"Task\" must be required, but it is optional. Remove the \"?\"",
+      "spanText": "@@discriminator(type)"
+    }
+  ]
+}

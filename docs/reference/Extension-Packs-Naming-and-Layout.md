@@ -3,9 +3,10 @@
 Purpose: define a consistent convention for naming, placing, and describing extension packs across domains.
 
 ## NPM Package Name
-- Use `@internal/extension-<name>` for all extension packs
+- Use `@internal/extension-<name>` as the private workspace name of each extension pack in this repo; Prisma publishes it as `@prisma/orm-extension-<name>`
   - Examples: `@internal/extension-pgvector`, `@internal/extension-postgis`, `@internal/extension-views`
 - Include domain only when necessary to avoid ambiguity (rare): `@internal/extension-sql-views`
+- Packages published by someone other than Prisma follow [ADR 308](../architecture%20docs/adrs/ADR%20308%20-%20Community%20packages%20are%20named%20prisma-orm-name.md)
 
 ## Filesystem Location
 
@@ -24,19 +25,6 @@ packages/
 **Examples:**
 - `packages/3-extensions/pgvector/` → `@internal/extension-pgvector`
 - `packages/3-extensions/sql/views/` → `@internal/extension-sql-views` (future)
-
-## Required package.json Metadata
-Add the following fields to support discovery and guardrails:
-```json
-{
-  "name": "@internal/extension-<name>",
-  "prismaNext": {
-    "family": "sql",            // or "framework", "document"
-    "dialects": ["postgres"],    // if domain-specific
-    "type": "extension-pack"     // reserved values: extension-pack
-  }
-}
-```
 
 ## Minimal Source Layout
 
@@ -141,7 +129,7 @@ Extension packs require multiple entries in `architecture.config.json` to map ea
 - Control plane code cannot import from runtime plane (enforced by dependency cruiser)
 
 ## Rationale
-This convention keeps imports clear and consistent, keeps the repo navigable, and scales across domains. The `extension-` prefix is preferred over shorter alternatives (like `ext-`) for clarity and discoverability. The numbered directory prefix (`3-extensions/`) indicates that extensions are in domain 3, which can import from domains 1 (framework) and 2 (sql/document). Metadata enables automated loading and validation.
+This convention keeps imports clear and consistent, keeps the repo navigable, and scales across domains. The `extension-` prefix is preferred over shorter alternatives (like `ext-`) for clarity and discoverability. The numbered directory prefix (`3-extensions/`) indicates that extensions are in domain 3, which can import from domains 1 (framework) and 2 (sql/document).
 
 ## Related Documentation
 - [Package Naming Conventions](./Package%20Naming%20Conventions.md)

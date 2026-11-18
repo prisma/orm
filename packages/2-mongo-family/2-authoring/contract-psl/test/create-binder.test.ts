@@ -1,9 +1,7 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
-import type {
-  AuthoringFieldNamespace,
-  AuthoringTypeNamespace,
-} from '@internal/framework-components/authoring';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { buildSymbolTable, createBinder, EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { parse, SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -16,7 +14,7 @@ import {
 const SCHEMA = `
 model User {
   id        ObjectId @id @map("_id")
-  createdAt temporal.createdAt()
+  createdAt temporal.CreatedAt
   score     Points
   weird     String   @unrecognized
   ghost     Unknown
@@ -31,19 +29,13 @@ model Session {
 }
 `;
 
-const fieldPresets: AuthoringFieldNamespace = {
-  temporal: {
-    createdAt: {
-      kind: 'fieldPreset',
-      output: { codecId: 'mongo/date@1' },
-    },
-  },
-};
-
 const mongoScalarAuthoringTypes: AuthoringTypeNamespace = {
   String: { kind: 'typeConstructor', output: { codecId: 'mongo/string@1' } },
   ObjectId: { kind: 'typeConstructor', output: { codecId: 'mongo/objectId@1' } },
   Points: { kind: 'typeConstructor', output: { codecId: 'mongo/int32@1' } },
+  temporal: {
+    CreatedAt: { kind: 'typeAlias', output: { type: { codecId: 'mongo/date@1' } } },
+  },
 };
 
 function normalize(resolution: unknown): unknown {
@@ -119,7 +111,6 @@ describe('createBinder', () => {
       composedExtensionContracts: new Map(),
       authoringContributions: {
         dataTypes: {},
-        field: fieldPresets,
         type: mongoScalarAuthoringTypes,
         entityTypes: {},
         pslBlockDescriptors: {},
@@ -129,6 +120,7 @@ describe('createBinder', () => {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       controlMutationDefaults: { defaultFunctionRegistry, generatorDescriptors: [] },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       dataTypes: EMPTY_DATA_TYPES,
       resolvedInputs: [],
       capabilities: {},
@@ -165,7 +157,7 @@ describe('createBinder', () => {
       { kind: 'attribute', name: 'id', level: 'field' },
       { kind: 'attribute', name: 'map', level: 'field' },
       { kind: 'field', name: 'createdAt' },
-      { kind: 'contributedType', name: 'createdAt', path: ['temporal', 'createdAt'] },
+      { kind: 'contributedType', name: 'CreatedAt', path: ['temporal', 'CreatedAt'] },
       { kind: 'contributedNamespace', name: 'temporal' },
       { kind: 'field', name: 'score' },
       { kind: 'contributedType', name: 'Points', path: ['Points'] },
@@ -224,7 +216,6 @@ describe('createBinder', () => {
       composedExtensionContracts: new Map(),
       authoringContributions: {
         dataTypes: {},
-        field: fieldPresets,
         type: mongoScalarAuthoringTypes,
         entityTypes: {},
         pslBlockDescriptors: {},
@@ -237,6 +228,7 @@ describe('createBinder', () => {
       },
       codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       dataTypes: EMPTY_DATA_TYPES,
       resolvedInputs: [],
       capabilities: {},

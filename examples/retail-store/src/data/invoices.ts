@@ -2,11 +2,11 @@ import type { InvoiceLineItemInput } from '../contract';
 import type { Db } from '../db';
 
 export function findInvoiceById(db: Db, id: string) {
-  return db.orm.invoices.where({ _id: id }).first();
+  return db.orm.invoices.where({ id }).first();
 }
 
 export function findInvoiceWithOrder(db: Db, id: string) {
-  return db.orm.invoices.include('order').where({ _id: id }).first();
+  return db.orm.invoices.include('order').where({ id }).first();
 }
 
 export function createInvoice(

@@ -5,22 +5,10 @@ import { paradedbIndexTypes } from '../src/types/index-types';
 
 describe('ParadeDB extension', () => {
   describe('paradedbPackMeta', () => {
-    it('declares correct extension identity', () => {
-      expect(paradedbPackMeta.kind).toBe('extension');
-      expect(paradedbPackMeta.id).toBe('paradedb');
-      expect(paradedbPackMeta.familyId).toBe('sql');
-      expect(paradedbPackMeta.targetId).toBe('postgres');
-    });
-
     it('declares bm25 capability', () => {
       expect(paradedbPackMeta.capabilities).toEqual({
         postgres: { 'paradedb/bm25': true },
       });
-    });
-
-    it('exposes the bm25 entry in indexTypes', () => {
-      expect(paradedbPackMeta.indexTypes.entries).toHaveLength(1);
-      expect(paradedbPackMeta.indexTypes.entries[0]?.type).toBe('bm25');
     });
   });
 

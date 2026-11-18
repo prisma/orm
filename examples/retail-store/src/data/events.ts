@@ -3,7 +3,7 @@ import { acc } from '@prisma/orm-mongo/query-builder';
 import type { FieldInputTypes } from '../contract';
 import type { Db } from '../db';
 
-type EventBase = Omit<FieldInputTypes['__unbound__']['Event'], '_id' | 'type'>;
+type EventBase = Omit<FieldInputTypes['__unbound__']['Event'], 'id' | 'type'>;
 
 export function createViewProductEvent(
   db: Db,

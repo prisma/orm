@@ -296,16 +296,16 @@ function rewriteFieldTypeNames(
 const NAMED_TYPE_ALIASES: Readonly<Record<string, string>> = {
   Inet: 'IpAddress',
   Json: 'Payload',
-  SmallInt: 'EmailChangeConfirmStatus',
-  Timestamp: 'CreatedAt',
+  'Int(storage: int2)': 'EmailChangeConfirmStatus',
+  TimestampString: 'CreatedAt',
   Uuid: 'Id',
-  'VarChar(40)': 'Hash',
-  'VarChar(64)': 'IpAddress2',
-  'VarChar(100)': 'Name',
-  'VarChar(255)': 'Parent',
+  'String(storage: varchar, length: 40)': 'Hash',
+  'String(storage: varchar, length: 64)': 'IpAddress2',
+  'String(storage: varchar, length: 100)': 'Name',
+  'String(storage: varchar, length: 255)': 'Parent',
 };
 
-/** The type as `printPsl` would write it, e.g. `Uuid` or `VarChar(255)`. */
+/** The type as `printPsl` would write it, e.g. `Uuid` or `String(storage: varchar, length: 255)`. */
 function printedFieldType(field: PslField): string {
   const { typeConstructor } = field;
   if (!typeConstructor) return field.typeName;
@@ -391,7 +391,7 @@ async function introspectSchema(
   const rawSchemaNode = await controlAdapter.introspect(driver, undefined, schemaName);
   PostgresDatabaseSchemaNode.assert(rawSchemaNode);
 
-  const ast = sqlFamilyDescriptor.create(controlStack).inferPslContract(rawSchemaNode);
+  const ast = await sqlFamilyDescriptor.create(controlStack).inferPslContract(rawSchemaNode);
   const namespace = ast.namespaces.find((ns) => ns.name === schemaName);
   if (!namespace) {
     throw new Error(

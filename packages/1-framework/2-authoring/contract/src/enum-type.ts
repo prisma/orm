@@ -56,7 +56,7 @@ type MembersAccessorMap<Members extends readonly EnumMember<string, unknown>[]> 
 // breaking nominal type identity across chunk boundaries. A string constant
 // survives .d.mts de-duplication because string equality is preserved by value.
 // Mirrors the FILTER_EXPR_BRAND pattern in mongo-query-ast/filter-expressions.ts.
-export const ENUM_TYPE_HANDLE_BRAND = '__prismaNextEnumTypeHandle__';
+export const ENUM_TYPE_HANDLE_BRAND = '__prismaEnumTypeHandle__';
 
 /** Authoring handle returned by `enumType()`. Generic over the ordered value tuple so `const Role = enumType(...)` retains literal types. */
 export interface EnumTypeHandle<
@@ -64,6 +64,7 @@ export interface EnumTypeHandle<
   Values extends readonly unknown[] = readonly unknown[],
   Names extends readonly string[] = readonly string[],
   MembersMap extends Record<string, unknown> = Record<string, unknown>,
+  CodecId extends string = string,
 > {
   /** Internal brand for lowering-pipeline detection. */
   readonly [ENUM_TYPE_HANDLE_BRAND]: true;
@@ -72,7 +73,7 @@ export interface EnumTypeHandle<
   readonly enumName: Name;
 
   /** codecId from the codec passed to `enumType`. */
-  readonly codecId: string;
+  readonly codecId: CodecId;
 
   /** Ordered member list for lowering (name + value pairs). */
   readonly enumMembers: readonly { readonly name: string; readonly value: Values[number] }[];
@@ -137,7 +138,7 @@ function describeValue(value: unknown): string {
  *
  * - The codec is an explicit required argument — the `codecId` is taken
  *   from the passed `ColumnTypeDescriptor` (e.g. `{ codecId: 'pg/text@1' }`
- *   from a field preset output or a direct inline object).
+ *   from a column type constant or a direct inline object).
  * - `const` generics on the members spread preserve the ordered literal
  *   value tuple so `Role.values` is `readonly ['user','admin']`, not
  *   `string[]`.
@@ -176,7 +177,8 @@ export function enumType<
   Name,
   MembersToValues<[...Members]>,
   MembersToNames<[...Members]>,
-  MembersAccessorMap<[...Members]>
+  MembersAccessorMap<[...Members]>,
+  Codec['codecId']
 >;
 export function enumType(
   name: string,
@@ -249,7 +251,9 @@ export function enumType(
 export function duplicateMemberError(enumName: string, duplicate: DuplicateStoredValue) {
   return contractError(
     'CONTRACT.ENUM_INVALID',
-    `enumType("${enumName}"): members "${duplicate.earlier}" and "${duplicate.later}" both store ${JSON.stringify(duplicate.stored)}. Member values must be unique as their codec stores them.`,
+    duplicate.earlierStored === undefined
+      ? `enumType("${enumName}"): members "${duplicate.earlier}" and "${duplicate.later}" both store ${JSON.stringify(duplicate.stored)}. Member values must be unique as their codec stores them.`
+      : `enumType("${enumName}"): members "${duplicate.earlier}" and "${duplicate.later}" store ${JSON.stringify(duplicate.earlierStored)} and ${JSON.stringify(duplicate.stored)}, which the database holds equal. Member values must be unique as their data type compares them.`,
     {
       meta: {
         enumName,
@@ -282,7 +286,8 @@ export type BoundEnumType<CodecTypes extends CodecTypeMap> = <
   Name,
   MembersToValues<[...Members]>,
   MembersToNames<[...Members]>,
-  MembersAccessorMap<[...Members]>
+  MembersAccessorMap<[...Members]>,
+  Codec['codecId']
 >;
 
 /**

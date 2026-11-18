@@ -6,6 +6,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction, StructuredError } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
+import { APP_UPGRADE_GUIDES_URL } from './upgrade-guides';
 
 /**
  * CLI error envelope for output formatting.
@@ -42,6 +43,8 @@ export interface CliErrorConflict {
   readonly why?: string;
   /** The statement the conflict refuses, in domain coordinates. */
   readonly refusedStatement?: ResolvedMigrationStatement;
+  /** The statements to leave out of a plan whose `migration.ts` the user finishes by hand. */
+  readonly leaveOut?: readonly ResolvedMigrationStatement[];
   /** Where the conflict is; `namespaceId` is left out of JSON output for the unbound namespace. */
   readonly location?: Readonly<Record<string, unknown>> & { readonly namespaceId?: string };
 }
@@ -223,13 +226,24 @@ export function errorContractValidationFailed(
   options?: {
     readonly where?: { readonly path?: string; readonly line?: number };
     readonly cause?: unknown;
+    /** What the refusal is about, such as the columns whose defaults were refused. */
+    readonly meta?: Record<string, unknown> | undefined;
   },
 ): CliStructuredError {
   return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
     why: reason,
-    fix: 'Re-run `{bin} contract emit`, or fix the contract file and try again',
+    fix: `If an earlier release emitted this contract, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}. If this release emitted it, re-run \`{bin} contract emit\`, or fix the contract file if you edited it, and try again`,
     nextActions: [
-      { kind: 'run-command', label: 'Re-emit the contract', command: '{bin} contract emit' },
+      {
+        kind: 'open-url',
+        label: 'If an earlier release emitted the contract, follow the app upgrade instructions',
+        url: APP_UPGRADE_GUIDES_URL,
+      },
+      {
+        kind: 'run-command',
+        label: 'If this release emitted the contract, re-emit it',
+        command: '{bin} contract emit',
+      },
       {
         kind: 'edit-file',
         label: 'Fix the contract file, then re-run the command',
@@ -239,6 +253,7 @@ export function errorContractValidationFailed(
     docsUrl: docsUrlFor('CONTRACT.VALIDATION_FAILED'),
     ...(options?.where ? { where: options.where } : {}),
     ...ifDefined('cause', options?.cause),
+    ...ifDefined('meta', options?.meta),
   });
 }
 
@@ -397,6 +412,9 @@ function conflictJson(conflict: CliErrorConflict): Record<string, unknown> {
     ...(conflict.refusedStatement === undefined
       ? {}
       : { refusedStatement: migrationStatementJson(conflict.refusedStatement) }),
+    ...(conflict.leaveOut === undefined
+      ? {}
+      : { leaveOut: conflict.leaveOut.map(migrationStatementJson) }),
   };
 }
 
@@ -406,7 +424,7 @@ function conflictJson(conflict: CliErrorConflict): Record<string, unknown> {
 export function errorMigrationPlanningFailed(options: {
   readonly conflicts: readonly CliErrorConflict[];
   readonly why?: string;
-}): CliStructuredError {
+}): CliStructuredError & { readonly why: string } {
   const conflictSummaries = options.conflicts.map((c) => c.summary);
   const computedWhy = options.why ?? conflictSummaries.join('\n');
 
@@ -418,12 +436,13 @@ export function errorMigrationPlanningFailed(options: {
       ? conflictFixes.join('\n')
       : 'Use `db verify --schema-only` to inspect conflicts, or ensure the database is empty';
 
-  return new CliStructuredError('MIGRATION.PLANNING_FAILED', 'Migration planning failed', {
+  const error = new CliStructuredError('MIGRATION.PLANNING_FAILED', 'Migration planning failed', {
     why: computedWhy,
     fix: computedFix,
     meta: { conflicts: options.conflicts.map(conflictJson) },
     docsUrl: docsUrlFor('MIGRATION.PLANNING_FAILED'),
   });
+  return Object.assign(error, { why: computedWhy });
 }
 
 /**

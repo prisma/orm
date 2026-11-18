@@ -33,7 +33,7 @@ describe('ordinary row lifecycle', () => {
   it('streams plain mapped rows and closes the source on cancellation', async () => {
     const { collection, events } = setup([{ user_id: 1 }, { user_id: 2 }]);
     const result = collection.select('userId').all();
-    expect(events).toEqual(['query']);
+    expect(events).toEqual([]);
     for await (const row of result) {
       expect(row).toEqual({ userId: 1 });
       expect(events).toEqual(['query', 'row']);

@@ -1,5 +1,4 @@
-import type { SqliteRuntime } from '@prisma/orm-sqlite/runtime';
-import { createOrmClient } from './client';
+import { db } from '../prisma/db';
 
 /**
  * What a bare aggregate answered with: either the total, or the structured
@@ -64,26 +63,22 @@ async function guarded(run: () => Promise<{ total: number | null }>): Promise<Gu
  * The seeded impressions total 2^53 + 1000, which is what makes
  * `sum('impressionCount')` raise and `sumBigInt('impressionCount')` answer.
  */
-export async function ormClientGetEngagementPrecision(
-  runtime: SqliteRuntime,
-): Promise<EngagementPrecisionReport> {
-  const db = createOrmClient(runtime);
-
-  const posts = await db.Post.aggregate((aggregate) => ({
+export async function ormClientGetEngagementPrecision(): Promise<EngagementPrecisionReport> {
+  const posts = await db.orm.Post.aggregate((aggregate) => ({
     count: aggregate.count(),
     countBigInt: aggregate.countBigInt(),
   }));
 
-  const views = await db.Post.aggregate((aggregate) => ({
+  const views = await db.orm.Post.aggregate((aggregate) => ({
     sum: aggregate.sum('viewCount'),
     sumBigInt: aggregate.sumBigInt('viewCount'),
     avg: aggregate.avg('viewCount'),
   }));
 
   const impressionSum = await guarded(() =>
-    db.Post.aggregate((aggregate) => ({ total: aggregate.sum('impressionCount') })),
+    db.orm.Post.aggregate((aggregate) => ({ total: aggregate.sum('impressionCount') })),
   );
-  const impressionSumBigInt = await db.Post.aggregate((aggregate) => ({
+  const impressionSumBigInt = await db.orm.Post.aggregate((aggregate) => ({
     total: aggregate.sumBigInt('impressionCount'),
   }));
 

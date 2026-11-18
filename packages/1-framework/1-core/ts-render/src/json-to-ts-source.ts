@@ -3,15 +3,15 @@
  *
  * This module is the second stage of the codec → TS pipeline:
  *
- *     jsValue  →  codec.encodeJson  →  JsonValue  →  jsonToTsSource  →  TS source text
+ *     jsValue  →  codec.toDataTypeValue  →  JsonValue  →  jsonToTsSource  →  TS source text
  *
- * Stage 1 (`codec.encodeJson`) is a codec responsibility — date serialization,
+ * Stage 1 (`codec.toDataTypeValue`, whose value holds the stored JSON) is a codec and data type responsibility — date serialization,
  * opaque domain types (vector, bigint, uuid), JSON canonicalization. Stage 2
  * (this module) is a pure JSON-to-TS printer that must never grow type-specific
  * branches.
  *
  * To render a non-JSON JS value (Date, Vector, BigInt, Buffer, …), encode it
- * through the relevant codec's `encodeJson` first. Adding special cases to
+ * through the relevant codec's `toDataTypeValue` first. Adding special cases to
  * this file is not the answer — that's what codecs are for.
  *
  * The file also exports `tsObjectSource` and `tsArraySource`, the object and

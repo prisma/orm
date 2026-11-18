@@ -75,7 +75,7 @@ describe('re-scaffolding over an existing project', () => {
     it(
       'refuses when the typed answer is not the token',
       async () => {
-        const run = await harness().run(scaffoldArgv(...NO_PACKAGE_WORK), {
+        const run = await harness().run([...scaffoldArgv(...NO_PACKAGE_WORK), '--json'], {
           cwd: projectDir,
           isTty: { stdin: true },
           answers: ['', 'no'],
@@ -91,7 +91,7 @@ describe('re-scaffolding over an existing project', () => {
     it(
       'exits 3 when the prompt is cancelled outright',
       async () => {
-        const run = await harness().run(scaffoldArgv(...NO_PACKAGE_WORK), {
+        const run = await harness().run([...scaffoldArgv(...NO_PACKAGE_WORK), '--json'], {
           cwd: projectDir,
           isTty: { stdin: true },
           stdin: '',
@@ -123,7 +123,9 @@ describe('re-scaffolding over an existing project', () => {
     it(
       'names the token it wants when a non-interactive run offers none',
       async () => {
-        const run = await harness().run(scaffoldArgv(...NO_PACKAGE_WORK), { cwd: projectDir });
+        const run = await harness().run([...scaffoldArgv(...NO_PACKAGE_WORK), '--json'], {
+          cwd: projectDir,
+        });
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({
@@ -141,7 +143,7 @@ describe('re-scaffolding over an existing project', () => {
     it(
       'refuses --yes as consent',
       async () => {
-        const run = await harness().run(scaffoldArgv('--yes', ...NO_PACKAGE_WORK), {
+        const run = await harness().run([...scaffoldArgv('--yes', ...NO_PACKAGE_WORK), '--json'], {
           cwd: projectDir,
           isTty: { stdin: true },
         });
@@ -159,7 +161,7 @@ describe('re-scaffolding over an existing project', () => {
       'rejects an unknown --target before asking for anything',
       async () => {
         const run = await harness().run(
-          ['orm', 'init', '--target', 'sqlite', '--authoring', 'psl', ...NO_PACKAGE_WORK],
+          ['orm', 'init', '--target', 'sqlite', '--authoring', 'psl', ...NO_PACKAGE_WORK, '--json'],
           { cwd: projectDir },
         );
 
@@ -254,7 +256,9 @@ describe('re-scaffolding over an existing project', () => {
     it(
       'names the schema path in the question it asks consent for',
       async () => {
-        const run = await harness().run(scaffoldArgv(...NO_PACKAGE_WORK), { cwd: projectDir });
+        const run = await harness().run([...scaffoldArgv(...NO_PACKAGE_WORK), '--json'], {
+          cwd: projectDir,
+        });
 
         expect(envelopeOf(run)).toMatchObject({
           error: { code: 'CLI.CONSENT_REQUIRED', summary: expect.stringContaining(SCHEMA_PATH) },
@@ -271,7 +275,9 @@ describe('re-scaffolding over an existing project', () => {
         writeProjectFile(SCHEMA_PATH, HAND_WRITTEN_SCHEMA);
         writeProjectFile('src/prisma/db.ts', 'export const db = null\n');
 
-        const run = await harness().run(scaffoldArgv(...NO_PACKAGE_WORK), { cwd: projectDir });
+        const run = await harness().run([...scaffoldArgv(...NO_PACKAGE_WORK), '--json'], {
+          cwd: projectDir,
+        });
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({
@@ -314,7 +320,9 @@ describe('re-scaffolding over an existing project', () => {
     it(
       'asks for a token the user can actually type',
       async () => {
-        const run = await harness().run(scaffoldArgv(...NO_PACKAGE_WORK), { cwd: spacedDir });
+        const run = await harness().run([...scaffoldArgv(...NO_PACKAGE_WORK), '--json'], {
+          cwd: spacedDir,
+        });
 
         expect(envelopeOf(run)).toMatchObject({
           error: { code: 'CLI.CONSENT_REQUIRED', meta: { consentToken: 'my app' } },

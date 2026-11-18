@@ -1,0 +1,13 @@
+{
+  "ts": {
+    "code": "CONTRACT.INDEX_INVALID",
+    "message": "Model \"Doc\" index {\"fields\":{\"$**\":1},\"options\":{\"unique\":true}} is unique and has a wildcard key; a unique index cannot use a wildcard."
+  },
+  "psl": [
+    {
+      "code": "PSL_INVALID_INDEX",
+      "message": "Unique indexes cannot use wildcard() fields",
+      "spanText": "@@unique([wildcard()])"
+    }
+  ]
+}

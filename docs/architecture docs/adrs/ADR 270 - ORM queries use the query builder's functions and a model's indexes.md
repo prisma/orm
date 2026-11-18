@@ -72,7 +72,7 @@ So the ORM needs to name the index, not restate it.
 
 ### Reusing the query builder's functions keeps one mechanism
 
-The alternative to `fns` is to give the index reference its own methods, `indexes.post_search.matches(q)`. That needs a second way for packages to attach operations: today an operation attaches to a field by the field's data type, and these would attach to an index by the index's type. That mechanism was designed for collection scopes (see "Later decision" below) and is a larger change than this one.
+The alternative to `fns` is to give the index reference its own methods, `indexes.post_search.matches(q)`. That needs a second way for packages to attach operations: today an operation attaches to a field by the field's data type, and these would attach to an index by the index's type. That mechanism is a larger change than this one, and the later decision below, collection methods that packages contribute, does not need it.
 
 `fns` needs nothing new from packages. `fullTextMatches` and `fullTextRank` already accept an index reference as their document, and the ORM's execution context already holds the operation registry the SQL query builder reads `fns` from. Code that searches looks the same in both lanes, which is what an application moving a query between them expects.
 
@@ -168,22 +168,20 @@ db.User.where({ id }).include('posts', (posts) => posts.with(search(input.search
   - `examples/prisma-8-demo`: the base checks in 793,326 instantiations. With the change and the demo's source as it is at the base, so nothing uses the feature, 788,705 (−0.6%); the drop comes from the shared index reference type, which resolves only the columns an index covers. Adding `examples/prisma-8-demo/test/callback-tools-uses.types.test-d.ts`, which uses the second argument once at each of ten sites (`where` and `orderBy` on a collection, a chained collection, an include refinement, a relation filter, a fragment for one model, a custom collection method, a `first` filter, `fns.eq` between two fields and an `orderBy` array), gives 790,082 (+1,377, +0.17%). The demo as shipped with this change, with its weighted search, checks in 793,197.
   - `packages/3-extensions/sql-orm-client`, without the four `test/callback-tools*` files: 1,876,427 at the base and 1,887,338 with the change (+0.6%, which includes two new indexes in the test fixture). Adding back `test/callback-tools-uses.types.test-d.ts`, the same ten sites on `User`, gives 1,906,118 (+18,780, +1.0%).
 
-## Later decision: collection scopes built from indexes
+## Later decision: collection methods computed from a model
 
-The next step is for the ORM to offer each search index as a scope on the model's collection, so the application writes no query:
+The next step, for the ORM to offer each search index as a method of the model's collection so the application writes no query, is [ADR 272 — Packages contribute collection methods computed from a model](ADR%20272%20-%20Packages%20contribute%20collection%20methods%20computed%20from%20a%20model.md):
 
 ```ts
-db.Post.scopes.search.fulltext(q).where({ userId }).limit(10).all();
+db.Post.using.post_search(q).where({ userId }).limit(10).all();
 ```
 
-That design was drafted and spiked in September 2026. The package that owns an index type supplies its scope operations through an interface the ORM defines. The ORM finds a model's scopes from its indexes in the contract, and the contract declares no scopes. A scope is reached through a reserved `scopes` member, so an index name cannot collide with a collection method. The spikes measured about 0.5% more type checking on the demo application when unused and about 2% when used. A shorter form, `db.Post.search.fulltext(q)`, was dropped for its cost.
-
-It is a separate decision because it adds a contribution interface for packages, a reserved collection member and a type registry, and because it needs this decision first: a scope operation is a `where` and an `orderBy` that name an index, which is what this decision makes possible.
+A package reads each model and contributes the methods it offers; the Postgres package offers one for each full-text index, named after the index. The method's body is a `where` and an `orderBy` that name the index, which is what this decision makes possible.
 
 ## Alternatives considered
 
-- **A helper exported by the Postgres package**, `fulltextSearchScopes(db.Post).post_search(q)`, which reads the model's full-text indexes from the contract and returns a fragment for each. It needs a generic builder in the ORM so that each package can type its helper, and each package must write one. Naming the index in an ordinary query gives the same result without either, and leaves the automatic form to collection scopes.
-- **Methods on the index reference**, `indexes.post_search.matches(q)`. It needs packages to attach operations to index types, a second attachment mechanism beside the one by data type. That mechanism belongs to collection scopes.
+- **A helper exported by the Postgres package**, `fulltextSearchScopes(db.Post).post_search(q)`, which reads the model's full-text indexes from the contract and returns a fragment for each. It needs a generic builder in the ORM so that each package can type its helper, and each package must write one. Naming the index in an ordinary query gives the same result without either, and leaves the automatic form to ADR 272.
+- **Methods on the index reference**, `indexes.post_search.matches(q)`. It needs packages to attach operations to index types, a second attachment mechanism beside the one by data type.
 - **Only `fns`, with the weights written in the query**, `fns.fullTextMatches(fullTextDocument([[p.title, p.subtitle], [p.body]]), q)`. Any difference from the index silently disables it. It remains possible, but it is not the way to search an index.
 - **Scopes declared in the contract's domain plane**, mapped to a storage index. A domain entry would carry nothing beyond a name the index already has, and the contract must not describe one query interface.
 - **`indexes` and `fns` as members of the model accessor.** They would collide with fields of the same names.

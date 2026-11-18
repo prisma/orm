@@ -19,10 +19,7 @@ const identitySerialize = (c: Contract): JsonObject => c as unknown as JsonObjec
 const identityDeserialize = (json: Record<string, unknown>): Contract => {
   const contract = structuredClone(json) as unknown as Contract;
   for (const namespace of Object.values(contract.domain.namespaces)) {
-    for (const entity of [
-      ...Object.values(namespace.models),
-      ...Object.values(namespace.valueObjects ?? {}),
-    ]) {
+    for (const entity of Object.values(namespace.models)) {
       for (const [name, field] of Object.entries(entity.fields)) {
         entity.fields[name] = { ...field, many: field.many ?? false };
       }
@@ -51,6 +48,8 @@ const SQL_EMIT_HOOKS = {
   sortStorage: sqlSortStorage,
 } satisfies Pick<CanonicalizeContractOptions, 'shouldPreserveEmpty' | 'sortStorage'>;
 
+export const TEST_TYPES_MODULE = '@acme/orm-db/contract-types';
+
 /**
  * Tests author JSON-clean contracts directly, so the canonicalisation
  * hook trivially passes through. Production callers thread the target
@@ -60,10 +59,11 @@ export function emit(
   contract: Contract,
   stack: EmitStackInput,
   family: EmissionSpi,
-  options?: Omit<EmitOptions, 'serializeContract' | 'deserializeContract'>,
+  options?: Partial<Omit<EmitOptions, 'serializeContract' | 'deserializeContract'>>,
 ): Promise<EmitResult> {
   return emitImpl(contract, stack, family, {
     ...SQL_EMIT_HOOKS,
+    typesModule: TEST_TYPES_MODULE,
     ...options,
     serializeContract: identitySerialize,
     deserializeContract: identityDeserialize,

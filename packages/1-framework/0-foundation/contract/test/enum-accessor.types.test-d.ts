@@ -3,25 +3,11 @@ import type { Contract } from '../src/contract-types';
 import type { NamespacedEnums } from '../src/enum-accessor';
 import type { ProfileHashBase, StorageBase, StorageHashBase } from '../src/types';
 
-// An accessor for one enum with literal `values`/`names`/`members`, matching
-// the runtime `EnumAccessor` shape the no-emit (built) contract carries on
-// `enumAccessors`.
-type Accessor<Values extends readonly unknown[], Names extends readonly string[], Members> = {
-  readonly values: Values;
-  readonly names: Names;
-  readonly members: Members;
-  has(v: Values[number]): boolean;
-  nameOf(v: Values[number]): string | undefined;
-  ordinalOf(v: Values[number]): number;
-  readonly Value: Values[number];
-};
-
-// A literal contract shape mirroring the no-emit (built) carrier: enums are
-// reached through the flat, already-accessor-shaped `enumAccessors` map
-// (`BuiltEnumAccessorsOf`), which preserves literal tuples. Built as a
-// standalone literal type — not via the SQL authoring builder, which the
-// foundation layer must not depend on. The `toExtend<Contract>` assertion below
-// proves it still satisfies the framework contract interface.
+// A literal contract shape carrying two text enums the way every contract does:
+// `enum` types each member as stored, `enumMemberTypes` as the application reads
+// it. Built as a standalone literal type — not via the SQL authoring builder,
+// which the foundation layer must not depend on. The `toExtend<Contract>`
+// assertion below proves it still satisfies the framework contract interface.
 type EnumContract = {
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
@@ -31,22 +17,36 @@ type EnumContract = {
   readonly extensions: Record<string, never>;
   readonly profileHash: ProfileHashBase<'def'>;
   readonly meta: Record<string, never>;
-  readonly enumAccessors: {
-    readonly Role: Accessor<
-      readonly ['user', 'admin'],
-      readonly ['User', 'Admin'],
-      { readonly User: 'user'; readonly Admin: 'admin' }
-    >;
-    readonly Status: Accessor<
-      readonly ['active', 'inactive'],
-      readonly ['Active', 'Inactive'],
-      { readonly Active: 'active'; readonly Inactive: 'inactive' }
-    >;
-  };
   readonly domain: {
     readonly namespaces: {
       readonly public: {
         readonly models: Record<string, never>;
+        readonly enum: {
+          readonly Role: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'User'; readonly value: 'user' },
+              { readonly name: 'Admin'; readonly value: 'admin' },
+            ];
+          };
+          readonly Status: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'Active'; readonly value: 'active' },
+              { readonly name: 'Inactive'; readonly value: 'inactive' },
+            ];
+          };
+        };
+        readonly enumMemberTypes?: {
+          readonly Role: readonly [
+            { readonly name: 'User'; readonly value: 'user' },
+            { readonly name: 'Admin'; readonly value: 'admin' },
+          ];
+          readonly Status: readonly [
+            { readonly name: 'Active'; readonly value: 'active' },
+            { readonly name: 'Inactive'; readonly value: 'inactive' },
+          ];
+        };
       };
     };
   };
@@ -68,10 +68,6 @@ const publicEnums = {} as Enums['public'];
 
 test('enums.public.Role.values is the literal value tuple', () => {
   expectTypeOf(publicEnums.Role.values).toEqualTypeOf<readonly ['user', 'admin']>();
-});
-
-test('enums.public.Role.values is not a widened string[]', () => {
-  expectTypeOf(publicEnums.Role.values).not.toEqualTypeOf<readonly string[]>();
 });
 
 test('enums.public.Status.values preserves declaration order as a literal tuple', () => {
@@ -117,7 +113,7 @@ test('enums.public.Status.Value is the literal value union', () => {
 // reads it.
 // ---------------------------------------------------------------------------
 
-type EmittedContract = Omit<EnumContract, 'enumAccessors' | 'domain'> & {
+type EmittedContract = Omit<EnumContract, 'domain'> & {
   readonly domain: {
     readonly namespaces: {
       readonly public: {

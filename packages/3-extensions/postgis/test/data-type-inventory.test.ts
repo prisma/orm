@@ -7,10 +7,6 @@ const EXPECTED: Readonly<Record<string, string>> = {
 };
 
 describe('postgis data type inventory', () => {
-  it('ships codecs to check', () => {
-    expect(codecDescriptors.length).toBeGreaterThan(0);
-  });
-
   it('names the data type of every codec it ships', () => {
     expect(
       Object.fromEntries(

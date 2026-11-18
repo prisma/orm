@@ -160,8 +160,8 @@ function runCommand(
 
 async function initializeBackendSchema(database: DevDatabase): Promise<void> {
   await runCommand(
-    'node',
-    [CLI_BIN_PATH, 'db', 'init', '--db', database.connectionString, '--json', '--no-color'],
+    'pnpm',
+    ['exec', 'prisma', 'db', 'init', '--db', database.connectionString, '--json', '--no-color'],
     {
       cwd: BACKEND_DIR,
       env: { ...process.env, DATABASE_URL: database.connectionString },

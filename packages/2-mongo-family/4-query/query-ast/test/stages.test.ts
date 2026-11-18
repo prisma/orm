@@ -1,3 +1,4 @@
+import { MongoPreparedParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import {
   MongoAggFieldRef,
@@ -15,6 +16,8 @@ import {
   MongoUnwindStage,
 } from '../src/stages';
 import type { MongoAggExprRewriter, MongoFilterRewriter } from '../src/visitors';
+
+const takePlaceholder = new MongoPreparedParamRef('take', 'mongo/int32@1', false);
 
 describe('MongoMatchStage', () => {
   it('wraps a filter expression', () => {
@@ -108,16 +111,20 @@ describe('MongoLimitStage', () => {
     expect(stage.limit).toBe(10);
   });
 
-  it('accepts zero', () => {
-    expect(new MongoLimitStage(0).limit).toBe(0);
+  it('refuses zero, which MongoDB rejects', () => {
+    expect(() => new MongoLimitStage(0)).toThrow('limit must be a positive integer');
   });
 
   it('rejects negative values', () => {
-    expect(() => new MongoLimitStage(-1)).toThrow('limit must be a non-negative integer');
+    expect(() => new MongoLimitStage(-1)).toThrow('limit must be a positive integer');
   });
 
   it('rejects non-integer values', () => {
-    expect(() => new MongoLimitStage(1.5)).toThrow('limit must be a non-negative integer');
+    expect(() => new MongoLimitStage(1.5)).toThrow('limit must be a positive integer');
+  });
+
+  it('accepts a placeholder', () => {
+    expect(new MongoLimitStage(takePlaceholder).limit).toBe(takePlaceholder);
   });
 
   it('is frozen', () => {
@@ -147,6 +154,10 @@ describe('MongoSkipStage', () => {
 
   it('rejects non-integer values', () => {
     expect(() => new MongoSkipStage(2.5)).toThrow('skip must be a non-negative integer');
+  });
+
+  it('accepts a placeholder', () => {
+    expect(new MongoSkipStage(takePlaceholder).skip).toBe(takePlaceholder);
   });
 
   it('is frozen', () => {

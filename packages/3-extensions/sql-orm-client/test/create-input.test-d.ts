@@ -112,7 +112,11 @@ type CreateInputContract = Omit<Contract<CreateInputStorage>, 'domain'> & {
     readonly mutations: {
       readonly defaults: [
         {
-          readonly ref: { readonly entry: 'user'; readonly field: 'slug' };
+          readonly ref: {
+            readonly namespace: '__unbound__';
+            readonly entry: 'user';
+            readonly field: 'slug';
+          };
           readonly onCreate: {
             readonly kind: 'generator';
             readonly id: 'uuidv4';

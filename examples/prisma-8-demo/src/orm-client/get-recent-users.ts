@@ -1,5 +1,4 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 import { createdSince, postSummary } from './fragments';
 
 /**
@@ -9,10 +8,9 @@ import { createdSince, postSummary } from './fragments';
 export async function ormClientGetRecentUsers(
   since: Temporal.Instant,
   limit: number,
-  runtime: Runtime,
+  orm: DemoOrm,
 ) {
-  const db = createOrmClient(runtime);
-  return db.User.with(createdSince(since))
+  return orm.User.with(createdSince(since))
     .select('id', 'email')
     .include('posts', (posts) =>
       posts

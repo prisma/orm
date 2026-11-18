@@ -64,6 +64,8 @@ import renamedPolicyContractJson from './fixtures/renamed-policy/contract.json' 
 };
 import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mock-schema';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 // Derive the policy wire name from the deserialized contract rather than pinning a literal.
 // The public namespace holds exactly one policy; its `.name` is the content-addressed wire name.
 const _deserializedForConsts = new PostgresContractSerializer().deserializeContract<Contract>(
@@ -157,6 +159,7 @@ describe('supabase walking skeleton — external-contract migrate/verify + publi
         // --- Plan mode: verify zero ops for auth/storage ---
 
         const planResult = await client.dbInit({
+          invocation: TEST_INVOCATION,
           contract: contractJson,
           mode: 'plan',
           migrationsDir,
@@ -164,7 +167,7 @@ describe('supabase walking skeleton — external-contract migrate/verify + publi
 
         if (!planResult.ok) {
           throw new Error(
-            `db init plan failed: ${planResult.failure.summary}\n\n${JSON.stringify(planResult.failure, null, 2)}`,
+            `db init plan failed: ${planResult.failure.message}\n\n${JSON.stringify(planResult.failure, null, 2)}`,
           );
         }
 
@@ -211,6 +214,7 @@ describe('supabase walking skeleton — external-contract migrate/verify + publi
         // --- Apply mode ---
 
         const applyResult = await client.dbInit({
+          invocation: TEST_INVOCATION,
           contract: contractJson,
           mode: 'apply',
           migrationsDir,
@@ -218,7 +222,7 @@ describe('supabase walking skeleton — external-contract migrate/verify + publi
 
         if (!applyResult.ok) {
           throw new Error(
-            `db init apply failed: ${applyResult.failure.summary}\n\n${JSON.stringify(applyResult.failure, null, 2)}`,
+            `db init apply failed: ${applyResult.failure.message}\n\n${JSON.stringify(applyResult.failure, null, 2)}`,
           );
         }
 
@@ -306,12 +310,13 @@ describe('supabase walking skeleton — external-contract migrate/verify + publi
       try {
         await client.connect(connectionString);
         const applyResult = await client.dbInit({
+          invocation: TEST_INVOCATION,
           contract: contractJson,
           mode: 'apply',
           migrationsDir,
         });
         if (!applyResult.ok) {
-          throw new Error(`dbInit apply failed: ${applyResult.failure.summary}`);
+          throw new Error(`dbInit apply failed: ${applyResult.failure.message}`);
         }
       } finally {
         await client.close();
@@ -428,13 +433,14 @@ describe('supabase RLS behavioral e2e — filtering + drift-fails-verify', () =>
     await client.connect(database.connectionString);
 
     const applyResult = await client.dbInit({
+      invocation: TEST_INVOCATION,
       contract: contractJson,
       mode: 'apply',
       migrationsDir,
     });
     if (!applyResult.ok) {
       throw new Error(
-        `db init apply failed: ${applyResult.failure.summary}\n\n${JSON.stringify(applyResult.failure, null, 2)}`,
+        `db init apply failed: ${applyResult.failure.message}\n\n${JSON.stringify(applyResult.failure, null, 2)}`,
       );
     }
   }, timeouts.spinUpPpgDev * 4);
@@ -624,6 +630,7 @@ describe('supabase RLS behavioral e2e — filtering + drift-fails-verify', () =>
 
       // Plan: exactly one drop per policy — no enablement change anywhere.
       const planResult = await client.dbUpdate({
+        invocation: TEST_INVOCATION,
         answerQuestions: async (questions) =>
           questions.map((question) => ({
             verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
@@ -643,6 +650,7 @@ describe('supabase RLS behavioral e2e — filtering + drift-fails-verify', () =>
       );
 
       const applyResult = await client.dbUpdate({
+        invocation: TEST_INVOCATION,
         answerQuestions: async (questions) =>
           questions.map((question) => ({
             verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
@@ -706,6 +714,7 @@ describe('supabase RLS behavioral e2e — filtering + drift-fails-verify', () =>
 
       // Plan: exactly one rename — no drop, no create, no enablement change.
       const planResult = await client.dbUpdate({
+        invocation: TEST_INVOCATION,
         answerQuestions: async (questions) =>
           questions.map((question) => ({
             verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
@@ -722,6 +731,7 @@ describe('supabase RLS behavioral e2e — filtering + drift-fails-verify', () =>
       expect(planIds).toEqual([`rlsPolicy.public.profile.${POLICY_WIRE_NAME}.rename`]);
 
       const applyResult = await client.dbUpdate({
+        invocation: TEST_INVOCATION,
         answerQuestions: async (questions) =>
           questions.map((question) => ({
             verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),

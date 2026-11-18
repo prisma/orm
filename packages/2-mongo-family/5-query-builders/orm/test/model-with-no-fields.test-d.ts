@@ -30,7 +30,10 @@ type LegacyContract = MongoContractWithTypeMaps<
             readonly Legacy: {
               readonly fields: Record<never, never>;
               readonly relations: Record<string, never>;
-              readonly storage: { readonly collection: 'legacy' };
+              readonly storage: {
+                readonly collection: 'legacy';
+                readonly fields: Record<string, never>;
+              };
             };
           };
         };
