@@ -417,6 +417,12 @@ A table or column rename that no statement asks for is refused when it swaps or 
 
 A variant stored in its base's table that gets a table of its own under a new name: `--rename Bug:Defect` is refused, since it would move the whole table, and the advice says to leave it out. The plan without it asks about `Bug` and offers `--rename Bug:Defect` first again, which is refused again. The question should not offer a rename the planner refuses. Files: the question offers in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`.
 
+## The statement planner's names say "statement" for renames no statement asks for
+
+**Found:** stored-name renames, final system design review (2026-11-18).
+
+`planStatements`, `PlannedStatements`, `StatementPlanner` and `StatementPlanningTarget` in `packages/2-sql-family/9-family/src/core/migrations/statement-planning.ts`, and their test files `statement-planning*.test.ts`, now also plan the table and column renames of models and fields that keep their names, which no statement asks for. Their names still say "statement", so a reader looking for the code that renames a table when only `@@map` changes will not look there. Renaming them is a wide change to names that exist on `main`, called by both SQL target planners, and needs names chosen by the operator.
+
 ## A statement that names storage
 
 **Found:** stored-name renames decision, 2026-11-18. Recorded in [`storage-naming.md`](./storage-naming.md).
