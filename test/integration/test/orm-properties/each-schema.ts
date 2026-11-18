@@ -80,7 +80,7 @@ export async function onEachSchema(
       await run({ schema, contractJson, seed: seed + index });
     } catch (error) {
       throw new Error(
-        `the two paths disagree on schema ${index} of seed ${seed} (ORM_PATHS_SEED=${seed} ORM_PATHS_SCHEMA=${index}):\n${schema.psl}`,
+        `the two paths disagree on schema ${index} of seed ${seed} (ORM_PROPERTIES_SEED=${seed} ORM_PROPERTIES_SCHEMA=${index}):\n${schema.psl}`,
         { cause: error },
       );
     }

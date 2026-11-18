@@ -1,3 +1,4 @@
+import { and, not } from '@internal/sql-orm-client';
 import fc from 'fast-check';
 import {
   type Command,
@@ -23,7 +24,7 @@ interface Accessor {
   every(matching: (row: RowAccessor) => unknown): unknown;
 }
 
-type RowAccessor = Record<string, Accessor>;
+export type RowAccessor = Record<string, Accessor>;
 type Condition = Record<string, unknown> | ((row: RowAccessor) => unknown);
 
 interface RelationMutator {
@@ -34,6 +35,13 @@ interface RelationMutator {
   disconnect(keys?: readonly unknown[]): unknown;
   updateAll(changes: unknown): unknown;
   deleteAll(): unknown;
+}
+
+export interface Aggregates {
+  count(): unknown;
+  sum(field: string): unknown;
+  min(field: string): unknown;
+  max(field: string): unknown;
 }
 
 export interface LooseCollection {
@@ -47,7 +55,18 @@ export interface LooseCollection {
   select(...fields: string[]): LooseCollection;
   orderBy(by: readonly ((row: RowAccessor) => unknown)[]): LooseCollection;
   limit(count: number): LooseCollection;
+  offset(count: number): LooseCollection;
+  cursor(values: Record<string, unknown>): LooseCollection;
+  aggregate(
+    spec: (aggregate: Aggregates) => Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
+  groupBy(field: string): {
+    aggregate(
+      spec: (aggregate: Aggregates) => Record<string, unknown>,
+    ): PromiseLike<Record<string, unknown>[]>;
+  };
   all(): PromiseLike<unknown[]>;
+  first(): Promise<unknown>;
   create(data: unknown): Promise<unknown>;
   createAll(rows: readonly unknown[]): PromiseLike<unknown[]>;
   createAndCount(rows: readonly unknown[]): Promise<number>;
@@ -62,16 +81,26 @@ export interface LooseCollection {
 
 export type LooseOrm = Record<string, LooseCollection>;
 
-function accessor(row: RowAccessor, name: string): Accessor {
+export function accessor(row: RowAccessor, name: string): Accessor {
   const found = row[name];
   if (found === undefined) throw new Error(`the ORM offers no field or relation ${name}`);
   return found;
 }
 
-function collectionOf(orm: LooseOrm, model: string, variant: string | undefined): LooseCollection {
+export function collectionOf(
+  orm: LooseOrm,
+  model: string,
+  variant: string | undefined,
+): LooseCollection {
   const collection = orm[model];
   if (collection === undefined) throw new Error(`the ORM offers no model ${model}`);
   return variant === undefined ? collection : collection.variant(variant);
+}
+
+type OrmCondition = Parameters<typeof not>[0];
+
+function asCondition(value: unknown): OrmCondition {
+  return value as OrmCondition;
 }
 
 function matching(filter: Filter): (row: RowAccessor) => unknown {
@@ -85,6 +114,10 @@ function matching(filter: Filter): (row: RowAccessor) => unknown {
       return (row) => accessor(row, filter.field).isNull();
     case 'in':
       return (row) => accessor(row, filter.field).in(filter.values);
+    case 'and':
+      return (row) => and(...filter.filters.map((part) => asCondition(matching(part)(row))));
+    case 'not':
+      return (row) => not(asCondition(matching(filter.filter)(row)));
     case 'related': {
       const inner = filter.filter === undefined ? undefined : matching(filter.filter);
       return (row) => {
@@ -96,13 +129,13 @@ function matching(filter: Filter): (row: RowAccessor) => unknown {
   }
 }
 
-function conditionOf(filter: Filter, model: ModelShape): Condition {
+export function conditionOf(filter: Filter, model: ModelShape): Condition {
   const ofModel =
     filter.kind === 'equals' && model.fields.some(({ name }) => name === filter.field);
   return ofModel ? { [filter.field]: filter.value } : matching(filter);
 }
 
-function comparable(value: unknown): unknown {
+export function comparable(value: unknown): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (value instanceof Date || value instanceof Uint8Array) return value;
   if (Array.isArray(value)) return value.map(comparable);
@@ -113,7 +146,7 @@ function comparable(value: unknown): unknown {
   );
 }
 
-function inAnyOrder(rows: readonly unknown[]): unknown[] {
+export function inAnyOrder(rows: readonly unknown[]): unknown[] {
   return rows
     .map(comparable)
     .sort((left, right) => fc.stringify(left).localeCompare(fc.stringify(right)));
@@ -121,6 +154,12 @@ function inAnyOrder(rows: readonly unknown[]): unknown[] {
 
 function ofVariant(mutator: RelationMutator, variant: string | undefined): RelationMutator {
   return variant === undefined ? mutator : mutator.variant(variant);
+}
+
+export function byKey(collection: LooseCollection, model: ModelShape): LooseCollection {
+  return collection.orderBy(
+    model.key.map((name) => (row: RowAccessor) => accessor(row, name).asc()),
+  );
 }
 
 export class OrmRunner {
@@ -168,12 +207,6 @@ export class OrmRunner {
     return change.kind === 'updateAll' ? filtered.updateAll(change.changes) : filtered.deleteAll();
   }
 
-  #byKey(collection: LooseCollection, model: ModelShape): LooseCollection {
-    return collection.orderBy(
-      model.key.map((name) => (row: RowAccessor) => accessor(row, name).asc()),
-    );
-  }
-
   #including(collection: LooseCollection, model: ModelShape, tree: IncludeTree): LooseCollection {
     return Object.entries(tree).reduce((current, [name, included]) => {
       const relation = relationOf(model, name);
@@ -183,7 +216,7 @@ export class OrmRunner {
           included.filter === undefined
             ? related
             : related.where(conditionOf(included.filter, target));
-        const ordered = relation.many ? this.#byKey(filtered, target) : filtered;
+        const ordered = relation.many ? byKey(filtered, target) : filtered;
         const limited = included.limit === undefined ? ordered : ordered.limit(included.limit);
         return this.#including(limited, target, included.include);
       });
@@ -260,11 +293,33 @@ export class OrmRunner {
           command.filter === undefined
             ? collection
             : collection.where(conditionOf(command.filter, model));
-        const ordered = this.#byKey(filtered, model);
+        const ordered = byKey(filtered, model);
         const limited = command.limit === undefined ? ordered : ordered.limit(command.limit);
         return shape(limited).all();
       }
     }
+  }
+
+  async readBack(
+    orm: LooseOrm,
+    command: Command,
+    value: unknown,
+  ): Promise<{ readonly returned: unknown[]; readonly read: unknown[] }> {
+    const model = modelOf(this.#schema, command.model);
+    const removes = command.kind === 'delete' || command.kind === 'deleteAll';
+    const counted = 'counted' in command && command.counted;
+    const rows = command.kind === 'read' || counted ? [] : [value].flat();
+    const keyed = rows
+      .filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null)
+      .filter((row) => model.key.every((name) => name in row))
+      .slice(0, 3);
+    const read: unknown[] = [];
+    for (const row of keyed) {
+      const key = Object.fromEntries(model.key.map((name) => [name, row[name]]));
+      const found = collectionOf(orm, command.model, command.variant).whereUnique(key);
+      read.push(comparable(await this.#shaped(found, model, command.shape).first()));
+    }
+    return { returned: removes ? keyed.map(() => null) : keyed, read };
   }
 
   async readTables(orm: LooseOrm): Promise<Record<string, unknown[]>> {

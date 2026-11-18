@@ -130,6 +130,10 @@ function fullRowOf(model: ModelShape): fc.Arbitrary<Scalars> {
   return recordOf(model.fields, (field) => valuesOfNewRow(model, field));
 }
 
+function withoutSelect(shape: Shape): Shape {
+  return { ...shape, select: undefined };
+}
+
 function scopesOf(model: ModelShape): (string | undefined)[] {
   return [undefined, ...model.variants.map((variant) => variant.value)];
 }
@@ -396,12 +400,14 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
     const model = scoped(base, variant);
     const unvaried = scoped(base, undefined);
     const writable = writableScopesOf(base).includes(variant);
+    const inOwnTable = base.variants.some(
+      (candidate) => candidate.value === variant && candidate.ownTable,
+    );
     const on = {
       model: fc.constant(model.name),
       variant: fc.constant(variant),
-      shape: shapeOf(tie, model),
+      shape: shapeOf(tie, unvaried),
     };
-    const rewritten = { ...on, shape: shapeOf(tie, unvaried) };
     const counted = fc.boolean();
     const filter = filterOf(tie, base, variant);
     const also = fc.oneof(
@@ -424,6 +430,7 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
           row: row.map((created) =>
             withDistinctKeys(created, model, { values: new Set(), next: 0 }),
           ),
+          ...(inOwnTable ? { shape: shapeOf(tie, unvaried).map(withoutSelect) } : {}),
         }),
       },
       {
@@ -438,7 +445,7 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
       {
         weight: 2,
         arbitrary: fc.record({
-          ...rewritten,
+          ...on,
           kind: fc.constant('upsert' as const),
           create: fullRowOf(model),
           update: changesOf(unvaried, model.key),
@@ -452,7 +459,7 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
         weight: 6,
         arbitrary: fc
           .record({
-            ...rewritten,
+            ...on,
             kind: fc.constant('update' as const),
             key: keyOf(model),
             also,
@@ -489,7 +496,7 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
       {
         weight: 2,
         arbitrary: fc.record({
-          ...rewritten,
+          ...on,
           kind: fc.constant('updateAll' as const),
           filter,
           changes: changesOf(unvaried, model.key),
@@ -499,7 +506,7 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
       {
         weight: 2,
         arbitrary: fc.record({
-          ...rewritten,
+          ...on,
           kind: fc.constant('delete' as const),
           key: keyOf(model),
           also,
@@ -508,7 +515,7 @@ export function commands({ schema, generatedKeys }: CommandOptions): fc.Arbitrar
       {
         weight: 1,
         arbitrary: fc.record({
-          ...rewritten,
+          ...on,
           kind: fc.constant('deleteAll' as const),
           filter,
           counted,

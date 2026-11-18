@@ -6,8 +6,8 @@ import sqlite from '@internal/sqlite/runtime';
 import { contractFromJson } from '@internal/sqlite/static';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
+import { withoutCapabilities } from '../paths';
 import { pushContract } from '../push-sqlite';
-import { withoutCapabilities } from '../same-on-both-paths';
 import type { Contract } from './fixtures/sqlite/generated/contract';
 import contractJson from './fixtures/sqlite/generated/contract.json' with { type: 'json' };
 
@@ -49,6 +49,30 @@ describe('SQLite ORM calls known to fail', () => {
       await withDatabase(async (db) => {
         await db.orm.Counter.createAndCount([{ id: 1, big: 2n ** 62n }]);
         expect(await db.orm.Counter.select('id', 'big').all()).toEqual([{ id: 1, big: 2n ** 62n }]);
+      });
+    });
+  });
+
+  describe('a Char value with a trailing space', () => {
+    it.fails('is found by a filter on the value read back', async () => {
+      await withDatabase(async (db) => {
+        await db.orm.Label.createAndCount([{ id: 1, code: 'a ' }]);
+        const label = await db.orm.Label.whereUnique({ id: 1 }).select('id', 'code').firstOrThrow();
+        expect(await db.orm.Label.where({ code: label.code }).select('id').all()).toEqual([
+          { id: 1 },
+        ]);
+      });
+    });
+  });
+
+  describe('select before create on a variant', () => {
+    it.fails('returns only the selected fields of a variant stored in its own table', async () => {
+      await withDatabase(async (db) => {
+        expect(
+          await db.orm.Task.variant('feature')
+            .select('id', 'title')
+            .create({ id: 2, title: 'Dark mode', priority: 3 }),
+        ).toEqual({ id: 2, title: 'Dark mode' });
       });
     });
   });

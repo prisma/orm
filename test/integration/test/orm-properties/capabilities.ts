@@ -1,9 +1,7 @@
-import type { Contract } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
-import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import fc from 'fast-check';
 import { expect } from 'vitest';
 import { commands } from './arbitraries';
+import type { Paths } from './paths';
 import {
   type Command,
   depthOfInclude,
@@ -40,19 +38,6 @@ export const variations = {
 export type Variation = keyof typeof variations;
 
 const variationNames = Object.keys(variations) as Variation[];
-
-export function withoutCapabilities<TContract extends Contract<SqlStorage>>(
-  context: ExecutionContext<TContract>,
-  removed: readonly string[],
-): ExecutionContext<TContract> {
-  const capabilities = Object.fromEntries(
-    Object.entries(context.contract.capabilities).map(([group, entries]) => [
-      group,
-      Object.fromEntries(Object.entries(entries).filter(([name]) => !removed.includes(name))),
-    ]),
-  );
-  return { ...context, contract: { ...context.contract, capabilities } };
-}
 
 type Outcome =
   | { readonly status: 'returned'; readonly value: unknown }
@@ -132,8 +117,8 @@ export class Tally {
     return this.#counts.get(key) ?? 0;
   }
 
-  rejected(command: Command, code: string, error: unknown): void {
-    this.#examples.set(`${command.kind} ${code}`, String(error).slice(0, 240));
+  rejected(label: string, error: unknown): void {
+    this.#examples.set(label, String(error).slice(0, 240));
   }
 
   get report(): string {
@@ -202,12 +187,6 @@ export class Tally {
   }
 }
 
-export interface Paths {
-  readonly reference: LooseOrm;
-  readonly varied: (removedCapabilities: readonly string[]) => LooseOrm;
-  readonly clear: () => void | Promise<void>;
-}
-
 export interface Comparison {
   readonly schema: Schema;
   readonly generatedKeys: boolean;
@@ -233,7 +212,7 @@ export async function sameOnBothPaths(paths: Paths, comparison: Comparison): Pro
           { cause: error },
         );
       }
-      tally.rejected(command, code, error);
+      tally.rejected(`${command.kind} ${code}`, error);
       return code === 'ORM.CAPABILITY_MISSING' && orm !== paths.reference
         ? { status: 'refused' }
         : { status: 'rejected', code };
@@ -250,6 +229,14 @@ export async function sameOnBothPaths(paths: Paths, comparison: Comparison): Pro
       const outcome: Outcome = skipped.has(step)
         ? { status: 'refused' }
         : await attempt(orm, command);
+      if (outcome.status === 'returned') {
+        const { returned, read } = await runner.readBack(orm, command, outcome.value);
+        expect(
+          { step, command, read },
+          'a returned row differs from the row read by its key straight after',
+        ).toEqual({ step, command, read: returned });
+        if (read.length > 0) tally.add(`${command.kind} read back`);
+      }
       steps.push({ step, command, outcome, tables: await runner.readTables(orm) });
     }
     return steps;

@@ -5,12 +5,13 @@ export interface ScalarType {
   readonly values: fc.Arbitrary<unknown>;
   readonly equatable: boolean;
   readonly distinct?: (ordinal: number) => unknown;
+  readonly summable?: boolean;
 }
 
 export const existingOrdinals = fc.integer({ min: 1, max: 6 });
 export const unusedOrdinals = fc.integer({ min: 20, max: 59 });
 
-function key(psl: string, distinct: (ordinal: number) => unknown): ScalarType {
+function key(psl: string, distinct: (ordinal: number) => unknown, summable = false): ScalarType {
   return {
     psl,
     values: fc
@@ -18,6 +19,7 @@ function key(psl: string, distinct: (ordinal: number) => unknown): ScalarType {
       .map(distinct),
     equatable: true,
     distinct,
+    summable,
   };
 }
 
@@ -263,13 +265,16 @@ const sqliteTypes: readonly fc.Arbitrary<ScalarType>[] = [
     scalar(written('sql.Varchar', length), textUpTo(length)),
   ),
   parameterised(fc.integer({ min: 1, max: 6 }), (length) =>
-    scalar(written('sql.Char', length), textUpTo(length)),
+    scalar(
+      written('sql.Char', length),
+      textUpTo(length).map((value) => value.trimEnd()),
+    ),
   ),
 ];
 
 const postgresKeyTypes: readonly ScalarType[] = [
-  key('Int4', numbered),
-  key('Int2', numbered),
+  key('Int4', numbered, true),
+  key('Int2', numbered, true),
   key('Int8BigInt', bigNumbered),
   key('Int8Number', numbered),
   key('Oid', numbered),
@@ -281,7 +286,7 @@ const postgresKeyTypes: readonly ScalarType[] = [
 ];
 
 const sqliteKeyTypes: readonly ScalarType[] = [
-  key('Int', numbered),
+  key('Int', numbered, true),
   key('BigInt', bigNumbered),
   key('BigIntNumber', numbered),
   key('String', named),
@@ -295,7 +300,7 @@ export const keyTypes = {
   sqlite: fc.constantFrom(...sqliteKeyTypes),
 } as const;
 
-export const generatedKeyType = key('Int', numbered);
+export const generatedKeyType = key('Int', numbered, true);
 
 export const discriminatorType: ScalarType = {
   psl: 'String',

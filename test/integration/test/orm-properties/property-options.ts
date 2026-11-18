@@ -6,25 +6,28 @@ function numberFrom(variable: string): number | undefined {
 }
 
 export function runsAreOverridden(): boolean {
-  return ['ORM_PATHS_RUNS', 'ORM_PATHS_PATH', 'ORM_PATHS_SEED', 'ORM_PATHS_SCHEMA'].some(
-    (variable) => process.env[variable] !== undefined,
-  );
+  return [
+    'ORM_PROPERTIES_RUNS',
+    'ORM_PROPERTIES_PATH',
+    'ORM_PROPERTIES_SEED',
+    'ORM_PROPERTIES_SCHEMA',
+  ].some((variable) => process.env[variable] !== undefined);
 }
 
 export function seedOfRun(): number {
-  return numberFrom('ORM_PATHS_SEED') ?? 1;
+  return numberFrom('ORM_PROPERTIES_SEED') ?? 1;
 }
 
 export function propertyOptions(defaultRuns: number, seed: number): fc.Parameters<unknown> {
-  const path = process.env['ORM_PATHS_PATH'];
+  const path = process.env['ORM_PROPERTIES_PATH'];
   return {
-    numRuns: numberFrom('ORM_PATHS_RUNS') ?? defaultRuns,
+    numRuns: numberFrom('ORM_PROPERTIES_RUNS') ?? defaultRuns,
     seed,
     ...(path === undefined ? {} : { path, endOnFailure: true }),
-    ...(process.env['ORM_PATHS_UNSHRUNK'] === undefined ? {} : { endOnFailure: true }),
+    ...(process.env['ORM_PROPERTIES_UNSHRUNK'] === undefined ? {} : { endOnFailure: true }),
   };
 }
 
 export function onlySchema(): number | undefined {
-  return numberFrom('ORM_PATHS_SCHEMA');
+  return numberFrom('ORM_PROPERTIES_SCHEMA');
 }

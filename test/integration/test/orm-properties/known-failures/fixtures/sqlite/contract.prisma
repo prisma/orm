@@ -12,3 +12,23 @@ model Person {
   manager Person?  @relation("Management", fields: [managerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   reports Person[] @relation("Management")
 }
+
+model Task {
+  id    Int    @id
+  title String
+  kind  String
+
+  @@discriminator(kind)
+}
+
+model Feature {
+  priority Int?
+
+  @@base(Task, "feature")
+  @@map("features")
+}
+
+model Label {
+  id   Int         @id
+  code sql.Char(5)
+}

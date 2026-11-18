@@ -98,7 +98,9 @@ export type Filter =
       readonly relation: string;
       readonly quantifier: Quantifier;
       readonly filter: Filter | undefined;
-    };
+    }
+  | { readonly kind: 'and'; readonly filters: readonly Filter[] }
+  | { readonly kind: 'not'; readonly filter: Filter };
 
 export type RelatedChange =
   | NewRelated

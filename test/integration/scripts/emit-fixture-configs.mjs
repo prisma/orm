@@ -31,7 +31,7 @@ const fixtureRoots = [
   'test/mongo/prisma6-source',
   'test/mongo/recursive-value-objects',
   'test/value-objects/fixtures',
-  'test/orm-capability-paths/known-failures/fixtures',
+  'test/orm-properties/known-failures/fixtures',
 ];
 
 function findConfigs(dir) {
