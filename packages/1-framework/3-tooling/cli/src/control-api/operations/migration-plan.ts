@@ -834,14 +834,10 @@ async function executeMigrationPlanCommandInner(
   }
 
   try {
-    const plannedContracts = {
-      origin: fromContract ?? EMPTY_ORIGIN,
-      destination: toContract,
-      statements: statementTexts.filter(isPlannedStatement),
-    };
     const plannedOperations = (
       leg: PlannerSuccess,
       entries: readonly PlannedSubject[],
+      planned: readonly StatementText[],
     ): readonly DataProtectionRefusedOperation[] =>
       entries.map((entry) => ({
         spaceId: aggregate.app.spaceId,
@@ -849,18 +845,27 @@ async function executeMigrationPlanCommandInner(
           'operationId',
           entry.operationIndex === undefined ? undefined : leg.plannedOps[entry.operationIndex]?.id,
         ),
-        subject: subjectText(entry.subject, plannedContracts),
+        subject: subjectText(entry.subject, {
+          origin: fromContract ?? EMPTY_ORIGIN,
+          destination: toContract,
+          statements: planned,
+        }),
         label: entry.label,
       }));
-    const refuseForbidden = (legs: readonly PlannerSuccess[]) =>
+    const refuseForbidden = (
+      legs: readonly PlannerSuccess[],
+      planned: readonly StatementText[] = statementTexts.filter(isPlannedStatement),
+    ) =>
       toRef === undefined
         ? undefined
         : refuseForbiddenChanges({
             appSpaceId: aggregate.app.spaceId,
             command: 'migration plan',
             forbidden: forbiddenDataProtectionOfRef(toRef),
-            dataLoss: legs.flatMap((leg) => plannedOperations(leg, leg.dataLoss)),
-            accessChanges: legs.flatMap((leg) => plannedOperations(leg, leg.accessChanges)),
+            dataLoss: legs.flatMap((leg) => plannedOperations(leg, leg.dataLoss, planned)),
+            accessChanges: legs.flatMap((leg) =>
+              plannedOperations(leg, leg.accessChanges, planned),
+            ),
           });
     const planner = migrations.createPlanner(controlAdapter);
     const planDestination: PlanDestination = {
@@ -892,7 +897,10 @@ async function executeMigrationPlanCommandInner(
             destination: toContract,
           });
           if (!resolved.ok) return resolved;
-          return planDelta([...consentTexts, ...planned], resolved.value);
+          const replanned = await planDelta([...consentTexts, ...planned], resolved.value);
+          if (!replanned.ok) return replanned;
+          const refused = refuseForbidden([replanned.value], planned);
+          return refused === undefined ? replanned : notOk(refused);
         },
       });
 

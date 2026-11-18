@@ -1,8 +1,12 @@
 import { readdir } from 'node:fs/promises';
+import type { PrismaConfig } from '@internal/config/config-types';
 import type { DeclaredDatabasePolicies } from '@internal/framework-components/control';
 import { writeRef } from '@internal/migration-tools/refs';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { executeMigrationPlanCommand } from '../../src/control-api/operations/migration-plan';
+import type { AnswerPlanQuestions } from '../../src/control-api/statements/plan-questions';
+import type { StatementText } from '../../src/control-api/statements/statement-text';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
@@ -14,6 +18,7 @@ import {
   type OfflineProject,
   offlineConfig,
   removeOfflineProjects,
+  renderContractDtsMock,
   resetRenderContractDtsMock,
   seedContractSnapshot,
   seedDbRef,
@@ -153,5 +158,137 @@ describe('migration plan --to <ref>, data protection', () => {
       exitCode: 0,
       migrations: 2,
     });
+  });
+});
+
+const LEGACY_LOSS = {
+  operationIndex: 1,
+  subject: { kind: 'model', namespaceId: 'app', model: 'Legacy' },
+} as const;
+
+/** A project whose database sits at HASH_FROM with models User and Legacy, and ref production at a contract with User and Archive; `withHistory: false` leaves the graph empty, so the plan writes a baseline first. */
+async function renamingProject(
+  policies: DeclaredDatabasePolicies,
+  withHistory = true,
+): Promise<OfflineProject> {
+  const project = await createOfflineProject({ storageHash: HASH_TO, models: ['User', 'Archive'] });
+  if (withHistory) {
+    await seedMigrationPackage({
+      appMigrationsDir: project.appMigrationsDir,
+      dirName: INITIAL,
+      from: null,
+      to: HASH_FROM,
+    });
+  }
+  await seedContractSnapshot({
+    migrationsDir: project.migrationsDir,
+    storageHash: HASH_FROM,
+    models: ['User', 'Legacy'],
+  });
+  await seedContractSnapshot({
+    migrationsDir: project.migrationsDir,
+    storageHash: HASH_PRODUCTION,
+    models: ['User', 'Archive'],
+  });
+  await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
+  await writeRef(join(project.appMigrationsDir, 'refs'), 'production', {
+    hash: HASH_PRODUCTION,
+    invariants: [],
+    policies,
+  });
+  return project;
+}
+
+async function planThroughControlApi(
+  project: OfflineProject,
+  script: FakePlannerScript,
+  statements: readonly StatementText[],
+  answerQuestions: AnswerPlanQuestions,
+) {
+  const result = await executeMigrationPlanCommand(
+    {
+      config: {
+        ...offlineConfig({ project, script }),
+        baseDir: project.dir,
+      } as unknown as PrismaConfig,
+      cwd: project.dir,
+      projectDir: project.dir,
+      to: 'production',
+      statements,
+      answerQuestions,
+      client: { renderContractDts: renderContractDtsMock },
+    },
+    Date.now(),
+  );
+  return {
+    result,
+    migrations: (await readdir(project.appMigrationsDir)).filter((entry) => entry !== 'refs'),
+  };
+}
+
+describe('migration plan --to <ref>, renames', () => {
+  it('refuses an access change that only the plan made after an interactive rename holds, and writes nothing', async () => {
+    const project = await renamingProject({
+      dataProtection: { accessWidening: 'access-widening-forbidden' },
+    });
+
+    const { result, migrations } = await planThroughControlApi(
+      project,
+      {
+        ...CHANGES_ACCESS,
+        dataLoss: [LEGACY_LOSS],
+        statementsResolveDataLoss: true,
+        statementsChangeAccess: true,
+      },
+      [],
+      async (questions) => questions.map(() => ({ verb: 'rename', text: 'Legacy:Archive' })),
+    );
+
+    expect({
+      envelope: result.ok ? undefined : result.failure.toEnvelope(),
+      migrations,
+    }).toMatchObject({
+      envelope: {
+        code: 'MIGRATION.DATA_PROTECTION_FORBIDS',
+        meta: { operations: [{ setting: 'accessWidening', operationId: DISABLE_RLS.id }] },
+      },
+      migrations: [INITIAL],
+    });
+  });
+
+  it('writes a plan whose loss a --rename answers under a ref that forbids data loss', async () => {
+    const project = await renamingProject({ dataProtection: { dataLoss: 'data-loss-forbidden' } });
+
+    const { result, migrations } = await planThroughControlApi(
+      project,
+      {
+        operations: [ADDITIVE_OP, DESTRUCTIVE_OP],
+        dataLoss: [LEGACY_LOSS],
+        statementsResolveDataLoss: true,
+      },
+      [{ verb: 'rename', text: 'Legacy:Archive' }],
+      async () => [],
+    );
+
+    expect({ ok: result.ok, migrations: migrations.length }).toEqual({ ok: true, migrations: 2 });
+  });
+
+  it('refuses a lossy delta after an automatic baseline, and writes neither migration', async () => {
+    const project = await renamingProject(
+      { dataProtection: { dataLoss: 'data-loss-forbidden' } },
+      false,
+    );
+
+    const { result, migrations } = await planThroughControlApi(
+      project,
+      { operations: [ADDITIVE_OP, DESTRUCTIVE_OP], dataLossByPlan: [[], [LEGACY_LOSS]] },
+      [],
+      async () => [],
+    );
+
+    expect({
+      code: result.ok ? undefined : result.failure.code,
+      migrations,
+    }).toEqual({ code: 'MIGRATION.DATA_PROTECTION_FORBIDS', migrations: [] });
   });
 });

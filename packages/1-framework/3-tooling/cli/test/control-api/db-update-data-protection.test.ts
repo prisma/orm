@@ -72,6 +72,7 @@ function markerWith(policies: DeclaredDatabasePolicies | undefined): ContractMar
 /** Without statements the plan drops `Profile`, and disables row-level security when asked to; a rename answers the drop. */
 function plannerMigrations(args: {
   readonly changesAccess: boolean;
+  readonly renameChangesAccess: boolean;
   readonly execute: ReturnType<typeof vi.fn>;
 }) {
   const accessChanges: MigrationAccessChange[] = args.changesAccess
@@ -91,13 +92,18 @@ function plannerMigrations(args: {
                 operationIndexes: [0],
               })),
               dataLoss: [],
-              accessChanges: [],
+              accessChanges: args.renameChangesAccess
+                ? [{ operationIndex: 1, subject: PROFILE, widens: true }]
+                : [],
               temporaryValues: [],
               plan: {
                 targetId: 'postgres',
                 origin: options.origin,
                 destination: { storageHash: DESTINATION_HASH },
-                operations: [{ ...RENAME, operationClass: 'widening' }],
+                operations: [
+                  { ...RENAME, operationClass: 'widening' },
+                  ...(args.renameChangesAccess ? [DISABLE_RLS] : []),
+                ],
                 renderTypeScript: () => '',
               },
             }
@@ -138,6 +144,10 @@ async function update(args: {
   readonly policies?: DeclaredDatabasePolicies;
   readonly mode?: 'plan' | 'apply';
   readonly changesAccess?: boolean;
+  /** The plan made with a rename disables row-level security. */
+  readonly renameChangesAccess?: boolean;
+  /** Answers a data-loss question with this rename instead of a delete. */
+  readonly answerLossWithRename?: string;
   readonly statements?: readonly StatementText[];
   readonly acceptDataLoss?: boolean;
   readonly acceptAccessChanges?: boolean;
@@ -171,7 +181,11 @@ async function update(args: {
     } as unknown as ControlFamilyInstance<'sql', unknown>,
     contract: destination,
     mode: args.mode ?? 'apply',
-    migrations: plannerMigrations({ changesAccess: args.changesAccess ?? false, execute }),
+    migrations: plannerMigrations({
+      changesAccess: args.changesAccess ?? false,
+      renameChangesAccess: args.renameChangesAccess ?? false,
+      execute,
+    }),
     frameworkComponents: [],
     migrationsDir,
     answerQuestions: async (questions) => {
@@ -179,7 +193,9 @@ async function update(args: {
       return questions.map((question) =>
         question.verbs.includes('allow')
           ? { verb: 'allow', text: question.subject }
-          : { verb: 'delete', text: question.subject },
+          : args.answerLossWithRename === undefined
+            ? { verb: 'delete', text: question.subject }
+            : { verb: 'rename', text: args.answerLossWithRename },
       );
     },
     targetId: 'postgres',
@@ -359,5 +375,50 @@ describe('executeDbUpdate, with-consent', () => {
       ok: result.ok,
       asked: asked.map((questions) => questions.map(({ verbs }) => verbs.includes('allow'))),
     }).toEqual({ ok: true, asked: [[false, true]] });
+  });
+});
+
+describe('executeDbUpdate, a plan made again after a question is answered', () => {
+  it('refuses an access change that only the plan made after an interactive rename holds', async () => {
+    const { result, executed } = await update({
+      policies: ACCESS_FORBIDDEN,
+      renameChangesAccess: true,
+      answerLossWithRename: 'Profile:User',
+    });
+
+    expect({
+      meta: result.ok ? undefined : result.failure.toEnvelope().meta,
+      executed,
+    }).toEqual({
+      meta: {
+        spaceId: 'app',
+        command: 'db update',
+        settings: [{ setting: 'accessWidening', level: 'access-widening-forbidden' }],
+        operations: [
+          {
+            setting: 'accessWidening',
+            spaceId: 'app',
+            operationId: DISABLE_RLS.id,
+            subject: 'User',
+            label: DISABLE_RLS.label,
+          },
+        ],
+      },
+      executed: 0,
+    });
+  });
+});
+
+describe('executeDbUpdate, --rename under data-loss-permitted', () => {
+  it('applies the rename rather than deleting the subject', async () => {
+    const { result, executed } = await update({
+      policies: { dataProtection: { dataLoss: 'data-loss-permitted' } },
+      statements: [{ verb: 'rename', text: 'Profile:User' }],
+    });
+
+    expect({
+      statements: result.ok ? result.value.appliedStatements?.map(({ verb }) => verb) : result,
+      executed,
+    }).toEqual({ statements: ['rename'], executed: 1 });
   });
 });

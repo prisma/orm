@@ -260,6 +260,8 @@ export interface FakePlannerScript {
     readonly subject: { readonly kind: 'storage'; readonly name: string };
     readonly widens: boolean;
   }[];
+  /** Reports `accessChanges` only from a `plan` call given statements, as a rename can change access. */
+  readonly statementsChangeAccess?: boolean;
 }
 
 /**
@@ -322,7 +324,10 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
               label: (operations ?? [ADDITIVE_OP])[entry.operationIndex]?.label,
               ...entry,
             })),
-            accessChanges: script.accessChanges ?? [],
+            accessChanges:
+              script.statementsChangeAccess === true && options.statements.length === 0
+                ? []
+                : (script.accessChanges ?? []),
             temporaryValues: script.temporaryValues ?? [],
             ...(script.warnings === undefined ? {} : { warnings: script.warnings }),
             appliedStatements: options.statements.map((statement) => ({

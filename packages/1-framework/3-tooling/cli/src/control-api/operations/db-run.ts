@@ -422,27 +422,33 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   let run = first.value;
   let plannedTexts: readonly StatementText[] = statementTexts.filter(isPlannedStatement);
   let consented: readonly ConsentedSubject[] = [];
-  // A `forbidden` data protection setting refuses what the plan still loses or changes after the
-  // given renames, before anyone is asked; a `permitted` one answers every question it covers.
+  // A `forbidden` data protection setting refuses what a plan still loses or changes after the
+  // renames it was given, before anyone is asked about it; a `permitted` one answers every question
+  // it covers.
   const protection =
     checkedPolicies === undefined ? undefined : dataProtectionOfRun(checkedPolicies);
-  if (options.action === 'dbUpdate' && checkedPolicies !== undefined) {
-    const planned = (entries: readonly MigrationOperationSubject[]) =>
-      plannedOperations(run.orderedResolutions, entries, {
+  const refuseForbidden = (
+    planned: PlannedRun,
+    texts: readonly StatementText[],
+  ): CliStructuredError | undefined => {
+    if (options.action !== 'dbUpdate' || checkedPolicies === undefined) return undefined;
+    const operations = (entries: readonly MigrationOperationSubject[]) =>
+      plannedOperations(planned.orderedResolutions, entries, {
         origin: fromContract ?? EMPTY_ORIGIN,
         destination: contract,
-        statements: plannedTexts,
+        statements: texts,
       });
-    const forbidden = refuseForbiddenChanges({
+    return refuseForbiddenChanges({
       appSpaceId: aggregate.app.spaceId,
       command: 'db update',
       forbidden: forbiddenDataProtectionOfRun(checkedPolicies, options.ref),
-      dataLoss: planned(run.subjects.dataLoss),
-      accessChanges: planned(run.subjects.accessChanges),
+      dataLoss: operations(planned.subjects.dataLoss),
+      accessChanges: operations(planned.subjects.accessChanges),
     });
-    if (forbidden !== undefined) {
-      return notOk(forbidden);
-    }
+  };
+  const forbidden = refuseForbidden(run, plannedTexts);
+  if (forbidden !== undefined) {
+    return notOk(forbidden);
   }
   const consentAll =
     options.action === 'dbUpdate'
@@ -472,7 +478,12 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
         options.invocation,
         recordedDatabaseContract(aggregate, markerRows),
       ),
-      replan: (planned) => plan([...consentTexts, ...planned], resolveRenames(planned)),
+      replan: async (planned) => {
+        const replanned = await plan([...consentTexts, ...planned], resolveRenames(planned));
+        if (!replanned.ok) return replanned;
+        const refused = refuseForbidden(replanned.value, planned);
+        return refused === undefined ? replanned : notOk({ refused });
+      },
     });
     if (!answered.ok) {
       if (CliStructuredError.is(answered.failure)) {
