@@ -8,7 +8,6 @@ These tests generate schemas, rows and ORM calls with [fast-check](https://fast-
 | `reads.*.test.ts` | A read agrees with the same rows read another way. |
 | `nested.*.test.ts` | A write with relation callbacks stores the same rows as the same writes made one call at a time. |
 | `values.*.test.ts` | A value of every scalar type is returned as stored, is stored again unchanged, reads the same through an include, and is found by an equality filter. |
-| `known-failures/*.test.ts` | Typed examples of what the tests above found, marked `it.fails`. |
 
 ## Capabilities
 
@@ -88,7 +87,7 @@ ORM_PROPERTIES_SEED=<seed> ORM_PROPERTIES_SCHEMA=<index> ORM_PROPERTIES_PATH=<pa
 
 ## What the generators avoid
 
-**Known failures.** Each has a test marked `it.fails` in `known-failures/`, which starts failing when the ORM changes, and the generators leave the input out so that one known failure does not stop a run:
+**Known failures.** Each has a typed test marked `it.fails` in `test/integration/test/orm-known-failures/` (added in #31105), which starts failing when the ORM changes. The generators leave the input out so that one known failure does not stop a run; when a failure is fixed, remove its row here and the matching restriction in the generators:
 
 | Failure | Left out of generation |
 | --- | --- |

@@ -1,6 +1,0 @@
-// use prisma-8
-
-model Shift {
-  id       Int             @id
-  startsAt TimeTemporal(0)
-}
