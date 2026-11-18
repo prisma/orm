@@ -51,6 +51,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { isValidDate } from '@internal/type-implementations/date';
 import { blindCast } from '@internal/utils/casts';
+import { hexJsonProjection, hexJsonProjectionOr } from './blob-json-projection';
 import { sqliteBooleanDescriptor } from './boolean-codec';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
@@ -84,7 +85,7 @@ import {
 } from './date-time-codecs';
 import { sqliteInstantMilliseconds } from './date-time-values';
 import { sqliteDecimalDescriptor } from './decimal-codec';
-import { errorDateTimeUnwritable, sqliteError } from './errors';
+import { errorColumnUnreadable, errorDateTimeUnwritable, sqliteError } from './errors';
 
 /**
  * Projects the expression unchanged, for codecs whose canonical JSON is what
@@ -108,27 +109,9 @@ const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => e
 const decimalTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
   CastExpr.as(expression, 'TEXT');
 
-/**
- * Projects a blob as a one-element array of its hexadecimal text.
- *
- * SQLite's JSON functions reject a BLOB argument outright, so the encoding has to replace the native
- * conversion rather than post-process it. `hex()` emits uppercase and never wraps. The array is what
- * tells a blob from text: outside a STRICT table a BLOB column may hold text, which passes through as
- * text, as a row carries it, and so does NULL and any other value.
- */
-const hexJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
-  CaseExpr.of(
-    [
-      {
-        condition: BinaryExpr.eq(
-          FunctionCallExpr.of('typeof', [expression]),
-          LiteralExpr.of('blob'),
-        ),
-        value: FunctionCallExpr.of('json_array', [FunctionCallExpr.of('hex', [expression])]),
-      },
-    ],
-    expression,
-  );
+/** Projects an integer column read into a `number` as decimal text, and a blob it holds as the array of its hex text, which the codec refuses, as it refuses the bytes a row carries. A blob cast to text would read as the digits its bytes spell. */
+const safeIntegerJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  hexJsonProjectionOr(expression, decimalTextJsonProjection(expression));
 
 /**
  * Projects a REAL as SQLite writes it in JSON, except an infinity, which SQLite writes as `9.0e+999` and which becomes the text `Infinity` or `-Infinity` that the codec stores. The test is equality with an infinity, so text or a blob that a REAL column holds outside a STRICT table passes through unchanged.
@@ -327,53 +310,28 @@ const safeIntegerFromDigitText = (codecId: string, json: JsonValue): number =>
 const digitTextOfSafeInteger = (codecId: string, value: number): string =>
   String(encodableSafeInteger(codecId, value));
 
-/** A stored value an integer codec cannot read into a `number`, named by its column where the read knows it. */
 function errorIntegerUnreadable(
   codecId: string,
   received: unknown,
   ctx: SqlCodecCallContext,
-  messageWithoutColumn: string,
 ): never {
-  const column = ctx.column;
-  const shown =
-    typeof received === 'string'
-      ? JSON.stringify(received)
-      : received instanceof Uint8Array
-        ? 'bytes'
-        : String(received);
-  throw sqliteError(
-    'RUNTIME.DECODE_FAILED',
-    column === undefined
-      ? messageWithoutColumn
-      : `Column "${column.table}"."${column.name}" holds ${shown}, which is not an integer within the safe integer range. ${codecId} reads integers from ${SAFE_INTEGER_BIGINT_RANGE.min} to ${SAFE_INTEGER_BIGINT_RANGE.max}.`,
-    {
-      meta: {
-        codecId,
-        ...(column === undefined ? {} : { table: column.table, column: column.name }),
-        received: String(received),
-      },
-    },
-  );
+  throw errorColumnUnreadable({
+    codecId,
+    received,
+    column: ctx.column,
+    notA: 'an integer within the safe integer range',
+    reads: `integers from ${SAFE_INTEGER_BIGINT_RANGE.min} to ${SAFE_INTEGER_BIGINT_RANGE.max}`,
+  });
 }
 
-/** The decimal text an include carries for an INTEGER, because its projection casts the integer to text so that no digit is lost in JSON, read into a safe-range `number`. */
-function safeIntegerFromText(codecId: string, wire: string, ctx: SqlCodecCallContext): number {
-  if (!DECIMAL_INTEGER.test(wire)) {
-    return errorIntegerUnreadable(
-      codecId,
-      wire,
-      ctx,
-      `${codecId} wire value must be an integer or its decimal text`,
-    );
+/** The decimal text an include carries for an INTEGER, read into a safe-range `number`. A blob, which a row carries as bytes and an include as the array of their hex text, is refused. */
+function safeIntegerFromText(codecId: string, wire: unknown, ctx: SqlCodecCallContext): number {
+  if (typeof wire !== 'string' || !DECIMAL_INTEGER.test(wire)) {
+    return errorIntegerUnreadable(codecId, wire, ctx);
   }
   const value = BigInt(wire);
   if (value < SAFE_INTEGER_BIGINT_RANGE.min || value > SAFE_INTEGER_BIGINT_RANGE.max) {
-    return errorIntegerUnreadable(
-      codecId,
-      wire,
-      ctx,
-      `${codecId} value must be an integer within the safe integer range, got ${wire}`,
-    );
+    return errorIntegerUnreadable(codecId, wire, ctx);
   }
   return Number(value);
 }
@@ -387,12 +345,7 @@ function integerWire(codecId: string, wire: number | string, ctx: SqlCodecCallCo
 function safeIntegerWire(codecId: string, wire: number | string, ctx: SqlCodecCallContext): number {
   if (typeof wire !== 'number') return safeIntegerFromText(codecId, wire, ctx);
   if (Number.isSafeInteger(wire)) return Object.is(wire, -0) ? 0 : wire;
-  return errorIntegerUnreadable(
-    codecId,
-    wire,
-    ctx,
-    `${codecId} value must be an integer within the safe integer range, got ${String(wire)}`,
-  );
+  return errorIntegerUnreadable(codecId, wire, ctx);
 }
 
 /**
@@ -474,7 +427,7 @@ export class SqliteSqlIntCodec extends SqlIntCodec {
 export const sqliteSqlIntDescriptor = sqliteCodec(sqlIntDescriptor, {
   dataType: sqliteInteger,
   renderValueLiteral: decimalTextNumberLiteral,
-  jsonProjection: decimalTextJsonProjection,
+  jsonProjection: safeIntegerJsonProjection,
   factory: (descriptor, dataType) => () => new SqliteSqlIntCodec(descriptor, dataType),
 });
 
@@ -552,7 +505,7 @@ export class SqliteIntegerCodec extends CodecImpl<
 
 export class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return decimalTextJsonProjection(expression);
+    return safeIntegerJsonProjection(expression);
   }
   override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_INTEGER_CODEC_ID;

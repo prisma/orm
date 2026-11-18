@@ -1,4 +1,5 @@
 import { CliStructuredError } from '@internal/errors/control';
+import type { SqlColumnRef } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import type { StructuredError, StructuredErrorOptions } from '@internal/utils/structured-error';
 import { structuredError } from '@internal/utils/structured-error';
@@ -27,6 +28,49 @@ export function sqliteError(
   options?: StructuredErrorOptions,
 ): StructuredError {
   return structuredError(code, message, options);
+}
+
+/** The bytes a blob is, from the row's `Uint8Array` or from the array of their hex text an include carries. */
+function blobHexText(value: unknown): string | undefined {
+  if (value instanceof Uint8Array) return Buffer.from(value).toString('hex').toUpperCase();
+  if (!Array.isArray(value) || value.length !== 1) return undefined;
+  const [hex]: readonly unknown[] = value;
+  return typeof hex === 'string' ? hex : undefined;
+}
+
+/**
+ * A stored value a codec cannot read, named by its column where the read knows it, as in `Column "account"."active" holds 2, which is not 0 or 1. sqlite/boolean@1 reads 0 as false and 1 as true.`
+ */
+export function errorColumnUnreadable(options: {
+  readonly codecId: string;
+  readonly received: unknown;
+  readonly column: SqlColumnRef | undefined;
+  readonly notA: string;
+  readonly reads: string;
+}): StructuredError {
+  const { codecId, received, column, notA, reads } = options;
+  const hex = blobHexText(received);
+  const shownReceived =
+    hex !== undefined
+      ? `bytes x'${hex}'`
+      : typeof received === 'string'
+        ? JSON.stringify(received)
+        : String(received);
+  const holder =
+    column === undefined
+      ? `A ${codecId} value is ${shownReceived}`
+      : `Column "${column.table}"."${column.name}" holds ${shownReceived}`;
+  return sqliteError(
+    'RUNTIME.DECODE_FAILED',
+    `${holder}, which is not ${notA}. ${codecId} reads ${reads}.`,
+    {
+      meta: {
+        codecId,
+        ...(column === undefined ? {} : { table: column.table, column: column.name }),
+        received: hex !== undefined ? `x'${hex}'` : String(received),
+      },
+    },
+  );
 }
 
 /**

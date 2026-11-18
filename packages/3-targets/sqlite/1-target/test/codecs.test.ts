@@ -54,11 +54,12 @@ describe('SQLite codecs read the value an include carries', () => {
     await expect(integer.fromWire('9007199254740993', ctx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'sqlite/integer@1 value must be an integer within the safe integer range, got 9007199254740993',
+        'A sqlite/integer@1 value is "9007199254740993", which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.',
     });
     await expect(sqlInt.fromWire('4.5', ctx)).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'sql/int@1 wire value must be an integer or its decimal text',
+      message:
+        'A sql/int@1 value is "4.5", which is not an integer within the safe integer range. sql/int@1 reads integers from -9007199254740991 to 9007199254740991.',
     });
   });
 
@@ -89,16 +90,21 @@ describe('SQLite codecs read the value an include carries', () => {
   });
 
   it.each([
-    ['sqlite/integer@1', integer, 'abc'],
-    ['sqlite/integer@1', integer, new Uint8Array([0x00, 0xff])],
-    ['sql/int@1', sqlInt, 'abc'],
-    ['sql/int@1', sqlInt, new Uint8Array([0x00, 0xff])],
+    ['sqlite/integer@1', integer, 'abc', '"abc"', 'abc'],
+    ['sqlite/integer@1', integer, new Uint8Array([0x35]), "bytes x'35'", "x'35'"],
+    ['sqlite/integer@1', integer, new Uint8Array([0x00, 0xff]), "bytes x'00FF'", "x'00FF'"],
+    ['sqlite/integer@1', integer, ['35'], "bytes x'35'", "x'35'"],
+    ['sql/int@1', sqlInt, 'abc', '"abc"', 'abc'],
+    ['sql/int@1', sqlInt, new Uint8Array([0x35]), "bytes x'35'", "x'35'"],
+    ['sql/int@1', sqlInt, new Uint8Array([0x00, 0xff]), "bytes x'00FF'", "x'00FF'"],
+    ['sql/int@1', sqlInt, ['35'], "bytes x'35'", "x'35'"],
   ])(
     '%s refuses %j, which an INTEGER column outside a STRICT table can hold',
-    async (codecId, codec, wire) => {
+    async (codecId, codec, wire, shown, received) => {
       await expect(codec.fromWire(wire as never, ctx)).rejects.toMatchObject({
         code: 'RUNTIME.DECODE_FAILED',
-        message: `${codecId} wire value must be an integer or its decimal text`,
+        message: `A ${codecId} value is ${shown}, which is not an integer within the safe integer range. ${codecId} reads integers from -9007199254740991 to 9007199254740991.`,
+        meta: { codecId, received },
       });
     },
   );

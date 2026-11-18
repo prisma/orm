@@ -14,10 +14,11 @@ import {
 } from '@internal/framework-components/codec';
 import type { ProjectionExpr, SqlCodecCallContext } from '@internal/sql-relational-core/ast';
 import { booleanFromInteger, integerFromBoolean } from '@internal/type-implementations/boolean';
+import { hexJsonProjection } from './blob-json-projection';
 import { SqliteCodecDescriptor } from './codec-descriptor';
 import { SQLITE_BOOLEAN_CODEC_ID } from './codec-ids';
 import { sqliteBoolean } from './data-types';
-import { sqliteError } from './errors';
+import { errorColumnUnreadable, sqliteError } from './errors';
 
 function describeReceived(value: unknown): string {
   return typeof value === 'string' ? JSON.stringify(value) : String(value);
@@ -34,22 +35,13 @@ function requireBoolean(value: unknown): boolean {
 
 /** A stored value that is neither 0 nor 1, named by its column where the read knows it. */
 function errorBooleanUnreadable(wire: unknown, ctx: SqlCodecCallContext): never {
-  const column = ctx.column;
-  const holder =
-    column === undefined
-      ? `A ${SQLITE_BOOLEAN_CODEC_ID} value is ${describeReceived(wire)}`
-      : `Column "${column.table}"."${column.name}" holds ${describeReceived(wire)}`;
-  throw sqliteError(
-    'RUNTIME.DECODE_FAILED',
-    `${holder}, which is not 0 or 1. ${SQLITE_BOOLEAN_CODEC_ID} reads 0 as false and 1 as true.`,
-    {
-      meta: {
-        codecId: SQLITE_BOOLEAN_CODEC_ID,
-        ...(column === undefined ? {} : { table: column.table, column: column.name }),
-        received: String(wire),
-      },
-    },
-  );
+  throw errorColumnUnreadable({
+    codecId: SQLITE_BOOLEAN_CODEC_ID,
+    received: wire,
+    column: ctx.column,
+    notA: '0 or 1',
+    reads: '0 as false and 1 as true',
+  });
 }
 
 export class SqliteBooleanCodec extends CodecImpl<
@@ -74,7 +66,7 @@ export class SqliteBooleanCodec extends CodecImpl<
 
 export class SqliteBooleanDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return hexJsonProjection(expression);
   }
   override readonly dataType = sqliteBoolean.id;
   override readonly codecId = SQLITE_BOOLEAN_CODEC_ID;

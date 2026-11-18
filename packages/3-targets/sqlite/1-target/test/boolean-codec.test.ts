@@ -89,6 +89,19 @@ describe('sqlite/boolean@1', () => {
     });
   });
 
+  it.each([
+    ['one byte a row carries', new Uint8Array([0x01]), '01'],
+    ['the hex text of bytes an include carries', ['01'], '01'],
+  ])('raises a decode error naming the column for %s', async (_name, wire, hex) => {
+    await expect(
+      codec.fromWire(notBoolean(wire), { column: { table: 'user', name: 'active' } }),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `Column "user"."active" holds bytes x'${hex}', which is not 0 or 1. sqlite/boolean@1 reads 0 as false and 1 as true.`,
+      meta: { codecId: 'sqlite/boolean@1', table: 'user', column: 'active', received: `x'${hex}'` },
+    });
+  });
+
   it('raises a decode error for a stored value it cannot read where no column is known', async () => {
     await expect(codec.fromWire(notBoolean(2), {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',

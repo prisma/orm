@@ -11,6 +11,7 @@ import {
   ColumnRef,
   FunctionCallExpr,
   LiteralExpr,
+  type ProjectionExpr,
   sqlCharDescriptor,
   sqlFloatDescriptor,
   sqlIntDescriptor,
@@ -18,6 +19,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
+import { sqliteBooleanDescriptor } from '../src/core/boolean-codec';
 import type { AnySqliteCodecDescriptor } from '../src/core/codec-descriptor';
 import {
   codecDescriptors,
@@ -40,6 +42,7 @@ import {
   sqliteInteger,
   sqliteReal,
 } from '../src/core/data-types';
+import { sqliteDecimalDescriptor } from '../src/core/decimal-codec';
 import { sqliteCodecDescriptorRegistry, sqliteCodecRegistry } from '../src/core/registry';
 import { fromContractJson, toContractJson } from './contract-json';
 
@@ -158,8 +161,8 @@ describe('SQLite built-in codec descriptors', () => {
 
     // SQLite's JSON functions reject a BLOB argument outright. A blob is carried as its hex text inside a
     // one-element array, which no row holds, so text in a BLOB column stays text. NULL and any other
-    // value pass through as themselves.
-    expect(sqliteBlobDescriptor.projectJson(expression, refFor(sqliteBlobDescriptor))).toEqual(
+    // value pass through as the codec projects them.
+    const blobAsHexOr = (otherwise: ProjectionExpr) =>
       CaseExpr.of(
         [
           {
@@ -170,9 +173,17 @@ describe('SQLite built-in codec descriptors', () => {
             value: FunctionCallExpr.of('json_array', [FunctionCallExpr.of('hex', [expression])]),
           },
         ],
-        expression,
-      ),
-    );
+        otherwise,
+      );
+    expect({
+      blob: sqliteBlobDescriptor.projectJson(expression, refFor(sqliteBlobDescriptor)),
+      decimal: sqliteDecimalDescriptor.projectJson(expression, refFor(sqliteDecimalDescriptor)),
+      boolean: sqliteBooleanDescriptor.projectJson(expression, refFor(sqliteBooleanDescriptor)),
+    }).toEqual({
+      blob: blobAsHexOr(expression),
+      decimal: blobAsHexOr(expression),
+      boolean: blobAsHexOr(expression),
+    });
     // SQLite writes an infinity in JSON as 9.0e+999; both float codecs write the text their toDataTypeValue writes.
     const infinityAsText = CaseExpr.of(
       [
@@ -200,16 +211,21 @@ describe('SQLite built-in codec descriptors', () => {
       CastExpr.as(expression, 'TEXT'),
     );
     // The canonical JSON is the decimal text every codec of sqlite/integer
-    // carries, whichever storage class the projected expression holds.
-    for (const descriptor of [
-      sqliteIntegerDescriptor,
-      sqliteSqlIntDescriptor,
-      sqliteBigintNumberDescriptor,
-    ]) {
-      expect(descriptor.projectJson(expression, refFor(descriptor))).toEqual(
-        CastExpr.as(expression, 'TEXT'),
-      );
-    }
+    // carries, whichever storage class the projected expression holds. The two
+    // codecs that read a `number` from a row refuse a blob there, so they carry
+    // a blob as its hex text too, where the cast would spell its bytes as digits.
+    expect({
+      integer: sqliteIntegerDescriptor.projectJson(expression, refFor(sqliteIntegerDescriptor)),
+      sqlInt: sqliteSqlIntDescriptor.projectJson(expression, refFor(sqliteSqlIntDescriptor)),
+      bigintNumber: sqliteBigintNumberDescriptor.projectJson(
+        expression,
+        refFor(sqliteBigintNumberDescriptor),
+      ),
+    }).toEqual({
+      integer: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
+      sqlInt: blobAsHexOr(CastExpr.as(expression, 'TEXT')),
+      bigintNumber: CastExpr.as(expression, 'TEXT'),
+    });
   });
 
   it('keeps authored registries complete, with no codec rendering a named TypeScript type', () => {

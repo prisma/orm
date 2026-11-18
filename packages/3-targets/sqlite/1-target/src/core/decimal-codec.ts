@@ -14,10 +14,11 @@ import {
 } from '@internal/framework-components/codec';
 import type { ProjectionExpr, SqlCodecCallContext } from '@internal/sql-relational-core/ast';
 import { isDecimalText, printedDecimalText } from '@internal/type-implementations/decimal';
+import { hexJsonProjection } from './blob-json-projection';
 import { SqliteCodecDescriptor } from './codec-descriptor';
 import { SQLITE_DECIMAL_CODEC_ID } from './codec-ids';
 import { sqliteDecimal } from './data-types';
-import { sqliteError } from './errors';
+import { errorColumnUnreadable, sqliteError } from './errors';
 
 const EXPECTED = 'decimal text, such as "12.50"';
 
@@ -37,22 +38,13 @@ function storedDecimalText(value: unknown): string {
 
 /** A stored value the codec cannot read, such as the empty text an earlier fill wrote into a new column, named by its column where the read knows it. */
 function errorDecimalUnreadable(wire: unknown, ctx: SqlCodecCallContext): never {
-  const column = ctx.column;
-  const holder =
-    column === undefined
-      ? `A ${SQLITE_DECIMAL_CODEC_ID} value is ${describeReceived(wire)}`
-      : `Column "${column.table}"."${column.name}" holds ${describeReceived(wire)}`;
-  throw sqliteError(
-    'RUNTIME.DECODE_FAILED',
-    `${holder}, which is not decimal text. ${SQLITE_DECIMAL_CODEC_ID} reads ${EXPECTED}.`,
-    {
-      meta: {
-        codecId: SQLITE_DECIMAL_CODEC_ID,
-        ...(column === undefined ? {} : { table: column.table, column: column.name }),
-        received: String(wire),
-      },
-    },
-  );
+  throw errorColumnUnreadable({
+    codecId: SQLITE_DECIMAL_CODEC_ID,
+    received: wire,
+    column: ctx.column,
+    notA: 'decimal text',
+    reads: EXPECTED,
+  });
 }
 
 export class SqliteDecimalCodec extends CodecImpl<
@@ -78,7 +70,7 @@ export class SqliteDecimalCodec extends CodecImpl<
 
 export class SqliteDecimalDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return hexJsonProjection(expression);
   }
   override readonly dataType = sqliteDecimal.id;
   override readonly codecId = SQLITE_DECIMAL_CODEC_ID;

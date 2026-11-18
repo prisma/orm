@@ -104,6 +104,24 @@ describe('sqlite/decimal@1', () => {
     });
   });
 
+  it.each([
+    ['bytes a row carries', new Uint8Array([0x31, 0x32]), '3132'],
+    ['the hex text of bytes an include carries', ['3132'], '3132'],
+  ])('raises a decode error naming the column for %s', async (_name, wire, hex) => {
+    await expect(
+      codec.fromWire(notString(wire), { column: { table: 'invoice', name: 'total' } }),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `Column "invoice"."total" holds bytes x'${hex}', which is not decimal text. sqlite/decimal@1 reads decimal text, such as "12.50".`,
+      meta: {
+        codecId: 'sqlite/decimal@1',
+        table: 'invoice',
+        column: 'total',
+        received: `x'${hex}'`,
+      },
+    });
+  });
+
   it('raises a decode error for a stored value it cannot read where no column is known', async () => {
     await expect(codec.fromWire(notString(12.5), {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',

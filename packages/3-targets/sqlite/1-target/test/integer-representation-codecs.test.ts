@@ -245,7 +245,7 @@ describe('sqlite/integer@1 guards the safe integer range as sqlite/bigintnumber@
   it.each([9007199254740992, 1.5])('refuses to read the number %d', async (wire) => {
     await expect(codec.fromWire(wire, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: `sqlite/integer@1 value must be an integer within the safe integer range, got ${wire}`,
+      message: `A sqlite/integer@1 value is ${wire}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
     });
   });
 
@@ -263,13 +263,17 @@ describe('sqlite/integer@1 guards the safe integer range as sqlite/bigintnumber@
     });
   });
 
-  it('names stored bytes it cannot read as bytes', async () => {
+  it.each([
+    ['one byte a row carries', new Uint8Array([0x35]), '35'],
+    ['bytes a row carries', new Uint8Array([0x00, 0xff]), '00FF'],
+    ['the hex text of bytes an include carries', ['35'], '35'],
+  ])('refuses %s, naming them as bytes', async (_name, wire, hex) => {
     await expect(
-      codec.fromWire(wrongTyped(new Uint8Array([0x00, 0xff])), {
-        column: { table: 'meter', name: 'peak' },
-      }),
+      codec.fromWire(wrongTyped(wire), { column: { table: 'meter', name: 'peak' } }),
     ).rejects.toMatchObject({
-      message: `Column "meter"."peak" holds bytes, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `Column "meter"."peak" holds bytes x'${hex}', which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      meta: { codecId: 'sqlite/integer@1', table: 'meter', column: 'peak', received: `x'${hex}'` },
     });
   });
 });
