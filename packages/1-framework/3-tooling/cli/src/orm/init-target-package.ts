@@ -80,8 +80,11 @@ export function withPackagesAddedAction(
   });
 }
 
-export function installCommand(packageManager: PackageManager, packageName: string): string {
-  return [packageManager, ...formatAddArgs(packageManager, [packageName])].join(' ');
+export function installCommand(
+  packageManager: PackageManager,
+  packages: readonly string[],
+): string {
+  return [packageManager, ...formatAddArgs(packageManager, [...packages])].join(' ');
 }
 
 /** The target package and the contribution it exports, with what installing it changed. */
@@ -139,6 +142,7 @@ export function createTargetPackagePreparation(ctx: {
     const warnings: string[] = [];
     let installed: readonly string[] = [];
     let added: PackagesAdded | undefined;
+    let ranCommand: string | undefined;
 
     if (ctx.install) {
       const deps = [packageName, 'dotenv', ...peerPackages];
@@ -156,6 +160,7 @@ export function createTargetPackagePreparation(ctx: {
         warnings.push(...buildCatalogWarnings(ctx.cwd, deps));
       }
       installed = deps;
+      ranCommand = installCommand(ctx.packageManager, deps);
       const newlyDeclared = deps.filter((dep) => !declaredBefore.has(dep));
       added =
         newlyDeclared.length === 0
@@ -167,7 +172,7 @@ export function createTargetPackagePreparation(ctx: {
     }
 
     try {
-      const contribution = await loadContribution(ctx, packageName);
+      const contribution = await loadContribution(ctx, packageName, ranCommand);
       return { contribution, installed, added, warnings };
     } catch (error) {
       throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
@@ -183,14 +188,16 @@ async function loadContribution(
     readonly importFromProject: ImportFromProject;
   },
   packageName: string,
+  /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
+  ranCommand: string | undefined,
 ): Promise<InitContribution> {
   const entrypoint = await ctx.importFromProject(ctx.cwd, `${packageName}/init`);
   switch (entrypoint.kind) {
     case 'not-installed':
       throw errorInitTargetPackageNotInstalled({
         packageName,
-        installCommand: installCommand(ctx.packageManager, packageName),
-        installed: ctx.install,
+        installCommand: installCommand(ctx.packageManager, [packageName]),
+        ranCommand,
       });
     case 'not-exported':
       throw errorInitContributionUnavailable({
