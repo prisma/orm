@@ -13,11 +13,17 @@ test('global and per-call options support the four MySQL isolation literals', ()
   expectTypeOf<MysqlOptionsBase['transactionOptions']>().toEqualTypeOf<
     MysqlTransactionOptions | undefined
   >();
-  const db = mysql({ contract, transactionOptions: { isolationLevel: 'ReadUncommitted' } });
+  expectTypeOf<MysqlTransactionOptions['timeout']>().toEqualTypeOf<number | null | undefined>();
+  // @ts-expect-error
+  expectTypeOf({ timeout: '1000' } satisfies MysqlTransactionOptions);
+  const db = mysql({
+    contract,
+    transactionOptions: { isolationLevel: 'ReadUncommitted', timeout: 1000 },
+  });
   expectTypeOf(db.transaction).parameter(1).toEqualTypeOf<MysqlTransactionOptions | undefined>();
-  expectTypeOf(db.transaction(async () => 42, { isolationLevel: 'Serializable' })).toEqualTypeOf<
-    Promise<number>
-  >();
+  expectTypeOf(
+    db.transaction(async () => 42, { isolationLevel: 'Serializable', timeout: null }),
+  ).toEqualTypeOf<Promise<number>>();
 });
 
 test('rejects null and unsupported isolation literals', () => {

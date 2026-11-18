@@ -64,6 +64,14 @@ const contract = contractFromJson<Contract>(fixtureContractJson);
 const collections = { Post: PostCollection };
 const url = 'postgres://localhost:5432/db';
 
+function deferred() {
+  let resolve = () => {};
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 const selectIds = 'SELECT "id" AS "id" FROM "public"."posts"';
 const resetViews = 'UPDATE posts SET views = 0';
 const selectById = 'SELECT "id" AS "id" FROM "public"."posts" WHERE "id" = $1';
@@ -104,6 +112,7 @@ afterEach(() => {
   recorded.connections = 0;
   recorded.beginFailure = undefined;
   recorded.disposals.length = 0;
+  vi.useRealTimers();
 });
 
 describe.each(['pooled', 'serverless'] as const)('%s transaction isolation', (transport) => {
@@ -147,8 +156,73 @@ describe.each(['pooled', 'serverless'] as const)('%s transaction isolation', (tr
     await db.close();
   });
 
+  it.each([
+    [{ isolationLevel: 'RepeatableRead', timeout: 10 }, undefined, true, 'REPEATABLE READ'],
+    [
+      { isolationLevel: 'RepeatableRead', timeout: 10 },
+      { isolationLevel: 'Serializable', timeout: undefined },
+      true,
+      'SERIALIZABLE',
+    ],
+    [
+      { isolationLevel: 'RepeatableRead', timeout: 10 },
+      { timeout: null },
+      false,
+      'REPEATABLE READ',
+    ],
+    [{ isolationLevel: 'RepeatableRead', timeout: null }, { timeout: 1 }, true, 'REPEATABLE READ'],
+  ] as const)(
+    'resolves timeout independently: global %j local %j',
+    async (global, local, expires, isolation) => {
+      const db = await client(global);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+      const entered = deferred();
+      const resume = deferred();
+      recorded.statements.length = 0;
+      const run = db.transaction(async () => {
+        entered.resolve();
+        await resume.promise;
+        return 42;
+      }, local);
+      const outcome = expires
+        ? expect(run).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_TIMEOUT' })
+        : expect(run).resolves.toBe(42);
+      await entered.promise;
+      await vi.advanceTimersByTimeAsync(20);
+      resume.resolve();
+      await outcome;
+      expect(recorded.statements).toEqual(
+        onOneConnection(
+          expires
+            ? [`BEGIN ISOLATION LEVEL ${isolation}`]
+            : [`BEGIN ISOLATION LEVEL ${isolation}`, 'COMMIT'],
+        ),
+      );
+      expect(recorded.disposals).toHaveLength(transport === 'pooled' || expires ? 1 : 0);
+      expect(vi.getTimerCount()).toBe(0);
+      if (expires && transport === 'serverless') {
+        await expect(db.runtime().connection()).rejects.toMatchObject({
+          code: 'DRIVER.NOT_CONNECTED',
+        });
+      } else {
+        const manual = await db.runtime().connection();
+        const tx = await manual.transaction();
+        await vi.advanceTimersByTimeAsync(20);
+        await tx.rollback();
+        await manual.release();
+      }
+      await db.close();
+    },
+  );
+
+  it.each([1, 2147483647, null, undefined])('accepts a global timeout of %s', async (timeout) => {
+    const db = await client({ timeout });
+    await expect(db.transaction(async () => 42, { timeout: null })).resolves.toBe(42);
+    await db.close();
+  });
+
   it('destroys an uncertain failed isolation start without invoking the callback', async () => {
-    const db = await client({ isolationLevel: 'Serializable' });
+    const db = await client({ isolationLevel: 'Serializable', timeout: 10 });
     recorded.statements.length = 0;
     const failure = new Error('begin failed');
     recorded.beginFailure = failure;
@@ -163,6 +237,9 @@ describe.each(['pooled', 'serverless'] as const)('%s transaction isolation', (tr
   });
 
   const invalid = [
+    ...[0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 2147483648].map(
+      (timeout) => ({ timeout }),
+    ),
     null,
     1,
     'Serializable',

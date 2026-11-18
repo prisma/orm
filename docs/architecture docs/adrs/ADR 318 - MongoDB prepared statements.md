@@ -33,11 +33,16 @@ const promote = await db.prepare({ from: 'mongo/string@1', to: 'mongo/string@1' 
     .updateMany((f) => [f.status.set(p.to)]),
 );
 const { affectedRows } = await promote.execute(runtime, { from: 'new', to: 'active' });
+
+const byEmail = await db.prepare({ email: 'mongo/string@1' }, (p) =>
+  db.orm.accounts.where({ email: p.email }).prepared.first(),
+);
+const account = await byEmail.query(runtime, { email: 'alice@example.com' });
 ```
 
 ## Decision
 
-MongoDB has `prepare(declaration, callback)` with the author surface ADR 210 gives SQL. A declaration maps each parameter name to a codec id. The callback receives one placeholder per name and returns a plan. `prepare` returns a handle, and the handle runs against an explicit target with `query(target, params)` (and, for updates and deletes, `execute(target, params)`).
+MongoDB has `prepare(declaration, callback)` with the author surface ADR 210 gives SQL. A declaration maps each parameter name to a codec id. The callback receives one placeholder per name and returns a plan, or a `MongoPreparable` from an ORM read (see "ORM reads"). `prepare` returns a handle, and the handle runs against an explicit target with `query(target, params)` (and, for updates and deletes, `execute(target, params)`).
 
 MongoDB has no server-side prepared statements, so all the saving is on the client. The callback, the plan building and the structural lowering run once, at `prepare`. Each run fills in the values, runs `beforeEncode`, encodes the values with codecs and sends the command. The driver is unchanged.
 
@@ -76,7 +81,7 @@ It does no I/O. It is `async`, so a future async `beforeCompile` fits without an
 3. Binds the draft. Each placeholder becomes one `MongoParamRef(value, { name, codecId, nullable })`, placed at every position the placeholder holds. A placeholder used twice is one parameter in two places, so `beforeEncode`'s `entries()` lists it twice and one `replaceValue` changes both.
 4. Continues as an ad-hoc run does after structural lowering: the statement activity, `beforeEncode`, a check of every `$limit` and `$skip` value, `resolveParams`, the driver, and row decoding with the result shape kept from `prepare`. Ad-hoc and prepared runs share this code.
 
-The activity's `plan` is the handle, as on SQL. `intercept.onQuery`, `onRow` and `contentHash` receive the execution plan built for each run, so a prepared run has the same content hash as the same query run ad hoc with the same values.
+The activity's `plan` is the handle, as on SQL. `intercept.onQuery`, `onRow` and `contentHash` receive the execution plan built for each run, so a prepared run has the same content hash as an ad-hoc run that sends the same command. The hash covers the command after encoding. An ad-hoc ORM read encodes a literal with the field's codec, which a prepared ORM read's placeholder must also name, so the two hashes match. An ad-hoc query-builder literal is sent as written, with no codec, so its hash equals the prepared run's only when the declared codec leaves the value unchanged.
 
 Steps 1 to 3 happen before the activity starts: on the first iteration for `query`, and as a rejected promise for `execute`. SQL checks params inside the activity. A MongoDB run on a closed runtime fails with `DRIVER.NOT_CONNECTED` (`'Runtime is closed'`) in the driver step, after `beforeEncode`, which is where an ad-hoc MongoDB run fails.
 
@@ -103,7 +108,29 @@ Paging is the most common prepared query, and SQL accepts placeholders there, so
 
 `MongoPreparedFor<Params, Row, Command>` picks the handle from the plan's `Command` type, and `prepare` builds the matching class from the draft's command kind. The rule is the one ad-hoc `execute` uses: a raw `updateOne` lowers to an `updateOne` wire command, which `runtime.execute` gives statistics for, so its prepared handle has `execute` too. The raw lane's plans carry their raw command type, so the type agrees. A method a plan cannot use is absent from the value, not only from the type, as on SQL.
 
-The second handle has both methods because a MongoDB update or delete plan, typed or raw, supports both `query` and `execute`. Each method sends the command on its own: `execute` reduces its own driver response to `{ affectedRows }`, the same row `query` would yield. They are two ways to run the statement, not two steps, so calling `query` and then `execute` runs a delete twice. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
+The second handle has both methods because a MongoDB update or delete plan, typed or raw, supports both `query` and `execute`. Each method sends the command on its own: `query` yields the driver's result row (for an update, `{ matchedCount, modifiedCount, upsertedCount }`), and `execute` reduces that same response to `{ affectedRows }`. They are two ways to run the statement, not two steps, so calling `query` and then `execute` runs a delete twice. SQL's `PreparedExecution` has `execute` only; the MongoDB class shares the name because it is the handle that has `execute`.
+
+## ORM reads
+
+A MongoDB ORM collection has `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()`, as the SQL ORM's `.prepared` has. Each returns a `MongoPreparable<Row, Result>` (in `@internal/mongo-query-ast/execution`, beside `MongoQueryPlan`, where SQL keeps `Preparable`): the plan the read sends, and `consume(rows)`, which turns one run's rows into the read's result. The ad-hoc `all()`, `first()` and `firstOrThrow()` are built from the same `MongoPreparable`s, so a prepared read sends the plan the ad-hoc read sends and maps rows, including included documents, the same way. `first()` and `firstOrThrow()` set `limit` to 1, so a declared `limit` placeholder they replace fails at `prepare` with `RUNTIME.PREPARE_UNUSED_PARAM`, as on SQL. `firstOrThrow()` rejects with `RUNTIME.NO_ROWS` when nothing matches, as the ad-hoc call does. The MongoDB ORM has no `aggregate`, so `.prepared` has no counterpart for it.
+
+`db.prepare` takes either a plan or a `MongoPreparable`. For a `MongoPreparable` it prepares only the plan on the runtime (`MongoRuntime.prepare` takes plans only) and wraps the handle in a frozen `MongoPreparedRowQuery<Params, Result>`, whose `query(target, params, options?)` returns `consume`'s result directly: an `AsyncIterableResult<Row>` for `all()`, `Promise<Row | null>` for `first()`, `Promise<Row>` for `firstOrThrow()`. It has no `execute`. `MongoPreparedFrom<Params, Q>` picks the handle type from what the callback returns. `query` is not an `async` function, because the row stream is thenable and would be resolved to an array. On SQL this wrapper (`prepareQuery`) lives in the SQL ORM package. On MongoDB it lives in the facade (`packages/3-targets/mongo/9-facade/src/runtime/prepared-row-query.ts`). It is not in the ORM, because the MongoDB ORM package may not depend on the MongoDB runtime. It is not in the runtime, because `MongoRuntime.prepare` takes plans only, as SQL's `Runtime.prepare` does: the runtime knows nothing of ORM reads, and the client, which has both, joins them. The MongoDB ORM has no activity source, so there is no counterpart of SQL's prepared ORM call record.
+
+### Where a placeholder may go in an ORM read
+
+- **Object-form `where`** (`where({ status: p.status })`): a top-level value for a scalar field. The types require the placeholder's codec to be the field's codec. A nullable placeholder is accepted only on a nullable field. On a list field the placeholder stands for one item (`$elemMatch: { $eq: … }`), as a single literal does: its codec must be the element codec, and it must not be nullable, because a literal `null` on a list field means "not a list", which a placeholder cannot say. A declaration has no list form, so a whole-list placeholder is not possible.
+- **Filter-expression `where`** (`where(MongoFieldFilter.eq('status', p.status))`): only the operand of a comparison (`$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`) or an item of a `$in`/`$nin` list, on a scalar field, including a scalar inside a value object (`address.city`). An indexed list path (`tags.0`) names one item: the placeholder takes the element codec and may be nullable exactly when the list's items may be null. This holds under `$and`, `$or` and `$not` too.
+- **`limit` and `offset`**, with the `PagingCount` rule above.
+
+Every other position is refused with `ORM.ARGUMENT_INVALID` when the `where` is built: any other operator (`$type`, `$exists`, `$regex`, `$size`, `$elemMatch`, …), a `$in`/`$nin` whose whole value is a placeholder, a list that holds a placeholder, alone or beside other values (a whole-list equality, or `where({ tags: [p.tag] })` in the object form; the error names the field and says a declaration has no list form), a `MongoParamRef` wrapping a placeholder, anything inside `$expr` (the error then has `meta: { name, operator: '$expr' }`), a whole value object or an item of a value-object list (the error says a prepared parameter stands for one scalar value), a path below a value object that the contract does not know (`address.planet`; the error says the contract has no field there, so no codec can be checked), and a placeholder inside a value-object literal. A path whose first segment is not a field of the model is refused earlier, with `ORM.FIELD_UNKNOWN`, whatever its value, as in a `where` without placeholders. Includes, `orderBy` and `select` carry names and directions, not values.
+
+### The codec is checked when the `where` is built
+
+A placeholder kept on a scalar field is checked against it, in both `where` forms: its codec id must equal the field's (the element codec on a list), and it may be nullable only as described above. A mismatch throws `ORM.ARGUMENT_INVALID` naming the parameter, the field and both codec ids, with `meta: { name, field, codecId, fieldCodecId }`, or the nullability problem with `meta: { name, field, nullable: true, list }`. The filter-expression form is not typed against the model, so this is its only check. Without it, a placeholder declared `mongo/string@1` compared with an ObjectId field would send a string and match nothing, with no error, where a literal in the same position is encoded with the field's codec.
+
+### Writes refuse a placeholder
+
+ORM writes run at once, so they cannot take a placeholder. `ormParam`, which every ORM value passes through, refuses one at any depth. A write on a collection whose `where` kept a placeholder (`where({ name: p.name }).deleteAll()`, and likewise `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAndCount` and `upsert`) is refused with `ORM.ARGUMENT_INVALID` when the write is called, before anything is sent. The error names the write and the parameter (`meta: { name, method }`) and says to use the parameter only with `.prepared.all()`, `.prepared.first()` or `.prepared.firstOrThrow()`. A placeholder in `limit` or `offset` never reaches a write, because writes refuse `limit` and `offset` with `ORM.OPERATION_UNSUPPORTED`.
 
 ## The runtime is the only target, and the bridge is internal
 
@@ -116,15 +143,15 @@ The MongoDB runtime has no connections or transactions to run a handle on, so it
 - `MongoDeclaration<CT>` maps names to a codec id (`keyof CT & string`) or `{ codecId, nullable?: boolean }`.
 - `MongoPlaceholders<D>` gives the callback a `MongoPreparedParamRef<CodecId, Nullable>` per name.
 - `MongoParamsFromDeclaration<D, CT>` gives each run's values: each codec's `input` type, plus `null` when the parameter is nullable. It reads `input` through `MongoCodecInput<CT, Id>` in `@internal/mongo-contract`, beside `ExtractMongoCodecTypes`.
-- `MongoPrepareMember<DefaultCodecTypes>` is the `prepare` method. `MongoRuntime` uses it with the base codec types; `MongoClient` binds them to `ExtractMongoCodecTypes<TContract>`, so an unknown codec id fails to compile. A declaration names a codec id and nullability only; MongoDB builds each codec once, with no type parameters.
+- `MongoRuntime.prepare` checks declarations against the base codec types and takes plans only. `MongoClient` gets its `prepare` from `MongoPrepareMember<TContract>`, an object type that has the `prepare` method a client offers, as SQL clients get theirs from `PrepareMember<TContract>`. It checks declarations against `ExtractMongoCodecTypes<TContract>`, so an unknown codec id fails to compile, and also takes a `MongoPreparable`. A declaration names a codec id and nullability only; MongoDB builds each codec once, with no type parameters.
 
-The handle and declaration types, and `MongoPreparedParamRef` as a type, are exported from `@prisma/orm-mongo/family-runtime`.
+The handle and declaration types, and `MongoPreparedParamRef` as a type, are exported from `@prisma/orm-mongo/family-runtime`. `MongoPreparedRowQuery`, `MongoPreparedFrom` and `MongoPrepareMember` are exported from `@prisma/orm-mongo/runtime`, beside `MongoClient`.
 
 ## `null` values
 
-A `null` binds to `MongoParamRef(null, { name, codecId, nullable })`, so middleware sees it like any other value. `resolveValue` sends `null` without calling the codec only when the parameter holds `null` and is marked nullable. Every other `null` still goes to the codec, which refuses it with `RUNTIME.ENCODE_FAILED`.
+A `null` binds to `MongoParamRef(null, { name, codecId, nullable })`, so middleware sees it like any other value. `resolveValue` sends a `null` on a parameter marked nullable without calling the codec. A `null` on any other parameter goes to its codec's `toWire`, and is sent unchanged if that codec has no `toWire`. A codec that cannot encode `null` refuses it with `RUNTIME.ENCODE_FAILED`; a codec whose values include `null`, such as `mongo/json@1`, encodes it.
 
-SQL skips the codec for every `null`. MongoDB cannot: the ORM wraps a `null` element written to a list whose elements are not nullable as `MongoParamRef(null, { codecId })` so the codec refuses it. A non-nullable placeholder given `null` at run time is refused the same way, which matches its type.
+SQL skips the codec for every `null`. MongoDB cannot: the ORM wraps a `null` element written to a list whose elements are not nullable as `MongoParamRef(null, { codecId })` so the codec decides. A non-nullable placeholder given `null` at run time goes to its codec the same way, which matches its type: `null` is accepted only where the codec's input type includes it.
 
 ## Codec ids are checked at `prepare`
 
@@ -139,6 +166,9 @@ SQL raises `RUNTIME.CODEC_DESCRIPTOR_MISSING` at the first run. MongoDB raises i
 | Placeholder the declaration does not give | `RUNTIME.PREPARE_UNDECLARED_PARAM` | `prepare` |
 | Declared name not used | `RUNTIME.PREPARE_UNUSED_PARAM` | `prepare` |
 | Closed client | `DRIVER.NOT_CONNECTED` | `db.prepare` |
+| Placeholder in an ORM `where` whose codec or nullability does not fit the field | `ORM.ARGUMENT_INVALID` | when the `where` is built |
+| Placeholder anywhere else in an ORM `where`, in a value-object literal, or in an ORM write | `ORM.ARGUMENT_INVALID` | when the `where` is built, or when the write is called |
+| `firstOrThrow()` read that matches nothing | `RUNTIME.NO_ROWS` | run |
 | Name missing at run, or params not an object | `RUNTIME.PREPARE_MISSING_PARAM` | run, before the activity |
 | `$limit` value not a positive integer, or `$skip` value not a non-negative integer | `ORM.ARGUMENT_INVALID` | run, after `beforeEncode` |
 | Target without the bridge | invariant error | run |
@@ -151,7 +181,7 @@ SQL raises `RUNTIME.CODEC_DESCRIPTOR_MISSING` at the first run. MongoDB raises i
 - No server-side preparation and no driver change.
 - No placeholders in the raw lane; `prepare` refuses them.
 - No placeholders in `inc`, `mul` or `pop` amounts, sort directions, field names, `$sample` sizes or `$vectorSearch` settings. These positions are typed as plain numbers or strings.
-- No prepared ORM writes, as on SQL. ORM reads (`.prepared.all()` and `.prepared.first()`) are a separate step.
+- No prepared ORM writes, as on SQL.
 - No check that a handle runs against a runtime for the same contract, as on SQL (ADR 210, cross-adapter reuse).
 - The client is not a target. No SQL client is one either: Postgres, SQLite and MySQL handles run against `db.runtime()`, a connection or a transaction. Making clients targets would be one decision for every family.
 

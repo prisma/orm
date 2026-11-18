@@ -1,11 +1,11 @@
 import { expect } from 'vitest';
 
-/** One call of `name` in `source` from its start, written on one line with double quotes and no trailing commas. */
+/** Each call of `name` in `source`, `this.` or not, written on one line with double quotes and no trailing commas. */
 function oneLineCalls(source: string, name: string): string {
   let out = '';
   let rest = source;
   for (;;) {
-    const start = rest.indexOf(`this.${name}({`);
+    const start = rest.indexOf(`${name}({`);
     if (start === -1) return out + rest;
     let depth = 0;
     let end = start;
@@ -39,12 +39,12 @@ function oneLineCalls(source: string, name: string): string {
 export function followEdits(source: string, advice: string): string {
   const blocks = [
     ...advice.matchAll(
-      /Replace:\n(this\.removeStoredValue\(\{[\s\S]*?\n\s*\}\))\nwith:\n(this\.replaceStoredValue\(\{[\s\S]*?\n\s*\}\)(?:,\n\s*this\.replaceStoredValue\(\{[\s\S]*?\n\s*\}\))*)(?=\nReplace:|$)/g,
+      /Replace:\n((?:this\.)?removeStoredValue\(\{[\s\S]*?\n\s*\}\))\nwith:\n((?:this\.)?replaceStoredValue\(\{[\s\S]*?\n\s*\}\)(?:,\n\s*(?:this\.)?replaceStoredValue\(\{[\s\S]*?\n\s*\}\))*)(?=\nReplace:|$)/g,
     ),
   ];
   const phrases = [
     ...advice.matchAll(
-      /replace (this\.removeStoredValue\(\{.*?\}\)) with (this\.replaceStoredValue\(\{.*?\}\)(?:, this\.replaceStoredValue\(\{.*?\}\))*)/g,
+      /replace ((?:this\.)?removeStoredValue\(\{.*?\}\)) with ((?:this\.)?replaceStoredValue\(\{.*?\}\)(?:, (?:this\.)?replaceStoredValue\(\{.*?\}\))*)/g,
     ),
   ];
   expect(blocks.length + phrases.length, 'the advice prints an edit').toBeGreaterThan(0);

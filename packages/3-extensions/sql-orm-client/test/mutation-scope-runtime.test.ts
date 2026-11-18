@@ -18,6 +18,9 @@ function setup(failure?: Error, middleware: readonly SqlMiddleware[] = []) {
     ...queryable,
     commit: vi.fn(async () => undefined),
     rollback: vi.fn(async () => undefined),
+    savepoint: vi.fn(async (): Promise<never> => {
+      throw new Error('savepoint is not stubbed');
+    }),
   };
   const connection = {
     ...queryable,
@@ -92,7 +95,7 @@ function nestedUpdate(runtime: Parameters<typeof orm>[0]['runtime']) {
     .update({ posts: (posts) => posts.connect({ id: 1 }) });
 }
 
-describe('mutation graph with production runtime activities', () => {
+describe('statement graph with production runtime activities', () => {
   it('applies policy and releases a committed graph transaction', async () => {
     const { runtime, connection, transaction } = setup();
     try {

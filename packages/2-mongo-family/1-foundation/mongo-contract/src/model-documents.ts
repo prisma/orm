@@ -14,14 +14,17 @@ function modelOf(
   return Object.hasOwn(models, name) ? models[name] : undefined;
 }
 
-/**
- * The filter that selects a variant's documents in its collection: its base's discriminator, under
- * its stored name, holding the variant's value. `undefined` for a root model.
- */
-export function variantFilterOf(
+/** The variant whose documents a change selects: its base's discriminator, under its stored name, and the variant's value. */
+export interface SelectedVariant {
+  readonly field: string;
+  readonly value: unknown;
+}
+
+/** The variant a model is, by its base's stored discriminator and its value. `undefined` for a root model. */
+export function selectedVariantOf(
   domain: ApplicationDomain,
   reference: MongoModelReference,
-): Document | undefined {
+): SelectedVariant | undefined {
   const models = mongoModelsOf(domain, reference.namespaceId);
   const base = modelOf(models, reference.model)?.base;
   if (base === undefined) return undefined;
@@ -33,21 +36,12 @@ export function variantFilterOf(
   )?.[0];
   return baseModel === undefined || field === undefined || value === undefined
     ? undefined
-    : { [ownStoredNameOf(baseModel, field)]: value };
+    : { field: ownStoredNameOf(baseModel, field), value };
 }
 
-/** The discriminator field and value a variant's filter selects; `undefined` for any other filter. */
-function discriminatorValueOf(
-  filter: Document | undefined,
-): { readonly field: string; readonly value: unknown } | undefined {
-  const entries = Object.entries(filter ?? {});
-  if (entries.length !== 1) return undefined;
-  const [entry] = entries;
-  if (entry === undefined) return undefined;
-  const [field, value] = entry;
-  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-    ? { field, value }
-    : undefined;
+/** The filter that selects a variant's documents in its collection. */
+export function variantFilter(variant: SelectedVariant): Document {
+  return { [variant.field]: variant.value };
 }
 
 /** Whether one of `model`'s own fields or embed relations is stored under `storedName`. */
@@ -60,18 +54,18 @@ function ownStores(model: ContractModel<MongoModelStorage>, storedName: string):
 
 /**
  * The other models stored in `collection`, root models and their variants, whose documents a change
- * of `storedName` with `filter` reaches, and which store the field themselves or through their base;
+ * of `storedName` in the documents of `variant` reaches, and which store the field themselves or through their base;
  * with no `storedName`, every such model, whether it stores the field or not. No discriminator tells
- * the documents of several root models apart, so without a filter, or with a base model's filter,
- * every other root model's documents are reached. A variant's filter, one discriminator value,
- * reaches a model only when its documents can hold that value: a variant of another root model with
+ * the documents of several root models apart, so without a selected variant every other root
+ * model's documents are reached. A selected variant, one discriminator value, reaches a model only
+ * when its documents can hold that value: a variant of another root model with
  * the same discriminator field and value, or a model that declares the discriminator field itself.
  */
 export function otherModelsReached(
   domain: ApplicationDomain,
   reference: MongoModelReference,
   collection: string,
-  filter: Document | undefined,
+  variant: SelectedVariant | undefined,
   storedName: string | undefined,
 ): readonly string[] {
   const models = mongoModelsOf(domain, reference.namespaceId);
@@ -81,21 +75,20 @@ export function otherModelsReached(
   };
   const storesOrInherits = (name: string, stored: string) =>
     modelAndBasesOf(models, name).some((each) => ownStores(each, stored));
-  const selected = discriminatorValueOf(filter);
   const canHold = (name: string) => {
-    if (selected === undefined) return true;
+    if (variant === undefined) return true;
     const base = baseOf(name);
     const discriminator = base?.discriminator?.field;
     if (
       base !== undefined &&
       discriminator !== undefined &&
-      ownStoredNameOf(base, discriminator) === selected.field
+      ownStoredNameOf(base, discriminator) === variant.field
     ) {
       return Object.entries(base.variants ?? {}).some(
-        ([value, variant]) => variant.model === name && value === selected.value,
+        ([value, each]) => each.model === name && value === variant.value,
       );
     }
-    return storesOrInherits(name, selected.field);
+    return storesOrInherits(name, variant.field);
   };
   const subjectRoot = modelOf(models, reference.model)?.base?.model ?? reference.model;
   return (collectionRootModelsOf(models)[collection] ?? [])

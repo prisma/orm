@@ -1,4 +1,8 @@
-export type { MongoQueryExecutor, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+export type {
+  MongoPreparable,
+  MongoQueryExecutor,
+  MongoQueryPlan,
+} from '@internal/mongo-query-ast/execution';
 export type { SimplifyDeep } from '@internal/utils/simplify-deep';
 export type { MongoCollection, MongoCollectionContext } from '../collection';
 export { createMongoCollection } from '../collection';
@@ -16,6 +20,7 @@ export type { MongoOrmClient, MongoOrmOptions } from '../mongo-orm';
 export { mongoOrm } from '../mongo-orm';
 export type { MongoRawClient } from '../mongo-raw';
 export { mongoRaw } from '../mongo-raw';
+export type { MongoPreparedCollection } from '../prepared-collection';
 export type { RawMongoCollection } from '../raw-collection';
 export type {
   CreateInput,

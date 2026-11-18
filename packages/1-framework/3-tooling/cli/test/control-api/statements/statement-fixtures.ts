@@ -14,6 +14,8 @@ interface ModelSpec {
   readonly fields?: readonly string[];
   readonly relations?: readonly string[];
   readonly base?: string;
+  /** The model whose data embeds this one's. */
+  readonly owner?: string;
   /** The discriminator field of a base model, and each variant by its discriminator value. */
   readonly discriminator?: string;
   readonly variants?: Readonly<Record<string, string>>;
@@ -80,6 +82,7 @@ function modelOf(namespaceId: string, spec: ModelSpec): ContractModelBase {
     relations: Object.fromEntries((spec.relations ?? []).map((name) => [name, relation])),
     storage: {},
     ...(spec.base !== undefined ? { base: crossRef(spec.base, namespaceId) } : {}),
+    ...(spec.owner !== undefined ? { owner: spec.owner } : {}),
     ...(spec.discriminator !== undefined ? { discriminator: { field: spec.discriminator } } : {}),
     ...(spec.variants !== undefined
       ? {

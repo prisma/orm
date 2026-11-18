@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { type DataTypeValue, dataType, readJsonString } from '@internal/framework-components/codec';
 import {
   assembleMongoCodecRegistry,
@@ -8,7 +9,7 @@ import { MongoParamRef, MongoPreparedParamRef, type MongoValue } from '@internal
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { InternalError } from '@internal/utils/internal-error';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';
-import { Binary, BSONRegExp, Decimal128, Double, Long, MinKey, ObjectId } from 'mongodb';
+import { Binary, BSON, BSONRegExp, Decimal128, Double, Long, MinKey, ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
 import { resolveDraftDoc, resolveValue } from '../src/resolve-value';
 
@@ -155,6 +156,31 @@ describe('resolveValue', () => {
     expect(await resolveValue('raw', emptyRegistry(), noCtx)).toBe('raw');
     const d = new Date();
     expect(await resolveValue(d, emptyRegistry(), noCtx)).toBe(d);
+  });
+
+  it('passes a Date created in another realm through unchanged', async () => {
+    const d: Date = runInNewContext('new Date(0)');
+    expect(await resolveValue({ at: d }, emptyRegistry(), noCtx)).toEqual({ at: d });
+  });
+
+  it('gives the driver a Date it serializes as a date, even one from another realm with its own string tag', async () => {
+    const d: Date = runInNewContext(
+      'Object.defineProperty(new Date(0), Symbol.toStringTag, { value: "Tagged" })',
+    );
+    const resolved = await resolveValue({ at: d }, emptyRegistry(), noCtx);
+    expect(BSON.deserialize(BSON.serialize(resolved as BSON.Document))).toEqual({
+      at: new Date(0),
+    });
+  });
+
+  it('gives the driver a Date of this realm when a codec-less param ref holds a tagged Date from another realm', async () => {
+    const d: Date = runInNewContext(
+      'Object.defineProperty(new Date(0), Symbol.toStringTag, { value: "Tagged" })',
+    );
+    const resolved = await resolveValue({ at: new MongoParamRef(d) }, emptyRegistry(), noCtx);
+    expect(BSON.deserialize(BSON.serialize(resolved as BSON.Document))).toEqual({
+      at: new Date(0),
+    });
   });
 
   describe('async dispatch — codec encode + concurrent encoding', () => {

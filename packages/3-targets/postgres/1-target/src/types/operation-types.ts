@@ -24,6 +24,8 @@ type TextualSelfSpec = { readonly traits: readonly ['textual'] };
 
 type TextualSelf<CT extends CodecTypesBase> = TraitExpression<readonly ['textual'], false, CT>;
 
+type NullableTextualSelf<CT extends CodecTypesBase> = TextualSelf<CT> | FullTextColumn<CT>;
+
 type TextOperand<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', false, CT>;
 
 /** A textual column, nullable or not, as an expression rather than a value. */
@@ -63,7 +65,7 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
     readonly ilike: {
       readonly self: TextualSelfSpec;
       readonly impl: (
-        self: TextualSelf<CT>,
+        self: NullableTextualSelf<CT>,
         pattern: TextOperand<CT>,
       ) => Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
     };
@@ -81,7 +83,7 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
           options?: WithoutLanguage<FullTextMatchesOptions>,
         ): Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
         (
-          document: TextualSelf<CT> | FullTextDocument,
+          document: NullableTextualSelf<CT> | FullTextDocument,
           query: TsqueryArgument<CT>,
           options?: FullTextMatchesOptions,
         ): Expression<{ codecId: 'pg/bool@1'; nullable: false }>;

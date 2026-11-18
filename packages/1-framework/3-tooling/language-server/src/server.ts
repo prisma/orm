@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { isPrismaNextSchema, type SymbolTable } from '@internal/psl-parser';
+import { isPrisma8Schema, type SymbolTable } from '@internal/psl-parser';
 import {
   type CompletionItem,
   type Connection,
@@ -51,7 +51,7 @@ function createServerOn(connection: Connection): LanguageServer {
     const document = getOpenDocument(uri);
     if (document === undefined) return [];
     const source = document.getText();
-    if (!isPrismaNextSchema(source)) return [];
+    if (!isPrisma8Schema(source)) return [];
     const project = await projects.nearestProject(uri);
     const formatted = await project?.formatDocument(uri, source);
     if (formatted === undefined || formatted === source) return [];

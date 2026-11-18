@@ -124,6 +124,7 @@ function createStubDriver(): Omit<ClosedRuntimeFixture, 'runtime'> {
     rollback: vi.fn().mockImplementation(async () => {
       calls.push('rollback');
     }),
+    savepoint: vi.fn().mockRejectedValue(new Error('savepoint is not stubbed')),
   };
 
   const connection = {

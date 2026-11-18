@@ -36,6 +36,7 @@ Before you submit:
 
 - [ ] All commits are signed off (`git commit -s`) per the [DCO](../CONTRIBUTING.md#developer-certificate-of-origin-dco). The DCO status check will block merge if any commit is missing a `Signed-off-by:` trailer.
 - [ ] Tests are updated (or `n/a` if the change is doc-only / refactor with no behavioural delta).
+- [ ] For a bug fix: I searched for the same bug elsewhere and fixed every occurrence, per [Fix the cause, everywhere it occurs](../CONTRIBUTING.md#fix-the-cause-everywhere-it-occurs) (or `n/a` if this is not a bug fix).
 - [ ] The **Skill update** section above is filled in (or stated `n/a — internal only`).
 
 ## Notes for the reviewer

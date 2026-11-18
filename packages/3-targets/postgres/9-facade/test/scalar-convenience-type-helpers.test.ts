@@ -1,3 +1,4 @@
+import { jsonbColumn, plainJsonColumn } from '@internal/adapter-postgres/column-types';
 import { describe, expect, it } from 'vitest';
 import { defineContract } from '../src/exports/contract-builder';
 
@@ -19,6 +20,9 @@ describe('a scalar convenience type helper', () => {
             small: field.column(type.Float({ storage: 'float4' })),
             active: field.column(type.Boolean()),
             avatar: field.column(type.Bytes()),
+            payload: field.column(type.Json()),
+            stored: field.column(type.Json({ storage: 'json' })),
+            settings: field.column(type.Json({ storage: 'jsonb' })),
           },
         }),
       },
@@ -39,6 +43,9 @@ describe('a scalar convenience type helper', () => {
             small: field.column(type.Float4()),
             active: field.column(type.Bool()),
             avatar: field.column(type.Bytea()),
+            payload: field.column(type.PlainJson()),
+            stored: field.column(type.PlainJson()),
+            settings: field.column(type.Jsonb()),
           },
         }),
       },
@@ -69,5 +76,31 @@ describe('a scalar convenience type helper', () => {
     ).toThrow(
       'Argument "length" of String does not apply to Text, the type that storage: text chooses.',
     );
+  });
+
+  it('emits, for PlainJson and Jsonb, the contract their column helpers emit', () => {
+    const helpers = defineContract({}, ({ type, field, model }) => ({
+      models: {
+        Event: model('Event', {
+          fields: {
+            id: field.column(type.Int()).id(),
+            payload: field.column(type.Json()),
+            settings: field.column(type.Json({ storage: 'jsonb' })),
+          },
+        }),
+      },
+    }));
+    const columns = defineContract({}, ({ type, field, model }) => ({
+      models: {
+        Event: model('Event', {
+          fields: {
+            id: field.column(type.Int()).id(),
+            payload: field.column(plainJsonColumn),
+            settings: field.column(jsonbColumn),
+          },
+        }),
+      },
+    }));
+    expect(JSON.stringify(helpers)).toBe(JSON.stringify(columns));
   });
 });

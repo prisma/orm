@@ -52,6 +52,7 @@ import {
 import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 import type { SqliteDdlNode } from '@internal/target-sqlite/ddl';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-sqlite/sql-utils';
+import { isDate } from '@internal/type-implementations/date';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { SqliteControlAdapter } from './control-adapter';
@@ -80,6 +81,8 @@ const defaultCapabilities = Object.freeze({
     limit: true,
     lateral: false,
     jsonAgg: true,
+    outerReferencesInDerivedTables: true,
+    jsonAggWithoutTruncation: true,
     returning: true,
     enums: false,
     insertOnConflictSkip: true,
@@ -497,7 +500,7 @@ function renderLiteral(expr: LiteralExpr): string {
   if (expr.value === null || expr.value === undefined) {
     return 'NULL';
   }
-  if (expr.value instanceof Date) {
+  if (isDate(expr.value)) {
     return `'${escapeLiteral(expr.value.toISOString())}'`;
   }
   const json = JSON.stringify(expr.value);
@@ -530,11 +533,13 @@ function renderOperation(expr: OperationExpr, ctx: SqliteRenderContext): string 
   );
 }
 
-function renderSubqueryExpr(expr: SubqueryExpr, ctx: SqliteRenderContext): string {
-  if (expr.query.projection.length !== 1) {
+function renderSubqueryExpr(expr: SubqueryExpr, ctx: SqliteRenderContext, columns = 1): string {
+  if (expr.query.projection.length !== columns) {
     throw structuredError(
       'RUNTIME.AST_INVALID',
-      'Subquery expressions must project exactly one column',
+      columns === 1
+        ? 'Subquery expressions must project exactly one column'
+        : `A subquery compared with a row value of ${columns} columns must project ${columns} columns`,
       { meta: { node: 'subquery' } },
     );
   }
@@ -599,6 +604,13 @@ function renderBinary(expr: BinaryExpr, ctx: SqliteRenderContext): string {
   switch (rightNode.kind) {
     case 'list':
       right = renderListLiteral(rightNode, ctx);
+      break;
+    case 'subquery':
+      right = renderSubqueryExpr(
+        rightNode,
+        ctx,
+        leftExpr.kind === 'list' ? leftExpr.values.length : 1,
+      );
       break;
     case 'literal':
       right = renderLiteral(rightNode);
@@ -728,14 +740,32 @@ function projectJsonThroughCodec(
   return descriptor.projectJson(value, codec);
 }
 
+// SQLite builds before 3.48 take at most 127 arguments per function: json_object takes two per entry, and json_set, which appends entries in order, one plus two per entry.
+const SQLITE_JSON_CALL_MAX_ENTRIES = 63;
+
 function renderJsonObjectExpr(expr: JsonObjectExpr, ctx: SqliteRenderContext): string {
-  const args = expr.entries
-    .flatMap((entry): [string, string] => {
-      const key = `'${escapeLiteral(entry.key)}'`;
-      return [key, renderJsonValueProjection(entry.value, ctx)];
-    })
-    .join(', ');
-  return `json_object(${args})`;
+  const rendered = expr.entries.map((entry) => ({
+    key: entry.key,
+    value: renderJsonValueProjection(entry.value, ctx),
+  }));
+  const first = rendered.slice(0, SQLITE_JSON_CALL_MAX_ENTRIES);
+  let object = `json_object(${first.map(({ key, value }) => `'${escapeLiteral(key)}', ${value}`).join(', ')})`;
+  for (
+    let start = SQLITE_JSON_CALL_MAX_ENTRIES;
+    start < rendered.length;
+    start += SQLITE_JSON_CALL_MAX_ENTRIES
+  ) {
+    const chunk = rendered.slice(start, start + SQLITE_JSON_CALL_MAX_ENTRIES);
+    const appended = chunk.map(
+      ({ key, value }) => `'${escapeLiteral(jsonPathOfKey(key))}', ${value}`,
+    );
+    object = `json_set(${object}, ${appended.join(', ')})`;
+  }
+  return object;
+}
+
+function jsonPathOfKey(key: string): string {
+  return `$."${key.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 }
 
 function renderOrderByItems(items: ReadonlyArray<OrderByItem>, ctx: SqliteRenderContext): string {

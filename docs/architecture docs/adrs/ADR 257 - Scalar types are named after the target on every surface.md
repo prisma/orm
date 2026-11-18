@@ -2,11 +2,15 @@
 
 Status: **Accepted**
 
-**Amended 2026-10-30 (TML-3714):** the TypeScript builder's helper for a type is `type.<Name>()`, the PSL name, on every target, not `field.<token>()`. MongoDB's TypeScript builder used to hard-code one `field.<token>()` helper per type; it now builds `type.*` from the constructors the family, target and extension packs contribute, as the SQL builder does (ADR 241), and a field is `field.scalar(type.Int32())`. The MongoDB target, not its adapter, contributes those constructors. The old helpers were removed before the release candidate, with no deprecated alias, as the PostgreSQL date and time renames were: reading one, such as `field.objectId`, throws `CONTRACT.FIELD_HELPER_UNKNOWN` naming the `type.*` call to write, and an upgrade script rewrites them. The deprecated PSL names (`Int`, `Float`, `Boolean`) stay PSL-only and get no `type.*` helper.
+**Amended 2026-10-30 (TML-3714):** the TypeScript builder's helper for a type is `type.<Name>()`, the PSL name, on every target, not `field.<token>()`. MongoDB's TypeScript builder used to hard-code one `field.<token>()` helper per type; it now builds `type.*` from the constructors the family, target and extension packs contribute, as the SQL builder does (ADR 241), and a field is `field.scalar(type.Int32())`. The MongoDB target, not its adapter, contributes those constructors. The old helpers were removed before the release candidate, with no deprecated alias, as the PostgreSQL date and time renames were: reading one, such as `field.objectId`, throws `CONTRACT.FIELD_HELPER_UNKNOWN` naming the `type.*` call to write, and an upgrade script rewrites them. The deprecated PSL names stay PSL-only and get no `type.*` helper. (`Int`, `Float` and `Boolean`, the deprecated names at the time, became convenience types with helpers under ADR 322; `Int64` is the deprecated name now.)
 
-**Amended by [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) (2026-10-22):** where a stored type has several codecs, every one of them carries a suffix naming its kind of value, not only the second (`TimestamptzTemporal`, `TimestamptzJsDate`, `TimestamptzString`). The unsuffixed name of the concept, such as `DateTime`, `Date`, `Time` and `Duration` on PostgreSQL, belongs to a convenience type, a type choice that becomes one of the suffixed types. Those renames were made before the release candidate, so the old names were removed at once, with no deprecated alias for a release line; the upgrade instructions give each rewrite. A type named before this amendment with no suffix beside a suffixed one, such as MongoDB's `Int64` beside `Int64Number` below, keeps its name until it is renamed under the alias rule.
+**Amended by [ADR 279](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md) (2026-10-22):** where a stored type has several codecs, every one of them carries a suffix naming its kind of value, not only the second (`TimestamptzTemporal`, `TimestamptzJsDate`, `TimestamptzString`). The unsuffixed name of the concept, such as `DateTime`, `Date`, `Time` and `Duration` on PostgreSQL, belongs to a convenience type, a type choice that becomes one of the suffixed types. Those renames were made before the release candidate, so the old names were removed at once, with no deprecated alias for a release line; the upgrade instructions give each rewrite. A type named before this amendment with no suffix beside a suffixed one, such as MongoDB's `Int64` beside `Int64Number` below, kept its name until it was renamed under the alias rule (MongoDB's `Int64` was renamed `Int64BigInt` by ADR 322).
 
 **Amended by [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md) (2026-11-02):** the PSL name is the database type, plus a suffix naming the application value where the database type has several codecs, such as `Int8BigInt` and `NumericString`. The codec id is a frozen identifier and need not match the PSL name: `Int8BigInt` is `pg/int8@1`, `NumericBigInt` is `pg/unboundedint@1`. A column helper is named after the explicit type it gives, such as `int8BigIntColumn`. The token rule below holds where the names already agree.
+
+**Amended by [ADR 316](ADR%20316%20-%20PostgreSQL%20scalars%20get%20convenience%20types.md) (2026-11-17):** a convenience type and an explicit type cannot share a name, because a type choice row names its explicit type in the same namespace. The rule is decided there and applied to PostgreSQL in that change. MongoDB applies it under ADR 322. SQLite and MySQL still have explicit types with convenience names, and each takes the names below when it gets these convenience types. Where the rule above would give an explicit type a convenience name, the explicit type takes, in this order: (a) the database's own second name for the type, where it has one, such as `INT4`, `NUMERIC` and `BOOL`, the names MySQL's explicit types will take; (b) the application-value suffix of ADR 315 (rule 5), where it gives a meaningful name, such as `DecimalString`, the name SQLite's explicit decimal type will take; (c) a name recorded as an exception. The exceptions are `PlainJson` and `BsonString`, MongoDB's explicit string type. `PlainJson` is the explicit type a bare `Json` becomes. The suffix was not used for them because `JsonJson` and `StringString` say nothing. On PostgreSQL, `Json` is now a convenience type whose default is `PlainJson`, a `json` column, and the column helper `jsonColumn` is `plainJsonColumn`. Where `Json` is a convenience type, as on PostgreSQL and MongoDB, the encoding-named explicit type described below is `PlainJson`, and `Json` is the concept that chooses it.
+
+**Amended by [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md) (2026-11-17):** MongoDB's `Int`, `BigInt`, `Float`, `Decimal`, `Boolean`, `Bytes`, `String` and `Json` are convenience types over its explicit types. `Int`, `Float` and `Boolean` are no longer deprecated aliases and have `type.*` helpers again (`type.Int()`, `type.Float()`, `type.Boolean()`); they choose `Int32`, `Double` and `Bool`, as before. The explicit `Int64` is renamed `Int64BigInt`, so both readings of a BSON `long` carry a suffix, as PostgreSQL's `Int8BigInt` and `Int8Number` do. `Int64` stays in PSL for one release line as a deprecated alias; `type.Int64()` is removed at once, because the one-release-line promise covers PSL names, and a TypeScript rename fails at compile time with a rewrite the upgrade instruction applies. The explicit `String` and `Json` are renamed `BsonString` and `PlainJson`, the two exceptions above, with no alias: the bare names are now convenience types that give the same codecs. MongoDB's interpreter warns about a deprecated name wherever it is written, as the rule below says.
 
 ## Decision
 
@@ -22,14 +26,14 @@ The MongoDB target's scalar type constructors name each type after the BSON type
 
 ```ts
 // packages/3-targets/mongo/1-target/src/core/authoring.ts
-export const mongoScalarAuthoringTypes = {
+const mongoExplicitScalarTypes = {
   Int32: {
     kind: 'typeConstructor',
     documentation: 'A signed 32-bit integer, stored as BSON int.',
     output: { codecId: MONGO_INT32_CODEC_ID },
   },
   // …
-  Json: {
+  PlainJson: {
     kind: 'typeConstructor',
     documentation:
       'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
@@ -41,13 +45,15 @@ export const mongoScalarAuthoringTypes = {
       'Any BSON value, read as BsonValue; the collection validator does not constrain it.',
     output: { codecId: MONGO_BSON_CODEC_ID },
   },
-  Int: {
-    kind: 'typeConstructor',
-    documentation: 'Deprecated: use Int32. A signed 32-bit integer, stored as BSON int.',
-    output: { codecId: MONGO_INT32_CODEC_ID },
-    deprecated: { replacement: 'Int32' },
-  },
   // …
+};
+
+const mongoDeprecatedScalarTypes = {
+  Int64: {
+    ...int64BigInt,
+    documentation: `Deprecated: use Int64BigInt. ${int64BigInt.documentation}`,
+    deprecated: { replacement: 'Int64BigInt' },
+  },
 };
 ```
 
@@ -90,7 +96,7 @@ On PostgreSQL and SQLite, `Json` columns store JSON text, so what is stored is a
 
 ## Renaming a surface name
 
-A renamed PSL name stays available as a deprecated alias of the new one for one release line, then is removed. The one exception is the date and time renames of ADR 279 and ADR 315, made before the release candidate, which removed the old names at once. The alias resolves to the same codec, so the contract does not change. A type constructor marks itself with `deprecated: { replacement }` on its `AuthoringTypeConstructorDescriptor`, and the PSL interpreter reports `PSL_DEPRECATED_SCALAR_NAME` at the type's span wherever the deprecated name is written: bare or with arguments, as the type of a field, of a value object member, or of a `types {}` alias. The warning goes through the contract source's warning channel: a `ContractSourceDiagnostic` with `severity: 'warning'`, delivered to `ContractSourceContext.reportWarning`. `contract emit` prints it and still emits; the language server shows it as a warning and lists the deprecated names last in completion, struck through. The SQL family's interpreter follows this rule. MongoDB's interpreter warns only on a bare name written as a field's type; TML-3790 brings it in line.
+A renamed PSL name stays available as a deprecated alias of the new one for one release line, then is removed. The one exception is the date and time renames of ADR 279 and ADR 315, made before the release candidate, which removed the old names at once. The alias resolves to the same codec, so the contract does not change. A type constructor marks itself with `deprecated: { replacement }` on its `AuthoringTypeConstructorDescriptor`, and the PSL interpreter reports `PSL_DEPRECATED_SCALAR_NAME` at the type's span wherever the deprecated name is written: bare or with arguments, as the type of a field, of a value object member, or of a `types {}` alias. The warning goes through the contract source's warning channel: a `ContractSourceDiagnostic` with `severity: 'warning'`, delivered to `ContractSourceContext.reportWarning`. `contract emit` prints it and still emits; the language server shows it as a warning and lists the deprecated names last in completion, struck through. The SQL family's interpreter and MongoDB's follow this rule.
 
 A codec id is never renamed under this decision. If one ever has to change, the reserved mechanism is: the codec registry registers the same codec under both ids, the emitter always writes the new id, the contract validator accepts both, `CodecTypes` carries both keys mapped to the same type, and an upgrade instruction tells users to re-emit and re-sign; after one release line the old id is removed with an error naming the new one.
 

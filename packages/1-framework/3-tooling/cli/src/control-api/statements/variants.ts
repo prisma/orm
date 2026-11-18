@@ -18,6 +18,14 @@ function modelOf(
     : undefined;
 }
 
+/** Whether a field is the discriminator of its model in the contract. */
+export function isDiscriminatorField(
+  contract: ContractWithDomain,
+  coordinate: { readonly namespaceId: string; readonly model: string; readonly field: string },
+): boolean {
+  return modelOf(contract, coordinate)?.discriminator?.field === coordinate.field;
+}
+
 /** The discriminator value a variant has in its base model, or `undefined` when the model is no variant of the contract. */
 export function variantValue(
   contract: ContractWithDomain,
