@@ -6,8 +6,6 @@ Each test here states what a call should do and is marked `it.fails`, because th
 | --- | --- |
 | SQLite: a `BigInt` beyond ±(2^53 − 1), on `create` and on read | `create` throws `RangeError` after the row is stored, and every later read of the table throws it too |
 | SQLite: a `sql.Char(n)` value with a trailing space | the value is read without the space, and a filter on the value read does not find the row |
-| `select` before `create` on a variant stored in its own table | `select` is ignored and every field is returned |
-| `create` on a variant stored in its own table, with a relation callback | refused with `ORM.FIELD_UNKNOWN` |
 | `upsert` on a variant whose key a row of another variant holds | returns that row, which the variant does not contain |
 | `update` whose filter across a relation its own nested write stops matching | the nested write is kept and the record is not updated |
 | `deleteAll` returning rows, on a model related to itself with `onDelete: SetNull` | with `RETURNING`, a row another deleted row changed comes back with its foreign key `null`; without, as it was before the delete |

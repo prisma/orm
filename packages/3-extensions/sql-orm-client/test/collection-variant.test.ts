@@ -781,6 +781,53 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
     expect(rows[0]).toHaveProperty('priority', 99);
   });
 
+  function projectedColumns(ast: unknown): string[] {
+    return (ast as SelectAst).projection.map((item) =>
+      item.expr instanceof ColumnRef ? `${item.expr.table}.${item.expr.column}` : item.expr.kind,
+    );
+  }
+
+  it('reads the selected fields back from both tables after the two INSERTs', async () => {
+    const { collection, runtime } = createReturningMixedPolyCollection();
+    runtime.setNextResults([[{ id: 10 }], [{ id: 10, features__priority: 1 }]]);
+
+    const narrowed = collection.variant('feature' as never) as typeof collection;
+    const row = await narrowed
+      .select('id', 'priority' as never)
+      .create({ title: 'Dark mode', priority: 1 } as never);
+
+    expect({
+      statements: runtime.executions.map(({ plan }) => plan.ast.kind),
+      projected: projectedColumns(runtime.executions[2]?.plan.ast),
+      row,
+    }).toEqual({
+      statements: ['insert', 'insert', 'select'],
+      projected: ['tasks.id', 'features.priority'],
+      row: { id: 10, priority: 1 },
+    });
+  });
+
+  it('update() returning a selected field of the variant reads it from the variant table', async () => {
+    const { collection, runtime } = createReturningMixedPolyCollection();
+    runtime.setNextResults([[{ id: 10 }], [{ id: 10 }], [{ id: 10, features__priority: 1 }]]);
+
+    const narrowed = collection.variant('feature' as never) as typeof collection;
+    const row = await narrowed
+      .where({ id: 10 } as never)
+      .select('id', 'priority' as never)
+      .update({ title: 'Darker mode' } as never);
+
+    expect({
+      statements: runtime.executions.map(({ plan }) => plan.ast.kind),
+      projected: projectedColumns(runtime.executions.at(-1)?.plan.ast),
+      row,
+    }).toEqual({
+      statements: ['select', 'update', 'select'],
+      projected: ['tasks.id', 'features.priority'],
+      row: { id: 10, priority: 1 },
+    });
+  });
+
   it('wraps both INSERTs in a transaction when available', async () => {
     const contract = withReturningCapability(buildMixedPolyContract());
     const baseContext = getTestContext();

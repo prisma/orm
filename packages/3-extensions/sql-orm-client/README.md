@@ -403,6 +403,19 @@ await db.Project.where({ id: 1 }).update({
 
 `r.create(data)` without `variant()` on a polymorphic target is a type error, as a collection's `create()` on a polymorphic base model without `variant()` is. Use `r.variant(value).create(data)`.
 
+The data of a variant's row takes relation callbacks for the base model's relations, in `r.variant(value).create(data)` and in `create()` on a collection narrowed with `variant(value)`, whether the variant is stored in the base table or in its own:
+
+```ts
+await db.Task.variant('feature').create({
+  title: 'Dark mode',
+  priority: 1,
+  project: (project) => project.connect({ id: 1 }),
+  comments: (comments) => comments.create({ body: 'Seen it' }),
+});
+```
+
+A variant stored in its own table is written with two inserts for each row, the base row and then the variant row with the base row's key, and the nested operations are applied around the base row as for any other model. `create()` and `createAll()` on such a variant return the two inserted rows joined; after `select` or `include` they read the rows back by key with one `SELECT` instead, and `createAll()` then returns them in no particular order.
+
 #### Connecting and disconnecting rows
 
 `r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error.
