@@ -51,7 +51,7 @@ export type SharedTableRefusal<ForeignKey> =
       readonly kind: 'index';
       readonly variant: string;
       readonly index: IndexNode;
-      /** The variant that already declares the same index under another name, when that is the reason. */
+      /** The base or the variant that already declares the same index under another name, when that is the reason. */
       readonly namedDifferentlyBy: string | undefined;
     };
 
@@ -68,9 +68,15 @@ export interface SharedTableMerge<ForeignKey> {
  * Another model whose rows are in the table may write the same columns, so a variant's declaration is checked against every other model that maps one of its columns:
  * - A variant's foreign key is refused unless each such model declares the same foreign key, compared by its source-to-target column pairs; otherwise that model's rows would have to satisfy it. A foreign key that creates no constraint is not checked.
  * - A variant's unique is accepted only over exactly the columns of one of its own foreign keys, and only when each such model declares the same foreign key and the same unique. Its columns then hold NULL in every other row, so it constrains only the rows that relate.
- * - A variant's index without a `where` condition is accepted only when it is identical in content to the backing index one of its own foreign keys derives. An index the base already has is dropped; one another variant declares under another name is refused.
+ * - A variant's index without a `where` condition is accepted only when it is identical in content to the backing index one of its own foreign keys derives. The same index already on the table under the same name is kept once; under another name, whether the base or another variant declares it, it is refused.
  * - Identical declarations are kept once, in the order first declared.
  */
+/** How a message names columns: `column "a"` or `columns "a", "b"`. */
+export function columnsPhrase(columns: readonly string[]): string {
+  const quoted = columns.map((column) => `"${column}"`).join(', ');
+  return columns.length === 1 ? `column ${quoted}` : `columns ${quoted}`;
+}
+
 export function mergeSharedTable<ForeignKey>(input: {
   readonly tableName: string;
   readonly base: TableSharer<ForeignKey>;
@@ -195,7 +201,6 @@ export function mergeSharedTable<ForeignKey>(input: {
         });
         continue;
       }
-      if (base.indexes.some((existing) => sameContent(existing, index))) continue;
       const earlier = indexes.find((existing) => sameContent(existing, index));
       if (earlier === undefined) {
         indexes.push(index);
@@ -205,7 +210,7 @@ export function mergeSharedTable<ForeignKey>(input: {
           kind: 'index',
           variant: variant.modelName,
           index,
-          namedDifferentlyBy: indexDeclarers.get(earlier),
+          namedDifferentlyBy: indexDeclarers.get(earlier) ?? base.modelName,
         });
       }
     }

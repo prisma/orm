@@ -105,6 +105,7 @@ import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-deriv
 import {
   buildSqlContractFromDefinition,
   type CheckNode,
+  columnsPhrase,
   composedExtensionPackRefs,
   type EnumTypeHandle,
   type FieldNode,
@@ -2337,8 +2338,12 @@ function stiRefusalDiagnostic(
   const at = site?.location ?? baseDecl.source.at(baseDecl.span);
   if (refusal.kind === 'foreignKey') {
     const columns = refusal.columns.join(', ');
+    const declared = refusal.foreignKey.columns.join(', ');
+    const shared = columnsPhrase(refusal.columns);
     const message = !refusal.otherDeclaresOne
-      ? `Model "${variant}" declares a foreign key on (${columns}), but "${refusal.other}" maps the same columns without it in the table of "${base}" (single-table inheritance). Every "${refusal.other}" row would have to satisfy it; give the field of "${variant}" its own column with @map.`
+      ? refusal.otherIsBase
+        ? `Model "${variant}" declares a foreign key on (${declared}), but its base model "${base}" also maps ${shared} without it (single-table inheritance). Every row of "${base}" would have to satisfy it; give the field of "${variant}" its own column with @map.`
+        : `Model "${variant}" declares a foreign key on (${declared}), but "${refusal.other}" also maps ${shared} in the table of "${base}" without it (single-table inheritance). Every "${refusal.other}" row would have to satisfy it; give the field of "${variant}" its own column with @map.`
       : refusal.otherIsBase
         ? `Model "${variant}" shares the table of its base model "${base}" (single-table inheritance) and declares a foreign key on (${columns}) that differs from the one "${base}" declares there. Every row would have to satisfy both; keep only one of the two relations.`
         : `Models "${variant}" and "${refusal.other}" share the table of their base model "${base}" (single-table inheritance) and declare different foreign keys on (${columns}). Every row would have to satisfy both; give each variant its own column.`;
@@ -2361,14 +2366,14 @@ function stiRefusalDiagnostic(
   ) {
     return {
       code: PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
-      message: `${shared}, and "${refusal.sharedWith}" maps the same columns without this unique. A one-to-one relation needs the unique, so give the field of "${variant}" its own column with @map.`,
+      message: `${shared}, and "${refusal.sharedWith}" also maps ${columnsPhrase(refusal.unique.columns)} without this unique. A one-to-one relation needs the unique, so give the field of "${variant}" its own column with @map.`,
       ...at,
     };
   }
   const condition = `where: sql\`${sqlColumnReference(discriminatorColumn)} = '${baseDecl.value.replaceAll("'", "''")}'\``;
   const advice =
     site?.indexArguments === undefined
-      ? `Scope it to this variant instead with ${condition}.`
+      ? `Limit it to this variant's rows with ${condition.replace('where: ', '')} if the attribute takes a condition, or give its field a column of its own.`
       : `Scope it to this variant instead: @@index(${[...site.indexArguments, condition].join(', ')})`;
   return {
     code: PSL_UNSCOPED_INDEX_ON_STI_VARIANT,

@@ -3,6 +3,7 @@ import type { TableProperties } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { ColumnSite } from './declaration-sites';
 import {
+  columnsPhrase,
   mergeSharedTable,
   type SharedForeignKeyView,
   type SharedTableRefusal,
@@ -270,7 +271,9 @@ function refusalError(
       ? first.otherIsBase
         ? `Model "${first.variant}" shares table "${tableName}" with its base model "${first.other}" (single-table inheritance) and declares a foreign key on (${listed}) that differs from the one "${first.other}" declares there. Every row would have to satisfy both; keep only one of the two.`
         : `Models "${first.variant}" and "${first.other}" share table "${tableName}" (single-table inheritance) and declare different foreign keys on (${listed}). Every row would have to satisfy both; give each variant its own column.`
-      : `Model "${first.variant}" declares a foreign key on (${listed}) of table "${tableName}", but model "${first.other}" also maps those columns without it (single-table inheritance). Every "${first.other}" row would have to satisfy it; give "${first.variant}" a column of its own.`;
+      : first.otherIsBase
+        ? `Model "${first.variant}" declares a foreign key on (${first.foreignKey.source.columns.join(', ')}) of table "${tableName}", but its base model "${first.other}" also maps ${columnsPhrase(first.columns)} without it (single-table inheritance). Every row of the table would have to satisfy it; give "${first.variant}" a column of its own.`
+        : `Model "${first.variant}" declares a foreign key on (${first.foreignKey.source.columns.join(', ')}) of table "${tableName}", but model "${first.other}" also maps ${columnsPhrase(first.columns)} without it (single-table inheritance). Every "${first.other}" row would have to satisfy it; give "${first.variant}" a column of its own.`;
     return contractError('CONTRACT.FOREIGN_KEY_CONFLICT_ON_STI_VARIANT', message, {
       meta: {
         modelName: first.variant,

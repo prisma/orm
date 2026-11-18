@@ -60,7 +60,7 @@ describe('a single-table variant column another model of the table also maps', (
       expect.objectContaining({
         code: 'PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT',
         message:
-          'Model "HumanActor" declares a foreign key on (contactId), but "BotActor" maps the same columns without it in the table of "Actor" (single-table inheritance). Every "BotActor" row would have to satisfy it; give the field of "HumanActor" its own column with @map.',
+          'Model "HumanActor" declares a foreign key on (contactId), but "BotActor" also maps column "contactId" in the table of "Actor" without it (single-table inheritance). Every "BotActor" row would have to satisfy it; give the field of "HumanActor" its own column with @map.',
         span: expect.objectContaining({
           start: expect.objectContaining({ offset: schema.indexOf('@relation("Human", fields') }),
         }),
@@ -78,7 +78,28 @@ describe('a single-table variant column another model of the table also maps', (
     expect(diagnosticsOf(schema)).toEqual([
       expect.objectContaining({
         code: 'PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT',
-        message: expect.stringContaining('but "Actor" maps the same columns without it'),
+        message:
+          'Model "HumanActor" declares a foreign key on (contactId), but its base model "Actor" also maps column "contactId" without it (single-table inheritance). Every row of "Actor" would have to satisfy it; give the field of "HumanActor" its own column with @map.',
+      }),
+    ]);
+  });
+
+  it('names only the shared column of a foreign key over several columns', () => {
+    const schema = tenantSchema('tenantId, ownerId', 'tenantId, ownerId')
+      .replace(
+        `model BotActor {
+  tenantId Int
+  ownerId  Int
+  team     Team @relation(fields: [tenantId, ownerId], references: [tenantId, id])`,
+        `model BotActor {
+  ownerId  Int`,
+      )
+      .replace('  bots     BotActor[]\n', '');
+
+    expect(diagnosticsOf(schema)).toEqual([
+      expect.objectContaining({
+        message:
+          'Model "HumanActor" declares a foreign key on (tenantId, ownerId), but "BotActor" also maps column "ownerId" in the table of "Actor" without it (single-table inheritance). Every "BotActor" row would have to satisfy it; give the field of "HumanActor" its own column with @map.',
       }),
     ]);
   });
@@ -143,7 +164,7 @@ model BotActor {
       expect.objectContaining({
         code: 'PSL_UNSCOPED_INDEX_ON_STI_VARIANT',
         message:
-          'Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), and "BotActor" maps the same columns without this unique. A one-to-one relation needs the unique, so give the field of "HumanActor" its own column with @map.',
+          'Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), and "BotActor" also maps column "contactId" without this unique. A one-to-one relation needs the unique, so give the field of "HumanActor" its own column with @map.',
       }),
     );
   });
@@ -154,24 +175,66 @@ model BotActor {
     );
   });
 
-  it('drops a variant backing index silently when the base has the same index under another name', () => {
-    const tables = tablesOf(
-      [
-        contactOf('  actors Actor[]'),
-        actor
-          .replace(
-            'kind String',
-            'kind      String\n  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)\n  contactId Int?',
-          )
-          .replace(
-            '@@discriminator(kind)',
-            '@@index([contactId], map: "actor_contact")\n  @@discriminator(kind)',
-          ),
-        humanWithContact('  @@index([contactId], map: "human_contact")'),
-      ].join('\n\n'),
-    );
+  it('refuses a variant backing index the base already declares under another name', () => {
+    const schema = [
+      contactOf('  actors Actor[]'),
+      actor
+        .replace(
+          'kind String',
+          'kind      String\n  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)\n  contactId Int?',
+        )
+        .replace(
+          '@@discriminator(kind)',
+          '@@index([contactId], map: "actor_contact")\n  @@discriminator(kind)',
+        ),
+      humanWithContact('  @@index([contactId], map: "human_contact")'),
+    ].join('\n\n');
 
-    expect(tables['actor']?.indexes).toMatchObject([{ name: 'actor_contact' }]);
+    expect(diagnosticsOf(schema)).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSCOPED_INDEX_ON_STI_VARIANT',
+        message:
+          'Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), and "Actor" already declares this index there under another name. Give both the same name.',
+        span: expect.objectContaining({
+          start: expect.objectContaining({
+            offset: schema.indexOf('@@index([contactId], map: "human_contact")'),
+          }),
+        }),
+      }),
+    ]);
+  });
+
+  it('places each refusal on the attribute that wrote it, a mixin attribute included', () => {
+    const schema = `${contactOf('')}
+
+${actor}
+
+model mixin Nicknamed {
+  nickname String?
+
+  @@index([nickname])
+}
+
+model HumanActor {
+  contact   Contact @relation("Human", fields: [contactId], references: [id])
+  contactId Int
+  email     String? @unique
+  +Nicknamed
+
+  @@index([email])
+  @@base(Actor, "human")
+}
+
+${plainBot()}`;
+    const offsets = (texts: readonly string[]) => texts.map((text) => schema.indexOf(text));
+
+    expect(
+      diagnosticsOf(schema)
+        .map((diagnostic) => diagnostic.span?.start.offset)
+        .sort((left, right) => (left ?? 0) - (right ?? 0)),
+    ).toEqual(
+      offsets(['@@index([nickname])', '@relation("Human", fields', '@unique', '@@index([email])']),
+    );
   });
 
   it('keeps one partial index when two variants write it with and without an explicit unique: false', () => {

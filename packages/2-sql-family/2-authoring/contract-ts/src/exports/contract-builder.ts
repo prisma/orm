@@ -69,6 +69,7 @@ export type {
 } from '../enum-type';
 export { bindEnumType, enumType, member } from '../enum-type';
 export {
+  columnsPhrase,
   mergeSharedTable,
   type SharedForeignKeyView,
   type SharedTableMerge,

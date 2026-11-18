@@ -61,7 +61,7 @@ A relation with `fields:` on a variant now puts its foreign key on the base mode
 
 When another model of the table maps the same column, it must declare the same relation: the same target, the same column pairs and the same referential actions. If it declares a different one, or maps the column as a plain field, the emit fails with `PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT`, because its rows would have to satisfy the foreign key too. When the other foreign key is the base model's, keep only one of the two relations. Otherwise give the variant's field its own column with `@map`, in this order, so that no value is lost:
 
-1. Keep the old shared column. Add the variant's new column beside it, nullable and without a foreign key yet: map the field to the new column and leave the relation off for now.
+1. Keep the old shared column. Add the variant's new column beside it, nullable and without a foreign key yet: map the field to the new column, and remove both the relation field and its back-relation on the other model for now, since a back-relation without its relation fails with `PSL_ORPHANED_BACKRELATION`.
 2. Copy the values across for that variant's rows only, by discriminator value, as in `UPDATE actor SET human_contact_id = "contactId" WHERE kind = 'human'`.
 3. Check that every copied value has its target row, as in `SELECT human_contact_id FROM actor WHERE human_contact_id IS NOT NULL AND human_contact_id NOT IN (SELECT id FROM contact)`, which must return no rows.
-4. Put the relation back on the new column, plan and apply the migration that adds its foreign key, and drop the old column only when no model maps it any more.
+4. Restore the relation on the new column together with its back-relation, plan and apply the migration that adds its foreign key, and drop the old column only when no model maps it any more.

@@ -203,7 +203,7 @@ model Note {
       expect.objectContaining({
         code: 'PSL_UNSCOPED_INDEX_ON_STI_VARIANT',
         message: expect.stringContaining(
-          "Scope it to this variant instead with where: sql`kind = 'note'`.",
+          "Limit it to this variant's rows with sql`kind = 'note'` if the attribute takes a condition, or give its field a column of its own.",
         ),
         span: expect.objectContaining({
           start: expect.objectContaining({ offset: schema.indexOf('@@searchIndex') }),
