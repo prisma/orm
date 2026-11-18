@@ -21,7 +21,7 @@ describe('a TypeScript contract module that defineConfig refuses', () => {
       });
       expect(result.ok ? 'emitted' : result.failure).toMatchObject({
         code: 'CONTRACT_SOURCE_INVALID',
-        summary: `The TypeScript contract "${contractPath}" was built for target "postgres", but this defineConfig is for target "mysql".`,
+        summary: `The TypeScript contract "${contractPath}" was built for target "postgres", but the config is for target "mysql".`,
         meta: {
           code: 'CONTRACT.TARGET_MISMATCH',
           contract: contractPath,

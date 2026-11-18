@@ -21,7 +21,7 @@ describe('a TypeScript contract built for another target', () => {
       });
       expect(result.ok ? 'emitted' : result.failure).toMatchObject({
         code: 'CONTRACT_SOURCE_INVALID',
-        summary: `The TypeScript contract "${contractPath}" was built for target "postgres", but this defineConfig is for target "sqlite".`,
+        summary: `The TypeScript contract "${contractPath}" was built for target "postgres", but the config is for target "sqlite".`,
         meta: {
           code: 'CONTRACT.TARGET_MISMATCH',
           contract: contractPath,

@@ -52,7 +52,7 @@ type ContractOrigin = Pick<ContractSourceProvider, 'format' | 'inputs'>;
 function describeContract({ format, inputs }: ContractOrigin): string {
   const kind = format === 'typescript' ? 'The TypeScript contract' : 'The contract';
   const path = inputs?.[0];
-  return path === undefined ? `${kind} passed to defineConfig` : `${kind} "${path}"`;
+  return path === undefined ? `${kind} in the config` : `${kind} "${path}"`;
 }
 
 function otherTargetGuidance(
@@ -88,7 +88,7 @@ function refuseOtherTarget(
   if (typeof actual !== 'string' || actual === configured) return;
   throw contractError(
     'CONTRACT.TARGET_MISMATCH',
-    `${describeContract(origin)} was built for target "${actual}", but this defineConfig is for target "${configured}".`,
+    `${describeContract(origin)} was built for target "${actual}", but the config is for target "${configured}".`,
     {
       ...otherTargetGuidance(origin, expected),
       meta: { ...ifDefined('contract', origin.inputs?.[0]), expected: configured, actual },

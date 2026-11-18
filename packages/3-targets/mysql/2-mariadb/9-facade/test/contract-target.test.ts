@@ -35,7 +35,7 @@ describe('a TypeScript contract built for another target', () => {
       await emitFailure(createMariadbControlClient(), defineConfig({ contract }).contract),
     ).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
-      summary: `The TypeScript contract "${contract}" was built for target "mysql", but this defineConfig is for target "mariadb".`,
+      summary: `The TypeScript contract "${contract}" was built for target "mysql", but the config is for target "mariadb".`,
       why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
       meta: {
         code: 'CONTRACT.TARGET_MISMATCH',
@@ -52,7 +52,7 @@ describe('a TypeScript contract built for another target', () => {
       await emitFailure(createMysqlControlClient(), mysqlDefineConfig({ contract }).contract),
     ).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
-      summary: `The TypeScript contract "${contract}" was built for target "mariadb", but this defineConfig is for target "mysql".`,
+      summary: `The TypeScript contract "${contract}" was built for target "mariadb", but the config is for target "mysql".`,
       why: "Its defineContract came from another target's contract-builder entry, so the contract carries that target's id and capabilities.",
       meta: {
         code: 'CONTRACT.TARGET_MISMATCH',

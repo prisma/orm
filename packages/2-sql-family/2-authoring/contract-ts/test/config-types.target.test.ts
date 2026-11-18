@@ -56,7 +56,7 @@ describe('typescriptContractFromPath with the target the config is for', () => {
         refused: {
           code: 'CONTRACT.TARGET_MISMATCH',
           message:
-            'The TypeScript contract "./contract.ts" was built for target "mysql", but this defineConfig is for target "postgres".',
+            'The TypeScript contract "./contract.ts" was built for target "mysql", but the config is for target "postgres".',
           fix: 'Import defineContract from @prisma/orm-postgres/contract-builder.',
           meta: { contract: './contract.ts', expected: 'postgres', actual: 'mysql' },
         },
@@ -151,7 +151,7 @@ describe('typescriptContractFromPath with the target the config is for', () => {
         refused: {
           code: 'CONTRACT.TARGET_MISMATCH',
           message:
-            'The TypeScript contract "./contract.ts" was built for target "mongo", but this defineConfig is for target "postgres".',
+            'The TypeScript contract "./contract.ts" was built for target "mongo", but the config is for target "postgres".',
           fix: 'Import defineContract from @prisma/orm-postgres/contract-builder.',
           meta: { contract: './contract.ts', expected: 'postgres', actual: 'mongo' },
         },

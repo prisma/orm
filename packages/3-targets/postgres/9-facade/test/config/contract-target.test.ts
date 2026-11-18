@@ -31,7 +31,7 @@ describe('a TypeScript contract built for another target', () => {
     const contractPath = resolve(import.meta.dirname, '../fixtures', 'mysql-target-contract.ts');
     expect(await emitThrough(contractPath)).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
-      summary: `The TypeScript contract "${contractPath}" was built for target "mysql", but this defineConfig is for target "postgres".`,
+      summary: `The TypeScript contract "${contractPath}" was built for target "mysql", but the config is for target "postgres".`,
       meta: {
         code: 'CONTRACT.TARGET_MISMATCH',
         contract: contractPath,
@@ -45,7 +45,7 @@ describe('a TypeScript contract built for another target', () => {
     expect(await emitThrough(typescriptContract(mysqlContract))).toMatchObject({
       code: 'CONTRACT_SOURCE_INVALID',
       summary:
-        'The TypeScript contract passed to defineConfig was built for target "mysql", but this defineConfig is for target "postgres".',
+        'The TypeScript contract in the config was built for target "mysql", but the config is for target "postgres".',
       meta: { code: 'CONTRACT.TARGET_MISMATCH', expected: 'postgres', actual: 'mysql' },
     });
   });
