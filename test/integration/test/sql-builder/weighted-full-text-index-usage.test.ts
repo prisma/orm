@@ -210,7 +210,7 @@ describe('weighted full-text index usage', { timeout: timeouts.databaseOperation
         .build(),
     );
 
-    expect(lowered.sql).toContain(`WHERE ${document} @@`);
+    expect(lowered.sql).toContain(`WHERE ${documentOf('documents')} @@`);
     const plan = await explain(lowered.sql, lowered.params);
     expect(indexNames(plan)).toContain(searchIndex.name);
   });

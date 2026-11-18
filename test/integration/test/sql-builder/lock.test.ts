@@ -15,7 +15,8 @@ describe('integration: Postgres accepts each row-locking clause the builder rend
     db()
       .public.users.select('id', 'name')
       .where((f, fns) => fns.eq(f.id, 1));
-  const aliceSql = 'SELECT "id" AS "id", "name" AS "name" FROM "public"."users" WHERE "id" = $1';
+  const aliceSql =
+    'SELECT "id" AS "id", "name" AS "name" FROM "public"."users" WHERE "users"."id" = $1';
 
   const lockedByThisTransaction = () =>
     db()
@@ -88,7 +89,7 @@ describe('integration: Postgres accepts each row-locking clause the builder rend
       .build();
 
     expect(lower(plan).sql).toBe(
-      'SELECT "id" AS "id", "title" AS "title" FROM "public"."posts" WHERE "views" > $1 ORDER BY "views" ASC LIMIT 1 FOR UPDATE SKIP LOCKED',
+      'SELECT "id" AS "id", "title" AS "title" FROM "public"."posts" WHERE "posts"."views" > $1 ORDER BY "views" ASC LIMIT 1 FOR UPDATE SKIP LOCKED',
     );
     expect(await inTransaction(plan)).toEqual([{ id: 2, title: 'Second Post' }]);
   });

@@ -3,16 +3,19 @@
 The one package a PostgreSQL application installs. It wires the framework, the SQL family, and the Postgres target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
 
 ```sh
-pnpm add @prisma/orm-postgres
+pnpm add @prisma/orm-postgres pg
+pnpm add -D @types/pg
 ```
 
 ```
 @prisma/orm-postgres
 ├── @prisma/orm-framework       contracts, components, runtime core
 ├── @prisma/orm-family-sql      SQL contract, lanes, ORM client, runtime
-├── @prisma/orm-target-postgres target descriptor + adapter + pg driver
+├── @prisma/orm-target-postgres target descriptor + adapter + driver
 └── @prisma/orm-toolchain       ORM command family for the `prisma` CLI, emitter, config loader
 ```
+
+`pg` and `@types/pg` are peer dependencies: the driver is the application's, so a `pg.Pool` the application creates and the `pg` types Prisma 8 declares come from one copy. Prisma 8 supports `pg` 8.22.0 and later within major version 8.
 
 `temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands and the Vite plugin, loads it as a fallback `Temporal` when the runtime has none, and a project that already installs it for its own code has one copy. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
 

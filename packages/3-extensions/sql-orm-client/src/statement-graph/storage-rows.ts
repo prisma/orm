@@ -14,6 +14,7 @@ import {
 } from '../collection-contract';
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
 import { mapModelDataToStorageRow } from '../collection-runtime';
+import { ormError } from '../orm-errors';
 import type { AliasedTable } from '../table-scope';
 import type { Model } from './model-statements';
 import type { BeforeWrite } from './nested-mutations';
@@ -232,6 +233,18 @@ export function mappedUpdateRow(
   data: ModelData,
 ): Record<string, unknown> {
   const { context, modelName, namespaceId } = collection;
+  const discriminator = resolvePolymorphismInfo(
+    context.contract,
+    namespaceId,
+    modelName,
+  )?.discriminatorField;
+  if (discriminator !== undefined && data[discriminator] !== undefined) {
+    throw ormError(
+      'ORM.FIELD_IMMUTABLE',
+      `Update data for model "${modelName}" cannot set its discriminator "${discriminator}"`,
+      { meta: { model: modelName, field: discriminator } },
+    );
+  }
   return mapModelDataToStorageRow(context.contract, namespaceId, modelName, data);
 }
 

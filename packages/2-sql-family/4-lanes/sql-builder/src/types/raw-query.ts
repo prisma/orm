@@ -1,4 +1,5 @@
 import type { ExtractCodecTypes } from '@internal/sql-contract/types';
+import type { CodecRef } from '@internal/sql-relational-core/ast';
 import type {
   Expression,
   NoReservedRowColumn,
@@ -33,6 +34,7 @@ export interface ContractColumnRef<
 > {
   readonly codecId: CodecId;
   readonly nullable: Nullable;
+  readonly codec?: CodecRef;
   readonly [columnOutput]?: Output;
 }
 

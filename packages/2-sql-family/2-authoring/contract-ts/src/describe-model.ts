@@ -136,7 +136,16 @@ function describeModelStorage(
         { meta: { tableName, modelName: model.modelName } },
       );
     }
-    return { kind: 'baseTable', modelName: model.modelName, namespaceId, tableName, columns };
+    return {
+      kind: 'baseTable',
+      modelName: model.modelName,
+      namespaceId,
+      tableName,
+      columns,
+      uniques: model.uniques ?? [],
+      indexes: model.indexes ?? [],
+      foreignKeys,
+    };
   }
   return {
     kind: 'ownTable',
