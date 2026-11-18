@@ -384,7 +384,7 @@ await db.transaction(async (tx) => {
 
 ## Workflow — Switch between Postgres, SQLite, and Mongo
 
-The concept: the façade selection is baked into `db.ts` (`@prisma/orm-postgres` or `@prisma/orm-mongo`) and `prisma.config.ts` (which target's `config` subpath `ormConfig` is imported from). To switch a project's target, re-run `prisma orm init` in the same directory and pick the other target — the init flow detects the existing scaffold and prompts to reinit (non-interactive runs grant the consent with `--confirm <directory name>`). PN re-scaffolds `prisma.config.ts` and `db.ts` for the new façade. The contract source needs to be re-authored for the new target's idioms (Mongo expresses nested documents; Postgres expresses relations).
+The concept: the façade selection is baked into `db.ts` (`@prisma/orm-postgres` or `@prisma/orm-mongo`) and `prisma.config.ts` (which target's `config` subpath `ormConfig` is imported from). To switch a project's target, re-run `prisma orm init` in the same directory and pick the other target — the init flow detects the existing scaffold and prompts to reinit (non-interactive runs grant the consent with `--confirm <directory name>`). Prisma 8 re-scaffolds `prisma.config.ts` and `db.ts` for the new façade. The contract source needs to be re-authored for the new target's idioms (Mongo expresses nested documents; Postgres expresses relations).
 
 After the switch (Mongo):
 

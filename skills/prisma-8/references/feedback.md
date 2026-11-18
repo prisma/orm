@@ -15,9 +15,9 @@ Canonical channels:
 ## When to Use
 
 - A capability-gap entry from another `prisma-8` skill fired and the user said *"yes, file the feature request"*.
-- User says *"this is a bug"*, *"file this"*, *"report this"*, *"file an issue against PN"*, *"send feedback"*, *"this should be a feature"*.
+- User says *"this is a bug"*, *"file this"*, *"report this"*, *"file an issue against Prisma 8"*, *"send feedback"*, *"this should be a feature"*.
 - User describes an unexpected behaviour — wrong exit code, error message that didn't match what happened, type signature that doesn't match runtime behaviour, planner refused a migration that looked safe — and wants it on the framework team's radar.
-- User asks *"can I ask the Prisma team about this?"*, *"is there somewhere I can talk to the team?"*, *"is this the intended way to do X?"*, *"how should I integrate <my extension / my tool> with PN?"*, or any other open-ended Q&A or design-feedback prompt — including extension authors asking integration questions.
+- User asks *"can I ask the Prisma team about this?"*, *"is there somewhere I can talk to the team?"*, *"is this the intended way to do X?"*, *"how should I integrate <my extension / my tool> with Prisma 8?"*, or any other open-ended Q&A or design-feedback prompt — including extension authors asking integration questions.
 
 ## When Not to Use
 
@@ -71,7 +71,7 @@ The user is filing a GitHub issue. Is it a bug or a feature request?
 
 **Feature request** if any of:
 
-- The user wants a capability that doesn't exist yet (most of the *What PN doesn't do yet* entries land here).
+- The user wants a capability that doesn't exist yet (most of the *What Prisma 8 doesn't do yet* entries land here).
 - The user wants a better error message, an additional CLI flag, a new middleware, an additional bundler plugin, etc.
 
 If both — a bug *and* the user wants a related feature — file two separate issues. Mixing them makes the framework team's triage harder.
@@ -98,7 +98,7 @@ For **bug reports**, additionally:
 For **feature requests**, additionally:
 
 - **Desired API or behaviour** — one paragraph. Concrete shape (CLI flag, config field, middleware export, plugin API) where possible.
-- **Where the gap surfaces today** — which skill's *What PN doesn't do yet* entry triggered the request, or the workflow the user was trying to complete.
+- **Where the gap surfaces today** — which skill's *What Prisma 8 doesn't do yet* entry triggered the request, or the workflow the user was trying to complete.
 - **Current workaround**, if any — one sentence (and the skill body the user is following may already say this).
 
 ### 4. Render the body
@@ -241,7 +241,7 @@ When step 1 picked the Discord channel (steps 2–7 do not apply):
 ## Checklist
 
 - [ ] Classified as bug or feature request (not both in one issue).
-- [ ] Environment block present: PN version, Node, package manager, OS.
+- [ ] Environment block present: Prisma 8 version, Node, package manager, OS.
 - [ ] Reproduction is minimal, public-safe, secret-free.
 - [ ] Schema fragments use original names where safe; renamed to neutral placeholders only where original names would leak confidential domain detail.
 - [ ] Title in conventional-commit form (`bug(area): …` / `feat(area): …`).

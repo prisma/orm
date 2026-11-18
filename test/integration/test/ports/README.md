@@ -16,7 +16,7 @@ A non-portable entry can go stale when Prisma 8 gains what it said was missing. 
 - **Not yet ported** — the test can now be expressed; the entry names the API that expresses it. It waits to be ported into bucket 1 or 2, and its line is then deleted.
 - **Needs re-examination** — the reason first given no longer holds, and whether the test can be expressed has not been settled. It waits for someone to port it or to write the reason that still holds.
 
-Both count as non-portable until they are moved, and the roll-up lists them separately.
+Both count as non-portable until they are moved. Their ledger lines in `projects/port-all-tests/checklists/` are unchecked, because the reason that justified the check no longer holds.
 
 The per-test ledger is the checklist corpus at [`projects/port-all-tests/checklists/`](../../../../projects/port-all-tests/checklists/README.md); the reviewer checks a box only once its disposition is verified.
 
@@ -61,7 +61,15 @@ Notes: Prisma 8 PSL lowercases table names (model `User` → table `user`) but k
 
 _Totals are finalised at project close-out. Live progress is tracked in the checklist corpus._
 
-| Corpus | Ported & passing | Ported & failing (`test.fails`) | Non-portable | of which: not yet ported | of which: needs re-examination |
-| --- | --- | --- | --- | --- | --- |
-| prisma/prisma | in progress | in progress | in progress | 27 | 6 |
-| prisma-engines | in progress | in progress | in progress | 0 | 0 |
+| Corpus | Ported & passing | Ported & failing (`test.fails`) | Non-portable |
+| --- | --- | --- | --- |
+| prisma/prisma | in progress | in progress | in progress |
+| prisma-engines | in progress | in progress | in progress |
+
+The non-portable entries carrying a status are not typed into this table, because every port or re-examination would make a typed number wrong. Count them from the records, one line per test, with:
+
+```bash
+grep -rhE '^- `.*— (Not yet ported|Needs re-examination)' test/integration/test/ports/{prisma,engines}/non-ported | grep -oE '— (Not yet ported|Needs re-examination)' | sort | uniq -c
+```
+
+The checklist ledger marks the same tests `- [ ] … → non-ported (not yet ported)` or `(needs re-examination)`; change the ledger line in the same commit as the record.

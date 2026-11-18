@@ -194,9 +194,27 @@ export function proseScopeFiles(scanDir) {
 }
 
 const INTERNAL_NAME = /@internal\/[A-Za-z0-9._/-]*[A-Za-z0-9_]/g;
-// A placeholder such as `@prisma/orm-<target>/runtime` or `@prisma/orm-family-*` names no entry.
-const PUBLISHED_NAME =
-  /@prisma\/orm-[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9][a-z0-9_-]*)*(?![-<*/\w])/g;
+const PUBLISHED_NAME = /@prisma\/orm-[^\s`'"()[\],;:]+/g;
+// A placeholder such as `@prisma/orm-<target>/runtime`, `@prisma/orm-family-*` or `{a,b}` names no
+// entry, and neither does a prefix such as `@prisma/orm-extension-` in code that tests for it.
+const PLACEHOLDER = /[<*{]|-$/;
+
+/**
+ * The published names a line mentions, each without a version (`@8.0.0`) or
+ * sentence punctuation. A name inside a URL path, such as
+ * `npmjs.com/package/@prisma/orm-postgres/v/8.0.0`, keeps only its package: the
+ * rest of the path is the site's, not an entry.
+ */
+export function publishedNamesOnLine(line) {
+  const names = [];
+  for (const match of line.matchAll(PUBLISHED_NAME)) {
+    let name = match[0].replace(/^(@prisma\/[^@/]+(?:\/[^@]*)?)@.*$/, '$1').replace(/[.!?]+$/, '');
+    if (PLACEHOLDER.test(name)) continue;
+    if (line[match.index - 1] === '/') name = name.split('/').slice(0, 2).join('/');
+    if (!names.includes(name)) names.push(name);
+  }
+  return names;
+}
 
 /** Every string a guide's `detection` blocks hold; a line repeating one of them is a pattern, not prose. */
 function detectionPatterns(content) {
@@ -232,11 +250,19 @@ export function publishedEntries(scanDir, packageName) {
   const manifest = join(scanDir, 'packages/9-public', packageName, 'package.json');
   if (!existsSync(manifest)) return undefined;
   const exports = JSON.parse(readFileSync(manifest, 'utf-8')).exports ?? {};
-  return new Set(
-    Object.keys(exports).map((key) =>
-      key === '.' ? packageName : `${packageName}/${key.slice(2)}`,
-    ),
-  );
+  const keys = typeof exports === 'string' ? ['.'] : Object.keys(exports);
+  const specifierOf = (key) => (key === '.' ? packageName : `${packageName}/${key.slice(2)}`);
+  const exact = new Set(keys.filter((key) => !key.includes('*')).map(specifierOf));
+  const wildcards = keys
+    .filter((key) => key.includes('*'))
+    .map((key) => {
+      const [before, after] = specifierOf(key).split('*');
+      return (specifier) =>
+        specifier.length > before.length + after.length &&
+        specifier.startsWith(before) &&
+        specifier.endsWith(after);
+    });
+  return { has: (specifier) => exact.has(specifier) || wildcards.some((fits) => fits(specifier)) };
 }
 
 /** One record per prose line naming an internal package or a published entry that does not exist. */
@@ -249,7 +275,7 @@ export function findProseNames(content, entriesOf) {
     const line = lines[i];
     if (i < frontmatterEnd && patterns.includes(asYamlScalar(line))) continue;
     const internal = [...new Set(line.match(INTERNAL_NAME) ?? [])];
-    const unpublished = [...new Set(line.match(PUBLISHED_NAME) ?? [])].filter((specifier) => {
+    const unpublished = publishedNamesOnLine(line).filter((specifier) => {
       const packageName = specifier.split('/').slice(0, 2).join('/');
       const entries = entriesOf(packageName);
       if (entries === undefined) return true;

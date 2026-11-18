@@ -17,7 +17,7 @@ A fresh Next.js project (`pnpm create next-app`) into which `prisma orm init` ha
 ## Expected agent behaviour
 
 - [ ] Skill matcher fires on `prisma-8-build` (description contains "next plugin", "next.js plugin", "withPrisma").
-- [ ] Agent surfaces the *What PN doesn't do yet* entry: no first-party Next.js plugin exists.
+- [ ] Agent surfaces the *What Prisma 8 doesn't do yet* entry: no first-party Next.js plugin exists.
 - [ ] Agent does NOT fabricate a Next.js package such as `@prisma/orm-next` (or any `@internal/*` name) or `withPrisma` — those packages / exports do not exist.
 - [ ] Agent recommends the workaround:
    1. Add a `prebuild` script to `package.json` running `prisma contract emit`.

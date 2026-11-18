@@ -27,7 +27,7 @@ The skill teaches *the system's mental model* — what a ref is, what a marker i
 
 ### Origin
 
-The **origin** is the database's *current contract hash*. The database carries a row in PN's marker table that records *"this database is at hash X"*. When the CLI runs online (a `--db <url>` is provided, or `db.connection` is set in `prisma.config.ts`), PN reads the marker and that hash is the origin. Offline (no DB connection), the origin is unknown — many commands degrade to listing the on-disk migrations and skip the per-edge applied/pending status.
+The **origin** is the database's *current contract hash*. The database carries a row in Prisma 8's marker table that records *"this database is at hash X"*. When the CLI runs online (a `--db <url>` is provided, or `db.connection` is set in `prisma.config.ts`), Prisma 8 reads the marker and that hash is the origin. Offline (no DB connection), the origin is unknown — many commands degrade to listing the on-disk migrations and skip the per-edge applied/pending status.
 
 A live DB is therefore the authoritative source of origin. The "recorded marker" in any other artifact (refs, local cache, your assumptions) is a working copy that can drift; the live DB never does.
 
@@ -113,7 +113,7 @@ Just `migration status --db $URL` for each environment's DB. The marker (origin)
 
 ## Concept — concurrent migrations on the same branch point
 
-This used to be called *diamond convergence* in some PN docs; the situation is the same regardless of the label.
+This used to be called *diamond convergence* in some Prisma 8 docs; the situation is the same regardless of the label.
 
 **What's happening.** Two topic branches each authored a migration off the same parent contract hash. The first branch merges to `main`; the destination ref (e.g. `production`) advances to that branch's `to` hash. Your branch's migration still has its `from` hash pointing at the *old* parent. The migration graph, after rebase, no longer has a clean path through your migration:
 

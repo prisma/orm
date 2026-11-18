@@ -12,7 +12,7 @@ The point: when the user asks about a feature Prisma 8 doesn't have yet, the age
 
 > Add a validation: email must contain '@'.
 
-- [ ] Agent names the gap: validations not first-class in PN.
+- [ ] Agent names the gap: validations not first-class in Prisma 8.
 - [ ] Agent suggests app-side validation with arktype or zod.
 - [ ] Agent routes to `prisma-8-feedback` for the feature request.
 

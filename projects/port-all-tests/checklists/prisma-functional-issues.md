@@ -76,9 +76,9 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 
 ### packages/client/tests/functional/issues/12003-order-by-self/tests.ts
 
-- [x] `findFirst` — orderBy across a self-relation works in findFirst [providers: all] → non-ported
-- [x] `findMany` — orderBy across a self-relation works in findMany [providers: all] → non-ported
-- [x] `aggregate` — orderBy across a self-relation works in aggregate [providers: all] → non-ported
+- [ ] `findFirst` — orderBy across a self-relation works in findFirst [providers: all] → non-ported (not yet ported)
+- [ ] `findMany` — orderBy across a self-relation works in findMany [providers: all] → non-ported (not yet ported)
+- [ ] `aggregate` — orderBy across a self-relation works in aggregate [providers: all] → non-ported (needs re-examination)
 
 ### packages/client/tests/functional/issues/12378/tests.ts
 
@@ -280,7 +280,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 
 ### packages/client/tests/functional/issues/21369-select-null/tests.ts
 
-- [x] `SELECT NULL works` — a raw `SELECT NULL` returns null correctly [providers: sql] → non-ported
+- [ ] `SELECT NULL works` — a raw `SELECT NULL` returns null correctly [providers: sql] → non-ported (not yet ported)
 
 ### packages/client/tests/functional/issues/21454-$type-in-json/tests.ts
 

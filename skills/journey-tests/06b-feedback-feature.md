@@ -23,11 +23,11 @@ Second prompt (after the user says yes to the route):
 ## Expected agent behaviour
 
 - [ ] On the first prompt, `prisma-8-contract` activates and does not confabulate a `@validates` PSL attribute.
-- [ ] On the routing offer, the agent surfaces the *What PN doesn't do yet* entry plus the offer to file via `prisma-8-feedback`.
+- [ ] On the routing offer, the agent surfaces the *What Prisma 8 doesn't do yet* entry plus the offer to file via `prisma-8-feedback`.
 - [ ] On the second prompt, `prisma-8-feedback` fires.
 - [ ] Agent classifies as **feature request** (not a bug).
 - [ ] Agent produces the body using the feature-request fields from `.github/ISSUE_TEMPLATE/feature_request.yml`: *What problem are you trying to solve?* / *Proposed solution* / *Alternatives considered* / *Scope and impact*.
-- [ ] *Alternatives considered* references back to `prisma-8-contract`'s *What PN doesn't do yet* entry on validations (arktype / zod workaround).
+- [ ] *Alternatives considered* references back to `prisma-8-contract`'s *What Prisma 8 doesn't do yet* entry on validations (arktype / zod workaround).
 - [ ] Title in `feat(area): summary` form, e.g. `feat(contract): first-class field-level validations in PSL`.
 - [ ] User is prompted for confirmation before submission.
 - [ ] On user confirmation, submitted via `gh issue create` or via the prefilled new-issue URL.
