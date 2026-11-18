@@ -26,7 +26,7 @@ const integerNumber = {
 } as const;
 
 /**
- * The explicit SQLite scalar types. An explicit type is named after the SQLite column type that stores it: `Text`, `Real` and `Blob`. `integer` is read as three kinds of value, so its types carry the value too: `IntegerNumber`, `IntegerBigInt` and `IntegerBoolean`. A type stored as `text` that holds a value with a form of its own is named after that value instead: `DecimalString`, `PlainJson` and the date and time types. PSL writes them as field types and the TypeScript builder calls them as `type.X()`. ADR 315, ADR 322.
+ * The explicit SQLite scalar types. An explicit type is named after the SQLite column type that stores it: `Text`, `Real` and `Blob`. `integer` is read by more than one codec of its data type, so those types carry the value too: `IntegerNumber` and `IntegerBigInt`. A type with a data type of its own, which a `text` column stores, is named after that data type, as ADR 315 and rule 7 of ADR 322 give it: `DecimalString`, `PlainJson` and the date and time types. `IntegerBoolean` is an exception that rule 7 records: `sqlite/boolean` is a data type of its own, which an `integer` column stores, and its name takes the form of the other `integer` types. PSL writes them as field types and the TypeScript builder calls them as `type.X()`. ADR 315, ADR 322.
  */
 export const sqliteExplicitScalarTypes = {
   IntegerNumber: integerNumber,
