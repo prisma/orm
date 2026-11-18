@@ -30,6 +30,7 @@ pnpm add @prisma/orm-mongo mongodb
 | `/bson` | BSON value helpers (`ObjectId`, `Decimal128`, …) |
 | `/target`, `/family` | the Mongo target pack and the Mongo family pack |
 | `/migration`, `/control` | migration planning and the control client |
+| `/init` | the init contribution `prisma orm init` writes a project from |
 
 A generated `contract.d.ts` imports every framework, family and target type it names from `/contract-types`, and a generated `migration.ts` imports from `/migration`: the modules this package's `defineConfig` sets as `contract.typesModule` and `migrations.module`. The facade also forwards the namespaces of the packages it is built from, so an application never has to depend on a package it did not install:
 

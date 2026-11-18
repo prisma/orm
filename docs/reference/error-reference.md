@@ -111,9 +111,17 @@ A file the command needs does not exist at the given path. Produced by several c
 
 Writing a file failed: currently raised when `contract format` cannot write the formatted PSL source back to disk (e.g. the file is not writable). The underlying failure is attached as `cause`. Payload: none.
 
+### CLI.INIT_AUTHORING_UNSUPPORTED
+
+`prisma orm init --authoring <mode>` names a way to write the contract that the target package's init contribution does not offer. Raised after the target package is installed and before any file is written. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `authoring`, `offered` (the modes the package lists).
+
 ### CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH
 
 During `prisma orm init`, `--authoring` and `--schema-path` disagree on file extension, for example `--authoring psl` with a schema path ending in `.ts`. Raised before any scaffold files are written, so the project tree stays untouched. Payload: `authoring`, `schemaPath`, `actualExtension`, `expectedExtension`.
+
+### CLI.INIT_CONTRIBUTION_UNAVAILABLE
+
+`prisma orm init` installed the target package, but the package has no `init` entrypoint (`reason: no-entrypoint`), or the default export of `<package>/init` is not an init contribution (`reason: invalid-shape`, with what is wrong in `why`). The package stays installed and no file is written. The fix is to write `prisma.config.ts` by hand, importing `defineConfig` from the package. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `reason`.
 
 ### CLI.INIT_EMIT_FAILED
 
@@ -125,7 +133,7 @@ During `prisma orm init`, the `prisma contract emit` step failed after a success
 
 ### CLI.INIT_INSTALL_FAILED
 
-During `prisma orm init`, dependency installation failed. On a normal run the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. On the Prisma 7 path the first install runs before anything is written, to check that the target package can read the schema; when that install fails, `filesWritten` is empty and the next action is to run `orm init` again once the dependencies install. `orm init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
+During `prisma orm init`, dependency installation failed. The first install, of the target package and `dotenv`, runs before anything is written, because init writes the project from the target package; when that install fails, `filesWritten` is empty and the next action is to run `orm init` again once the dependencies install. When a later install fails, the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. `orm init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
 
 ### CLI.INIT_INVALID_FLAG_VALUE
 
@@ -173,7 +181,7 @@ On the Prisma 7 path of `prisma orm init`, the target package's Prisma 7 contrac
 
 ### CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE
 
-On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or it could not be loaded from the project after init installed it (`reason: not-resolvable`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without `prisma7Schema` is not an error: init warns and runs as a fresh init. Nothing is written apart from the target package and `dotenv` the check installed, and the next actions give the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `packagesAdded` (the packages the project did not declare before the check).
+On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export, or its init contribution has no `prisma7ConfigFile`, while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or the config module its contribution names could not be loaded from the project (`reason: not-resolvable`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without a Prisma 7 source is not an error: init warns and runs as a fresh init. Nothing is written apart from the target package and `dotenv` the check installed, and the next actions give the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `packagesAdded` (the packages the project did not declare before the check).
 
 ### CLI.INIT_PRISMA7_TARGET_MISMATCH
 
@@ -196,6 +204,10 @@ Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skil
 ### CLI.INIT_STRICT_PROBE_WITHOUT_PROBE
 
 `prisma orm init --strict-probe` was supplied without `--probe-db`. Init is offline-by-default, so no probe runs without `--probe-db`; rather than silently ignoring the strict flag, init errors and tells the user to add `--probe-db` or drop `--strict-probe`. Maps to init exit code 2 (PRECONDITION). Payload: none.
+
+### CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED
+
+`prisma orm init --skip-install` ran in a project that does not have the target package installed. Init writes every file from the package's init contribution and `--skip-install` forbids installing it, so init stops before changing anything. The next action names the install command, for example `pnpm add @prisma/orm-postgres`. Maps to init exit code 2 (PRECONDITION). Payload: `packageName`, `installCommand`.
 
 ### CLI.INIT_USER_ABORTED
 

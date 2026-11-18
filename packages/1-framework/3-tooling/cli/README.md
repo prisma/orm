@@ -111,7 +111,17 @@ The other commands print no data lines and declare why with `noDataLines(reason)
 
 ### `prisma orm init`
 
-Sets a project up for Prisma ORM 8: writes `prisma.config.ts`, a starter schema (PSL or TypeScript), `src/prisma/db.ts`, `prisma-8.md`, and `.env.example`; merges `tsconfig.json`, `.gitignore`, `.gitattributes`, and `package.json`; installs the target package, the driver it declares as a peer dependency (`mongodb` for MongoDB), `dotenv`, and `prisma@latest`; then runs `prisma contract emit`. Interactively it asks for the target, the authoring style, and the schema path; `--target` and `--authoring` make it scriptable.
+Sets a project up for Prisma ORM 8: writes `prisma.config.ts`, a starter schema (PSL or TypeScript), `src/prisma/db.ts`, `prisma-8.md`, and `.env.example`; merges `tsconfig.json`, `.gitignore`, `.gitattributes`, and `package.json`; installs the target package, the driver packages it names, `dotenv`, and `prisma@latest`; then runs `prisma contract emit`. Interactively it asks for the target, the authoring style, and the schema path; `--target` and `--authoring` make it scriptable.
+
+**Where the files come from.** The target package writes them. It exports an *init contribution* as the default export of its `init` entrypoint (`@prisma/orm-postgres/init`, `@prisma/orm-mongo/init`): the starter contract for each authoring mode, `db.ts`, the `.env.example` body, the quick reference and README, the driver packages to install, the minimum server version, the `--probe-db` probe, and, for a package that reads Prisma 7 schemas, the Prisma 7 config and quick reference. The type is `InitContribution` from `@prisma/orm-toolchain/cli/init-contribution` (`@internal/cli/init-contribution` in this repository). The entrypoint may import framework types but no framework code that runs, because the CLI that loads it can be a different installed copy of the framework. The CLI keeps what is the same for every target: which files exist and where, `prisma.config.ts` around the contribution's `configModule`, `tsconfig.json`, the git files, the `package.json` scripts, the questions and the output. It names no target except in [`src/commands/init/target-packages.ts`](src/commands/init/target-packages.ts), the list of target packages Prisma vouches for. Each entry holds names only: the short name and aliases `--target` takes, the package, the label the picker shows before anything is installed, and the provider an earlier Prisma's schema names.
+
+**The order of a run.** Init resolves the target package (from `--target`, the picker, or a Prisma 7 schema's provider), installs it with `dotenv`, and loads `<package>/init` as the project resolves it, checking the default export's shape. Then it asks the remaining questions (the authoring mode, offered as the package lists them, the schema path, and consent to replace files), writes the files, installs the driver packages and the CLI, emits, and probes the server when asked. Nothing is asked between naming the target and installing it.
+
+- `--skip-install`: the target package must already be installed. If it is not, init stops before changing anything with `CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED`, naming the install command.
+- The install of the target package fails: init stops with no file written and completes at exit 4 with `CLI.INIT_INSTALL_FAILED` as a finding.
+- The package has no `init` entrypoint, or its default export is not an init contribution: `CLI.INIT_CONTRIBUTION_UNAVAILABLE`, with the package installed and no file written. The fix is to write `prisma.config.ts` by hand.
+- `--authoring` names a mode the package does not offer: `CLI.INIT_AUTHORING_UNSUPPORTED`, naming the modes it offers. A package that offers one mode gets it without the question.
+- `--probe-db` and the package has no probe: a warning that it cannot check the server; with `--strict-probe` it is `CLI.INIT_PROBE_FAILED`.
 
 **Canonical command:**
 ```bash
@@ -129,12 +139,11 @@ A no, `--yes`, or a session that cannot ask runs init as today.
 
 The target comes from the schema's `datasource` provider: `postgresql` or `mongodb`. `--target` may only agree with it, or name the database when the provider is not a string literal. With `--from-prisma7-schema`, a mismatch fails with `CLI.INIT_PRISMA7_TARGET_MISMATCH`, and a provider with no target with `CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`, before anything is asked or installed. Without the flag, init does not ask its Prisma 7 question when the target cannot be resolved this way, and runs as a fresh init.
 
-Before any consent question or file change, init checks that Prisma 8 can read the schema. It installs the target package and `dotenv`, loads the package's `/config` entrypoint from the project, and runs its `prisma7Schema` source in memory. The CLI carries no target code, so the installed package is the only one that can answer. Outcomes:
+Before any consent question or file change, init checks that Prisma 8 can read the schema. With the target package installed and its contribution loaded, it loads the contribution's `configModule` from the project and runs its `prisma7Schema` source in memory. The CLI carries no target code, so the installed package is the only one that can answer. A contribution with no `prisma7ConfigFile` cannot take a Prisma 7 schema. Outcomes:
 
 - The source reads the schema: init continues.
 - The source refuses the schema, for example a `view` block: `CLI.INIT_PRISMA7_SCHEMA_REFUSED` with the source's diagnostics. The project is unchanged apart from the two packages, and the error gives the command that removes them.
-- The package has no `prisma7Schema`: after a yes to the question, init warns before its next question and runs as a fresh init for that target; the warning says when that replaces the Prisma 7 `prisma.config.ts` (after asking) and the Prisma 7 CLI. With `--from-prisma7-schema` it stops with `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`.
-- `--skip-install` and the package is not installed: init warns that it could not check and continues.
+- The package has no `prisma7Schema` or no `prisma7ConfigFile`: after a yes to the question, init warns before its next question and runs as a fresh init for that target; the warning says when that replaces the Prisma 7 `prisma.config.ts` (after asking) and the Prisma 7 CLI. With `--from-prisma7-schema` it stops with `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`.
 
 The second question is the consent token; `--confirm <dir>` answers it non-interactively. Under it init:
 
@@ -144,7 +153,7 @@ The second question is the consent token; `--confirm <dir>` answers it non-inter
 
 It then writes `prisma.config.ts` with `contract: prisma7Schema("<schema path>")` and `output: "src/prisma"`, `src/prisma/db.ts`, and a `prisma-8.md` that describes the transition loop; no starter schema is written and `prisma/` stays byte-identical. The next steps are the transition routine: set `DATABASE_URL`, `prisma db sign`, move routes one at a time, and re-run `prisma contract emit` then `prisma db sign` after each `prisma7 migrate dev`.
 
-**On a Prisma 6 MongoDB project.** A schema whose `datasource` says `provider = "mongodb"` is a Prisma 6 schema, since Prisma 7 has no MongoDB support. When init finds one where it looks for a Prisma 7 schema, or at the path `--from-prisma7-schema` names, it stops with `CLI.INIT_PRISMA6_SCHEMA_FOUND` before asking, installing, or writing anything, and never suggests the Prisma 7 path. Its next actions are the side-by-side setup the Mongo package documents: the Prisma 6 CLI moves to an npm alias with a `prisma6` script and its own `prisma6.config.ts` (both CLIs are published as `prisma`, and the Prisma 6 CLI reads `prisma.config.ts`), Prisma 8 is installed, and `prisma.config.ts` reads the schema through `prisma6Schema`. Init does not make these edits itself. With `--target` and `--authoring`, init sets up a starter in the same project and warns that this breaks the Prisma 6 CLI: the `prisma.config.ts` it writes makes every Prisma 6 command fail until Prisma 6 gets its own config file, and its install step replaces the Prisma 6 CLI with `prisma@latest`.
+**On a Prisma 6 MongoDB project.** A schema whose `datasource` says `provider = "mongodb"` is a Prisma 6 schema, since Prisma 7 has no MongoDB support. The list of known target packages records which providers only Prisma 6 wrote, and the driver packages the printed setup installs, since nothing is installed on this path. When init finds one where it looks for a Prisma 7 schema, or at the path `--from-prisma7-schema` names, it stops with `CLI.INIT_PRISMA6_SCHEMA_FOUND` before asking, installing, or writing anything, and never suggests the Prisma 7 path. Its next actions are the side-by-side setup the Mongo package documents: the Prisma 6 CLI moves to an npm alias with a `prisma6` script and its own `prisma6.config.ts` (both CLIs are published as `prisma`, and the Prisma 6 CLI reads `prisma.config.ts`), Prisma 8 is installed, and `prisma.config.ts` reads the schema through `prisma6Schema`. Init does not make these edits itself. With `--target` and `--authoring`, init sets up a starter in the same project and warns that this breaks the Prisma 6 CLI: the `prisma.config.ts` it writes makes every Prisma 6 command fail until Prisma 6 gets its own config file, and its install step replaces the Prisma 6 CLI with `prisma@latest`.
 
 **Design constraints on the Prisma 7 path:**
 
@@ -157,9 +166,9 @@ It then writes `prisma.config.ts` with `contract: prisma7Schema("<schema path>")
 
 **Exit codes:**
 - `0`: set up (and, unless skipped, installed and emitted)
-- `2`: precondition — an invalid flag, a refusal on the Prisma 7 path (`CLI.INIT_FLAG_CONFLICT`, `CLI.INIT_PRISMA7_SCHEMA_INVALID`, `CLI.INIT_PRISMA7_CONFIG_COLLISION`, `CLI.INIT_PRISMA7_CONFIG_UNREADABLE`, `CLI.INIT_PRISMA7_TARGET_MISMATCH`, `CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`, `CLI.INIT_PRISMA7_SCHEMA_REFUSED`, `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`), a consent not granted, or a write that failed; nothing is written before a refusal, and the schema check's install is the only change before one
+- `2`: precondition — an invalid flag, a target package that is not installed under `--skip-install`, has no init contribution, or does not offer the authoring mode (`CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED`, `CLI.INIT_CONTRIBUTION_UNAVAILABLE`, `CLI.INIT_AUTHORING_UNSUPPORTED`), a refusal on the Prisma 7 path (`CLI.INIT_FLAG_CONFLICT`, `CLI.INIT_PRISMA7_SCHEMA_INVALID`, `CLI.INIT_PRISMA7_CONFIG_COLLISION`, `CLI.INIT_PRISMA7_CONFIG_UNREADABLE`, `CLI.INIT_PRISMA7_TARGET_MISMATCH`, `CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`, `CLI.INIT_PRISMA7_SCHEMA_REFUSED`, `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`), a consent not granted, or a write that failed; nothing is written before a refusal, and the install of the target package is the only change before one
 - `3`: an interactive prompt was cancelled
-- `4`: dependency install failed; on the Prisma 7 path this can be the install before the schema check, in which case nothing is written
+- `4`: dependency install failed; when it is the first install, of the target package, nothing is written
 - `5`: scaffold written and installed; contract emit failed
 
 **`--json`:** the success document names every file written, deleted, or renamed, every package installed, and the next steps. On the Prisma 7 path `authoring` is `prisma7`, `schemaPath` is the Prisma 7 schema, and `prisma7` records the adoption; on a normal run `filesRenamed` is `[]` and `prisma7` is `null`.
@@ -1615,6 +1624,7 @@ The CLI package exports several subpaths for different use cases:
 - **`@internal/cli`** (main export): Exports `loadContractFromTs`, and `runOrmBin`, which runs the CLI as the process's `prisma` command; `src/bin.ts` and the workspace bin in `test/prisma-bin` call it
 - **`@internal/cli/config-types`**: Exports `defineConfig` and config types
 - **`@internal/cli/control-api`**: Exports `createControlClient` and control API types
+- **`@internal/cli/init-contribution`**: Exports, as types only, `InitContribution` and the inputs its members take: what a target package's `init` entrypoint default-exports for `prisma orm init`. Published as `@prisma/orm-toolchain/cli/init-contribution`
 - **`@internal/cli/commands/db-init`**: Exports `createDbInitCommand`
 - **`@internal/cli/commands/db-update`**: Exports `createDbUpdateCommand`
 - **`@internal/cli/commands/db-schema`**: Exports `createDbSchemaCommand`

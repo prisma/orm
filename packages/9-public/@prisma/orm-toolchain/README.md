@@ -9,6 +9,7 @@ Applications get it as an exact-pinned dependency of their database facade (`@pr
 | Namespace | Surface |
 | --- | --- |
 | `/cli` | The `orm` command family (`ormCommandFamily`, `ormConfigSection`) and CLI programmatic surface |
+| `/cli/init-contribution` | the `InitContribution` type a target package's `init` entrypoint exports |
 | `/emitter` | contract emitter |
 | `/config-loader` | `prisma.config.ts` loading |
 | `/language-server` | PSL language server |
