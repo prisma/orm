@@ -5,9 +5,9 @@
  *
  * E4 and E5 have a required `status`. In E4 no row holds the value, and `--delete` removes it. In E5 rows hold it: the question offers the rename first, `--delete` fails at apply with `MIGRATION.PRECHECK_FAILED` saying how to keep the rows and changes nothing, and `--rename` applies.
  *
- * E10 swaps the stored values of `ACTIVE` and `ARCHIVED`: both are asked about, and the printed edits swap the data through a temporary value.
- *
  * E1 renames the value with `--rename Status.ARCHIVED:Status.RETIRED` through `migration plan` and `migrate`: the rows and lists that held `archived` hold `retired`. E2 deletes the value through `db update`: refused until `--delete Status.ARCHIVED` answers, then the rows hold NULL and the lists lose it. E3 renames only the member, keeping its stored value, through `db update`: nothing is planned and the statement is reported as applied.
+ *
+ * A member that keeps its name while its stored value changes is in `enum-stored-values.e2e.test.ts`.
  *
  * Every journey ends with `db verify --schema-only` clean and a further plan empty, and the `migration.ts` written is run again and reproduces its `ops.json` and `migration.json` byte for byte.
  */
@@ -57,30 +57,6 @@ const FROM_PSL = contractWith('  ARCHIVED = "archived"\n');
 const RENAMED_PSL = contractWith('  RETIRED = "retired"\n');
 const REMOVED_PSL = contractWith('');
 const MEMBER_RENAMED_PSL = contractWith('  RETIRED = "archived"\n');
-
-function twoTablesWith(archived: string): string {
-  return `// use prisma-8
-
-enum Status {
-  @@type("pg/text@1")
-  ACTIVE = "active"
-  ARCHIVED = "${archived}"
-}
-
-model Task {
-  id     Int      @id
-  status Status?
-  tags   Status[]
-  @@map("task")
-}
-
-model Note {
-  id    Int     @id
-  state Status?
-  @@map("note")
-}
-`;
-}
 
 function requiredContractWith(members: string): string {
   return contractWith(members).replace('status Status?', 'status Status ');
@@ -598,145 +574,6 @@ withTempDir(({ createTempDir }) => {
           { id: 2, status: 'active', tags: [] },
         ]);
         await expectSettled(ctx, 'migrate', latestMigrationDirName(ctx), 'E8.09');
-      },
-      timeouts.spinUpPpgDev,
-    );
-  });
-
-  describe('E9: keep the data of a member that keeps its name with a new stored value, as the question advises', () => {
-    const db = useDevDatabase();
-
-    it(
-      'rewrites the value in every column the enum types, two tables and a list, when the advice is followed as printed',
-      async () => {
-        const ctx = setupJourney({
-          connectionString: db.connectionString,
-          createTempDir,
-          contractMode: 'psl',
-        });
-        await emit(ctx, twoTablesWith('archived'), 'E9.01');
-        const initial = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
-        expect(initial.exitCode, `E9.02: plan initial: ${initial.stderr}`).toBe(0);
-        expect((await runMigrate(ctx)).exitCode, 'E9.02: migrate initial').toBe(0);
-        const origin = latestMigrationDirName(ctx);
-        await sql(
-          db.connectionString,
-          `INSERT INTO "task" (id, status, tags) VALUES (1, 'archived', '{archived,active}'), (2, 'active', '{}');
-           INSERT INTO "note" (id, state) VALUES (1, 'archived')`,
-        );
-        await emit(ctx, twoTablesWith('old'), 'E9.03');
-
-        const asked = await runMigrationPlan(ctx, ['--from', origin, '--json']);
-        expect(engineError(asked)?.code, 'E9.04: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
-        expect(
-          String(engineError(asked)?.why),
-          'E9.04: the question lists every column, one per line',
-        ).toBe(
-          'These operations would lose enum value "Status.ARCHIVED" from the data that holds it:\n- Remove value "archived" from column "state" of "note"\n- Remove value "archived" from column "status" of "task"\n- Remove value "archived" from column "tags" of "task"',
-        );
-        const question = nextActionLabels(asked)[0] ?? '';
-        expect(question, 'E9.04: the way that keeps the data comes first').toContain(
-          'To keep that data, answer with --delete Status.ARCHIVED, then in the migration.ts this command writes replace',
-        );
-        expect(question, 'E9.04: names the command that runs the file').toContain(
-          'run `node <migration directory>/migration.ts` for the directory it writes',
-        );
-        expect(
-          question.match(/replace this\.removeStoredValue/g),
-          'E9.04: one edit per column',
-        ).toHaveLength(3);
-
-        const plan = await runMigrationPlan(ctx, [
-          '--name',
-          'keep',
-          '--from',
-          origin,
-          '--delete',
-          'Status.ARCHIVED',
-        ]);
-        expect(plan.exitCode, `E9.05: plan: ${plan.stderr}`).toBe(0);
-        const dirName = latestMigrationDirName(ctx);
-        const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
-        writeFileSync(file, followEdits(readFileSync(file, 'utf-8'), question));
-        const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
-        expect(reEmit.exitCode, `E9.06: node migration.ts: ${reEmit.stderr}`).toBe(0);
-        const migrate = await runMigrate(ctx);
-        expect(migrate.exitCode, `E9.07: migrate: ${migrate.stderr}`).toBe(0);
-
-        expect(await tasks(db.connectionString)).toEqual([
-          { id: 1, status: 'old', tags: ['old', 'active'] },
-          { id: 2, status: 'active', tags: [] },
-        ]);
-        expect(
-          (await sql(db.connectionString, 'SELECT id, state FROM "note" ORDER BY id')).rows,
-        ).toEqual([{ id: 1, state: 'old' }]);
-        await expectSettled(ctx, 'migrate', dirName, 'E9.08');
-      },
-      timeouts.spinUpPpgDev,
-    );
-  });
-
-  describe('E10: keep the data of two members that swap stored values, as the question advises', () => {
-    const db = useDevDatabase();
-
-    it(
-      'asks about both members and swaps the values in every column through a temporary value',
-      async () => {
-        const ctx = setupJourney({
-          connectionString: db.connectionString,
-          createTempDir,
-          contractMode: 'psl',
-        });
-        await emit(ctx, twoTablesWith('archived'), 'E10.01');
-        const initial = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
-        expect(initial.exitCode, `E10.02: plan initial: ${initial.stderr}`).toBe(0);
-        expect((await runMigrate(ctx)).exitCode, 'E10.02: migrate initial').toBe(0);
-        const origin = latestMigrationDirName(ctx);
-        await sql(
-          db.connectionString,
-          `INSERT INTO "task" (id, status, tags) VALUES (1, 'archived', '{archived,active}'), (2, 'active', '{}');
-           INSERT INTO "note" (id, state) VALUES (1, 'active')`,
-        );
-        await emit(
-          ctx,
-          twoTablesWith('active').replace('ACTIVE = "active"', 'ACTIVE = "archived"'),
-          'E10.03',
-        );
-
-        const asked = await runMigrationPlan(ctx, ['--from', origin, '--json']);
-        expect(engineError(asked)?.code, 'E10.04: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
-        const why = String(engineError(asked)?.why);
-        expect(why, 'E10.04: asks about both members').toContain('"Status.ACTIVE"');
-        expect(why, 'E10.04: asks about both members').toContain('"Status.ARCHIVED"');
-        const question = nextActionLabels(asked).join('\n');
-
-        const plan = await runMigrationPlan(ctx, [
-          '--name',
-          'swap',
-          '--from',
-          origin,
-          '--delete',
-          'Status.ACTIVE',
-          '--delete',
-          'Status.ARCHIVED',
-        ]);
-        expect(plan.exitCode, `E10.05: plan: ${plan.stderr}`).toBe(0);
-        const dirName = latestMigrationDirName(ctx);
-        const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
-        writeFileSync(file, followEdits(readFileSync(file, 'utf-8'), question));
-        const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
-        expect(reEmit.exitCode, `E10.06: node migration.ts: ${reEmit.stderr}`).toBe(0);
-        const migrate = await runMigrate(ctx);
-        expect(migrate.exitCode, `E10.07: migrate: ${migrate.stderr}`).toBe(0);
-
-        expect(await tasks(db.connectionString)).toEqual([
-          { id: 1, status: 'active', tags: ['active', 'archived'] },
-          { id: 2, status: 'archived', tags: [] },
-        ]);
-        expect(
-          (await sql(db.connectionString, 'SELECT id, state FROM "note" ORDER BY id')).rows,
-        ).toEqual([{ id: 1, state: 'archived' }]);
-        await expectSettled(ctx, 'migrate', dirName, 'E10.08');
       },
       timeouts.spinUpPpgDev,
     );

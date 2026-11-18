@@ -249,7 +249,7 @@ export function dump(label: string, value: unknown): void {
 export interface ExpectedConflict {
   readonly summary: string;
   readonly why: string;
-  readonly location: Readonly<Record<string, string>>;
+  readonly location?: Readonly<Record<string, string>>;
 }
 
 /** The whole error of a plan refused for a conflict of kind `unsupportedOperation`, which carries no statement. */
