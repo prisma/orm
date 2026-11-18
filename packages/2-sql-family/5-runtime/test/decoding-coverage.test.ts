@@ -7,7 +7,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it } from 'vitest';
-import { buildDecodeContext, decodeRow } from '../src/codecs/decoding';
+import { buildDecodeContext, decodeRow, sqlNativeArrayListDecoder } from '../src/codecs/decoding';
 import { defineTestCodec } from './test-codec';
 import { buildTestContractCodecs } from './utils';
 
@@ -34,9 +34,8 @@ describe('decodeRow — many-typed column validation', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/passthrough@1',
-        targetTypes: ['text'],
-        encode: (v: string) => v,
-        decode: (v: unknown) => String(v),
+        toWire: (v: string) => v,
+        fromWire: (v: unknown) => String(v),
       }),
     ];
 
@@ -45,6 +44,7 @@ describe('decodeRow — many-typed column validation', () => {
         { tags: 'not-an-array' },
         buildDecodeContext(ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
@@ -68,26 +68,46 @@ describe('decodeRow — include aggregate (JSON) columns', () => {
 
   it('returns [] for a null include aggregate wire value', async () => {
     const ast = buildIncludePlan().ast;
-    const result = await decodeRow({ posts: null }, buildDecodeContext(ast, undefined), {});
+    const result = await decodeRow(
+      { posts: null },
+      buildDecodeContext(ast, undefined),
+      {},
+      sqlNativeArrayListDecoder,
+    );
     expect(result).toEqual({ posts: [] });
   });
 
   it('parses a JSON string wire value for an include aggregate', async () => {
     const ast = buildIncludePlan().ast;
-    const result = await decodeRow({ posts: '[{"id":1}]' }, buildDecodeContext(ast, undefined), {});
+    const result = await decodeRow(
+      { posts: '[{"id":1}]' },
+      buildDecodeContext(ast, undefined),
+      {},
+      sqlNativeArrayListDecoder,
+    );
     expect(result).toEqual({ posts: [{ id: 1 }] });
   });
 
   it('passes through an already-parsed object wire value unchanged', async () => {
     const ast = buildIncludePlan().ast;
-    const result = await decodeRow({ posts: { count: 5 } }, buildDecodeContext(ast, undefined), {});
+    const result = await decodeRow(
+      { posts: { count: 5 } },
+      buildDecodeContext(ast, undefined),
+      {},
+      sqlNativeArrayListDecoder,
+    );
     expect(result).toEqual({ posts: { count: 5 } });
   });
 
   it('throws RUNTIME.DECODE_FAILED when the JSON string is malformed', async () => {
     const ast = buildIncludePlan().ast;
     await expect(
-      decodeRow({ posts: '{not valid json' }, buildDecodeContext(ast, undefined), {}),
+      decodeRow(
+        { posts: '{not valid json' },
+        buildDecodeContext(ast, undefined),
+        {},
+        sqlNativeArrayListDecoder,
+      ),
     ).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message: expect.stringContaining("Failed to parse JSON array for include alias 'posts'"),
@@ -96,7 +116,12 @@ describe('decodeRow — include aggregate (JSON) columns', () => {
 
   it('coerces a non-string, non-object wire value via String() before parsing', async () => {
     const ast = buildIncludePlan().ast;
-    const result = await decodeRow({ posts: 42 }, buildDecodeContext(ast, undefined), {});
+    const result = await decodeRow(
+      { posts: 42 },
+      buildDecodeContext(ast, undefined),
+      {},
+      sqlNativeArrayListDecoder,
+    );
     expect(result).toEqual({ posts: 42 });
   });
 });
@@ -121,9 +146,8 @@ describe('buildDecodeContext — raw-query row spec', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/int@1',
-        targetTypes: ['int4'],
-        encode: (v: number) => v,
-        decode: (v: unknown) => Number(v),
+        toWire: (v: number) => v,
+        fromWire: (v: unknown) => Number(v),
       }),
     ];
     const ast = {
@@ -158,9 +182,8 @@ describe('decodeRow — wire preview truncation', () => {
     const registry = [
       defineTestCodec({
         typeId: 'test/broken@1',
-        targetTypes: ['text'],
-        encode: (v: string) => v,
-        decode: () => {
+        toWire: (v: string) => v,
+        fromWire: () => {
           throw new Error('boom');
         },
       }),
@@ -171,6 +194,7 @@ describe('decodeRow — wire preview truncation', () => {
         { value: longValue },
         buildDecodeContext(ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toMatchObject({
       details: expect.objectContaining({
@@ -188,16 +212,20 @@ describe('decodeRow — decode failures without a resolvable column ref', () => 
     const registry = [
       defineTestCodec({
         typeId: 'test/broken@1',
-        targetTypes: ['int4'],
-        encode: (v: number) => v,
-        decode: () => {
+        toWire: (v: number) => v,
+        fromWire: () => {
           throw new Error('boom');
         },
       }),
     ];
 
     await expect(
-      decodeRow({ total: '5' }, buildDecodeContext(ast, buildTestContractCodecs(registry)), {}),
+      decodeRow(
+        { total: '5' },
+        buildDecodeContext(ast, buildTestContractCodecs(registry)),
+        {},
+        sqlNativeArrayListDecoder,
+      ),
     ).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       details: expect.objectContaining({ alias: 'total' }),
