@@ -119,9 +119,9 @@ Write the entries under the fixed section order from [`docs/releases/README.md`]
 1. **Breaking changes** — API removals/renames, semantic changes to existing APIs, contract-format changes. Say what the reader must *do*, not just what changed.
 2. **Features** — new capabilities.
 3. **Fixes** — bug fixes.
-4. **New contributors** — first-time contributors, with the PR that welcomed them.
+4. **Contributors** — every outside contributor whose PR merged in the range, with their PRs (step 8).
 
-Breaking changes lead because they are what a reader scanning the notes most needs to see. Every line links its PR as an **absolute markdown link** — `[#NNN](https://github.com/prisma/orm/pull/NNN)`, never bare `#NNN`. Bare references only autolink inside the GitHub Release body; they render as plain text when the committed `docs/releases/v<version>.md` is read as a repo file or in PR review, so the explicit link form is what makes every reference work in every context.
+Breaking changes lead because they are what a reader scanning the notes most needs to see. Every entry links its PR as an **absolute markdown link** — `[#NNN](https://github.com/prisma/orm/pull/NNN)`, never bare `#NNN`. Bare references only autolink inside the GitHub Release body; they render as plain text when the committed `docs/releases/v<version>.md` is read as a repo file or in PR review, so the explicit link form is what makes every reference work in every context.
 
 ### 6. Anchor breaking-change entries to their migration recipe
 
@@ -168,13 +168,26 @@ The format is the prose bullet, then the nested example:
 
 ### 8. Attribute contributors
 
-Preserve the "New contributors" credit that `--generate-notes` gave for free. Each first-time contributor gets a line naming the PR that welcomed them, with both the handle and the PR as absolute links:
+Every outside contributor is thanked by name, in two places.
+
+**On each entry.** An entry whose PR an outside contributor wrote ends with the thanks inside its parentheses:
 
 ```md
-- [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/orm/pull/<pr>)
+- <what changed>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>), thanks @<handle>)
 ```
 
-Resolve first-time status from PR author metadata (e.g. `gh api` `author_association` of `FIRST_TIME_CONTRIBUTOR` / `FIRST_TIMER`, or by checking whether the author appears in the range before this PR).
+**In the Contributors section.** List every outside contributor whose PR merged in the range, **including PRs step 4 excluded** (tests, docs, refactors): their work counts even when users do not see it. Give their PRs in GitHub's short form, and mark first-time contributors:
+
+```md
+## Contributors
+
+Thank you to everyone outside the team whose work is in this release:
+
+- @<handle>: #<pr>, #<pr>
+- @<handle> made their first contribution: #<pr>
+```
+
+An outside contributor is the author of a PR from a fork (`isCrossRepository`) who is not a member of the `prisma` organization and not a bot such as Dependabot. When a maintainer finished a contributor's PR on their branch, the contributor is still its author. Resolve first-time status from PR author metadata (`author_association` of `FIRST_TIME_CONTRIBUTOR` / `FIRST_TIMER`), or by checking that the author has no PR merged before the range.
 
 ### 9. Write the notes file and prepend the CHANGELOG
 
@@ -208,10 +221,14 @@ Fill the [`docs/releases/README.md`](../../docs/releases/README.md) template int
 ## Fixes
 
 - <bug fix>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>))
+- <bug fix from an outside contributor>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>), thanks @<handle>)
 
-## New contributors
+## Contributors
 
-- [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/orm/pull/<pr>)
+Thank you to everyone outside the team whose work is in this release:
+
+- @<handle>: #<pr>, #<pr>
+- @<handle> made their first contribution: #<pr>
 ````
 
 Then **prepend** a `## v$NEXT` entry to [`CHANGELOG.md`](../../CHANGELOG.md), mirroring the notes-file body (newest-first). The CHANGELOG is a plain newest-first mirror — no second authoring format, no "Keep a Changelog" headers; copy the section bodies under the `## v$NEXT` header at the top of the entry list (below the file's intro and the `<!-- New release entries go here … -->` marker).
@@ -249,11 +266,11 @@ Cutting `v0.12.0` from `origin/main` (previous stable tag `v0.11.0`).
 1. `PREV_TAG=$(git describe --abbrev=0 --tags --match 'v[0-9]*' --exclude '*-dev.*' --exclude '*-beta.*')` → `v0.11.0`.
 2. `git log --first-parent --oneline v0.11.0..HEAD` lists 14 merged PRs. `gh pr list --state merged --base main --json number,title,author,labels,mergedAt` resolves their metadata.
 3. PR #1240's title is `TML-2536: contract deserializer seam`. Read TML-2536 in Linear → the user-facing outcome is "contract deserialization now goes through an explicit adapter seam". Write that outcome in public words; cite #1240, not TML-2536.
-4. Triage: #1240 changes the contract format → **always-include, breaking**. A CI-cache tweak (#1237) and a test-only refactor (#1239) → **default-exclude**, dropped silently. A new `includeMany` capability (#1234) → feature. A null-handling bug fix (#1242) → fix. First-time contributor @somebody on #1238.
-5. Categorize: Breaking changes (#1240) → Features (#1234) → Fixes (#1242) → New contributors (@somebody, #1238).
+4. Triage: #1240 changes the contract format → **always-include, breaking**. A CI-cache tweak (#1237) and a test-only refactor (#1239) → **default-exclude**, dropped silently. A new `includeMany` capability (#1234) → feature. A null-handling bug fix (#1242), from outside contributor @helper → fix. The test-only refactor #1239 is also @helper's, and #1238, a docs typo fix, is first-time contributor @somebody's: both are dropped from the entries but listed under Contributors.
+5. Categorize: Breaking changes (#1240) → Features (#1234) → Fixes (#1242) → Contributors (@helper: #1242, #1239; @somebody: #1238).
 6. The breaking change's transition is `0.11-to-0.12`. The recipe dir `skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/` exists in the checkout → the breaking note links it as a tag-pinned URL, `https://github.com/prisma/orm/blob/v0.12.0/skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/`. (If it were absent, return to release preparation before finalizing notes.)
-7. #1240 is a code-visible contract-shape/runtime change, so it earns a before/after example — lifted from the `0.11-to-0.12` recipe (a TS runtime change, so a `ts` fence). @somebody's contributor line, with absolute links: `- [@somebody](https://github.com/somebody) made their first contribution in [#1238](https://github.com/prisma/orm/pull/1238)`.
-8. Write `docs/releases/v0.12.0.md` (every PR ref + handle an absolute link; the breaking entry carries a before/after):
+7. #1240 is a code-visible contract-shape/runtime change, so it earns a before/after example — lifted from the `0.11-to-0.12` recipe (a TS runtime change, so a `ts` fence).
+8. Write `docs/releases/v0.12.0.md` (every entry's PR an absolute link; the breaking entry carries a before/after):
 
 ````md
 # v0.12.0
@@ -282,11 +299,14 @@ Contract deserialization gains an explicit adapter seam, and queries can now eag
 
 ## Fixes
 
-- Null values in `returning()` projections no longer throw. ([#1242](https://github.com/prisma/orm/pull/1242))
+- Null values in `returning()` projections no longer throw. ([#1242](https://github.com/prisma/orm/pull/1242), thanks @helper)
 
-## New contributors
+## Contributors
 
-- [@somebody](https://github.com/somebody) made their first contribution in [#1238](https://github.com/prisma/orm/pull/1238)
+Thank you to everyone outside the team whose work is in this release:
+
+- @helper: #1242, #1239
+- @somebody made their first contribution: #1238
 ````
 
    Then prepend the same body under `## v0.12.0` to `CHANGELOG.md`.

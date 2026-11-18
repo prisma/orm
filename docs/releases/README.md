@@ -17,17 +17,18 @@ These files are drafted automatically by the [`draft-release-notes`](../../skill
 - **Categorize** entries under the fixed section order below, and **omit any section that has no entries**.
 - **Lead with breaking changes** — they are what a reader scanning the notes most needs to see.
 - **Show the impact of breaking changes with a short before/after example.** For the code-visible breaking changes (contract-shape changes, authoring-surface changes, runtime-option changes), nest a compact `before` / `after` snippet under the prose bullet so a reader can see the change at a glance. Source the snippet from the matching `<transition-label>` upgrade recipe so it stays accurate. Lead with PSL (```` ```prisma ````) when the change is on the authoring surface; use TS/JSON only when the change is genuinely a TS/emitted-shape change. Operational-only breaks (version floors, peer-dep changes, package removals) need no example.
-- **Link PRs and contributors as absolute markdown links** — `[#1234](https://github.com/prisma/orm/pull/1234)` and `[@handle](https://github.com/handle)`, never bare `#1234` / `@handle`. Bare references only autolink inside the GitHub Release body, **not** when this file is read as a repo file or in PR review; explicit links work in every context. Attribute contributors, especially first-time ones.
+- **Link each entry's PR as an absolute markdown link** — `[#1234](https://github.com/prisma/orm/pull/1234)`, not bare `#1234`. Bare references only autolink inside the GitHub Release body, **not** when this file is read as a repo file or in PR review.
+- **Thank every outside contributor.** An entry whose PR came from someone outside the team ends with `thanks @handle` inside its parentheses. The **Contributors** section lists every outside contributor whose PR merged since the previous release, user-facing or not, with their PRs in GitHub's short form (`#1234`).
 - **Link migration recipes as absolute, tag-pinned URLs** — not repo-relative paths. This file is published verbatim as the GitHub Release body, where repo-relative links do not resolve; pinning to the release tag keeps the link working and rot-proof. A breaking change can affect either audience or both, so link whichever recipe directories exist:
   - User-facing migrations: `https://github.com/prisma/orm/blob/v<version>/skills/prisma-8/upgrading/app/upgrades/<transition-label>/`
   - Extension-author migrations: `https://github.com/prisma/orm/blob/v<version>/skills/prisma-8/upgrading/extension/upgrades/<transition-label>/`
 
-The section order is: **Breaking changes → Features → Fixes → New contributors**.
+The section order is: **Breaking changes → Features → Fixes → Contributors**.
 
 1. **Breaking changes** — API removals or renames, semantic changes to existing APIs, contract-format changes. Say what the reader must *do*, not just what changed.
 2. **Features** — new capabilities.
 3. **Fixes** — bug fixes.
-4. **New contributors** — first-time contributors, with the PR that welcomed them.
+4. **Contributors** — every outside contributor whose PR merged since the previous release, with their PRs; first-time contributors are marked.
 
 ## Template
 
@@ -61,10 +62,14 @@ Copy this into `docs/releases/v<version>.md` and fill it in, dropping any sectio
 ## Fixes
 
 - <bug fix>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>))
+- <bug fix from an outside contributor>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>), thanks @<handle>)
 
-## New contributors
+## Contributors
 
-- [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/orm/pull/<pr>)
+Thank you to everyone outside the team whose work is in this release:
+
+- @<handle>: #<pr>, #<pr>
+- @<handle> made their first contribution: #<pr>
 ````
 
 ## See also
