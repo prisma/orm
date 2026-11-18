@@ -303,14 +303,22 @@ export function mergeScopes<A extends Scope, B extends Scope>(a: A, b: B): Merge
 }
 
 export function nullableScope<S extends Scope>(scope: S): NullableScope<S> {
+  const nullableFields = new Map<ScopeField, ScopeField>();
+  const toNullable = (field: ScopeField): ScopeField => {
+    const existing = nullableFields.get(field);
+    if (existing) return existing;
+    const nullable: ScopeField = {
+      codecId: field.codecId,
+      nullable: true,
+      ...(field.codec !== undefined ? { codec: field.codec } : {}),
+    };
+    nullableFields.set(field, nullable);
+    return nullable;
+  };
   const mkNullable = (tbl: ScopeTable): ScopeTable => {
     const result: ScopeTable = {};
     for (const [k, v] of Object.entries(tbl)) {
-      result[k] = {
-        codecId: v.codecId,
-        nullable: true,
-        ...(v.codec !== undefined ? { codec: v.codec } : {}),
-      };
+      result[k] = toNullable(v);
     }
     return result;
   };

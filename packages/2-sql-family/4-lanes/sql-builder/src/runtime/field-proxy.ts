@@ -12,18 +12,12 @@ export function createFieldProxy<S extends Scope>(scope: S): FieldProxy<S> {
         if (Object.hasOwn(scope.topLevel, prop)) {
           const topField = scope.topLevel[prop];
           if (topField) {
-            // Qualify top-level fields with their table name so the reference
-            // stays correct when the expression is used inside a subquery.
-            // A bare IdentifierRef resolves against the nearest table in scope,
-            // which is the inner table once inside a correlated subquery.
-            // Fall back to IdentifierRef only for select-list aliases, which
-            // exist in topLevel but not in any namespace.
-            const namespaceName = Object.keys(scope.namespaces).find((ns) =>
-              Object.hasOwn(scope.namespaces[ns]!, prop),
-            );
+            const owningNamespace = Object.entries(scope.namespaces).find(
+              ([, fields]) => fields[prop] === topField,
+            )?.[0];
             const ref =
-              namespaceName !== undefined
-                ? ColumnRef.of(namespaceName, prop)
+              owningNamespace !== undefined
+                ? ColumnRef.of(owningNamespace, prop)
                 : IdentifierRef.of(prop);
             return new ExpressionImpl(ref, topField);
           }
