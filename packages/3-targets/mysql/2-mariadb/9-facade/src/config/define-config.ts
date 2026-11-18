@@ -12,4 +12,5 @@ export const defineConfig: (options: MariadbConfigOptions) => PrismaConfig<'sql'
     pack: mariadbPackRef,
     typesModule: contractTypesModule,
     migrationModule,
+    contractBuilderModule: '@prisma/orm-mariadb/contract-builder',
   });

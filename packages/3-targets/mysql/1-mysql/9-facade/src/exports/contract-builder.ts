@@ -1,3 +1,4 @@
+// MariaDB's contract-builder entry lists these names again; a test there compares the values.
 export type {
   ComposedAuthoringHelpers,
   ContractDefinition,

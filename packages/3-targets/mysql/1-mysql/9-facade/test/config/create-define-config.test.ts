@@ -31,6 +31,7 @@ const mariadbComponents = {
   }),
   typesModule: '@acme/mariadb/contract-types',
   migrationModule: '#migration-helpers',
+  contractBuilderModule: '@prisma/orm-mariadb/contract-builder',
 };
 
 describe('createMysqlDefineConfig', () => {
