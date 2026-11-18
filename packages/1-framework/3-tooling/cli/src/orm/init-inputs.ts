@@ -17,6 +17,8 @@ import {
   errorInitPrisma7TargetMismatch,
   errorInitStrictProbeWithoutProbe,
   errorInitUserAborted,
+  type InstallReason,
+  PRISMA7_CHECK,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
 import { resolveAuthoring, resolveTarget, validateSchemaPath } from '../commands/init/input-values';
@@ -45,6 +47,7 @@ import {
   type PreparedTargetPackage,
   type PrepareTargetPackage,
   TargetPackageInstallFailed,
+  TargetPackageRefusedAfterInstall,
   withPackagesAddedAction,
 } from './init-target-package';
 
@@ -142,13 +145,14 @@ async function prepareTarget(
   prepareTargetPackage: PrepareTargetPackage,
   target: KnownTarget,
   report: { readonly authoring: ContractSourceFormat | 'prisma7'; readonly schemaPath: string },
+  installReason: InstallReason,
 ): Promise<PreparedTargetPackage> {
   try {
-    return await prepareTargetPackage(
-      target.packageName,
-      report.authoring === 'prisma7' ? 'prisma7-check' : 'init-contribution',
-    );
+    return await prepareTargetPackage(target.packageName);
   } catch (error) {
+    if (error instanceof TargetPackageRefusedAfterInstall) {
+      throw withPackagesAddedAction(error.cause, error.added, installReason);
+    }
     if (error instanceof TargetPackageInstallFailed) {
       throw new InitInstallFailedBeforeWriting(
         error.failure,
@@ -521,10 +525,12 @@ async function resolvePrisma7Inputs(ctx: {
   }
   const target = targetResult.value;
 
-  const prepared = await prepareTarget(ctx.prepareTargetPackage, target, {
-    authoring: 'prisma7',
-    schemaPath: schema.path,
-  });
+  const prepared = await prepareTarget(
+    ctx.prepareTargetPackage,
+    target,
+    { authoring: 'prisma7', schemaPath: schema.path },
+    PRISMA7_CHECK,
+  );
   const check = await ctx.checkPrisma7Source({
     packageName: target.packageName,
     contribution: prepared.contribution,
@@ -565,7 +571,9 @@ async function resolvePrisma7Inputs(ctx: {
       quickReference: check.quickReference,
     });
   } catch (error) {
-    throw prepared.added === undefined ? error : withPackagesAddedAction(error, prepared.added);
+    throw prepared.added === undefined
+      ? error
+      : withPackagesAddedAction(error, prepared.added, PRISMA7_CHECK);
   }
 }
 
@@ -690,19 +698,28 @@ async function resolveStarterInputs(ctx: {
     validateSchemaPath(flags.schemaPath, flagAuthoring);
   }
 
+  const installReason: InstallReason = {
+    kind: 'init-contribution',
+    packageName: target.packageName,
+  };
   const reportedAuthoring = flagAuthoring ?? 'psl';
   const prepared =
     ctx.prepared ??
-    (await prepareTarget(ctx.prepareTargetPackage, target, {
-      authoring: reportedAuthoring,
-      schemaPath: flags.schemaPath ?? defaultSchemaPath(reportedAuthoring),
-    }));
+    (await prepareTarget(
+      ctx.prepareTargetPackage,
+      target,
+      {
+        authoring: reportedAuthoring,
+        schemaPath: flags.schemaPath ?? defaultSchemaPath(reportedAuthoring),
+      },
+      installReason,
+    ));
   // The Prisma 7 path adds the undo instruction itself when it hands its preparation over.
   const added = ctx.prepared === undefined ? prepared.added : undefined;
   try {
     return await confirmStarterInputs({ ...ctx, target, prepared });
   } catch (error) {
-    throw added === undefined ? error : withPackagesAddedAction(error, added);
+    throw added === undefined ? error : withPackagesAddedAction(error, added, installReason);
   }
 }
 

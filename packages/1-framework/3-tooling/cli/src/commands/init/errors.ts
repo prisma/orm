@@ -508,30 +508,31 @@ export function errorInitAuthoringUnsupported(options: {
   );
 }
 
-/**
- * Packages init installed before it found out it could not continue, and why it installed them:
- * to check a Prisma 7 schema, or to read the target package's init contribution.
- */
+/** Packages init installed before it found out it could not continue. */
 export interface PackagesAdded {
   readonly packages: readonly string[];
   readonly removeCommand: string;
-  readonly reason:
-    | { readonly kind: 'prisma7-check' }
-    | { readonly kind: 'init-contribution'; readonly packageName: string };
 }
 
+/** Why init installed the packages it then has to tell the user how to remove. */
+export type InstallReason =
+  | { readonly kind: 'prisma7-check' }
+  | { readonly kind: 'init-contribution'; readonly packageName: string };
+
+export const PRISMA7_CHECK: InstallReason = { kind: 'prisma7-check' };
+
 /** The next action that tells the user how to undo what init installed. */
-export function packagesAddedAction(added: PackagesAdded): string {
+export function packagesAddedAction(added: PackagesAdded, reason: InstallReason): string {
   const pronoun = added.packages.length === 1 ? 'it' : 'them';
   const packages = added.packages.join(' and ');
   const remove = `remove ${pronoun} with \`${added.removeCommand}\`.`;
-  return added.reason.kind === 'prisma7-check'
+  return reason.kind === 'prisma7-check'
     ? `init added ${packages} to package.json before checking; ${remove}`
-    : `init installed ${packages} to read the init contribution of ${added.reason.packageName}; ${remove}`;
+    : `init installed ${packages} to read the init contribution of ${reason.packageName}; ${remove}`;
 }
 
 function packagesAddedNote(added: PackagesAdded | undefined): string {
-  return added === undefined ? '' : `\n${packagesAddedAction(added)}`;
+  return added === undefined ? '' : `\n${packagesAddedAction(added, PRISMA7_CHECK)}`;
 }
 
 /**
@@ -539,25 +540,40 @@ function packagesAddedNote(added: PackagesAdded | undefined): string {
  * from the project, or it has no Prisma 7 contract source while
  * `--from-prisma7-schema` asked for one.
  */
-export function errorInitPrisma7SourceUnavailable(options: {
-  readonly schemaPath: string;
-  readonly packageName: string;
-  readonly reason: 'not-resolvable' | 'no-prisma7-source';
-  readonly added: PackagesAdded | undefined;
-}): CliStructuredError {
+export function errorInitPrisma7SourceUnavailable(
+  options: {
+    readonly schemaPath: string;
+    readonly packageName: string;
+    readonly added: PackagesAdded | undefined;
+  } & (
+    | { readonly reason: 'not-resolvable' | 'no-prisma7-source' }
+    | {
+        readonly reason: 'unloadable';
+        /** The config module the contribution names. */
+        readonly module: string;
+        readonly cause: string;
+      }
+  ),
+): CliStructuredError {
   const { packageName, schemaPath } = options;
   const wording =
-    options.reason === 'not-resolvable'
+    options.reason === 'unloadable'
       ? {
-          summary: `Could not load ${packageName} from the project`,
-          why: `${packageName} was installed but could not be loaded from the project, so init cannot check that Prisma 8 reads ${schemaPath}.`,
-          fix: `Check that ${packageName} is installed and resolves from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`,
+          summary: `Could not load ${options.module}`,
+          why: `\`${options.module}\` could not be loaded: ${options.cause}. init cannot check that Prisma 8 reads ${schemaPath}.`,
+          fix: `Reinstall ${packageName} with your package manager, then run \`prisma orm init\` again.`,
         }
-      : {
-          summary: 'No Prisma 7 contract source for this database',
-          why: `${packageName} does not provide a Prisma 7 contract source, so it cannot read ${schemaPath}.`,
-          fix: 'Choose a database whose Prisma 8 package reads Prisma 7 schemas, or run `prisma orm init` without `--from-prisma7-schema`.',
-        };
+      : options.reason === 'not-resolvable'
+        ? {
+            summary: `Could not load ${packageName} from the project`,
+            why: `${packageName} was installed but could not be loaded from the project, so init cannot check that Prisma 8 reads ${schemaPath}.`,
+            fix: `Check that ${packageName} is installed and resolves from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`,
+          }
+        : {
+            summary: 'No Prisma 7 contract source for this database',
+            why: `${packageName} does not provide a Prisma 7 contract source, so it cannot read ${schemaPath}.`,
+            fix: 'Choose a database whose Prisma 8 package reads Prisma 7 schemas, or run `prisma orm init` without `--from-prisma7-schema`.',
+          };
   return new CliStructuredError('CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE', wording.summary, {
     why: wording.why,
     fix: `${wording.fix}${packagesAddedNote(options.added)}`,
@@ -566,6 +582,7 @@ export function errorInitPrisma7SourceUnavailable(options: {
       schemaPath: options.schemaPath,
       packageName: options.packageName,
       reason: options.reason,
+      ...(options.reason === 'unloadable' ? { module: options.module } : {}),
       packagesAdded: options.added?.packages ?? [],
     },
   });

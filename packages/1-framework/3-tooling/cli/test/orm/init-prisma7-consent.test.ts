@@ -169,7 +169,6 @@ describe(
       const ADDED = {
         packages: ['stub-target-package', 'dotenv'],
         removeCommand: 'pnpm remove stub-target-package dotenv',
-        reason: { kind: 'prisma7-check' } as const,
       };
 
       it('runs with the target and schema before any consent is asked', async () => {

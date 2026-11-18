@@ -5,6 +5,7 @@ import {
   errorInitPrisma7SchemaRefused,
   errorInitPrisma7SourceUnavailable,
   type PackagesAdded,
+  PRISMA7_CHECK,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
 import { loadContractSource } from '../control-api/operations/load-contract-source';
@@ -42,13 +43,20 @@ export function createPrisma7SourceCheck(ctx: {
       try {
         return await step();
       } catch (error) {
-        throw added === undefined ? error : withPackagesAddedAction(error, added);
+        throw added === undefined ? error : withPackagesAddedAction(error, added, PRISMA7_CHECK);
       }
     };
 
     const imported = await ctx.importFromProject(ctx.cwd, contribution.configModule);
     if (imported.kind === 'unloadable') {
-      throw added === undefined ? imported.cause : withPackagesAddedAction(imported.cause, added);
+      throw errorInitPrisma7SourceUnavailable({
+        schemaPath,
+        packageName,
+        reason: 'unloadable',
+        module: contribution.configModule,
+        cause: imported.cause instanceof Error ? imported.cause.message : String(imported.cause),
+        added,
+      });
     }
     if (imported.kind !== 'loaded') {
       throw errorInitPrisma7SourceUnavailable({
@@ -70,7 +78,7 @@ export function createPrisma7SourceCheck(ctx: {
         reason: 'invalid-shape',
         detail: `${contribution.configModule} exports prisma7Schema, but the contribution has no prisma7QuickReference`,
       });
-      throw added === undefined ? missing : withPackagesAddedAction(missing, added);
+      throw added === undefined ? missing : withPackagesAddedAction(missing, added, PRISMA7_CHECK);
     }
 
     const config = await undoable(() => {

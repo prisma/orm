@@ -301,15 +301,39 @@ describe('the Prisma 7 check before init changes the project', () => {
     timeouts.coldTransformImport,
   );
 
+  it(
+    'names the config module and the cause, and the packages it installed, when the config module throws while loading',
+    async () => {
+      copyFixture();
+      loadTargetConfig = async () => ({ kind: 'unloadable', cause: new Error('module exploded') });
+
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE',
+          summary: 'Could not load @internal/postgres/config',
+          why: expect.stringContaining('module exploded'),
+          meta: {
+            reason: 'unloadable',
+            module: '@internal/postgres/config',
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv'],
+          },
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: expect.stringContaining(
+                'init added @prisma/orm-postgres and dotenv to package.json before checking; remove them with',
+              ),
+            }),
+          ]),
+        },
+      });
+      expectProjectUnchangedApartFromTheCheckInstall();
+    },
+    timeouts.coldTransformImport,
+  );
+
   it.each([
-    [
-      'loading the target package throws',
-      'CLI.UNEXPECTED',
-      async (): Promise<ImportFromProject> => async () => ({
-        kind: 'unloadable',
-        cause: new Error('module exploded'),
-      }),
-    ],
     [
       'the source throws',
       'CONTRACT.SOURCE_LOAD_FAILED',

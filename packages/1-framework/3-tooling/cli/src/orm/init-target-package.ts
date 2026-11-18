@@ -14,6 +14,7 @@ import {
   errorInitContributionUnavailable,
   errorInitInvalidManifest,
   errorInitTargetPackageNotInstalled,
+  type InstallReason,
   type PackagesAdded,
   packagesAddedAction,
 } from '../commands/init/errors';
@@ -61,11 +62,15 @@ function causeMessage(cause: unknown): string {
  * the engine's own consent or cancellation errors, which init cannot word itself. An error with
  * no structured code becomes `CLI.UNEXPECTED`, as it would at the handler boundary.
  */
-export function withPackagesAddedAction(error: unknown, added: PackagesAdded): CliStructuredError {
+export function withPackagesAddedAction(
+  error: unknown,
+  added: PackagesAdded,
+  reason: InstallReason,
+): CliStructuredError {
   const engineError = normalizeError(error);
   return new CliStructuredError(engineError.code, engineError.message, {
     severity: engineError.severity,
-    nextActions: [...engineError.nextActions, chooseAction(packagesAddedAction(added))],
+    nextActions: [...engineError.nextActions, chooseAction(packagesAddedAction(added, reason))],
     diagnostics: engineError.diagnostics,
     meta: { ...engineError.meta, packagesAdded: added.packages },
     ...ifDefined('why', engineError.why),
@@ -89,13 +94,21 @@ export interface PreparedTargetPackage {
   readonly warnings: readonly string[];
 }
 
-/** Why the target package is being installed, which the undo instruction says. */
-export type PreparationPurpose = 'prisma7-check' | 'init-contribution';
+export type PrepareTargetPackage = (packageName: string) => Promise<PreparedTargetPackage>;
 
-export type PrepareTargetPackage = (
-  packageName: string,
-  purpose: PreparationPurpose,
-) => Promise<PreparedTargetPackage>;
+/**
+ * The target package was installed, then could not be used. The caller adds the instruction to
+ * undo the install, because only it knows why it installed the package.
+ */
+export class TargetPackageRefusedAfterInstall extends Error {
+  constructor(
+    override readonly cause: unknown,
+    readonly added: PackagesAdded,
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = 'TargetPackageRefusedAfterInstall';
+  }
+}
 
 /** The install of the target package failed; nothing else has happened yet. */
 export class TargetPackageInstallFailed extends Error {
@@ -117,7 +130,7 @@ export function createTargetPackagePreparation(ctx: {
   readonly install: boolean;
   readonly importFromProject: ImportFromProject;
 }): PrepareTargetPackage {
-  return async (packageName, purpose) => {
+  return async (packageName) => {
     rejectUnparseableManifest(ctx.cwd);
     const warnings: string[] = [];
     let installed: readonly string[] = [];
@@ -146,10 +159,6 @@ export function createTargetPackagePreparation(ctx: {
           : {
               packages: newlyDeclared,
               removeCommand: formatRemoveCommand(ctx.packageManager, newlyDeclared),
-              reason:
-                purpose === 'prisma7-check'
-                  ? { kind: 'prisma7-check' }
-                  : { kind: 'init-contribution', packageName },
             };
     }
 
@@ -157,7 +166,7 @@ export function createTargetPackagePreparation(ctx: {
       const contribution = await loadContribution(ctx, packageName);
       return { contribution, installed, added, warnings };
     } catch (error) {
-      throw added === undefined ? error : withPackagesAddedAction(error, added);
+      throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
     }
   };
 }
