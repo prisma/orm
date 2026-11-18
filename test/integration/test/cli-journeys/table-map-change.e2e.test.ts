@@ -236,7 +236,10 @@ withTempDir(({ createTempDir }) => {
           expect(await planAndApply(journey, [], 'M5.04'), 'M5.04: without it').toEqual(
             RENAMED_TABLE,
           );
-          expect(await people(journey), 'M5.05: the rows under the new name').toHaveLength(2);
+          expect(await people(journey), 'M5.05: the rows under the new name').toEqual([
+            { id: 1, email: 'alice@example.com', nick: 'al', score: 10 },
+            { id: 2, email: 'bob@example.com', nick: null, score: 20 },
+          ]);
           await expectSettled(journey, 'M5.06');
         },
         timeouts.spinUpPpgDev,
