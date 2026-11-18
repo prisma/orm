@@ -1,15 +1,21 @@
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { AuthoringMode, InitContribution } from '@internal/cli/init-contribution';
+import mongoContribution from '@internal/mongo/init';
+import postgresContribution from '@internal/postgres/init';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import {
-  type AuthoringId,
-  configFile,
-  dbFile,
-  starterSchema,
-  type TargetId,
-  workspaceTargetPackageName,
-} from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+
+type TargetId = 'postgres' | 'mongo';
+type AuthoringId = AuthoringMode;
+
+const CONTRIBUTIONS: Record<TargetId, InitContribution> = {
+  postgres: postgresContribution,
+  mongo: mongoContribution,
+};
 
 /**
  * Regression guard for TML-2485.
@@ -77,10 +83,11 @@ function extractInternalImports(source: string): readonly string[] {
 
 function templateSources(target: TargetId, authoring: AuthoringId): readonly string[] {
   const schemaPath = authoring === 'typescript' ? 'prisma/contract.ts' : 'prisma/contract.prisma';
+  const contribution = CONTRIBUTIONS[target];
   return [
-    starterSchema(target, authoring, workspaceTargetPackageName(target)),
-    dbFile(target, workspaceTargetPackageName(target)),
-    configFile(`./${schemaPath}`, workspaceTargetPackageName(target)),
+    contribution.starterContract(authoring),
+    contribution.databaseFile(),
+    configFile(`./${schemaPath}`, contribution.configModule),
   ];
 }
 
@@ -133,6 +140,89 @@ describe('init templates only depend on the facade package (TML-2485)', () => {
           ).toBe(true);
         }
       });
+    });
+  }
+});
+
+const FRAMEWORK_LOCATIONS = [
+  'packages/1-framework/',
+  'packages/9-public/@prisma/orm-framework/',
+  'packages/9-public/@prisma/orm-toolchain/',
+];
+
+/** The modules a built file imports, statically or dynamically; text inside its strings is not an import. */
+function moduleSpecifiers(source: string): readonly string[] {
+  return ts.preProcessFile(source, true, true).importedFiles.map((imported) => imported.fileName);
+}
+
+function isOurs(specifier: string): boolean {
+  return (
+    specifier.startsWith('.') ||
+    specifier.startsWith('@internal/') ||
+    specifier.startsWith('@prisma/orm-')
+  );
+}
+
+/**
+ * Every workspace file a built entrypoint loads, following its own and its workspace
+ * dependencies' imports, as repository-relative paths. Third-party and Node modules are leaves.
+ */
+function workspaceModulesLoadedBy(entry: string): { files: string[]; specifiers: string[] } {
+  const files: string[] = [];
+  const specifiers: string[] = [];
+  const pending = [realpathSync(entry)];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (file === undefined || files.includes(relative(REPO_ROOT, file))) continue;
+    files.push(relative(REPO_ROOT, file));
+    for (const specifier of moduleSpecifiers(readFileSync(file, 'utf-8'))) {
+      specifiers.push(specifier);
+      if (!isOurs(specifier)) continue;
+      const resolved = realpathSync(createRequire(file).resolve(specifier));
+      if (!resolved.includes('/node_modules/')) pending.push(resolved);
+    }
+  }
+  return { files, specifiers };
+}
+
+describe('the init entrypoints import no framework code that runs', () => {
+  const entrypoints = [
+    { name: '@internal/postgres/init', dir: 'packages/3-targets/postgres/9-facade' },
+    { name: '@internal/mongo/init', dir: 'packages/3-targets/mongo/9-facade' },
+    { name: '@prisma/orm-postgres/init', dir: 'packages/9-public/@prisma/orm-postgres' },
+    { name: '@prisma/orm-mongo/init', dir: 'packages/9-public/@prisma/orm-mongo' },
+  ];
+
+  it('finds a framework module that a built file imports', () => {
+    const dir = mkdtempSync(join(__dirname, 'test-init-imports-'));
+    try {
+      const entry = join(dir, 'init.mjs');
+      writeFileSync(
+        entry,
+        'const text = `import "./not-an-import.js"`;\nimport "@internal/utils/casts";\n',
+      );
+
+      const { files, specifiers } = workspaceModulesLoadedBy(entry);
+
+      expect(specifiers[0]).toBe('@internal/utils/casts');
+      expect(specifiers).not.toContain('./not-an-import.js');
+      expect(files.some((file) => file.startsWith('packages/1-framework/'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  for (const { name, dir } of entrypoints) {
+    it(`${name} loads only target and third-party modules`, () => {
+      const { files, specifiers } = workspaceModulesLoadedBy(
+        resolve(REPO_ROOT, dir, 'dist/init.mjs'),
+      );
+
+      expect(specifiers).toContain('pathe');
+      expect(specifiers.some((specifier) => specifier.endsWith('/server-version'))).toBe(true);
+      expect(
+        files.filter((file) => FRAMEWORK_LOCATIONS.some((location) => file.startsWith(location))),
+      ).toEqual([]);
     });
   }
 });
