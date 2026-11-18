@@ -28,6 +28,10 @@
       "model": "Post",
       "namespace": "__unbound__"
     },
+    "Task": {
+      "model": "Task",
+      "namespace": "__unbound__"
+    },
     "Tick": {
       "model": "Tick",
       "namespace": "__unbound__"
@@ -143,6 +147,34 @@
               "table": "Author"
             }
           },
+          "Bug": {
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "severity": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "severity": {
+                  "column": "severity"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Task"
+            }
+          },
           "Counter": {
             "fields": {
               "big": {
@@ -233,6 +265,31 @@
               },
               "namespaceId": "__unbound__",
               "table": "Event"
+            }
+          },
+          "Feature": {
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "priority": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "priority": {
+                  "column": "priority"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Feature"
             }
           },
           "Note": {
@@ -368,6 +425,108 @@
               },
               "namespaceId": "__unbound__",
               "table": "Post"
+            }
+          },
+          "Task": {
+            "discriminator": {
+              "field": "type"
+            },
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "parentId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "type": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {
+              "parent": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "parentId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Task",
+                  "namespace": "__unbound__"
+                }
+              },
+              "subtasks": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "parentId"
+                  ]
+                },
+                "to": {
+                  "model": "Task",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "parentId": {
+                  "column": "parentId"
+                },
+                "title": {
+                  "column": "title"
+                },
+                "type": {
+                  "column": "type"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Task"
+            },
+            "variants": {
+              "bug": {
+                "model": "Bug",
+                "namespace": "__unbound__"
+              },
+              "feature": {
+                "model": "Feature",
+                "namespace": "__unbound__"
+              }
             }
           },
           "Tick": {
@@ -605,6 +764,49 @@
               },
               "uniques": []
             },
+            "Feature": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "priority": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "primaryKey": true
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Feature"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Task"
+                  }
+                }
+              ],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Note": {
               "columns": {
                 "authorId": {
@@ -735,6 +937,87 @@
               },
               "uniques": []
             },
+            "Task": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "parentId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": true
+                },
+                "severity": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": true,
+                  "typeParams": {
+                    "length": 191
+                  }
+                },
+                "title": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                },
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Task.type",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Task_parentId_idx_6a68f597"
+                  },
+                  "source": {
+                    "columns": [
+                      "parentId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Task"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Task"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "parentId"
+                  ],
+                  "name": "Task_parentId_idx_6a68f597",
+                  "prefix": "Task_parentId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Tick": {
               "columns": {
                 "at": {
@@ -823,13 +1106,20 @@
                 "USER",
                 "ADMIN"
               ]
+            },
+            "Task.type": {
+              "kind": "valueSet",
+              "values": [
+                "bug",
+                "feature"
+              ]
             }
           }
         },
         "id": "__unbound__"
       }
     },
-    "storageHash": "4515728f03f65a482b592c1a3b42852b273481dff3946317231d310f36fe0a3c"
+    "storageHash": "75fe237e51a88060d032cba2276fb5a524fdf30d702c0a0cdd978930220afe6b"
   },
   "capabilities": {
     "sql": {
