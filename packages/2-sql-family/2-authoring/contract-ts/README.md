@@ -377,7 +377,7 @@ typescriptContract(contract, 'src/prisma/contract.json', {
 
 The specifier value applies only when the loaded contract omits `defaultControlPolicy` (a value authored on the contract module wins).
 
-`typescriptContractFromPath` requires the target the config is for, and the module that target's `defineContract` comes from, so no `defineConfig` can leave the check out. It refuses a loaded contract whose `target` is another target's id with `CONTRACT.TARGET_MISMATCH`, naming both targets and that module, with `expected`, `actual` and `contract` in its `meta`. A value whose `target` is not a string is left to contract validation. Every SQL target's `defineConfig` passes them:
+`typescriptContractFromPath` requires the target the config is for, and the module that target's `defineContract` comes from, so no `defineConfig` can leave the check out. It refuses a loaded contract whose `target` is another target's id with `CONTRACT.TARGET_MISMATCH`, naming both targets and that module, with `expected`, `actual` and `contract` in its `meta`. An export that is not a SQL contract (no SQL target family, or no storage namespaces record) is refused first, with `CONTRACT.EXPORT_INVALID`. A contract whose `target` is not a string is left to contract validation. Every SQL target's `defineConfig` passes them:
 
 ```typescript
 typescriptContractFromPath('prisma/contract.ts', 'prisma/contract.json', {

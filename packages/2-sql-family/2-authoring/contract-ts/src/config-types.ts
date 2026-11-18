@@ -41,12 +41,15 @@ export interface TypeScriptContractTarget {
 }
 
 export type TypeScriptContractFromPathOptions =
-  | TypeScriptContractTarget
+  | (TypeScriptContractTarget & {
+      readonly defaultControlPolicy?: never;
+      readonly createNamespace?: never;
+    })
   | (TypeScriptContractTarget & TypeScriptContractSpecifierOptions);
 
 function refuseOtherTarget(
   contractPath: string,
-  loaded: { readonly target?: unknown },
+  loaded: Contract,
   expected: TypeScriptContractTarget,
 ): void {
   const actual = loaded.target;
@@ -63,15 +66,14 @@ function refuseOtherTarget(
   );
 }
 
+function isRecord(value: unknown): value is object {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function isSqlContract(value: unknown): value is Contract {
-  if (typeof value !== 'object' || value === null) return false;
+  if (!isRecord(value)) return false;
   const { targetFamily, storage } = Object(value);
-  return (
-    targetFamily === 'sql' &&
-    typeof storage === 'object' &&
-    storage !== null &&
-    typeof Object(storage).namespaces === 'object'
-  );
+  return targetFamily === 'sql' && isRecord(storage) && isRecord(Object(storage).namespaces);
 }
 
 export function emptyContract(options: {
@@ -138,7 +140,7 @@ export function typescriptContractFromPath(
   output: string | undefined,
   options: TypeScriptContractFromPathOptions,
 ): ContractConfig {
-  const policy = 'defaultControlPolicy' in options ? options : undefined;
+  const policy = options.defaultControlPolicy === undefined ? undefined : options;
   return {
     source: {
       format: 'typescript',
@@ -151,17 +153,14 @@ export function typescriptContractFromPath(
           );
         }
         const mod = await import(pathToFileURL(absolutePath).href);
-        const exported: unknown = mod.default ?? mod.contract;
-        if (exported === undefined) {
+        if (mod.default === undefined && mod.contract === undefined) {
           throw contractError(
             'CONTRACT.MODULE_EXPORT_MISSING',
             `typescriptContractFromPath: module at "${absolutePath}" has no "default" or "contract" export.`,
             { meta: { path: absolutePath } },
           );
         }
-        if (typeof exported === 'object' && exported !== null) {
-          refuseOtherTarget(contractPath, exported, options);
-        }
+        const exported: unknown = mod.default ?? mod.contract;
         if (!isSqlContract(exported)) {
           throw contractError(
             'CONTRACT.EXPORT_INVALID',
@@ -174,6 +173,7 @@ export function typescriptContractFromPath(
           );
         }
         const contract = exported;
+        refuseOtherTarget(contractPath, contract, options);
         return ok(
           policy === undefined
             ? contract

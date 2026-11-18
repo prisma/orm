@@ -210,7 +210,9 @@ describe('typescriptContractFromPath with the target the config is for', () => {
     'refuses a contract built for another target, naming both targets and the module to import defineContract from',
     async () => {
       expect(
-        await loadModule(`export default { targetFamily: 'sql', target: 'mysql' };\n`),
+        await loadModule(
+          `export default { targetFamily: 'sql', target: 'mysql', storage: { namespaces: {} } };\n`,
+        ),
       ).toEqual({
         refused: {
           code: 'CONTRACT.TARGET_MISMATCH',
@@ -245,6 +247,43 @@ describe('typescriptContractFromPath with the target the config is for', () => {
             meta: { path: expect.stringMatching(/contract\.ts$/), reason: 'not-a-contract' },
           },
         },
+      });
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'refuses as not a SQL contract an export with a target but no SQL contract shape, null or list namespaces, or a null default export',
+    async () => {
+      const notContract = { refused: { code: 'CONTRACT.EXPORT_INVALID' } };
+      expect({
+        targetOnly: await loadModule(`export default { target: 'mysql', models: {} };\n`),
+        nullNamespaces: await loadModule(
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: null } };\n`,
+        ),
+        listNamespaces: await loadModule(
+          `export default { targetFamily: 'sql', target: 'postgres', storage: { namespaces: [] } };\n`,
+        ),
+        nullDefault: await loadModule('export default null;\n'),
+      }).toMatchObject({
+        targetOnly: notContract,
+        nullNamespaces: notContract,
+        listNamespaces: notContract,
+        nullDefault: notContract,
+      });
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'loads the contract export when the default export is null',
+    async () => {
+      expect(
+        await loadModule(
+          `export default null;\nexport const contract = { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } };\n`,
+        ),
+      ).toEqual({
+        loaded: { targetFamily: 'sql', target: 'postgres', storage: { namespaces: {} } },
       });
     },
     timeouts.typeScriptCompilation,
