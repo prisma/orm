@@ -243,7 +243,7 @@ export interface PlannedStatements<TCall extends CallWithCompanions> {
   /**
    * The tables whose model keeps its name and whose new table the working schema already has, so
    * the rename is already done and none is planned: the diff renames their constraints, which a
-   * target puts before creates.
+   * target puts before creates and after the drops that free their new names.
    */
   readonly alreadyRenamedTables: readonly ModelTable[];
   readonly plannedStatements: readonly PlannedStatement[];

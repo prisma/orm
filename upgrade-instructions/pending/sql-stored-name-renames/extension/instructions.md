@@ -9,7 +9,7 @@ changes:
         - '(?<![\w$])SchemaTables(?![\w$])'
   - id: plan-statements-plans-stored-name-renames
     summary: |
-      `planStatements` from `@prisma/orm-family-sql/family/control` now plans a table or column rename for a model or field that keeps its name while its stored name changes, with no statement, whenever there is an origin contract. Its result, `PlannedStatements`, gains `alreadyRenamedTables` (tables whose rename the database already has, whose constraint renames a target puts before its creates) and `storageRenames` (a `StorageRenames`, or `undefined` with no origin contract). `StatementPlanningTarget` no longer extends `TableRenameByHand`.
+      `planStatements` from `@prisma/orm-family-sql/family/control` now plans a table or column rename for a model or field that keeps its name while its stored name changes, with no statement, whenever there is an origin contract. Its result, `PlannedStatements`, gains `alreadyRenamedTables` (tables whose rename the database already has, whose constraint renames a target puts before its creates and after the drops that free their new names) and `storageRenames` (a `StorageRenames`, or `undefined` with no origin contract). `StatementPlanningTarget` no longer extends `TableRenameByHand`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -63,7 +63,7 @@ A database that compares names without case passes its own comparison, the same 
 
 ## `plan-statements-plans-stored-name-renames`
 
-A target that calls `planStatements` keeps putting its `calls` first in the plan. The calls may now include renames no statement asked for. Put the renames of the constraints of each table in `alreadyRenamedTables` before the plan's creates. Pass `storageRenames` on to `subjectsOfCalls`, as below. An object literal typed as `StatementPlanningTarget` that also holds `renderTableRename` and `tableRenameByHand` keeps them only where a `TableRenameByHand` is expected.
+A target that calls `planStatements` keeps putting its `calls` first in the plan. The calls may now include renames no statement asked for. Put the renames of the constraints of each table in `alreadyRenamedTables` before the plan's creates, but after a drop that frees the name a rename gives. Pass `storageRenames` on to `subjectsOfCalls`, as below. An object literal typed as `StatementPlanningTarget` that also holds `renderTableRename` and `tableRenameByHand` keeps them only where a `TableRenameByHand` is expected.
 
 ## `subjects-of-calls-storage-renames`
 
