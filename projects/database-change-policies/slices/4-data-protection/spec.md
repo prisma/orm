@@ -10,7 +10,7 @@ A production database's ref declares that nothing may lose its data, and the dat
 $ prisma db migrate --db $PROD
 ✘ [MIGRATION.DATA_PROTECTION_FORBIDS] This database's data protection policy forbids data loss
   why: The marker records dataLoss: data-loss-forbidden. Migration 20261118T0900_drop_legacy drops column "user"."legacy_name".
-→ Change the migration so it does not lose data. To keep the data, carry it first with a data transform.
+→ This database forbids losing data, so this operation cannot run on it. Take it out of the migration. To drop the data, whoever owns the database must first change its data protection policy.
 ```
 
 Nothing ran. `db update` refuses the same change, even with `--delete`. `migration plan --to production` refuses to write the migration in the first place.
@@ -46,7 +46,7 @@ The framework's `ControlFamilyInstance` already has `storageNameOf(operation)`, 
 
 `access-widening-forbidden` refuses every listed access change, whether `widens` is true or false. That matches `db update`, which asks about both, and the project spec's definition (an operation that changes who can read or write rows).
 
-**Known limit:** a `rawSql` operation and a data transform are opaque. A hand-written `ALTER TABLE … DISABLE ROW LEVEL SECURITY` is not recognised. The decision record and the skill say so.
+**Known limits:** what a `rawSql` operation or a data transform does is not read, so a hand-written `ALTER TABLE … DISABLE ROW LEVEL SECURITY` is not recognised. Adding a policy and changing a policy's condition are not access changes to the planner today, so no command asks about or refuses them. The decision record and the skill say so.
 
 ### `db update`
 
@@ -75,8 +75,8 @@ A setting the ref does not declare is not checked. `migration plan` given no ref
 
 - **summary:** says which setting forbids the change.
 - **why:** the setting and where it is recorded, then each refused operation: its subject, and for `db migrate` the migration that contains it.
-- **meta:** `{ spaceId, command, setting, level, operations: [{ spaceId, migration?, operationId?, subject, label }] }`.
-- **next actions:** `user-choice`, no command. For data loss: change the contract or the migration so it does not lose data; to keep the data, carry it first with a data transform. For access: change the contract or the migration so it does not change who can read or write the rows. It never offers `--permit-policy-change`, `--delete` or `--allow`.
+- **meta:** `{ spaceId, command, settings: [{ setting, level }], operations: [{ setting, spaceId, migration?, operationId?, subject, label }] }`.
+- **next actions:** `user-choice`, no command. For data loss: the operation cannot run on this database; state a `--rename` if it was only a rename, convert a type change with `migration plan --convert`, or keep the data; really dropping it takes a change to the database's policy by its owner first. A migration that copies the data and then drops it is still refused. For access: change the contract or the migration so it does not change who can read or write the rows, or have the owner change the policy first. It never offers `--permit-policy-change`, `--delete` or `--allow`.
 
 When one run breaks both settings, one error reports both.
 
@@ -106,7 +106,7 @@ When one run breaks both settings, one error reports both.
 
 ## Framework domain
 
-`ControlFamilyInstance.accessChangesOf` and the doc comment on `PerSpacePlan.accessChanges` change the framework domain. The exemption granted for database policies on 2026-10-30 covers them: the policy is a framework concept, and the framework cannot name a target's operations itself.
+`ControlFamilyInstance.accessChangesOf`, the `accessChangesOf` input threaded through `resolveRecordedPath` beside `storageNameOf`, and the doc comment on `PerSpacePlan.accessChanges` change the framework domain. The exemption granted for database policies on 2026-10-30 covers them: the policy is a framework concept, and the framework cannot name a target's operations itself.
 
 ## Failure states
 
