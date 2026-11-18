@@ -33,7 +33,7 @@ import type { InitContribution } from '@prisma/orm-toolchain/cli/init-contributi
 export default {
   label: 'PostgreSQL',
   configModule: '@prisma/orm-postgres/config',
-  peerPackages: [],
+  peerPackages: ['pg'],
   authoringModes: ['psl', 'typescript'],
   starterContract: (mode) => (mode === 'psl' ? starterPsl : starterTs),
   contractSample: (mode) => (mode === 'psl' ? samplePsl : sampleTs),
@@ -62,7 +62,7 @@ The CLI holds no template, driver name, connection string or server check for an
 | `quickReference(input)` | Writes it as the quick reference |
 | `readme(input)` | Optional. Writes it as the README in a project that already has `src/index.ts` |
 | `serverRequirement` | Optional. States the minimum server version in the quick reference |
-| `probe(databaseUrl)` | Optional. Connects and reports the server's version, for `--probe-db` |
+| `probe(databaseUrl)` | Optional. Connects and reports the server's version, for `--probe-db`, within the deadline `init` gives it |
 | `prisma7QuickReference(input)` | Optional. The quick reference for a project that keeps its Prisma 7 schema as the contract source |
 
 The CLI keeps everything that is the same for every target: which files exist and where they go, package manager detection, `prisma.config.ts` around `configModule` (for a starter contract and for a Prisma 7 schema), `tsconfig.json`, `.gitignore`, `.gitattributes`, the `package.json` scripts, the questions it asks and what it prints.
@@ -71,7 +71,7 @@ Two facts are shared by the CLI and every contribution, and the interface states
 
 The `init` entrypoint may import types from the framework but no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one the target package depends on, and two copies in one process do not recognise each other's values.
 
-A probe reports one of three results: the server's version, a missing driver, or a connection that worked whose version could not be read. It rejects only when it cannot connect.
+A probe reports one of three results: the server's version, a missing driver, or a connection that worked whose version could not be read. It rejects only when it cannot connect. `init` gives every probe a deadline, so a probe that never settles is reported like one that could not connect.
 
 ## The target package is installed first
 
@@ -91,7 +91,9 @@ check the flags
 
 `init` asks nothing before installing the target package. The user named it, and installing it is what they asked for. Any refusal that depends only on the flags happens before the install.
 
-The drivers go in the same install. A target package declares its driver as a required peer dependency ([ADR 219](ADR%20219%20-%20Database%20driver%20coupling%20-%20framework%20owns%20user-facing%20types%20and%20driver%20is%20a%20single-major%20peer%20dependency.md)), and some package managers refuse to install a package without its required peers. For a listed package the list names the drivers, because they must be known before the package is installed.
+The drivers go in the same install. A target package declares its driver as a required peer dependency ([ADR 219](ADR%20219%20-%20Database%20driver%20coupling%20-%20framework%20owns%20user-facing%20types%20and%20driver%20is%20a%20single-major%20peer%20dependency.md)), and some package managers refuse to install a package without its required peers. This holds on every path, a project that keeps its Prisma 7 schema included. For a listed package the list names the drivers, because they must be known before the package is installed. A driver the project already declares is left to the later install, so a refusal after the first install changes no version the project chose.
+
+A target package's other required peers, such as `temporal-polyfill` and `@types/pg`, are not installed by `init` yet.
 
 When a refusal comes after the install, the error says the package was added and gives the command to remove it.
 
@@ -115,7 +117,7 @@ The CLI holds a list of known target packages. `--target` is looked up in it, an
 
 - **A target package is listed because Prisma vouches for it.** Who wrote it does not matter, and a community package can be listed.
 - **The list holds names and the facts `init` needs before anything is installed.** The picker shows the label before the package is installed. The drivers go into the package's own install, and a Prisma 6 project gets printed setup instructions and no install at all, so both take the drivers from the list.
-- **A listed package runs the same code as an unlisted one.** Listing gives a short name, a line in the interactive picker, and the mapping from an earlier Prisma's provider.
+- **A listed package runs the same code as an unlisted one.** Listing gives a short name, a line in the interactive picker, the drivers for the first install, and the mapping from an earlier Prisma's provider.
 - **The list must agree with the contributions.** A test loads each listed package's published contribution and checks that its label, driver packages and config module match the list entry.
 
 ## Projects coming from Prisma 6 and Prisma 7
