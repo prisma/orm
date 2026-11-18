@@ -21,8 +21,12 @@ MariaDB support is early. The package covers contracts, migrations and queries o
 ```ts
 import mariadb from '@prisma/orm-mariadb/runtime';
 import { contractFromJson } from '@prisma/orm-mariadb/static';
+import type { Contract } from './prisma/contract.d';
+import contractJson from './prisma/contract.json' with { type: 'json' };
 
-const db = mariadb({ contract: contractFromJson<Contract>(contractJson), url: process.env.MARIADB_URL });
+const url = process.env['MARIADB_URL'];
+if (url === undefined) throw new Error('Set MARIADB_URL');
+const db = mariadb({ contract: contractFromJson<Contract>(contractJson), url });
 const users = await db.orm.User.include('posts', (posts) => posts.orderBy((p) => p.id.desc()).limit(3)).all();
 ```
 
