@@ -417,7 +417,7 @@ On a relation the record holds the key for, `disconnect` is not available on a v
 
 #### Updating and deleting rows of a variant
 
-`r.variant(value).where(w).updateAll(data)`, `.deleteAll()`, and both without `where`, change only the related rows of the variant, on a one-to-many and a many-to-many relation, in `update()`. `updateAll` data takes the base model's fields only: a field of the variant is a type error and is refused with `ORM.FIELD_UNKNOWN`.
+`r.variant(value).where(w).updateAll(data)`, `.deleteAll()`, and both without `where`, change only the related rows of the variant, on a one-to-many and a many-to-many relation, in `update()`. `updateAll` data takes the base model's fields only: a field of the variant is a type error and is refused with `ORM.FIELD_UNKNOWN`. Update data on a polymorphic model never takes the discriminator: setting it is a type error and is refused with `ORM.FIELD_IMMUTABLE`.
 
 ```ts
 await db.Project.where({ id: 1 }).update({

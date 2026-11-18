@@ -1722,7 +1722,7 @@ export type CreateInput<
   ModelName extends string,
   NsId extends string = never,
 > = RowCreateFields<TContract, ModelName, NsId> &
-  RelationMutationFields<TContract, ModelName, 'create'>;
+  RelationMutationFields<TContract, ModelName, 'create', NsId>;
 
 type IsPolymorphicBase<
   TContract extends Contract<SqlStorage>,
@@ -1764,6 +1764,23 @@ export type VariantCreateInput<
       >
   : never;
 
+type ConcreteNsId<NsId extends string> = string extends NsId ? never : NsId;
+
+type WithoutDiscriminator<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> =
+  DiscriminatorFieldName<
+    TContract,
+    ModelName,
+    ConcreteNsId<NsId>
+  > extends infer Discriminator extends string
+    ? [Discriminator] extends [never]
+      ? unknown
+      : { readonly [K in Discriminator]?: never }
+    : unknown;
+
 /**
  * An input with no keys is `Record<string, never>`, not `{}`: TypeScript accepts any object where `{}` is expected, so a model with no fields would accept any key.
  */
@@ -1774,7 +1791,10 @@ export type ScalarUpdateInput<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
-> = ClosedWhenEmpty<Partial<DefaultModelInputRow<TContract, ModelName, NsId>>>;
+> = ClosedWhenEmpty<
+  Partial<DefaultModelInputRow<TContract, ModelName, NsId>> &
+    WithoutDiscriminator<TContract, ModelName, NsId>
+>;
 
 export type ResolvedCreateInput<
   TContract extends Contract<SqlStorage>,
@@ -1912,36 +1932,41 @@ export type UniqueConstraintCriterion<
       : never
     : never;
 
-type RelationConnectCriterion<TContract extends Contract<SqlStorage>, ModelName extends string> = [
-  UniqueConstraintCriterion<TContract, ModelName>,
-] extends [never]
+type RelationConnectCriterion<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = [UniqueConstraintCriterion<TContract, ModelName, NsId>] extends [never]
   ? Record<string, unknown>
-  : UniqueConstraintCriterion<TContract, ModelName>;
+  : UniqueConstraintCriterion<TContract, ModelName, NsId>;
 
 export interface RelationMutationCreate<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  NsId extends string = never,
 > {
   readonly kind: 'create';
-  readonly data: readonly MutationCreateInput<TContract, ModelName>[];
+  readonly data: readonly MutationCreateInput<TContract, ModelName, NsId>[];
   readonly variant?: string;
 }
 
 export interface RelationMutationConnect<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  NsId extends string = never,
 > {
   readonly kind: 'connect';
-  readonly criteria: readonly RelationConnectCriterion<TContract, ModelName>[];
+  readonly criteria: readonly RelationConnectCriterion<TContract, ModelName, NsId>[];
   readonly state?: CollectionState;
 }
 
 export interface RelationMutationDisconnect<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  NsId extends string = never,
 > {
   readonly kind: 'disconnect';
-  readonly criteria?: readonly RelationConnectCriterion<TContract, ModelName>[];
+  readonly criteria?: readonly RelationConnectCriterion<TContract, ModelName, NsId>[];
   readonly state?: CollectionState;
 }
 
@@ -1949,29 +1974,33 @@ export type RelationMutationFilter<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   VariantValue extends string | undefined = undefined,
+  NsId extends string = never,
 > =
   | WhereArg
   | ((
-      model: VariantAwareModelAccessor<TContract, ModelName, VariantValue>,
-      tools: ModelCallbackTools<TContract, ModelName>,
+      model: VariantAwareModelAccessor<TContract, ModelName, VariantValue, NsId>,
+      tools: ModelCallbackTools<TContract, ModelName, NsId>,
     ) => WhereCallbackResult)
-  | ShorthandWhereFilter<TContract, never, ModelName>;
+  | ShorthandWhereFilter<TContract, NsId & DomainNamespaceId<TContract>, ModelName>;
 
 export type RelationMutationUpdateAllData<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ParentLinkFields extends string = never,
-> = Partial<DefaultModelInputRow<TContract, ModelName>> & {
-  readonly [K in ParentLinkFields]?: never;
-};
+  NsId extends string = never,
+> = Partial<DefaultModelInputRow<TContract, ModelName, NsId>> &
+  WithoutDiscriminator<TContract, ModelName, NsId> & {
+    readonly [K in ParentLinkFields]?: never;
+  };
 
 export interface RelationMutationUpdateAll<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  NsId extends string = never,
 > {
   readonly kind: 'updateAll';
   readonly state: CollectionState;
-  readonly data: Partial<DefaultModelInputRow<TContract, ModelName>>;
+  readonly data: RelationMutationUpdateAllData<TContract, ModelName, never, NsId>;
 }
 
 export interface RelationMutationDeleteAll {
@@ -1979,19 +2008,24 @@ export interface RelationMutationDeleteAll {
   readonly state: CollectionState;
 }
 
-export type RelationMutation<TContract extends Contract<SqlStorage>, ModelName extends string> =
-  | RelationMutationCreate<TContract, ModelName>
-  | RelationMutationConnect<TContract, ModelName>
-  | RelationMutationDisconnect<TContract, ModelName>
-  | RelationMutationUpdateAll<TContract, ModelName>
+export type RelationMutation<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> =
+  | RelationMutationCreate<TContract, ModelName, NsId>
+  | RelationMutationConnect<TContract, ModelName, NsId>
+  | RelationMutationDisconnect<TContract, ModelName, NsId>
+  | RelationMutationUpdateAll<TContract, ModelName, NsId>
   | RelationMutationDeleteAll;
 
 type RelationThrough<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   RelName extends string,
+  NsId extends string = never,
 > =
-  RelationsOf<TContract, ModelName> extends infer Rels extends Record<string, unknown>
+  RelationsOf<TContract, ModelName, NsId> extends infer Rels extends Record<string, unknown>
     ? RelName extends keyof Rels
       ? Rels[RelName] extends {
           readonly through: infer Through extends {
@@ -2009,16 +2043,18 @@ type HasJunctionThrough<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   RelName extends string,
-> = [RelationThrough<TContract, ModelName, RelName>] extends [never] ? false : true;
+  NsId extends string = never,
+> = [RelationThrough<TContract, ModelName, RelName, NsId>] extends [never] ? false : true;
 
 type RelationParentLinkFields<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   RelName extends string,
+  NsId extends string = never,
 > =
-  HasJunctionThrough<TContract, ModelName, RelName> extends true
+  HasJunctionThrough<TContract, ModelName, RelName, NsId> extends true
     ? never
-    : RelationsOf<TContract, ModelName> extends infer Rels extends Record<string, unknown>
+    : RelationsOf<TContract, ModelName, NsId> extends infer Rels extends Record<string, unknown>
       ? RelName extends keyof Rels
         ? Rels[RelName] extends {
             readonly on: { readonly targetFields: readonly (infer Field extends string)[] };
@@ -2082,8 +2118,9 @@ type HasRequiredJunctionPayload<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   RelName extends string,
+  NsId extends string = never,
 > =
-  RelationThrough<TContract, ModelName, RelName> extends infer Through extends {
+  RelationThrough<TContract, ModelName, RelName, NsId> extends infer Through extends {
     readonly table: string;
     readonly namespaceId: string;
     readonly parentColumns: readonly string[];
@@ -2120,42 +2157,48 @@ type DisconnectMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   BareDisconnectDisabled extends boolean,
+  NsId extends string = never,
 > = BareDisconnectDisabled extends true
   ? (
-      criteria: readonly RelationConnectCriterion<TContract, ModelName>[],
-    ) => RelationMutationDisconnect<TContract, ModelName>
+      criteria: readonly RelationConnectCriterion<TContract, ModelName, NsId>[],
+    ) => RelationMutationDisconnect<TContract, ModelName, NsId>
   : {
-      (): RelationMutationDisconnect<TContract, ModelName>;
+      (): RelationMutationDisconnect<TContract, ModelName, NsId>;
       (
-        criteria: readonly RelationConnectCriterion<TContract, ModelName>[],
-      ): RelationMutationDisconnect<TContract, ModelName>;
+        criteria: readonly RelationConnectCriterion<TContract, ModelName, NsId>[],
+      ): RelationMutationDisconnect<TContract, ModelName, NsId>;
     };
 
 export type RelationMutationResult<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
-> = RelationMutation<TContract, ModelName> | readonly RelationMutation<TContract, ModelName>[];
+  NsId extends string = never,
+> =
+  | RelationMutation<TContract, ModelName, NsId>
+  | readonly RelationMutation<TContract, ModelName, NsId>[];
 
 export type ToOneRelationMutationResult<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  NsId extends string = never,
 > =
-  | RelationMutation<TContract, ModelName>
+  | RelationMutation<TContract, ModelName, NsId>
   | readonly []
-  | readonly [RelationMutation<TContract, ModelName>];
+  | readonly [RelationMutation<TContract, ModelName, NsId>];
 
 export interface FilteredRelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ParentLinkFields extends string = never,
   VariantValue extends string | undefined = undefined,
+  NsId extends string = never,
 > {
   where(
-    filter: RelationMutationFilter<TContract, ModelName, VariantValue>,
-  ): FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue>;
+    filter: RelationMutationFilter<TContract, ModelName, VariantValue, NsId>,
+  ): FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue, NsId>;
   updateAll(
-    data: RelationMutationUpdateAllData<TContract, ModelName, ParentLinkFields>,
-  ): RelationMutationUpdateAll<TContract, ModelName>;
+    data: RelationMutationUpdateAllData<TContract, ModelName, ParentLinkFields, NsId>,
+  ): RelationMutationUpdateAll<TContract, ModelName, NsId>;
   deleteAll(): RelationMutationDeleteAll;
 }
 
@@ -2167,61 +2210,70 @@ export interface RelationMutator<
   DisconnectDisabled extends boolean = false,
   FilteredWritesDisabled extends boolean = false,
   ParentLinkFields extends string = never,
+  NsId extends string = never,
 > {
   create(
-    data: CreateDisabled<TContract, ModelName, LinkWritesDisabled> extends true
+    data: CreateDisabled<TContract, ModelName, LinkWritesDisabled, NsId> extends true
       ? never
-      : MutationCreateInput<TContract, ModelName>,
-  ): RelationMutationCreate<TContract, ModelName>;
+      : MutationCreateInput<TContract, ModelName, NsId>,
+  ): RelationMutationCreate<TContract, ModelName, NsId>;
   create(
-    data: CreateDisabled<TContract, ModelName, LinkWritesDisabled> extends true
+    data: CreateDisabled<TContract, ModelName, LinkWritesDisabled, NsId> extends true
       ? never
-      : readonly MutationCreateInput<TContract, ModelName>[],
-  ): RelationMutationCreate<TContract, ModelName>;
+      : readonly MutationCreateInput<TContract, ModelName, NsId>[],
+  ): RelationMutationCreate<TContract, ModelName, NsId>;
   connect(
     criterion: LinkWritesDisabled extends true
       ? never
-      : RelationConnectCriterion<TContract, ModelName>,
-  ): RelationMutationConnect<TContract, ModelName>;
+      : RelationConnectCriterion<TContract, ModelName, NsId>,
+  ): RelationMutationConnect<TContract, ModelName, NsId>;
   connect(
     criteria: LinkWritesDisabled extends true
       ? never
-      : readonly RelationConnectCriterion<TContract, ModelName>[],
-  ): RelationMutationConnect<TContract, ModelName>;
+      : readonly RelationConnectCriterion<TContract, ModelName, NsId>[],
+  ): RelationMutationConnect<TContract, ModelName, NsId>;
   // `disconnect` is update-only: `createGraph` rejects any nested disconnect
   // during `create()`, so in the create context the criteria parameter narrows
   // to `never`, making every call a type error (mirrors the `LinkWritesDisabled`
   // arms above). `never` is callable, so disabling must live on the parameter,
   // not the property type.
   readonly disconnect: DisconnectDisabled extends true
-    ? (criteria: never) => RelationMutationDisconnect<TContract, ModelName>
-    : DisconnectMutator<TContract, ModelName, BareDisconnectDisabled>;
+    ? (criteria: never) => RelationMutationDisconnect<TContract, ModelName, NsId>
+    : DisconnectMutator<TContract, ModelName, BareDisconnectDisabled, NsId>;
   readonly where: FilteredWritesDisabled extends true
-    ? (input: never) => FilteredRelationMutator<TContract, ModelName, ParentLinkFields>
-    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields>['where'];
+    ? (
+        input: never,
+      ) => FilteredRelationMutator<TContract, ModelName, ParentLinkFields, undefined, NsId>
+    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields, undefined, NsId>['where'];
   readonly updateAll: FilteredWritesDisabled extends true
-    ? (data: never) => RelationMutationUpdateAll<TContract, ModelName>
-    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields>['updateAll'];
+    ? (data: never) => RelationMutationUpdateAll<TContract, ModelName, NsId>
+    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields, undefined, NsId>['updateAll'];
   readonly deleteAll: FilteredWritesDisabled extends true
     ? (unavailable: never) => RelationMutationDeleteAll
-    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields>['deleteAll'];
+    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields, undefined, NsId>['deleteAll'];
 }
 
 type CreateDisabled<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   LinkWritesDisabled extends boolean,
-> = LinkWritesDisabled extends true ? true : IsPolymorphicBase<TContract, ModelName>;
+  NsId extends string = never,
+> = LinkWritesDisabled extends true ? true : IsPolymorphicBase<TContract, ModelName, NsId>;
 
 type NestedVariantCreateInput<
   TContract extends Contract<SqlStorage>,
   BaseModelName extends string,
   VariantValue extends string,
+  NsId extends string = never,
 > = Omit<
-  MutationCreateInput<TContract, BaseModelName>,
-  DiscriminatorFieldName<TContract, BaseModelName>
+  MutationCreateInput<TContract, BaseModelName, NsId>,
+  DiscriminatorFieldName<TContract, BaseModelName, NsId>
 > &
-  CreateInput<TContract, VariantModelName<TContract, BaseModelName, VariantValue>>;
+  CreateInput<
+    TContract,
+    VariantModelName<TContract, BaseModelName, VariantValue, NsId>,
+    VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>
+  >;
 
 export interface VariantRelationMutator<
   TContract extends Contract<SqlStorage>,
@@ -2232,6 +2284,7 @@ export interface VariantRelationMutator<
   DisconnectDisabled extends boolean = false,
   FilteredWritesDisabled extends boolean = false,
   ParentLinkFields extends string = never,
+  NsId extends string = never,
 > extends Pick<
     RelationMutator<
       TContract,
@@ -2240,25 +2293,26 @@ export interface VariantRelationMutator<
       BareDisconnectDisabled,
       DisconnectDisabled,
       FilteredWritesDisabled,
-      ParentLinkFields
+      ParentLinkFields,
+      NsId
     >,
     'connect' | 'disconnect' | 'updateAll' | 'deleteAll'
   > {
   readonly where: FilteredWritesDisabled extends true
     ? (
         input: never,
-      ) => FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue>
-    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue>['where'];
+      ) => FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue, NsId>
+    : FilteredRelationMutator<TContract, ModelName, ParentLinkFields, VariantValue, NsId>['where'];
   create(
     data: LinkWritesDisabled extends true
       ? never
-      : NestedVariantCreateInput<TContract, ModelName, VariantValue>,
-  ): RelationMutationCreate<TContract, ModelName>;
+      : NestedVariantCreateInput<TContract, ModelName, VariantValue, NsId>,
+  ): RelationMutationCreate<TContract, ModelName, NsId>;
   create(
     data: LinkWritesDisabled extends true
       ? never
-      : readonly NestedVariantCreateInput<TContract, ModelName, VariantValue>[],
-  ): RelationMutationCreate<TContract, ModelName>;
+      : readonly NestedVariantCreateInput<TContract, ModelName, VariantValue, NsId>[],
+  ): RelationMutationCreate<TContract, ModelName, NsId>;
 }
 
 type RelationMutatorVariant<
@@ -2269,10 +2323,11 @@ type RelationMutatorVariant<
   VariantDisconnectDisabled extends boolean,
   FilteredWritesDisabled extends boolean,
   ParentLinkFields extends string,
+  NsId extends string,
 > =
-  IsPolymorphicBase<TContract, ModelName> extends true
+  IsPolymorphicBase<TContract, ModelName, NsId> extends true
     ? {
-        variant<V extends DiscriminatorValues<TContract, ModelName>>(
+        variant<V extends DiscriminatorValues<TContract, ModelName, NsId>>(
           value: V,
         ): VariantRelationMutator<
           TContract,
@@ -2282,61 +2337,72 @@ type RelationMutatorVariant<
           BareDisconnectDisabled,
           VariantDisconnectDisabled,
           FilteredWritesDisabled,
-          ParentLinkFields
+          ParentLinkFields,
+          NsId
         >;
       }
     : unknown;
 
+type RelationTargetNamespaceKey<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  RelName extends string,
+  NsId extends string = never,
+> =
+  RelationsOf<TContract, ModelName, NsId> extends infer Rels extends Record<string, unknown>
+    ? RelName extends keyof Rels
+      ? Rels[RelName] extends { readonly to: { readonly namespace: infer N extends string } }
+        ? ContractNamespaceKey<TContract, N>
+        : never
+      : never
+    : never;
+
 type RelationMutationCallback<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
-  RelName extends RelationNames<TContract, ModelName>,
-  Context extends 'create' | 'update' = 'update',
+  RelName extends RelationNames<TContract, ModelName, NsId>,
+  Context extends 'create' | 'update',
+  NsId extends string,
+  TargetModel extends string = RelatedModelName<TContract, ModelName, RelName, NsId> & string,
+  TargetNs extends string = RelationTargetNamespaceKey<TContract, ModelName, RelName, NsId>,
+  Cardinality = RelationCardinality<TContract, ModelName, RelName, NsId>,
 > = (
   mutator: RelationMutator<
     TContract,
-    RelatedModelName<TContract, ModelName, RelName> & string,
-    HasRequiredJunctionPayload<TContract, ModelName, RelName>,
-    HasJunctionThrough<TContract, ModelName, RelName>,
+    TargetModel,
+    HasRequiredJunctionPayload<TContract, ModelName, RelName, NsId>,
+    HasJunctionThrough<TContract, ModelName, RelName, NsId>,
     Context extends 'create' ? true : false,
-    Context extends 'create'
-      ? true
-      : RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
-        ? true
-        : false,
-    RelationParentLinkFields<TContract, ModelName, RelName>
+    Context extends 'create' ? true : Cardinality extends '1:1' | 'N:1' ? true : false,
+    RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
+    TargetNs
   > &
     RelationMutatorVariant<
       TContract,
-      RelatedModelName<TContract, ModelName, RelName> & string,
-      HasRequiredJunctionPayload<TContract, ModelName, RelName>,
-      HasJunctionThrough<TContract, ModelName, RelName>,
-      Context extends 'create'
-        ? true
-        : RelationCardinality<TContract, ModelName, RelName> extends 'N:1'
-          ? true
-          : false,
-      Context extends 'create'
-        ? true
-        : RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
-          ? true
-          : false,
-      RelationParentLinkFields<TContract, ModelName, RelName>
+      TargetModel,
+      HasRequiredJunctionPayload<TContract, ModelName, RelName, NsId>,
+      HasJunctionThrough<TContract, ModelName, RelName, NsId>,
+      Context extends 'create' ? true : Cardinality extends 'N:1' ? true : false,
+      Context extends 'create' ? true : Cardinality extends '1:1' | 'N:1' ? true : false,
+      RelationParentLinkFields<TContract, ModelName, RelName, NsId>,
+      TargetNs
     >,
-) => RelationCardinality<TContract, ModelName, RelName> extends '1:1' | 'N:1'
-  ? ToOneRelationMutationResult<TContract, RelatedModelName<TContract, ModelName, RelName> & string>
-  : RelationMutationResult<TContract, RelatedModelName<TContract, ModelName, RelName> & string>;
+) => Cardinality extends '1:1' | 'N:1'
+  ? ToOneRelationMutationResult<TContract, TargetModel, TargetNs>
+  : RelationMutationResult<TContract, TargetModel, TargetNs>;
 
 type RelationMutationFields<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   Context extends 'create' | 'update' = 'update',
+  NsId extends string = never,
 > = Partial<{
-  [K in RelationNames<TContract, ModelName>]: RelationMutationCallback<
+  [K in RelationNames<TContract, ModelName, ConcreteNsId<NsId>>]: RelationMutationCallback<
     TContract,
     ModelName,
     K,
-    Context
+    Context,
+    ConcreteNsId<NsId>
   >;
 }>;
 
@@ -2357,7 +2423,11 @@ type RelationDefWithTargetFields = {
   };
 };
 
-type ChildForeignKeyFieldNames<TContract extends Contract<SqlStorage>, ModelName extends string> =
+type ChildForeignKeyFieldNames<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> =
   Extract<AllModelRelationEntries<TContract>, RelationDefWithTargetFields> extends infer Relation
     ? Relation extends {
         readonly to: { readonly model: ModelName };
@@ -2365,7 +2435,13 @@ type ChildForeignKeyFieldNames<TContract extends Contract<SqlStorage>, ModelName
           readonly targetFields: infer Fields extends readonly string[];
         };
       }
-      ? Fields[number]
+      ? [NsId] extends [never]
+        ? Fields[number]
+        : Relation extends { readonly to: { readonly namespace: infer Target extends string } }
+          ? Target extends NsId
+            ? Fields[number]
+            : never
+          : Fields[number]
       : never
     : never;
 
@@ -2376,7 +2452,7 @@ type NestedOptionalCreateFieldNames<
 > =
   | OptionalCreateFieldNames<TContract, ModelName, NsId>
   | Extract<
-      ChildForeignKeyFieldNames<TContract, ModelName>,
+      ChildForeignKeyFieldNames<TContract, ModelName, ConcreteNsId<NsId>>,
       CreateFieldNames<TContract, ModelName, NsId>
     >;
 
@@ -2415,14 +2491,14 @@ export type MutationCreateInput<
   ModelName extends string,
   NsId extends string = never,
 > = NestedCreateInput<TContract, ModelName, NsId> &
-  RelationMutationFields<TContract, ModelName, 'create'>;
+  RelationMutationFields<TContract, ModelName, 'create', NsId>;
 
 export type MutationCreateInputWithRelations<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
 > = NestedCreateInput<TContract, ModelName, NsId> &
-  AtLeastOne<RelationMutationFields<TContract, ModelName, 'create'>>;
+  AtLeastOne<RelationMutationFields<TContract, ModelName, 'create', NsId>>;
 
 export type MutationUpdateInput<
   TContract extends Contract<SqlStorage>,
@@ -2430,7 +2506,8 @@ export type MutationUpdateInput<
   NsId extends string = never,
 > = ClosedWhenEmpty<
   Partial<DefaultModelInputRow<TContract, ModelName, NsId>> &
-    RelationMutationFields<TContract, ModelName, 'update'>
+    WithoutDiscriminator<TContract, ModelName, NsId> &
+    RelationMutationFields<TContract, ModelName, 'update', NsId>
 >;
 
 type ModelRelations<
