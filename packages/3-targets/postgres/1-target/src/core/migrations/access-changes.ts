@@ -72,32 +72,50 @@ function policyKey({ schema, table, name }: Policy): string {
  * The operations of one migration that change who can read or write rows. Disabling row-level
  * security widens access: every role with table privileges then reads and writes every row.
  * Dropping a policy changes access either way, since a permissive policy grants access and a
- * restrictive one limits it, unless the same migration creates the policy again, by name or by
- * generated-name prefix. Each operation is recognised from its target and the id its operation
- * factory builds; an operation with neither, such as raw SQL, is not read.
+ * restrictive one limits it, unless a policy the same migration creates, under the same name or
+ * generated-name prefix, is still there when the migration ends. Each operation is recognised from
+ * its target and the id its operation factory builds; an operation with neither, such as raw SQL,
+ * is not read.
  */
 export function accessChangesOfIdentities(
   identities: readonly (UncheckedIdentity | undefined)[],
 ): readonly TableAccessChange[] {
-  const created = new Set(
-    identities.flatMap((identity) => {
-      const policy =
-        identity === undefined ? undefined : policyOf(identity, createRlsPolicyIdentity);
-      return policy === undefined ? [] : [policyKey(policy)];
-    }),
-  );
-  return identities.flatMap((identity, index): TableAccessChange[] => {
-    if (identity === undefined) return [];
-    const disabled = disabledTable(identity);
-    if (disabled !== undefined) {
-      return [{ index, schema: disabled.schema, table: disabled.table, widens: true }];
+  const createdAndKept = new Map<string, Set<string>>();
+  const disabled: TableAccessChange[] = [];
+  const droppedFromBefore: (TableAccessChange & { readonly key: string })[] = [];
+
+  identities.forEach((identity, index) => {
+    if (identity === undefined) return;
+    const table = disabledTable(identity);
+    if (table !== undefined) {
+      disabled.push({ index, ...table, widens: true });
+      return;
+    }
+    const created = policyOf(identity, createRlsPolicyIdentity);
+    if (created !== undefined) {
+      const key = policyKey(created);
+      createdAndKept.set(key, (createdAndKept.get(key) ?? new Set()).add(created.name));
+      return;
     }
     const dropped = policyOf(identity, dropRlsPolicyIdentity);
-    if (dropped !== undefined && !created.has(policyKey(dropped))) {
-      return [{ index, schema: dropped.schema, table: dropped.table, widens: false }];
-    }
-    return [];
+    if (dropped === undefined) return;
+    const key = policyKey(dropped);
+    if (createdAndKept.get(key)?.delete(dropped.name)) return;
+    droppedFromBefore.push({
+      index,
+      schema: dropped.schema,
+      table: dropped.table,
+      widens: false,
+      key,
+    });
   });
+
+  return [
+    ...disabled,
+    ...droppedFromBefore
+      .filter(({ key }) => (createdAndKept.get(key)?.size ?? 0) === 0)
+      .map(({ key: _key, ...change }) => change),
+  ].sort((a, b) => a.index - b.index);
 }
 
 /** The operations of a recorded Postgres migration that change who can read or write rows. */
