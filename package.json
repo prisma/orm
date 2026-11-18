@@ -79,7 +79,7 @@
     "@internal/migration-tools": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
-    "@vitest/coverage-v8": "5.1.0",
+    "@vitest/coverage-v8": "5.0.0-rc.2",
     "arktype": "catalog:",
     "dependency-cruiser": "^18.7.2",
     "es-module-lexer": "2.3.1",
@@ -102,7 +102,7 @@
     "overrides": {
       "hono": "4.11.4",
       "js-yaml": "3.14.2",
-      "lodash": "4.17.23",
+      "lodash": "4.18.1",
       "minimatch@3.1.2": "3.1.3",
       "minimatch@9.0.5": "9.0.7",
       "rollup": "4.59.0"

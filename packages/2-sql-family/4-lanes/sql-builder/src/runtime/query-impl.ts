@@ -19,7 +19,6 @@ import {
   type BooleanCodecType,
   createFunctions,
   type Functions,
-  // biome-ignore lint/correctness/noUnusedImports: used in `declare` property
   type SubqueryMarker,
 } from '@internal/sql-relational-core/functions';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
