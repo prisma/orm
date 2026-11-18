@@ -453,11 +453,8 @@ model Job {
 
         const refused = await runDbUpdate(ctx, [...renames, '--no-interactive', '--json']);
         expect(engineError(refused)?.code, 'S11.04').toBe('MIGRATION.PLANNING_FAILED');
-        expect(nextActionLabels(refused), 'S11.04: two plans first, by hand second').toEqual([
-          'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.X" a stored value no member stores, such as "prisma_swap", and give "Status.Y" the stored value "active", and plan and apply that with the same statements; then give "Status.X" the stored value "archived", and plan again without them. With migration plan, you can instead leave out the renames in the cycle, and in the migration.ts a plan without them writes, rewrite the values in each column the enum types through a value no member stores, "active" to "prisma_swap", then "archived" to "active", then "prisma_swap" to "archived", each with this.replaceStoredValue({ table, column, from, to }).',
-          expect.stringMatching(
-            /^To write the rewrites by hand, plan the change without --rename Status\.ACTIVE:Status\.X and --rename Status\.ARCHIVED:Status\.Y with `prisma-test migration plan --from \S+`, add the rewrites the message describes to the migration\.ts it writes, run `node <migration directory>\/migration\.ts` for the directory it writes, and apply it with `prisma-test db migrate`$/,
-          ),
+        expect(nextActionLabels(refused), 'S11.04: the two plans').toEqual([
+          'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.X" a stored value no member stores, such as "prisma_swap", and give "Status.Y" the stored value "active", and plan and apply that with the same statements; then give "Status.X" the stored value "archived", and plan again without them.',
         ]);
 
         await emit(ctx, cycle('prisma_swap'), 'S11.05');

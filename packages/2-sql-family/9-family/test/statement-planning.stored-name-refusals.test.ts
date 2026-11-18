@@ -80,7 +80,7 @@ describe('planStatements refuses a table rename no statement asks for', () => {
       kind: 'unsupportedOperation',
       summary:
         'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts"',
-      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of model "app.Account". Without the rename the plan would read the rows of table "accounts" as rows of model "app.User". Make the change in two plans: first remove table "accounts" or give it a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
+      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of model "app.Account". Without the rename the plan would read the rows of table "accounts" as rows of model "app.User". Make the change in two plans: first remove model "app.Account", or keep it and change its table to a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
       location: usersLocation,
     });
   });
@@ -96,7 +96,7 @@ describe('planStatements refuses a table rename no statement asks for', () => {
       kind: 'unsupportedOperation',
       summary:
         'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts", as "Accounts"',
-      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "Accounts", the table of model "app.Account". Without the rename the plan would read the rows of table "Accounts" as rows of model "app.User". Make the change in two plans: first remove table "Accounts" or give it a name nothing uses, such as "prisma_swap_Accounts", and plan and apply that; then make this change and plan again.',
+      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "Accounts", the table of model "app.Account". Without the rename the plan would read the rows of table "Accounts" as rows of model "app.User". Make the change in two plans: first remove model "app.Account", or keep it and change its table to a name nothing uses, such as "prisma_swap_Accounts", and plan and apply that; then make this change and plan again.',
       location: usersLocation,
     });
   });
@@ -183,7 +183,7 @@ describe('planStatements refuses a column rename no statement asks for', () => {
       kind: 'unsupportedOperation',
       summary:
         'Cannot rename column "users"."x" to "y": the schema being planned from already has a column "y" on table "users"',
-      why: 'The column of field "app.User.a" changes from "x" to "y", and the schema being planned from already has column "y" on table "users", the column of field "app.User.old". Without the rename the plan would read the values of column "y" as values of field "app.User.a". Make the change in two plans: first remove column "y" or give it a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
+      why: 'The column of field "app.User.a" changes from "x" to "y", and the schema being planned from already has column "y" on table "users", the column of field "app.User.old". Without the rename the plan would read the values of column "y" as values of field "app.User.a". Make the change in two plans: first remove field "app.User.old", or keep it and change its column to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
       location: columnLocation('x'),
     });
   });
@@ -199,7 +199,7 @@ describe('planStatements refuses a column rename no statement asks for', () => {
       kind: 'unsupportedOperation',
       summary:
         'Cannot rename column "users"."x" to "y": the schema being planned from already has a column "y" on table "users", as "Y"',
-      why: 'The column of field "app.User.a" changes from "x" to "y", and the schema being planned from already has column "Y" on table "users", the column of field "app.User.old". Without the rename the plan would read the values of column "Y" as values of field "app.User.a". Make the change in two plans: first remove column "Y" or give it a name nothing uses, such as "prisma_swap_Y", and plan and apply that; then make this change and plan again.',
+      why: 'The column of field "app.User.a" changes from "x" to "y", and the schema being planned from already has column "Y" on table "users", the column of field "app.User.old". Without the rename the plan would read the values of column "Y" as values of field "app.User.a". Make the change in two plans: first remove field "app.User.old", or keep it and change its column to a name nothing uses, such as "prisma_swap_Y", and plan and apply that; then make this change and plan again.',
       location: columnLocation('x'),
     });
   });

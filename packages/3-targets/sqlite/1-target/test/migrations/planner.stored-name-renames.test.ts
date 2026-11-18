@@ -204,7 +204,7 @@ describe('SQLite planner, a table or column whose model or field keeps its name'
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts", as "Accounts"',
-        why: 'The table of model "User" changes from "users" to "accounts", and the schema being planned from already has table "Accounts", the table of model "Account". Without the rename the plan would read the rows of table "Accounts" as rows of model "User". Make the change in two plans: first remove table "Accounts" or give it a name nothing uses, such as "prisma_swap_Accounts", and plan and apply that; then make this change and plan again.',
+        why: 'The table of model "User" changes from "users" to "accounts", and the schema being planned from already has table "Accounts", the table of model "Account". Without the rename the plan would read the rows of table "Accounts" as rows of model "User". Make the change in two plans: first remove model "Account", or keep it and change its table to a name nothing uses, such as "prisma_swap_Accounts", and plan and apply that; then make this change and plan again.',
         location: { namespaceId: NS, entityKind: 'table', entityName: 'users' },
       },
     ]);
@@ -222,7 +222,7 @@ describe('SQLite planner, a table or column whose model or field keeps its name'
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename column "users"."email" to "address": the schema being planned from already has a column "address" on table "users", as "Address"',
-        why: 'The column of field "User.email" changes from "email" to "address", and the schema being planned from already has column "Address" on table "users", the column of field "User.old". Without the rename the plan would read the values of column "Address" as values of field "User.email". Make the change in two plans: first remove column "Address" or give it a name nothing uses, such as "prisma_swap_Address", and plan and apply that; then make this change and plan again.',
+        why: 'The column of field "User.email" changes from "email" to "address", and the schema being planned from already has column "Address" on table "users", the column of field "User.old". Without the rename the plan would read the values of column "Address" as values of field "User.email". Make the change in two plans: first remove field "User.old", or keep it and change its column to a name nothing uses, such as "prisma_swap_Address", and plan and apply that; then make this change and plan again.',
         location: { namespaceId: NS, entityKind: 'table', entityName: 'users', column: 'email' },
       },
     ]);

@@ -20,7 +20,6 @@ import { invariant } from '@internal/utils/assertions';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { buildColumnCodecRef } from './contract-to-schema-ir';
-import { handWrittenMigrationSteps } from './hand-written-migration';
 import { jsonPathText } from './json-path';
 import { isSqlModelStorage, tableControlPolicy } from './model-storage';
 import { joinedList } from './plan-text';
@@ -208,7 +207,7 @@ function unlistedRefusal(
       : 'The plan rewrites an enum value inside JSON only in a column that holds a value object or a list of them.';
   const [first] = changes;
   invariant(first !== undefined, 'an enum with no changed value plans no rewrite to refuse');
-  const routes = `Keep the members and stored values of enum "${enumText(enums, first.enumValue)}" as the origin contract has them, and plan again. To change them with migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(`the JSON of ${where}`)}`;
+  const routes = `Keep the members and stored values of enum "${enumText(enums, first.enumValue)}" as the origin contract has them, and plan again.`;
   const statement = changes.find((change) => change.statement !== undefined)?.statement;
   if (statement === undefined) {
     return {
@@ -356,21 +355,6 @@ function cycleTwoPlans(
   return `Make the change in two plans: first give ${member} a stored value no member stores, such as ${enums.text(swap)}, and give ${others}, and plan and apply that${withStatements ? ' with the same statements' : ''}; then give ${member} the stored value ${enums.text(first.to)}, and plan again${withStatements ? ' without them' : ''}.`;
 }
 
-/** The rewrites a hand-written migration makes for a cycle: the first value through `swap`, the others in reverse order, then `swap` to the first's new value. */
-function cycleRewrites(
-  moves: readonly [CycleMove, ...CycleMove[]],
-  enums: EnumComparison,
-  swap: StoredEnumValue,
-): string {
-  const [first, ...rest] = moves;
-  const steps = [
-    { from: first.from, to: swap },
-    ...[...rest].reverse(),
-    { from: swap, to: first.to },
-  ].map(({ from, to }: StoredValueReplacement) => `${enums.text(from)} to ${enums.text(to)}`);
-  return `the values in each column the enum types through a value no member stores, ${steps.slice(0, -1).join(', then ')}, then ${steps.at(-1)}, each with this.replaceStoredValue({ table, column, from, to })`;
-}
-
 function cycleRefusal(
   statement: ResolvedEnumValueRenameStatement,
   cycle: readonly StoredChange[],
@@ -382,18 +366,11 @@ function cycleRefusal(
   const listed = joinedList(
     moves.map(({ from, to }) => `${enums.text(from)} to ${enums.text(to)}`),
   );
-  const stated = moves.flatMap((move) => (move.statement === undefined ? [] : [move.statement]));
-  const allStated = stated.length === moves.length;
   return {
     kind: 'statementRefused',
     summary: `Cannot rename enum value "${enumValueStatementText(enums.fromContract, statement.from)}" to "${enumValueStatementText(enums.contract, statement.to)}": the renames move stored values in a cycle, ${listed}, and a rewrite of one would overwrite the other before it is read`,
-    why: `${CYCLE_WHY} ${cycleTwoPlans(moves, enums, swap)} ${
-      allStated
-        ? `With migration plan, you can instead leave out the renames in the cycle, and in the migration.ts a plan without them writes, rewrite ${cycleRewrites(moves, enums, swap)}.`
-        : `With migration plan, you can instead write this change as a hand-written migration: ${handWrittenMigrationSteps(cycleRewrites(moves, enums, swap))}`
-    }`,
+    why: `${CYCLE_WHY} ${cycleTwoPlans(moves, enums, swap)}`,
     refusedStatement: statement,
-    ...(allStated ? { leaveOut: stated } : {}),
   };
 }
 
@@ -414,7 +391,7 @@ function changeMergingRefusal(
   return {
     kind: 'unsupportedOperation',
     summary: `${changeText(enums, change)}: the origin enum stores ${toText} as enum value "${holderText}"`,
-    why: `A changed stored value is rewritten in every row that holds it, so the rows of "${member}" would hold ${toText} as the rows of "${holderText}" do, and their data would merge. To make the change without merging their data, make it in two plans: first remove enum value "${holderText}", and plan and apply that, which asks about its rows; then give "${member}" the stored value ${toText}, and plan again. To merge their data on purpose with migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(`${fromText} to ${toText} in each column the enum types, with this.replaceStoredValue({ table, column, from, to })`)}`,
+    why: `A changed stored value is rewritten in every row that holds it, so the rows of "${member}" would hold ${toText} as the rows of "${holderText}" do, and their data would merge. Make the change in two plans: first remove enum value "${holderText}", and plan and apply that; then give "${member}" the stored value ${toText}, and plan again. The first plan asks about the rows that hold ${toText}. If you answer it with --delete ${holderText}, a column that takes no NULL cannot keep those rows: before that plan applies, delete them in the database, or set them to ${fromText} there to merge their data with the data of "${member}" on purpose.`,
   };
 }
 
@@ -433,7 +410,7 @@ function changeCycleRefusal(
   return {
     kind: 'unsupportedOperation',
     summary: `Cannot change the stored values of enum "${enumText(enums, first.enumValue)}": enum values ${joinedList(members)} move stored values in a cycle, ${joinedList(moves.map(({ from, to }) => `${enums.text(from)} to ${enums.text(to)}`))}, and a rewrite of one would overwrite the other before it is read`,
-    why: `${CYCLE_WHY} ${cycleTwoPlans(moves, enums, swap)} With migration plan, you can instead write this change as a hand-written migration: ${handWrittenMigrationSteps(cycleRewrites(moves, enums, swap))}`,
+    why: `${CYCLE_WHY} ${cycleTwoPlans(moves, enums, swap)}`,
   };
 }
 

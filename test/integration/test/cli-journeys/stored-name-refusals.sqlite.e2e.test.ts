@@ -222,7 +222,7 @@ const SCENARIOS: readonly RefusalScenario[] = [
     conflict: {
       summary:
         'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts"',
-      why: 'The table of model "User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of model "Account". Without the rename the plan would read the rows of table "accounts" as rows of model "User". Make the change in two plans: first remove table "accounts" or give it a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
+      why: 'The table of model "User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of model "Account". Without the rename the plan would read the rows of table "accounts" as rows of model "User". Make the change in two plans: first remove model "Account", or keep it and change its table to a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
       location: { entityKind: 'table', entityName: 'users' },
     },
     steps: [
@@ -253,7 +253,7 @@ const SCENARIOS: readonly RefusalScenario[] = [
     conflict: {
       summary:
         'Cannot rename column "users"."x" to "y": the schema being planned from already has a column "y" on table "users"',
-      why: 'The column of field "User.a" changes from "x" to "y", and the schema being planned from already has column "y" on table "users", the column of field "User.b". Without the rename the plan would read the values of column "y" as values of field "User.a". Make the change in two plans: first remove column "y" or give it a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
+      why: 'The column of field "User.a" changes from "x" to "y", and the schema being planned from already has column "y" on table "users", the column of field "User.b". Without the rename the plan would read the values of column "y" as values of field "User.a". Make the change in two plans: first remove field "User.b", or keep it and change its column to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
       location: { entityKind: 'table', entityName: 'users', column: 'x' },
     },
     steps: [

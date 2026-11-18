@@ -55,10 +55,6 @@ function rewrite(
 const CYCLE_WHY =
   'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle.';
 
-function handWritten(rewritten: string): string {
-  return `run prisma migration new, and in the operations of the migration.ts it writes, rewrite ${rewritten} yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`;
-}
-
 describe('planEnumValueRewrites refuses members that keep their names and move stored values in a cycle', () => {
   it('and gives a route through a value no member stores, in two plans', () => {
     expect(
@@ -67,7 +63,7 @@ describe('planEnumValueRewrites refuses members that keep their names and move s
       kind: 'unsupportedOperation',
       summary:
         'Cannot change the stored values of enum "Status": enum values "Status.ACTIVE" and "Status.OLD" move stored values in a cycle, "active" to "old" and "old" to "active", and a rewrite of one would overwrite the other before it is read',
-      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap", and give "Status.OLD" the stored value "active", and plan and apply that; then give "Status.ACTIVE" the stored value "old", and plan again. With migration plan, you can instead write this change as a hand-written migration: ${handWritten('the values in each column the enum types through a value no member stores, "active" to "prisma_swap", then "old" to "active", then "prisma_swap" to "old", each with this.replaceStoredValue({ table, column, from, to })')}`,
+      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap", and give "Status.OLD" the stored value "active", and plan and apply that; then give "Status.ACTIVE" the stored value "old", and plan again.`,
     });
   });
 
@@ -89,7 +85,7 @@ describe('planEnumValueRewrites refuses members that keep their names and move s
       kind: 'unsupportedOperation',
       summary:
         'Cannot change the stored values of enum "Status": enum values "Status.LOW", "Status.MID" and "Status.HIGH" move stored values in a cycle, 1 to 2, 2 to 3 and 3 to 1, and a rewrite of one would overwrite the other before it is read',
-      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.LOW" a stored value no member stores, such as 8, and give "Status.MID" the stored value 3 and "Status.HIGH" the stored value 1, and plan and apply that; then give "Status.LOW" the stored value 2, and plan again. With migration plan, you can instead write this change as a hand-written migration: ${handWritten('the values in each column the enum types through a value no member stores, 1 to 8, then 3 to 1, then 2 to 3, then 8 to 2, each with this.replaceStoredValue({ table, column, from, to })')}`,
+      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.LOW" a stored value no member stores, such as 8, and give "Status.MID" the stored value 3 and "Status.HIGH" the stored value 1, and plan and apply that; then give "Status.LOW" the stored value 2, and plan again.`,
     });
   });
 
@@ -98,13 +94,13 @@ describe('planEnumValueRewrites refuses members that keep their names and move s
       kind: 'unsupportedOperation',
       summary:
         'Cannot change the stored values of enum "Status": enum values "Status.LOW" and "Status.HIGH" move stored values in a cycle, 1.5 to 2.5 and 2.5 to 1.5, and a rewrite of one would overwrite the other before it is read',
-      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.LOW" a stored value no member stores, such as 3, and give "Status.HIGH" the stored value 1.5, and plan and apply that; then give "Status.LOW" the stored value 2.5, and plan again. With migration plan, you can instead write this change as a hand-written migration: ${handWritten('the values in each column the enum types through a value no member stores, 1.5 to 3, then 2.5 to 1.5, then 3 to 2.5, each with this.replaceStoredValue({ table, column, from, to })')}`,
+      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.LOW" a stored value no member stores, such as 3, and give "Status.HIGH" the stored value 1.5, and plan and apply that; then give "Status.LOW" the stored value 2.5, and plan again.`,
     });
   });
 });
 
 describe('planEnumValueRewrites refuses rename statements that move stored values in a cycle', () => {
-  it('gives the route in two plans, and lets a plan without the statements be written by hand', () => {
+  it('gives the route in two plans', () => {
     const statements = [rename('ACTIVE', 'X'), rename('OLD', 'Y')];
     expect(
       refusal(plan({ ACTIVE: 'active', OLD: 'old' }, { X: 'old', Y: 'active' }, statements)),
@@ -112,9 +108,8 @@ describe('planEnumValueRewrites refuses rename statements that move stored value
       kind: 'statementRefused',
       summary:
         'Cannot rename enum value "Status.ACTIVE" to "Status.X": the renames move stored values in a cycle, "active" to "old" and "old" to "active", and a rewrite of one would overwrite the other before it is read',
-      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.X" a stored value no member stores, such as "prisma_swap", and give "Status.Y" the stored value "active", and plan and apply that with the same statements; then give "Status.X" the stored value "old", and plan again without them. With migration plan, you can instead leave out the renames in the cycle, and in the migration.ts a plan without them writes, rewrite the values in each column the enum types through a value no member stores, "active" to "prisma_swap", then "old" to "active", then "prisma_swap" to "old", each with this.replaceStoredValue({ table, column, from, to }).`,
+      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.X" a stored value no member stores, such as "prisma_swap", and give "Status.Y" the stored value "active", and plan and apply that with the same statements; then give "Status.X" the stored value "old", and plan again without them.`,
       refusedStatement: rename('ACTIVE', 'X'),
-      leaveOut: statements,
     });
     expect(rewrites(plan({ ACTIVE: 'active', OLD: 'old' }, { X: 'old', Y: 'active' }))).toEqual([]);
   });
@@ -131,7 +126,7 @@ describe('planEnumValueRewrites refuses rename statements that move stored value
     ]);
   });
 
-  it('gives no route that leaves out the statement when a member that keeps its name is in the cycle', () => {
+  it('gives the route in two plans when a member that keeps its name is in the cycle', () => {
     const statement = rename('OLD', 'LEGACY');
     expect(
       refusal(
@@ -141,7 +136,7 @@ describe('planEnumValueRewrites refuses rename statements that move stored value
       kind: 'statementRefused',
       summary:
         'Cannot rename enum value "Status.OLD" to "Status.LEGACY": the renames move stored values in a cycle, "active" to "old" and "old" to "active", and a rewrite of one would overwrite the other before it is read',
-      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap", and give "Status.LEGACY" the stored value "active", and plan and apply that with the same statements; then give "Status.ACTIVE" the stored value "old", and plan again without them. With migration plan, you can instead write this change as a hand-written migration: ${handWritten('the values in each column the enum types through a value no member stores, "active" to "prisma_swap", then "old" to "active", then "prisma_swap" to "old", each with this.replaceStoredValue({ table, column, from, to })')}`,
+      why: `${CYCLE_WHY} Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap", and give "Status.LEGACY" the stored value "active", and plan and apply that with the same statements; then give "Status.ACTIVE" the stored value "old", and plan again without them.`,
       refusedStatement: statement,
     });
   });
@@ -165,7 +160,7 @@ describe('planEnumValueRewrites refuses a change that merges the data of two mem
       kind: 'unsupportedOperation',
       summary:
         'Cannot change the stored value of enum value "Status.ARCHIVED" from "archived" to "done": the origin enum stores "done" as enum value "Status.DONE"',
-      why: `A changed stored value is rewritten in every row that holds it, so the rows of "Status.ARCHIVED" would hold "done" as the rows of "Status.DONE" do, and their data would merge. To make the change without merging their data, make it in two plans: first remove enum value "Status.DONE", and plan and apply that, which asks about its rows; then give "Status.ARCHIVED" the stored value "done", and plan again. To merge their data on purpose with migration plan, write this change as a hand-written migration instead: ${handWritten('"archived" to "done" in each column the enum types, with this.replaceStoredValue({ table, column, from, to })')}`,
+      why: `A changed stored value is rewritten in every row that holds it, so the rows of "Status.ARCHIVED" would hold "done" as the rows of "Status.DONE" do, and their data would merge. Make the change in two plans: first remove enum value "Status.DONE", and plan and apply that; then give "Status.ARCHIVED" the stored value "done", and plan again. The first plan asks about the rows that hold "done". If you answer it with --delete Status.DONE, a column that takes no NULL cannot keep those rows: before that plan applies, delete them in the database, or set them to "archived" there to merge their data with the data of "Status.ARCHIVED" on purpose.`,
     });
   });
 

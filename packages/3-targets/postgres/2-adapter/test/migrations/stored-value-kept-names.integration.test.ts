@@ -154,7 +154,7 @@ describe('Postgres planner, stored values of members that keep their names', {
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Role": enum values "Role.USER" and "Role.GUEST" move stored values in a cycle, "user" to "guest" and "guest" to "user", and a rewrite of one would overwrite the other before it is read',
-        why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Role.USER" a stored value no member stores, such as "prisma_swap", and give "Role.GUEST" the stored value "user", and plan and apply that; then give "Role.USER" the stored value "guest", and plan again. With migration plan, you can instead write this change as a hand-written migration: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values in each column the enum types through a value no member stores, "user" to "prisma_swap", then "guest" to "user", then "prisma_swap" to "guest", each with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Role.USER" a stored value no member stores, such as "prisma_swap", and give "Role.GUEST" the stored value "user", and plan and apply that; then give "Role.USER" the stored value "guest", and plan again.',
       },
     ]);
   });
@@ -173,7 +173,7 @@ describe('Postgres planner, stored values of members that keep their names', {
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored value of enum value "Role.USER" from "user" to "guest": the origin enum stores "guest" as enum value "Role.GUEST"',
-        why: 'A changed stored value is rewritten in every row that holds it, so the rows of "Role.USER" would hold "guest" as the rows of "Role.GUEST" do, and their data would merge. To make the change without merging their data, make it in two plans: first remove enum value "Role.GUEST", and plan and apply that, which asks about its rows; then give "Role.USER" the stored value "guest", and plan again. To merge their data on purpose with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite "user" to "guest" in each column the enum types, with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        why: 'A changed stored value is rewritten in every row that holds it, so the rows of "Role.USER" would hold "guest" as the rows of "Role.GUEST" do, and their data would merge. Make the change in two plans: first remove enum value "Role.GUEST", and plan and apply that; then give "Role.USER" the stored value "guest", and plan again. The first plan asks about the rows that hold "guest". If you answer it with --delete Role.GUEST, a column that takes no NULL cannot keep those rows: before that plan applies, delete them in the database, or set them to "user" there to merge their data with the data of "Role.USER" on purpose.',
       },
     ]);
   });
@@ -304,7 +304,7 @@ describe('Postgres planner, stored values of members that keep their names', {
         kind: 'statementRefused',
         summary:
           'Cannot rename enum value "Role.GUEST" to "Role.VISITOR": the renames move stored values in a cycle, "user" to "guest" and "guest" to "user", and a rewrite of one would overwrite the other before it is read',
-        why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Role.USER" a stored value no member stores, such as "prisma_swap", and give "Role.VISITOR" the stored value "user", and plan and apply that with the same statements; then give "Role.USER" the stored value "guest", and plan again without them. With migration plan, you can instead write this change as a hand-written migration: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values in each column the enum types through a value no member stores, "user" to "prisma_swap", then "guest" to "user", then "prisma_swap" to "guest", each with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Role.USER" a stored value no member stores, such as "prisma_swap", and give "Role.VISITOR" the stored value "user", and plan and apply that with the same statements; then give "Role.USER" the stored value "guest", and plan again without them.',
         refusedStatement: statement,
       },
     ]);

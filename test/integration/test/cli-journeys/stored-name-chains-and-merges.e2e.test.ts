@@ -6,6 +6,7 @@
  * - Chains: two models or two fields whose tables or columns move along a chain in one contract change (`User` from `users` to `accounts` while `Account` moves from `accounts` to `members`). The plan is refused with no statement named, and its advice is followed through two plans and names nothing uses.
  * - G1: a statement merges two tables: `--rename Bug:Defect`, where `Bug` has a table of its own and `Defect` is stored in its base's table `task`. The statement is refused. Its advice is followed: without the statement the plan asks about `Bug`, offering the same rename first, and `--delete Bug` deletes its rows and leaves every other row in place.
  * - G2: two contract changes move to one new table name: the base `Task` moves from `task` to `work`, and its variant `Bug` leaves its own table `bug` for its base's. No rename is planned: the plan asks about the data of `Bug` and `Task` it drops, and no row moves into `work`.
+ * - G3: the same refusal as G1, through `migration plan` only, followed by the hand-written migration its advice describes: `migration new`, column `severity` added to `task`, the severity of each bug copied into it, and table `bug` dropped. Every row is kept.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -15,6 +16,7 @@ import {
   COMMANDS,
   emit,
   expectSettled,
+  migrateByHand,
   planAndApply,
   postgresJourney,
   refusal,
@@ -146,6 +148,12 @@ const OWN_TABLE = tasks('task', { name: 'Bug', table: 'bug' });
 
 const SEED = `INSERT INTO "task" (id, type, scope) VALUES (1, 'bug', NULL), (2, 'epic', 'big'), (3, 'bug', NULL); INSERT INTO "bug" (id, severity) VALUES (1, 'high'), (3, NULL)`;
 
+const BUG_MERGE_SUMMARY =
+  'Cannot rename table "bug" to "task": table "task" also stores models "public.Epic" and "public.Task", whose rows are not in table "bug"';
+
+const BUG_MERGE_WHY =
+  'A table rename moves the rows of one table, and table "task" would also store the rows of models "public.Epic" and "public.Task". Moving the rows of two tables into one is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. A question about model "public.Bug" offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "public.Bug", and those of models "public.Epic" and "public.Task" that table "task" does not already hold, into table "task" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.';
+
 const MERGE_ADVICE =
   'The destination stores models "public.Bug", "public.Epic" and "public.Task" in table "work", and the origin stores them in different tables, so their storage is being merged. Keeping their rows is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of models "public.Bug", "public.Epic" and "public.Task" into table "work" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.';
 
@@ -178,10 +186,6 @@ withTempDir(({ createTempDir }) => {
           await start(journey, OWN_TABLE, SEED, 'G1.01');
           await emit(journey, tasks('task', { name: 'Defect' }), 'G1.02');
 
-          const why =
-            'A table rename moves the rows of one table, and table "task" would also store the rows of models "public.Epic" and "public.Task". Moving the rows of two tables into one is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. A question about model "public.Bug" offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "public.Bug", and those of models "public.Epic" and "public.Task" that table "task" does not already hold, into table "task" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.';
-          const summary =
-            'Cannot rename table "bug" to "task": table "task" also stores models "public.Epic" and "public.Task", whose rows are not in table "bug"';
           expect(
             await refusal(journey, ['--rename', 'Bug:Defect'], 'G1.03'),
             'G1.03: the statement is refused',
@@ -189,14 +193,14 @@ withTempDir(({ createTempDir }) => {
             code: 'MIGRATION.PLANNING_FAILED',
             severity: 'error',
             summary: 'Migration planning failed',
-            why: summary,
-            nextActions: [{ kind: 'user-choice', label: why }],
+            why: BUG_MERGE_SUMMARY,
+            nextActions: [{ kind: 'user-choice', label: BUG_MERGE_WHY }],
             meta: {
               conflicts: [
                 {
                   kind: 'statementRefused',
-                  summary,
-                  why,
+                  summary: BUG_MERGE_SUMMARY,
+                  why: BUG_MERGE_WHY,
                   location: { namespaceId: 'public', entityKind: 'table', entityName: 'bug' },
                   refusedStatement: {
                     kind: 'rename',
@@ -303,4 +307,59 @@ withTempDir(({ createTempDir }) => {
       );
     },
   );
+
+  describe('Journey G3 (Postgres): --rename of a variant into its base table, kept by a hand-written migration', () => {
+    const db = useDevDatabase();
+
+    it(
+      'is refused, and the hand-written migration its advice describes keeps the rows of Bug',
+      async () => {
+        const journey = postgresJourney(db.connectionString, createTempDir, 'migration plan');
+        await start(journey, OWN_TABLE, SEED, 'G3.01');
+        await emit(journey, tasks('task', { name: 'Defect' }), 'G3.02');
+        const refused = await refusal(journey, ['--rename', 'Bug:Defect'], 'G3.03');
+        expect(refused.nextActions, 'G3.03: the statement is refused').toEqual([
+          { kind: 'user-choice', label: BUG_MERGE_WHY },
+        ]);
+
+        await migrateByHand(
+          journey,
+          ['col', 'rawSql'],
+          `      this.addColumn({
+        schema: 'public',
+        table: 'task',
+        column: col('severity', 'text', { codecRef: { codecId: 'pg/text@1' } }),
+      }),
+      rawSql({
+        id: 'data_migration.bug-rows-into-task',
+        label: 'Copy the rows of Bug into "task"',
+        operationClass: 'data',
+        target: { id: 'postgres' },
+        precheck: [],
+        execute: [
+          {
+            description: 'copy the severity of each bug into "task"',
+            sql: 'UPDATE "public"."task" SET severity = bug.severity FROM "public"."bug" WHERE bug.id = task.id',
+          },
+        ],
+        postcheck: [],
+      }),
+      this.dropTable({ schema: 'public', table: 'bug' }),`,
+          'G3.04',
+        );
+
+        expect(await tableNames(journey), 'G3.05: the variant table is gone').toEqual(['task']);
+        expect(
+          await rows(journey, 'SELECT * FROM "task" ORDER BY id'),
+          'G3.05: task holds the rows of Bug, and no other row changes',
+        ).toEqual([
+          { id: 1, type: 'bug', scope: null, severity: 'high' },
+          { id: 2, type: 'epic', scope: 'big', severity: null },
+          { id: 3, type: 'bug', scope: null, severity: null },
+        ]);
+        await expectSettled(journey, 'G3.06');
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
 });

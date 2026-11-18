@@ -544,6 +544,20 @@ function hasStatement(change: TableChange | ColumnChange): boolean {
  * rename, or moves onto a name the schema being planned from already has. Names compare the way
  * the target compares them, through `tables`.
  */
+/** How the first of two plans frees a name: it removes what the origin stores there, or the table or column itself when nothing is. */
+function freeName(
+  kind: 'table' | 'column',
+  held: string,
+  holders: { readonly text: string; readonly count: number },
+  unused: string,
+): string {
+  if (holders.count === 0) {
+    return `remove ${kind} "${held}" or give it a name nothing uses, such as "${unused}"`;
+  }
+  const [them, their] = holders.count === 1 ? ['it', 'its'] : ['them', 'their'];
+  return `remove ${holders.text}, or keep ${them} and change ${their} ${kind} to a name nothing uses, such as "${unused}"`;
+}
+
 function tableRenameConflict(
   change: TableChange,
   current: string | undefined,
@@ -557,8 +571,8 @@ function tableRenameConflict(
   const label = `Cannot rename table "${from}" to "${to}"`;
   const location = change.origin;
   const changeText = capitalized(tableChangeText(change));
-  const misread = (table: string) =>
-    `rows of table "${table}" as rows of ${modelsText(change.renames.map((rename) => rename.from))}`;
+  const movingModels = modelsText(change.renames.map((rename) => rename.from));
+  const misread = (table: string) => `rows of table "${table}" as rows of ${movingModels}`;
   const others = changes.filter((other) => other !== change);
   const { sameName } = renames;
   const [held] = tables
@@ -579,14 +593,14 @@ function tableRenameConflict(
     if (!renames.originHasTable(heldTable)) {
       return contractChangeRefused(
         `${label}: the database has both tables`,
-        `${changeText}, and the database has both table "${from}" and table "${held}". The rename may have been half done by hand, or something created table "${held}" before db update ran: then move into table "${from}" the rows of table "${held}" that it does not already hold, drop table "${held}", and run again. Or table "${from}" was renamed to "${held}" by hand and the name "${from}" used again for another table: then drop table "${from}", and run again. To keep its rows, first move them into a table the contract has: db update drops every table the contract does not have.`,
+        `${changeText}, and the database has both table "${from}" and table "${held}". One of two things happened, and each has its own fix. If the rename was half done by hand, or something created table "${held}" before db update ran, table "${from}" holds the rows of ${movingModels}: move into table "${from}" the rows of table "${held}" that it does not already hold, drop table "${held}", and run again. If table "${from}" was renamed to "${held}" by hand and the name "${from}" then used for another table, table "${held}" holds the rows of ${movingModels}: drop table "${from}", and run again; to keep the rows of that other table, first move them into a table the contract has, since db update drops every table the contract does not have.`,
         location,
       );
     }
     const holders = renames.originModelsIn(heldTable);
     return contractChangeRefused(
       `${label}: the schema being planned from already has a table "${to}"${held === to ? '' : `, as "${held}"`}`,
-      `${changeText}, and the schema being planned from already has table "${held}"${holders.length === 0 ? '' : `, the table of ${modelsText(holders)}`}. Without the rename the plan would read the ${misread(held)}. Make the change in two plans: first remove table "${held}" or give it a name nothing uses, such as "${renames.unusedTableName(namespaceId, held)}", and plan and apply that; then make this change and plan again.`,
+      `${changeText}, and the schema being planned from already has table "${held}"${holders.length === 0 ? '' : `, the table of ${modelsText(holders)}`}. Without the rename the plan would read the ${misread(held)}. Make the change in two plans: first ${freeName('table', held, { text: modelsText(holders), count: holders.length }, renames.unusedTableName(namespaceId, held))}, and plan and apply that; then make this change and plan again.`,
       location,
     );
   }
@@ -618,8 +632,8 @@ function columnRenameConflict(
   const label = `Cannot rename column "${table}"."${change.from}" to "${change.to}"`;
   const location = { namespaceId, table, column: change.from };
   const changeText = capitalized(columnChangeText(change));
-  const misread = (column: string) =>
-    `values of column "${column}" as values of ${fieldsText(change.renames.map((rename) => rename.from))}`;
+  const movingFields = fieldsText(change.renames.map((rename) => rename.from));
+  const misread = (column: string) => `values of column "${column}" as values of ${movingFields}`;
   const others = changes.filter(
     (other) => other !== change && sameTable(other.origin, change.origin),
   );
@@ -639,14 +653,14 @@ function columnRenameConflict(
     if (!renames.originHasColumn(change.origin, held)) {
       return contractChangeRefused(
         `${label}: the database has both columns`,
-        `${changeText}, and table "${table}" in the database has both column "${change.from}" and column "${held}". The rename may have been half done by hand, or something created column "${held}" before db update ran: then copy into column "${change.from}" the value of column "${held}" in each row where column "${held}" holds one, drop column "${held}", and run again. Or column "${change.from}" was renamed to "${held}" by hand and the name "${change.from}" used again for another column: then drop column "${change.from}", and run again. To keep its values, first move them into a column the contract has: db update drops every column the contract does not have.`,
+        `${changeText}, and table "${table}" in the database has both column "${change.from}" and column "${held}". One of two things happened, and each has its own fix. If the rename was half done by hand, or something created column "${held}" before db update ran, column "${change.from}" holds the values of ${movingFields}: copy into column "${change.from}" the value of column "${held}" in each row where column "${held}" holds one, drop column "${held}", and run again. If column "${change.from}" was renamed to "${held}" by hand and the name "${change.from}" then used for another column, column "${held}" holds the values of ${movingFields}: drop column "${change.from}", and run again; to keep the values of that other column, first move them into a column the contract has, since db update drops every column the contract does not have.`,
         location,
       );
     }
     const holders = renames.originFieldsIn(change.origin, held);
     return contractChangeRefused(
       `${label}: the schema being planned from already has a column "${change.to}" on table "${table}"${held === change.to ? '' : `, as "${held}"`}`,
-      `${changeText}, and the schema being planned from already has column "${held}" on table "${table}"${holders.length === 0 ? '' : `, the column of ${fieldsText(holders)}`}. Without the rename the plan would read the ${misread(held)}. Make the change in two plans: first remove column "${held}" or give it a name nothing uses, such as "${renames.unusedColumnName(change, held)}", and plan and apply that; then make this change and plan again.`,
+      `${changeText}, and the schema being planned from already has column "${held}" on table "${table}"${holders.length === 0 ? '' : `, the column of ${fieldsText(holders)}`}. Without the rename the plan would read the ${misread(held)}. Make the change in two plans: first ${freeName('column', held, { text: fieldsText(holders), count: holders.length }, renames.unusedColumnName(change, held))}, and plan and apply that; then make this change and plan again.`,
       location,
     );
   }

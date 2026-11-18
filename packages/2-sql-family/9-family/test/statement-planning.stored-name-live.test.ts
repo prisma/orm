@@ -118,7 +118,7 @@ describe('planStatements against a database whose table already has its new name
     ).toEqual({
       kind: 'unsupportedOperation',
       summary: 'Cannot rename table "users" to "app_users": the database has both tables',
-      why: 'The table of model "app.User" changes from "users" to "app_users", and the database has both table "users" and table "app_users". The rename may have been half done by hand, or something created table "app_users" before db update ran: then move into table "users" the rows of table "app_users" that it does not already hold, drop table "app_users", and run again. Or table "users" was renamed to "app_users" by hand and the name "users" used again for another table: then drop table "users", and run again. To keep its rows, first move them into a table the contract has: db update drops every table the contract does not have.',
+      why: 'The table of model "app.User" changes from "users" to "app_users", and the database has both table "users" and table "app_users". One of two things happened, and each has its own fix. If the rename was half done by hand, or something created table "app_users" before db update ran, table "users" holds the rows of model "app.User": move into table "users" the rows of table "app_users" that it does not already hold, drop table "app_users", and run again. If table "users" was renamed to "app_users" by hand and the name "users" then used for another table, table "app_users" holds the rows of model "app.User": drop table "users", and run again; to keep the rows of that other table, first move them into a table the contract has, since db update drops every table the contract does not have.',
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'users' },
     });
   });
@@ -136,7 +136,7 @@ describe('planStatements against a database whose table already has its new name
       kind: 'unsupportedOperation',
       summary:
         'Cannot rename table "users" to "accounts": the schema being planned from already has a table "accounts"',
-      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of model "app.Account". Without the rename the plan would read the rows of table "accounts" as rows of model "app.User". Make the change in two plans: first remove table "accounts" or give it a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
+      why: 'The table of model "app.User" changes from "users" to "accounts", and the schema being planned from already has table "accounts", the table of model "app.Account". Without the rename the plan would read the rows of table "accounts" as rows of model "app.User". Make the change in two plans: first remove model "app.Account", or keep it and change its table to a name nothing uses, such as "prisma_swap_accounts", and plan and apply that; then make this change and plan again.',
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'users' },
     });
   });
@@ -185,7 +185,7 @@ describe('planStatements against a database whose column already has its new nam
       kind: 'unsupportedOperation',
       summary:
         'Cannot rename column "users"."email" to "email_address": the database has both columns',
-      why: 'The column of field "app.User.email" changes from "email" to "email_address", and table "users" in the database has both column "email" and column "email_address". The rename may have been half done by hand, or something created column "email_address" before db update ran: then copy into column "email" the value of column "email_address" in each row where column "email_address" holds one, drop column "email_address", and run again. Or column "email" was renamed to "email_address" by hand and the name "email" used again for another column: then drop column "email", and run again. To keep its values, first move them into a column the contract has: db update drops every column the contract does not have.',
+      why: 'The column of field "app.User.email" changes from "email" to "email_address", and table "users" in the database has both column "email" and column "email_address". One of two things happened, and each has its own fix. If the rename was half done by hand, or something created column "email_address" before db update ran, column "email" holds the values of field "app.User.email": copy into column "email" the value of column "email_address" in each row where column "email_address" holds one, drop column "email_address", and run again. If column "email" was renamed to "email_address" by hand and the name "email" then used for another column, column "email_address" holds the values of field "app.User.email": drop column "email", and run again; to keep the values of that other column, first move them into a column the contract has, since db update drops every column the contract does not have.',
       location: { namespaceId: 'app', entityKind: 'table', entityName: 'users', column: 'email' },
     });
   });

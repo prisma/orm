@@ -160,7 +160,7 @@ withTempDir(({ createTempDir }) => {
         expect(refused, 'D2.03: both tables').toEqual(
           planningFailure({
             summary: 'Cannot rename table "users" to "people": the database has both tables',
-            why: 'The table of model "public.User" changes from "users" to "people", and the database has both table "users" and table "people". The rename may have been half done by hand, or something created table "people" before db update ran: then move into table "users" the rows of table "people" that it does not already hold, drop table "people", and run again. Or table "users" was renamed to "people" by hand and the name "users" used again for another table: then drop table "users", and run again. To keep its rows, first move them into a table the contract has: db update drops every table the contract does not have.',
+            why: 'The table of model "public.User" changes from "users" to "people", and the database has both table "users" and table "people". One of two things happened, and each has its own fix. If the rename was half done by hand, or something created table "people" before db update ran, table "users" holds the rows of model "public.User": move into table "users" the rows of table "people" that it does not already hold, drop table "people", and run again. If table "users" was renamed to "people" by hand and the name "users" then used for another table, table "people" holds the rows of model "public.User": drop table "users", and run again; to keep the rows of that other table, first move them into a table the contract has, since db update drops every table the contract does not have.',
             location: {
               namespaceId: 'public',
               entityKind: 'table',
@@ -219,7 +219,7 @@ withTempDir(({ createTempDir }) => {
         expect(refused, 'D3.03: both tables').toEqual(
           planningFailure({
             summary: 'Cannot rename table "users" to "people": the database has both tables',
-            why: 'The table of model "public.User" changes from "users" to "people", and the database has both table "users" and table "people". The rename may have been half done by hand, or something created table "people" before db update ran: then move into table "users" the rows of table "people" that it does not already hold, drop table "people", and run again. Or table "users" was renamed to "people" by hand and the name "users" used again for another table: then drop table "users", and run again. To keep its rows, first move them into a table the contract has: db update drops every table the contract does not have.',
+            why: 'The table of model "public.User" changes from "users" to "people", and the database has both table "users" and table "people". One of two things happened, and each has its own fix. If the rename was half done by hand, or something created table "people" before db update ran, table "users" holds the rows of model "public.User": move into table "users" the rows of table "people" that it does not already hold, drop table "people", and run again. If table "users" was renamed to "people" by hand and the name "users" then used for another table, table "people" holds the rows of model "public.User": drop table "users", and run again; to keep the rows of that other table, first move them into a table the contract has, since db update drops every table the contract does not have.',
             location: {
               namespaceId: 'public',
               entityKind: 'table',

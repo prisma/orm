@@ -7,21 +7,24 @@
  * - V2: a chain: `ACTIVE` takes `archived`, the value `ARCHIVED` had, and `ARCHIVED` takes `old`. The rewrites run last value first.
  * - V3: `ACTIVE` and `ARCHIVED` swap values. The plan is refused with no statement named, and the advice is followed: two plans through a value no member stores.
  * - V4: `ARCHIVED` is removed and `ACTIVE` takes its value. The plan is refused, since the rows of both would merge, and the advice is followed: remove `ARCHIVED` in one plan, then change `ACTIVE`.
+ * - V5: the same change, where `Status` types the required `status` of `Ticket`. The advice is followed with `--delete Status.ARCHIVED`: the first plan fails its precheck while rows hold `archived`, and applies once those rows are deleted (`migration plan`) or set to `active` (`db update`), as the advice says.
  *
  * Each journey reads every row back, and ends with `db verify --schema-only` clean and a further plan empty.
  */
 
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
-import { timeouts } from '../utils/journey-test-helpers';
+import { engineError, parseJsonOutput, runMigrate, timeouts } from '../utils/journey-test-helpers';
 import {
   COMMANDS,
   emit,
+  execute,
   expectSettled,
   planAndApply,
   planningFailure,
   refusal,
   rows,
+  run,
   type StoredNameJourney,
   sqliteJourney,
   start,
@@ -55,6 +58,37 @@ const FROM_PSL = contractWith(members('active', 'archived'));
 
 const SEED = `INSERT INTO "task" (id, status) VALUES (1, 'archived'), (2, 'active'), (3, NULL);
 INSERT INTO "note" (id, state) VALUES (1, 'archived'), (2, 'active')`;
+
+function ticketContract(members: string): string {
+  return `// use prisma-8
+
+enum Status {
+  @@type("sqlite/text@1")
+${members}}
+
+model Ticket {
+  id     Int    @id
+  status Status
+  @@map("ticket")
+}
+`;
+}
+
+const PLAN_ONE = [
+  {
+    label: 'Remove value "archived" from column "status" of "ticket"',
+    operationClass: 'destructive',
+  },
+];
+
+const PLAN_TWO = [
+  {
+    label: 'Replace value "active" with "archived" in column "status" of "ticket"',
+    operationClass: 'widening',
+  },
+];
+
+const TICKET_SEED = `INSERT INTO "ticket" (id, status) VALUES (1, 'archived'), (2, 'active')`;
 
 async function data(journey: StoredNameJourney) {
   return {
@@ -166,7 +200,7 @@ withTempDir(({ createTempDir }) => {
             planningFailure({
               summary:
                 'Cannot change the stored values of enum "Status": enum values "Status.ACTIVE" and "Status.ARCHIVED" move stored values in a cycle, "active" to "archived" and "archived" to "active", and a rewrite of one would overwrite the other before it is read',
-              why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap", and give "Status.ARCHIVED" the stored value "active", and plan and apply that; then give "Status.ACTIVE" the stored value "archived", and plan again. With migration plan, you can instead write this change as a hand-written migration: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values in each column the enum types through a value no member stores, "active" to "prisma_swap", then "archived" to "active", then "prisma_swap" to "archived", each with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+              why: 'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap", and give "Status.ARCHIVED" the stored value "active", and plan and apply that; then give "Status.ACTIVE" the stored value "archived", and plan again.',
             }),
           );
 
@@ -237,7 +271,7 @@ withTempDir(({ createTempDir }) => {
             planningFailure({
               summary:
                 'Cannot change the stored value of enum value "Status.ACTIVE" from "active" to "archived": the origin enum stores "archived" as enum value "Status.ARCHIVED"',
-              why: 'A changed stored value is rewritten in every row that holds it, so the rows of "Status.ACTIVE" would hold "archived" as the rows of "Status.ARCHIVED" do, and their data would merge. To make the change without merging their data, make it in two plans: first remove enum value "Status.ARCHIVED", and plan and apply that, which asks about its rows; then give "Status.ACTIVE" the stored value "archived", and plan again. To merge their data on purpose with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite "active" to "archived" in each column the enum types, with this.replaceStoredValue({ table, column, from, to }) yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+              why: 'A changed stored value is rewritten in every row that holds it, so the rows of "Status.ACTIVE" would hold "archived" as the rows of "Status.ARCHIVED" do, and their data would merge. Make the change in two plans: first remove enum value "Status.ARCHIVED", and plan and apply that; then give "Status.ACTIVE" the stored value "archived", and plan again. The first plan asks about the rows that hold "archived". If you answer it with --delete Status.ARCHIVED, a column that takes no NULL cannot keep those rows: before that plan applies, delete them in the database, or set them to "active" there to merge their data with the data of "Status.ACTIVE" on purpose.',
             }),
           );
 
@@ -278,6 +312,78 @@ withTempDir(({ createTempDir }) => {
             ],
           });
           await expectSettled(journey, 'V4.07');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
+
+  describe.each(COMMANDS)(
+    'Journey V5 (SQLite): a member takes the value of a removed member that a required column holds, with %s',
+    (command) => {
+      it(
+        'is refused, and the rows the advice names are dealt with before the first plan applies',
+        async () => {
+          const journey = sqliteJourney(createTempDir, command);
+          await start(journey, ticketContract(members('active', 'archived')), TICKET_SEED, 'V5.01');
+          const merged = ticketContract(members('archived', undefined));
+          await emit(journey, merged, 'V5.02');
+          expect(await refusal(journey, [], 'V5.03'), 'V5.03: a merge').toEqual(
+            planningFailure({
+              summary:
+                'Cannot change the stored value of enum value "Status.ACTIVE" from "active" to "archived": the origin enum stores "archived" as enum value "Status.ARCHIVED"',
+              why: 'A changed stored value is rewritten in every row that holds it, so the rows of "Status.ACTIVE" would hold "archived" as the rows of "Status.ARCHIVED" do, and their data would merge. Make the change in two plans: first remove enum value "Status.ARCHIVED", and plan and apply that; then give "Status.ACTIVE" the stored value "archived", and plan again. The first plan asks about the rows that hold "archived". If you answer it with --delete Status.ARCHIVED, a column that takes no NULL cannot keep those rows: before that plan applies, delete them in the database, or set them to "active" there to merge their data with the data of "Status.ACTIVE" on purpose.',
+            }),
+          );
+
+          await emit(journey, ticketContract(members('active', undefined)), 'V5.04');
+          const answer = ['--delete', 'Status.ARCHIVED'];
+          if (command === 'migration plan') {
+            const planned = await run(journey, answer);
+            expect(planned.exitCode, `V5.04: plan 1: ${planned.stderr}`).toBe(0);
+            expect(
+              parseJsonOutput<{ operations: { label: string; operationClass: string }[] }>(
+                planned,
+              ).operations.map(({ label, operationClass }) => ({ label, operationClass })),
+              'V5.04: plan 1 of the advice',
+            ).toEqual(PLAN_ONE);
+            const held = await runMigrate(journey, ['--json']);
+            expect(engineError(held)?.code, 'V5.05: rows still hold the value').toBe(
+              'MIGRATION.PRECHECK_FAILED',
+            );
+            await execute(journey, `DELETE FROM "ticket" WHERE status = 'archived'`);
+            const migrate = await runMigrate(journey);
+            expect(migrate.exitCode, `V5.06: plan 1 applies: ${migrate.stderr}`).toBe(0);
+          } else {
+            const held = await run(journey, answer);
+            expect(engineError(held)?.code, 'V5.05: rows still hold the value').toBe(
+              'MIGRATION.PRECHECK_FAILED',
+            );
+            await execute(
+              journey,
+              `UPDATE "ticket" SET status = 'active' WHERE status = 'archived'`,
+            );
+            expect(await planAndApply(journey, answer, 'V5.06'), 'V5.06: plan 1 applies').toEqual(
+              PLAN_ONE,
+            );
+          }
+
+          await emit(journey, merged, 'V5.07');
+          expect(await planAndApply(journey, [], 'V5.07'), 'V5.07: plan 2 of the advice').toEqual(
+            PLAN_TWO,
+          );
+          expect(
+            await rows(journey, 'SELECT id, status FROM "ticket" ORDER BY id'),
+            'V5.08: the rows that held the removed value are deleted, or merged on purpose',
+          ).toEqual(
+            command === 'migration plan'
+              ? [{ id: 2, status: 'archived' }]
+              : [
+                  { id: 1, status: 'archived' },
+                  { id: 2, status: 'archived' },
+                ],
+          );
+          await expectSettled(journey, 'V5.09');
         },
         timeouts.spinUpPpgDev,
       );
