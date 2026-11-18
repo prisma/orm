@@ -137,6 +137,20 @@ describe('constraints declared on a single-table variant', () => {
     expect(tables['actor']?.uniques).toEqual([]);
   });
 
+  it("accepts an index without a condition on the columns of the variant's own foreign key, as a printed contract writes it", () => {
+    const written = tablesOf(
+      [
+        contact,
+        actor,
+        humanWithContact('  @@index([contactId], name: "actor_contactId_idx")'),
+      ].join('\n\n'),
+    );
+    const derived = tablesOf([contact, actor, humanWithContact('')].join('\n\n'));
+
+    expect(written['actor']?.indexes).toMatchObject([{ columns: ['contactId'], unique: false }]);
+    expect(written['actor']?.indexes).toHaveLength(derived['actor']?.indexes.length ?? 0);
+  });
+
   it('stores the same table as when the base model declares the column, relation and index', () => {
     const fromVariant = tablesOf(
       [
@@ -172,11 +186,7 @@ model HumanActor {
   });
 
   it('refuses every unique and every index without a condition, each at its attribute', () => {
-    const attributes = [
-      '@@unique([email])',
-      '@@index([contactId])',
-      '@@index([email], unique: true)',
-    ];
+    const attributes = ['@@unique([email])', '@@index([email])', '@@index([email], unique: true)'];
     const schema = [
       contact,
       actor,

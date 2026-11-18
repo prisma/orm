@@ -28,6 +28,8 @@ A unique constraint or a plain index on the shared table would also cover the ot
 PSL_UNSCOPED_INDEX_ON_STI_VARIANT: Model "Bug" shares the table of its base model "Task" (single-table inheritance), so "@unique" would also cover the rows of other variants. Scope it to this variant instead: @@index([ticket], unique: true, where: sql`type = 'bug'`)
 ```
 
+A plain `@@index` over exactly the `fields:` of one of the variant's relations is still accepted: the relation's foreign key derives that index anyway.
+
 In every file the detection matches, find each variant that declares `@unique`, `@@unique` or an `@@index` without `where:`. Replace it with the `@@index` the message writes out: the same fields, `unique: true` for a unique one, and a `where:` condition that compares the base's discriminator column with the variant's value.
 
 ```prisma

@@ -127,6 +127,21 @@ describe('mergeTables', () => {
     ).toEqual([{ ...task, ...constraints }]);
   });
 
+  it("accepts a plain index on the columns of the variant's own foreign key", () => {
+    const task = table('task', [column('Task', 'id'), column('Task', 'ownerId')]);
+    const constraints = {
+      indexes: [columnIndex(['ownerId'])],
+      foreignKeys: [foreignKey('ownerId', 'user')],
+    } satisfies Partial<TableDescription>;
+
+    expect(
+      mergeTables(
+        [ownTable(task), baseTable('Bug', 'task', [column('Bug', 'ownerId')], constraints)],
+        [],
+      ),
+    ).toEqual([{ ...task, ...constraints }]);
+  });
+
   it('merges the same foreign key declared by two variants', () => {
     const task = table('task', [column('Task', 'id'), column('Task', 'ownerId')]);
     const constraints = { foreignKeys: [foreignKey('ownerId', 'user')] };

@@ -133,6 +133,7 @@ import { type DeprecatedTypeNameWarner, deprecatedTypeNameWarner } from './depre
 import {
   getAttribute,
   getNamedArgument,
+  getPositionalArgumentEntry,
   mapFieldNamesToColumns,
   renamedTypeConstructorsOf,
   reportFieldDbAttributes,
@@ -2255,7 +2256,7 @@ function discriminatorColumnOf(
 }
 
 /**
- * An STI variant shares its base's table, so a unique constraint or an index without a `where` condition on it would also cover the rows of the base and the other variants. Each such attribute is refused where it is written, with the partial index scoped to the variant that the author can write instead.
+ * An STI variant shares its base's table, so a unique constraint or an index without a `where` condition on it would also cover the rows of the base and the other variants. Each such attribute is refused where it is written, with the partial index scoped to the variant that the author can write instead. A plain index over exactly the fields of one of the variant's relations is accepted: the relation's foreign key derives that same index, and a printed contract writes it out.
  */
 function unscopedIndexDiagnostics(
   baseDecl: BaseDeclaration,
@@ -2274,6 +2275,17 @@ function unscopedIndexDiagnostics(
   });
   const writtenArguments = (args: readonly ResolvedAttributeArg[]) =>
     args.map((arg) => (arg.kind === 'named' ? `${arg.name}: ${arg.value}` : arg.value));
+  const withoutSpaces = (text: string | undefined) => text?.replaceAll(/\s/g, '');
+  const relationFieldLists = new Set(
+    Object.values(baseDecl.model.fields).flatMap((field) => {
+      const relation = getAttribute(field.attributes, 'relation');
+      const fields = relation === undefined ? undefined : getNamedArgument(relation, 'fields');
+      return fields === undefined ? [] : [withoutSpaces(fields)];
+    }),
+  );
+  const backsOwnForeignKey = (attribute: ResolvedAttribute<ModelAttributeAst>) =>
+    getNamedArgument(attribute, 'unique') !== 'true' &&
+    relationFieldLists.has(withoutSpaces(getPositionalArgumentEntry(attribute)?.value));
 
   const refusals: PslDiagnostic[] = [];
   for (const field of Object.values(baseDecl.model.fields)) {
@@ -2300,7 +2312,7 @@ function unscopedIndexDiagnostics(
       );
     }
     const scoped = attribute.args.some((arg) => arg.kind === 'named' && arg.name === 'where');
-    if (attribute.name === 'index' && !scoped) {
+    if (attribute.name === 'index' && !scoped && !backsOwnForeignKey(attribute)) {
       refusals.push(refusal('@@index', attribute.node, writtenArguments(attribute.args)));
     }
   }

@@ -1,5 +1,5 @@
 import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-key-materialization';
-import type { TableProperties } from './contract-definition';
+import type { IndexNode, TableProperties } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { ColumnSite } from './declaration-sites';
 import {
@@ -206,11 +206,17 @@ function assertVariantColumnsOnBaseTable(variant: VariantStorage, table: TableDe
   );
 }
 
-/** A variant shares its base's table, so a unique constraint or an index without a `where` condition would also cover the rows of the base and the other variants. Only an index the author scoped with a condition is accepted. */
+/** A variant shares its base's table, so a unique constraint or an index without a `where` condition would also cover the rows of the base and the other variants. An index the author scoped with a condition is accepted, and so is a plain index over exactly the columns of one of the variant's foreign keys, the index the foreign key derives anyway. */
 function assertVariantIndexesScoped(variant: VariantStorage): void {
+  const backsOwnForeignKey = (index: IndexNode) =>
+    index.unique !== true &&
+    index.columns !== undefined &&
+    variant.foreignKeys.some((foreignKey) =>
+      sameColumnList(foreignKey.source.columns, index.columns ?? []),
+    );
   const unscoped = [
     ...variant.uniques,
-    ...variant.indexes.filter((index) => index.where === undefined),
+    ...variant.indexes.filter((index) => index.where === undefined && !backsOwnForeignKey(index)),
   ].map((constraint) => constraint.columns ?? []);
   if (unscoped.length === 0) return;
   const listed = unscoped.map((columns) => `(${columns.join(', ')})`).join(', ');
