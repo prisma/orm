@@ -160,7 +160,10 @@ await db.orm.users.where({ id: user.id }).update({ name: 'Bob' });
 // Field operations: atomic, server-side, checked against the field's type.
 await db.orm.posts
   .where({ id: postId })
-  .update((p) => [p.views.inc(1), p.tags.push('mongodb'), p.tags.addToSet('unique-tag')]);
+  .update((p) => [p.views.inc(1), p.tags.push('mongodb')]);
+
+// One update takes one operation per field, so a second change to `tags` is its own update.
+await db.orm.posts.where({ id: postId }).update((p) => [p.tags.addToSet('unique-tag')]);
 
 await db.orm.users.where({ id: user.id }).delete();
 ```

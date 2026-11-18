@@ -261,7 +261,7 @@ export function publishedEntries(scanDir, packageName) {
 
 /** One record per prose line naming an internal package or a published entry that does not exist. */
 export function findProseNames(content, entriesOf) {
-  const lines = content.split('\n');
+  const lines = content.split(/\r?\n/);
   const patterns = detectionLines(lines);
   const records = [];
   for (let i = 0; i < lines.length; i++) {
@@ -281,6 +281,11 @@ export function findProseNames(content, entriesOf) {
   return records;
 }
 
+/** The skill describes the current release; an upgrade guide also names the entries a release removed. */
+function describesThePresent(relPath) {
+  return ALWAYS_PROSE.some((scope) => relPath === scope || relPath.startsWith(`${scope}/`));
+}
+
 export function scanProse(scanDir) {
   const cache = new Map();
   const entriesOf = (packageName) => {
@@ -288,10 +293,10 @@ export function scanProse(scanDir) {
     return cache.get(packageName);
   };
   return proseScopeFiles(scanDir).flatMap((relPath) =>
-    findProseNames(readFileSync(join(scanDir, relPath), 'utf-8'), entriesOf).map((record) => ({
-      file: relPath,
-      ...record,
-    })),
+    findProseNames(readFileSync(join(scanDir, relPath), 'utf-8'), entriesOf)
+      .map((record) => (describesThePresent(relPath) ? record : { ...record, unpublished: [] }))
+      .filter((record) => record.internal.length > 0 || record.unpublished.length > 0)
+      .map((record) => ({ file: relPath, ...record })),
   );
 }
 

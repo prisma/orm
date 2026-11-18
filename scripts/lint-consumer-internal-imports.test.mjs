@@ -386,6 +386,25 @@ describe('findProseNames', () => {
     );
   });
 
+  it('exempts detection patterns in a file with CRLF line endings', () => {
+    const content = [
+      '---',
+      'changes:',
+      '  - id: first',
+      '    detection:',
+      '      matches:',
+      '        - "@internal/adapter-postgres/column-types"',
+      '---',
+      '',
+      'Prose naming `@internal/postgres/runtime`.',
+      '',
+    ].join('\r\n');
+    assert.deepEqual(
+      findProseNames(content, entriesOf).map((record) => record.line),
+      [9],
+    );
+  });
+
   it('exempts every line of a multi-line detection value', () => {
     const content = [
       '---',
@@ -439,6 +458,27 @@ describe('prose scopes', () => {
       'upgrade-instructions/pending/renamed/app/instructions.md',
     ]);
     assert.match(result.stderr, /@internal\/postgres\/runtime \(not published\)/);
+  });
+
+  it('lets an upgrade guide name an entry a release removed, and the skill not', () => {
+    writeRepoFile(
+      'packages/9-public/@prisma/orm-x/package.json',
+      JSON.stringify({ name: '@prisma/orm-x', exports: { '.': './i.mjs' } }),
+    );
+    const removed = '`@prisma/orm-x/removed` is removed. Nothing replaces it.\n';
+    writeRepoFile('upgrade-instructions/pending/removed/app/instructions.md', removed);
+    writeRepoFile('skills/prisma-8/references/runtime.md', removed);
+    commitAll('fixture');
+
+    const result = runScript('--list');
+    assert.equal(result.status, 1);
+    assert.deepEqual(
+      result.stdout
+        .trim()
+        .split('\n')
+        .map((line) => line.trim().split(':')[0]),
+      ['skills/prisma-8/references/runtime.md'],
+    );
   });
 
   it('refuses file arguments rather than skipping the check', () => {
