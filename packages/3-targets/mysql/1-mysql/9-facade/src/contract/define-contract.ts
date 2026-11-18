@@ -12,6 +12,7 @@ import type {
   SqlNamespaceInput,
 } from '@internal/sql-contract/types';
 import type {
+  CapabilityContributor,
   ComposedAuthoringHelpers,
   ContractInput,
   EnumTypeHandle,
@@ -32,12 +33,9 @@ type ModelsConstraint = Record<string, ModelLike>;
 type EnumsConstraint = Record<string, EnumTypeHandle>;
 type ForeignKeyDefaultsConstraint = ContractInput['foreignKeyDefaults'];
 
-/** What the adapter a contract runs with adds to it: its capabilities and its aggregate overloads, as `prisma contract emit` adds them. */
-export type MysqlContractContributions = NonNullable<ContractInput['adapter']>;
-
 type MysqlResult<
   Pack extends SqlTargetPack,
-  Adapter extends MysqlContractContributions,
+  Adapter extends CapabilityContributor,
   DatabaseTypes extends DatabaseTypesConstraint,
   Models extends ModelsConstraint,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
@@ -114,7 +112,7 @@ type MysqlScaffold<
 /** The `defineContract` of MySQL, or of a target that extends it. */
 export interface MysqlDefineContract<
   Pack extends SqlTargetPack,
-  Adapter extends MysqlContractContributions,
+  Adapter extends CapabilityContributor,
 > {
   <
     const DatabaseTypes extends DatabaseTypesConstraint = Record<never, never>,
@@ -156,7 +154,7 @@ export interface MysqlDefineContract<
 
 export interface MysqlDefineContractOptions<
   Pack extends SqlTargetPack,
-  Adapter extends MysqlContractContributions,
+  Adapter extends CapabilityContributor,
 > {
   /** The target's pack ref, whose id the contract carries. */
   readonly target: Pack;
@@ -167,7 +165,7 @@ export interface MysqlDefineContractOptions<
 /** Builds the `defineContract` of MySQL, or of a target that extends it, for that target's pack and adapter. */
 export function createMysqlDefineContract<
   const Pack extends SqlTargetPack,
-  const Adapter extends MysqlContractContributions,
+  const Adapter extends CapabilityContributor,
 >(options: MysqlDefineContractOptions<Pack, Adapter>): MysqlDefineContract<Pack, Adapter> {
   const { target, adapter } = options;
   function defineContract(
@@ -205,7 +203,7 @@ export function createMysqlDefineContract<
   }
   return blindCast<
     MysqlDefineContract<Pack, Adapter>,
-    "the implementation builds with the given pack and adapter, which the overloads' result types name"
+    "the implementation passes target and adapter to buildBoundContract unchanged, so its result is the one the overloads name for Pack and Adapter; TypeScript cannot check overloads that name the outer function's type parameters against it"
   >(defineContract);
 }
 

@@ -2,7 +2,7 @@ import { mariadbAdapterContractContributions } from '@internal/adapter-mariadb/a
 import {
   createMysqlDefineContract,
   type MysqlDefineContract,
-} from '@internal/mysql/contract-builder';
+} from '@internal/mysql/define-contract';
 import mariadbPack from '@internal/target-mariadb/pack';
 
 /** MariaDB's `defineContract`: MySQL's, applied to MariaDB's pack and adapter, so the contract carries target `mariadb` and MariaDB's capabilities. */
