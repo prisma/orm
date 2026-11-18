@@ -324,7 +324,7 @@ const PERMITTED_STATEMENTS = {
   dataLoss: { verb: 'delete', text: 'permits losing data, so these deletes' },
   accessWidening: {
     verb: 'allow',
-    text: 'permits changing who can read or write data, so these allows',
+    text: 'permits changing who can read or write data, so these access changes',
   },
 } as const satisfies Record<DataProtectionSetting, { verb: string; text: string }>;
 

@@ -193,4 +193,34 @@ describe('db update --dry-run on a database whose data protection policy permits
       permitted: ['dataLoss'],
     });
   });
+
+  it('says nothing about the policy on an apply that deleted nothing', async () => {
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...permittedPlan(),
+        mode: 'apply',
+        permitted: ['dataLoss', 'accessWidening'],
+        dataLoss: [],
+        accessChanges: [],
+        appliedStatements: [
+          {
+            verb: 'rename',
+            statement: { kind: 'rename', from: legacy, to: { ...legacy, field: 'former' } },
+            description: 'rename field "User.legacy" to "User.former"',
+            operationIndexes: [0],
+          },
+        ],
+        execution: { operationsPlanned: 1, operationsExecuted: 1 },
+        marker: { storageHash: DEST_HASH },
+      }),
+    );
+
+    const human = await harness().run(['db', 'update'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(JSON.stringify(human.presented?.presentation.human)).not.toContain('without asking');
+    expect(human.exitCode).toBe(0);
+  });
 });
