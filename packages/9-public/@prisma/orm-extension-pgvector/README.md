@@ -18,4 +18,4 @@ pnpm add @prisma/orm-extension-pgvector
 
 ## Responsibilities
 
-Variable or fixed-dimension vector storage and search: the `pg/vector@1` codec (`number[]` at runtime, `Vector<N>` in `contract.d.ts`), similarity operations such as `cosineDistance`, and a baseline migration that runs `CREATE EXTENSION IF NOT EXISTS vector` when the pack is composed into an application.
+Variable or fixed-dimension vector storage and search: the `pg/vector@1` codec (`number[]` at runtime; in `contract.d.ts`, `Vector<N>` for `vector(n)` and `number[]` for `vector()`), similarity operations such as `cosineDistance`, and a baseline migration that runs `CREATE EXTENSION IF NOT EXISTS vector` when the pack is composed into an application.

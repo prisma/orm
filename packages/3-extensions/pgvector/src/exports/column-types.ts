@@ -16,7 +16,7 @@ import { VECTOR_CODEC_ID } from '../core/constants';
  * @returns A column type descriptor without `typeParams.length` set
  */
 export function vector(): ColumnTypeDescriptor<typeof VECTOR_CODEC_ID> & {
-  readonly typeParams: Record<string, never>;
+  readonly typeParams: Record<never, never>;
 };
 /**
  * Factory for creating dimensioned vector column descriptors.
@@ -34,10 +34,8 @@ export function vector<N extends number>(
 ): ColumnTypeDescriptor<typeof VECTOR_CODEC_ID> & { readonly typeParams: { readonly length: N } };
 /** Creates a vector descriptor whose dimension may be absent, leaving variable dimensions when it is. */
 export function vector(length?: number): ColumnTypeDescriptor<typeof VECTOR_CODEC_ID> & {
-  readonly typeParams: Record<string, never> | { readonly length: number };
+  readonly typeParams: Record<never, never> | { readonly length: number };
 };
-
-/** Creates a vector descriptor, omitting the dimension parameter when no length is supplied. */
 export function vector(length?: number): ColumnTypeDescriptor<typeof VECTOR_CODEC_ID> {
   if (length === undefined) {
     return { codecId: VECTOR_CODEC_ID, typeParams: {} };

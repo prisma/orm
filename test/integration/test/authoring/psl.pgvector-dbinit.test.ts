@@ -279,6 +279,55 @@ model Document {
       },
       timeouts.spinUpPpgDev,
     );
+
+    it(
+      'dbUpdate plans a type change between vector and vector(3)',
+      async () => {
+        const before = await emitPgvectorContract(`model Document {
+  id Int @id @default(autoincrement())
+  grows pgvector.Vector
+  shrinks pgvector.Vector(3)
+}
+`);
+        const after = await emitPgvectorContract(`model Document {
+  id Int @id @default(autoincrement())
+  grows pgvector.Vector(3)
+  shrinks pgvector.Vector
+}
+`);
+        const migrationsDir = await materialisePgvectorPinnedArtifacts(testDir);
+
+        await withDevDatabase(async ({ connectionString }) => {
+          await withPgvectorControlClient(connectionString, async (client) => {
+            const init = await client.dbInit({
+              invocation: TEST_INVOCATION,
+              contract: before,
+              mode: 'apply',
+              migrationsDir,
+            });
+            if (!init.ok) throw new Error(`dbInit apply failed: ${init.failure.message}`);
+
+            const update = await client.dbUpdate({
+              invocation: TEST_INVOCATION,
+              answerQuestions: async (questions) =>
+                questions.map((question) => ({
+                  verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+                  text: question.subject,
+                })),
+              contract: after,
+              mode: 'plan',
+              migrationsDir,
+            });
+            if (!update.ok) throw new Error(`dbUpdate plan failed: ${update.failure.message}`);
+            expect(update.value.plan.preview?.statements.map((s) => s.text)).toEqual([
+              'ALTER TABLE "public"."Document" ALTER COLUMN "grows" TYPE vector(3) USING "grows"::vector(3)',
+              'ALTER TABLE "public"."Document" ALTER COLUMN "shrinks" TYPE vector USING "shrinks"::vector',
+            ]);
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
   },
   timeouts.spinUpPpgDev,
 );

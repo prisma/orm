@@ -45,11 +45,7 @@ describe('the pgvector nearest-neighbour collection methods', () => {
     type Methods = MethodsFor<{
       readonly embedding: {
         readonly nullable: false;
-        readonly type: {
-          readonly kind: 'scalar';
-          readonly codecId: 'pg/vector@1';
-          readonly typeParams: Record<never, never>;
-        };
+        readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/vector@1' };
       };
     }>;
     expectTypeOf<Methods['embedding_nearest']['parameters']>().toEqualTypeOf<

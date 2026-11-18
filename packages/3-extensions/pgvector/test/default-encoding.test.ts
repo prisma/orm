@@ -102,7 +102,8 @@ describe('literal defaults on a codec contributed through extensions', () => {
       ).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.TYPE_PARAMS_INVALID',
-          message: expect.stringContaining('length'),
+          message:
+            'Field "Doc.embedding" has type parameters that its data type does not accept: pgvector/vector: length must be at least 1 (was 0)',
           meta: {
             dataType: 'pgvector/vector',
             parameters: ['length'],

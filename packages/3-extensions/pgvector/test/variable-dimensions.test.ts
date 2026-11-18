@@ -32,11 +32,9 @@ describe('variable dimensions', () => {
       pgvectorAuthoringTypes.pgvector.Vector.args,
       [],
     );
-    expect(
-      instantiateAuthoringTypeConstructor(pgvectorAuthoringTypes.pgvector.Vector, []),
-    ).toMatchObject({
-      codecId: 'pg/vector@1',
-    });
+    expect(instantiateAuthoringTypeConstructor(pgvectorAuthoringTypes.pgvector.Vector, [])).toEqual(
+      { codecId: 'pg/vector@1' },
+    );
   });
 
   it('validates and renders undimensioned contracts', async () => {
