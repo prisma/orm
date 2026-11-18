@@ -55,6 +55,7 @@ function probeWarning(
     case 'no-database-url':
     case 'invalid-result':
     case 'connection-failed':
+    case 'timed-out':
     case 'driver-missing':
     case 'version-unreadable':
     case 'unsupported':

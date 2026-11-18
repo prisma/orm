@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InitProbeResult } from '../../../src/commands/init/init-contribution';
 import {
   compareVersionPrefix,
@@ -176,6 +176,34 @@ describe('probeServerVersion (FR8.3)', () => {
       message: expect.stringContaining(
         'Skipped --probe-db: the probe of @example/target gave a malformed answer',
       ),
+    });
+  });
+
+  describe('a probe that never settles', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('gives up after 60 seconds, naming the package', async () => {
+      vi.useFakeTimers();
+      const pending = probeServerVersion(
+        probeContext('postgres://localhost:5432/db', () => new Promise(() => {})),
+      );
+
+      await vi.advanceTimersByTimeAsync(59_999);
+      let settled = false;
+      void pending.then(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toMatchObject({
+        kind: 'timed-out',
+        message:
+          '--probe-db gave up: the probe of @example/target did not finish within 60 seconds.',
+      });
     });
   });
 

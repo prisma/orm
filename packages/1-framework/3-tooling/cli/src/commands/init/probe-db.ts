@@ -2,6 +2,28 @@ import { type } from 'arktype';
 import { redactUrlCredentials } from '../../utils/url-credentials';
 import type { InitContribution } from './init-contribution';
 
+/**
+ * How long the CLI waits for a target package's probe. Prisma's own probes give the driver 20
+ * seconds to connect and 20 more to answer, so they settle inside it.
+ */
+export const PROBE_DEADLINE_MILLIS = 60_000;
+
+const TIMED_OUT = Symbol('timed-out');
+
+/** The probe's answer, or `TIMED_OUT` when it has not settled by the deadline. */
+async function withinDeadline<T>(probe: Promise<T>): Promise<T | typeof TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), PROBE_DEADLINE_MILLIS);
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([probe, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const ProbeResultSchema = type({ kind: "'server-version'", serverVersion: 'string' })
   .or({ kind: "'version-unreadable'", detail: 'string' })
   .or({ kind: "'driver-missing'", driver: 'string', cause: 'string' });
@@ -30,7 +52,7 @@ export type ProbeOutcome =
       readonly message: string;
     }
   | {
-      readonly kind: 'no-database-url' | 'unsupported';
+      readonly kind: 'no-database-url' | 'unsupported' | 'timed-out';
       readonly minVersion: string | undefined;
       readonly meetsMinimum: null;
       readonly message: string;
@@ -67,7 +89,7 @@ export interface ProbeContext {
  *   `--strict-probe` (the spec scopes strict-probe to "probe
  *   *failures*", and a successful probe that finds an old server is
  *   not a failure).
- * - `no-database-url` / `connection-failed` / `driver-missing` /
+ * - `no-database-url` / `connection-failed` / `timed-out` / `driver-missing` /
  *   `version-unreadable` / `invalid-result` / `unsupported` — warning by
  *   default, fatal under `--strict-probe`.
  */
@@ -94,7 +116,7 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
 
   let answer: unknown;
   try {
-    answer = await contribution.probe(databaseUrl);
+    answer = await withinDeadline(contribution.probe(databaseUrl));
   } catch (err) {
     const cause = redactUrlCredentials(causeMessage(err));
     return {
@@ -106,6 +128,14 @@ export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcom
     };
   }
 
+  if (answer === TIMED_OUT) {
+    return {
+      kind: 'timed-out',
+      minVersion,
+      meetsMinimum: null,
+      message: `--probe-db gave up: the probe of ${ctx.packageName} did not finish within ${PROBE_DEADLINE_MILLIS / 1000} seconds.`,
+    };
+  }
   const result = ProbeResultSchema(answer);
   if (result instanceof type.errors) {
     const cause = `the probe of ${ctx.packageName} gave a malformed answer: ${result.summary}`;

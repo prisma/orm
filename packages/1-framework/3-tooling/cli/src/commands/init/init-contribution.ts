@@ -69,7 +69,11 @@ export interface InitContribution {
   /** The README for a project that already has `src/index.ts`; no README is written without it. */
   readonly readme?: (input: ReadmeInput) => string;
   readonly serverRequirement?: ServerRequirement;
-  /** Connects and reads the server's version; rejects when it cannot connect. */
+  /**
+   * Connects and reads the server's version; rejects when it cannot connect. `init` waits 60 seconds
+   * for it and then reports the probe as not finished, so a probe should bound its own connect and
+   * query with its driver's timeouts, well inside that.
+   */
   readonly probe?: (databaseUrl: string) => Promise<InitProbeResult>;
   /** The quick reference for a project that keeps its Prisma 7 schema as the contract source. */
   readonly prisma7QuickReference?: (input: Prisma7QuickReferenceInput) => string;
