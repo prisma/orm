@@ -348,6 +348,10 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
               .where((task) => task.id.gte(2))
               .deleteAndCount(),
           ),
+          byKey: await outcome(
+            sent,
+            db.orm.Task.variant('feature').where({ id: 1 }).select('id', 'title', 'type').delete(),
+          ),
           first: await outcome(
             sent,
             db.orm.Task.variant('feature')
@@ -365,13 +369,8 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
                   { id: 5, title: 'Backlog', type: 'feature', parentId: null, priority: 50 },
                 ]),
                 counted: written(1),
-                first: written({
-                  id: 1,
-                  title: 'Launch',
-                  type: 'feature',
-                  parentId: null,
-                  priority: 10,
-                }),
+                byKey: written({ id: 1, title: 'Launch', type: 'feature' }),
+                first: { result: null, wrote: false },
                 second: null,
                 remaining: [
                   { id: 3, title: 'Crash', type: 'bug', parentId: 1, severity: 'critical' },
@@ -381,15 +380,16 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
             : {
                 deleted: refused,
                 counted: refused,
+                byKey: written({ id: 1, title: 'Launch', type: 'feature' }),
                 first: written({
-                  id: 1,
-                  title: 'Launch',
+                  id: 2,
+                  title: 'Checkout',
                   type: 'feature',
-                  parentId: null,
-                  priority: 10,
+                  parentId: 1,
+                  priority: 20,
                 }),
-                second: { id: 2, title: 'Checkout', type: 'feature', parentId: 1, priority: 20 },
-                remaining: seededTasks.slice(2),
+                second: { id: 5, title: 'Backlog', type: 'feature', parentId: null, priority: 50 },
+                remaining: seededTasks.filter((task) => task.id === 3 || task.id === 4),
               },
         );
       });
