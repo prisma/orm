@@ -13,6 +13,8 @@ changes:
 
 This applies to a package that adds a target and wants `prisma orm init` to set up projects on it. Nothing changes for a package that does not.
 
+In this release `--target` takes only the short names of the packages Prisma lists, so `init` cannot reach a package outside that list yet; accepting a package name comes in a later release. Exporting the entrypoint now prepares your package for it.
+
 Export an `init` entrypoint whose default export satisfies `InitContribution`:
 
 ```ts
@@ -32,8 +34,7 @@ export default {
 } satisfies InitContribution;
 ```
 
-- `db.ts` and `.env.example` read the connection string from `DATABASE_URL`, and `dotenv` is installed with your package, so `db.ts` may import `dotenv/config`.
+- `db.ts` and `.env.example` read the connection string from `DATABASE_URL`, and `dotenv` is installed with your package, so `db.ts` may import `dotenv/config`. `--probe-db` reads `DATABASE_URL` from the shell's environment, not from `.env`.
+- `peerPackages` names the drivers your package requires as peers. `init` reads it only after your package is installed, so it cannot help a package manager that refuses to install your package without its peers. For a package Prisma lists, the list names the drivers so they go into that first install; a probe must settle within the 60 seconds `init` gives it.
 - `readme`, `serverRequirement`, `probe` and `prisma7QuickReference` are optional. Give `prisma7QuickReference` when your `configModule` exports `prisma7Schema`.
 - The entrypoint may import types from the framework, and no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one your package depends on.
-
-In this release `--target` takes only the short names of the packages Prisma lists, so `init` cannot reach a package outside that list yet. Accepting a package name comes in a later release.

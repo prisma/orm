@@ -71,7 +71,7 @@ Two facts are shared by the CLI and every contribution, and the interface states
 
 The `init` entrypoint may import types from the framework but no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one the target package depends on, and two copies in one process do not recognise each other's values.
 
-A probe reports one of three results: the server's version, a missing driver, or a connection that worked whose version could not be read. It rejects only when it cannot connect. `init` gives every probe a deadline, so a probe that never settles is reported like one that could not connect.
+A probe reports one of four results: the server's version, a driver that is missing, a driver that is installed but fails to load, or a connection that worked whose version could not be read. It rejects only when it cannot connect. `init` gives every probe a deadline of 60 seconds, so a probe that never settles is reported like one that could not connect. `--probe-db` reads `DATABASE_URL` from the shell's environment, not from `.env`.
 
 ## The target package is installed first
 
@@ -89,13 +89,15 @@ check the flags
   → check the server, when asked to
 ```
 
-`init` asks nothing before installing the target package. The user named it, and installing it is what they asked for. Any refusal that depends only on the flags happens before the install.
+Before the install, `init` asks only which target, when `--target` is not given, and, when it finds a Prisma 7 schema, whether to keep it as the contract source. Every question that depends on the contribution comes after the install. `init` asks no consent to install the package: the user named it, and installing it is what they asked for. Any refusal that depends only on the flags happens before the install.
 
 The drivers go in the same install. A target package declares its driver as a required peer dependency ([ADR 219](ADR%20219%20-%20Database%20driver%20coupling%20-%20framework%20owns%20user-facing%20types%20and%20driver%20is%20a%20single-major%20peer%20dependency.md)), and some package managers refuse to install a package without its required peers. This holds on every path, a project that keeps its Prisma 7 schema included. For a listed package the list names the drivers, because they must be known before the package is installed. A driver the project already declares is left to the later install, so a refusal after the first install changes no version the project chose.
 
 A target package's other required peers, such as `temporal-polyfill` and `@types/pg`, are not installed by `init` yet.
 
-When a refusal comes after the install, the error says the package was added and gives the command to remove it.
+When a refusal comes after the install, `init` has written no scaffold file, but the install may have changed `package.json` and the lockfile. When the install added declarations, the error names them, gives the command to remove them, and names any declared range the install rewrote. When the install added nothing, as with `--skip-install`, the error has no removal instruction.
+
+A failed install also leaves no scaffold file, and the package manager may already have changed the dependency files, so the user checks them before trying again.
 
 With `--skip-install`, `init` installs nothing, so the target package must already be there. If it is not, `init` stops before changing anything and prints the install command.
 
@@ -105,10 +107,10 @@ A failed install stops `init`, as [ADR 323](ADR%20323%20-%20Prisma%208%20is%20no
 
 ```sh
 prisma orm init --target postgres                 # a short name
-prisma orm init --target prisma-orm-cockroachdb   # a package name
+prisma orm init --target prisma-orm-cockroachdb   # a package name, once package names are accepted
 ```
 
-The CLI holds a list of known target packages. `--target` is looked up in it, and a value that is not in the list is taken as a package name. Until package names are accepted, `--target` takes the short names only.
+Today `--target` takes the short names and aliases in the CLI's list of known target packages, and refuses any other value. The decision is that `--target` is looked up in the list and a value that is not in it is taken as a package name; that comes with a later change, and everything this record says about unlisted packages applies from then.
 
 | Short name | Aliases | Package | Name in this repository | Label | Provider in an earlier Prisma schema | Drivers it requires |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -122,10 +124,10 @@ The CLI holds a list of known target packages. `--target` is looked up in it, an
 
 ## Projects coming from Prisma 6 and Prisma 7
 
-`init` reads the `provider` from an existing Prisma schema and finds the target package through the list. Only listed packages take part. A provider with no entry is refused, with advice to name a package with `--target` and start a fresh project.
+`init` reads the `provider` from an existing Prisma schema and finds the target package through the list. Only listed packages take part. A provider with no entry is refused, with advice to start a fresh project with `--target`.
 
 - **A provider only Prisma 6 wrote**, such as `mongodb`, marks a Prisma 6 project. `init` changes nothing and prints how to set Prisma 8 up beside it.
-- **A Prisma 7 schema** can be kept as the contract source. A target package can take one when its `configModule` exports `prisma7Schema`. The CLI then writes the config around it, and the contribution must give `prisma7QuickReference`. A package without `prisma7Schema` cannot take a Prisma 7 schema, and `init` sets up a fresh project instead.
+- **A Prisma 7 schema** can be kept as the contract source. A target package can take one when its `configModule` exports `prisma7Schema`. The CLI then writes the config around it, and the contribution must give `prisma7QuickReference`. A package without `prisma7Schema` cannot take a Prisma 7 schema. In an interactive run, `init` then sets up a fresh project instead; with `--from-prisma7-schema` it stops with `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE` and writes nothing.
 
 ## Output
 

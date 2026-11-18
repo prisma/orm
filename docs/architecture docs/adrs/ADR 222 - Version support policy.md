@@ -81,7 +81,7 @@ Each target package is the authoritative source of truth for its database server
 The correct sequence for raising a DB floor:
 
 1. Update the constant in the target package's `src/core/server-version.ts`.
-2. Update the test infrastructure — the Postgres service-container image tags in `.github/workflows/ci.yml` and the `docker-compose.yaml` image tag — to match the new floor.
+2. Update the test infrastructure to match the new floor. For PostgreSQL, that is the service-container image tags in `.github/workflows/ci.yml` and the `docker-compose.yaml` image tag. For MongoDB, it is the `mongod` version the tests download: `mongodb-memory-server`, pinned in the `pnpm-workspace.yaml` catalog, downloads its own default, so a raised floor needs a version that runs at least the floor.
 
 ---
 
