@@ -330,12 +330,17 @@ const digitTextOfSafeInteger = (codecId: string, value: number): string =>
 /** A stored value an integer codec cannot read into a `number`, named by its column where the read knows it. */
 function errorIntegerUnreadable(
   codecId: string,
-  received: number | string,
+  received: unknown,
   ctx: SqlCodecCallContext,
   messageWithoutColumn: string,
 ): never {
   const column = ctx.column;
-  const shown = typeof received === 'string' ? JSON.stringify(received) : String(received);
+  const shown =
+    typeof received === 'string'
+      ? JSON.stringify(received)
+      : received instanceof Uint8Array
+        ? 'bytes'
+        : String(received);
   throw sqliteError(
     'RUNTIME.DECODE_FAILED',
     column === undefined

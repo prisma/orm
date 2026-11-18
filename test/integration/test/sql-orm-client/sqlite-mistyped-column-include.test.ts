@@ -40,10 +40,16 @@ const stack = createSqlExecutionStack({
 });
 const context = createExecutionContext({ contract, stack });
 
-const refusal = (codecId: string, reason: string) => ({
+const refusal = (expected: string | RegExp) => ({
   code: 'RUNTIME.DECODE_FAILED',
-  message: expect.stringContaining(`${codecId} wire value must be ${reason}`),
+  message:
+    typeof expected === 'string'
+      ? expect.stringContaining(expected)
+      : expect.stringMatching(expected),
 });
+
+const notAnInteger = (column: string, shown: string, codecId: string) =>
+  `Column "mistyped_cells"."${column}" holds ${shown}, which is not an integer within the safe integer range. ${codecId} reads integers`;
 
 // Outside a STRICT table, SQLite keeps a value of any type in any column. A codec reads a row and an
 // include with the same fromWire, so a value its type does not hold is refused both ways.
@@ -122,28 +128,29 @@ describe('a SQLite column holding a value of another type, read flat and through
   });
 
   it.each([
-    ['text in an INTEGER column', 2, 'sqlite/integer@1', 'an integer or its decimal text'],
-    ['a blob in an INTEGER column', 3, 'sql/int@1', 'an integer or its decimal text'],
+    ['text in an INTEGER column', 2, notAnInteger('integer', '"abc"', 'sqlite/integer@1')],
+    [
+      'a blob in an INTEGER column, which an include carries as text',
+      3,
+      /Column "mistyped_cells"\."sql_int" holds (?:bytes|".*"), which is not an integer within the safe integer range\. sql\/int@1 reads integers/,
+    ],
     [
       'text in an INTEGER column read as sql/int@1',
       6,
-      'sql/int@1',
-      'an integer or its decimal text',
+      notAnInteger('sql_int', '"abc"', 'sql/int@1'),
     ],
     [
       'hex text in a BLOB column, which is text and not bytes',
       4,
-      'sqlite/blob@1',
-      'bytes, or the array of their hex text an include carries',
+      'sqlite/blob@1 wire value must be bytes, or the array of their hex text an include carries',
     ],
     [
       'a number in a BLOB column',
       5,
-      'sqlite/blob@1',
-      'bytes, or the array of their hex text an include carries',
+      'sqlite/blob@1 wire value must be bytes, or the array of their hex text an include carries',
     ],
-  ])('refuses %s', async (_name, id, codecId, reason) => {
-    await expect(readCell(id)).rejects.toMatchObject(refusal(codecId, reason));
-    await expect(includeCells(id)).rejects.toMatchObject(refusal(codecId, reason));
+  ])('refuses %s', async (_name, id, expected) => {
+    await expect(readCell(id)).rejects.toMatchObject(refusal(expected));
+    await expect(includeCells(id)).rejects.toMatchObject(refusal(expected));
   });
 });

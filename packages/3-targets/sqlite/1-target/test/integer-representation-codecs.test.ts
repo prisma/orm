@@ -262,4 +262,14 @@ describe('sqlite/integer@1 guards the safe integer range as sqlite/bigintnumber@
       meta: { codecId: 'sqlite/integer@1', table: 'meter', column: 'peak', received: String(wire) },
     });
   });
+
+  it('names stored bytes it cannot read as bytes', async () => {
+    await expect(
+      codec.fromWire(wrongTyped(new Uint8Array([0x00, 0xff])), {
+        column: { table: 'meter', name: 'peak' },
+      }),
+    ).rejects.toMatchObject({
+      message: `Column "meter"."peak" holds bytes, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+    });
+  });
 });
