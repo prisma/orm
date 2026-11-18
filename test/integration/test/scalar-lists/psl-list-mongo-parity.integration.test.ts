@@ -16,7 +16,7 @@ import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonic
 import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
 import postgres from '@internal/target-postgres/control';
 import type { JsonObject } from '@internal/utils/json';
-import { timeouts } from '@repo/test-utils';
+import { timeouts, workspaceTypesModule } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -75,6 +75,7 @@ describe('PSL scalar-list Mongo parity', () => {
       const sqlEmitted = await emit(sqlResult.contract, sqlStack, sql.emission, {
         serializeContract: (c) => sqlSerializeContract(c) as unknown as JsonObject,
         deserializeContract: (json) => sqlFamily.deserializeContract(json),
+        typesModule: workspaceTypesModule.postgres,
         ...sqlContractCanonicalizationHooks,
       });
       const mongoFamily = mongoFamilyDescriptor.create(mongoStack);
@@ -85,6 +86,7 @@ describe('PSL scalar-list Mongo parity', () => {
         {
           serializeContract: (c) => mongoSerializeContract(c) as unknown as JsonObject,
           deserializeContract: (json) => mongoFamily.deserializeContract(json),
+          typesModule: workspaceTypesModule.mongo,
           ...mongoContractCanonicalizationHooks,
         },
       );

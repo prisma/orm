@@ -1,5 +1,5 @@
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { CreateIndexCall, DropIndexCall } from '../src/core/migrations/op-factory-call';
 import { PlannerProducedMongoMigration } from '../src/core/migrations/planner-produced-migration';
@@ -58,7 +58,7 @@ describe('PlannerProducedMongoMigration', () => {
     ];
     const migration = new PlannerProducedMongoMigration(calls, META, SNAPSHOTS_IMPORT_PATH);
 
-    const source = migration.renderTypeScript(keepInternalSpecifiers);
+    const source = migration.renderTypeScript(workspaceMigrationModule.mongo);
 
     // New shape: base derives describe() from the imported contract JSON, so the
     // scaffold carries `Migration<Start, End>` + the JSON/field imports and emits
@@ -72,7 +72,7 @@ describe('PlannerProducedMongoMigration', () => {
     expect(source).not.toContain(`'${META.from}'`);
     expect(source).not.toContain(`'${META.to}'`);
     expect(source).toContain(
-      "import { Migration, MigrationCLI, createIndex } from '@internal/target-mongo/migration';",
+      "import { Migration, MigrationCLI, createIndex } from '@internal/mongo/migration';",
     );
     expect(source).toContain('MigrationCLI.run(import.meta.url, M);');
   });
@@ -80,7 +80,7 @@ describe('PlannerProducedMongoMigration', () => {
   it('renders an empty-class stub when constructed with no calls', () => {
     const migration = new PlannerProducedMongoMigration([], META, SNAPSHOTS_IMPORT_PATH);
 
-    const source = migration.renderTypeScript(keepInternalSpecifiers);
+    const source = migration.renderTypeScript(workspaceMigrationModule.mongo);
 
     expect(source).toContain('class M extends Migration<Start, End>');
     expect(source).toContain('override readonly endContractJson = endContract;');
@@ -94,7 +94,7 @@ describe('PlannerProducedMongoMigration', () => {
     ];
     const migration = new PlannerProducedMongoMigration(calls, META, SNAPSHOTS_IMPORT_PATH);
 
-    const source = migration.renderTypeScript(keepInternalSpecifiers);
+    const source = migration.renderTypeScript(workspaceMigrationModule.mongo);
 
     expect(source).toContain('class M extends Migration<Start, End>');
     expect(source).not.toContain('describe()');

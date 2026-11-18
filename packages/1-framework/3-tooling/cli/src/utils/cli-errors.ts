@@ -404,6 +404,34 @@ export function errorSpaceNotFound(
   });
 }
 
+export function errorContractTypesModuleMissing(): ActionableCliError {
+  const fix =
+    "A config assembled by hand sets `contract.typesModule` to a module that exports the framework's and family's contract types. If the config comes from a target package's `defineConfig`, that package is older than this requirement: upgrade it to a release that sets the member.";
+  return new ActionableCliError(
+    'CONFIG.CONTRACT_TYPES_MODULE_MISSING',
+    'Config names no contract types module',
+    {
+      why: 'Config.contract.typesModule is not set, so a generated contract.d.ts has no module to import the framework and family contract types from.',
+      fix,
+      nextActions: [editFileAction(fix)],
+    },
+  );
+}
+
+export function errorMigrationModuleMissing(): ActionableCliError {
+  const fix =
+    "A config assembled by hand sets `migrations.module` to the module that exports the target's migration helpers. If the config comes from a target package's `defineConfig`, that package is older than this requirement: upgrade it to a release that sets the member.";
+  return new ActionableCliError(
+    'CONFIG.MIGRATION_MODULE_MISSING',
+    'Config names no migration module',
+    {
+      why: 'Config.migrations.module is not set, so a rendered migration.ts has no module to import Migration, MigrationCLI and the operation helpers from.',
+      fix,
+      nextActions: [editFileAction(fix)],
+    },
+  );
+}
+
 /**
  * A `migration show` target resolved to a directory or a graph node, but no
  * on-disk package was loaded for it.

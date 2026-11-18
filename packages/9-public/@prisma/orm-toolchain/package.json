@@ -41,7 +41,6 @@
     "@internal/emitter": "workspace:8.0.0-rc.24",
     "@internal/language-server": "workspace:8.0.0-rc.24",
     "@internal/migration-tools": "workspace:8.0.0-rc.24",
-    "@internal/publish-surface": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",
     "@internal/vite-plugin-contract-emit": "workspace:8.0.0-rc.24",
@@ -92,9 +91,6 @@
     "./migration-tools/ref-resolution": "./dist/migration-tools__ref-resolution.mjs",
     "./migration-tools/refs": "./dist/migration-tools__refs.mjs",
     "./migration-tools/spaces": "./dist/migration-tools__spaces.mjs",
-    "./publish-surface": "./dist/publish-surface.mjs",
-    "./publish-surface/import-roots": "./dist/publish-surface__import-roots.mjs",
-    "./publish-surface/shells": "./dist/publish-surface__shells.mjs",
     "./vite-plugin-contract-emit": "./dist/vite-plugin-contract-emit.mjs",
     "./package.json": "./package.json"
   },

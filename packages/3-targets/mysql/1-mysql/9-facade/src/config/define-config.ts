@@ -1,22 +1,19 @@
-import mysqlAdapter from '@internal/adapter-mysql/control';
 import type { ContractConfig, FormatterConfig, PrismaConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
 } from '@internal/config/config-types';
-import mysqlDriver from '@internal/driver-mysql/control';
-import sql from '@internal/family-sql/control';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
 import { MYSQL_ENUM_CODEC_ID, MYSQL_INT_CODEC_ID } from '@internal/target-mysql/codec-ids';
-import mysql from '@internal/target-mysql/control';
 import mysqlPackRef from '@internal/target-mysql/pack';
 import { mysqlCreateNamespace } from '@internal/target-mysql/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 import { typescriptContractUnsupported } from '../errors';
+import { contractTypesModule, controlComponents, migrationModule } from './components';
 
 export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   readonly contract: string;
@@ -31,12 +28,17 @@ export interface MysqlConfigOptions<TargetId extends string = 'mysql'> {
   readonly formatter?: FormatterConfig;
 }
 
-/** The components of MySQL, or of a target that extends it, that its `prisma.config.ts` wires together. The control target carries the facade module its `migration.ts` files import from. */
+/** The components of MySQL, or of a target that extends it, that its `prisma.config.ts` wires together. The target and adapter are the ones the target package hands on, with their type declarations restated. */
 export interface MysqlConfigComponents<TargetId extends string> {
   readonly pack: TargetPackRef<'sql', TargetId>;
+  readonly family: PrismaConfig<'sql', TargetId>['family'];
   readonly target: PrismaConfig<'sql', TargetId>['target'];
   readonly adapter: PrismaConfig<'sql', TargetId>['adapter'];
   readonly driver: NonNullable<PrismaConfig<'sql', TargetId>['driver']>;
+  /** The module a generated `contract.d.ts` imports the contract types from. */
+  readonly typesModule: string;
+  /** The module a generated `migration.ts` imports the migration helpers from. */
+  readonly migrationModule: string;
 }
 
 const typescriptExtensions: ReadonlySet<string> = new Set(['.ts', '.mts', '.cts', '.tsx']);
@@ -53,14 +55,14 @@ function buildConfig<TargetId extends string>(
   contract: ContractConfig,
 ): PrismaConfig<'sql', TargetId> {
   return coreDefineConfig({
-    family: sql,
+    family: components.family,
     target: components.target,
     adapter: components.adapter,
     driver: components.driver,
     extensions: options.extensions ?? [],
-    contract,
+    contract: { ...contract, typesModule: components.typesModule },
+    migrations: { ...options.migrations, module: components.migrationModule },
     ...ifDefined('db', options.db),
-    ...ifDefined('migrations', options.migrations),
     ...ifDefined('formatter', options.formatter),
   });
 }
@@ -89,10 +91,10 @@ export function createMysqlDefineConfig<TargetId extends string>(
 }
 
 const mysqlComponents: MysqlConfigComponents<'mysql'> = {
+  ...controlComponents,
   pack: mysqlPackRef,
-  target: mysql,
-  adapter: mysqlAdapter,
-  driver: mysqlDriver,
+  typesModule: contractTypesModule,
+  migrationModule,
 };
 
 const mysqlPslDefineConfig = createMysqlDefineConfig(mysqlComponents);

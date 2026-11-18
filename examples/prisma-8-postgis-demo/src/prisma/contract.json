@@ -361,22 +361,6 @@
       "id": "postgis",
       "kind": "extension",
       "targetId": "postgres",
-      "types": {
-        "codecTypes": {
-          "import": {
-            "alias": "PostgisTypes",
-            "named": "CodecTypes",
-            "package": "@internal/extension-postgis/codec-types"
-          }
-        },
-        "queryOperationTypes": {
-          "import": {
-            "alias": "PostgisQueryOperationTypes",
-            "named": "QueryOperationTypes",
-            "package": "@internal/extension-postgis/operation-types"
-          }
-        }
-      },
       "version": "0.0.1"
     }
   },

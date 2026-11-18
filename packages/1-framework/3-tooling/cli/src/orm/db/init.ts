@@ -22,7 +22,6 @@ import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
@@ -167,7 +166,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: contractPath,
-          projectDir: baseDirFor(ctx.config),
+          config: ctx.config,
           client,
         });
         if (!preflight.ok) {

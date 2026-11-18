@@ -73,6 +73,7 @@
     "./contract/validate-domain": "./dist/contract__validate-domain.mjs",
     "./contract/validate-once": "./dist/contract__validate-once.mjs",
     "./contract/validate-storage": "./dist/contract__validate-storage.mjs",
+    "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./driver": "./dist/driver.mjs",
     "./driver/control": "./dist/driver__control.mjs",

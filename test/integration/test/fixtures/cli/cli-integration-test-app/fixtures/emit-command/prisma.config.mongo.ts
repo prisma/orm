@@ -11,9 +11,12 @@ export default definePrismaConfig({
     family: mongoFamilyDescriptor,
     target: mongoTargetDescriptor,
     adapter: mongoAdapter,
-    contract: mongoContract('./contract.prisma', {
-      target: mongoTargetPack,
-      output: 'output/contract.json',
-    }),
+    contract: {
+      ...mongoContract('./contract.prisma', {
+        target: mongoTargetPack,
+        output: 'output/contract.json',
+      }),
+      typesModule: '@internal/mongo/contract-types',
+    },
   }),
 });

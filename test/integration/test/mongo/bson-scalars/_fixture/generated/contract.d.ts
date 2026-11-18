@@ -3,24 +3,19 @@
 // To regenerate, run: prisma contract emit
 import type {
   CodecTypes as MongoCodecTypes,
-  ParameterizedOutputTypesForTypeParams as MongoParameterizedOutputTypes,
-} from '@internal/target-mongo/codec-types';
-
-import type {
-  MongoCollection,
-  MongoContractWithTypeMaps,
-  MongoTypeMaps,
-  RelationKeys,
-} from '@internal/mongo-contract';
-import type {
   Contract as ContractType,
   ExecutionHashBase,
   FieldTypesFromDomain,
+  MongoCollection,
+  MongoContractWithTypeMaps,
+  MongoTypeMaps,
   NamespaceId,
+  ParameterizedOutputTypesForTypeParams as MongoParameterizedOutputTypes,
   ProfileHashBase,
+  RelationKeys,
   StorageHashBase,
   ValueObjectTypesFromStorage,
-} from '@internal/contract/types';
+} from '@internal/mongo/contract-types';
 
 export type StorageHash =
   StorageHashBase<'587167f68245c71b02d0b16add544f6309946b099c767c78cfa60e0d3c68b8ce'>;

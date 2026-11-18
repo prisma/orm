@@ -37,16 +37,11 @@ The pack declares the extension in the unbound namespace, so it is found through
 Add the extension to your `prisma.config.ts`:
 
 ```typescript
-import { defineConfig } from '@internal/cli/config-types';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import sql from '@internal/family-sql/control';
-import postgres from '@internal/target-postgres/control';
+import { defineConfig } from '@internal/postgres/config';
 import pgvector from '@internal/extension-pgvector/control';
 
 export default defineConfig({
-  family: sql,
-  target: postgres,
-  adapter: postgresAdapter,
+  contract: './prisma/schema.prisma',
   extensions: [pgvector],
 });
 ```

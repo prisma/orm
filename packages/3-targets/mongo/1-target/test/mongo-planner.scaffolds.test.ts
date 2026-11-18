@@ -1,4 +1,5 @@
 import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import type { PlannerProducedMongoMigration } from '../src/core/migrations/planner-produced-migration';
 import {
@@ -82,7 +83,7 @@ async function scaffolded(result: ReturnType<typeof plan>) {
 function migrationTs(result: ReturnType<typeof plan>): string {
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
   return compact(
-    (result.plan as PlannerProducedMongoMigration).renderTypeScript((specifier) => specifier),
+    (result.plan as PlannerProducedMongoMigration).renderTypeScript(workspaceMigrationModule.mongo),
   );
 }
 

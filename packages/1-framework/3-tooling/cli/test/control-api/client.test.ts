@@ -3,18 +3,11 @@ import { tmpdir } from 'node:os';
 import type { ContractSourceProvider } from '@internal/config/config-types';
 import type { Contract, LedgerEntryRecord } from '@internal/contract/types';
 import type {
-  ControlAdapterDescriptor,
-  ControlDriverDescriptor,
-  ControlDriverInstance,
   ControlFamilyDescriptor,
   ControlFamilyInstance,
   ControlTargetDescriptor,
-  SpaceToSign,
-  VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
-import type { EmissionSpi } from '@internal/framework-components/emission';
-import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { createContract, timeouts } from '@repo/test-utils';
@@ -22,134 +15,11 @@ import { join } from 'pathe';
 import { describe, expect, it, vi } from 'vitest';
 import { createControlClient } from '../../src/control-api/client';
 import type { ControlProgressEvent, EmitResult } from '../../src/control-api/types';
+import { createMockComponents, createSourceProvider, emittableContract } from './client-fixtures';
+
+const TYPES_MODULE = '@acme/orm-db/contract-types';
 
 const TEST_INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
-
-/**
- * The smallest contract the real emitter accepts: a storage envelope with a
- * hash and no models. No module mocks — the emit tests run the real
- * `@internal/emitter` over this, so they hold regardless of which test file
- * warmed the module registry first (`isolate: false` shares it).
- */
-function emittableContract(): Contract {
-  return {
-    schemaVersion: '1.0.0',
-    target: 'postgres',
-    targetFamily: 'sql',
-    roots: {},
-    domain: { namespaces: { app: { models: {} } } },
-    storage: { storageHash: 'test-storage-hash', namespaces: { app: { tables: {} } } },
-    extensions: {},
-    capabilities: {},
-    meta: {},
-    profileHash: 'test-profile-hash',
-    models: {},
-  } as unknown as Contract;
-}
-
-function createSourceProvider(
-  load: ContractSourceProvider['load'] = async () => ok(emittableContract()),
-  inputs?: readonly string[],
-): ContractSourceProvider {
-  return {
-    format: 'typescript',
-    ...ifDefined('inputs', inputs),
-    load,
-  };
-}
-
-function createMockComponents() {
-  const mockDriver = {
-    close: async () => {},
-  } as unknown as ControlDriverInstance<string, string>;
-
-  const mockFamilyInstance = {
-    introspect: async () => ({ tables: [] }),
-    deserializeContract: (ir: unknown) => ir as Contract,
-    readMarker: async () => null,
-    readAllMarkers: async () => new Map(),
-    readLedger: async () => [],
-    verify: async (): Promise<VerifyDatabaseResult> => ({
-      ok: true,
-      summary: 'Verification passed',
-      contract: { storageHash: 'test-hash' },
-      marker: { storageHash: 'test-hash' },
-      target: { expected: 'postgres' },
-      timings: { total: 10 },
-    }),
-    verifySchema: (): VerifyDatabaseSchemaResult => ({
-      ok: true,
-      summary: 'Schema verification passed',
-      contract: { storageHash: 'test-hash' },
-      target: { expected: 'postgres' },
-      schema: {
-        issues: [],
-      },
-      timings: { total: 10 },
-    }),
-    signSpaces: async ({ spaces }: { readonly spaces: readonly SpaceToSign[] }) =>
-      spaces.map(({ space, contract }) => ({
-        status: 'created',
-        space,
-        contract: { storageHash: contract.storage.storageHash, profileHash: contract.profileHash },
-      })),
-  } as unknown as ControlFamilyInstance<string, unknown>;
-
-  const mockHook: EmissionSpi = {
-    id: 'sql',
-    generateStorageType: () =>
-      '{ readonly tables: Record<string, never>; readonly types: Record<string, never>; readonly storageHash: StorageHash }',
-    generateModelStorageType: () => 'Record<string, never>',
-    getFamilyImports: () => [
-      "import type { ContractWithTypeMaps, TypeMaps as TypeMapsType } from '@internal/sql-contract/types';",
-    ],
-    getFamilyTypeAliases: () => '',
-    getTypeMapsExpression: () => 'TypeMapsType<CodecTypes, OperationTypes>',
-    getContractWrapper: (base: string, tm: string) =>
-      `export type Contract = ContractWithTypeMaps<${base}, ${tm}>;`,
-  };
-
-  const mockFamily = {
-    familyId: 'sql',
-    emission: mockHook,
-    create: () => mockFamilyInstance,
-    // biome-ignore lint/suspicious/noExplicitAny: required for mock flexibility
-  } as unknown as ControlFamilyDescriptor<any, any>;
-
-  const mockTarget = {
-    kind: 'target',
-    targetId: 'postgres',
-    familyId: 'sql',
-    contractSerializer: {
-      serializeContract: (contract: unknown) => contract,
-      deserializeContract: (json: unknown) => json,
-    },
-    // biome-ignore lint/suspicious/noExplicitAny: required for mock flexibility
-  } as unknown as ControlTargetDescriptor<any, any, any>;
-
-  const mockAdapter = {
-    kind: 'adapter',
-    familyId: 'sql',
-    targetId: 'postgres',
-    create: () => ({ familyId: 'sql', targetId: 'postgres' }),
-    // biome-ignore lint/suspicious/noExplicitAny: required for mock flexibility
-  } as unknown as ControlAdapterDescriptor<any, any, any>;
-
-  const mockDriverDescriptor = {
-    targetId: 'postgres',
-    create: async () => mockDriver,
-    // biome-ignore lint/suspicious/noExplicitAny: required for mock flexibility
-  } as unknown as ControlDriverDescriptor<any, any, any, any>;
-
-  return {
-    mockDriver,
-    mockFamilyInstance,
-    mockFamily,
-    mockTarget,
-    mockAdapter,
-    mockDriverDescriptor,
-  };
-}
 
 describe('ControlClient progress emission', () => {
   describe('verify()', () => {
@@ -452,6 +322,7 @@ describe('ControlClient progress emission', () => {
           contractConfig: {
             source: createSourceProvider(),
             output: '/tmp/contract.json',
+            typesModule: TYPES_MODULE,
           },
           onProgress: (event) => events.push(event),
         });
@@ -506,6 +377,7 @@ describe('ControlClient progress emission', () => {
             contractConfig: {
               source,
               output: '/tmp/contract.json',
+              typesModule: TYPES_MODULE,
             },
           });
 
@@ -540,6 +412,7 @@ describe('ControlClient progress emission', () => {
             throw new Error('Source load error');
           }),
           output: '/tmp/contract.json',
+          typesModule: TYPES_MODULE,
         },
         onProgress: (event) => events.push(event),
       });
@@ -580,6 +453,7 @@ describe('ControlClient progress emission', () => {
             });
           }),
           output: '/tmp/contract.json',
+          typesModule: TYPES_MODULE,
         },
       });
 
@@ -617,6 +491,7 @@ describe('ControlClient progress emission', () => {
               return outcome();
             }),
             output: '/tmp/contract.json',
+            typesModule: TYPES_MODULE,
           },
         });
         await client.close();
@@ -686,6 +561,7 @@ describe('ControlClient progress emission', () => {
             }),
           ),
           output: '/tmp/contract.json',
+          typesModule: TYPES_MODULE,
         },
       });
 
@@ -719,6 +595,7 @@ describe('ControlClient progress emission', () => {
             async () => ({}) as unknown as Awaited<ReturnType<ContractSourceProvider['load']>>,
           ),
           output: '/tmp/contract.json',
+          typesModule: TYPES_MODULE,
         },
       });
 
@@ -748,6 +625,7 @@ describe('ControlClient progress emission', () => {
           // A contract with no storage envelope makes the real emitter throw.
           source: createSourceProvider(async () => ok({} as unknown as Contract)),
           output: '/tmp/contract.json',
+          typesModule: TYPES_MODULE,
         },
         onProgress: (event) => events.push(event),
       });
@@ -1242,11 +1120,15 @@ describe('ControlClient progress emission', () => {
         });
 
         const emitted = await client.emit({
-          contractConfig: { source: createSourceProvider(), output: '/tmp/contract.json' },
+          contractConfig: {
+            source: createSourceProvider(),
+            output: '/tmp/contract.json',
+            typesModule: TYPES_MODULE,
+          },
         });
         const rendered = await client.renderContractDts({
           contract: emittableContract(),
-          resolveImportSpecifier: (specifier) => specifier,
+          typesModule: TYPES_MODULE,
         });
         await client.close();
 
@@ -1261,7 +1143,7 @@ describe('ControlClient progress emission', () => {
     );
 
     it(
-      'rewrites the import specifiers through the resolver it is given',
+      'imports the framework and family types from the module it is given',
       async () => {
         const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
         const client = createControlClient({
@@ -1272,13 +1154,14 @@ describe('ControlClient progress emission', () => {
 
         const rendered = await client.renderContractDts({
           contract: emittableContract(),
-          resolveImportSpecifier: (specifier) => specifier.replace(/^@internal\//, '@published/'),
+          typesModule: '@acme/orm-db/contract-types',
         });
         await client.close();
 
         expect(rendered.ok).toBe(true);
         if (rendered.ok) {
-          expect(rendered.value.contractDts).toContain("from '@published/contract/types'");
+          expect(rendered.value.contractDts).toContain("from '@acme/orm-db/contract-types'");
+          expect(rendered.value.contractDts).not.toContain('@internal/');
         }
       },
       timeouts.databaseOperation,
@@ -1303,7 +1186,10 @@ describe('ControlClient progress emission', () => {
       };
       const client = createControlClient({ family: mockFamily, target, adapter: mockAdapter });
 
-      const rendered = await client.renderContractDts({ contract: emittableContract() });
+      const rendered = await client.renderContractDts({
+        contract: emittableContract(),
+        typesModule: TYPES_MODULE,
+      });
       await client.close();
 
       expect(rendered.ok).toBe(true);
@@ -1320,7 +1206,10 @@ describe('ControlClient progress emission', () => {
         adapter: mockAdapter,
       });
 
-      const rendered = await client.renderContractDts({ contract: { storage: {} } });
+      const rendered = await client.renderContractDts({
+        contract: { storage: {} },
+        typesModule: TYPES_MODULE,
+      });
       await client.close();
 
       expect(rendered.ok).toBe(false);
@@ -1342,7 +1231,10 @@ describe('ControlClient progress emission', () => {
         adapter: mockAdapter,
       });
 
-      const rendered = await client.renderContractDts({ contract: emittableContract() });
+      const rendered = await client.renderContractDts({
+        contract: emittableContract(),
+        typesModule: TYPES_MODULE,
+      });
       await client.close();
 
       expect(rendered.ok).toBe(false);
