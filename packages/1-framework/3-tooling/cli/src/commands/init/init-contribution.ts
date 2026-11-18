@@ -77,7 +77,8 @@ export interface InitContribution {
   readonly readme?: (input: ReadmeInput) => string;
   readonly serverRequirement?: ServerRequirement;
   /**
-   * Connects and reads the server's version; rejects when it cannot connect. `init` waits 60 seconds
+   * Connects to the `DATABASE_URL` of the shell environment that ran `init` (not `.env`) and
+   * reads the server's version; rejects when it cannot connect. `init` waits 60 seconds
    * for it and then reports the probe as not finished, so a probe should bound its own connect and
    * query with its driver's timeouts, well inside that.
    */
