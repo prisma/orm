@@ -22,6 +22,7 @@ type PrismaClientJsGeneratorOptions = {
 
 export class PrismaClientJsGenerator implements Generator {
   readonly name = BuiltInProvider.PrismaClientJs
+  readonly usageHint = 'Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)'
 
   #cliCommand: string
   #shouldResolvePrismaClient: boolean
