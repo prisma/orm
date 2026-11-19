@@ -2,7 +2,7 @@
 changes:
   - id: postgres-transaction-context-has-transaction
     summary: |
-      `PostgresTransactionContext`, from `@prisma/orm-postgres/runtime`, has a required `transaction(fn)` member: `tx.transaction(fn)` runs `fn` in a savepoint and passes it a context of the same type. A context an extension builds for its own transactions and types as `PostgresTransactionContext` must have the member, or be typed without it. The detection matches TypeScript sources that name the type.
+      `PostgresTransactionContext`, from `@prisma/orm-postgres/runtime`, has a required `transaction(fn)` member: `tx.transaction(fn)` runs `fn` in a savepoint and passes it a context of the same type. A context an extension builds for its own transactions and types as `PostgresTransactionContext` must have the member, or be typed with the runtime's `transaction` in its place. The detection matches TypeScript sources that name the type.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -35,13 +35,14 @@ function buildTransactionContext(txCtx: TransactionContext): PostgresTransaction
 return withTransaction(runtime, (txCtx) => fn(buildTransactionContext(txCtx)), options);
 ```
 
-To keep the context without nested transactions, type it without the member:
+To keep the extension's context out of nested transactions, type it with the runtime's member, which the object already has through `withTransactionMembers`; the nested callback then receives the runtime's `TransactionContext`:
 
 ```ts
 export type MyTransactionContext<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
-> = Omit<PostgresTransactionContext<TContract, TCollections>, 'transaction'>;
+> = Omit<PostgresTransactionContext<TContract, TCollections>, 'transaction'> &
+  Pick<TransactionContext, 'transaction'>;
 ```
 
 # `TransactionContext` has `transaction`
@@ -57,4 +58,4 @@ const ctx: TransactionContext = {
 };
 ```
 
-A context type that extends `TransactionContext` and builds its object with `withTransactionMembers` now has `transaction` in its type and at run time, and the callback receives the runtime's `TransactionContext`, without the extension's members. To pass the extension's context instead, declare `transaction` on the type and add the member as in the Postgres example above. To hide it, type the context with `Omit<…, 'transaction'>`.
+A context type that extends `TransactionContext` and builds its object with `withTransactionMembers` now has `transaction` in its type and at run time, and the callback receives the runtime's `TransactionContext`, without the extension's members. To pass the extension's context instead, declare `transaction` on the type and add the member as in the Postgres example above.

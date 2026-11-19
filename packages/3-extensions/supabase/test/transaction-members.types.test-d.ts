@@ -4,6 +4,7 @@ import type {
   PostgresTransactionOptions,
 } from '@internal/postgres/runtime';
 import type { Collection } from '@internal/sql-orm-client';
+import type { TransactionContext } from '@internal/sql-runtime';
 import type { Pool } from 'pg';
 import { expectTypeOf, test } from 'vitest';
 import type {
@@ -43,10 +44,12 @@ test('query, execute and toSql have the types a postgres client has', () => {
   expectTypeOf<Client['toSql']>().toEqualTypeOf<Postgres['toSql']>();
 });
 
-test('a transaction has no lifecycle members, transaction or runtime', () => {
-  expectTypeOf<
-    Extract<keyof Tx, 'close' | 'transaction' | 'runtime' | typeof Symbol.asyncDispose>
-  >().toBeNever();
+test('a transaction has no lifecycle members or runtime', () => {
+  expectTypeOf<Extract<keyof Tx, 'close' | 'runtime' | typeof Symbol.asyncDispose>>().toBeNever();
+});
+
+test('a transaction has the runtime transaction method, whose callback receives the runtime context', () => {
+  expectTypeOf<Tx['transaction']>().toEqualTypeOf<TransactionContext['transaction']>();
 });
 
 test('a role-bound client and its transaction have the enums and nativeEnums a postgres client has', () => {
@@ -58,7 +61,7 @@ test('a role-bound client and its transaction have the enums and nativeEnums a p
 });
 
 test('a role-bound transaction has the members of a postgres transaction', () => {
-  expectTypeOf<Tx>().toEqualTypeOf<
+  expectTypeOf<Omit<Tx, 'transaction'>>().toEqualTypeOf<
     Omit<PostgresTransactionContext<Contract, Classes>, 'transaction'>
   >();
 });
