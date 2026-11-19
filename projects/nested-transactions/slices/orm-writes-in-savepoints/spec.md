@@ -69,7 +69,7 @@ Project spec decisions 7 and 8, as amended during slice 3. The savepoint code is
 ### What users see
 
 - A multi-statement ORM write on `tx.orm` (or on `inner.orm` in a nested transaction) sends `SAVEPOINT`, its statements, and `RELEASE SAVEPOINT`. When a statement fails it sends `ROLLBACK TO SAVEPOINT` and rejects with the statement's error.
-- On MySQL, MariaDB and SQLite, the rows the failed write had already written are gone. On Postgres the transaction is no longer aborted after the failure, so the callback can catch the error and continue, and the commit stores the work around the write.
+- On MySQL, MariaDB and SQLite, the rows the failed write had already written are gone. On Postgres the transaction is no longer aborted after the failure, so the callback can catch the error and continue, and the commit stores the work around the write. The exception on every database is an error with which the database ends the whole transaction (an InnoDB deadlock, a SQLite error that rolls the transaction back): `ROLLBACK TO` then fails and the transaction is closed (decision 9).
 - While such a write runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED` (project spec decision 3). Before this slice, `Promise.all` of an ORM write and another query on one `tx` worked; each call on `tx` now has to be awaited before the next one starts when one of them is a multi-statement write.
 - Middleware sees the write's savepoint as a `'transaction'` activity beneath the `orm-call` activity (decision 6).
 
@@ -168,7 +168,16 @@ The project plan estimated 300. The operator's cap is about 500.
   - `pnpm --filter <pkg> test` for `@internal/sql-runtime`, `@internal/sql-orm-client`, `@internal/postgres`, `@internal/sqlite`, `@internal/mysql-live-tests` (with `MYSQL_URL` and `MARIADB_URL` set), and `@internal/extension-supabase` (its handles go through the changed code).
   - The integration files that run ORM writes inside a transaction or through a handle wrapper: `test/integration/test/sql-orm-client/` and the interactive-transaction ports under `test/integration/test/ports/`, run as `.agents/rules/running-tests.mdc` says.
   - `pnpm --filter <pkg> lint` for every touched package, `pnpm lint:deps`, `pnpm check:error-reference`, `pnpm lint:skills`, `pnpm fixtures:check`.
-  - `pnpm check:upgrade-coverage --mode pr --prev f08ba069a56e0 --head HEAD` (the branch is stacked on slice 5 until it merges).
+  - `pnpm check:upgrade-coverage --mode pr --prev <base> --head HEAD`: the base was `f08ba069a56e0` while the branch was stacked on slice 5, and `origin/main` after the rebase.
+
+## Amendments
+
+- **D1 R1: three existing tests outside § Scope changed.** They encoded "a handle inside a transaction has no `transaction`": two assertions in `packages/2-sql-family/5-runtime/test/client-activity.test.ts` (deleted; the new tests cover what replaced that behaviour), the fixture in `sql-orm-client/test/orm-call-fixtures.ts` with the test in `orm-call-terminals.test.ts` that used it, and a driver stub in `sql-orm-client/test/mutation-scope-runtime.test.ts` whose `savepoint` threw. The reviewer accepted each as the least edit that is true now.
+- **D1 R1: `withPlanRecording` needed no change.** It already copies every handle member it does not override, so `inTransaction` reaches the ORM through it. The second row of § Pre-investigated edge cases did not apply.
+- **D1 review R1: the `RUNTIME.TRANSACTION_ALREADY_OPEN` entry in the error reference is in scope.** It said "transactions do not nest". It now says when the error is raised: on a handle opened on a connection before a transaction was open there.
+- **D1 review R1: the finalization of a savepoint beneath a client activity is asserted.** The release test and the rollback test in `client-activity.transaction.test.ts` assert the `activityFinalized` outcomes of decision 6. The `trace` helper of slice 4's `nested-transaction.test.ts` moved to the shared fixtures so both files use it.
+- **D1 R3, raised by the orchestrator: no claim that the transaction always stays usable.** The first doc text said the callback "can catch the error and go on" after a failed write. That does not hold when the database ends the whole transaction with the error. § What users see and the two doc sentences now say so.
+- **Size: about 600 changed lines outside `projects/`**, against the estimate of 380 and the operator's cap of about 500: about 95 production, 420 tests, 16 docs, 73 upgrade instructions. The estimate missed the mechanical edits in the existing handle tests (`transaction?.(` became `transaction(` on about twenty lines once the member was required), the three test edits above, and a second upgrade-instruction fragment for application code. The reviewer found no reduction that keeps the coverage.
 
 ## Open Questions
 
