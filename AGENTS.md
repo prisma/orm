@@ -147,6 +147,7 @@
   - Do write documentation comments, and mainly do so for exported items (although intra-module documentation may sometimes be useful as well).
   - The correct and official abbreviation of WebAssembly is "Wasm", not "WASM". There are instances of "WASM" in the codebase, but they are wrong and you should not repeat them. Fix the capitalization whenever you incidentally touch the corresponding lines or surrounding code for other reasons.
   - Prefer native JavaScript private properties and methods (`#field`) over the `private` keyword in TypeScript.
+  - **Never make a value lossy for convenience.** Do not call `Number()` or `parseFloat()` on a `Decimal`, a `bigint` or a 64-bit integer, and do not override `valueOf` or `Symbol.toPrimitive` on a value class (`Prisma.Decimal` included) so that `<`, `>` or arithmetic compute through a JavaScript number: decimals that differ beyond about 15 significant digits then compare as equal. JavaScript has no operator overloading, so no change can make these operators exact; point users at the type's own methods (`a.lt(b)`, `a.cmp(b)`). A third-party library's documented behaviour is changed upstream, not by subclassing or patching it here. Reviewers flag any pull request that does either.
 
 - **Workflow reminders**:
   - Respect existing structure: modifications often require updating both command implementation and tests/fixtures.

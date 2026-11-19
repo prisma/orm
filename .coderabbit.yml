@@ -16,3 +16,14 @@ reviews:
     # avoiding.
     base_branches:
       - 'v7'
+  path_instructions:
+    - path: '**/*.{ts,tsx,mts,cts,js,mjs,cjs}'
+      instructions: >-
+        Flag any change that turns a value into a lossy JavaScript form to make something convenient:
+        calling Number() or parseFloat() on a Decimal, a bigint or a 64-bit integer value, or overriding
+        valueOf or Symbol.toPrimitive on a value class (Prisma.Decimal included) so that <, >, == or
+        arithmetic compute through a JavaScript number. Such a change loses precision silently (two decimals
+        that differ beyond about 15 significant digits compare as equal) and is the wrong approach whatever
+        it fixes. JavaScript has no operator overloading, so no change can make these operators exact; ask
+        for the type's own exact methods instead, such as a.lt(b), a.cmp(b) or bigint arithmetic. Also flag a
+        subclass or patch that changes a third-party library's documented behaviour; that belongs upstream.
