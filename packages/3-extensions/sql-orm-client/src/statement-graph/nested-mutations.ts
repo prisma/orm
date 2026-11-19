@@ -19,7 +19,6 @@ import {
   resolveModelTableName,
   resolvePolymorphismInfo,
   resolveRelationTargetColumns,
-  resolveRowIdentityColumns,
 } from '../collection-contract';
 import {
   type CollectionTables,
@@ -59,6 +58,7 @@ import {
   addUpdateAll,
   createAllVariantGraph,
   requireOnlyCollidingKey,
+  sameRowColumnsOf,
 } from './collection-graphs';
 import {
   type ConflictCall,
@@ -381,12 +381,6 @@ function addConditionalUnlink(
     related.tables.root,
     resolveRelationTargetColumns(contract, relation),
   );
-  const { namespaceId, tableName } = model.tables.root.storage;
-  const identity = projectTableColumns(
-    contract,
-    model.tables.root,
-    resolveRowIdentityColumns(contract, namespaceId, tableName),
-  );
   const { criteria } = mutation;
   const wheres =
     criteria === undefined
@@ -406,7 +400,7 @@ function addConditionalUnlink(
         linked,
         SubqueryExpr.of(where === undefined ? target : target.withWhere(where)),
       ),
-      filters: [{ from: parent, columns: identity.map((column) => [column, column]) }],
+      filters: [{ from: parent, columns: sameRowColumnsOf(contract, model.tables.root) }],
       links: [],
       payloads: [],
       owner: { operation: 'update', modelName: model.modelName },

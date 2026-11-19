@@ -1,3 +1,5 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
@@ -548,7 +550,21 @@ function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly 
 }
 
 function sameRowColumns(collection: DescribeCollectionRowsOptions): ColumnMapping[] {
-  return sameColumns(identityProjection(collection));
+  return sameRowColumnsOf(collection.context.contract, collection.state.tables.root);
+}
+
+export function sameRowColumnsOf(
+  contract: Contract<SqlStorage>,
+  root: AliasedTable,
+): ColumnMapping[] {
+  const { namespaceId, tableName } = root.storage;
+  return sameColumns(
+    projectTableColumns(
+      contract,
+      root,
+      resolveRowIdentityColumns(contract, namespaceId, tableName),
+    ),
+  );
 }
 
 function whereOf(collection: DescribeCollectionRowsOptions): AnyExpression | undefined {
