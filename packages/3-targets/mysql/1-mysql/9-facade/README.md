@@ -34,7 +34,7 @@ ORM-owned transactions use ReadCommitted. ORM operations inside an explicit tran
 
 Callback options also accept `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. Implicit ORM and manual transactions remain untimed. See [callback timeouts](../../../../../docs/reference/transaction-options.md#timeout).
 
-`tx.transaction(async (inner) => ...)` runs the callback in a savepoint, and `inner` has the same type and members as `tx` (`MysqlTransactionContext<Contract>`, which MariaDB's `MariadbTransactionContext` aliases), to any depth. It takes no options. When the callback throws, the work since the savepoint is rolled back, the call rejects with the same error and `tx` can be used again. A failed statement does not end a MySQL or MariaDB transaction, so a nested callback that catches the error and returns is released and keeps its earlier statements; on Postgres the same callback is rolled back.
+`tx.transaction(async (inner) => ...)` runs the callback in a savepoint, and `inner` has the same type and members as `tx` (`MysqlTransactionContext<Contract>`, which MariaDB's `MariadbTransactionContext` aliases), to any depth. It takes no options. When the callback throws, the work since the savepoint is rolled back, the call rejects with the same error and `tx` can be used again. Most failed statements, such as a constraint violation, do not end a MySQL or MariaDB transaction (a deadlock does), so a nested callback that catches the error and returns is released and keeps its earlier statements; on Postgres the same callback is rolled back.
 
 ## Environment requirements
 
