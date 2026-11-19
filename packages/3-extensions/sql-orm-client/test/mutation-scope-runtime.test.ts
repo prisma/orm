@@ -1,6 +1,10 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import type { SqlDriver, SqlTransactionOptions } from '@internal/sql-relational-core/ast';
+import type {
+  SqlDriver,
+  SqlTransaction,
+  SqlTransactionOptions,
+} from '@internal/sql-relational-core/ast';
 import { createSqlExecutionStack, type SqlMiddleware, SqlRuntimeBase } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it, vi } from 'vitest';
@@ -14,13 +18,17 @@ function setup(failure?: Error, middleware: readonly SqlMiddleware[] = []) {
     query: async function* () {},
     execute: async () => ({ affectedRows: 0 }),
   };
+  const openSavepoint = async (): Promise<SqlTransaction> => ({
+    ...queryable,
+    commit: async () => undefined,
+    rollback: async () => undefined,
+    savepoint: openSavepoint,
+  });
   const transaction = {
     ...queryable,
     commit: vi.fn(async () => undefined),
     rollback: vi.fn(async () => undefined),
-    savepoint: vi.fn(async (): Promise<never> => {
-      throw new Error('savepoint is not stubbed');
-    }),
+    savepoint: vi.fn(openSavepoint),
   };
   const connection = {
     ...queryable,
