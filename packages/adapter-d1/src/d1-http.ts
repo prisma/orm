@@ -51,7 +51,7 @@ function onGenericD1HttpError(error: Error): never {
 }
 
 function onError(error: Error): never {
-  console.error('Error in performIO: %O', error)
+  debug('Error in performIO: %O', error)
   throw new DriverAdapterError(convertDriverError(error))
 }
 
