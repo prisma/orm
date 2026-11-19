@@ -1,0 +1,12 @@
+C            filter by binary param matches 1 row(s); filter by numeric param matches 1 of the binary-written rows
+de_DE.UTF-8  filter by binary param matches 2 row(s); filter by numeric param matches 2 of the binary-written rows
+ja_JP.UTF-8  filter by binary param matches 3 row(s); filter by numeric param matches 0 of the binary-written rows
+ar_KW.UTF-8  filter by binary param matches 4 row(s); filter by numeric param matches 0 of the binary-written rows
+read under C: binary   ar_KW.UTF-8  $1,234.56
+read under C: binary   C            $1,234.56
+read under C: binary   de_DE.UTF-8  $1,234.56
+read under C: binary   ja_JP.UTF-8  $1,234.56
+read under C: numeric  ar_KW.UTF-8  $12,345.60
+read under C: numeric  C            $1,234.56
+read under C: numeric  de_DE.UTF-8  $1,234.56
+read under C: numeric  ja_JP.UTF-8  $12.35

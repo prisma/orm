@@ -1,0 +1,21 @@
+
+
+reset: CONNECTED {"pid":60,"ds":"ISO, MDY","lm":"de_DE.UTF-8","tz":"UTC","st":"0","app":""}
+pooled options [-c lc_monetary=C]: FAILED {"message":"Failed to connect to upstream database. Please contact Prisma support if the problem persists."}
+pooled options [-c lc_monetary=en_US.utf8]: FAILED {"message":"Failed to connect to upstream database. Please contact Prisma support if the problem persists."}
+pooled options [-c DateStyle=German]: CONNECTED {"pid":60,"ds":"German, DMY","lm":"en_US.utf8","tz":"UTC","st":"0","app":""}
+pooled options [-c DateStyle=ISO -c TimeZone=Asia/Tokyo]: CONNECTED {"pid":60,"ds":"ISO, DMY","lm":"en_US.utf8","tz":"Asia/Tokyo","st":"0","app":""}
+pooled options [-c TimeZone=Asia/Tokyo]: CONNECTED {"pid":60,"ds":"ISO, MDY","lm":"en_US.utf8","tz":"Asia/Tokyo","st":"0","app":""}
+pooled options [-c statement_timeout=5000]: FAILED {"message":"Failed to connect to upstream database. Please contact Prisma support if the problem persists."}
+pooled options [-c search_path=public]: FAILED {"message":"Failed to connect to upstream database. Please contact Prisma support if the problem persists."}
+pooled options [-c DateStyle=ISO -c statement_timeout=5000]: FAILED {"message":"Failed to connect to upstream database. Please contact Prisma support if the problem persists."}
+pooled options [-c lc_messages=C]: FAILED {"message":"Failed to connect to upstream database. Please contact Prisma support if the problem persists."}
+pooled options [-c extra_float_digits=1]: CONNECTED {"pid":60,"ds":"ISO, MDY","lm":"en_US.utf8","tz":"UTC","st":"0","app":""}
+pooled, SET LOCAL in tx: CONNECTED {"pid":60,"ds":"ISO, MDY","lm":"en_US.utf8","tz":"UTC","st":"0","app":""}
+   in tx C
+   after tx en_US.utf8
+ALTER ROLE via direct: CONNECTED {"pid":65,"ds":"ISO, MDY","lm":"en_US.utf8","tz":"UTC","st":"0","app":""}
+   alter role: ok
+   alter database: ok
+direct after alter: CONNECTED {"pid":66,"ds":"ISO, MDY","lm":"C","tz":"UTC","st":"0","app":""}
+pooled after alter: CONNECTED {"pid":60,"ds":"ISO, MDY","lm":"en_US.utf8","tz":"UTC","st":"0","app":""}

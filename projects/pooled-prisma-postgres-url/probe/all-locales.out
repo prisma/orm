@@ -1,0 +1,5 @@
+locales scanned: 350
+locales where every value read back exactly: C chr_US.utf8 C.utf8 en_AG.utf8 en_AU.utf8 en_CA.utf8 en_NZ.utf8 en_US.utf8 en_ZW.utf8 es_US.utf8 ik_CA.utf8 iu_CA.utf8 mi_NZ.utf8 niu_NU.utf8 niu_NZ.utf8 POSIX shs_CA.utf8
+locales where some values read and others are refused: en_SG.utf8(6 read) unm_US.utf8(4 read) zh_SG.utf8(6 read)
+locales where the codec accepts a value that differs from what was sent (same session): none
+locales whose writes are scaled (read back under C as a different amount): aa_ER.utf8 ar_AE.utf8 ar_BH.utf8 ar_DZ.utf8 ar_EG.utf8 ar_IQ.utf8 ar_JO.utf8 ar_KW.utf8 ar_LB.utf8 ar_LY.utf8 ar_MA.utf8 ar_OM.utf8 ar_QA.utf8 ar_SD.utf8 ar_SS.utf8 ar_SY.utf8 ar_TN.utf8 ar_YE.utf8 az_IR.utf8 ber_DZ.utf8 ber_MA.utf8 byn_ER.utf8 ckb_IQ.utf8 dz_BT.utf8 eu_ES.utf8@euro.UTF-8 fa_IR.utf8 gez_ER.utf8 gez_ER.utf8@abegede.UTF-8 is_IS.utf8 ja_JP.utf8 ko_KR.utf8 ps_AF.utf8 sq_AL.utf8 sr_RS.utf8@latin.UTF-8 ssy_ER.utf8 ti_ER.utf8 tig_ER.utf8 vi_VN.utf8 zgh_MA.utf8

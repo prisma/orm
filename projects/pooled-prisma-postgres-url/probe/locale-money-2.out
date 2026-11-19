@@ -1,0 +1,41 @@
+psql:/tmp/p2.sql:5: NOTICE:  table "w" does not exist, skipping
+--- read as text under C
+C | 1234.56 | $1,234.56
+C | 0.07 | $0.07
+ja_JP | 1234.56 | $12.35
+ja_JP | 0.07 | $0.00
+de_DE | 1234.56 | $1,234.56
+--- read as text under ja_JP
+C | 1234.56 | ￥123,456
+C | 0.07 | ￥7
+ja_JP | 1234.56 | ￥1,235
+ja_JP | 0.07 | ￥0
+de_DE | 1234.56 | ￥123,456
+--- read as text under en_US
+C | 1234.56 | $1,234.56
+C | 0.07 | $0.07
+ja_JP | 1234.56 | $12.35
+ja_JP | 0.07 | $0.00
+de_DE | 1234.56 | $1,234.56
+--- json, aggregates under de_DE
+{"a" : "1.234,56 €"} | "1.234,56 €"
+1.234,63 € | 0,07 € | 1.234,56 €
+--- json under ja_JP
+{"a" : "￥123,456"}
+psql:/tmp/p2.sql:31: NOTICE:  table "dd" does not exist, skipping
+--- DDL default rendered as the control adapter renders it: DEFAULT '12.34'::money
+created under de_DE, read under C | $1,234.00 | $123,456.00 | '$1,234.00'::money
+psql:/tmp/p2.sql:36: NOTICE:  table "dj" does not exist, skipping
+psql:/tmp/p2.sql:41: NOTICE:  table "dg" does not exist, skipping
+created under ja_JP, read under C | $0.12 | '$0.12'::money
+created under en_GB, read under C | $12.34 | '$12.34'::money
+--- numeric-cast default spelling, created under ja_JP
+psql:/tmp/p2.sql:47: NOTICE:  table "dn" does not exist, skipping
+(12.34)::money
+(12.34)::money
+--- scale probe expression per locale: 0.01 and 0.001 through numeric::money::numeric
+C | 0.01 | 0.00
+ja_JP | 0 | 0
+--- int8 to money also scales
+C | $5.00
+ja_JP | ￥5

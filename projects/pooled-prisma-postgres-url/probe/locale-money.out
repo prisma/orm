@@ -1,0 +1,123 @@
+Output format is unaligned.
+Field separator is " | ".
+psql:/tmp/p.sql:5: NOTICE:  table "m" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+locale | label | sent | text under same locale | numeric of stored (locale-free)
+
+
+
+
+
+
+
+CREATE FUNCTION
+C | 1234.5 | $1,234.50 | 1234.50
+C | -1234.5 | -$1,234.50 | -1234.50
+C | 0 | $0.00 | 0.00
+C | 0.07 | $0.07 | 0.07
+C | -0.07 | -$0.07 | -0.07
+C | 12.505 | $12.51 | 12.51
+C | 1234567890.12 | $1,234,567,890.12 | 1234567890.12
+C | 92233720368547758.07 | $92,233,720,368,547,758.07 | 92233720368547758.07
+C | -92233720368547758.08 | -$92,233,720,368,547,758.08 | -92233720368547758.08
+POSIX | 1234.5 | $1,234.50 | 1234.50
+POSIX | -1234.5 | -$1,234.50 | -1234.50
+POSIX | 0 | $0.00 | 0.00
+POSIX | 0.07 | $0.07 | 0.07
+POSIX | -0.07 | -$0.07 | -0.07
+POSIX | 12.505 | $12.51 | 12.51
+POSIX | 1234567890.12 | $1,234,567,890.12 | 1234567890.12
+POSIX | 92233720368547758.07 | $92,233,720,368,547,758.07 | 92233720368547758.07
+POSIX | -92233720368547758.08 | -$92,233,720,368,547,758.08 | -92233720368547758.08
+C.UTF-8 | 1234.5 | $1,234.50 | 1234.50
+C.UTF-8 | -1234.5 | -$1,234.50 | -1234.50
+C.UTF-8 | 0 | $0.00 | 0.00
+C.UTF-8 | 0.07 | $0.07 | 0.07
+C.UTF-8 | -0.07 | -$0.07 | -0.07
+C.UTF-8 | 12.505 | $12.51 | 12.51
+C.UTF-8 | 1234567890.12 | $1,234,567,890.12 | 1234567890.12
+C.UTF-8 | 92233720368547758.07 | $92,233,720,368,547,758.07 | 92233720368547758.07
+C.UTF-8 | -92233720368547758.08 | -$92,233,720,368,547,758.08 | -92233720368547758.08
+en_US.UTF-8 | 1234.5 | $1,234.50 | 1234.50
+en_US.UTF-8 | -1234.5 | -$1,234.50 | -1234.50
+en_US.UTF-8 | 0 | $0.00 | 0.00
+en_US.UTF-8 | 0.07 | $0.07 | 0.07
+en_US.UTF-8 | -0.07 | -$0.07 | -0.07
+en_US.UTF-8 | 12.505 | $12.51 | 12.51
+en_US.UTF-8 | 1234567890.12 | $1,234,567,890.12 | 1234567890.12
+en_US.UTF-8 | 92233720368547758.07 | $92,233,720,368,547,758.07 | 92233720368547758.07
+en_US.UTF-8 | -92233720368547758.08 | -$92,233,720,368,547,758.08 | -92233720368547758.08
+en_GB.UTF-8 | 1234.5 | £1,234.50 | 1234.50
+en_GB.UTF-8 | -1234.5 | -£1,234.50 | -1234.50
+en_GB.UTF-8 | 0 | £0.00 | 0.00
+en_GB.UTF-8 | 0.07 | £0.07 | 0.07
+en_GB.UTF-8 | -0.07 | -£0.07 | -0.07
+en_GB.UTF-8 | 12.505 | £12.51 | 12.51
+en_GB.UTF-8 | 1234567890.12 | £1,234,567,890.12 | 1234567890.12
+en_GB.UTF-8 | 92233720368547758.07 | £92,233,720,368,547,758.07 | 92233720368547758.07
+en_GB.UTF-8 | -92233720368547758.08 | -£92,233,720,368,547,758.08 | -92233720368547758.08
+de_DE.UTF-8 | 1234.5 | 1.234,50 € | 1234.50
+de_DE.UTF-8 | -1234.5 | -1.234,50 € | -1234.50
+de_DE.UTF-8 | 0 | 0,00 € | 0.00
+de_DE.UTF-8 | 0.07 | 0,07 € | 0.07
+de_DE.UTF-8 | -0.07 | -0,07 € | -0.07
+de_DE.UTF-8 | 12.505 | 12,51 € | 12.51
+de_DE.UTF-8 | 1234567890.12 | 1.234.567.890,12 € | 1234567890.12
+de_DE.UTF-8 | 92233720368547758.07 | 92.233.720.368.547.758,07 € | 92233720368547758.07
+de_DE.UTF-8 | -92233720368547758.08 | -92.233.720.368.547.758,08 € | -92233720368547758.08
+ja_JP.UTF-8 | 1234.5 | ￥1,235 | 1235
+ja_JP.UTF-8 | -1234.5 | ￥-1,235 | -1235
+ja_JP.UTF-8 | 0 | ￥0 | 0
+ja_JP.UTF-8 | 0.07 | ￥0 | 0
+ja_JP.UTF-8 | -0.07 | ￥0 | 0
+ja_JP.UTF-8 | 12.505 | ￥13 | 13
+ja_JP.UTF-8 | 1234567890.12 | ￥1,234,567,890 | 1234567890
+ja_JP.UTF-8 | 92233720368547758.07 | ￥92,233,720,368,547,758 | 92233720368547758
+ja_JP.UTF-8 | -92233720368547758.08 | ￥-92,233,720,368,547,758 | -92233720368547758
+--- written under C, read under other locales
+CREATE FUNCTION
+psql:/tmp/p.sql:42: ERROR:  column reference "loc" is ambiguous
+LINE 1: SELECT loc, m.sent, m.stored::text, m.stored::numeric FROM m...
+               ^
+DETAIL:  It could refer to either a PL/pgSQL variable or a table column.
+QUERY:  SELECT loc, m.sent, m.stored::text, m.stored::numeric FROM m WHERE m.loc = 'C'
+CONTEXT:  PL/pgSQL function "cross"(text) line 4 at RETURN QUERY
+psql:/tmp/p.sql:43: ERROR:  column reference "loc" is ambiguous
+LINE 1: SELECT loc, m.sent, m.stored::text, m.stored::numeric FROM m...
+               ^
+DETAIL:  It could refer to either a PL/pgSQL variable or a table column.
+QUERY:  SELECT loc, m.sent, m.stored::text, m.stored::numeric FROM m WHERE m.loc = 'C'
+CONTEXT:  PL/pgSQL function "cross"(text) line 4 at RETURN QUERY
+--- text input $1,234.56 under each locale, read numeric
+CREATE FUNCTION
+C | $1,234.56 | 1234.56 | 
+de_DE.UTF-8 | $1,234.56 |  | invalid input syntax for type money: "$1,234.56"
+de_DE.UTF-8 | 1234.56 | 123456.00 | 
+ja_JP.UTF-8 | 1234.56 | 1235 | 
+ja_JP.UTF-8 | $1,234.56 |  | invalid input syntax for type money: "$1,234.56"
+--- json and aggregates under de_DE and ja_JP
+de_DE.UTF-8
+psql:/tmp/p.sql:63: ERROR:  money out of range
+ja_JP.UTF-8
+psql:/tmp/p.sql:65: ERROR:  money out of range
+--- column default spelling
+C
+psql:/tmp/p.sql:69: NOTICE:  table "d" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+12.34
+'$12.34'::money
+'$12.34'::money
+de_DE.UTF-8
+12.34
+'12,34 €'::money
+'12,34 €'::money
+ja_JP.UTF-8
+12.34
+'￥1,234'::money
+'￥1,234'::money
+12.34
+'￥1,234'::money
+'￥1,234'::money

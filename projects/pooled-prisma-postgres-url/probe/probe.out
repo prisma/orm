@@ -1,0 +1,33 @@
+(node:36330) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+direct, no options: CONNECTED
+   { pid: 58, ds: 'ISO, MDY', lm: 'en_US.utf8' }
+direct, with options: CONNECTED
+   { pid: 59, ds: 'ISO, MDY', lm: 'C' }
+pooled, with options: FAILED {"message":"Failed to connect to upstream database. Please contact Prisma support if the problem persists."}
+pooled, options DateStyle only: CONNECTED
+pooled, options via URL param: CONNECTED
+pooled, no options: CONNECTED
+   before { pid: 60, ds: 'ISO, MDY', lm: 'en_US.utf8' }
+   set_config { set_config: 'C' }
+   after 0 { pid: 60, ds: 'ISO, MDY', lm: 'C' }
+   after 1 { pid: 60, ds: 'ISO, MDY', lm: 'C' }
+   after 2 { pid: 60, ds: 'ISO, MDY', lm: 'C' }
+   after 3 { pid: 60, ds: 'ISO, MDY', lm: 'C' }
+   after 4 { pid: 60, ds: 'ISO, MDY', lm: 'C' }
+   after 5 { pid: 60, ds: 'ISO, MDY', lm: 'C' }
+   in tx 1 { pid: 60, ds: 'ISO, MDY', lm: 'C' }
+   in tx 2 { pid: 60, ds: 'ISO, MDY', lm: 'C' }
+   money { m: '$1,234.50', t: '2026-11-18 10:33:46.279224+00' }
+   named prepared statements: ok
+   pg_advisory_xact_lock in tx: ok
+   A { pid: 60, ds: 'German, DMY', lm: 'de_DE.UTF-8' } B { pid: 60, ds: 'ISO, MDY', lm: 'de_DE.UTF-8' }
+   A { pid: 60, ds: 'German, DMY', lm: 'de_DE.UTF-8' } B { pid: 60, ds: 'ISO, MDY', lm: 'de_DE.UTF-8' }
+   A { pid: 60, ds: 'German, DMY', lm: 'de_DE.UTF-8' } B { pid: 60, ds: 'ISO, MDY', lm: 'de_DE.UTF-8' }

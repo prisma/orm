@@ -1,0 +1,56 @@
+\pset format unaligned
+\pset fieldsep ' | '
+\pset tuples_only on
+-- Rows written by the driver's write expression ($1::numeric::money) under C, read under other locales, and vice versa
+DROP TABLE IF EXISTS w;
+CREATE TABLE w (written_under text, sent numeric, stored money);
+SET lc_monetary = 'C';
+INSERT INTO w VALUES ('C', 1234.56, 1234.56::numeric::money), ('C', 0.07, 0.07::numeric::money);
+SET lc_monetary = 'ja_JP.UTF-8';
+INSERT INTO w VALUES ('ja_JP', 1234.56, 1234.56::numeric::money), ('ja_JP', 0.07, 0.07::numeric::money);
+SET lc_monetary = 'de_DE.UTF-8';
+INSERT INTO w VALUES ('de_DE', 1234.56, 1234.56::numeric::money);
+SELECT '--- read as text under C';
+SET lc_monetary = 'C';
+SELECT written_under, sent, stored::text FROM w;
+SELECT '--- read as text under ja_JP';
+SET lc_monetary = 'ja_JP.UTF-8';
+SELECT written_under, sent, stored::text FROM w;
+SELECT '--- read as text under en_US';
+SET lc_monetary = 'en_US.UTF-8';
+SELECT written_under, sent, stored::text FROM w;
+SELECT '--- json, aggregates under de_DE';
+SET lc_monetary = 'de_DE.UTF-8';
+SELECT json_build_object('a', stored)::text, to_jsonb(stored)::text FROM w WHERE written_under = 'C' LIMIT 1;
+SELECT sum(stored)::text, min(stored)::text, max(stored)::text FROM w WHERE written_under = 'C';
+SELECT '--- json under ja_JP';
+SET lc_monetary = 'ja_JP.UTF-8';
+SELECT json_build_object('a', stored)::text FROM w WHERE written_under = 'C' LIMIT 1;
+SELECT '--- DDL default rendered as the control adapter renders it: DEFAULT ''12.34''::money';
+SET lc_monetary = 'de_DE.UTF-8';
+DROP TABLE IF EXISTS dd; CREATE TABLE dd (id int, a money DEFAULT '12.34'::money, b money DEFAULT '1234.56'::money);
+INSERT INTO dd (id) VALUES (1);
+SET lc_monetary = 'C';
+SELECT 'created under de_DE, read under C', a::text, b::text, pg_get_expr(adbin, adrelid) FROM dd, pg_attrdef WHERE adrelid = 'dd'::regclass AND adnum = 2;
+SET lc_monetary = 'ja_JP.UTF-8';
+DROP TABLE IF EXISTS dj; CREATE TABLE dj (id int, a money DEFAULT '12.34'::money);
+INSERT INTO dj (id) VALUES (1);
+SET lc_monetary = 'C';
+SELECT 'created under ja_JP, read under C', a::text, pg_get_expr(adbin, adrelid) FROM dj, pg_attrdef WHERE adrelid = 'dj'::regclass AND adnum = 2;
+SET lc_monetary = 'en_GB.UTF-8';
+DROP TABLE IF EXISTS dg; CREATE TABLE dg (id int, a money DEFAULT '12.34'::money);
+INSERT INTO dg (id) VALUES (1);
+SET lc_monetary = 'C';
+SELECT 'created under en_GB, read under C', a::text, pg_get_expr(adbin, adrelid) FROM dg, pg_attrdef WHERE adrelid = 'dg'::regclass AND adnum = 2;
+SELECT '--- numeric-cast default spelling, created under ja_JP';
+SET lc_monetary = 'ja_JP.UTF-8';
+DROP TABLE IF EXISTS dn; CREATE TABLE dn (id int, a money DEFAULT '12.34'::numeric::money);
+SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid = 'dn'::regclass;
+SET lc_monetary = 'C';
+SELECT pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid = 'dn'::regclass;
+SELECT '--- scale probe expression per locale: 0.01 and 0.001 through numeric::money::numeric';
+SET lc_monetary = 'C'; SELECT 'C', 0.01::numeric::money::numeric, 0.001::numeric::money::numeric;
+SET lc_monetary = 'ja_JP.UTF-8'; SELECT 'ja_JP', 0.01::numeric::money::numeric, 0.001::numeric::money::numeric;
+SELECT '--- int8 to money also scales';
+SET lc_monetary = 'C'; SELECT 'C', 5::int8::money::text;
+SET lc_monetary = 'ja_JP.UTF-8'; SELECT 'ja_JP', 5::int8::money::text;
