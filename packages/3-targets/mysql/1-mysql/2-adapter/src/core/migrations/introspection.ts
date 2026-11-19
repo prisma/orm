@@ -79,7 +79,7 @@ const NOTHING_DECLARED: DeclaredIndexes = {
   declaresUniqueIndex: () => false,
 };
 
-/** What a column's reported literal default reads as, through the codec of the column the contract declares: `body` is the literal's value, text or bytes, and `rawDefault` its text, which a refusal quotes: the body itself, or the hexadecimal literal the catalog reports for bytes. */
+/** What a column's reported literal default reads as, through the codec of the column the contract declares: `body` is the literal's value, text or bytes, and `rawDefault` its text, which a refusal quotes: the body itself, or what the catalog reports for bytes. */
 export type ReadLiteralDefault = (
   tableName: string,
   columnName: string,
@@ -141,31 +141,16 @@ function byPosition<Row>(position: (row: Row) => string): (a: Row, b: Row) => nu
 
 type ReadDefault = Pick<SqlColumnIRInput, 'resolvedDefault' | 'defaultValue' | 'defaultUnreadable'>;
 
-const BYTES_COLUMN_TYPE = /^(?:(?:tiny|medium|long)?blob|(?:var)?binary\(\d+\))$/i;
-
-/** A text default on a bytes column: the column's codec would read the text as base64, so only a hexadecimal literal is read as bytes. */
-function textDefaultOnBytesColumn(columnType: string, text: string): ReadDefault {
-  const hex = Buffer.from(text, 'utf8').toString('hex').toUpperCase();
-  return {
-    defaultUnreadable: `The database reports the default '${text}' on this ${columnType} column, which is text, not bytes. Prisma reads a bytes default only when it is written as a hexadecimal literal, such as X'00FF'. Write the default as one, as in DEFAULT (X'${hex}'), or remove it.`,
-  };
-}
-
 async function readDefaultOf(
   row: MysqlColumnRow,
   readLiteralDefault: ReadLiteralDefault,
 ): Promise<ReadDefault> {
-  const reported = readMysqlDefault(row.column_default, row.extra);
+  const reported = readMysqlDefault(row.column_default, row.extra, row.column_type);
   if (reported === undefined) return {};
   if (reported.kind === 'function') return { resolvedDefault: reported satisfies ColumnDefault };
   const { body } = reported.literal;
-  if (typeof body !== 'string') {
-    return readLiteralDefault(row.table_name, row.column_name, row.column_default ?? '', body);
-  }
-  if (BYTES_COLUMN_TYPE.test(row.column_type)) {
-    return textDefaultOnBytesColumn(row.column_type, body);
-  }
-  return readLiteralDefault(row.table_name, row.column_name, body, body);
+  const raw = typeof body === 'string' ? body : (row.column_default ?? '');
+  return readLiteralDefault(row.table_name, row.column_name, raw, body);
 }
 
 async function columnOf(

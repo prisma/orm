@@ -112,6 +112,23 @@ describe('converting a MariaDB column row to the form MySQL 8.4 reports', () => 
     },
   );
 
+  it.each([
+    ['longblob', "'abc'", '0x616263'],
+    ['blob', "'é'", '0xc3a9'],
+    ['varbinary(10)', "''", '0x'],
+    ['binary(4)', "'é\\0\\0'", '0xc3a90000'],
+    ['varbinary(10)', "'0x61'", '0x30783631'],
+  ])(
+    'reads the text default of a %s column, %s, as the hexadecimal literal of the bytes it stores, %s',
+    (type, mariadb, mysql) => {
+      expect(converted(type, mariadb)).toEqual({ type, default: mysql, extra: '' });
+    },
+  );
+
+  it('reports the text of a function default byte by byte, as MySQL reports an expression default', () => {
+    expect(converted('longblob', "_binary'é'").default).toBe("_binary'\u00c3\u00a9'");
+  });
+
   it('leaves an auto_increment column as MariaDB reports it', () => {
     expect(converted('int(11)', null, 'auto_increment')).toEqual({
       type: 'int',

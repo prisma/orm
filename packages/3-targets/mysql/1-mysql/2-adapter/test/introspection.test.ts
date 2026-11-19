@@ -233,13 +233,13 @@ describe('buildMysqlSchemaIR', () => {
     });
   });
 
-  it('reports a text default on a bytes column as unreadable, without reading it as bytes', async () => {
-    const read: string[] = [];
+  it('reads a text default on a bytes column as the bytes the column stores, its UTF-8, through the column’s codec', async () => {
+    const read: (readonly [string, string | readonly number[]])[] = [];
     const recordingReadLiteral: ReadLiteralDefault = async (table, name, raw, body) => {
-      read.push(name);
+      read.push([name, typeof body === 'string' ? body : [...body]]);
       return readLiteral(table, name, raw, body);
     };
-    const schema = await buildMysqlSchemaIR(
+    await buildMysqlSchemaIR(
       {
         tables: ['Blobs'],
         columns: [
@@ -247,12 +247,15 @@ describe('buildMysqlSchemaIR', () => {
             column_default: "_utf8mb4\\'abcd\\'",
             extra: 'DEFAULT_GENERATED',
           }),
-          column('Blobs', 'mariadb', 2, 'longblob', { column_default: 'abcd' }),
-          column('Blobs', 'hex', 3, 'longblob', {
+          column('Blobs', 'hex', 2, 'longblob', {
             column_default: '0x61626364',
             extra: 'DEFAULT_GENERATED',
           }),
-          column('Blobs', 'fixed', 4, 'varbinary(4)', { column_default: 'abcd' }),
+          column('Blobs', 'empty', 3, 'longblob', {
+            column_default: "X\\'\\'",
+            extra: 'DEFAULT_GENERATED',
+          }),
+          column('Blobs', 'fixed', 4, 'binary(6)', { column_default: '0x61626364' }),
           column('Blobs', 'note', 5, 'text', {
             column_default: "_utf8mb4\\'abcd\\'",
             extra: 'DEFAULT_GENERATED',
@@ -265,24 +268,13 @@ describe('buildMysqlSchemaIR', () => {
       mysqlDataTypes,
       recordingReadLiteral,
     );
-    const columns = schema.tables['Blobs']?.columns ?? {};
-    const textOnBytes = (type: string) =>
-      `The database reports the default 'abcd' on this ${type} column, which is text, not bytes. Prisma reads a bytes default only when it is written as a hexadecimal literal, such as X'00FF'. Write the default as one, as in DEFAULT (X'61626364'), or remove it.`;
-    expect(
-      Object.fromEntries(
-        Object.entries(columns).map(([name, c]) => [
-          name,
-          [c.resolvedDefault, c.defaultUnreadable],
-        ]),
-      ),
-    ).toEqual({
-      mysql: [undefined, textOnBytes('longblob')],
-      mariadb: [undefined, textOnBytes('longblob')],
-      hex: [{ kind: 'literal', value: '0x61626364 as 4 bytes' }, undefined],
-      fixed: [undefined, textOnBytes('varbinary(4)')],
-      note: [{ kind: 'literal', value: 'abcd' }, undefined],
-    });
-    expect(read).toEqual(['hex', 'note']);
+    expect(read).toEqual([
+      ['mysql', [97, 98, 99, 100]],
+      ['hex', [97, 98, 99, 100]],
+      ['empty', []],
+      ['fixed', [97, 98, 99, 100, 0, 0]],
+      ['note', 'abcd'],
+    ]);
   });
 
   it('resolves each column’s reported type to the data type that claims it', async () => {
