@@ -93,14 +93,14 @@ describe('SQLite built-in codec descriptors', () => {
     }
   });
 
-  it('projects sql/char@1 without trailing spaces, as its decode reads a flat value', () => {
+  it('projects sql/char@1 as SQLite stores it, which does not pad the value', () => {
     const expression = ColumnRef.of('records', 'value');
     expect(
       sqliteSqlCharDescriptor.projectJson(
         expression,
         refFor(sqliteSqlCharDescriptor, { length: 12 }),
       ),
-    ).toEqual(FunctionCallExpr.of('rtrim', [expression, LiteralExpr.of(' ')]));
+    ).toBe(expression);
     expect({
       dataType: sqliteSqlCharDescriptor.dataType,
       paramsSchema: sqliteSqlCharDescriptor.paramsSchema,

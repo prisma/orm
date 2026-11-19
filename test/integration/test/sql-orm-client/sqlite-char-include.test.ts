@@ -78,7 +78,7 @@ describe('a SQLite sql/char@1 value, which SQLite stores unpadded, read through 
     if (directory !== undefined) rmSync(directory, { recursive: true, force: true });
   });
 
-  it('is the value a flat read returns, with trailing spaces and only spaces dropped', async () => {
+  it('is the value a flat read returns, as SQLite stores it', async () => {
     const namespace = { namespaceId: soleDomainNamespaceId(contract.domain) };
     const flat = await new Collection({ runtime: runtime!, context }, 'Point', namespace)
       .select('id', 'code')
@@ -91,11 +91,30 @@ describe('a SQLite sql/char@1 value, which SQLite stores unpadded, read through 
 
     expect({ flat, included }).toEqual({
       flat: [
-        { id: 1, code: 'a' },
+        { id: 1, code: 'a  ' },
         { id: 2, code: 'a\t' },
         { id: 3, code: 'abc' },
       ],
       included: [{ id: 1, points: flat }],
+    });
+  });
+
+  it('is read with the spaces it was written with, so a filter on the value read finds it', async () => {
+    const namespace = { namespaceId: soleDomainNamespaceId(contract.domain) };
+    const points = () => new Collection({ runtime: runtime!, context }, 'Point', namespace);
+    await points().createAndCount([{ id: 10, seriesId: 1, code: 'b ' }]);
+    const read = await points().where({ id: 10 }).select('code').all();
+
+    expect({
+      stored: { ...database!.prepare('select code from char_points where id = 10').get() },
+      read,
+      foundByValueRead: await points().where({ code: read[0]?.['code'] }).select('id').all(),
+      foundWithoutTheSpace: await points().where({ code: 'b' }).select('id').all(),
+    }).toEqual({
+      stored: { code: 'b ' },
+      read: [{ code: 'b ' }],
+      foundByValueRead: [{ id: 10 }],
+      foundWithoutTheSpace: [],
     });
   });
 });

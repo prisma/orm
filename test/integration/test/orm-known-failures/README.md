@@ -5,7 +5,6 @@ Each test here states what a call should do and is marked `it.fails`, because th
 | Test | What happens today |
 | --- | --- |
 | SQLite: a `BigInt` beyond ±(2^53 − 1), on `create` and on read | `create` throws `RangeError` after the row is stored, and every later read of the table throws it too |
-| SQLite: a `sql.Char(n)` value with a trailing space | the value is read without the space, and a filter on the value read does not find the row |
 | `select` before `create` on a variant stored in its own table | `select` is ignored and every field is returned |
 | `create` on a variant stored in its own table, with a relation callback | refused with `ORM.FIELD_UNKNOWN` |
 | `upsert` on a variant whose key a row of another variant holds | returns that row, which the variant does not contain |

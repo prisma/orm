@@ -356,17 +356,18 @@ function floatWire(codecId: string, wire: number | string): number {
 /** The hex text SQLite's `hex()` writes: two uppercase digits for each byte. */
 const BLOB_HEX_TEXT = /^(?:[0-9A-F]{2})*$/;
 
-/**
- * Projects a `sql/char@1` value without trailing spaces, as its `decode` reads it on a flat read, so an include reads the same value. SQLite does not pad the value; the rule is the family codec's.
- */
-const unpaddedCharJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
-  FunctionCallExpr.of('rtrim', [expression, LiteralExpr.of(' ')]);
+export class SqliteSqlCharCodec extends SqlCharCodec {
+  override async fromWire(wire: string, _ctx: CodecCallContext): Promise<string> {
+    return wire;
+  }
+}
 
 export const sqliteSqlCharDescriptor = sqliteCodec(sqlCharDescriptor, {
   dataType: sqliteCharacter,
   renderValueLiteral: renderTsLiteral,
-  jsonProjection: unpaddedCharJsonProjection,
-  factory: (descriptor, dataType, params) => () => new SqlCharCodec(descriptor, dataType, params),
+  jsonProjection: identityJsonProjection,
+  factory: (descriptor, dataType, params) => () =>
+    new SqliteSqlCharCodec(descriptor, dataType, params),
 });
 
 export const sqliteSqlVarcharDescriptor = sqliteCodec(sqlVarcharDescriptor, {

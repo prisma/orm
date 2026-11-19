@@ -94,4 +94,24 @@ describe('sql/char@1 and sql/varchar@1 on SQLite contract values', () => {
       fromContractJson(char, 'toolong', { length: 3 }),
     ]).toEqual(['toolong', 'toolong']);
   });
+
+  it('stores a char value with the spaces it ends with, which SQLite keeps', () => {
+    const char = sqliteSqlCharDescriptor.factory({ length: 3 })(ctx);
+    expect({
+      written: toContractJson(char, 'a '),
+      read: fromContractJson(char, 'a ', { length: 3 }),
+    }).toEqual({ written: 'a ', read: 'a ' });
+  });
+});
+
+describe('sql/char@1 on SQLite wire values', () => {
+  const char = sqliteSqlCharDescriptor.factory({ length: 3 })(ctx);
+
+  it('writes and reads a value as SQLite stores it, with the spaces it ends with', async () => {
+    const values = ['a ', 'a  b  ', 'a\t', '  ', 'abc'];
+    expect({
+      written: await Promise.all(values.map((value) => char.toWire(value, {}))),
+      read: await Promise.all(values.map((value) => char.fromWire(value, {}))),
+    }).toEqual({ written: values, read: values });
+  });
 });
