@@ -760,6 +760,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       packages: [
         { dir: 'packages/3-targets/sqlite/9-facade', name: '@internal/sqlite', entry: '' },
       ],
+      copy: ['packages/3-targets/sqlite/9-facade/dist/*.md'],
       reexports: facadeReexports({
         family: '@internal/sql-contract',
         familyPack: '@internal/family-sql',
@@ -779,6 +780,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       packages: [
         { dir: 'packages/3-targets/mysql/1-mysql/9-facade', name: '@internal/mysql', entry: '' },
       ],
+      copy: ['packages/3-targets/mysql/1-mysql/9-facade/dist/*.md'],
       reexports: facadeReexports({
         family: '@internal/sql-contract',
         familyPack: '@internal/family-sql',

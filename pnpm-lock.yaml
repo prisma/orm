@@ -1607,15 +1607,27 @@ importers:
       '@internal/mongo':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../../3-targets/mongo/9-facade
+      '@internal/mysql':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../../../../../3-targets/mysql/1-mysql/9-facade
       '@internal/postgres':
         specifier: workspace:8.0.0-rc.24
         version: link:../../../../../3-targets/postgres/9-facade
+      '@internal/sqlite':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../../../../../3-targets/sqlite/9-facade
       '@prisma/orm-mongo':
         specifier: workspace:@internal/mongo@8.0.0-rc.24
         version: link:../../../../../3-targets/mongo/9-facade
+      '@prisma/orm-mysql':
+        specifier: workspace:@internal/mysql@8.0.0-rc.24
+        version: link:../../../../../3-targets/mysql/1-mysql/9-facade
       '@prisma/orm-postgres':
         specifier: workspace:@internal/postgres@8.0.0-rc.24
         version: link:../../../../../3-targets/postgres/9-facade
+      '@prisma/orm-sqlite':
+        specifier: workspace:@internal/sqlite@8.0.0-rc.24
+        version: link:../../../../../3-targets/sqlite/9-facade
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2

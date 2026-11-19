@@ -116,6 +116,7 @@
     "./family-contract/value-set-derivation-hook": "./dist/family-contract__value-set-derivation-hook.mjs",
     "./family-runtime": "./dist/family-runtime.mjs",
     "./family-runtime/internal/prepared-query": "./dist/family-runtime__internal__prepared-query.mjs",
+    "./init": "./dist/init.mjs",
     "./migration": "./dist/migration.mjs",
     "./migration-tools/aggregate": "./dist/migration-tools__aggregate.mjs",
     "./migration-tools/contract-snapshot-store": "./dist/migration-tools__contract-snapshot-store.mjs",
