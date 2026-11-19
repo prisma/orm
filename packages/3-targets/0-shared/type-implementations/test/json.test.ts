@@ -75,6 +75,11 @@ describe('findNonJsonValue', () => {
     expect(findNonJsonValue({ list: List.from([1]) })).toEqual({ received: 'List', path: 'list' });
   });
 
+  it('names an object whose prototype has no constructor as an object', () => {
+    const value = Object.create(Object.create(null));
+    expect(findNonJsonValue({ value })).toEqual({ received: 'object', path: 'value' });
+  });
+
   it('names an object as the tag the caller reads from it, before reading its shape', () => {
     const tagOf = (value: object) =>
       'tagged' in value && typeof value.tagged === 'string' ? value.tagged : undefined;
