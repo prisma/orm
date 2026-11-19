@@ -72,6 +72,7 @@ In addition to the canonical slice DoD:
 - If the slice touches `packages/3-*-extensions/**`, the slice plan must include a `pnpm fixtures:check` dispatch step.
 - If the slice touches package boundaries / imports, the slice plan must include `pnpm lint:deps`.
 - If the slice changes typed surfaces consumed elsewhere, the slice plan must include a downstream `pnpm typecheck` after the producing package's `pnpm build`.
+- If a slice adds a test that needs a database server or another service, the plan names the CI job that runs the test, that job starts the service, and the test fails in CI when the service is missing (it may skip locally). (Added 2026-11-19, MySQL proof of concept: four MySQL integration files skipped in CI for the whole project.)
 - If a dispatch adds a JavaScript or TypeScript file outside a package, `projects/` included, the checks include `pnpm lint:ratchets`: CI's Lint job runs it over those files too. (Added 2026-10-07, lsp-find-references: a QA driver under `projects/` failed CI's Lint job on a bare `throw new Error`.)
 
 ### PR-side items

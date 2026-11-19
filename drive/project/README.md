@@ -40,6 +40,10 @@ Projects that introduce durable architectural decisions (subsystems, patterns, c
 
 A project's `plan.md` close-out checklist is a reminder, not the procedure. Close-out runs the close-out procedure of the `drive-process` skill (`references/close-project.md`, installed from [prisma/ignite](https://github.com/prisma/ignite/tree/main/skills/.pilot)) step by step: the final retro first, then the project DoD criterion by criterion with evidence, confirmation that every review thread on every slice PR is resolved by a fix or by a reply that says why not, the reference scan, file classification and prose audit, migration, and a close-out PR whose description carries the DoD block, the classification and the reference-strip summary. (Added 2026-10-27, mongo-authoring-structure: the first close-out PR filed tickets, linked them from an ADR and deleted the folder, and skipped the retro, the DoD block, the classification and two references; the operator sent it back.)
 
+## Close-out moves reasons into docs, not notes
+
+When a project's working notes hold something the permanent docs lack, write the durable fact and its reason into the doc that owns the subject, in that doc's own voice. Do not copy the notes. Leave out measurements from one run, figures no test checks, surveys of other libraries, upstream bug ids for code paths we do not use, and anything that would need "measured once" or "observed on" in front of it. (Added 2026-11-19, MySQL proof of concept: one-run timings went into a driver README.)
+
 ## Close-out destinations
 
 `drive-close-project` uses these defaults when migrating long-lived methodology out of `projects/<project>/`:
