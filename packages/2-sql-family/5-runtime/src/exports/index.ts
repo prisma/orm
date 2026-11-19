@@ -105,7 +105,6 @@ export type {
 } from '../sql-runtime';
 export {
   SqlRuntimeBase,
-  withSavepoint,
   withTransaction,
   withTransactionMembers,
 } from '../sql-runtime';

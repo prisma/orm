@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SqlMiddleware } from '../src/middleware/sql-middleware';
-import { type TransactionContext, withSavepoint, withTransaction } from '../src/sql-runtime';
+import { type TransactionContext, withTransaction } from '../src/sql-runtime';
 import { deferred } from './closed-runtime-stub';
 import {
   createSetup,
@@ -24,39 +24,27 @@ const trace = (events: readonly HookEvent[]) =>
     )
     .join(', ');
 
-const build = (ctx: TransactionContext) => ({ ctx });
-
 const savepointMiddleware = (hooks: Omit<SqlMiddleware, 'name' | 'familyId'>): SqlMiddleware => ({
   name: 'savepoint-hooks',
   familyId: 'sql',
   ...hooks,
 });
 
-describe('withSavepoint', () => {
-  it('releases the savepoint after the callback resolves, builds the context for each nested call and names a nested savepoint sp_2', async () => {
+describe('TransactionContext.transaction', () => {
+  it('releases the savepoint after the callback resolves and names a nested savepoint sp_2', async () => {
     const { runtime, events } = createSetup();
-    const builder = vi.fn(build);
 
     const result = await withTransaction(runtime, (tx) =>
-      withSavepoint(
-        tx,
-        async (middle) => {
-          await middle.ctx.execute(statementB);
-          return withSavepoint(
-            middle.ctx,
-            async (inner) => {
-              await inner.ctx.execute(statementC);
-              return 42;
-            },
-            builder,
-          );
-        },
-        builder,
-      ),
+      tx.transaction(async (middle) => {
+        await middle.execute(statementB);
+        return middle.transaction(async (inner) => {
+          await inner.execute(statementC);
+          return 42;
+        });
+      }),
     );
 
     expect(result).toBe(42);
-    expect(builder).toHaveBeenCalledTimes(2);
     expect(trace(events)).toBe(
       'begin, SAVEPOINT sp_1, insert b, SAVEPOINT sp_2, insert c, RELEASE SAVEPOINT sp_2, RELEASE SAVEPOINT sp_1, commit, release',
     );
@@ -68,14 +56,10 @@ describe('withSavepoint', () => {
 
     await withTransaction(runtime, async (tx) => {
       await expect(
-        withSavepoint(
-          tx,
-          async (inner) => {
-            await inner.ctx.execute(statementB);
-            throw error;
-          },
-          build,
-        ),
+        tx.transaction(async (inner) => {
+          await inner.execute(statementB);
+          throw error;
+        }),
       ).rejects.toBe(error);
       await tx.execute(statementC);
     });
@@ -93,7 +77,7 @@ describe('withSavepoint', () => {
     const { runtime, events } = createSetup({ failures: { releaseSavepoint: releaseError } });
 
     await withTransaction(runtime, async (tx) => {
-      await expect(withSavepoint(tx, async () => 1, build)).rejects.toMatchObject({
+      await expect(tx.transaction(async () => 1)).rejects.toMatchObject({
         code: 'RUNTIME.TRANSACTION_COMMIT_FAILED',
         cause: releaseError,
       });
@@ -113,13 +97,9 @@ describe('withSavepoint', () => {
 
     const run = withTransaction(runtime, async (tx) => {
       await expect(
-        withSavepoint(
-          tx,
-          async () => {
-            throw error;
-          },
-          build,
-        ),
+        tx.transaction(async () => {
+          throw error;
+        }),
       ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED', cause: error });
       await rejectsWith(tx.execute(statementC), 'TRANSACTION_CLOSED');
     });
@@ -142,7 +122,7 @@ describe('withSavepoint', () => {
     const callback = vi.fn(async () => 1);
 
     await withTransaction(runtime, async (tx) => {
-      await expect(withSavepoint(tx, callback, build)).rejects.toBe(refusal);
+      await expect(tx.transaction(callback)).rejects.toBe(refusal);
       await tx.execute(statementC);
     });
 
@@ -163,7 +143,7 @@ describe('withSavepoint', () => {
     });
 
     await withTransaction(runtime, async (tx) => {
-      await expect(withSavepoint(tx, async () => 1, build)).rejects.toBe(hookError);
+      await expect(tx.transaction(async () => 1)).rejects.toBe(hookError);
     });
 
     expect(trace(events)).toBe('begin, SAVEPOINT sp_1, RELEASE SAVEPOINT sp_1, commit, release');
@@ -173,14 +153,14 @@ describe('withSavepoint', () => {
     const { runtime, events } = createSetup();
 
     await withTransaction(runtime, async (tx) => {
-      const escaped = await withSavepoint(tx, async (inner) => inner.ctx, build);
+      const escaped = await tx.transaction(async (inner) => inner);
       const before = events.length;
 
       expect(escaped.invalidated).toBe(true);
       await rejectsWith(escaped.execute(statementC), 'TRANSACTION_CLOSED');
       await rejectsWith(escaped.query(statementC).toArray(), 'TRANSACTION_CLOSED');
       await rejectsWith(
-        withSavepoint(escaped, async () => 1, build),
+        escaped.transaction(async () => 1),
         'TRANSACTION_CLOSED',
       );
       expect(events.slice(before)).toEqual([]);
@@ -194,7 +174,7 @@ describe('withSavepoint', () => {
     const run = withTransaction(
       runtime,
       (tx) => {
-        nested = withSavepoint(tx, () => new Promise<never>(() => {}), build);
+        nested = tx.transaction(() => new Promise<never>(() => {}));
         return nested;
       },
       { timeout: 1 },
@@ -225,21 +205,17 @@ describe('withSavepoint', () => {
       const enclosingCall = deferred<{ call: Promise<unknown> }>();
       const leave = (ctx: TransactionContext) => {
         contexts.push(ctx);
-        nested = withSavepoint(
-          ctx,
-          async (inner) => {
-            contexts.push(inner.ctx);
-            await proceed.promise;
-            return 1;
-          },
-          build,
-        );
+        nested = ctx.transaction(async (inner) => {
+          contexts.push(inner);
+          await proceed.promise;
+          return 1;
+        });
       };
 
       const run = withTransaction(runtime, async (tx) => {
         if (depth === 0) return leave(tx);
         contexts.push(tx);
-        const call = withSavepoint(tx, async (middle) => leave(middle.ctx), build);
+        const call = tx.transaction(async (middle) => leave(middle));
         enclosingCall.resolve({ call });
         await call.catch(() => undefined);
       });
@@ -266,19 +242,4 @@ describe('withSavepoint', () => {
       expect(ends).toEqual(ends.map(() => 1));
     },
   );
-
-  it('rejects a context the runtime did not make', async () => {
-    const { runtime } = createSetup();
-
-    await withTransaction(runtime, async (tx) => {
-      const foreign: TransactionContext = {
-        invalidated: false,
-        query: (plan) => tx.query(plan),
-        execute: (plan) => tx.execute(plan),
-      };
-      await expect(withSavepoint(foreign, async () => 1, build)).rejects.toThrow(
-        'withSavepoint takes the context that withTransaction or withSavepoint passed to its callback',
-      );
-    });
-  });
 });

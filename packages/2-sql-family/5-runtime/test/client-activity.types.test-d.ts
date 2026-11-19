@@ -22,6 +22,14 @@ test('the public runtime types do not show startActivity or planContentHash', ()
   expectTypeOf<TransactionContext>().not.toHaveProperty('planContentHash');
 });
 
+test('a transaction context runs a nested transaction with one callback that receives a transaction context', () => {
+  const tx = {} as TransactionContext;
+  expectTypeOf(tx.transaction).parameters.toEqualTypeOf<
+    [(tx: TransactionContext) => PromiseLike<unknown>]
+  >();
+  expectTypeOf(tx.transaction(async () => 42)).toEqualTypeOf<Promise<number>>();
+});
+
 test('a handle is typed by its kind, and nests through its own members', async () => {
   const runtime = {} as Runtime;
   const call = await startActivityOn(runtime, {

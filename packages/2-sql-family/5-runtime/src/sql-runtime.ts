@@ -207,6 +207,7 @@ export interface RuntimeQueryable extends RuntimeScope {}
 
 export interface TransactionContext extends RuntimeQueryable {
   readonly invalidated: boolean;
+  transaction<R>(fn: (tx: TransactionContext) => PromiseLike<R>): Promise<R>;
 }
 
 export type { RuntimeTelemetryEvent, TelemetryOutcome, VerifyMarkerOption };
@@ -1832,29 +1833,13 @@ async function runTransactionOn<R>(
   }
 }
 
-const contextTransaction = Symbol('contextTransaction');
-
-interface ContextTransactionTarget {
-  readonly [contextTransaction]: RuntimeTransaction;
-}
-
-function hasContextTransaction(value: object): value is ContextTransactionTarget {
-  return contextTransaction in value;
-}
-
-export async function withSavepoint<TCtx, R>(
-  txCtx: TransactionContext,
-  fn: (tx: TCtx) => PromiseLike<R>,
-  buildMembers: (txCtx: TransactionContext) => TCtx,
+async function runInSavepoint<R>(
+  transaction: RuntimeTransaction,
+  fn: (tx: TransactionContext) => PromiseLike<R>,
 ): Promise<R> {
-  invariant(
-    hasContextTransaction(txCtx),
-    'withSavepoint takes the context that withTransaction or withSavepoint passed to its callback',
-  );
-  if (txCtx.invalidated) throw transactionClosedError();
-  const savepoint = await txCtx[contextTransaction].transaction();
+  const savepoint = await transaction.transaction();
   try {
-    return await runAndSettleTransaction(savepoint, (tx) => fn(buildMembers(tx)));
+    return await runAndSettleTransaction(savepoint, fn);
   } catch (error) {
     if (savepoint.signal.aborted && error === savepoint.signal.reason) {
       await savepoint.rollback().catch(() => undefined);
@@ -1869,8 +1854,7 @@ function guardedTransactionContext(
 ): TransactionContext &
   PreparedStatementQueryTarget &
   PreparedStatementExecuteTarget &
-  ActivitySourceTarget &
-  ContextTransactionTarget {
+  ActivitySourceTarget {
   async function* guardedStream<Row>(
     open: () => AsyncIterable<Row>,
   ): AsyncGenerator<Row, void, unknown> {
@@ -1961,7 +1945,10 @@ function guardedTransactionContext(
       return isClosed();
     },
     [activitySource]: guardedSource(transaction),
-    [contextTransaction]: transaction,
+    async transaction<R>(fn: (tx: TransactionContext) => PromiseLike<R>): Promise<R> {
+      if (isClosed()) throw transactionClosedError();
+      return runInSavepoint(transaction, fn);
+    },
   };
 }
 

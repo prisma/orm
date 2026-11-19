@@ -27,7 +27,6 @@ import {
   activitySource,
   delegatingActivitySource,
   delegatingRuntime,
-  withSavepoint,
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';
@@ -201,7 +200,7 @@ export function buildPostgresRuntimeBoundMembers<
       nativeEnums,
       transaction: <R>(
         fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
-      ) => withSavepoint(txCtx, fn, buildTransactionContext),
+      ) => txCtx.transaction((nested) => fn(buildTransactionContext(nested))),
     });
   }
 
