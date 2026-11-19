@@ -88,7 +88,7 @@ function errorDecimalUnsendable(
       'RUNTIME.ENCODE_FAILED',
       `Cannot write ${received} to ${target} declared without a precision: a value sent for it can have ${sendable}.`,
       {
-        fix: `${round}. In a prepared statement, declare the parameter with the precision and scale of the column it is compared with or written to, as in { codecId: '${MYSQL_DECIMAL_CODEC_ID}', typeParams: { precision: 65, scale: 0 } }. In raw SQL, pass the value as text without param() and write the cast in the SQL, as in CAST(\${value} AS DECIMAL(65,0)).`,
+        fix: `${round}. In a prepared statement, declare the parameter with the precision and scale of the column it is compared with or written to, as in { codecId: '${MYSQL_DECIMAL_CODEC_ID}', typeParams: { precision: 65, scale: 0 } }. In raw SQL, pass the value as text without param() and cast it in the SQL to the type of the column it is compared with or written to, as in CAST(\${value} AS DECIMAL(65,0)) for a decimal(65,0) column.`,
         meta,
       },
     );

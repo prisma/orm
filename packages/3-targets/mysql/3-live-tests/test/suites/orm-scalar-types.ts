@@ -344,7 +344,7 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       );
     });
 
-    it('sums a decimal past the widest decimal exactly when grouped by a column with an index', async (test) => {
+    it('sums a decimal past the widest decimal exactly when the server reads the groups from an index', async (test) => {
       await withSeededDatabase(
         test,
         server,
@@ -412,7 +412,7 @@ export function describeOrmScalarTypes(server: LiveServer): void {
         ).rejects.toMatchObject({
           code: 'RUNTIME.ENCODE_FAILED',
           fix: expect.stringContaining(
-            'In raw SQL, pass the value as text without param() and write the cast in the SQL',
+            'In raw SQL, pass the value as text without param() and cast it in the SQL to the type of the column',
           ),
         });
         expect(

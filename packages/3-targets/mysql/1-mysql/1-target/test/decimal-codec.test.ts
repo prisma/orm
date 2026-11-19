@@ -225,7 +225,7 @@ describe('mysql/decimal@1', () => {
       await expect(decimal().toWire(value, {})).rejects.toMatchObject({
         code: 'RUNTIME.ENCODE_FAILED',
         message: `Cannot write "${value}" to a mysql/decimal@1 value declared without a precision: a value sent for it can have at most 35 digits before the point and 30 after it.`,
-        fix: `Round the value to at most 30 digits after the point and keep at most 35 digits before it. In a prepared statement, declare the parameter with the precision and scale of the column it is compared with or written to, as in { codecId: 'mysql/decimal@1', typeParams: { precision: 65, scale: 0 } }. In raw SQL, pass the value as text without param() and write the cast in the SQL, as in CAST(\${value} AS DECIMAL(65,0)).`,
+        fix: `Round the value to at most 30 digits after the point and keep at most 35 digits before it. In a prepared statement, declare the parameter with the precision and scale of the column it is compared with or written to, as in { codecId: 'mysql/decimal@1', typeParams: { precision: 65, scale: 0 } }. In raw SQL, pass the value as text without param() and cast it in the SQL to the type of the column it is compared with or written to, as in CAST(\${value} AS DECIMAL(65,0)) for a decimal(65,0) column.`,
       });
     },
   );
