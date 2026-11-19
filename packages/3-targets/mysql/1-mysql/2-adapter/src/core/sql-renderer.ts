@@ -167,7 +167,7 @@ function assertWrapsParameterOnce(
     `Codec "${codec.codecId}" wraps a value of this query in an expression that does not hold that value exactly once.`,
     {
       why: 'A codec descriptor wraps a parameter in an expression, such as a cast, that holds the parameter exactly once, so each value of the statement keeps its placeholder.',
-      fix: `Return the parameter itself, or one expression around it, from the wrappedParameter method of codec "${codec.codecId}".`,
+      fix: `Return the parameter itself, or one expression around it, from the wrapParameter method of codec "${codec.codecId}", or from wrappedParameter where its descriptor extends MysqlCodecDescriptor.`,
       meta: { codecId: codec.codecId, parameters: parameters.length },
     },
   );

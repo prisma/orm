@@ -46,3 +46,9 @@ The architect and principal engineer design reviews of 2026-11-17 are in `review
 ## Follow-ups to file at close-out
 
 - The deprecation warner exists in both the SQL and MongoDB PSL interpreters (`deprecated-type-names.ts` in each) because a shared home would be the framework; move it to `@internal/psl-parser/interpret` when a framework change is allowed.
+
+## Follow-ups filed during the MySQL slice
+
+- TML-3890: `Float(storage: float)` and an explicit `Float4` on MySQL and MariaDB, left out because a `float` column reads back from a row rounded to six significant digits.
+- TML-3891: refuse an `@id`, `@unique` or `@@unique` on a `Bytes`, `Json` or `String(storage: text)` field on MySQL and MariaDB when the contract is authored, not only when `db migrate` fails.
+- TML-3892: `Decimal(precision: n)` without a `scale` keeps a scale of 30 on MySQL and MariaDB, where PostgreSQL gives a scale of 0.

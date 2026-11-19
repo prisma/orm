@@ -233,6 +233,15 @@ describe('mysql/decimal@1', () => {
     });
   });
 
+  it('sends one digit after the point for a decimal(64,0), which the server rounds on write, and refuses a second', async () => {
+    const column64 = decimal({ precision: 64, scale: 0 });
+    expect(await column64.toWire('1.5', {})).toBe('1.5');
+    await expect(column64.toWire('1.25', {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      fix: 'Round the value to at most 1 digit after the point, and keep it below 10^64.',
+    });
+  });
+
   it('writes a filter value with more digits after the point than the column holds, which the cast compares unrounded', async () => {
     expect(await decimal({ precision: 10, scale: 2 }).toWire('1.005', {})).toBe('1.005');
   });

@@ -18,7 +18,8 @@ Builds MySQL's control adapter ([`@internal/adapter-mysql`](../../1-mysql/2-adap
   - the display width of `tinyint`, `smallint`, `mediumint`, `int` and `bigint` is removed, keeping `unsigned`: `int(11)` reads as `int` and `int(10) unsigned` as `int unsigned`. A signed `tinyint(1)` and a `zerofill` column keep their width, as MySQL 8.4 prints them; MySQL 8.4 prints `tinyint(1) unsigned` as `tinyint unsigned`, and so does the reader;
   - a default MariaDB reports as the text `NULL` is no default;
   - a quoted literal default is unquoted, with `''` and backslash escapes read as MariaDB reads them, so `'it''s'` is `it's`;
-  - on a blob, `binary` or `varbinary` column, a quoted literal default is the hexadecimal literal of its UTF-8 bytes, `'ab'` as `0x6162`, which is how MySQL reports such a default;
+  - on a blob column, a quoted literal default is the generated hexadecimal literal of its UTF-8 bytes, `'ab'` as `0x6162`, which is how MySQL reports a blob's default, an expression;
+  - on a `binary` or `varbinary` column, a default is left quoted, as MariaDB reports it, because MariaDB quotes even one written in hexadecimal and shows each byte that is not UTF-8 as `?`; MySQL's reader keeps it as an expression;
   - an unquoted number, such as `0` or `1.50`, stays a literal;
   - a bytes default, `X'00ff'`, is MySQL's generated `0x00ff`;
   - any other default, such as `current_timestamp(3)` or `curdate()`, is a function, marked `DEFAULT_GENERATED` as MySQL marks it, with each byte of its UTF-8 shown as one Latin-1 character, as MySQL reports an expression default;

@@ -78,7 +78,7 @@ function errorDecimalUnsendable(
   const message = declared
     ? `Cannot write ${received} to ${target}: a ${columnType} column holds ${decimalColumnHolds(column)}, and a value sent for it can have ${sendable}.`
     : `Cannot write ${received} to ${target}, which has no precision: it is sent as a value of a ${columnType} column, which holds ${decimalColumnHolds(column)}, and can have ${sendable}.`;
-  const round = `${fraction === 0 ? 'Round the value to a whole number' : `Round the value to at most ${fraction} digits after the point`}, and keep it below 10^${integer}.`;
+  const round = `${fraction === 0 ? 'Round the value to a whole number' : `Round the value to at most ${fraction} ${fraction === 1 ? 'digit' : 'digits'} after the point`}, and keep it below 10^${integer}.`;
   return mysqlError('RUNTIME.ENCODE_FAILED', message, {
     fix: declared
       ? round
