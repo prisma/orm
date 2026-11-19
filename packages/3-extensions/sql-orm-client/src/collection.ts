@@ -43,7 +43,6 @@ import {
   assertDistinctOnCapability,
   assertInsertConflictSkipCapability,
   assertLockCapability,
-  assertReturningCapability,
   columnOfCallerField,
   getModelFieldColumns,
   hasCompleteUniqueKey,
@@ -84,7 +83,6 @@ import {
   type CollectionTables,
   createCollectionTables,
   createIncludeTables,
-  requireVariantTable,
   tableAliases,
   withScopeCopy,
 } from './collection-tables';
@@ -149,8 +147,8 @@ import { parseMutationInput } from './relation-mutations';
 import type { RelationCollection } from './relation-mutator';
 import {
   createAllGraph,
-  createAllVariantGraph,
   createGraph,
+  createVariantGraph,
   deleteAllGraph,
   deleteFirstGraph,
   updateAllGraph,
@@ -1974,27 +1972,11 @@ export class CollectionBase<
       >(data),
       this.#relatedCollection,
     );
-    const rows =
-      mtiCreateContextOf(this.#descriptionOptions()) === undefined
-        ? queryGraph<Row>(
-            createGraph(this.#descriptionOptions(), parsed),
-            this.#on(queryable),
-            this.#descriptionOptions(),
-          ).toArray()
-        : this.#createAllRows(
-            [
-              blindCast<
-                ResolvedScalarCreateInput<
-                  TContract,
-                  ModelName,
-                  State['variantValue'],
-                  State['nsId']
-                >,
-                'a create on an MTI variant has no nested callbacks, which createAll() refuses'
-              >(data),
-            ],
-            'create()',
-          )(queryable);
+    const rows = queryGraph<Row>(
+      createGraph(this.#descriptionOptions(), parsed),
+      this.#on(queryable),
+      this.#descriptionOptions(),
+    ).toArray();
     const [created] = await rows;
     if (created !== undefined) {
       return created;
@@ -2085,7 +2067,7 @@ export class CollectionBase<
     return streamOrmCall(
       this.ctx.runtime,
       this.#writeCall('createAll', annotations, ormResults.rows<Row>),
-      this.#createAllRows(data, 'createAll()', conflictSkip),
+      this.#createAllRows(data, conflictSkip),
     );
   }
 
@@ -2096,7 +2078,6 @@ export class CollectionBase<
       State['variantValue'],
       State['nsId']
     >[],
-    method: 'create()' | 'createAll()',
     conflictSkip?: InsertConflictSkip,
   ): (queryable: RuntimeQueryable) => AsyncIterableResult<Row> {
     if (data.length === 0) {
@@ -2110,16 +2091,13 @@ export class CollectionBase<
     >(data);
     const mtiContext = mtiCreateContextOf(this.#descriptionOptions());
     if (mtiContext) {
-      assertReturningCapability(this.contract, method);
-      const variantTable = requireVariantTable(this.state.tables, mtiContext.variant.value);
-      const graph = createAllVariantGraph(
-        this.#descriptionWithoutIncludes(),
-        variantTable,
+      const graph = createVariantGraph(
+        this.#descriptionOptions(),
         mtiContext,
-        rows,
+        rows.map((scalarData) => ({ scalarData, relationMutations: [] })),
+        'createAll',
       );
-      return (queryable) =>
-        queryGraph(graph, this.#on(queryable), this.#descriptionWithoutIncludes());
+      return (queryable) => queryGraph(graph, this.#on(queryable), this.#descriptionOptions());
     }
 
     const graph = createAllGraph(this.#descriptionOptions(), rows, conflictSkip, 'rows');

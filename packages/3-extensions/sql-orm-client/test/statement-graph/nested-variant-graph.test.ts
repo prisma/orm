@@ -5,16 +5,10 @@ import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../../src/collection';
-import { requireVariantTable } from '../../src/collection-tables';
 import { parseMutationInput } from '../../src/relation-mutations';
-import {
-  createAllVariantGraph,
-  createGraph,
-  updateFirstGraph,
-} from '../../src/statement-graph/collection-graphs';
+import { createGraph, updateFirstGraph } from '../../src/statement-graph/collection-graphs';
 import type { Graph } from '../../src/statement-graph/graph';
 import { Insert } from '../../src/statement-graph/insert';
-import { mtiCreateContextOf } from '../../src/statement-graph/storage-rows';
 import type { Contract as PolyContract } from '../fixtures/polymorphism/generated/contract';
 import polyContractJson from '../fixtures/polymorphism/generated/contract.json' with {
   type: 'json',
@@ -154,6 +148,10 @@ describe('a nested create of a variant stored in the base table', () => {
 
 interface CommentMutator {
   create(data: object): unknown;
+}
+
+interface ConnectMutator {
+  connect(criteria: object): unknown;
 }
 
 function thrownBy(run: () => unknown): { code?: unknown; message?: unknown; meta?: unknown } {
@@ -321,61 +319,103 @@ describe('a nested create of a variant stored in its own table', () => {
     });
   });
 
-  function topLevelFeatureCreate(row: Record<string, unknown>) {
+  function topLevelFeatureCreate(row: Record<string, unknown>): Graph {
     const features = new Collection({ runtime: createMockRuntime(), context }, 'Task', {
       namespaceId: 'public',
     }).variant('feature');
-    return thrownBy(() => {
-      parsed('Task', row);
-      const mti = mtiCreateContextOf({
-        context,
-        state: features.state,
-        modelName: 'Task',
-        namespaceId: 'public',
-      });
-      if (mti === undefined) {
-        throw new Error('feature is stored in its own table');
-      }
-      createAllVariantGraph(
-        { context, state: features.state, modelName: 'Task', namespaceId: 'public' },
-        requireVariantTable(features.state.tables, 'feature'),
-        mti,
-        [row],
-      );
-    });
-  }
-
-  function nestedFeatureCreate(row: Record<string, unknown>) {
-    return thrownBy(() =>
-      createOf('Project', {
-        id: 1,
-        name: 'Launch',
-        tasks: (tasks: VariantMutator) => tasks.variant('feature').create(row),
-      }),
+    return createGraph(
+      { context, state: features.state, modelName: 'Task', namespaceId: 'public' },
+      parsed('Task', row),
     );
   }
 
-  it('refuses a relation callback in the row with the error of the top-level variant create', () => {
-    const row = {
-      ...darkMode,
-      comments: (comments: CommentMutator) => comments.create({ body: 'Seen it' }),
-    };
-    const topLevel = topLevelFeatureCreate(row);
+  function nestedFeatureCreate(row: Record<string, unknown>): Graph {
+    return createOf('Project', {
+      id: 1,
+      name: 'Launch',
+      tasks: (tasks: VariantMutator) => tasks.variant('feature').create(row),
+    });
+  }
 
-    expect(topLevel).toMatchObject({ code: 'ORM.FIELD_UNKNOWN' });
-    expect(nestedFeatureCreate(row)).toMatchObject({
-      code: topLevel.code,
-      message: topLevel.message,
-      meta: topLevel.meta,
+  describe('with a relation callback in its row', () => {
+    it('writes the related rows of a relation the related rows hold the key for after the base row', () => {
+      const row = {
+        ...darkMode,
+        comments: (comments: CommentMutator) => comments.create({ body: 'Seen it' }),
+      };
+
+      expect({
+        topLevel: printGraph(topLevelFeatureCreate(row)),
+        nested: printGraph(nestedFeatureCreate(row)),
+      }).toEqual({
+        topLevel: [
+          'n1 Insert tasks',
+          'n2 Insert features <- PayloadData n1 (id->id)',
+          'n3 Insert task_comments <- PayloadData n1 (id->task_id)',
+          'n4 CrossJoin <- Rows n1, Rows n2',
+          'result: n4',
+        ].join('\n'),
+        nested: [
+          'n1 Insert projects_tbl',
+          'n2 Insert tasks <- PayloadData n1 (id->project_id)',
+          'n3 Insert features <- PayloadData n2 (id->id)',
+          'n4 Insert task_comments <- PayloadData n2 (id->task_id)',
+          'result: n1',
+        ].join('\n'),
+      });
+    });
+
+    it('copies the key of a relation the row holds the key for into the base row', () => {
+      const row = {
+        ...darkMode,
+        project: (project: ConnectMutator) => project.connect({ id: 7 }),
+      };
+      const graph = topLevelFeatureCreate(row);
+
+      expect(printGraph(graph)).toBe(
+        [
+          'n1 Find projects_tbl where id = 7 limit 1',
+          'n2 Assert <- Rows n1',
+          'n3 Insert tasks <- PayloadData n1 (id->project_id)',
+          'n4 Insert features <- PayloadData n3 (id->id)',
+          'n5 CrossJoin <- Rows n3, Rows n4',
+          'result: n5',
+        ].join('\n'),
+      );
+      expect({
+        tasks: insertedRows(graph, 'tasks'),
+        features: insertedRows(graph, 'features'),
+      }).toEqual({
+        tasks: [{ title: 'Dark mode', type: 'feature' }],
+        features: [{ priority: 1 }],
+      });
+    });
+
+    it('refuses an operation only update() takes', () => {
+      const row = {
+        ...darkMode,
+        comments: (comments: FilteredMutator) => comments.deleteAll(),
+      };
+      const topLevel = thrownBy(() => topLevelFeatureCreate(row));
+
+      expect(topLevel).toMatchObject({
+        code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+        message: 'deleteAll() is only supported in update() nested mutations',
+      });
+      expect(thrownBy(() => nestedFeatureCreate(row))).toMatchObject({
+        code: topLevel.code,
+        message: topLevel.message,
+        meta: topLevel.meta,
+      });
     });
   });
 
   it('refuses a relation callback that returns no operation with the error of the top-level variant create', () => {
     const row = { ...darkMode, comments: () => 'not an operation' };
-    const topLevel = topLevelFeatureCreate(row);
+    const topLevel = thrownBy(() => topLevelFeatureCreate(row));
 
     expect(topLevel).toMatchObject({ code: 'ORM.RELATION_MUTATION_INVALID' });
-    expect(nestedFeatureCreate(row)).toMatchObject({
+    expect(thrownBy(() => nestedFeatureCreate(row))).toMatchObject({
       code: topLevel.code,
       message: topLevel.message,
       meta: topLevel.meta,

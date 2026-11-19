@@ -13,12 +13,11 @@ import {
   resolveUniqueKeyColumnSets,
 } from '../collection-contract';
 import type { DescribeCollectionRowsOptions } from '../collection-dispatch';
+import { requireVariantTable } from '../collection-tables';
 import { loadsIncludesPerRelation } from '../include-strategy';
 import {
   countMutationWhere,
   type InsertConflictSkip,
-  insertAst,
-  projectTableColumn,
   projectTableColumns,
   returningProjection,
   updateAssignments,
@@ -27,7 +26,6 @@ import {
 import { ormError } from '../orm-errors';
 import { variantReturning } from '../query-plan-source';
 import type { ParsedMutationInput, ParsedRelationMutation } from '../relation-mutations';
-import type { AliasedTable } from '../table-scope';
 import type { CollectionState } from '../types';
 import { rowIdentity } from '../written-keys';
 import { CrossJoin } from './cross-join';
@@ -40,7 +38,6 @@ import {
   deleteRows,
   findRows,
   insertRows,
-  type KeySource,
   type Returns,
   readBack,
   type Shape,
@@ -52,10 +49,10 @@ import {
   addAfterWrite,
   addBeforeWrite,
   addCreateWithRelations,
+  addVariantCreates,
   type Translation,
+  type VariantInserts,
 } from './nested-mutations';
-import { PayloadData } from './payload-data';
-import type { Requires } from './requires';
 import { Rows } from './rows';
 import {
   createRowOf,
@@ -63,8 +60,8 @@ import {
   type MtiCreateContext,
   mappedUpdateRow,
   modelOf,
+  mtiCreateContextOf,
   updateValuesOf,
-  variantCreateRowsOf,
   withUpdateDefaults,
 } from './storage-rows';
 import { UnionAll } from './union-all';
@@ -266,6 +263,10 @@ export function createGraph(
   collection: DescribeCollectionRowsOptions,
   parsed: ParsedMutationInput,
 ): Graph {
+  const mti = mtiCreateContextOf(collection);
+  if (mti !== undefined) {
+    return createVariantGraph(collection, mti, [parsed], 'create');
+  }
   const b = builderOf(collection);
   requireIdentityColumnsForIncludes(collection);
   b.graph.setResult(
@@ -279,81 +280,73 @@ export function createGraph(
   return b.graph;
 }
 
-export interface NestedVariantCreate {
-  readonly graph: Graph;
-  readonly keys: readonly KeySource[];
-  readonly requires: readonly Requires[];
-  readonly added: (base: NodeId) => void;
-}
-
-export function createAllVariantGraph(
+export function createVariantGraph(
   collection: DescribeCollectionRowsOptions,
-  variantTable: AliasedTable,
   mti: MtiCreateContext,
-  data: readonly Readonly<Record<string, unknown>>[],
-  nested?: NestedVariantCreate,
+  rows: readonly ParsedMutationInput[],
+  operation: 'create' | 'createAll',
 ): Graph {
   const { context, modelName, state } = collection;
-  const variantModelName = mti.variant.modelName;
-  const rows = variantCreateRowsOf(collection, mti, variantTable, data);
   const { contract } = context;
   const { root } = state.tables;
-  const graph = nested?.graph ?? new Graph(contract);
+  const b = builderOf(collection);
+  requireIdentityColumnsForIncludes(collection);
+  const inserts: VariantInserts[] = [];
+  addVariantCreates(
+    { ...b, parentRow: undefined },
+    { collection, mti, operation },
+    rows,
+    [],
+    (inserted) => inserts.push(inserted),
+  );
+  const [first, ...others] = inserts;
+  if (first === undefined) {
+    return b.graph;
+  }
   const keyColumns = resolvePrimaryKeyColumns(
     contract,
     root.storage.namespaceId,
     root.storage.tableName,
   );
-  const keyMappings = keyColumns.map(
-    (column): ColumnMapping => [
-      projectTableColumn(contract, root, column),
-      projectTableColumn(contract, variantTable, column),
-    ],
-  );
-  const baseColumns = returningProjection(contract, modelName, root, undefined);
-  const variantColumns = variantReturning(contract, variantTable, variantModelName, keyColumns);
-
-  const owner = { operation: 'createAll', modelName };
-  const joins = rows.flatMap((row) => {
-    const baseInsert = new Insert(
-      [insertAst(contract, root, [row.base], undefined).withReturning(baseColumns)],
-      owner,
-    );
-    const base = graph.add(baseInsert, {
-      payload: (nested?.keys ?? []).map(({ from, columns }) => new PayloadData(from, columns)),
-      state: graph.stateEdgesFor(baseInsert),
-      requires: [...(nested?.requires ?? [])],
-    });
-    const variantInsert = new Insert(
-      [insertAst(contract, variantTable, [row.variant], undefined).withReturning(variantColumns)],
-      { operation: 'createAll', modelName: variantModelName },
-    );
-    const variant = graph.add(variantInsert, {
-      payload: [new PayloadData(base, keyMappings)],
-      state: graph.stateEdgesFor(variantInsert),
-    });
-    if (nested !== undefined) {
-      nested.added(base);
-      return [];
-    }
-    return [
-      graph.add(new CrossJoin(), {
-        left: new Rows(base, sameColumns(baseColumns)),
-        right: new Rows(variant, sameColumns(variantColumns)),
+  if (state.selectedFields !== undefined || state.includes.length > 0) {
+    const key = sameColumns(projectTableColumns(contract, root, keyColumns));
+    const written =
+      others.length === 0
+        ? first.base
+        : b.graph.add(new UnionAll(), { rows: inserts.map(({ base }) => new Rows(base, key)) });
+    b.graph.setResult(
+      readBack(b, modelOf(collection), written, keyColumns, {
+        shape: shapeOf(collection),
+        by: 'keys',
+        owner: { operation, modelName },
       }),
-    ];
-  });
-
-  const [only, ...others] = joins;
-  if (only !== undefined && others.length === 0) {
-    graph.setResult(only);
-  } else if (only !== undefined) {
-    const joined = sameColumns([...baseColumns, ...variantColumns]);
-    graph.setResult(
-      graph.add(new UnionAll(), { rows: joins.map((join) => new Rows(join, joined)) }),
     );
+    return b.graph;
   }
-  return graph;
+  const baseColumns = returningProjection(contract, modelName, root, undefined);
+  const variantColumns = variantReturning(
+    contract,
+    requireVariantTable(state.tables, mti.variant.value),
+    mti.variant.modelName,
+    keyColumns,
+  );
+  const joins = inserts.map(({ base, variant }) =>
+    b.graph.add(new CrossJoin(), {
+      left: new Rows(base, sameColumns(baseColumns)),
+      right: new Rows(variant, sameColumns(variantColumns)),
+    }),
+  );
+  const [only] = joins;
+  b.graph.setResult(
+    only !== undefined && joins.length === 1
+      ? only
+      : b.graph.add(new UnionAll(), {
+          rows: joins.map(
+            (join) => new Rows(join, sameColumns([...baseColumns, ...variantColumns])),
+          ),
+        }),
+  );
+  return b.graph;
 }
 
 function sameColumns(columns: readonly ProjectionItem[]): ColumnMapping[] {
