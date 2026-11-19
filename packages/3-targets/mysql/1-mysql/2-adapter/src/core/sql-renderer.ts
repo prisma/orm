@@ -715,7 +715,8 @@ export class MysqlSqlRenderer {
     );
     if (wrapped === ref) return placeholder;
     assertWrapsParameterOnce(wrapped, ref, ref.codec);
-    return this.renderExpr(wrapped, { ...ctx, wrappedParameter: ref });
+    const rendered = this.renderExpr(wrapped, { ...ctx, wrappedParameter: ref });
+    return wrapped.kind === 'function-call' || wrapped.kind === 'cast' ? rendered : `(${rendered})`;
   }
 
   private projectThroughCodec(

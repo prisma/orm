@@ -104,7 +104,13 @@ describe('mysql/longblob@1', () => {
     }).toEqual({ long, empty: new Uint8Array() });
   });
 
-  it.each(['not base64!', 'abc'])(
+  it('reads eight mebibytes of base64 text an include carries', async () => {
+    const large = new Uint8Array(8 * 1024 * 1024).fill(7);
+    const read = await codec.fromWire(Buffer.from(large).toString('base64'), ctx);
+    expect(Buffer.from(read).equals(large)).toBe(true);
+  });
+
+  it.each(['not base64!', 'abc', 'A===', 'AB=C', '===='])(
     'refuses to read %j, which is not base64, naming the column',
     async (text) => {
       await expect(codec.fromWire(text, ctx)).rejects.toMatchObject({

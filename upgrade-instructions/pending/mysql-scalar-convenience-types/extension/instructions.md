@@ -13,7 +13,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '(?<![\s\S])(?![\s\S]*\bwrapParameter\b)[\s\S]*\bAnyMysqlCodecDescriptor\b'
+        - '\bAnyMysqlCodecDescriptor\b'
 ---
 
 # MySQL and MariaDB scalars get convenience types

@@ -304,7 +304,7 @@ A `scale` larger than the `precision` is refused. An unwritten `scale` of `Decim
 
 `BigInt(as: number)` reads a `bigint` column as a JavaScript `number` and refuses a value outside ±(2^53 − 1) on write, and on read with `RUNTIME.DECODE_FAILED` naming the column. `count`, a `sum` of integers and a `min` or `max` of such a column read as a `number` too and are refused the same way past that range; use `countBigInt` or `sumBigInt`, or declare the field `BigInt`, which reads a `bigint`.
 
-`String` is `varchar(191)`, which MySQL can index. `String(storage: text)` is a `text` column, of up to 65,535 bytes. Both compare case-insensitively. MySQL compares trailing spaces and MariaDB ignores them, because their default collations differ.
+`String` is `varchar(191)`, which MySQL can index. `String(storage: text)` is a `text` column, of up to 65,535 bytes. Both compare by the database's default collation. With each server's own default that is without regard to case, and MySQL compares trailing spaces where MariaDB ignores them; a database created with another collation, such as `utf8mb4_bin`, compares by its rules.
 
 A `Boolean` is a `tinyint(1)` holding 0 or 1, which is what MySQL writes for `TRUE` and `FALSE`. Both servers store any small integer in the column, but `= TRUE` matches only 1, so a read of any value other than 0 or 1 raises `RUNTIME.DECODE_FAILED` naming the column, in a row and through an `include()`. A `Boolean` field takes equality filters. A default is `@default(true)` or `@default(false)`, which a migration writes as `DEFAULT 1` or `DEFAULT 0`.
 

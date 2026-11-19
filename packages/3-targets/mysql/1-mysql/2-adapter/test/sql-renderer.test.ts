@@ -197,6 +197,7 @@ describe('MySQL lowering of a select', () => {
     const wrapping = new MysqlSqlRenderer(
       buildMysqlCodecDescriptorRegistry([
         new Wrapping('x/geometry@1', (p) => FunctionCallExpr.of('ST_GeomFromText', [p])),
+        new Wrapping('x/compared@1', (p) => BinaryExpr.eq(p, LiteralExpr.of(1))),
         new Wrapping('x/dropped@1', () => LiteralExpr.of(1)),
         new Wrapping('x/twice@1', (p) => BinaryExpr.eq(p, p)),
       ]),
@@ -214,6 +215,9 @@ describe('MySQL lowering of a select', () => {
       });
     expect(where('x/geometry@1')()).toBe(
       'SELECT `user`.`id` AS `id` FROM `user` WHERE `user`.`email` = ST_GeomFromText(?1)',
+    );
+    expect(where('x/compared@1')()).toBe(
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `user`.`email` = (?1 = 1)',
     );
     expect(where('x/dropped@1')).toThrow(refusal('x/dropped@1'));
     expect(where('x/twice@1')).toThrow(refusal('x/twice@1'));

@@ -149,6 +149,13 @@ describe('readMysqlDefault', () => {
       text('é€😀'),
     ],
     [
+      'a text default that starts with a byte order mark, which is kept',
+      shownByteByByte("_utf8mb4\\'\uFEFFa\\'"),
+      'DEFAULT_GENERATED',
+      'text',
+      text('\uFEFFa'),
+    ],
+    [
       'a JSON default with characters past ASCII',
       shownByteByByte(`_utf8mb4\\'{"k":"é"}\\'`),
       'DEFAULT_GENERATED',

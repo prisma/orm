@@ -18,7 +18,11 @@ import { mysqlLongblob } from './data-types';
 import { errorColumnUnreadable, errorColumnUnwritable } from './errors';
 
 const LINE_BREAKS = /\r?\n/g;
-const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const BASE64_CHARACTERS = /^[A-Za-z0-9+/]*={0,2}$/;
+
+function isBase64(text: string): boolean {
+  return text.length % 4 === 0 && BASE64_CHARACTERS.test(text);
+}
 
 function describeReceived(value: unknown): string {
   return typeof value === 'string' ? JSON.stringify(value) : String(value);
@@ -44,7 +48,7 @@ function plainBytes(bytes: Uint8Array): Uint8Array {
 
 function bytesOfBase64(text: string, ctx: SqlCodecCallContext): Uint8Array {
   const base64 = text.replace(LINE_BREAKS, '');
-  if (BASE64.test(base64)) return plainBytes(Buffer.from(base64, 'base64'));
+  if (isBase64(base64)) return plainBytes(Buffer.from(base64, 'base64'));
   throw errorColumnUnreadable({
     codecId: MYSQL_LONGBLOB_CODEC_ID,
     received: describeReceived(text),

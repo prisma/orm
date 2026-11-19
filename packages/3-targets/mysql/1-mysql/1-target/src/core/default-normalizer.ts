@@ -92,7 +92,7 @@ function stringLiteralBody(text: string, start: number): string | undefined {
 
 function utf8Text(bytes: Uint8Array): string | undefined {
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
   } catch {
     return undefined;
   }
