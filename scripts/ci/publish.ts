@@ -811,8 +811,9 @@ async function publishPackages(
       const pkgDir = path.dirname(pkg.path)
 
       const newVersion = prismaVersion
+      const packageTag = pkgName === 'prisma' && tag === 'latest' ? 'prev' : tag
 
-      console.log(`\nPublishing ${magenta(`${pkgName}@${newVersion}`)} ${dim(`on ${tag}`)}`)
+      console.log(`\nPublishing ${magenta(`${pkgName}@${newVersion}`)} ${dim(`on ${packageTag}`)}`)
 
       // Why is this needed?
       // Was introduced in the first version of this script on Apr 14, 2020
@@ -860,7 +861,7 @@ async function publishPackages(
           publishEnv.NODE_AUTH_TOKEN = prismaBotNpmToken
         }
 
-        await run(pkgDir, `pnpm publish --no-git-checks --access public --tag ${tag}`, dryRun, false, publishEnv)
+        await run(pkgDir, `pnpm publish --no-git-checks --access public --tag ${packageTag}`, dryRun, false, publishEnv)
       }
     }
   }

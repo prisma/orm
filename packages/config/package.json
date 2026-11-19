@@ -6,14 +6,14 @@
   "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/config"
   },
   "license": "Apache-2.0",
   "author": "Alberto Schiabel <schiabel@prisma.io>",
   "dependencies": {
     "c12": "3.3.4",
-    "deepmerge-ts": "7.1.5",
+    "deepmerge-ts": "8.0.2",
     "effect": "3.20.0",
     "empathic": "2.0.0"
   },

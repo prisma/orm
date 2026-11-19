@@ -154,7 +154,7 @@ jobs:
           number: ${{ steps.cpr.outputs.pull-request-number }}
 
       #
-      # Integration Engine PR for end to end testing (From prisma/prisma-engines to prisma/prisma and finally npm)
+      # Integration Engine PR for end to end testing (From prisma/prisma-engines to prisma/orm and finally npm)
       # This will create a draft PR as we don't want to merge it
       # But we want to publish it to npm
       # For that we can create an `integration/` branch
