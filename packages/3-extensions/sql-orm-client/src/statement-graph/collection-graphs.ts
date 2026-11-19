@@ -58,7 +58,7 @@ import {
   addAfterWrite,
   addBeforeWrite,
   addCreateWithRelations,
-  type Translation,
+  type ParentRow,
 } from './nested-mutations';
 import { PayloadData } from './payload-data';
 import type { Requires } from './requires';
@@ -241,12 +241,12 @@ export function updateFirstGraph(
   }
 
   const model = modelOf(collection);
-  const t: Translation = { ...b, parentRow: find, parentValues: set };
-  const before = addBeforeWrite(t, model, relationMutations);
+  const parent: ParentRow = { rowBeforeWrite: find, setValues: set };
+  const before = addBeforeWrite(b, model, parent, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
   const owner = { operation: 'update', modelName: collection.modelName };
   if (Object.keys(values).length === 0 && before.keys.length === 0) {
-    addAfterWrite(t, model, find, relationMutations);
+    addAfterWrite(b, model, { ...parent, node: find }, relationMutations);
     b.graph.setResult(
       state.includes.length === 0 && !before.unlinksAfterWrite
         ? find
@@ -268,7 +268,8 @@ export function updateFirstGraph(
       owner,
       returns: 'rows',
       shape: shapeOf(collection),
-      afterWrite: (updated) => addAfterWrite(t, model, updated, relationMutations),
+      afterWrite: (updated) =>
+        addAfterWrite(b, model, { ...parent, node: updated }, relationMutations),
     }),
   );
   return b.graph;
@@ -343,8 +344,9 @@ export function createGraph(
   requireIdentityColumnsForIncludes(collection);
   b.graph.setResult(
     addCreateWithRelations(
-      { ...b, parentRow: undefined, parentValues: {} },
+      b,
       modelOf(collection),
+      { rowBeforeWrite: undefined, setValues: {} },
       parsed,
       {
         keysFromParent: [],

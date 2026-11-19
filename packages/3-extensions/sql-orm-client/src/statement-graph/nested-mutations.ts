@@ -103,9 +103,13 @@ type CreateOrConnect = Extract<Mutation, { kind: 'create' | 'connect' }>;
 type FilteredWrite = Extract<Mutation, { kind: 'updateAll' | 'deleteAll' | 'update' | 'delete' }>;
 type SingleRowWrite = Extract<Mutation, { kind: 'update' | 'delete' }>;
 
-export interface Translation extends Builder {
-  readonly parentRow: NodeId | undefined;
-  readonly parentValues: Readonly<Record<string, unknown>>;
+export interface ParentRow {
+  readonly rowBeforeWrite: NodeId | undefined;
+  readonly setValues: Readonly<Record<string, unknown>>;
+}
+
+export interface ParentWrite extends ParentRow {
+  readonly node: NodeId;
 }
 
 export interface CreateOf {
@@ -127,17 +131,19 @@ export interface BeforeWrite {
 }
 
 export function addCreateWithRelations(
-  t: Translation,
+  b: Builder,
   model: Model,
+  parent: ParentRow,
   parsed: ParsedMutationInput,
   createOf: CreateOf,
 ): NodeId {
-  return insertWithRelations(t, model, parsed, createOf, undefined, undefined);
+  return insertWithRelations(b, model, parent, parsed, createOf, undefined, undefined);
 }
 
 function insertWithRelations(
-  t: Translation,
+  b: Builder,
   model: Model,
+  parent: ParentRow,
   parsed: ParsedMutationInput,
   { keysFromParent, returns, shape, variantValue }: CreateOf,
   storageRow: Record<string, unknown> | undefined,
@@ -146,23 +152,24 @@ function insertWithRelations(
   for (const relationMutation of parsed.relationMutations) {
     rejectUpdateOnly(relationMutation);
   }
-  const before = addBeforeWrite(t, model, parsed.relationMutations);
+  const before = addBeforeWrite(b, model, parent, parsed.relationMutations);
   const row =
-    storageRow ?? createRowOf(t.context, model, variantValue, parsed.scalarData, undefined);
-  return insertRows(t, model, [row], {
+    storageRow ?? createRowOf(b.context, model, variantValue, parsed.scalarData, undefined);
+  return insertRows(b, model, [row], {
     conflict: nested?.conflict,
     keys: [...keysFromParent, ...before.keys],
-    requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
+    requires: keysFromParent.length === 0 ? parentRowRequired(parent) : [],
     owner: { operation: 'create', modelName: model.modelName },
     returns,
     shape,
-    afterWrite: afterWriteOf(t, model, parsed.relationMutations, nested),
+    afterWrite: afterWriteOf(b, model, parent, parsed.relationMutations, nested),
   });
 }
 
 function afterWriteOf(
-  t: Translation,
+  b: Builder,
   model: Model,
+  parent: ParentRow,
   relationMutations: readonly ParsedRelationMutation[],
   nested: NestedConflict | undefined,
 ): ((written: NodeId) => void) | undefined {
@@ -175,16 +182,16 @@ function afterWriteOf(
   }
   return (written) => {
     if (guard !== undefined && nested !== undefined) {
-      addVariantCheck(t, model, written, nested.relation, guard);
+      addVariantCheck(b, model, written, nested.relation, guard);
     }
     if (readsRow) {
-      addAfterWrite(t, model, written, relationMutations);
+      addAfterWrite(b, model, { ...parent, node: written }, relationMutations);
     }
   };
 }
 
 function addVariantCheck(
-  { graph, context }: Translation,
+  { graph, context }: Builder,
   model: Model,
   written: NodeId,
   relation: string,
@@ -205,8 +212,9 @@ function addVariantCheck(
 }
 
 function addLinkedCreates(
-  t: Translation,
+  b: Builder,
   related: Model,
+  parent: ParentRow,
   name: string,
   relatedCollection: RelatedCollection,
   mutation: Extract<Mutation, { kind: 'create' }>,
@@ -214,16 +222,17 @@ function addLinkedCreates(
   data: readonly MutationCreateInput<Contract<SqlStorage>, string>[],
   link: (created: NodeId) => void,
 ): void {
-  const rows = data.map((row) => parseCreateInput(t, related, row, relatedCollection));
+  const rows = data.map((row) => parseCreateInput(b, related, row, relatedCollection));
   const values = rows.map((row) =>
-    createRowOf(t.context, related, mutation.variant, row.scalarData, undefined),
+    createRowOf(b.context, related, mutation.variant, row.scalarData, undefined),
   );
-  const nested = conflictOf(t, related, name, [], resolved, rows, values, mutation.variant);
+  const nested = conflictOf(b, related, name, [], resolved, rows, values, mutation.variant);
   rows.forEach((row, index) => {
     link(
       insertWithRelations(
-        t,
+        b,
         related,
+        parent,
         row,
         { keysFromParent: [], returns: 'rows', shape: allColumns, variantValue: mutation.variant },
         values[index],
@@ -234,7 +243,8 @@ function addLinkedCreates(
 }
 
 function addVariantInOwnTable(
-  t: Translation,
+  b: Builder,
+  parent: ParentRow,
   { relation, relatedCollection }: Pick<ParsedRelationMutation, 'relation' | 'relatedCollection'>,
   { data, variant }: Extract<Mutation, { kind: 'create' }>,
   keys: readonly KeyFilter[],
@@ -244,7 +254,7 @@ function addVariantInOwnTable(
     return false;
   }
   const collection = {
-    context: t.context,
+    context: b.context,
     state: relatedCollection(relation).variant(variant).state,
     modelName: relation.to,
     namespaceId: relation.toNamespace,
@@ -254,22 +264,23 @@ function addVariantInOwnTable(
     return false;
   }
   for (const row of data) {
-    parseCreateInput(t, modelOf(collection), row, relatedCollection);
+    parseCreateInput(b, modelOf(collection), row, relatedCollection);
   }
-  assertReturningCapability(t.context.contract, 'create()');
+  assertReturningCapability(b.context.contract, 'create()');
   createAllVariantGraph(
     collection,
     requireVariantTable(collection.state.tables, mti.variant.value),
     mti,
     data,
-    { graph: t.graph, keys, requires: keys.length === 0 ? parentRowRequired(t) : [], added },
+    { graph: b.graph, keys, requires: keys.length === 0 ? parentRowRequired(parent) : [], added },
   );
   return true;
 }
 
 export function addBeforeWrite(
-  t: Translation,
+  b: Builder,
   model: Model,
+  parent: ParentRow,
   relationMutations: readonly ParsedRelationMutation[],
 ): BeforeWrite {
   const { parentOwned, junctionOwned } = partitionByOwnership(relationMutations);
@@ -288,7 +299,7 @@ export function addBeforeWrite(
     for (const mutation of relationMutation.mutations) {
       if (mutation.kind === 'delete') {
         rejectNullOnRequiredKey(
-          t.context.contract,
+          b.context.contract,
           mutation.kind,
           relationMutation.name,
           model,
@@ -302,7 +313,7 @@ export function addBeforeWrite(
       }
       if (mutation.kind === 'disconnect') {
         rejectNullOnRequiredKey(
-          t.context.contract,
+          b.context.contract,
           mutation.kind,
           relationMutation.name,
           model,
@@ -315,11 +326,11 @@ export function addBeforeWrite(
           unlinksAfterWrite = true;
           continue;
         }
-        for (const column of localColumnsOf(t.context.contract, model, relationMutation.relation)) {
+        for (const column of localColumnsOf(b.context.contract, model, relationMutation.relation)) {
           nullColumns[column] = null;
         }
       } else {
-        keys.push(...addParentOwned(t, model, relationMutation, mutation));
+        keys.push(...addParentOwned(b, model, parent, relationMutation, mutation));
       }
     }
   }
@@ -327,9 +338,9 @@ export function addBeforeWrite(
 }
 
 export function addAfterWrite(
-  t: Translation,
+  b: Builder,
   model: Model,
-  parent: NodeId,
+  parent: ParentWrite,
   relationMutations: readonly ParsedRelationMutation[],
 ): void {
   const { parentOwned, childOwned, junctionOwned } = partitionByOwnership(relationMutations);
@@ -340,22 +351,22 @@ export function addAfterWrite(
         !disconnectsNothing(mutation) &&
         isConditionalUnlink(mutation)
       ) {
-        addConditionalUnlink(t, model, parent, relationMutation, mutation);
+        addConditionalUnlink(b, model, parent, relationMutation, mutation);
       } else if (mutation.kind === 'update') {
-        addLinkedRowWrite(t, model, parent, relationMutation, mutation);
+        addLinkedRowWrite(b, model, parent, relationMutation, mutation);
       } else if (mutation.kind === 'delete') {
-        addLinkedRowWrite(t, model, parent, relationMutation, mutation);
+        addLinkedRowWrite(b, model, parent, relationMutation, mutation);
       }
     }
   }
   for (const relationMutation of childOwned) {
     for (const mutation of relationMutation.mutations) {
-      addChildOwned(t, model, parent, relationMutation, mutation);
+      addChildOwned(b, model, parent, relationMutation, mutation);
     }
   }
   for (const relationMutation of junctionOwned) {
     for (const mutation of relationMutation.mutations) {
-      addJunctionOwned(t, model, parent, relationMutation, mutation);
+      addJunctionOwned(b, model, parent, relationMutation, mutation);
     }
   }
 }
@@ -381,13 +392,13 @@ function disconnectsNothing(mutation: Extract<Mutation, { kind: 'disconnect' }>)
 }
 
 function addConditionalUnlink(
-  t: Translation,
+  b: Builder,
   model: Model,
-  parent: NodeId,
+  parent: ParentWrite,
   { name, relation }: ParsedRelationMutation,
   mutation: Extract<Mutation, { kind: 'disconnect' }>,
 ): void {
-  const { context } = t;
+  const { context } = b;
   const { contract } = context;
   const related = relatedModel(contract, relation, mutation.state);
   const localColumns = localColumnsOf(contract, model, relation);
@@ -409,18 +420,18 @@ function addConditionalUnlink(
   const nulls = Object.fromEntries(localColumns.map((column) => [column, null]));
   const unlink = {
     ...nulls,
-    ...updateDefaultsOf(context, model, { ...t.parentValues, ...nulls }),
+    ...updateDefaultsOf(context, model, { ...parent.setValues, ...nulls }),
   };
   for (const where of wheres) {
     const target = SelectAst.from(related.tables.root.tableSource(contract)).withProjection(
       targets,
     );
-    updateRows(t, model, unlink, {
+    updateRows(b, model, unlink, {
       where: BinaryExpr.in(
         linked,
         SubqueryExpr.of(where === undefined ? target : target.withWhere(where)),
       ),
-      filters: [{ from: parent, columns: sameRowColumnsOf(contract, model.tables.root) }],
+      filters: [{ from: parent.node, columns: sameRowColumnsOf(contract, model.tables.root) }],
       links: [],
       payloads: [],
       owner: { operation: 'update', modelName: model.modelName },
@@ -503,13 +514,13 @@ function rejectSingleRowWrite({
 }
 
 function addLinkedRowWrite(
-  t: Translation,
+  b: Builder,
   model: Model,
-  parent: NodeId,
+  parent: ParentWrite,
   { relation }: ParsedRelationMutation,
   mutation: SingleRowWrite,
 ): void {
-  const { context } = t;
+  const { context } = b;
   const { contract } = context;
   const related = {
     context,
@@ -520,7 +531,7 @@ function addLinkedRowWrite(
   const localColumns = localColumnsOf(contract, model, relation);
   const targetColumns = resolveRelationTargetColumns(contract, relation);
   const target = mutation.state.tables.root;
-  const linked = t.parentRow ?? parent;
+  const linked = parent.rowBeforeWrite ?? parent.node;
   if (mutation.kind === 'delete') {
     const toTarget = columnMappings(
       contract,
@@ -530,19 +541,19 @@ function addLinkedRowWrite(
       targetColumns,
     );
     addDeleteFirst(
-      t,
+      b,
       related,
       { filters: [{ from: linked, columns: toTarget }], links: [] },
       (found) => {
         const nulls = Object.fromEntries(localColumns.map((column) => [column, null]));
         updateRows(
-          t,
+          b,
           model,
-          { ...nulls, ...updateDefaultsOf(context, model, { ...t.parentValues, ...nulls }) },
+          { ...nulls, ...updateDefaultsOf(context, model, { ...parent.setValues, ...nulls }) },
           {
             where: undefined,
             filters: [
-              { from: parent, columns: sameRowColumnsOf(contract, model.tables.root) },
+              { from: parent.node, columns: sameRowColumnsOf(contract, model.tables.root) },
               {
                 from: found,
                 columns: columnMappings(
@@ -577,7 +588,7 @@ function addLinkedRowWrite(
   };
   const set = updateValuesOf(related, mutation.data);
   if (Object.keys(set).length > 0) {
-    addUpdateFirst(t, related, set, keyFilters);
+    addUpdateFirst(b, related, set, keyFilters);
   }
 }
 
@@ -598,12 +609,13 @@ function rejectFilteredWriteOnToOne({ name, relation, mutations }: ParsedRelatio
 }
 
 function addParentOwned(
-  t: Translation,
+  b: Builder,
   model: Model,
+  parent: ParentRow,
   { name, relation, relatedCollection }: ParsedRelationMutation,
   mutation: CreateOrConnect,
 ): KeyFilter[] {
-  const { contract } = t.context;
+  const { contract } = b.context;
   const related = relatedModel(contract, relation, variantOf(mutation));
   const columns = columnMappings(
     contract,
@@ -621,12 +633,13 @@ function addParentOwned(
         { meta: { kind: 'create', relation: name, problem: 'missing-data' } },
       );
     }
-    const resolved = nestedConflictOf(t, name, relation, mutation);
+    const resolved = nestedConflictOf(b, name, relation, mutation);
     const keys: KeyFilter[] = [];
     const added = (from: NodeId) => keys.push({ from, columns });
     if (
       addVariantInOwnTable(
-        t,
+        b,
+        parent,
         { relation, relatedCollection },
         { ...mutation, data: [row] },
         [],
@@ -635,7 +648,7 @@ function addParentOwned(
     ) {
       return keys;
     }
-    addLinkedCreates(t, related, name, relatedCollection, mutation, resolved, [row], added);
+    addLinkedCreates(b, related, parent, name, relatedCollection, mutation, resolved, [row], added);
     return keys;
   }
   const [criterion] = mutation.criteria;
@@ -648,20 +661,20 @@ function addParentOwned(
   }
   return [
     {
-      from: addFindAndAssert(t, { name, relation }, mutation, criterion, columns),
+      from: addFindAndAssert(b, parent, { name, relation }, mutation, criterion, columns),
       columns,
     },
   ];
 }
 
 function addChildOwned(
-  t: Translation,
+  b: Builder,
   model: Model,
-  parent: NodeId,
+  parent: ParentWrite,
   { name, relation, relatedCollection }: ParsedRelationMutation,
   mutation: Mutation,
 ): void {
-  const { context } = t;
+  const { context } = b;
   const { contract } = context;
   const related = relatedModel(contract, relation, variantOf(mutation));
   const targetColumns = resolveRelationTargetColumns(contract, relation);
@@ -673,22 +686,31 @@ function addChildOwned(
     targetColumns,
   );
   if (isFilteredWrite(mutation)) {
-    addFilteredWrite(t, model, parent, name, relation, mutation);
+    addFilteredWrite(b, model, parent, name, relation, mutation);
     return;
   }
   if (mutation.kind === 'create') {
-    const keys = [{ from: parent, columns: fromParent }];
-    const resolved = nestedConflictOf(t, name, relation, mutation);
-    if (addVariantInOwnTable(t, { relation, relatedCollection }, mutation, keys, () => undefined)) {
+    const keys = [{ from: parent.node, columns: fromParent }];
+    const resolved = nestedConflictOf(b, name, relation, mutation);
+    if (
+      addVariantInOwnTable(
+        b,
+        parent,
+        { relation, relatedCollection },
+        mutation,
+        keys,
+        () => undefined,
+      )
+    ) {
       return;
     }
     const variantValue = mutation.variant;
-    const rows = mutation.data.map((row) => parseCreateInput(t, related, row, relatedCollection));
+    const rows = mutation.data.map((row) => parseCreateInput(b, related, row, relatedCollection));
     const values = rows.map((row) =>
       createRowOf(context, related, variantValue, row.scalarData, undefined),
     );
     const nested = conflictOf(
-      t,
+      b,
       related,
       name,
       targetColumns,
@@ -703,8 +725,9 @@ function addChildOwned(
     ) {
       rows.forEach((row, index) => {
         insertWithRelations(
-          t,
+          b,
           related,
+          parent,
           row,
           { keysFromParent: keys, returns: 'count', shape: allColumns, variantValue },
           values[index],
@@ -713,7 +736,7 @@ function addChildOwned(
       });
       return;
     }
-    insertRows(t, related, values, {
+    insertRows(b, related, values, {
       conflict: nested?.conflict,
       keys,
       requires: [],
@@ -727,14 +750,14 @@ function addChildOwned(
   if (mutation.kind === 'connect') {
     for (const criterion of mutation.criteria) {
       updateRows(
-        t,
+        b,
         related,
         {},
         {
           where: requiredCriterion(context, related, name, mutation, criterion),
           filters: [],
           links: [],
-          payloads: [{ from: parent, columns: fromParent }],
+          payloads: [{ from: parent.node, columns: fromParent }],
           owner: { operation: 'update', modelName: related.modelName },
           returns: 'count',
           shape: allColumns,
@@ -758,9 +781,9 @@ function addChildOwned(
       ? [variantWhere(contract, mutation.state, undefined)]
       : criteria.map((criterion) => requiredCriterion(context, related, name, mutation, criterion));
   for (const where of wheres) {
-    updateRows(t, related, unlink, {
+    updateRows(b, related, unlink, {
       where,
-      filters: [{ from: parent, columns: fromParent }],
+      filters: [{ from: parent.node, columns: fromParent }],
       links: [],
       payloads: [],
       owner: { operation: 'update', modelName: related.modelName },
@@ -772,13 +795,13 @@ function addChildOwned(
 }
 
 function addJunctionOwned(
-  t: Translation,
+  b: Builder,
   model: Model,
-  parent: NodeId,
+  parent: ParentWrite,
   { name, relation, relatedCollection }: JunctionRelationMutation,
   mutation: Mutation,
 ): void {
-  const { context } = t;
+  const { context } = b;
   const { contract } = context;
   const { through } = relation;
   const related = relatedModel(contract, relation, variantOf(mutation));
@@ -801,15 +824,15 @@ function addJunctionOwned(
     through.childColumns,
   );
   if (isFilteredWrite(mutation)) {
-    addFilteredWrite(t, model, parent, name, relation, mutation);
+    addFilteredWrite(b, model, parent, name, relation, mutation);
     return;
   }
   const addLink = (target: NodeId, conflict: InsertConflictSkip | undefined) => {
     const values = withCreateDefaults(context, through.namespaceId, through.table, {}, undefined);
-    addInsert(t, junction.root, [values], {
+    addInsert(b, junction.root, [values], {
       conflict,
       keys: [
-        { from: parent, columns: fromParent },
+        { from: parent.node, columns: fromParent },
         { from: target, columns: fromTarget },
       ],
       junction: { relation: name, junction: through.table },
@@ -819,9 +842,9 @@ function addJunctionOwned(
   };
 
   if (mutation.kind === 'create') {
-    const resolved = nestedConflictOf(t, name, relation, mutation);
+    const resolved = nestedConflictOf(b, name, relation, mutation);
     if (
-      addVariantInOwnTable(t, { relation, relatedCollection }, mutation, [], (base) =>
+      addVariantInOwnTable(b, parent, { relation, relatedCollection }, mutation, [], (base) =>
         addLink(base, undefined),
       )
     ) {
@@ -829,8 +852,9 @@ function addJunctionOwned(
     }
     const conflict = resolved === undefined ? undefined : linkKeyConflict(contract, relation);
     addLinkedCreates(
-      t,
+      b,
       related,
+      parent,
       name,
       relatedCollection,
       mutation,
@@ -843,7 +867,10 @@ function addJunctionOwned(
   if (mutation.kind === 'connect') {
     const conflict = linkKeyConflict(contract, relation);
     for (const criterion of mutation.criteria) {
-      addLink(addFindAndAssert(t, { name, relation }, mutation, criterion, fromTarget), conflict);
+      addLink(
+        addFindAndAssert(b, parent, { name, relation }, mutation, criterion, fromTarget),
+        conflict,
+      );
     }
     return;
   }
@@ -856,11 +883,11 @@ function addJunctionOwned(
     );
   }
   for (const criterion of criteria) {
-    const target = addFindAndAssert(t, { name, relation }, mutation, criterion, fromTarget);
-    deleteRows(t, junction, {
+    const target = addFindAndAssert(b, parent, { name, relation }, mutation, criterion, fromTarget);
+    deleteRows(b, junction, {
       where: undefined,
       filters: [
-        { from: parent, columns: fromParent },
+        { from: parent.node, columns: fromParent },
         { from: target, columns: fromTarget },
       ],
       links: [],
@@ -869,32 +896,32 @@ function addJunctionOwned(
 }
 
 function addFilteredWrite(
-  t: Translation,
+  b: Builder,
   model: Model,
-  parent: NodeId,
+  parent: ParentWrite,
   name: string,
   relation: ResolvedRelation,
   mutation: FilteredWrite,
 ): void {
   const related = {
-    context: t.context,
+    context: b.context,
     state: mutation.state,
     modelName: relation.to,
     namespaceId: relation.toNamespace,
   };
   const keyFilters = keyFiltersOf(
-    t.context.contract,
+    b.context.contract,
     model,
     relation,
     related.state.tables,
-    parent,
+    parent.node,
   );
   if (mutation.kind === 'deleteAll') {
-    addDeleteAll(t, related, keyFilters);
+    addDeleteAll(b, related, keyFilters);
     return;
   }
   if (mutation.kind === 'delete') {
-    addDeleteFirst(t, related, keyFilters);
+    addDeleteFirst(b, related, keyFilters);
     return;
   }
   const set = updateValuesOf(related, mutation.data);
@@ -902,7 +929,7 @@ function addFilteredWrite(
   const linking = linkFields.filter((field) =>
     Object.hasOwn(
       set,
-      columnOfContractField(t.context.contract, relation.toNamespace, relation.to, field),
+      columnOfContractField(b.context.contract, relation.toNamespace, relation.to, field),
     ),
   );
   if (linking.length > 0) {
@@ -923,10 +950,10 @@ function addFilteredWrite(
     return;
   }
   if (mutation.kind === 'update') {
-    addUpdateFirst(t, related, set, keyFilters);
+    addUpdateFirst(b, related, set, keyFilters);
     return;
   }
-  addUpdateAll(t, related, set, keyFilters, 'count');
+  addUpdateAll(b, related, set, keyFilters, 'count');
 }
 
 function keyFiltersOf(
@@ -1003,7 +1030,7 @@ function nestedCall(name: string, modelName: string): ConflictCall {
 }
 
 function nestedConflictOf(
-  t: Translation,
+  b: Builder,
   name: string,
   relation: ResolvedRelation,
   { options, variant }: Extract<Mutation, { kind: 'create' }>,
@@ -1011,7 +1038,7 @@ function nestedConflictOf(
   if (options === undefined) {
     return undefined;
   }
-  const { contract } = t.context;
+  const { contract } = b.context;
   const resolved = resolveConflict(
     contract,
     nestedCall(name, relation.to),
@@ -1058,7 +1085,7 @@ function variantTargetOf(
 }
 
 function conflictOf(
-  t: Translation,
+  b: Builder,
   model: Model,
   name: string,
   parentLinkColumns: readonly string[],
@@ -1070,7 +1097,7 @@ function conflictOf(
   if (resolved === undefined) {
     return undefined;
   }
-  const { context } = t;
+  const { context } = b;
   const { contract } = context;
   const call = nestedCall(name, model.modelName);
   for (const row of rows) {
@@ -1119,13 +1146,14 @@ function variantGuardOf(
 }
 
 function addFindAndAssert(
-  t: Translation,
+  b: Builder,
+  parent: ParentRow,
   { name, relation }: Pick<ParsedRelationMutation, 'name' | 'relation'>,
   mutation: Extract<Mutation, { kind: 'connect' | 'disconnect' }>,
   criterion: Readonly<Record<string, unknown>>,
   columns: readonly ColumnMapping[],
 ): NodeId {
-  const { graph, context } = t;
+  const { graph, context } = b;
   const { kind } = mutation;
   const related = relatedModel(context.contract, relation, mutation.state);
   const where = requiredCriterion(context, related, name, mutation, criterion);
@@ -1137,14 +1165,14 @@ function addFindAndAssert(
         }
       : related;
   const find = findRows(
-    t,
+    b,
     selectAstOf(
       context,
       withVariants,
       { ...emptyState(withVariants.tables), filters: [where], limit: 1 },
       'selection',
     ),
-    { filter: [], requires: parentRowRequired(t) },
+    { filter: [], requires: parentRowRequired(parent) },
   );
   graph.add(
     new Assert(
@@ -1159,7 +1187,7 @@ function addFindAndAssert(
         find,
         columns.map(([source]) => [source, source]),
       ),
-      requires: parentRowRequired(t),
+      requires: parentRowRequired(parent),
     },
   );
   return find;
@@ -1204,8 +1232,8 @@ function variantWhere(
   );
 }
 
-function parentRowRequired(t: Translation): Requires[] {
-  return t.parentRow === undefined ? [] : [new Requires(t.parentRow)];
+function parentRowRequired({ rowBeforeWrite }: ParentRow): Requires[] {
+  return rowBeforeWrite === undefined ? [] : [new Requires(rowBeforeWrite)];
 }
 
 function criterionWhere(
@@ -1269,13 +1297,13 @@ function localColumnsOf(
 }
 
 function parseCreateInput(
-  t: Translation,
+  b: Builder,
   model: Model,
   row: MutationCreateInput<Contract<SqlStorage>, string>,
   relatedCollection: RelatedCollection,
 ): ParsedMutationInput {
   return parseMutationInput(
-    t.context.contract,
+    b.context.contract,
     model.namespaceId,
     model.modelName,
     row,
