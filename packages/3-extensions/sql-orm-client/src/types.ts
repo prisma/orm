@@ -2555,7 +2555,12 @@ type RelationMutationCallback<
       Context extends 'create'
         ? true
         : Cardinality extends 'N:1'
-          ? true
+          ? AnyFieldRequired<
+              TContract,
+              ModelName,
+              RelationLocalFields<TContract, ModelName, RelName, NsId>,
+              NsId
+            >
           : AnyFieldRequired<
               TContract,
               TargetModel,

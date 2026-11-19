@@ -1,3 +1,5 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
@@ -183,14 +185,14 @@ export function updateFirstGraph(
   }
 
   const model = modelOf(collection);
-  const t: Translation = { ...b, parentRow: find };
+  const t: Translation = { ...b, parentRow: find, parentValues: set };
   const before = addBeforeWrite(t, model, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
   const owner = { operation: 'update', modelName: collection.modelName };
   if (Object.keys(values).length === 0 && before.keys.length === 0) {
     addAfterWrite(t, model, find, relationMutations);
     b.graph.setResult(
-      state.includes.length === 0
+      state.includes.length === 0 && !before.unlinksAfterWrite
         ? find
         : readBack(b, model, find, identityColumnsOf(collection), {
             shape: shapeOf(collection),
@@ -284,12 +286,17 @@ export function createGraph(
   const b = builderOf(collection);
   requireIdentityColumnsForIncludes(collection);
   b.graph.setResult(
-    addCreateWithRelations({ ...b, parentRow: undefined }, modelOf(collection), parsed, {
-      keysFromParent: [],
-      returns: 'rows',
-      shape: shapeOf(collection),
-      variantValue: collection.state.variantValue,
-    }),
+    addCreateWithRelations(
+      { ...b, parentRow: undefined, parentValues: {} },
+      modelOf(collection),
+      parsed,
+      {
+        keysFromParent: [],
+        returns: 'rows',
+        shape: shapeOf(collection),
+        variantValue: collection.state.variantValue,
+      },
+    ),
   );
   return b.graph;
 }
@@ -543,7 +550,21 @@ function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly 
 }
 
 function sameRowColumns(collection: DescribeCollectionRowsOptions): ColumnMapping[] {
-  return sameColumns(identityProjection(collection));
+  return sameRowColumnsOf(collection.context.contract, collection.state.tables.root);
+}
+
+export function sameRowColumnsOf(
+  contract: Contract<SqlStorage>,
+  root: AliasedTable,
+): ColumnMapping[] {
+  const { namespaceId, tableName } = root.storage;
+  return sameColumns(
+    projectTableColumns(
+      contract,
+      root,
+      resolveRowIdentityColumns(contract, namespaceId, tableName),
+    ),
+  );
 }
 
 function whereOf(collection: DescribeCollectionRowsOptions): AnyExpression | undefined {
