@@ -54,7 +54,7 @@ describe('SQLite ORM calls known to fail', () => {
   });
 
   describe('a Char value with a trailing space', () => {
-    it.fails('is found by a filter on the value read back', async () => {
+    it('is found by a filter on the value read back', async () => {
       await withDatabase(async (db) => {
         await db.orm.Label.createAndCount([{ id: 1, code: 'a ' }]);
         const label = await db.orm.Label.whereUnique({ id: 1 }).select('id', 'code').firstOrThrow();
