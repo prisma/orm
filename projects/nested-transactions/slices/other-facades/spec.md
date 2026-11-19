@@ -115,7 +115,7 @@ None.
 | Edge case | Disposition | Notes |
 | --- | --- | --- |
 | MySQL commits the transaction on DDL, which removes its savepoints. | The live suite creates nothing inside a transaction. | It uses the seeded example database (`withSeededDatabase`, `exampleDatabase`), as `suites/transaction-isolation.ts` does. |
-| On MySQL and SQLite a failed statement does not abort the transaction, so a nested callback that catches the error and returns is released, and its earlier statements stay. On Postgres the same callback is rolled back with `RUNTIME.TRANSACTION_COMMIT_FAILED`. | Documented in one sentence in the MySQL and SQLite READMEs. No test in this slice. | Project spec decision 6 records the difference. It is a property of the databases, not of the wrapping. |
+| On MySQL and SQLite a failed statement does not abort the transaction, so a nested callback that catches the error and returns is released, and its earlier statements stay. On Postgres the same callback is rolled back with `RUNTIME.TRANSACTION_COMMIT_FAILED`. | Not documented and not tested in this slice (see § Amendments). | Project spec decision 6 records the difference. It is a property of the databases, not of the wrapping. |
 | The live MySQL and MariaDB suites skip a server whose URL is not set (`MYSQL_URL`, `MARIADB_URL`), except in CI. | The implementer starts the servers (`docker compose up mysql mariadb`) and reports whether the suite ran. A skipped suite is reported as not verified. | `packages/3-targets/mysql/3-live-tests/README.md`. |
 | The Supabase PGlite test needs the Supabase roles in the dev database. | Reuse the setup of `test/rls-role-binding.integration.test.ts`. | The test may be added to that file or to a new one, whichever needs less setup code. |
 
@@ -168,6 +168,8 @@ The project plan estimated 400. The operator's cap is about 500.
 ## Amendments
 
 - **After the PR opened: no type test for the MariaDB alias.** The type-test done condition also asked that `MariadbTransactionContext['transaction']` is `MysqlTransactionContext['transaction']`, which needed a new test file in the MariaDB facade. `MariadbTransactionContext` is a type alias of `MysqlTransactionContext`, so the test compared a type with itself. The live suite covers MariaDB's behaviour. Removed on the operator's review.
+
+- **After the PR opened: the READMEs do not state the database difference.** The MySQL and SQLite READMEs each had one sentence saying that a nested callback which catches a failed statement and returns is released there and rolled back on Postgres. Review found three exceptions to it (an InnoDB deadlock, SQLite errors that roll back the transaction, SQLite's `INSERT OR ROLLBACK`). The operator chose to remove the sentence instead of qualifying it further.
 
 ## Open Questions
 
