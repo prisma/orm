@@ -101,12 +101,10 @@ describe('startActivity', () => {
       parent: callCtx?.parent,
       inTransaction: callCtx?.inTransaction(),
       scope: eventOf(events, 'started:statement')?.ctx?.scope,
-      hasTransaction: 'transaction' in call,
     }).toEqual({
       parent: eventOf(events, 'started:transaction')?.ctx,
       inTransaction: true,
       scope: 'transaction',
-      hasTransaction: false,
     });
     expect(lifecycle(events).filter((name) => name.startsWith('finalized:'))).toEqual([
       'finalized:statement:committed',
@@ -122,7 +120,6 @@ describe('startActivity', () => {
       const call = await startActivityOn(tx, testCall);
       await call.execute(rawPlan('update t set x = 1'));
       await call.end({ outcome: 'succeeded' });
-      expect('transaction' in call).toBe(false);
     });
 
     expect(eventOf(events, 'started:test-call')?.ctx?.parent).toBe(

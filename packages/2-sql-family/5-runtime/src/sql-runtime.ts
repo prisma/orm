@@ -112,6 +112,7 @@ import type {
 import {
   type OpenTransaction,
   OuterTransaction,
+  savepointOptionsUnsupportedError,
   type TransactionRuntime,
   transactionClosedError,
 } from './runtime-transaction';
@@ -248,13 +249,11 @@ export interface ActivityRoute {
     params: Params,
     options: ActivityExecuteOptions,
   ): Promise<SqlStatementStats>;
-  readonly transaction:
-    | (<R>(
-        parent: ActivityParent,
-        fn: (tx: TransactionContext) => PromiseLike<R>,
-        options?: RuntimeTransactionOptions,
-      ) => Promise<R>)
-    | undefined;
+  readonly transaction: <R>(
+    parent: ActivityParent,
+    fn: (tx: TransactionContext) => PromiseLike<R>,
+    options?: RuntimeTransactionOptions,
+  ) => Promise<R>;
   /** Whether an open activity on the route is runtime work that `close()` waits for. */
   readonly runtimeWork: boolean;
 }
@@ -324,9 +323,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #transactions = new WeakMap<SqlQueryable, OpenTransaction>();
   readonly #startingTransactions = new WeakSet<SqlConnection>();
   readonly #transactionRuntime: TransactionRuntime = {
-    route: (driverTx, activity) =>
-      this.queryableRoute(driverTx, 'transaction', () => activity, {
-        transaction: undefined,
+    route: (driverTx, transaction) =>
+      this.queryableRoute(driverTx, 'transaction', () => transaction.activity, {
+        transaction: savepointBeneath(transaction),
         runtimeWork: false,
       }),
     startActivity: (route, activity) => this.startActivityOnRoute(route, activity, undefined),
@@ -660,13 +659,13 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     connection: SqlConnection,
     owner: TransactionStartTarget,
   ): ActivityRoute {
-    const openTransaction = this.#transactions.get(connection)?.activity;
-    return this.queryableRoute(connection, 'connection', () => openTransaction, {
+    const openTransaction = this.#transactions.get(connection);
+    return this.queryableRoute(connection, 'connection', () => openTransaction?.activity, {
       transaction:
         openTransaction === undefined
           ? (parent, fn, options) =>
               this.transactionOnHeldConnection(connection, owner, parent, fn, options)
-          : undefined,
+          : savepointBeneath(openTransaction),
       runtimeWork: false,
     });
   }
@@ -792,6 +791,14 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           beneath(options),
         );
       },
+      inTransaction: () => run.ctx.inTransaction(),
+      async transaction<R>(
+        fn: (tx: TransactionContext) => PromiseLike<R>,
+        options?: RuntimeTransactionOptions,
+      ): Promise<R> {
+        run.assertAcceptsChildren();
+        return route.transaction(run, fn, options);
+      },
       end(end: ClientActivityEnd<K>): Promise<void> {
         let ending: Promise<void>;
         try {
@@ -806,17 +813,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         });
       },
     };
-    const transaction = route.transaction;
-    if (transaction === undefined) return handle;
-    return Object.assign(handle, {
-      transaction: async <R>(
-        fn: (tx: TransactionContext) => PromiseLike<R>,
-        options?: RuntimeTransactionOptions,
-      ): Promise<R> => {
-        run.assertAcceptsChildren();
-        return transaction(run, fn, options);
-      },
-    });
+    return handle;
   }
 
   /**
@@ -1833,11 +1830,18 @@ async function runTransactionOn<R>(
   }
 }
 
+function savepointBeneath(transaction: OpenTransaction): ActivityRoute['transaction'] {
+  return async (parent, fn, options) => {
+    if (options !== undefined) throw savepointOptionsUnsupportedError(options);
+    return runInSavepoint(() => transaction.transactionBeneath(parent), fn);
+  };
+}
+
 async function runInSavepoint<R>(
-  transaction: RuntimeTransaction,
+  open: () => Promise<RuntimeTransaction>,
   fn: (tx: TransactionContext) => PromiseLike<R>,
 ): Promise<R> {
-  const savepoint = await transaction.transaction();
+  const savepoint = await open();
   try {
     return await runAndSettleTransaction(savepoint, fn);
   } catch (error) {
@@ -1935,6 +1939,11 @@ function guardedTransactionContext(
       get intercepted() {
         return handle.intercepted;
       },
+      inTransaction: () => handle.inTransaction(),
+      async transaction(fn, options) {
+        if (isClosed()) throw transactionClosedError();
+        return handle.transaction(fn, options);
+      },
       end: (end) => handle.end(end),
     };
   }
@@ -1947,7 +1956,7 @@ function guardedTransactionContext(
     [activitySource]: guardedSource(transaction),
     async transaction<R>(fn: (tx: TransactionContext) => PromiseLike<R>): Promise<R> {
       if (isClosed()) throw transactionClosedError();
-      return runInSavepoint(transaction, fn);
+      return runInSavepoint(() => transaction.transaction(), fn);
     },
   };
 }

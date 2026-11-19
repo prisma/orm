@@ -1,5 +1,5 @@
 import { startClientActivity } from '@internal/framework-components/runtime';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { startActivityOn } from '../src/activity-handle';
 import { withTransaction } from '../src/sql-runtime';
 import { testCall } from './client-activity-kinds';
@@ -20,7 +20,7 @@ describe('the transaction of an activity handle', () => {
       const { runtime, events } = createSetup();
       const call = await startActivityOn(runtime, testCall);
 
-      const result = await call.transaction?.(async (tx) => {
+      const result = await call.transaction(async (tx) => {
         await tx.execute(rawPlan('update t set x = 1'));
         return 'done';
       });
@@ -44,7 +44,7 @@ describe('the transaction of an activity handle', () => {
       const failure = new Error('callback failed');
 
       await expect(
-        call.transaction?.(async () => {
+        call.transaction(async () => {
           throw failure;
         }),
       ).rejects.toBe(failure);
@@ -91,9 +91,9 @@ describe('the transaction of an activity handle', () => {
       const connection = await runtime.connection();
       const call = await startActivityOn(connection, testCall);
 
-      await call.transaction?.(async () => undefined);
-      await call.transaction?.(async () => Promise.reject(new Error('failed'))).catch(() => {});
-      await call.transaction?.(async () => undefined).catch(() => {});
+      await call.transaction(async () => undefined);
+      await call.transaction(async () => Promise.reject(new Error('failed'))).catch(() => {});
+      await call.transaction(async () => undefined).catch(() => {});
       await call.end({ outcome: 'succeeded' });
       const beforeRelease = driverCalls(events);
       await connection.release();
@@ -106,9 +106,9 @@ describe('the transaction of an activity handle', () => {
       const connection = await runtime.connection();
       const call = await startActivityOn(connection, testCall);
 
-      await call.transaction?.(async (tx) => tx.execute(rawPlan('update t set x = 1')));
+      await call.transaction(async (tx) => tx.execute(rawPlan('update t set x = 1')));
       await expect(
-        call.transaction?.(async () => {
+        call.transaction(async () => {
           throw new Error('callback failed');
         }),
       ).rejects.toThrow('callback failed');
@@ -127,7 +127,7 @@ describe('the transaction of an activity handle', () => {
       const call = await startActivityOn(connection, testCall);
 
       await expect(
-        call.transaction?.(async () => {
+        call.transaction(async () => {
           throw new Error('callback failed');
         }),
       ).rejects.toMatchObject({ code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED' });
@@ -156,14 +156,14 @@ describe('the transaction of an activity handle', () => {
       const connection = await runtime.connection();
       const call = await startActivityOn(connection, testCall);
 
-      const first = call.transaction?.(async (tx) => tx.execute(rawPlan('update t set x = 1')));
-      await expect(call.transaction?.(async () => undefined)).rejects.toMatchObject({
+      const first = call.transaction(async (tx) => tx.execute(rawPlan('update t set x = 1')));
+      await expect(call.transaction(async () => undefined)).rejects.toMatchObject({
         code: 'RUNTIME.TRANSACTION_ALREADY_OPEN',
       });
       const beforeStart = driverCalls(events);
       releaseStart();
       await first;
-      await call.transaction?.(async () => undefined);
+      await call.transaction(async () => undefined);
       await call.end({ outcome: 'succeeded' });
       const beforeRelease = driverCalls(events);
       await connection.release();
@@ -191,8 +191,8 @@ describe('the transaction of an activity handle', () => {
       const connection = await runtime.connection();
       const call = await startActivityOn(connection, testCall);
 
-      await expect(call.transaction?.(async () => undefined)).rejects.toBe(refusal);
-      await call.transaction?.(async () => undefined);
+      await expect(call.transaction(async () => undefined)).rejects.toBe(refusal);
+      await call.transaction(async () => undefined);
       await call.end({ outcome: 'succeeded' });
       const beforeRelease = driverCalls(events);
       await connection.release();
@@ -205,8 +205,8 @@ describe('the transaction of an activity handle', () => {
       const connection = await runtime.connection();
       const call = await startActivityOn(connection, testCall);
 
-      await call.transaction?.(async () => {
-        await expect(call.transaction?.(async () => undefined)).rejects.toMatchObject({
+      await call.transaction(async () => {
+        await expect(call.transaction(async () => undefined)).rejects.toMatchObject({
           code: 'RUNTIME.TRANSACTION_ALREADY_OPEN',
         });
       });
@@ -223,36 +223,188 @@ describe('the transaction of an activity handle', () => {
     const call = await startActivityOn(runtime, testCall);
     await call.end({ outcome: 'succeeded' });
 
-    await expect(call.transaction?.(async () => undefined)).rejects.toMatchObject({
+    await expect(call.transaction(async () => undefined)).rejects.toMatchObject({
       code: 'RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN',
     });
     expect(driverCalls(events)).toEqual([]);
   });
 
-  it('is absent on a handle opened on a connection whose transaction is open', async () => {
-    const { runtime } = createSetup();
-    const connection = await runtime.connection();
-    const transaction = await connection.transaction();
+  describe('opened inside a transaction', () => {
+    const sent = (events: readonly HookEvent[]) =>
+      events
+        .map((event) => (event.name === 'beforeEncode' ? event.sql : event.name))
+        .filter(
+          (name): name is string =>
+            name !== undefined && /^(SAVEPOINT|RELEASE|ROLLBACK|begin|commit|insert)/.test(name),
+        );
+    const startedBeneath = (events: readonly HookEvent[]) => {
+      const calls: unknown[] = events
+        .filter((event) => event.name === 'started:test-call')
+        .map((event) => event.ctx);
+      return events
+        .filter((event) => event.name === 'started:transaction')
+        .map((event) => calls.indexOf(event.ctx?.parent));
+    };
 
-    const call = await startActivityOn(connection, testCall);
+    it('runs the callback in a savepoint beneath the activity, and beneath a nested activity', async () => {
+      const { runtime, events } = createSetup();
+      const connection = await runtime.connection();
+      const transaction = await connection.transaction();
+      const call = await startActivityOn(transaction, testCall);
+      const nested = await call.startActivity(testCall);
 
-    expect('transaction' in call).toBe(false);
-    await call.end({ outcome: 'succeeded' });
-    await transaction.commit();
-    await connection.release();
+      const results = [
+        await call.transaction(async (sp) => {
+          await sp.execute(rawPlan('insert a'));
+          return 'a';
+        }),
+        await nested.transaction(async () => 'b'),
+      ];
+      await nested.end({ outcome: 'succeeded' });
+      await call.end({ outcome: 'succeeded' });
+      await transaction.commit();
+      await connection.release();
+
+      expect({
+        results,
+        sent: sent(events),
+        beneath: startedBeneath(events),
+      }).toEqual({
+        results: ['a', 'b'],
+        sent: [
+          'begin',
+          'SAVEPOINT sp_1',
+          'insert a',
+          'RELEASE SAVEPOINT sp_1',
+          'SAVEPOINT sp_2',
+          'RELEASE SAVEPOINT sp_2',
+          'commit',
+        ],
+        beneath: [-1, 0, 1],
+      });
+    });
+
+    it('rolls back to the savepoint and rethrows when the callback throws, leaving the transaction usable', async () => {
+      const { runtime, events } = createSetup();
+      const failure = new Error('callback failed');
+
+      await withTransaction(runtime, async (tx) => {
+        const call = await startActivityOn(tx, testCall);
+        await expect(
+          call.transaction(async (sp) => {
+            await sp.execute(rawPlan('insert a'));
+            throw failure;
+          }),
+        ).rejects.toBe(failure);
+        await call.end({ outcome: 'failed' });
+        await tx.execute(rawPlan('insert b'));
+      });
+
+      expect(sent(events)).toEqual([
+        'begin',
+        'SAVEPOINT sp_1',
+        'insert a',
+        'ROLLBACK TO SAVEPOINT sp_1',
+        'insert b',
+        'commit',
+      ]);
+    });
+
+    it('rejects options with RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED without starting or sending anything', async () => {
+      const { runtime, events } = createSetup();
+      const connection = await runtime.connection();
+      const transaction = await connection.transaction();
+      const call = await startActivityOn(transaction, testCall);
+      const fn = vi.fn(async () => undefined);
+
+      await expect(call.transaction(fn, { isolationLevel: 'serializable' })).rejects.toMatchObject({
+        code: 'RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED',
+        details: { options: { isolationLevel: 'serializable' } },
+      });
+      await call.end({ outcome: 'failed' });
+      await transaction.commit();
+      await connection.release();
+
+      expect({
+        called: fn.mock.calls.length,
+        starts: startedBeneath(events).length,
+        sent: sent(events),
+      }).toEqual({ called: 0, starts: 1, sent: ['begin', 'commit'] });
+    });
+
+    it('opens a savepoint on the open transaction of the connection it was opened on', async () => {
+      const { runtime, events } = createSetup();
+      const connection = await runtime.connection();
+      const transaction = await connection.transaction();
+      const call = await startActivityOn(connection, testCall);
+
+      await call.transaction(async (sp) => sp.execute(rawPlan('insert a')));
+      await call.end({ outcome: 'succeeded' });
+      await transaction.commit();
+      await connection.release();
+
+      expect(sent(events)).toEqual([
+        'begin',
+        'SAVEPOINT sp_1',
+        'insert a',
+        'RELEASE SAVEPOINT sp_1',
+        'commit',
+      ]);
+    });
+
+    it('opens a savepoint through a withTransaction context, and rejects RUNTIME.TRANSACTION_CLOSED once the context is closed', async () => {
+      const { runtime, events } = createSetup();
+
+      const call = await withTransaction(runtime, async (tx) => {
+        const handle = await startActivityOn(tx, testCall);
+        await handle.transaction(async (sp) => sp.execute(rawPlan('insert a')));
+        return handle;
+      });
+      const sentBeforeClosed = sent(events);
+      await expect(call.transaction(async () => undefined)).rejects.toMatchObject({
+        code: 'RUNTIME.TRANSACTION_CLOSED',
+      });
+
+      expect({ sentBeforeClosed, sent: sent(events) }).toEqual({
+        sentBeforeClosed: [
+          'begin',
+          'SAVEPOINT sp_1',
+          'insert a',
+          'RELEASE SAVEPOINT sp_1',
+          'commit',
+        ],
+        sent: sentBeforeClosed,
+      });
+    });
   });
 
-  it('is absent on a handle opened under a transaction, and on the handles nested in it', async () => {
+  it('reports whether the handle is inside a transaction', async () => {
     const { runtime } = createSetup();
+    const onRuntime = await startActivityOn(runtime, testCall);
     const connection = await runtime.connection();
+    const onConnection = await startActivityOn(connection, testCall);
     const transaction = await connection.transaction();
+    const onTransaction = await startActivityOn(transaction, testCall);
+    const nested = await onTransaction.startActivity(testCall);
+    const onOpenConnection = await startActivityOn(connection, testCall);
+    const inContext = await withTransaction(runtime, async (tx) => {
+      const handle = await startActivityOn(tx, testCall);
+      const inside = handle.inTransaction();
+      await handle.end({ outcome: 'succeeded' });
+      return inside;
+    });
 
-    const call = await startActivityOn(transaction, testCall);
-    const nested = await call.startActivity(testCall);
-
-    expect(['transaction' in call, 'transaction' in nested]).toEqual([false, false]);
-    await nested.end({ outcome: 'succeeded' });
-    await call.end({ outcome: 'succeeded' });
+    expect([
+      onRuntime.inTransaction(),
+      onConnection.inTransaction(),
+      onTransaction.inTransaction(),
+      nested.inTransaction(),
+      onOpenConnection.inTransaction(),
+      inContext,
+    ]).toEqual([false, false, true, true, true, true]);
+    for (const handle of [nested, onTransaction, onOpenConnection, onConnection, onRuntime]) {
+      await handle.end({ outcome: 'succeeded' });
+    }
     await transaction.commit();
     await connection.release();
   });
