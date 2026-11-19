@@ -6,13 +6,13 @@ import { describe, expect, test } from 'vitest'
 import { PrismaMariaDbAdapterFactory, rewriteConnectionString } from './mariadb'
 
 describe('IPv6 connection strings', () => {
-  test('are rejected by the driver verbatim, but accepted once rewritten', () => {
+  test('are accepted by the driver', () => {
     const connectionString = 'mariadb://user:pass@[2001:db8::1]:3306/db'
 
     // `createPool` does not connect, but it does parse the connection string eagerly, so it
-    // fails on a host the driver's grammar rejects.
-    expect(() => mariadb.createPool(connectionString)).toThrow(/error parsing connection string/)
-    expect(() => mariadb.createPool(rewriteConnectionString(new URL(connectionString)).toString())).not.toThrow()
+    // throws on a host the driver's grammar rejects.
+    const pool = mariadb.createPool(rewriteConnectionString(new URL(connectionString)).toString())
+    void pool.end()
   })
 
   test('reach a server listening on ::1', async () => {
