@@ -11,7 +11,7 @@ This skill covers the **runtime entry point** — `db.ts` — and how to compose
 - User wants to add middleware (lints, budgets, cache, custom).
 - User wants per-environment config (dev vs prod, multi-region).
 - User wants to switch between the Postgres, SQLite, and Mongo façades.
-- User wants to wrap operations in `db.transaction(...)` (Postgres, SQLite and Supabase role-bound clients).
+- User wants to wrap operations in `db.transaction(...)` (Postgres, SQLite, MySQL, MariaDB and Supabase role-bound clients).
 - User is running a one-off script (`tsx my-script.ts`, Node CLI, CI task) and the process won't exit after queries finish, or they need script teardown (`db.close()`, `await using`).
 - User is deploying to a per-request runtime (Cloudflare Workers + Hyperdrive, AWS Lambda, Vercel Edge, Deno Deploy, Bun edge) and needs `postgresServerless()` with `postgres.connect({ url })` per request.
 - User mentions: *db.ts, postgres(), mongo(), middleware, lints, budgets, cache, query log, slow query, DATABASE_URL, .env, connection pool, poolOptions, dev vs prod, transactions, read replicas, multi-database, script won't exit, hangs, db.close, db.end, close connection, pool.end, await using, serverless, edge, Cloudflare Workers, Hyperdrive, postgresServerless, connect per request*.
@@ -357,7 +357,7 @@ export const db = postgres({
 
 ## Workflow — Transactions
 
-The concept applies to **Postgres, SQLite and Supabase**. `db.transaction(fn)` opens a transaction, passes the callback a `tx`, commits when the callback returns and rolls back when it throws. `tx` offers the client's query members with the same types: `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query` (rows), `execute` (affected count) and `toSql`. Postgres and serverless-connection transactions also have `enums` and `nativeEnums`; SQLite's has `enums`. `tx` has no `close`, `[Symbol.asyncDispose]` or `runtime()`. For nested transactions on Postgres, see *Workflow — Transactions* in `references/queries-postgres.md`. Inside the callback, send every query through `tx`, not `db`, so it runs inside the transaction. A Supabase role-bound client (`asUser`, `asAnon`, `asServiceRole`) has `transaction(fn)` too, and its `tx` runs every statement under the bound role. The Mongo façade does not expose `db.transaction(...)`.
+The concept applies to **Postgres, SQLite, MySQL, MariaDB and Supabase**. `db.transaction(fn)` opens a transaction, passes the callback a `tx`, commits when the callback returns and rolls back when it throws. `tx` offers the client's query members with the same types: `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query` (rows), `execute` (affected count) and `toSql`. Postgres and serverless-connection transactions also have `enums` and `nativeEnums`; SQLite's, MySQL's and MariaDB's have `enums`. `tx` has no `close`, `[Symbol.asyncDispose]` or `runtime()`. `tx.transaction(async (inner) => ...)` runs a nested transaction in a savepoint on every one of them, and `inner` has the same members as `tx`; see *Workflow — Transactions* in `references/queries-postgres.md`. Inside the callback, send every query through `tx`, not `db`, so it runs inside the transaction. A Supabase role-bound client (`asUser`, `asAnon`, `asServiceRole`) has `transaction(fn)` too, and its `tx` runs every statement under the bound role. The Mongo façade does not expose `db.transaction(...)`.
 
 ```typescript
 await db.transaction(async (tx) => {
@@ -458,6 +458,6 @@ This skill is intentionally body-only; `prisma orm init --help`, the target `def
 - [ ] Per-env divergence (if any) gated by `NODE_ENV` or similar.
 - [ ] Did NOT hardcode credentials in any committed file.
 - [ ] Did NOT confabulate a `middleware` subpath on the Postgres package, a telemetry middleware package, an audit extension package, or a type argument or `contractJson` option on `postgres(...)`.
-- [ ] Did NOT claim `db.transaction(...)` exists on the Mongo façade — only Postgres, SQLite and Supabase role-bound clients expose it.
+- [ ] Did NOT claim `db.transaction(...)` exists on the Mongo façade — only Postgres, SQLite, MySQL, MariaDB and Supabase role-bound clients expose it.
 - [ ] Did NOT confabulate read-replica / multi-DB / extra pool config — pointed at *What Prisma 8 doesn't do yet* and routed to `references/feedback.md`.
 - [ ] For build-system / dev-server prompts (Vite plugin, Next.js plugin, …) routed to `references/build.md`.
