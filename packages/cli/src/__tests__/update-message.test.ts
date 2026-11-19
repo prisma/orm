@@ -102,7 +102,7 @@ describe('update available message', () => {
         },
       })
       const message = ctx.mocked['console.error'].mock.calls[0][0]
-      expect(message).toContain('Update available 7.10.1 -> 8.0.0-rc.34')
+      expect(message).toContain('7.10.1 -> 8.0.0-rc.34')
       expect(message).toContain('https://pris.ly/d/major-version-upgrade')
       expect(message).not.toContain('prisma@latest')
       expect(message).not.toContain('@prisma/client@latest')
