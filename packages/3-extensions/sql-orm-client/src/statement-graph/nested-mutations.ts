@@ -538,7 +538,7 @@ function addLinkedRowWrite(
         updateRows(
           t,
           model,
-          { ...nulls, ...updateDefaultsOf(context, model, nulls) },
+          { ...nulls, ...updateDefaultsOf(context, model, { ...t.parentValues, ...nulls }) },
           {
             where: undefined,
             filters: [
