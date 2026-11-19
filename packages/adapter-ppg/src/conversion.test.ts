@@ -1,7 +1,7 @@
-import type { ArgType } from '@prisma/driver-adapter-utils'
+import { type ArgType, ColumnTypeEnum } from '@prisma/driver-adapter-utils'
 import { describe, expect, test } from 'vitest'
 
-import { ArrayColumnType, builtinParsers, convertArgs, ScalarColumnType } from './conversion'
+import { ArrayColumnType, builtinParsers, convertArgs, fieldToColumnType, ScalarColumnType } from './conversion'
 
 function getParser(oid: number) {
   const entry = builtinParsers.find((p) => p.oid === oid)
@@ -168,6 +168,19 @@ describe('conversion', () => {
         .filter(([, oid]) => !builtinParsers.some((p) => p.oid === oid))
         .map(([name]) => name)
       expect(missing).toEqual([])
+    })
+
+    test('every array type maps to a column type', () => {
+      for (const [name, oid] of Object.entries(ArrayColumnType)) {
+        expect(() => fieldToColumnType(oid), name).not.toThrow()
+      }
+    })
+
+    test('parses timestamptz arrays', () => {
+      expect(fieldToColumnType(ArrayColumnType.TIMESTAMPTZ_ARRAY)).toBe(ColumnTypeEnum.DateTimeArray)
+      expect(getParser(ArrayColumnType.TIMESTAMPTZ_ARRAY)('{"2024-01-15 08:30:00+00"}')).toEqual([
+        '2024-01-15T08:30:00+00:00',
+      ])
     })
 
     test('parses text-family arrays, keeping quoted commas and spaces and NULL', () => {

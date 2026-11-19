@@ -277,6 +277,7 @@ export function fieldToColumnType(fieldTypeId: number): ColumnType {
     case ArrayColumnType.TIME_ARRAY:
       return ColumnTypeEnum.TimeArray
     case ArrayColumnType.TIMESTAMP_ARRAY:
+    case ArrayColumnType.TIMESTAMPTZ_ARRAY:
       return ColumnTypeEnum.DateTimeArray
     case ArrayColumnType.JSON_ARRAY:
     case ArrayColumnType.JSONB_ARRAY:
