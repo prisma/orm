@@ -61,8 +61,8 @@ env:
   FAILURE_TITLE_TEMPLATE: >-
     ${{
       github.event.inputs.targetVersion &&
-      format('prisma/prisma Release {0} from {1} on latest tag failed :x:', github.event.inputs.targetVersion, github.ref_name) ||
-      'prisma/prisma Release failed :x:'
+      format('prisma/orm Release {0} from {1} on latest tag failed :x:', github.event.inputs.targetVersion, github.ref_name) ||
+      'prisma/orm Release failed :x:'
     }}
 
 jobs:
@@ -165,7 +165,7 @@ jobs:
       - name: Slack Notification on Success
         uses: rtCamp/action-slack-notify@c33737706dea87cd7784c687dadc9adf1be59990 # v2.3.2
         env:
-          SLACK_TITLE: 'prisma/prisma Release ${{ needs.release.outputs.prismaVersion }} succeeded :white_check_mark:'
+          SLACK_TITLE: 'prisma/orm Release ${{ needs.release.outputs.prismaVersion }} succeeded :white_check_mark:'
           SLACK_COLOR: '#55ff55'
           SLACK_WEBHOOK: ${{ secrets.SLACK_RELEASE_FEED_WEBHOOK }}
           SLACK_CHANNEL: feed-prisma-publish

@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     # Only run on the main repo (not on forks): neither the CodSpeed token nor write
     # access to the `gh-pages` benchmark history is available to a fork.
-    if: github.repository == 'prisma/prisma'
+    if: github.repository == 'prisma/orm'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
