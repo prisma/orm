@@ -51,13 +51,18 @@ export function withSavepoint<TCtx, R>(
 ): Promise<R>
 ```
 
-1. **It takes the context `withTransaction` or an enclosing `withSavepoint` passed to its callback.** That context carries an internal symbol-keyed member through which `withSavepoint` opens a savepoint on the context's transaction (`RuntimeTransaction.transaction()`, slice 3). The member is not on the `TransactionContext` type and not exported from the package, as the transaction's settlement member is not. A context the runtime did not make has no such member, and `withSavepoint` fails an `invariant` that says so, as `activitySourceOf` does; this is a mistake by a facade author, so it gets no `RUNTIME.*` code. The member's name and exact shape are the implementer's choice.
+1. **It takes the context `withTransaction` or an enclosing `withSavepoint` passed to its callback.** That context carries an internal symbol-keyed member through which `withSavepoint` opens a savepoint on the context's transaction (`RuntimeTransaction.transaction()`, slice 3). The member is not on the `TransactionContext` type and not exported from the package, as the transaction's settlement member is not. A context the runtime did not make has no such member, and `withSavepoint` fails an `invariant` that says so, as `activitySourceOf` does; this is a mistake by a facade author, so it gets no `RUNTIME.*` code. The member holds the context's `RuntimeTransaction` and nothing else: whether the context is closed is read from `txCtx.invalidated`. Nothing in this slice is named "level" (slice 3 removed a `TransactionLevel` class).
 2. **No options** (project spec decision 2). `withSavepoint` has no options parameter, and the facade's `tx.transaction` type has exactly one parameter.
 3. **One guarded context for every level.** The code in `runTransactionOn` that builds the guarded context (`guardedStream`, `guardedQueryable`, `guardedSource`, `guardedHandle`, the context object) becomes a function that builds the context for any `RuntimeTransaction`, given a way to ask whether the level is closed. `runTransactionOn` and `withSavepoint` both call it. Keep the functions nested as they are, so the diff shows the new wrapper and not ninety moved lines.
    - A nested context is closed once its callback has settled, or once any enclosing context is closed (the enclosing callback settled, or the outer transaction's signal aborted). Closed means what it means for `tx` today: `invalidated` is `true`, and `query`, `execute`, the prepared-statement members, `startActivity` and `transaction` reject with `RUNTIME.TRANSACTION_CLOSED` before anything reaches the driver.
    - While a nested callback runs, work on the enclosing context rejects with `RUNTIME.TRANSACTION_SUSPENDED`. The runtime already does this (slice 3, rule 5); `withSavepoint` adds no check of its own.
    - A handle opened on a nested context has no `transaction` member, as a handle on `tx` has none (slice 6 changes both).
-4. **One settle sequence for every level.** The part of `runTransactionOn` from the call to `fn` to the end is shared by the outer transaction and the savepoint. What only the outer transaction has stays with it: the connection's clean or unclean state. For a savepoint the sequence gives project spec decision 9:
+4. **One settle sequence for every level.** The part of `runTransactionOn` from the call to `fn` to the end is shared by the outer transaction and the savepoint. The shared function takes the transaction, `fn` and how to tell whether the enclosing context is closed. It takes no callbacks: slice 3 removed callbacks that do nothing for one of the two kinds. Each caller does its own part around the call:
+
+   - `runTransactionOn` decides the connection's clean or unclean state after the call, from the outer transaction's settlement: clean when the database committed or rolled back, unclean otherwise. The reason it passes to `destroy()` stays what it is today.
+   - `withSavepoint` catches the rejection and, when the signal has aborted, calls the savepoint's `rollback()` and ignores its rejection.
+
+   For a savepoint the sequence gives project spec decision 9:
 
    | What happens | What `tx.transaction(cb)` does |
    |---|---|
@@ -163,6 +168,11 @@ About 560 changed lines, measured against the code: about 170 production (`sql-r
   - `pnpm --filter @internal/sql-runtime test`, `pnpm --filter @internal/postgres test`, `pnpm --filter @internal/extension-supabase test`.
   - `pnpm --filter <pkg> lint` for the three packages, `pnpm lint:deps` and `pnpm check:error-reference`.
   - `pnpm test:integration`: `runTransactionOn` is restructured, and every facade and the ORM run through it.
+
+## Amendments
+
+- **D1 review R1: an invariant, not a new error code.** The first implementation rejected a context the runtime did not make with a new `RUNTIME.UNKNOWN_TRANSACTION_CONTEXT`. Item 1 now names the invariant, and `pnpm check:error-reference` joined the gate.
+- **After the PR opened: no settle callbacks, and no "level".** The first implementation passed the shared settle function two callbacks (`onAborted`, `markUnclean`), one of which did nothing for a savepoint, and named the context's internal member `transactionLevel`, with a second copy of the context's closed state. Both bring back things slice 3's review removed. Items 1 and 4 now say what replaces them. Requested by the operator.
 
 ## References
 
