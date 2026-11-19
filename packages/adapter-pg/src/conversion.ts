@@ -322,9 +322,16 @@ function normalize_time(time: string): string {
 }
 
 function normalize_timez(time: string): string {
-  // Although it might be controversial, UTC is assumed in consistency with the behavior of rust postgres driver
-  // in quaint. See quaint/src/connector/postgres/conversion.rs
-  return time.replace(/[+-]\d{2}(:\d{2})?$/, '')
+  // Postgres sends TIMETZ as HH:MM:SS[.ffffff]±HH[:MM[:SS]]. Prisma surfaces it as a UTC time of day,
+  // so the offset has to be applied, not just dropped.
+  const match = time.match(/^(\d{2}):(\d{2}):(\d{2})(\.\d+)?([+-])(\d{2})(?::(\d{2}))?(?::(\d{2}))?$/)
+  if (!match) return time
+  const [, h, m, s, fraction = '', sign, oh, om = '0', os = '0'] = match
+  const offset = (sign === '+' ? 1 : -1) * (Number(oh) * 3600 + Number(om) * 60 + Number(os))
+  if (offset === 0) return `${h}:${m}:${s}${fraction}`
+  const seconds = (((Number(h) * 3600 + Number(m) * 60 + Number(s) - offset) % 86400) + 86400) % 86400
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}${fraction}`
 }
 
 /******************/
@@ -422,8 +429,10 @@ export function mapArg<A>(arg: A | Date, argType: ArgType): null | unknown[] | s
   if (arg instanceof Date) {
     switch (argType.dbType) {
       case 'TIME':
-      case 'TIMETZ':
         return formatTime(arg)
+      case 'TIMETZ':
+        // Without an explicit offset Postgres would interpret the UTC time in the session time zone.
+        return formatTime(arg) + '+00'
       case 'DATE':
         return formatDate(arg)
       default:
