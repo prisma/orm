@@ -53,7 +53,7 @@ describe('updateFirstGraph with relation operations', () => {
       );
     });
 
-    it('creates the related row and writes its key with an Update even when nothing else is set', () => {
+    it('creates the related row, then updates the row it found by its key alone, without the filter the created row may no longer match', () => {
       expect(
         printUpdate({
           invitedBy: (inviter: Mutator) =>
@@ -63,7 +63,7 @@ describe('updateFirstGraph with relation operations', () => {
         [
           'n1 Find users where id = 1',
           'n2 Insert users <- Requires n1',
-          'n3 Update users set nothing where id = 1 <- FilterData n1 (id->id), PayloadData n2 (id->invited_by_id)',
+          'n3 Update users set nothing <- FilterData n1 (id->id), PayloadData n2 (id->invited_by_id)',
           'result: n3',
         ].join('\n'),
       );
