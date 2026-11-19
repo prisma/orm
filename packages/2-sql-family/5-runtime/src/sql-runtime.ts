@@ -10,7 +10,6 @@ import {
   checkMiddlewareCompatibility,
   createContextBeneath,
   executeStatement,
-  isRuntimeError,
   type QueryPlan,
   RuntimeCore,
   type RuntimeExecuteOptions,
@@ -1827,17 +1826,10 @@ async function runTransactionOn<R>(
     const settlement = settlementOf(transaction);
     if (settlement?.committed !== true && settlement?.rolledBack !== true) {
       state.clean = false;
-      state.reason = settleFailureOf(error);
+      state.reason = error;
     }
     throw error;
   }
-}
-
-function settleFailureOf(error: unknown): unknown {
-  if (!isRuntimeError(error)) return error;
-  if (error.code === 'RUNTIME.TRANSACTION_ROLLBACK_FAILED') return error.details?.['rollbackError'];
-  if (error.code === 'RUNTIME.TRANSACTION_COMMIT_FAILED') return error.details?.['commitError'];
-  return error;
 }
 
 const contextTransaction = Symbol('contextTransaction');
