@@ -25,7 +25,7 @@ Project-scope calibration lives in [`drive/calibration/`](../calibration/):
 
 A stacked PR is justified only when its base PR is independently valuable to merge as-is. When a mid-flight scope addition rewrites an unmerged slice's internals, fold the two into one PR — the transient scaffolding then nets out of the diff entirely instead of costing two reviews. (Learned on lsp-interpreter-diagnostics: a stacked PR folded into its base after the operator flagged the review-time waste.)
 
-Order slices by what they wait on. A slice that needs another project's unmerged change goes last in the plan, and when part of a slice waits on unmerged work, ship the rest and move that part to a later slice. Before building a slice, list the open pull requests and recent merges that touch the same code, so a redesign on `main` is seen before the slice is built on the old code.
+Order slices by what they wait on. A slice that needs another project's unmerged change, and every slice that depends on it, goes after the slices that wait on nothing, and when part of a slice waits on unmerged work, ship the rest and move that part to a later slice. Before building a slice, list the open pull requests and recent merges that touch the same code, so a redesign on `main` is seen before the slice is built on the old code.
 
 ## Status-update cadence
 
