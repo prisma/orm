@@ -14,6 +14,13 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '(?<![\w$])TransactionContext(?![\w$])'
+  - id: transaction-settlement-state-has-closed-and-abandon
+    summary: |
+      `TransactionSettlementState`, from `@prisma/orm-family-sql/runtime/internal/prepared-query`, has two required members: `closed`, whether the transaction is closed, and `abandon()`, which invalidates the transaction and ends its activity. An object of this type built by hand must have both; code that forwards the member of a transaction it wraps needs no change. The detection matches TypeScript sources that name the type.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?<![\w$])TransactionSettlementState(?![\w$])'
 ---
 
 # `PostgresTransactionContext` has `transaction`
