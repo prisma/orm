@@ -61,7 +61,7 @@ export function withSavepoint<TCtx, R>(
    - A handle opened on a nested context has no `transaction` member, as a handle on `tx` has none (slice 6 changes both).
 4. **One settle sequence for every level.** The part of `runTransactionOn` from the call to `fn` to the end is shared by the outer transaction and the savepoint. The shared function takes the transaction and `fn`, nothing else. It takes no callbacks: slice 3 removed callbacks that do nothing for one of the two kinds. Each caller does its own part around the call:
 
-   - `runTransactionOn` decides the connection's clean or unclean state after the call, from the outer transaction's settlement: clean when the database committed or rolled back, unclean otherwise. The reason it passes to `destroy()` stays what it is today.
+   - `runTransactionOn` decides the connection's clean or unclean state after the call, from the outer transaction's settlement: clean when the database committed or rolled back, unclean otherwise. The reason it passes to `destroy()` is the error the call rejected with. For a failed `COMMIT` or `ROLLBACK` that is the `RUNTIME.TRANSACTION_COMMIT_FAILED` or `RUNTIME.TRANSACTION_ROLLBACK_FAILED` error, which holds the driver's error in its details; before this slice it was the driver's error itself.
    - `withSavepoint` catches the rejection and, when the signal has aborted, calls the savepoint's `rollback()` and ignores its rejection.
 
    For a savepoint the sequence gives project spec decision 9:
@@ -178,6 +178,7 @@ About 560 changed lines, measured against the code: about 170 production (`sql-r
 - **After the PR opened: no settle callbacks, and no "level".** The first implementation passed the shared settle function two callbacks (`onAborted`, `markUnclean`), one of which did nothing for a savepoint, and named the context's internal member `transactionLevel`, with a second copy of the context's closed state. Both bring back things slice 3's review removed. Items 1 and 4 now say what replaces them. Requested by the operator.
 
 - **After the PR opened: the stack, not the contexts, closes a transaction whose enclosing callback returned early.** The second implementation gave the shared function a third parameter, `isEnclosingClosed`, so that a nested context could read the enclosing context's flag; the outer transaction passed `() => false`. The only case it served is a nested call that was not awaited. The stack already carries the closed state of every entry, so the settle sequence now invalidates the stack when it could not settle an entry, and the parameter is gone. Requested by the operator.
+- **After the PR opened: the `destroy()` reason is the error the call rejected with.** Item 4 said the reason stays what it was, and the implementation had a helper, `settleFailureOf`, that read the driver's error back out of the `RUNTIME.*` error to keep it so. The reason is advisory, the driver's error is still in the details of the error passed, and the helper is removed. Decided by the operator. A nested context whose callback is still running after the stack was invalidated keeps `invalidated === false` while its work rejects `RUNTIME.TRANSACTION_CLOSED`; the operator chose to leave that.
 
 ## References
 
