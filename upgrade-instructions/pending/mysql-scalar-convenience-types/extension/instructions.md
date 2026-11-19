@@ -32,7 +32,7 @@ The generated `contract.d.ts` gains entries under `AggregateTypes` for the new c
 
 ## `mysql-codec-descriptor-wrap-parameter`
 
-In each matched file, find any object or class that implements `AnyMysqlCodecDescriptor` itself, without extending `MysqlCodecDescriptor` (from `@prisma/orm-target-mysql/target/codec-descriptor`) or being made with `mysqlCodec()`. If a matched file gives the type another name, such as `type CustomDescriptor = AnyMysqlCodecDescriptor`, search the project for that name too: a descriptor typed through it can sit in a file this step does not match. Give each such descriptor a `wrapParameter` method that returns the parameter it is given:
+In each matched file, find any object or class that implements `AnyMysqlCodecDescriptor` itself, without extending `MysqlCodecDescriptor` (from `@prisma/orm-target-mysql/target/codec-descriptor`) or being made with `mysqlCodec()`. If a matched file gives the type another name, such as `type CustomDescriptor = AnyMysqlCodecDescriptor`, search the project for that name too: a descriptor typed through it can sit in a file this step does not match. The same holds for a descriptor written as a plain object with no type: check every descriptor your extension gives a MySQL or MariaDB client in its codec list, since the codec registry refuses one without the method with `RUNTIME.CODEC_DESCRIPTOR_INVALID`. Give each such descriptor a `wrapParameter` method that returns the parameter it is given:
 
 ```ts
 import type { CodecRef } from '@prisma/orm-framework/components/codec';
