@@ -130,8 +130,9 @@ gh issue view <n> --repo prisma/orm --json title,state,author,createdAt,body
 3. **The fix reaches the layer that has the bug.** Plumbing an option through one layer only counts if the layer beneath already honours it — verify that, do not assume it.
 4. **A test fails without the change.** See the constraint below before running anything.
 5. **The fix covers every place the bug occurs.** Search the PR's base branch (`baseRefName` from step 4), not `main` by default, and the code the PR adds, for the same mistake in the other database targets, in the other family (SQL and MongoDB), and along the other code paths the same value passes through. Cite `file:line` for each occurrence the PR leaves unfixed, or say what you searched for and that you found none.
+6. **The fix keeps values exact.** Flag any change that turns a value into a lossy JavaScript form: `Number()` on a `Decimal`, `bigint` or 64-bit integer, or a `valueOf`/`Symbol.toPrimitive` override that routes `<`, `>` or arithmetic through a JavaScript number. That is a wrong approach whatever it fixes; the verdict is to close, pointing at the type's own methods (`a.lt(b)`). See [PR triage](../../docs/oss/pr-triage.md#step-3--is-the-bug-real-and-does-the-change-fix-it).
 
-Checks 1 to 3 and 5 are reading. Check 4 is execution, and that is a different risk.
+Checks 1 to 3, 5 and 6 are reading. Check 4 is execution, and that is a different risk.
 
 **Do not run a fork PR's tests on your own machine.** A test file is code the contributor wrote, and running the suite also runs install lifecycle scripts, with your credentials, your network and your filesystem in reach. Step 0 exists because of that; running the suite here would undo it. The diff sweep does not license execution — it cannot prove absence.
 
