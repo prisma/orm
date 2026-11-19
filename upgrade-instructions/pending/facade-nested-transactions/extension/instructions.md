@@ -7,9 +7,9 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '(?<![\w$])(?:Mysql|Mariadb|Sqlite)TransactionContext(?![\w$])'
-  - id: supabase-transaction-context-is-postgres-transaction-context
+  - id: supabase-transaction-context-has-transaction
     summary: |
-      `SupabaseTransactionContext`, from `@prisma/orm-extension-supabase/runtime`, is `PostgresTransactionContext` again: its `transaction(fn)` passes `fn` a `SupabaseTransactionContext`, not the runtime's `TransactionContext`. Code that typed the nested callback's parameter as `TransactionContext` can use the facade's members on it. The detection matches TypeScript sources that name the type.
+      `SupabaseTransactionContext`, from `@prisma/orm-extension-supabase/runtime`, is `PostgresTransactionContext`, so it has a required `transaction(fn)` member: `tx.transaction(fn)` runs `fn` in a savepoint and passes it a `SupabaseTransactionContext`. A context an extension builds for its own transactions and types as `SupabaseTransactionContext` must have the member. The detection matches TypeScript sources that name the type.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -35,6 +35,6 @@ return withTransaction(runtime, (txCtx) => fn(buildTransactionContext(txCtx)), o
 
 Code that only receives `tx` from `db.transaction(...)` needs no change: the callback of `tx.transaction(...)` now receives the same type as `tx`, which has every member the runtime's `TransactionContext` has.
 
-# `SupabaseTransactionContext` is `PostgresTransactionContext`
+# `SupabaseTransactionContext` has `transaction`
 
-Where code compares `SupabaseTransactionContext` with `Omit<PostgresTransactionContext, 'transaction'>`, or types the parameter of the callback passed to `tx.transaction(...)` as `TransactionContext`, use `PostgresTransactionContext` or `SupabaseTransactionContext` instead. A context an extension builds and types as `SupabaseTransactionContext` must have a `transaction` member built as in the example above.
+`SupabaseTransactionContext` is `PostgresTransactionContext`. Where an extension builds a context with `withTransactionMembers(txCtx, members)` and types it as `SupabaseTransactionContext`, add a `transaction` member built as in the example above, with `SupabaseTransactionContext` in place of `MysqlTransactionContext`.
