@@ -740,16 +740,30 @@ function sourcesOf(
   };
 }
 
-function columnsFilledBeforeWrite(
-  contract: Contract<SqlStorage>,
-  model: Model,
-  relationMutations: readonly ParsedRelationMutation[],
-): string[] {
-  return partitionByOwnership(relationMutations).parentOwned.flatMap(({ relation, mutations }) =>
-    mutations.some(({ kind }) => kind === 'create' || kind === 'connect')
-      ? localColumnsOf(contract, model, relation)
-      : [],
-  );
+function rejectParentHeldInConflictRow(
+  name: string,
+  onConflict: ResolvedConflict['onConflict'],
+  { relationMutations }: ParsedMutationInput,
+): void {
+  for (const { name: nested, mutations } of partitionByOwnership(relationMutations).parentOwned) {
+    const mutation = mutations.find(({ kind }) => kind === 'create' || kind === 'connect');
+    if (mutation === undefined) {
+      continue;
+    }
+    throw ormError(
+      'ORM.OPERATION_UNSUPPORTED',
+      `create() nested mutation for relation "${name}" cannot take a callback on relation "${nested}" in a row with onConflict "${onConflict}", because the foreign key of "${nested}" is on the row and the callback would write before the database decides whether the row conflicts`,
+      {
+        meta: {
+          kind: 'create',
+          relation: name,
+          reason: 'parent-held-relation-in-conflict-row',
+          nestedRelation: nested,
+          nestedKind: mutation.kind,
+        },
+      },
+    );
+  }
 }
 
 function nestedCall(name: string, modelName: string): ConflictCall {
@@ -831,16 +845,16 @@ function conflictOf(
   const { context } = t;
   const { contract } = context;
   const call = nestedCall(name, model.modelName);
+  for (const row of rows) {
+    rejectParentHeldInConflictRow(name, resolved.onConflict, row);
+  }
   const [connectColumns = []] = requireRowsThatCanConflict(
     contract,
     call,
     model.tables.root.storage,
     resolved,
     values,
-    (at) => [
-      ...parentLinkColumns,
-      ...columnsFilledBeforeWrite(contract, model, rows[at]?.relationMutations ?? []),
-    ],
+    () => parentLinkColumns,
   );
   if (resolved.onConflict === 'skip') {
     return { conflict: { columns: resolved.columns }, relation: name };

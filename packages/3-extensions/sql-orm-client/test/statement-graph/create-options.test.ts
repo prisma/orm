@@ -440,7 +440,7 @@ describe('create options on a relation', () => {
   });
 });
 
-describe('onConflict skip with a conflict key that a to-one relation write inside the row fills', () => {
+describe('onConflict in a row with a callback on a relation whose foreign key is on the row', () => {
   const Category = model('Category', {
     fields: { id: field.column(int4Column).id(), name: field.column(textColumn) },
   }).sql({ table: 'categories' });
@@ -498,33 +498,54 @@ describe('onConflict skip with a conflict key that a to-one relation write insid
     );
   }
 
-  it('accepts a row whose conflictOn foreign key comes from a nested connect or create', () => {
+  function parentHeldInRow(onConflict: string, kind: string) {
+    return {
+      code: 'ORM.OPERATION_UNSUPPORTED',
+      message: `create() nested mutation for relation "articles" cannot take a callback on relation "category" in a row with onConflict "${onConflict}", because the foreign key of "category" is on the row and the callback would write before the database decides whether the row conflicts`,
+      meta: {
+        kind: 'create',
+        relation: 'articles',
+        reason: 'parent-held-relation-in-conflict-row',
+        nestedRelation: 'category',
+        nestedKind: kind,
+      },
+    };
+  }
+
+  it('rejects a callback on a relation whose foreign key is on the row, for onConflict skip and connect', () => {
+    const connected = {
+      id: 10,
+      title: 'Connected',
+      category: (c: Mutator) => c.connect({ id: 5 }),
+    };
+    const created = {
+      id: 11,
+      title: 'Created',
+      category: (c: Mutator) => c.create({ id: 6, name: 'New' }),
+    };
+
+    expect(() =>
+      printCreate((articles) => articles.create([connected], { onConflict: 'skip' })),
+    ).toThrow(expect.objectContaining(parentHeldInRow('skip', 'connect')));
+    expect(() =>
+      printCreate((articles) => articles.create([created], { onConflict: 'connect' })),
+    ).toThrow(expect.objectContaining(parentHeldInRow('connect', 'create')));
+  });
+
+  it('accepts a callback on a relation whose foreign key is on the row when the create has no onConflict', () => {
     expect(
       printCreate((articles) =>
-        articles.create(
-          [
-            {
-              id: 10,
-              title: 'Connected',
-              category: (category: Mutator) => category.connect({ id: 5 }),
-            },
-            {
-              id: 11,
-              title: 'Created',
-              category: (category: Mutator) => category.create({ id: 6, name: 'New' }),
-            },
-          ],
-          { onConflict: 'skip', conflictOn: ['categoryId'] },
-        ),
+        articles.create({
+          id: 11,
+          title: 'Created',
+          category: (category: Mutator) => category.create({ id: 6, name: 'New' }),
+        }),
       ),
     ).toBe(
       [
         'n1 Insert authors',
-        'n2 Find categories where id = 5 limit 1',
-        'n3 Assert <- Rows n2',
-        'n4 Insert articles on conflict (category_id) do nothing <- PayloadData n1 (id->author_id), PayloadData n2 (id->category_id)',
-        'n5 Insert categories',
-        'n6 Insert articles on conflict (category_id) do nothing <- PayloadData n1 (id->author_id), PayloadData n5 (id->category_id)',
+        'n2 Insert categories',
+        'n3 Insert articles <- PayloadData n1 (id->author_id), PayloadData n2 (id->category_id)',
         'result: n1',
       ].join('\n'),
     );
