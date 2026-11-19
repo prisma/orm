@@ -75,6 +75,8 @@ interface RenderContext {
   readonly insertInto?: { readonly alias: string; readonly name: string };
   /** While an update or delete is written after its target: the target's qualified name, which its `SET` and `WHERE` may not read on MySQL. */
   readonly writtenTable?: string;
+  /** While the expression a codec wraps a parameter in is written: the parameter, which is written as its placeholder alone there. */
+  readonly wrappedParameter?: AnyParamRef;
 }
 
 /** The name an upsert gives the row it proposes, which its update reads as `new`.`column`; the ORM writes that row as `excluded`, as Postgres names it. */
@@ -150,6 +152,25 @@ function needsGrouping(expr: AnyExpression): boolean {
     case 'raw-expr':
       return false;
   }
+}
+
+/** Refuses the expression a codec wrapped a parameter in unless it holds that parameter exactly once: a parameter dropped or repeated would leave the statement's placeholders out of step with its values. */
+function assertWrapsParameterOnce(
+  wrapped: AnyExpression,
+  parameter: AnyParamRef,
+  codec: CodecRef,
+): void {
+  const parameters = wrapped.collectParamRefs();
+  if (parameters.length === 1 && parameters[0] === parameter) return;
+  throw structuredError(
+    'RUNTIME.CODEC_DESCRIPTOR_INVALID',
+    `Codec "${codec.codecId}" wraps a value of this query in an expression that does not hold that value exactly once.`,
+    {
+      why: 'A codec descriptor wraps a parameter in an expression, such as a cast, that holds the parameter exactly once, so each value of the statement keeps its placeholder.',
+      fix: `Return the parameter itself, or one expression around it, from the wrappedParameter method of codec "${codec.codecId}".`,
+      meta: { codecId: codec.codecId, parameters: parameters.length },
+    },
+  );
 }
 
 /**
@@ -684,11 +705,17 @@ export class MysqlSqlRenderer {
     return `?${number}`;
   }
 
-  /** A param as its numbered placeholder, written as its codec writes a parameter, refusing one whose codec the MySQL registry lacks. */
+  /** A param as its numbered placeholder, in the expression its codec wraps it in, refusing one whose codec the MySQL registry lacks. */
   private renderParam(ref: AnyParamRef, ctx: RenderContext): string {
     const placeholder = this.placeholder(ref, ctx);
-    if (ref.codec === undefined) return placeholder;
-    return this.descriptorOf(ref.codec, ctx, 'A value in this query').writeParameter(placeholder);
+    if (ref.codec === undefined || ctx.wrappedParameter === ref) return placeholder;
+    const wrapped = this.descriptorOf(ref.codec, ctx, 'A value in this query').wrapParameter(
+      ref,
+      ref.codec,
+    );
+    if (wrapped === ref) return placeholder;
+    assertWrapsParameterOnce(wrapped, ref, ref.codec);
+    return this.renderExpr(wrapped, { ...ctx, wrappedParameter: ref });
   }
 
   private projectThroughCodec(

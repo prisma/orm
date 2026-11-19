@@ -28,10 +28,10 @@ describe.each([APP, EXTENSION])('the MySQL contract re-emit detection in %s', (g
   });
 });
 
-describe('the MySQL codec descriptor writeParameter detection', () => {
-  const descriptor = matcher(EXTENSION, 'mysql-codec-descriptor-write-parameter');
+describe('the MySQL codec descriptor wrapParameter detection', () => {
+  const descriptor = matcher(EXTENSION, 'mysql-codec-descriptor-wrap-parameter');
 
-  it('matches a file that names AnyMysqlCodecDescriptor and has no writeParameter', () => {
+  it('matches a file that names AnyMysqlCodecDescriptor and has no wrapParameter', () => {
     expect({
       implementsItself: descriptor(
         'class Point implements AnyMysqlCodecDescriptor {\n  projectJson(e) { return e; }\n}',
@@ -40,11 +40,14 @@ describe('the MySQL codec descriptor writeParameter detection', () => {
         'const point: AnyMysqlCodecDescriptor = {\n  codecId: "x/point@1",\n};',
       ),
       alreadyWrites: descriptor(
-        'class Point implements AnyMysqlCodecDescriptor {\n  writeParameter(p: string) { return p; }\n}',
+        'class Point implements AnyMysqlCodecDescriptor {\n  wrapParameter(p, ref) { return p; }\n}',
       ),
       extendsBase: descriptor('class Point extends MysqlCodecDescriptor<void> {}'),
       adapted: descriptor('export const point = mysqlCodec(pointDescriptor, options);'),
       prefixedName: descriptor('type X = MyAnyMysqlCodecDescriptorLike;'),
+      oldMethodOnly: descriptor(
+        'class Point implements AnyMysqlCodecDescriptor {\n  writeParameter(p: string) { return p; }\n}',
+      ),
     }).toEqual({
       implementsItself: true,
       typedObject: true,
@@ -52,6 +55,7 @@ describe('the MySQL codec descriptor writeParameter detection', () => {
       extendsBase: false,
       adapted: false,
       prefixedName: false,
+      oldMethodOnly: true,
     });
   });
 

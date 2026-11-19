@@ -1,6 +1,8 @@
 import {
   AggregateExpr,
   AndExpr,
+  type AnyExpression,
+  type AnyParamRef,
   type AnyQueryAst,
   BinaryExpr,
   CaseExpr,
@@ -32,6 +34,7 @@ import {
   OrExpr,
   ParamRef,
   PreparedParamRef,
+  type ProjectionExpr,
   ProjectionItem,
   RawExpr,
   RawQueryAst,
@@ -41,7 +44,12 @@ import {
   UpdateAst,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
+import {
+  buildMysqlCodecDescriptorRegistry,
+  MysqlCodecDescriptor,
+} from '@internal/target-mysql/codec-descriptor';
 import { createMysqlBuiltinCodecLookup } from '@internal/target-mysql/codecs';
+import { mysqlText } from '@internal/target-mysql/data-types';
 import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
 import { describe, expect, it } from 'vitest';
 import { MysqlSqlRenderer } from '../src/core/sql-renderer';
@@ -150,6 +158,65 @@ describe('MySQL lowering of a select', () => {
       insert: 'INSERT INTO `t` (`amount`) VALUES (CAST(?1 AS DECIMAL(65,30)))',
       update: 'UPDATE `t` SET `amount` = CAST(?1 AS DECIMAL(65,30))',
     });
+  });
+
+  it('casts a decimal param to a DECIMAL that holds every value of its column, past 35 digits before the point included', () => {
+    const amount = ColumnRef.of('t', 'amount');
+    const param = (typeParams: { precision: number; scale: number }) =>
+      ParamRef.of('1', { codec: { codecId: 'mysql/decimal@1', typeParams } });
+    expect([
+      whereOf(BinaryExpr.eq(amount, param({ precision: 65, scale: 0 }))),
+      whereOf(BinaryExpr.eq(amount, param({ precision: 50, scale: 10 }))),
+    ]).toEqual([
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` = CAST(?1 AS DECIMAL(65,0))',
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` = CAST(?1 AS DECIMAL(65,25))',
+    ]);
+  });
+
+  it('writes the expression a codec wraps a param in, and refuses one that drops or repeats the param', () => {
+    class Wrapping extends MysqlCodecDescriptor<void> {
+      override readonly dataType = mysqlText.id;
+      override readonly traits = ['equality'] as const;
+      override readonly paramsSchema = undefined;
+      constructor(
+        override readonly codecId: string,
+        private readonly wrap: (parameter: AnyParamRef) => AnyExpression,
+      ) {
+        super();
+      }
+      protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+        return expression;
+      }
+      protected override wrappedParameter(parameter: AnyParamRef): AnyExpression {
+        return this.wrap(parameter);
+      }
+      override factory(): never {
+        throw new Error('not built in this test');
+      }
+    }
+    const wrapping = new MysqlSqlRenderer(
+      buildMysqlCodecDescriptorRegistry([
+        new Wrapping('x/geometry@1', (p) => FunctionCallExpr.of('ST_GeomFromText', [p])),
+        new Wrapping('x/dropped@1', () => LiteralExpr.of(1)),
+        new Wrapping('x/twice@1', (p) => BinaryExpr.eq(p, p)),
+      ]),
+      mysqlTargetDescriptorMetaRuntime,
+    );
+    const where = (codecId: string) => () =>
+      wrapping.render(
+        selectId.withWhere(BinaryExpr.eq(email, ParamRef.of('v', { codec: { codecId } }))),
+        undefined,
+      ).sql;
+    const refusal = (codecId: string) =>
+      expect.objectContaining({
+        code: 'RUNTIME.CODEC_DESCRIPTOR_INVALID',
+        message: `Codec "${codecId}" wraps a value of this query in an expression that does not hold that value exactly once.`,
+      });
+    expect(where('x/geometry@1')()).toBe(
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `user`.`email` = ST_GeomFromText(?1)',
+    );
+    expect(where('x/dropped@1')).toThrow(refusal('x/dropped@1'));
+    expect(where('x/twice@1')).toThrow(refusal('x/twice@1'));
   });
 
   it('refuses a param whose codec the registry lacks', () => {

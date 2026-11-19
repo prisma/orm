@@ -13,7 +13,7 @@ import {
   type DataTypeId,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
-import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
+import type { AnyExpression, AnyParamRef, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
@@ -27,11 +27,11 @@ const MYSQL_CODEC_DESCRIPTOR_KIND = 'mysql-codec' as const;
 export interface AnyMysqlCodecDescriptor extends AnyCodecDescriptor {
   readonly descriptorKind: typeof MYSQL_CODEC_DESCRIPTOR_KIND;
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr;
-  writeParameter(placeholder: string): string;
+  wrapParameter(parameter: AnyParamRef, ref: CodecRef): AnyExpression;
 }
 
 /**
- * A codec descriptor the MySQL target registers. `jsonProjection` writes a column into the JSON an include reads, in the form the codec's `fromWire` reads from a row, and `writeParameter` writes a parameter of the codec into SQL.
+ * A codec descriptor the MySQL target registers. `jsonProjection` writes a column into the JSON an include reads, in the form the codec's `fromWire` reads from a row, and `wrappedParameter` is the expression a parameter of the codec is written as in a statement.
  */
 export abstract class MysqlCodecDescriptor<P = void>
   extends CodecDescriptorImpl<P>
@@ -41,12 +41,20 @@ export abstract class MysqlCodecDescriptor<P = void>
 
   protected abstract jsonProjection(expression: ProjectionExpr, params: P): ProjectionExpr;
 
-  /** The SQL a parameter of this codec is written as, given its placeholder `?N`: the placeholder itself, unless the server would compare the value it carries in another type than the column's. */
-  writeParameter(placeholder: string): string {
-    return placeholder;
+  /** The expression a parameter of this codec is written as, such as a cast around it: the parameter itself, unless the server would compare the value it carries in another type than the column's. It holds the parameter exactly once. */
+  protected wrappedParameter(parameter: AnyParamRef, _params: P): AnyExpression {
+    return parameter;
+  }
+
+  wrapParameter(parameter: AnyParamRef, ref: CodecRef): AnyExpression {
+    return this.wrappedParameter(parameter, this.paramsOf(ref));
   }
 
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr {
+    return this.jsonProjection(expression, this.paramsOf(ref));
+  }
+
+  private paramsOf(ref: CodecRef): P {
     if (ref.many === true) {
       throw structuredError(
         'RUNTIME.CODEC_DESCRIPTOR_ARRAY_UNSUPPORTED',
@@ -58,12 +66,10 @@ export abstract class MysqlCodecDescriptor<P = void>
         },
       );
     }
-    return this.jsonProjection(
-      expression,
-      blindCast<P, 'validateCodecTypeParams validates the params against this descriptor schema'>(
-        validateCodecTypeParams(this, ref),
-      ),
-    );
+    return blindCast<
+      P,
+      'validateCodecTypeParams validates the params against this descriptor schema'
+    >(validateCodecTypeParams(this, ref));
   }
 }
 
@@ -100,7 +106,7 @@ export type AdaptedMysqlCodecDescriptor<D extends AnyCodecDescriptorTemplate> = 
   keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
   Pick<CodecDescriptor, 'dataType'> &
-  Pick<AnyMysqlCodecDescriptor, 'descriptorKind' | 'projectJson' | 'writeParameter'>;
+  Pick<AnyMysqlCodecDescriptor, 'descriptorKind' | 'projectJson' | 'wrapParameter'>;
 
 class MysqlCodecDescriptorAdapter<
   D extends AnyCodecDescriptorTemplate,
@@ -172,8 +178,8 @@ export function isMysqlCodecDescriptor(value: unknown): value is AnyMysqlCodecDe
     typeof value.factory === 'function' &&
     'projectJson' in value &&
     typeof value.projectJson === 'function' &&
-    'writeParameter' in value &&
-    typeof value.writeParameter === 'function'
+    'wrapParameter' in value &&
+    typeof value.wrapParameter === 'function'
   );
 }
 

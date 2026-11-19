@@ -137,6 +137,30 @@ exports[`MySQL lowering of a select > binds each param to its own numbered place
 }
 `;
 
+exports[`MySQL lowering of a select > casts a decimal param to a DECIMAL that holds every value of its column, past 35 digits before the point included 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "1",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,0))",
+}
+`;
+
+exports[`MySQL lowering of a select > casts a decimal param to a DECIMAL that holds every value of its column, past 35 digits before the point included 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "1",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,25))",
+}
+`;
+
 exports[`MySQL lowering of a select > numbers params in the order the runtime encodes them 1`] = `
 {
   "params": [

@@ -80,6 +80,18 @@ const rows: readonly (readonly [
     'mysql/decimal@1',
     { precision: 10, scale: 2 },
   ],
+  [
+    'Decimal(precision: 40)',
+    'NumericString(40, 30)',
+    'mysql/decimal@1',
+    { precision: 40, scale: 30 },
+  ],
+  [
+    'Decimal(precision: 10, scale: 0)',
+    'NumericString(10, 0)',
+    'mysql/decimal@1',
+    { precision: 10, scale: 0 },
+  ],
   ['String', 'Varchar(191)', 'sql/varchar@1', { length: 191 }],
   ['String(length: 40)', 'Varchar(40)', 'sql/varchar@1', { length: 40 }],
   ['String(storage: text)', 'Text', 'mysql/text@1', undefined],
@@ -117,6 +129,12 @@ describe('a MySQL scalar convenience type', () => {
     expect(bare.ok && bare.value.storage.namespaces['__unbound__']).toMatchObject({
       entries: { table: { event: { columns: { v: { codecId: 'mysql/decimal@1' } } } } },
     });
+  });
+
+  it('refuses a decimal default the column would round or cannot hold, showing the value and what to change', () => {
+    expect(failure(model('f Decimal(precision: 10, scale: 2) @default(1.005)'))).toContain(
+      'a number a decimal(10,2) column holds without rounding, with at most 8 digits before the point and 2 after it. 1.005 has 3 after it: round it to 2',
+    );
   });
 
   it('reads a decimal default written as a number or as text, in the form the column prints it', () => {
@@ -179,7 +197,23 @@ describe('a MySQL scalar convenience type', () => {
   });
 
   const scaleOf30Message =
-    'scale must be at most the precision: a scale of 30 is more than a precision of 10. A Decimal written without `scale` has a scale of 30, so a Decimal with a precision of 10 needs `scale` written too, at most the precision, as in Decimal(precision: 10, scale: 2).';
+    'scale must be at most the precision: a scale of 30 is more than a precision of 10. Write the scale with the precision, at most 10, as in (precision: 10, scale: 2). A scale left unwritten can default to 30.';
+
+  it('fills an unwritten scale with 30 whether or not the precision is written, so Decimal(precision: 40) has 10 digits before the point', () => {
+    const result = emit(model('v Decimal(precision: 40)', 'w NumericString(40)'));
+    expect(result.ok && result.value.storage.namespaces['__unbound__']).toMatchObject({
+      entries: {
+        table: {
+          event: {
+            columns: {
+              v: { codecId: 'mysql/decimal@1', typeParams: { precision: 40, scale: 30 } },
+              w: { codecId: 'mysql/decimal@1', typeParams: { precision: 40 } },
+            },
+          },
+        },
+      },
+    });
+  });
 
   it('says what to write for a Decimal with a precision of fewer than 30 digits and no scale', () => {
     expect(JSON.parse(failure(model('v Decimal(precision: 10)')))).toMatchObject({

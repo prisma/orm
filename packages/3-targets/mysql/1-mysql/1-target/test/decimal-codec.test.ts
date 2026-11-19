@@ -1,5 +1,5 @@
 import { renderSqlTypeName, resolveReportedSqlType } from '@internal/sql-contract/data-type';
-import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
+import { CastExpr, ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { mysqlIntDescriptor } from '../src/core/codecs';
@@ -62,8 +62,12 @@ describe('mysql/decimal', () => {
 
   it('refuses a value the column would round or cannot hold', () => {
     const params = { precision: 5, scale: 2 };
-    expect(() => mysqlDecimal.valueFrom('1.005', params)).toThrow(/holds without rounding/);
-    expect(() => mysqlDecimal.valueFrom('1000', params)).toThrow(/holds without rounding/);
+    expect(() => mysqlDecimal.valueFrom('1.005', params)).toThrow(
+      'mysql/decimal JSON value must be a number a decimal(5,2) column holds without rounding, with at most 3 digits before the point and 2 after it. 1.005 has 3 after it: round it to 2',
+    );
+    expect(() => mysqlDecimal.valueFrom('1000', params)).toThrow(
+      'mysql/decimal JSON value must be a number a decimal(5,2) column holds without rounding, with at most 3 digits before the point and 2 after it. 1000 has 4 before it: keep it below 10^3, or widen the column',
+    );
     expect(() => mysqlDecimal.valueFrom('1e5', params)).toThrow(/decimal text/);
   });
 
@@ -96,11 +100,30 @@ describe('mysql/decimal@1', () => {
     });
   });
 
-  it('writes each parameter cast to DECIMAL(65,30), and every other codec its placeholder alone', () => {
-    expect([
-      mysqlDecimalDescriptor.writeParameter('?3'),
-      mysqlIntDescriptor.writeParameter('?3'),
-    ]).toEqual(['CAST(?3 AS DECIMAL(65,30))', '?3']);
+  it.each([
+    [{ precision: 65, scale: 30 }, 'DECIMAL(65,30)'],
+    [{ precision: 10, scale: 2 }, 'DECIMAL(65,30)'],
+    [{ precision: 35, scale: 0 }, 'DECIMAL(65,30)'],
+    [undefined, 'DECIMAL(65,30)'],
+    [{ precision: 40 }, 'DECIMAL(65,25)'],
+    [{ precision: 50, scale: 10 }, 'DECIMAL(65,25)'],
+    [{ precision: 65, scale: 0 }, 'DECIMAL(65,0)'],
+  ])(
+    'wraps a parameter of a column of %j in a cast to %s, which holds every value the column holds',
+    (typeParams, castTo) => {
+      const parameter = ParamRef.of('1', { codec: { codecId: 'mysql/decimal@1' } });
+      expect(
+        mysqlDecimalDescriptor.wrapParameter(parameter, {
+          codecId: 'mysql/decimal@1',
+          ...(typeParams === undefined ? {} : { typeParams }),
+        }),
+      ).toEqual(CastExpr.as(parameter, castTo));
+    },
+  );
+
+  it('leaves a parameter of every other codec as it is', () => {
+    const parameter = ParamRef.of(1, { codec: { codecId: 'mysql/int@1' } });
+    expect(mysqlIntDescriptor.wrapParameter(parameter, { codecId: 'mysql/int@1' })).toBe(parameter);
   });
 
   it('projects a column into an include as its text, which JSON.parse would round as a number', () => {
@@ -155,6 +178,28 @@ describe('mysql/decimal@1', () => {
       code: 'RUNTIME.ENCODE_FAILED',
       message: `Cannot write ${JSON.stringify(value)} to a mysql/decimal@1 value, which holds ${holds}.`,
     });
+  });
+
+  it('writes every value a column with more than 35 digits before the point holds, and refuses digits its cast would round', async () => {
+    const wide = decimal({ precision: 65, scale: 0 });
+    const fiftyFive = decimal({ precision: 65, scale: 10 });
+    expect([
+      await wide.toWire('9'.repeat(65), {}),
+      await wide.toWire(`-${'9'.repeat(65)}`, {}),
+      await fiftyFive.toWire(`${'9'.repeat(55)}.${'9'.repeat(10)}`, {}),
+    ]).toEqual(['9'.repeat(65), `-${'9'.repeat(65)}`, `${'9'.repeat(55)}.${'9'.repeat(10)}`]);
+    await expect(wide.toWire('0.5', {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message:
+        'Cannot write "0.5" to a mysql/decimal@1 value, which holds a decimal number of at most 65 digits before the point and none after it.',
+    });
+    await expect(fiftyFive.toWire(`0.${'1'.repeat(11)}`, {})).rejects.toMatchObject({
+      message: `Cannot write "0.${'1'.repeat(11)}" to a mysql/decimal@1 value, which holds a decimal number of at most 55 digits before the point and 10 after it.`,
+    });
+  });
+
+  it('writes a filter value with more digits after the point than the column holds, which the cast compares unrounded', async () => {
+    expect(await decimal({ precision: 10, scale: 2 }).toWire('1.005', {})).toBe('1.005');
   });
 
   it('allows trailing zeros past 30 digits after the point, which the cast drops without changing the value', async () => {

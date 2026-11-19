@@ -175,6 +175,18 @@ describe('the MySQL explicit scalar types', () => {
     ).toMatchObject({ path: [convenience], args: named });
   });
 
+  it.each([
+    ['NumericString', []],
+    ['NumericString', [10]],
+  ])(
+    'has no convenience call for %s(%j), whose scale a type choice cannot leave unwritten',
+    (explicit, args) => {
+      expect(findAuthoringTypeChoiceCall({ namespace, call: { path: [explicit], args } })).toBe(
+        undefined,
+      );
+    },
+  );
+
   it.each(Object.entries(mysqlExplicitScalarTypes))('documents %s', (_name, descriptor) => {
     expect(descriptor.documentation).toMatch(/\S.+/);
   });

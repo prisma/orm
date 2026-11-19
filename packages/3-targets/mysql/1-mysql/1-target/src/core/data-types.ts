@@ -35,7 +35,6 @@ import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
 import { mysqlError } from './errors';
 import { quoteLiteral } from './sql-utils';
-import { MYSQL_DECIMAL_DEFAULTS } from './type-constructors';
 
 function integerParam(params: DataTypeParams, name: string): number | undefined {
   const value = params[name];
@@ -80,6 +79,9 @@ export const mysqlBigint = sqlDataType('mysql/bigint', {
   casts: { [mysqlInt.id]: asNumeralText },
 });
 
+/** The widest `decimal` MySQL and MariaDB hold: 65 digits, 30 of them after the point. */
+export const MYSQL_WIDEST_DECIMAL = { precision: 65, scale: 30 } as const;
+
 /** The precision and scale of `decimal`: at most 65 digits, at most 30 of them after the point. */
 export const mysqlDecimalParams = arktype({
   'precision?': 'number.integer >= 1 & number.integer <= 65',
@@ -91,12 +93,12 @@ export const mysqlDecimalParams = arktype({
   }
   if (params.scale <= params.precision) return true;
   const unwrittenScale =
-    params.scale === MYSQL_DECIMAL_DEFAULTS.scale
-      ? ` A Decimal written without \`scale\` has a scale of ${MYSQL_DECIMAL_DEFAULTS.scale}, so a Decimal with a precision of ${params.precision} needs \`scale\` written too, at most the precision, as in Decimal(precision: ${params.precision}, scale: 2).`
+    params.scale === MYSQL_WIDEST_DECIMAL.scale
+      ? ` A scale left unwritten can default to ${MYSQL_WIDEST_DECIMAL.scale}.`
       : '';
   return ctx.reject({
     path: ['scale'],
-    message: `scale must be at most the precision: a scale of ${params.scale} is more than a precision of ${params.precision}.${unwrittenScale}`,
+    message: `scale must be at most the precision: a scale of ${params.scale} is more than a precision of ${params.precision}. Write the scale with the precision, at most ${params.precision}, as in (precision: ${params.precision}, scale: ${Math.min(2, params.precision)}).${unwrittenScale}`,
   });
 });
 
@@ -126,14 +128,17 @@ const readDecimal: DataTypeReader = (json, params) => {
   const column = decimalColumn(params);
   if (column === undefined) return json;
   const digits = decimalTextDigits(json);
-  if (digits.integer > column.precision - column.scale || digits.fraction > column.scale) {
-    return refuseJsonValue(
-      'mysql/decimal',
-      `decimal text that decimal(${column.precision},${column.scale}) holds without rounding: at most ${column.precision - column.scale} digits before the point and ${column.scale} after it`,
-      json,
-    );
-  }
-  return json;
+  const integer = column.precision - column.scale;
+  if (digits.integer <= integer && digits.fraction <= column.scale) return json;
+  const change =
+    digits.fraction > column.scale
+      ? `${json} has ${digits.fraction} after it: round it to ${column.scale}`
+      : `${json} has ${digits.integer} before it: keep it below 10^${integer}, or widen the column`;
+  return refuseJsonValue(
+    'mysql/decimal',
+    `a number a decimal(${column.precision},${column.scale}) column holds without rounding, with at most ${integer} digits before the point and ${column.scale} after it. ${change}`,
+    json,
+  );
 };
 
 /** A value of `decimal(precision, scale)` is written as MySQL and MariaDB print it: no leading zeros, no minus sign on zero, and exactly `scale` digits after the point. */

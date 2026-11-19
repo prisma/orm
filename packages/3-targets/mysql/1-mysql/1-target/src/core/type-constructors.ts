@@ -22,6 +22,7 @@ import {
   MYSQL_TIMESTAMP_STRING_CODEC_ID,
   MYSQL_TIMESTAMP_TEMPORAL_CODEC_ID,
 } from './codec-ids';
+import { MYSQL_WIDEST_DECIMAL } from './data-types';
 
 /** The length of a `String` column: what Prisma ORM 7 used, and short enough for MySQL to index the column. */
 export const MYSQL_STRING_LENGTH = 191;
@@ -45,8 +46,8 @@ const scale = {
 
 const length = { kind: 'value', dataType: MYSQL_SIZE_TYPE, name: 'length' } as const;
 
-/** The precision and scale of a bare `Decimal`: the column Prisma ORM 7 created. MySQL's own bare `decimal` is `decimal(10,0)`, which holds no digits after the point. */
-export const MYSQL_DECIMAL_DEFAULTS = { precision: 65, scale: 30 } as const;
+/** The precision and scale of `Decimal` where they are not written: the widest decimal, the column Prisma ORM 7 created. MySQL's own bare `decimal` is `decimal(10,0)`, which holds no digits after the point. Each is filled on its own, so `Decimal(precision: 40)` is `decimal(40,30)`. */
+const MYSQL_DECIMAL_DEFAULTS = MYSQL_WIDEST_DECIMAL;
 
 /**
  * MySQL's explicit scalar types other than the date and time types. Each is named after the MySQL column type that stores it, plus the application value where that column type is read by more than one codec (`Int8BigInt` and `Int8Number`). Where that name would be a convenience name, the explicit type takes MySQL's own second name for the column type, as PostgreSQL's explicit types do: `Int4`, `Int8…`, `Float8`, `NumericString` and `Bool`. A JSON column's explicit type is `PlainJson`, as on every target. ADR 322.
