@@ -1,0 +1,16 @@
+// use prisma-8
+
+model Edge {
+  id           Int                              @id
+  noBytes      Bytes                            @default(longblob``)
+  bytes        Bytes                            @default(longblob`c3a900ff`)
+  blank        String(storage: text)            @default("")
+  accented     String(storage: text)            @default("é€")
+  jsonNull     Json?                            @default(json`null`)
+  jsonString   Json                             @default(json`""`)
+  jsonArray    Json                             @default(json`[]`)
+  jsonObject   Json                             @default(json`{}`)
+  jsonAccented Json                             @default(json`{"k": "é€"}`)
+  zero         Decimal(precision: 10, scale: 2) @default(0)
+  off          Boolean                          @default(false)
+}

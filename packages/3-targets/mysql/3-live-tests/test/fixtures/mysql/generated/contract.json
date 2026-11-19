@@ -28,6 +28,10 @@
       "model": "Item",
       "namespace": "__unbound__"
     },
+    "Ledger": {
+      "model": "Ledger",
+      "namespace": "__unbound__"
+    },
     "Measure": {
       "model": "Measure",
       "namespace": "__unbound__"
@@ -431,6 +435,55 @@
               },
               "namespaceId": "__unbound__",
               "table": "Item"
+            }
+          },
+          "Ledger": {
+            "fields": {
+              "cents": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "wide": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 0
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "cents": {
+                  "column": "cents"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "wide": {
+                  "column": "wide"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Ledger"
             }
           },
           "Measure": {
@@ -1179,6 +1232,41 @@
               },
               "uniques": []
             },
+            "Ledger": {
+              "columns": {
+                "cents": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "wide": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 0
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Measure": {
               "columns": {
                 "amount": {
@@ -1592,7 +1680,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "2b97c8bae59a6170184855e515309dde3eba15d345895ea538de465f4d9dfaa7"
+    "storageHash": "05a4f049dd6bd181383e0bf9f8d5213a41064fe51bfcefa7b69b84d3872d431e"
   },
   "capabilities": {
     "sql": {

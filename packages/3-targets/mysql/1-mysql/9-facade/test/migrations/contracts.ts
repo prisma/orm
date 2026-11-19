@@ -157,3 +157,49 @@ export function contractWithScalarTypes() {
     },
   }));
 }
+
+/** A table whose defaults are the empty or edge values of the bytes, text and JSON columns, whose reported forms differ from the others. */
+export function contractWithEdgeDefaults() {
+  return defineContract({}, ({ field, model, type }) => ({
+    models: {
+      Edge: model('Edge', {
+        fields: {
+          id: field.column(type.Int()).id(),
+          noBytes: field.column(type.Bytes()).default(new Uint8Array()),
+          bytes: field.column(type.Bytes()).default(new Uint8Array([0xc3, 0xa9, 0, 0xff])),
+          blank: field.column(type.String({ storage: 'text' })).default(''),
+          accented: field.column(type.String({ storage: 'text' })).default('é€😀'),
+          jsonNull: field.column(type.Json()).optional().default(null),
+          jsonString: field.column(type.Json()).default(''),
+          jsonArray: field.column(type.Json()).default([]),
+          jsonObject: field.column(type.Json()).default({}),
+          jsonAccented: field.column(type.Json()).default({ k: 'é€😀' }),
+          zero: field.column(type.Decimal({ precision: 10, scale: 2 })).default('0'),
+          off: field.column(type.Boolean()).default(false),
+          tiny: field.column(type.Float()).default(5e-324),
+        },
+      }),
+    },
+  }));
+}
+
+/** A table with one key on a `Bytes`, a `Json` or a `String(storage: text)` field, as `key` says. */
+export function contractWithKeyOn(key: 'bytes' | 'json' | 'text', kind: 'id' | 'unique') {
+  return defineContract({}, ({ field, model, type }) => {
+    const column = {
+      bytes: () => field.column(type.Bytes()),
+      json: () => field.column(type.Json()),
+      text: () => field.column(type.String({ storage: 'text' })),
+    }[key]();
+    return {
+      models: {
+        Keyed: model('Keyed', {
+          fields:
+            kind === 'id'
+              ? { key: column.id() }
+              : { id: field.column(type.Int()).id(), key: column.unique() },
+        }),
+      },
+    };
+  });
+}

@@ -44,6 +44,12 @@ const lowest = {
 
 const lowestRead = { ...lowest, amount: DECIMAL_TINY, price: '-0.50' };
 
+const ledgerDatabase = [
+  'CREATE TABLE `Ledger` (`id` int NOT NULL, `wide` decimal(65,0) NOT NULL, `cents` decimal(10,2) NOT NULL, PRIMARY KEY (`id`))',
+] as const;
+
+const WIDEST = '9'.repeat(65);
+
 const itemsDatabase = [
   'CREATE TABLE `Drawer` (`id` int NOT NULL, PRIMARY KEY (`id`))',
   'CREATE TABLE `Item` (`id` int NOT NULL, `on` tinyint(1) NOT NULL, `data` longblob NOT NULL, `doc` json NOT NULL, `extra` json NULL, `drawerId` int NOT NULL, PRIMARY KEY (`id`))',
@@ -180,6 +186,80 @@ export function describeOrmScalarTypes(server: LiveServer): void {
             db.orm.Measure.where({ amount: '0.100000000000000000000000000001' }).select('id').all(),
           ),
         }).toEqual({ equal: [1], inList: [1], above: [2], byObject: [2] });
+      });
+    });
+
+    it('writes, reads and finds every value of a decimal column with more than 35 digits before the point', async (test) => {
+      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        await db.orm.Ledger.createAll([
+          { id: 1, wide: WIDEST, cents: '1.01' },
+          { id: 2, wide: `-${WIDEST}`, cents: '1.00' },
+        ]);
+        const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
+          (await rows).map((row) => row.id);
+        expect({
+          rows: await db.orm.Ledger.orderBy((l) => l.id.asc()).all(),
+          equal: await ids(
+            db.orm.Ledger.where((l) => l.wide.eq(WIDEST))
+              .select('id')
+              .all(),
+          ),
+          inList: await ids(
+            db.orm.Ledger.where((l) => l.wide.in([WIDEST, '1']))
+              .select('id')
+              .all(),
+          ),
+        }).toEqual({
+          rows: [
+            { id: 1, wide: WIDEST, cents: '1.01' },
+            { id: 2, wide: `-${WIDEST}`, cents: '1.00' },
+          ],
+          equal: [1],
+          inList: [1],
+        });
+      });
+    });
+
+    it('compares a filter value with more digits after the point than its column holds without rounding it to the column', async (test) => {
+      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        await db.orm.Ledger.create({ id: 1, wide: '1', cents: '1.01' });
+        const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
+          (await rows).map((row) => row.id);
+        expect({
+          equal: await ids(
+            db.orm.Ledger.where((l) => l.cents.eq('1.005'))
+              .select('id')
+              .all(),
+          ),
+          inList: await ids(
+            db.orm.Ledger.where((l) => l.cents.in(['1.005']))
+              .select('id')
+              .all(),
+          ),
+          exact: await ids(
+            db.orm.Ledger.where((l) => l.cents.in(['1.010']))
+              .select('id')
+              .all(),
+          ),
+        }).toEqual({ equal: [], inList: [], exact: [1] });
+      });
+    });
+
+    it('says to use sumBigInt for a sum past the safe integer range', async (test) => {
+      await withSeededDatabase(test, server, measuresDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        await db.orm.Measure.createAll([measure, { ...measure, id: 2 }]);
+        await expect(
+          db.orm.Measure.aggregate((a) => ({ count: a.sum('count') })),
+        ).rejects.toMatchObject({
+          code: 'RUNTIME.DECODE_FAILED',
+          fix: 'The result does not fit a JavaScript number. Use sumBigInt or countBigInt in place of sum or count, which read a JavaScript bigint.',
+        });
+        expect(await db.orm.Measure.aggregate((a) => ({ count: a.sumBigInt('count') }))).toEqual({
+          count: 2n * BigInt(Number.MAX_SAFE_INTEGER),
+        });
       });
     });
 
@@ -339,6 +419,80 @@ export function describeOrmScalarTypes(server: LiveServer): void {
               .all(),
           ),
         }).toEqual({ on: [1, 3], off: [2, 4], bytes: [2], byBytes: [1, 4, 3, 2] });
+      });
+    });
+
+    it('writes, reads and finds every value of a decimal column with more than 35 digits before the point', async (test) => {
+      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        await db.orm.Ledger.createAll([
+          { id: 1, wide: WIDEST, cents: '1.01' },
+          { id: 2, wide: `-${WIDEST}`, cents: '1.00' },
+        ]);
+        const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
+          (await rows).map((row) => row.id);
+        expect({
+          rows: await db.orm.Ledger.orderBy((l) => l.id.asc()).all(),
+          equal: await ids(
+            db.orm.Ledger.where((l) => l.wide.eq(WIDEST))
+              .select('id')
+              .all(),
+          ),
+          inList: await ids(
+            db.orm.Ledger.where((l) => l.wide.in([WIDEST, '1']))
+              .select('id')
+              .all(),
+          ),
+        }).toEqual({
+          rows: [
+            { id: 1, wide: WIDEST, cents: '1.01' },
+            { id: 2, wide: `-${WIDEST}`, cents: '1.00' },
+          ],
+          equal: [1],
+          inList: [1],
+        });
+      });
+    });
+
+    it('compares a filter value with more digits after the point than its column holds without rounding it to the column', async (test) => {
+      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        await db.orm.Ledger.create({ id: 1, wide: '1', cents: '1.01' });
+        const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
+          (await rows).map((row) => row.id);
+        expect({
+          equal: await ids(
+            db.orm.Ledger.where((l) => l.cents.eq('1.005'))
+              .select('id')
+              .all(),
+          ),
+          inList: await ids(
+            db.orm.Ledger.where((l) => l.cents.in(['1.005']))
+              .select('id')
+              .all(),
+          ),
+          exact: await ids(
+            db.orm.Ledger.where((l) => l.cents.in(['1.010']))
+              .select('id')
+              .all(),
+          ),
+        }).toEqual({ equal: [], inList: [], exact: [1] });
+      });
+    });
+
+    it('says to use sumBigInt for a sum past the safe integer range', async (test) => {
+      await withSeededDatabase(test, server, measuresDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        await db.orm.Measure.createAll([measure, { ...measure, id: 2 }]);
+        await expect(
+          db.orm.Measure.aggregate((a) => ({ count: a.sum('count') })),
+        ).rejects.toMatchObject({
+          code: 'RUNTIME.DECODE_FAILED',
+          fix: 'The result does not fit a JavaScript number. Use sumBigInt or countBigInt in place of sum or count, which read a JavaScript bigint.',
+        });
+        expect(await db.orm.Measure.aggregate((a) => ({ count: a.sumBigInt('count') }))).toEqual({
+          count: 2n * BigInt(Number.MAX_SAFE_INTEGER),
+        });
       });
     });
 

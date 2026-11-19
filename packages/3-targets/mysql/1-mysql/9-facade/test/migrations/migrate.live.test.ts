@@ -17,6 +17,8 @@ import { defineContract } from '../../src/exports/contract-builder';
 import { exampleTablesDdl, frameworkComponents, loadExampleContract } from '../example-contract';
 import {
   contractRepointedToAdmin,
+  contractWithEdgeDefaults,
+  contractWithKeyOn,
   contractWithNickname,
   contractWithoutForeignKey,
   contractWithScalarTypes,
@@ -249,6 +251,82 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
       }),
     );
   });
+
+  it('applies the empty and edge defaults of bytes, text and JSON, which then verify strictly, plan nothing more and fill a row', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver, family) => {
+        const contract = contractWithEdgeDefaults();
+        const applied = await apply(family, driver, [
+          ['app', await planAgainst(driver, family, 'app', contract), contract],
+        ]);
+        const verified = family.verifySchema({
+          contract,
+          schema: await family.introspect({ driver, contract }),
+          strict: true,
+          frameworkComponents,
+        });
+        const again = await planAgainst(driver, family, 'app', contract);
+        await driver.query('INSERT INTO `Edge` (`id`) VALUES (1)');
+        const { rows } = await driver.query<Record<string, unknown>>(
+          'SELECT HEX(`noBytes`) AS noBytes, HEX(`bytes`) AS bytes, `blank`, `accented`, CAST(`jsonNull` AS CHAR) AS jsonNull, CAST(`jsonString` AS CHAR) AS jsonString, CAST(`jsonArray` AS CHAR) AS jsonArray, CAST(`jsonObject` AS CHAR) AS jsonObject, CAST(`jsonAccented` AS CHAR) AS jsonAccented FROM `Edge`',
+        );
+        expect({
+          applied: applied.ok ? true : applied.failure,
+          verified: verified.ok ? true : verified,
+          planAgain: again.operations.length,
+          row: rows[0],
+        }).toEqual({
+          applied: true,
+          verified: true,
+          planAgain: 0,
+          row: {
+            noBytes: '',
+            bytes: 'C3A900FF',
+            blank: '',
+            accented: 'é€😀',
+            jsonNull: 'null',
+            jsonString: '""',
+            jsonArray: '[]',
+            jsonObject: '{}',
+            jsonAccented: '{"k": "é€😀"}',
+          },
+        });
+      }),
+    );
+  });
+
+  it.for([
+    ['bytes', 'id', "BLOB/TEXT column 'key' used in key specification without a key length"],
+    ['bytes', 'unique', "BLOB/TEXT column 'key' used in key specification without a key length"],
+    ['text', 'id', "BLOB/TEXT column 'key' used in key specification without a key length"],
+    ['text', 'unique', "BLOB/TEXT column 'key' used in key specification without a key length"],
+    [
+      'json',
+      'id',
+      "JSON column 'key' supports indexing only via generated columns on a specified JSON path",
+    ],
+    [
+      'json',
+      'unique',
+      "JSON column 'key' supports indexing only via generated columns on a specified JSON path",
+    ],
+  ] as const)(
+    'fails to apply a key on a %s field, @%s, when the migration runs, as the scalar type reference says',
+    async ([key, kind, message], test) => {
+      await withMysqlDatabase(test, ({ url }) =>
+        withDriver(url, async (driver, family) => {
+          const contract = contractWithKeyOn(key, kind);
+          const applied = await apply(family, driver, [
+            ['app', await planAgainst(driver, family, 'app', contract), contract],
+          ]);
+          expect(applied.ok ? undefined : applied.failure).toMatchObject({
+            code: 'MIGRATION.EXECUTION_FAILED',
+            why: expect.stringContaining(message),
+          });
+        }),
+      );
+    },
+  );
 
   it('signs a database made by hand, creating the marker table first', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>

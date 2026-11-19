@@ -16,7 +16,7 @@ import type {
 } from '@internal/mariadb/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'06055398bd134b7aafe3ba14312f92986c9ed9f8de2f6cc8b215afd28bd49050'>;
+  StorageHashBase<'4ac60b45c34e468ab20c6bfa9a22a2898ea50ac83b0ef69a77de85a8d4bafc2b'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'c3165876e6069b3fd8cde4fadadb0b534082345d678b2c81c8c83e9225ce21d8'>;
@@ -297,6 +297,12 @@ export namespace Models {
     drawer: Drawer;
     readonly [RelationKeys]?: 'drawer';
   };
+  export type Ledger = {
+    cents: FieldOutputTypes['__unbound__']['Ledger']['cents'];
+    id: FieldOutputTypes['__unbound__']['Ledger']['id'];
+    wide: FieldOutputTypes['__unbound__']['Ledger']['wide'];
+    readonly [RelationKeys]?: never;
+  };
   export type Measure = {
     amount: FieldOutputTypes['__unbound__']['Measure']['amount'];
     count: FieldOutputTypes['__unbound__']['Measure']['count'];
@@ -361,6 +367,7 @@ export declare const models: {
   Event: Models.Event;
   Feature: Models.Feature;
   Item: Models.Item;
+  Ledger: Models.Ledger;
   Measure: Models.Measure;
   Note: Models.Note;
   Post: Models.Post;
@@ -601,6 +608,34 @@ type ContractBase = Omit<
                   };
                 },
               ];
+            };
+            readonly Ledger: {
+              columns: {
+                readonly cents: {
+                  readonly dataType: 'mysql/decimal';
+                  readonly codecId: 'mysql/decimal@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 10; readonly scale: 2 };
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'mysql/int';
+                  readonly codecId: 'mysql/int@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly wide: {
+                  readonly dataType: 'mysql/decimal';
+                  readonly codecId: 'mysql/decimal@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly precision: 65; readonly scale: 0 };
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
             };
             readonly Measure: {
               columns: {
@@ -941,6 +976,7 @@ type ContractBase = Omit<
     readonly Drawer: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Drawer' };
     readonly Event: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Event' };
     readonly Item: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Item' };
+    readonly Ledger: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Ledger' };
     readonly Measure: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'Measure';
@@ -1200,6 +1236,40 @@ type ContractBase = Omit<
                 readonly extra: { readonly column: 'extra' };
                 readonly id: { readonly column: 'id' };
                 readonly on: { readonly column: 'on' };
+              };
+            };
+          };
+          readonly Ledger: {
+            readonly fields: {
+              readonly cents: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'mysql/decimal@1';
+                  readonly typeParams: { readonly precision: 10; readonly scale: 2 };
+                };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mysql/int@1' };
+              };
+              readonly wide: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'mysql/decimal@1';
+                  readonly typeParams: { readonly precision: 65; readonly scale: 0 };
+                };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'Ledger';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly cents: { readonly column: 'cents' };
+                readonly id: { readonly column: 'id' };
+                readonly wide: { readonly column: 'wide' };
               };
             };
           };

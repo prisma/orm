@@ -95,6 +95,12 @@ model Measure {
   shelfId Int
 }
 
+model Ledger {
+  id    Int                              @id
+  wide  Decimal(precision: 65, scale: 0)
+  cents Decimal(precision: 10, scale: 2)
+}
+
 model Drawer {
   id    Int    @id
   items Item[]

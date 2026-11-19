@@ -14,7 +14,29 @@ import mariadb from '@internal/target-mariadb/control';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import { describe, expect, it } from 'vitest';
+import { defineContract } from '../src/exports/contract-builder';
 import { emitFixture } from './emit';
+
+/** A table with one key on a `Bytes`, a `Json` or a `String(storage: text)` field, as `key` says. */
+function contractWithKeyOn(key: 'bytes' | 'json' | 'text', kind: 'id' | 'unique') {
+  return defineContract({}, ({ field, model, type }) => {
+    const column = {
+      bytes: () => field.column(type.Bytes()),
+      json: () => field.column(type.Json()),
+      text: () => field.column(type.String({ storage: 'text' })),
+    }[key]();
+    return {
+      models: {
+        Keyed: model('Keyed', {
+          fields:
+            kind === 'id'
+              ? { key: column.id() }
+              : { id: field.column(type.Int()).id(), key: column.unique() },
+        }),
+      },
+    };
+  });
+}
 
 const SERVER = 'MARIADB_URL';
 const frameworkComponents = [mariadb, mariadbAdapter];
@@ -104,6 +126,7 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
     ['the example contract', 'example'],
     ['a contract with literal and function defaults', 'defaults'],
     ['a column of each scalar convenience type with its default', 'scalar-types'],
+    ['the empty and edge defaults of bytes, text and JSON', 'edge-defaults'],
   ] as const)(
     'applies %s, which then verifies strictly, plans nothing more and signs as unchanged',
     async ([, fixture], test) => {
@@ -150,6 +173,43 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
               markers: { app: contract.storage.storageHash },
               signed: ['unchanged'],
             });
+          }),
+        SERVER,
+      );
+    },
+  );
+
+  it.for([
+    ['bytes', 'id', false],
+    ['bytes', 'unique', true],
+    ['text', 'id', false],
+    ['text', 'unique', true],
+    ['json', 'id', false],
+    ['json', 'unique', true],
+  ] as const)(
+    'applies a key on a %s field, @%s, only where the scalar type reference says MariaDB accepts it (%s)',
+    async ([key, kind, accepted], test) => {
+      const contract = contractWithKeyOn(key, kind);
+      await withMysqlDatabase(
+        test,
+        ({ url }) =>
+          withDriver(url, async (driver, family) => {
+            const applied = await apply(
+              family,
+              driver,
+              await plan(driver, family, contract),
+              contract,
+            );
+            expect(applied.ok ? 'applied' : applied.failure).toEqual(
+              accepted
+                ? 'applied'
+                : expect.objectContaining({
+                    code: 'MIGRATION.EXECUTION_FAILED',
+                    why: expect.stringContaining(
+                      "BLOB/TEXT column 'key' used in key specification without a key length",
+                    ),
+                  }),
+            );
           }),
         SERVER,
       );

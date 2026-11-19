@@ -215,31 +215,46 @@ describe('introspecting a MariaDB database made by hand', {
     );
   });
 
-  it('reports a text default on a longblob column as unreadable, without reading the text as bytes', async (test) => {
-    const { contract } = await emitFixture('scalar-types');
-    const ddl = `CREATE TABLE \`Measure\` (
+  it.for([
+    ["'abcd'", '61626364'],
+    ["('abcd')", '61626364'],
+    ["('é€')", 'C3A9E282AC'],
+    ["''", ''],
+    ["X''", ''],
+    ["X'00FF'", '00FF'],
+    ["_binary'ab'", '6162'],
+  ])(
+    'reads the default %s on a longblob column as the bytes a row of it holds',
+    async ([written, rowHex], test) => {
+      const { contract } = await emitFixture('scalar-types');
+      const ddl = `CREATE TABLE \`Measure\` (
       \`id\` int NOT NULL,
-      \`data\` longblob NOT NULL DEFAULT 'abcd',
+      \`data\` longblob NOT NULL DEFAULT ${written},
       PRIMARY KEY (\`id\`)
     )`;
-    await withMysqlDatabase(
-      test,
-      ({ url }) =>
-        withTables(url, [ddl], async (driver) => {
-          const data = (await introspect(driver, contract)).tables['Measure']?.columns['data'];
-          expect({
-            resolvedDefault: data?.resolvedDefault,
-            unreadable: data?.defaultUnreadable,
-          }).toEqual({
-            resolvedDefault: undefined,
-            unreadable: expect.stringContaining(
-              "Write the default as one, as in DEFAULT (X'61626364')",
-            ),
-          });
-        }),
-      SERVER,
-    );
-  });
+      await withMysqlDatabase(
+        test,
+        ({ url }) =>
+          withTables(url, [ddl], async (driver) => {
+            const data = (await introspect(driver, contract)).tables['Measure']?.columns['data'];
+            await driver.query('INSERT INTO `Measure` (`id`) VALUES (1)');
+            const { rows } = await driver.query<{ hex: string }>(
+              'SELECT HEX(`data`) AS hex FROM `Measure`',
+            );
+            expect({
+              row: rows[0]?.hex,
+              resolvedDefault: data?.resolvedDefault,
+              unreadable: data?.defaultUnreadable,
+            }).toEqual({
+              row: rowHex,
+              resolvedDefault: { kind: 'literal', value: rowHex },
+              unreadable: undefined,
+            });
+          }),
+        SERVER,
+      );
+    },
+  );
 
   it('reads a longtext column as json only when MariaDB gave it the column check json_valid makes', async (test) => {
     const ddl = `CREATE TABLE \`Docs\` (
