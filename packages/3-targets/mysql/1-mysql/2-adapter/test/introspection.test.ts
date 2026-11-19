@@ -233,7 +233,7 @@ describe('buildMysqlSchemaIR', () => {
     });
   });
 
-  it('reads a text default on a bytes column as the bytes the column stores, its UTF-8, through the column’s codec', async () => {
+  it('reads a text default on a bytes column as the bytes the column stores, its UTF-8, through the column’s codec, and no literal default of a varbinary, which MySQL may report cut', async () => {
     const read: (readonly [string, string | readonly number[]])[] = [];
     const recordingReadLiteral: ReadLiteralDefault = async (table, name, raw, body) => {
       read.push([name, typeof body === 'string' ? body : [...body]]);
@@ -255,7 +255,11 @@ describe('buildMysqlSchemaIR', () => {
             column_default: "X\\'\\'",
             extra: 'DEFAULT_GENERATED',
           }),
-          column('Blobs', 'fixed', 4, 'binary(6)', { column_default: '0x61626364' }),
+          column('Blobs', 'fixed', 4, 'binary(6)', {
+            column_default: '0x61626364',
+            extra: 'DEFAULT_GENERATED',
+          }),
+          column('Blobs', 'cut', 6, 'varbinary(8)', { column_default: '0x61' }),
           column('Blobs', 'note', 5, 'text', {
             column_default: "_utf8mb4\\'abcd\\'",
             extra: 'DEFAULT_GENERATED',

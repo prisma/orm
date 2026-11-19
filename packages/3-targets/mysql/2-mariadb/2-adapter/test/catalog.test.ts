@@ -115,13 +115,26 @@ describe('converting a MariaDB column row to the form MySQL 8.4 reports', () => 
   it.each([
     ['longblob', "'abc'", '0x616263'],
     ['blob', "'é'", '0xc3a9'],
-    ['varbinary(10)', "''", '0x'],
-    ['binary(4)', "'é\\0\\0'", '0xc3a90000'],
-    ['varbinary(10)', "'0x61'", '0x30783631'],
+    ['longblob', "'a\\0b'", '0x610062'],
   ])(
-    'reads the text default of a %s column, %s, as the hexadecimal literal of the bytes it stores, %s',
+    'reads the text default of a %s column, %s, as the expression default of the bytes it stores that MySQL reports, %s',
     (type, mariadb, mysql) => {
-      expect(converted(type, mariadb)).toEqual({ type, default: mysql, extra: '' });
+      expect(converted(type, mariadb)).toEqual({
+        type,
+        default: mysql,
+        extra: 'DEFAULT_GENERATED',
+      });
+    },
+  );
+
+  it.each([
+    ['varbinary(8)', "'\\0?'"],
+    ['binary(4)', "'a\\0\\0\\0'"],
+    ['varbinary(10)', "''"],
+  ])(
+    'keeps the default of a %s column, %s, as MariaDB reports it, since a byte that is not UTF-8 is reported as a question mark',
+    (type, mariadb) => {
+      expect(converted(type, mariadb)).toEqual({ type, default: mariadb, extra: '' });
     },
   );
 

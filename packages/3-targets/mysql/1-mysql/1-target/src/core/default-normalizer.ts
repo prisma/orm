@@ -46,16 +46,22 @@ const SQL_ESCAPES: Readonly<Record<string, string>> = {
 
 const INTRODUCED_STRING = /^_([A-Za-z0-9]+)'/;
 const HEX_LITERAL = /^(?:0x((?:[0-9A-Fa-f]{2})*)|X'((?:[0-9A-Fa-f]{2})*)')$/;
-const BYTES_COLUMN_TYPE = /^(?:(?:tiny|medium|long)?blob|varbinary\(\d+\)|binary\((\d+)\))$/i;
+const BLOB_COLUMN_TYPE = /^(?:tiny|medium|long)?blob$/i;
+const BINARY_COLUMN_TYPE = /^(?:varbinary\(\d+\)|binary\((\d+)\))$/i;
 const LATIN1_LAST = 0xff;
 
 /** The character sets whose text is UTF-8, which is what a connection to MySQL or MariaDB sends; ASCII text is the same in UTF-8 and Latin-1. */
 const UTF8_CHARACTER_SETS = new Set(['utf8mb4', 'utf8mb3', 'utf8', 'binary']);
 const ASCII_CHARACTER_SETS = new Set(['ascii', 'latin1']);
 
-/** Whether the driver hands a row of a column of `columnType` over as bytes: a blob, `binary` or `varbinary` column. */
+/** Whether `columnType` is a blob, `binary` or `varbinary` column, whose rows the driver hands over as bytes. The driver hands `bit` and `geometry` columns over as bytes too; they are left out because no MySQL codec declares them. */
 export function isMysqlBytesColumnType(columnType: string): boolean {
-  return BYTES_COLUMN_TYPE.test(columnType);
+  return BLOB_COLUMN_TYPE.test(columnType) || BINARY_COLUMN_TYPE.test(columnType);
+}
+
+/** Whether `columnType` is a blob column, which MySQL gives an expression default only. */
+export function isMysqlBlobColumnType(columnType: string): boolean {
+  return BLOB_COLUMN_TYPE.test(columnType);
 }
 
 function withoutBackslashEscapes(text: string): string {
@@ -140,7 +146,7 @@ function hexLiteralBytes(text: string): Uint8Array | undefined {
 
 /** The bytes a row of a `binary(n)` column holds for `bytes`: padded with zero bytes to its length, as the server pads every value. */
 function paddedTo(columnType: string, bytes: Uint8Array): Uint8Array {
-  const length = Number(BYTES_COLUMN_TYPE.exec(columnType)?.[1] ?? 0);
+  const length = Number(BINARY_COLUMN_TYPE.exec(columnType)?.[1] ?? 0);
   if (bytes.length >= length) return bytes;
   const padded = new Uint8Array(length);
   padded.set(bytes);
@@ -166,13 +172,13 @@ function expressionDefault(reported: string, bytesColumn: boolean): MysqlReporte
   return { kind: 'function', expression: currentValueNamed(expression) ?? expression };
 }
 
+/** A literal default on a `binary` or `varbinary` column is kept as reported, since the report may not be the row's bytes: MySQL cuts it at its first zero byte, and MariaDB shows each byte that is not UTF-8 as `?`. */
 function literalDefault(reported: string, bytesColumn: boolean): MysqlReportedDefault {
-  if (!bytesColumn) return literal(reported);
-  return literal(hexLiteralBytes(reported) ?? new Uint8Array(Buffer.from(reported, 'utf8')));
+  return bytesColumn ? { kind: 'function', expression: reported } : literal(reported);
 }
 
 /**
- * Reads a column's reported default from `COLUMN_DEFAULT` and `EXTRA`, as what a row of the column hands its codec. `auto_increment` is `autoincrement()`. An expression default (`DEFAULT_GENERATED`) is a literal when it is a string with a character set introducer, such as `_utf8mb4\'abc\'`, the form MySQL reports for a literal default on a text, blob or JSON column, or a hexadecimal literal, `0x00ff`, or `X\'\'` for no bytes, the forms it reports for a blob default written as bytes; one that writes the current instant, such as `CURRENT_TIMESTAMP(3)`, is `now()`, and one that writes the current date or time of day, `curdate()` or `curtime(6)`, is `CURRENT_DATE` or `CURRENT_TIME`; any other is a function default kept as reported. Any other default is a literal. On a bytes column, `columnType` a blob, `binary` or `varbinary`, a literal is the bytes the server stores: the bytes of a hexadecimal literal, and the UTF-8 bytes of text, padded to the length of a `binary(n)`. `undefined` when the column has no default.
+ * Reads a column's reported default from `COLUMN_DEFAULT` and `EXTRA`, as what a row of the column hands its codec. `auto_increment` is `autoincrement()`. An expression default (`DEFAULT_GENERATED`) is a literal when it is a string with a character set introducer, such as `_utf8mb4\'abc\'`, the form MySQL reports for a literal default on a text, blob or JSON column, or a hexadecimal literal, `0x00ff`, or `X\'\'` for no bytes, the forms it reports for bytes; one that writes the current instant, such as `CURRENT_TIMESTAMP(3)`, is `now()`, and one that writes the current date or time of day, `curdate()` or `curtime(6)`, is `CURRENT_DATE` or `CURRENT_TIME`; any other is a function default kept as reported. On a bytes column, `columnType` a blob, `binary` or `varbinary`, a literal is the bytes the server stores: the bytes of a hexadecimal literal, and the UTF-8 bytes of text, padded to the length of a `binary(n)`. Any other default is a literal, except one on a `binary` or `varbinary` column, which is kept as reported because the report may not be the row's bytes. `undefined` when the column has no default.
  */
 export function readMysqlDefault(
   columnDefault: string | null,

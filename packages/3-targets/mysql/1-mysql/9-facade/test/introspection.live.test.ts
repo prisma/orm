@@ -253,6 +253,36 @@ describe('introspecting a MySQL database made by hand', {
     },
   );
 
+  it('keeps a literal binary and varbinary default as reported, since MySQL cuts it at its first zero byte, though it reports an expression default whole', async (test) => {
+    const ddl = `CREATE TABLE \`Fixed\` (
+      \`id\` int NOT NULL,
+      \`cut\` binary(4) NOT NULL DEFAULT 'a\\0b',
+      \`gone\` varbinary(8) NOT NULL DEFAULT 0x00ff,
+      \`whole\` varbinary(8) NOT NULL DEFAULT (0x00ff),
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [ddl], async (driver) => {
+        const columns = (await introspect(driver)).tables['Fixed']?.columns ?? {};
+        await driver.query('INSERT INTO `Fixed` (`id`) VALUES (1)');
+        const { rows } = await driver.query<Record<string, string>>(
+          'SELECT HEX(`cut`) AS cut, HEX(`gone`) AS gone, HEX(`whole`) AS whole FROM `Fixed`',
+        );
+        expect({
+          row: rows[0],
+          reported: [columns['cut']?.default, columns['gone']?.default, columns['whole']?.default],
+          cut: columns['cut']?.resolvedDefault,
+          gone: columns['gone']?.resolvedDefault,
+        }).toEqual({
+          row: { cut: '61006200', gone: '00FF', whole: '00FF' },
+          reported: ['0x61', '0x', '0x00ff'],
+          cut: { kind: 'function', expression: '0x61' },
+          gone: { kind: 'function', expression: '0x' },
+        });
+      }),
+    );
+  });
+
   it('verifies a unique constraint and a unique index the contract declares without drift', async (test) => {
     const contract = contractWithBothKindsOfUniqueness();
     const account = contract.storage.namespaces['__unbound__']?.entries.table?.['Account'];

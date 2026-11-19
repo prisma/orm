@@ -6,7 +6,10 @@ import {
   readMysqlCatalog,
 } from '@internal/adapter-mysql/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
-import { isMysqlBytesColumnType } from '@internal/target-mysql/default-normalizer';
+import {
+  isMysqlBlobColumnType,
+  isMysqlBytesColumnType,
+} from '@internal/target-mysql/default-normalizer';
 
 /** MySQL's catalog queries, with indexes read without `STATISTICS.EXPRESSION`: MariaDB has no functional indexes and no such column. */
 export const MARIADB_CATALOG_QUERIES: MysqlCatalogQueries = {
@@ -60,21 +63,34 @@ function shownAsMysqlExpression(text: string): string {
   return Buffer.from(text, 'utf8').toString('latin1');
 }
 
-/** A quoted literal's value as MySQL reports it: on a bytes column, the hexadecimal literal of its UTF-8 bytes, which is what the column stores. */
-function quotedDefault(row: MysqlColumnRow, value: string): string {
-  if (!isMysqlBytesColumnType(row.column_type)) return value;
-  return `0x${Buffer.from(value, 'utf8').toString('hex')}`;
+/**
+ * A quoted literal's default as MySQL reports it. On a blob column it is the hexadecimal literal of its UTF-8 bytes, an expression default, the only kind MySQL gives a blob. On a `binary` or `varbinary` column MariaDB reports even bytes written in hexadecimal quoted, each byte that is not UTF-8 shown as `?`, so the report is kept as it is, which the reader keeps as an expression.
+ */
+function quotedDefault(
+  row: MysqlColumnRow,
+  value: string,
+): Pick<MysqlColumnRow, 'column_default' | 'extra'> {
+  if (isMysqlBlobColumnType(row.column_type)) {
+    return {
+      column_default: `0x${Buffer.from(value, 'utf8').toString('hex')}`,
+      extra: withGeneratedFlag(row.extra),
+    };
+  }
+  if (isMysqlBytesColumnType(row.column_type)) {
+    return { column_default: row.column_default, extra: row.extra };
+  }
+  return { column_default: value, extra: row.extra };
 }
 
 /**
- * The column's default and `EXTRA` as MySQL 8.4 reports them. MariaDB reports no default as the text `NULL`, a literal quoted, which on a bytes column MySQL reports as the hexadecimal literal of its bytes, bytes as `X'00ff'`, which MySQL reports as the generated default `0x00ff`, and a function such as `current_timestamp(3)` unquoted with no `DEFAULT_GENERATED` flag, whose text MySQL reports byte by byte; an unquoted number is a literal on both servers.
+ * The column's default and `EXTRA` as MySQL 8.4 reports them. MariaDB reports no default as the text `NULL`, a literal quoted, bytes as `X'00ff'`, which MySQL reports as the generated default `0x00ff`, and a function such as `current_timestamp(3)` unquoted with no `DEFAULT_GENERATED` flag, whose text MySQL reports byte by byte; an unquoted number is a literal on both servers.
  */
 function mysqlDefault(row: MysqlColumnRow): Pick<MysqlColumnRow, 'column_default' | 'extra'> {
   const reported = row.column_default;
   if (reported === null || reported === 'NULL') return { column_default: null, extra: row.extra };
   const quoted = QUOTED.exec(reported);
   if (quoted !== null) {
-    return { column_default: quotedDefault(row, unquoted(quoted[1] ?? '')), extra: row.extra };
+    return quotedDefault(row, unquoted(quoted[1] ?? ''));
   }
   if (NUMBER.test(reported)) return { column_default: reported, extra: row.extra };
   const bytes = BYTES_LITERAL.exec(reported)?.[1];

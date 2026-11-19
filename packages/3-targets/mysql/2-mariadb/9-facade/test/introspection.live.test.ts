@@ -256,6 +256,36 @@ describe('introspecting a MariaDB database made by hand', {
     },
   );
 
+  it('keeps a binary and varbinary default as MariaDB reports it, since it shows a byte that is not UTF-8 as a question mark', async (test) => {
+    const ddl = `CREATE TABLE \`Fixed\` (
+      \`id\` int NOT NULL,
+      \`b\` binary(4) NOT NULL DEFAULT 0x61,
+      \`vb\` varbinary(8) NOT NULL DEFAULT 0x00ff,
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(
+      test,
+      ({ url }) =>
+        withTables(url, [ddl], async (driver) => {
+          const columns = (await introspect(driver)).tables['Fixed']?.columns ?? {};
+          await driver.query('INSERT INTO `Fixed` (`id`) VALUES (1)');
+          const { rows } = await driver.query<{ b: string; vb: string }>(
+            'SELECT HEX(`b`) AS b, HEX(`vb`) AS vb FROM `Fixed`',
+          );
+          expect({
+            row: rows[0],
+            b: columns['b']?.resolvedDefault,
+            vb: columns['vb']?.resolvedDefault,
+          }).toEqual({
+            row: { b: '61000000', vb: '00FF' },
+            b: { kind: 'function', expression: "'a\\0\\0\\0'" },
+            vb: { kind: 'function', expression: "'\\0?'" },
+          });
+        }),
+      SERVER,
+    );
+  });
+
   it('reads a longtext column as json only when MariaDB gave it the column check json_valid makes', async (test) => {
     const ddl = `CREATE TABLE \`Docs\` (
       \`id\` int NOT NULL,
