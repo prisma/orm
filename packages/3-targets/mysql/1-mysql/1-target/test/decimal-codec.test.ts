@@ -220,12 +220,12 @@ describe('mysql/decimal@1', () => {
   });
 
   it.each([`1${'0'.repeat(35)}`, `0.${'1'.repeat(31)}`])(
-    'refuses to write %j declared without a precision, which the widest cast would change, saying what can be sent and to declare the precision and scale',
+    'refuses to write %j declared without a precision, which the widest cast would change, saying what can be sent and how to send it from a prepared statement and from raw SQL',
     async (value) => {
       await expect(decimal().toWire(value, {})).rejects.toMatchObject({
         code: 'RUNTIME.ENCODE_FAILED',
         message: `Cannot write "${value}" to a mysql/decimal@1 value declared without a precision: a value sent for it can have at most 35 digits before the point and 30 after it.`,
-        fix: "Round the value to at most 30 digits after the point and keep at most 35 digits before it, or declare the precision and scale of the column the value is compared with or written to, as in { codecId: 'mysql/decimal@1', typeParams: { precision: 65, scale: 0 } }.",
+        fix: `Round the value to at most 30 digits after the point and keep at most 35 digits before it. In a prepared statement, declare the parameter with the precision and scale of the column it is compared with or written to, as in { codecId: 'mysql/decimal@1', typeParams: { precision: 65, scale: 0 } }. In raw SQL, pass the value as text without param() and write the cast in the SQL, as in CAST(\${value} AS DECIMAL(65,0)).`,
       });
     },
   );

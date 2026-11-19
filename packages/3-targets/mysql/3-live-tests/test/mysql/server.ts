@@ -34,6 +34,6 @@ export const mysqlLiveServer: LiveServer = {
     oversizedOrderedInclude: 'fails',
     havingAboveExactMean: 'drops the group',
     writeReadingWrittenTable: 'refused',
-    includedSumPastWidestDecimal: 'exact',
+    sumPastWidestDecimalIncludedForSeveralParents: 'exact',
   },
 };

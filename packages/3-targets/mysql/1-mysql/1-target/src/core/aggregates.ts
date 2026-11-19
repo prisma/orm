@@ -5,7 +5,7 @@
  *
  * The defaults policy is PostgreSQL's: `count` and `sum` over integers answer as a JS `number`, throwing through the codec's safe-range guard where the value cannot be one, while `countBigInt` and `sumBigInt` answer as a `bigint`. `avg` over an integer is written `CAST(SUM(x) AS DOUBLE) / COUNT(x)`: the exact decimal sum, rounded once to a `double` and divided. `AVG(x)` is a `decimal` that MySQL and MariaDB cut to nine decimal places when they group through a temporary table, so the mean it gives depends on the query plan. For the same reason there is no `avg` over a `decimal` and no `avgDecimal`.
  *
- * `sum` and `avg` over a `double` are a `double`. `sum` over a `decimal(p,s)` is the `decimal(min(65, p + 22), s)` both servers make of it, and its codec reference carries that precision and scale rather than the column's, since the total can need more digits than the column. A total past 65 digits is capped to the largest value of that type, without an error, when the server groups through a temporary table.
+ * `sum` and `avg` over a `double` are a `double`. `sum` over a `decimal(p,s)` is the `decimal(min(65, p + 22), s)` both servers make of it, and its codec reference carries that precision and scale rather than the column's, since the total can need more digits than the column. A total past 65 digits may be capped to the largest value of that type, without an error, whenever the server groups the rows through a temporary table, which depends on the query plan: a `groupBy` on a column without an index is one example.
  *
  * `sum` and `avg` over text, dates and times are left out: MySQL reads text as a number, warning, and a date or time as its digits run together, so neither has a result this target can type. `min`/`max` over a duration are left out too, since its text does not sort in the order of the durations.
  */
@@ -33,7 +33,7 @@ import {
   MYSQL_TIMESTAMP_STRING_CODEC_ID,
   MYSQL_TIMESTAMP_TEMPORAL_CODEC_ID,
 } from './codec-ids';
-import { MYSQL_WIDEST_DECIMAL, mysqlDecimal, mysqlDecimalColumn } from './data-types';
+import { MYSQL_WIDEST_DECIMAL, mysqlDecimal, mysqlDecimalColumnOfReference } from './data-types';
 
 type ValueInput = ValueInputAggregateDescriptor['input'];
 
@@ -94,9 +94,8 @@ const DECIMAL_SUM_EXTRA_DIGITS = 22;
 
 /** The precision and scale of the total of a `decimal` column; a reference without a precision is of no column, and so is its total. */
 const decimalSumParams = (input: CodecRef | undefined): JsonValue | undefined => {
-  const params = dataTypeParams(mysqlDecimal, input?.typeParams);
-  if (params['precision'] === undefined) return undefined;
-  const column = mysqlDecimalColumn(params);
+  const column = mysqlDecimalColumnOfReference(dataTypeParams(mysqlDecimal, input?.typeParams));
+  if (column === undefined) return undefined;
   return {
     precision: Math.min(
       MYSQL_WIDEST_DECIMAL.precision,

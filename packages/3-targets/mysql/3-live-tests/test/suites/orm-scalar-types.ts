@@ -1,4 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
+import { param } from '@internal/sql-relational-core/expression';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { withSeededDatabase } from '../live-database';
@@ -94,11 +95,12 @@ export function describeOrmScalarTypes(server: LiveServer): void {
   describe(`${server.displayName} reads and writes the scalar convenience types through the ORM`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('writes and reads each type at its boundaries, a decimal as the server prints it', async (test) => {
+    it('writes and reads each type at its boundaries, a decimal as the server prints it and a double -0 as 0', async (test) => {
       await withSeededDatabase(test, server, measuresDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Measure.createAll([measure, lowest]);
         await db.orm.Measure.create({ ...lowest, id: 3, amount: '1.5', price: '-0.0', ratio: 0.1 });
+        await db.orm.Measure.create({ ...lowest, id: 4, ratio: -0 });
         const rows = await db.orm.Measure.orderBy((m) => m.id.asc()).all();
         expectTypeOf(rows[0]?.count).toEqualTypeOf<number | undefined>();
         expectTypeOf(rows[0]?.ratio).toEqualTypeOf<number | undefined>();
@@ -113,6 +115,7 @@ export function describeOrmScalarTypes(server: LiveServer): void {
             price: '0.00',
             ratio: 0.1,
           },
+          { ...lowestRead, id: 4, ratio: 0 },
         ]);
       });
     });
@@ -297,7 +300,7 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('sums a decimal past the widest decimal exactly without grouping, and as the largest value of its type, with no error, in a groupBy and on MariaDB in an include', async (test) => {
+    it('sums a decimal past the widest decimal exactly without grouping, and as the largest value of its type, with no error, grouped by a column without an index and on MariaDB included for several parents', async (test) => {
       await withSeededDatabase(
         test,
         server,
@@ -319,7 +322,9 @@ export function describeOrmScalarTypes(server: LiveServer): void {
             .orderBy((shelf) => shelf.id.asc())
             .all();
           const includedTotal =
-            server.expected.includedSumPastWidestDecimal === 'exact' ? exact : DECIMAL_MAX;
+            server.expected.sumPastWidestDecimalIncludedForSeveralParents === 'exact'
+              ? exact
+              : DECIMAL_MAX;
           expect({
             ungrouped,
             grouped: [...grouped].sort((a, b) => a.shelfId - b.shelfId),
@@ -335,6 +340,30 @@ export function describeOrmScalarTypes(server: LiveServer): void {
               { id: 2, measures: `-${includedTotal}` },
             ],
           });
+        },
+      );
+    });
+
+    it('sums a decimal past the widest decimal exactly when grouped by a column with an index', async (test) => {
+      await withSeededDatabase(
+        test,
+        server,
+        [
+          ...measuresDatabase,
+          'CREATE INDEX `Measure_shelfId` ON `Measure` (`shelfId`)',
+          'INSERT INTO `Shelf` VALUES (2)',
+          `INSERT INTO \`Measure\` VALUES (1, 0, 0, ${DECIMAL_MAX}, 0, '', 1), (2, 0, 0, ${DECIMAL_MAX}, 0, '', 1), (3, 0, 0, -${DECIMAL_MAX}, 0, '', 2), (4, 0, 0, -${DECIMAL_MAX}, 0, '', 2)`,
+        ],
+        async (url) => {
+          await using db = server.client({ url, verifyMarker: false });
+          const exact = `1${'9'.repeat(35)}.${'9'.repeat(29)}8`;
+          const grouped = await db.orm.Measure.groupBy('shelfId').aggregate((a) => ({
+            total: a.sum('amount'),
+          }));
+          expect([...grouped].sort((a, b) => a.shelfId - b.shelfId)).toEqual([
+            { shelfId: 1, total: exact },
+            { shelfId: 2, total: `-${exact}` },
+          ]);
         },
       );
     });
@@ -361,10 +390,38 @@ export function describeOrmScalarTypes(server: LiveServer): void {
           code: 'RUNTIME.ENCODE_FAILED',
           message: `Cannot write "${forty}" to a mysql/decimal@1 value declared without a precision: a value sent for it can have at most 35 digits before the point and 30 after it.`,
           fix: expect.stringContaining(
-            'or declare the precision and scale of the column the value is compared with or written to',
+            'In a prepared statement, declare the parameter with the precision and scale of the column it is compared with or written to',
           ),
         });
         expect(await declared.query(runtime, { v: forty }).toArray()).toEqual([{ id: 1 }]);
+      });
+    });
+
+    it('compares a raw decimal parameter with a decimal(65,0) column at full width only when it is sent as text and cast in the SQL', async (test) => {
+      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        const forty = '9'.repeat(40);
+        await db.orm.Ledger.create({ id: 1, wide: forty, cents: '0.00' });
+        await expect(
+          db.query(
+            db.raw
+              .sql`SELECT id FROM Ledger WHERE wide = ${param(forty, { codecId: 'mysql/decimal@1' })}`
+              .returnsRow({ id: 'mysql/int@1' })
+              .build(),
+          ),
+        ).rejects.toMatchObject({
+          code: 'RUNTIME.ENCODE_FAILED',
+          fix: expect.stringContaining(
+            'In raw SQL, pass the value as text without param() and write the cast in the SQL',
+          ),
+        });
+        expect(
+          await db.query(
+            db.raw.sql`SELECT id FROM Ledger WHERE wide = CAST(${forty} AS DECIMAL(65,0))`
+              .returnsRow({ id: 'mysql/int@1' })
+              .build(),
+          ),
+        ).toEqual([{ id: 1 }]);
       });
     });
 

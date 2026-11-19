@@ -172,7 +172,7 @@ export const mysqlConvenienceScalarTypes = {
   Float: {
     kind: 'typeChoice',
     documentation:
-      'A floating-point number, stored as MySQL double, a double-precision float, which holds every JavaScript number but NaN and the infinities.',
+      'A floating-point number, stored as MySQL double, a double-precision float, which holds every JavaScript number but NaN and the infinities; -0 is written as 0.',
     args: [storageOption('double')],
     choices: [{ when: { storage: 'double' }, type: 'Float8' }],
   },

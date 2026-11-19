@@ -15,7 +15,7 @@ import { MYSQL_ENUM_CODEC_ID } from './codec-ids';
 import {
   mysqlDatetime,
   mysqlDecimal,
-  mysqlDecimalColumn,
+  mysqlDecimalColumnAsCreated,
   mysqlTime,
   mysqlTimestamp,
 } from './data-types';
@@ -169,7 +169,9 @@ function isUnwrittenDecimalColumn(column: unknown): column is Loose {
 
 /** A `decimal` column with no precision or no scale written records the column the server makes of it, `decimal(10,0)` for neither and a scale of 0 for a precision alone, and its default is written as that column prints it; a codec reference with no precision is a raw parameter's or an aggregate's, of no column. */
 function withDecimalColumnParams(column: Loose): Loose {
-  const typeParams = mysqlDecimalColumn(isLoose(column['typeParams']) ? column['typeParams'] : {});
+  const typeParams = mysqlDecimalColumnAsCreated(
+    isLoose(column['typeParams']) ? column['typeParams'] : {},
+  );
   const columnDefault = column['default'];
   if (!isLoose(columnDefault) || typeof columnDefault['value'] !== 'string') {
     return { ...column, typeParams };

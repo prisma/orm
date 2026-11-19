@@ -117,14 +117,21 @@ export function decimalTextDigits(text: string): {
   return { integer: significantWhole.length, fraction: fraction.replace(/0+$/, '').length };
 }
 
-/** The precision and scale of the column `params` describe, as the server makes it: a `decimal` without a precision is `decimal(10,0)`, and a precision written alone has a scale of 0. */
-export function mysqlDecimalColumn(params: DataTypeParams): {
+/** The precision and scale of a column written with `params`, as the server makes it when the contract is built: a `decimal` without a precision is `decimal(10,0)`, and a precision written alone has a scale of 0. Code that reads a codec reference uses `mysqlDecimalColumnOfReference`. */
+export function mysqlDecimalColumnAsCreated(params: DataTypeParams): {
   readonly precision: number;
   readonly scale: number;
 } {
   const precision = integerParam(params, 'precision');
   if (precision === undefined) return BARE_DECIMAL;
   return { precision, scale: integerParam(params, 'scale') ?? 0 };
+}
+
+/** The precision and scale of the column a decimal codec reference's `params` name, or `undefined` when they have no precision: a reference without a precision, such as a raw or prepared parameter's, belongs to no column. */
+export function mysqlDecimalColumnOfReference(
+  params: DataTypeParams,
+): { readonly precision: number; readonly scale: number } | undefined {
+  return params['precision'] === undefined ? undefined : mysqlDecimalColumnAsCreated(params);
 }
 
 function counted(count: number, noun: string): string {
@@ -168,17 +175,16 @@ const readDecimal: DataTypeReader = (json, params) => {
   if (typeof json !== 'string' || !isDecimalText(json)) {
     return refuseJsonValue('mysql/decimal', 'decimal text, as in "12.50"', json);
   }
-  return params['precision'] === undefined
-    ? json
-    : decimalTextInColumn(json, mysqlDecimalColumn(params));
+  const column = mysqlDecimalColumnOfReference(params);
+  return column === undefined ? json : decimalTextInColumn(json, column);
 };
 
 /** A value of `decimal(precision, scale)` is written as MySQL and MariaDB print it: no leading zeros, no minus sign on zero, and exactly `scale` digits after the point. */
 const spellDecimal: DataTypeSpelling = (json, params) => {
   if (typeof json !== 'string') return json;
   const printed = printedDecimalText(json);
-  if (params['precision'] === undefined) return printed;
-  const column = mysqlDecimalColumn(params);
+  const column = mysqlDecimalColumnOfReference(params);
+  if (column === undefined) return printed;
   const [whole = '', fraction = ''] = printed.split('.');
   const scaled =
     column.scale === 0
@@ -213,7 +219,7 @@ export const mysqlDecimal = sqlDataType('mysql/decimal', {
   read: readDecimal,
   spell: spellDecimal,
   equalityKey: decimalTextEqualityKey,
-  normalize: (params: DecimalParams): DecimalParams => mysqlDecimalColumn(params),
+  normalize: (params: DecimalParams): DecimalParams => mysqlDecimalColumnAsCreated(params),
   casts: {
     [mysqlText.id]: (value) =>
       typeof value === 'string' ? mysqlDecimalText(value) : refuseWrongShape(value, 'text'),
