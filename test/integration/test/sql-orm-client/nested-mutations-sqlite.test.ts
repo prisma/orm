@@ -41,8 +41,8 @@ const Comment = model('Comment', {
 }).sql({ table: 'comments' });
 const Profile = model('Profile', {
   fields: {
-    id: field.column(integerColumn).id(),
-    userId: field.column(integerColumn).column('user_id').unique(),
+    id: field.column(integerNumberColumn).id(),
+    userId: field.column(integerNumberColumn).column('user_id').unique(),
     bio: field.column(textColumn),
   },
 }).sql({ table: 'profiles' });
