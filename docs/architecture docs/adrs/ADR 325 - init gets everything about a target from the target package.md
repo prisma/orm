@@ -148,7 +148,7 @@ The `--json` result reports `target`: the short name for a listed package. When 
 - A target package without a runtime client cannot provide a contribution, because there is no `db.ts` to write.
 - `init` cannot write a project for a target package that is not installed. `--skip-install` in a project without it is refused.
 - `init` runs code from the package the user names. It is the same package the config loads a moment later.
-- When `--target` accepts a package name, `init` will not know an unlisted package's drivers before installing it. How it learns them is decided with that change.
+- `init` does not know an unlisted package's drivers before installing it, and it does not read the registry to find out. Its first install is the package and `dotenv`, and the package manager handles the package's required peers its own way; the contribution's `peerPackages` are declared in the later install. Where the package manager's configuration refuses a package without its peers, the install fails and `init` reports it.
 - The minimum server version has one source, the target package's code. The CLI keeps no copy of it.
 
 ## Alternatives considered
