@@ -81,7 +81,7 @@ These cost real anger in the previous session. They are also in his global instr
 ## 7. State of the code
 
 - **`prisma/orm#31081`** is open as a draft. Its remote branch `claude/pooled-url-startup-options` holds four superseded commits (tip `9bee8b8e80`): the retry design, then the statement-on-every-connection design. All of it is to be thrown away. Its title and description describe the superseded design.
-- **This branch, `claude/pooled-url-design-notes`,** is `main` at `858ec6e549` plus this folder. It exists only to carry the notes. Do not merge it as it is.
+- **This branch, `claude/pooled-url-design-notes`,** is `main` at `52c16aa515` plus this folder. It exists only to carry the notes. Do not merge it as it is.
 - No implementation of the agreed design exists anywhere.
 
 To continue: make a fresh worktree from the latest `main`. Build on a branch, then force-push it to `claude/pooled-url-startup-options` on the `bot` remote so #31081 becomes the new change, and rewrite its title and description. Bring this folder along if the notes should ship with the change; the repository's `projects/README.md` says a project folder is deleted when the project closes.
