@@ -13,9 +13,21 @@
       "types": "./dist/contract-types.d.ts",
       "default": "./dist/contract-types.js"
     },
+    "./init": {
+      "types": "./dist/init.d.ts",
+      "default": "./dist/init.js"
+    },
     "./migration": {
       "types": "./dist/migration.d.ts",
       "default": "./dist/migration.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "default": "./dist/runtime.js"
+    },
+    "./static": {
+      "types": "./dist/static.d.ts",
+      "default": "./dist/static.js"
     },
     "./package.json": "./package.json"
   },
@@ -23,6 +35,7 @@
   "dependencies": {
     "@prisma/orm-family-sql": "PUBLISHED_VERSION",
     "@prisma/orm-framework": "PUBLISHED_VERSION",
+    "@prisma/orm-postgres": "PUBLISHED_VERSION",
     "@prisma/orm-target-postgres": "PUBLISHED_VERSION"
   }
 }
