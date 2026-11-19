@@ -82,6 +82,14 @@ class MariaDbQueryable<Connection extends mariadb.Pool | mariadb.Connection> imp
   }
 }
 
+/**
+ * Server errors after which InnoDB has rolled back the whole transaction, not
+ * only the failing statement: a deadlock (1213) and a full lock table (1206).
+ * A lock wait timeout (1205) does so only with `innodb_rollback_on_timeout=ON`,
+ * so it is not included.
+ */
+const TRANSACTION_ROLLED_BACK_ERRNOS = new Set(['1213', '1206'])
+
 // All transaction operations use `client.query` instead of `client.execute` to avoid using the
 // binary protocol, which does not support transactions in the MariaDB driver.
 class MariaDbTransaction extends MariaDbQueryable<mariadb.Connection> implements Transaction {
@@ -93,6 +101,19 @@ class MariaDbTransaction extends MariaDbQueryable<mariadb.Connection> implements
    */
   private closed = false
 
+  /**
+   * The error with which the server rolled back this transaction. Once set, the connection is no
+   * longer in a transaction: further statements would each commit on their own, so they are
+   * refused, and `commit()` fails with it.
+   */
+  private rolledBackBy: DriverAdapterError | undefined
+
+  /**
+   * The last statement or command sent on this transaction. They run one at a time, so each one
+   * sees whether the previous one ended the transaction before it is sent.
+   */
+  private lastOperation: Promise<unknown> = Promise.resolve()
+
   constructor(
     readonly conn: mariadb.Connection,
     mariadbOptions: PrismaMariadbOptions | undefined,
@@ -102,9 +123,21 @@ class MariaDbTransaction extends MariaDbQueryable<mariadb.Connection> implements
     super(conn, mariadbOptions)
   }
 
-  protected override async performIO(query: SqlQuery): Promise<ArrayModeResult> {
-    this.assertOpen()
-    return await super.performIO(query)
+  protected override performIO(query: SqlQuery): Promise<ArrayModeResult> {
+    return this.serialize(async () => {
+      this.assertOpen()
+      try {
+        return await super.performIO(query)
+      } catch (error) {
+        if (
+          error instanceof DriverAdapterError &&
+          TRANSACTION_ROLLED_BACK_ERRNOS.has(String(error.cause.originalCode))
+        ) {
+          this.rolledBackBy = error
+        }
+        throw error
+      }
+    })
   }
 
   async commit(): Promise<void> {
@@ -136,10 +169,18 @@ class MariaDbTransaction extends MariaDbQueryable<mariadb.Connection> implements
       return
     }
     this.closed = true
+    // Let a statement that is still running finish, so a server rollback it causes is known here.
+    await this.lastOperation
 
     try {
+      if (sql === 'COMMIT' && this.rolledBackBy) {
+        throw this.rolledBackBy
+      }
       await this.client.query({ sql })
     } catch (err) {
+      if (err === this.rolledBackBy) {
+        throw err
+      }
       this.onError(err)
     } finally {
       try {
@@ -150,9 +191,17 @@ class MariaDbTransaction extends MariaDbQueryable<mariadb.Connection> implements
     }
   }
 
-  private async sendTransactionControl(sql: string): Promise<void> {
-    this.assertOpen()
-    await this.client.query({ sql }).catch(this.onError.bind(this))
+  private sendTransactionControl(sql: string): Promise<void> {
+    return this.serialize(async () => {
+      this.assertOpen()
+      await this.client.query({ sql }).catch(this.onError.bind(this))
+    })
+  }
+
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.lastOperation.then(operation)
+    this.lastOperation = result.catch(() => undefined)
+    return result
   }
 
   private assertOpen(): void {
@@ -161,6 +210,9 @@ class MariaDbTransaction extends MariaDbQueryable<mariadb.Connection> implements
         kind: 'TransactionAlreadyClosed',
         cause: 'The transaction has already been committed or rolled back',
       })
+    }
+    if (this.rolledBackBy) {
+      throw this.rolledBackBy
     }
   }
 }
