@@ -255,10 +255,14 @@ export class QueryInterpreter {
           return { value: null, lastInsertId }
         }
 
+        const parentRecords = (Array.isArray(parent) ? parent : [parent]).map(asRecord)
         const children = await Promise.all(
           node.args.children.map(async (joinExpr) => ({
             joinExpr,
-            childRecords: (await this.interpretNode(joinExpr.child, context)).value,
+            // A child can only attach to a parent whose join keys are all non-null.
+            childRecords: parentRecords.some((record) => joinExpr.on.every(([key]) => record[key] != null))
+              ? (await this.interpretNode(joinExpr.child, context)).value
+              : [],
           })),
         )
 
