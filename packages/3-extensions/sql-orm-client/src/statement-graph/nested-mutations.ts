@@ -370,6 +370,24 @@ export function addAfterWrite(
   }
 }
 
+export function rejectForeignKeyWithRelationMutation(
+  data: Readonly<Record<string, unknown>>,
+  relationMutations: readonly ParsedRelationMutation[],
+): void {
+  for (const { name, relation } of partitionByOwnership(relationMutations).parentOwned) {
+    const fields = relation.on.localFields.filter(
+      (field) => Object.hasOwn(data, field) && data[field] !== undefined,
+    );
+    if (fields.length > 0) {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `update() data sets ${fields.map((field) => `"${field}"`).join(', ')}, the foreign key of relation "${name}", and also has a callback on "${name}"; set the foreign key or use the callback`,
+        { meta: { relation: name, problem: 'foreign-key-with-relation-mutation', fields } },
+      );
+    }
+  }
+}
+
 function rejectUpdateOnly({ name, mutations }: ParsedRelationMutation): void {
   for (const { kind } of mutations) {
     if (kind !== 'create' && kind !== 'connect') {

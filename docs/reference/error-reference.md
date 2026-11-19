@@ -1101,7 +1101,7 @@ An aggregate was invoked for an operation/input pair the composed target declare
 
 ### ORM.ARGUMENT_INVALID
 
-An argument to an ORM client or query-builder method, including the input of a nested relation mutation, is malformed or missing a required part. `problem: 'missing-where'` means a nested `update()` or `delete()` on a to-many relation has no `where` that filters, and `problem: 'parent-link-column'` that the data or update defaults of a nested `updateAll()` or `update()` set a field linking the related rows to their parent.
+An argument to an ORM client or query-builder method, including the input of a nested relation mutation, is malformed or missing a required part. `problem: 'missing-where'` means a nested `update()` or `delete()` on a to-many relation has no `where` that filters, `problem: 'parent-link-column'` that the data or update defaults of a nested `updateAll()` or `update()` set a field linking the related rows to their parent, and `problem: 'foreign-key-with-relation-mutation'` that `update()` data sets a field of the foreign key the record holds for a relation (`fields`) and also has a callback on that relation (`relation`).
 
 ### ORM.CAPABILITY_MISSING
 

@@ -59,6 +59,7 @@ import {
   addBeforeWrite,
   addCreateWithRelations,
   type ParentRow,
+  rejectForeignKeyWithRelationMutation,
 } from './nested-mutations';
 import { PayloadData } from './payload-data';
 import type { Requires } from './requires';
@@ -222,6 +223,7 @@ export function updateFirstGraph(
   data: Readonly<Record<string, unknown>>,
   relationMutations: readonly ParsedRelationMutation[] = [],
 ): Graph {
+  rejectForeignKeyWithRelationMutation(data, relationMutations);
   const { state } = collection;
   const b = builderOf(collection);
   const set = mappedUpdateRow(collection, data);

@@ -12,6 +12,12 @@ interface SingleRowMutator {
   delete(): unknown;
 }
 
+interface LinkMutator extends SingleRowMutator {
+  create(data: object): unknown;
+  connect(criterion: object): unknown;
+  disconnect(): unknown;
+}
+
 function parsed(modelName: 'User' | 'Post', input: Record<string, unknown>) {
   const context = getTestContext();
   return parseMutationInput(
@@ -303,6 +309,44 @@ describe('rejections of update() and delete() on a relation', () => {
   ] as const)('rejects %s while the graph is built', (_, modelName, input, code, message, meta) => {
     expect(() => printUpdate(input, modelName)).toThrow(
       expect.objectContaining({ code, message, meta }),
+    );
+  });
+
+  it.each([
+    ['create', (inviter: LinkMutator) => inviter.create({ id: 9, name: 'Nia', email: 'nia@x.io' })],
+    ['connect', (inviter: LinkMutator) => inviter.connect({ id: 2 })],
+    ['disconnect', (inviter: LinkMutator) => inviter.disconnect()],
+    ['update', (inviter: LinkMutator) => inviter.update({ name: 'Grace H.' })],
+    ['delete', (inviter: LinkMutator) => inviter.delete()],
+  ])(
+    'rejects update() data that sets the foreign key of a relation together with %s() on it',
+    (_, invitedBy) => {
+      expect(() => printUpdate({ invitedBy }, 'User', { name: 'Ada', invitedById: 3 })).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          message:
+            'update() data sets "invitedById", the foreign key of relation "invitedBy", and also has a callback on "invitedBy"; set the foreign key or use the callback',
+          meta: {
+            relation: 'invitedBy',
+            problem: 'foreign-key-with-relation-mutation',
+            fields: ['invitedById'],
+          },
+        }),
+      );
+    },
+  );
+
+  it('accepts update() data that leaves the foreign key of a relation with a callback undefined', () => {
+    expect(
+      printUpdate({ invitedBy: (inviter: LinkMutator) => inviter.disconnect() }, 'User', {
+        invitedById: undefined,
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        'n2 Update users set invited_by_id = null where id = 1',
+        'result: n2',
+      ].join('\n'),
     );
   });
 
