@@ -115,6 +115,10 @@ abstract class TransactionBase
         return entry.state === 'rolled-back';
       },
       logDroppedError: (error) => this.logDroppedError(error),
+      abandon: async () => {
+        stack.invalidate();
+        await this.rollback().catch(() => undefined);
+      },
     };
   }
 

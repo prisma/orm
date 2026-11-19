@@ -1822,7 +1822,7 @@ async function runTransactionOn<R>(
   }
 
   try {
-    return await runAndSettleTransaction(transaction, fn, () => false);
+    return await runAndSettleTransaction(transaction, fn);
   } catch (error) {
     const settlement = settlementOf(transaction);
     if (settlement?.committed !== true && settlement?.rolledBack !== true) {
@@ -1862,11 +1862,7 @@ export async function withSavepoint<TCtx, R>(
   if (txCtx.invalidated) throw transactionClosedError();
   const savepoint = await txCtx[contextTransaction].transaction();
   try {
-    return await runAndSettleTransaction(
-      savepoint,
-      (tx) => fn(buildMembers(tx)),
-      () => txCtx.invalidated,
-    );
+    return await runAndSettleTransaction(savepoint, (tx) => fn(buildMembers(tx)));
   } catch (error) {
     if (savepoint.signal.aborted && error === savepoint.signal.reason) {
       await savepoint.rollback().catch(() => undefined);
@@ -1980,7 +1976,6 @@ function guardedTransactionContext(
 async function runAndSettleTransaction<R>(
   transaction: RuntimeTransaction,
   fn: (tx: TransactionContext) => PromiseLike<R>,
-  isEnclosingClosed: () => boolean,
 ): Promise<R> {
   let invalidated = false;
   const signal = transaction.signal;
@@ -1996,10 +1991,7 @@ async function runAndSettleTransaction<R>(
   signal.addEventListener('abort', onAbort, { once: true });
   if (signal.aborted) onAbort();
 
-  const txContext = guardedTransactionContext(
-    transaction,
-    () => invalidated || isEnclosingClosed(),
-  );
+  const txContext = guardedTransactionContext(transaction, () => invalidated);
 
   let commitRequested = false;
   try {
@@ -2022,6 +2014,7 @@ async function runAndSettleTransaction<R>(
           settlement.logDroppedError(rollbackError);
           throw selected;
         }
+        await settlement?.abandon();
         const wrapped = runtimeError(
           'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
           'Transaction rollback failed after callback error',
@@ -2038,6 +2031,7 @@ async function runAndSettleTransaction<R>(
     } catch (rollbackError) {
       const settlement = settlementOf(transaction);
       if (settlement?.rolledBack === true) settlement.logDroppedError(rollbackError);
+      else await settlement?.abandon();
     }
     const wrapped = runtimeError('RUNTIME.TRANSACTION_COMMIT_FAILED', 'Transaction commit failed', {
       commitError: error,

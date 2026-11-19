@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SqlMiddleware } from '../src/middleware/sql-middleware';
 import { type TransactionContext, withSavepoint, withTransaction } from '../src/sql-runtime';
+import { deferred } from './closed-runtime-stub';
 import {
   createSetup,
   finalized,
@@ -210,6 +211,61 @@ describe('withSavepoint', () => {
       'finalized:transaction:rolled-back',
     ]);
   });
+
+  it.each([
+    { enclosing: 'the outer transaction', depth: 0 },
+    { enclosing: 'a savepoint', depth: 1 },
+  ])(
+    'closes the transaction when $enclosing returns while a nested call it did not await is running',
+    async ({ depth }) => {
+      const { runtime, events } = createSetup();
+      const proceed = deferred();
+      const contexts: TransactionContext[] = [];
+      let nested: Promise<unknown> = Promise.resolve();
+      const enclosingCall = deferred<{ call: Promise<unknown> }>();
+      const leave = (ctx: TransactionContext) => {
+        contexts.push(ctx);
+        nested = withSavepoint(
+          ctx,
+          async (inner) => {
+            contexts.push(inner.ctx);
+            await proceed.promise;
+            return 1;
+          },
+          build,
+        );
+      };
+
+      const run = withTransaction(runtime, async (tx) => {
+        if (depth === 0) return leave(tx);
+        contexts.push(tx);
+        const call = withSavepoint(tx, async (middle) => leave(middle.ctx), build);
+        enclosingCall.resolve({ call });
+        await call.catch(() => undefined);
+      });
+
+      await rejectsWith(
+        depth === 0 ? run : (await enclosingCall.promise).call,
+        'TRANSACTION_COMMIT_FAILED',
+      );
+      await run.catch(() => undefined);
+      const before = events.length;
+      for (const ctx of contexts) {
+        await rejectsWith(ctx.execute(statementC), 'TRANSACTION_CLOSED');
+      }
+      proceed.resolve();
+      await nested.catch(() => undefined);
+
+      expect(trace(events.slice(before))).toBe('');
+      expect(trace(events).endsWith('destroy')).toBe(true);
+      const ends = transactionIds(events).map(
+        (id) =>
+          events.filter((event) => event.activity?.id === id && event.name.startsWith('ended:'))
+            .length,
+      );
+      expect(ends).toEqual(ends.map(() => 1));
+    },
+  );
 
   it('rejects a context the runtime did not make', async () => {
     const { runtime } = createSetup();
