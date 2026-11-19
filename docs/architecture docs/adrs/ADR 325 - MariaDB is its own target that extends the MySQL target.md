@@ -114,8 +114,6 @@ MariaDB's metadata is MySQL's, spread, with its own `targetId`, `id` and `displa
 | Column defaults in the catalog | A literal unquoted; a function flagged `DEFAULT_GENERATED` in `EXTRA` | No default reported as the text `NULL`; a literal quoted; a function such as `current_timestamp(3)` with no flag | `asMysqlColumnRow`, so MySQL's introspection and schema verifier read MariaDB's rows unchanged |
 | Session settings | `time_zone = '+00:00'` | The same | Inherited from MySQL's runtime metadata; MariaDB sets none of its own |
 
-MySQL could also read the proposed row as `VALUES(column)`, but it deprecates `VALUES()` in `ON DUPLICATE KEY UPDATE` from 8.0.20, so MySQL's renderer keeps the row alias. MariaDB 10.11 and 11.4 refuse the row alias (error 1064) and accept `VALUES()` without a deprecation warning, so only MariaDB's renderer writes it. The marker upsert in the control adapter needs neither: it binds the values a second time for the update.
-
 The capabilities `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation` make the ORM load MariaDB's includes with one query per relation instead of the one-query include. [ADR 164](ADR%20164%20-%20Repository%20Layer.md) describes both strategies and how the contract's capabilities choose between them.
 
 ## The folder layout

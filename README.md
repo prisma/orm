@@ -98,9 +98,9 @@ See [Using extensions](https://www.prisma.io/docs/orm/extensions/using-extension
 
 - **PostgreSQL** — the primary target, first-class support
 - **MongoDB** — first-class support
-- **SQLite** — planned next, a proof of concept today
-- **MySQL** — early support, MySQL 8.4 and later ([`@prisma/orm-mysql`](./packages/9-public/@prisma/orm-mysql/README.md))
-- **MariaDB** — early support, MariaDB 10.11 and later ([`@prisma/orm-mariadb`](./packages/9-public/@prisma/orm-mariadb/README.md))
+- **SQLite** — a proof of concept today
+- **MySQL** — a proof of concept today, MySQL 8.4 and later ([`@prisma/orm-mysql`](./packages/9-public/@prisma/orm-mysql/README.md))
+- **MariaDB** — a proof of concept today, MariaDB 10.11 and later ([`@prisma/orm-mariadb`](./packages/9-public/@prisma/orm-mariadb/README.md))
 
 See the [feature scoreboard](./scorecard.md) for what PostgreSQL, SQLite and MongoDB support today; it does not yet cover MySQL or MariaDB.
 
