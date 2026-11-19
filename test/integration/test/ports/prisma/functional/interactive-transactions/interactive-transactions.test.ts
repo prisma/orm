@@ -25,9 +25,9 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   'rollback throw value'                 → PORTED
 //   'postgresql: nested create'            → NON-PORTED (covered by nested-transactions.integration.test.ts)
 //   'mongodb: nested transactions …'       → mongo-skip (postgres port)
-//   'sql: nested rollback'                 → NON-PORTED (covered by nested-transactions.integration.test.ts)
-//   'sql: nested rollback restores …'      → NON-PORTED (covered by nested-transactions.integration.test.ts)
-//   'sql: nested commit keeps state …'     → NON-PORTED (covered by nested-transaction.test.ts)
+//   'sql: nested rollback'                 → NON-PORTED (nested rollback with outer commit covered by nested-transactions.integration.test.ts; no test rolls back the outer after it)
+//   'sql: nested rollback restores …'      → NON-PORTED (innermost of three rolling back covered by nested-transactions.integration.test.ts; no test rolls back an enclosing one after it)
+//   'sql: nested commit keeps state …'     → NON-PORTED (three levels committing covered by nested-transaction.test.ts; no test reads the rows back)
 //   'sql: disallow concurrent nested …'   → NON-PORTED (Prisma message; RUNTIME.TRANSACTION_SUSPENDED)
 //   'sql: allow nested transactions …'    → NON-PORTED (no Prisma 8 test)
 //   'sql: nested commit keeps outer …'    → NON-PORTED (covered by nested-transactions.integration.test.ts)
