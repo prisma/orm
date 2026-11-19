@@ -549,8 +549,6 @@ export class ClientEngine implements Engine {
       throw this.#transformRequestError(err, request)
     })
 
-    // Model queries are parameterized even when the batch also has raw queries, so that their
-    // values reach the database as given instead of being parsed by the query compiler.
     const onlyRawQueries = queries.every(isRawQuery)
     let batchResponse: BatchResponse
     let placeholderValues: Record<string, unknown> = {}
@@ -565,7 +563,9 @@ export class ClientEngine implements Engine {
       placeholderValues = extractedValues
       queryInfoQueries = parameterizedBatch.batch.map((query) => query.query)
 
-      const cached = this.#queryPlanCache?.getBatch(cacheKeyStr)
+      // Raw queries are not parameterized, so their values would end up in the cache key.
+      const isCacheable = !queries.some(isRawQuery)
+      const cached = isCacheable ? this.#queryPlanCache?.getBatch(cacheKeyStr) : undefined
       if (cached) {
         debug('batch query plan cache hit')
         batchResponse = cached
@@ -573,7 +573,9 @@ export class ClientEngine implements Engine {
         debug('batch query plan cache miss')
         try {
           batchResponse = this.#compileBatch(parameterizedBatch.batch, cacheKeyStr, queryCompiler)
-          this.#queryPlanCache?.setBatch(cacheKeyStr, batchResponse)
+          if (isCacheable) {
+            this.#queryPlanCache?.setBatch(cacheKeyStr, batchResponse)
+          }
         } catch (error) {
           throw this.#transformCompileError(error)
         }
