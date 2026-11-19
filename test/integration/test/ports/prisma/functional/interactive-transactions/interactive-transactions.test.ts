@@ -11,8 +11,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   `postgres({ contract, url }).transaction(async (tx) => { tx.orm.public.User... })`
 // Only the array/batch `$transaction([...])` form is absent.
 //
-// Nested `$transaction` (tx.$transaction(async tx2 => {...})) has no equivalent
-// in Prisma 8's facade: the tx context gives `tx.orm`/`tx.sql` but no `.transaction()`.
+// Nested `$transaction` (tx.$transaction(async tx2 => {...})) is `tx.transaction(fn)`
+// on Postgres; its tests are not ported here, see the non-ported list.
 // Transaction options (timeout, maxWait, isolationLevel) are not supported in the facade.
 //
 // Dispositions:
@@ -23,21 +23,21 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   'timeout override by PrismaClient'     → NON-PORTED (no per-client tx options)
 //   'rollback throw'                       → PORTED
 //   'rollback throw value'                 → PORTED
-//   'postgresql: nested create'            → NON-PORTED (no nested tx in facade)
+//   'postgresql: nested create'            → NON-PORTED (covered by nested-transactions.integration.test.ts)
 //   'mongodb: nested transactions …'       → mongo-skip (postgres port)
-//   'sql: nested rollback'                 → NON-PORTED (no nested tx in facade)
-//   'sql: nested rollback restores …'      → NON-PORTED (no nested tx in facade)
-//   'sql: nested commit keeps state …'     → NON-PORTED (no nested tx in facade)
-//   'sql: disallow concurrent nested …'   → NON-PORTED (no nested tx in facade)
-//   'sql: allow nested transactions …'    → NON-PORTED (no nested tx in facade)
-//   'sql: nested commit keeps outer …'    → NON-PORTED (no nested tx in facade)
-//   'sql: sequential nested …'            → NON-PORTED (no nested tx in facade)
-//   'sql: deep nesting (3 levels) works'  → NON-PORTED (no nested tx in facade)
-//   'sql: nested rollback can be caught …' → NON-PORTED (no nested tx in facade)
-//   'sql: enforce order for nested …'     → NON-PORTED (no nested tx in facade)
-//   'sql: child fails if parent tries …'  → NON-PORTED (no nested tx in facade)
-//   'sql: child fails if parent rolls …'  → NON-PORTED (no nested tx in facade)
-//   'sql: child fails if nested parent …' → NON-PORTED (no nested tx in facade)
+//   'sql: nested rollback'                 → NON-PORTED (covered by nested-transactions.integration.test.ts)
+//   'sql: nested rollback restores …'      → NON-PORTED (covered by nested-transactions.integration.test.ts)
+//   'sql: nested commit keeps state …'     → NON-PORTED (covered by nested-transaction.test.ts)
+//   'sql: disallow concurrent nested …'   → NON-PORTED (Prisma message; RUNTIME.TRANSACTION_SUSPENDED)
+//   'sql: allow nested transactions …'    → NON-PORTED (no Prisma 8 test)
+//   'sql: nested commit keeps outer …'    → NON-PORTED (covered by nested-transactions.integration.test.ts)
+//   'sql: sequential nested …'            → NON-PORTED (covered by nested-transactions.integration.test.ts)
+//   'sql: deep nesting (3 levels) works'  → NON-PORTED (covered by nested-transaction.test.ts)
+//   'sql: nested rollback can be caught …' → NON-PORTED (covered by nested-transactions.integration.test.ts)
+//   'sql: enforce order for nested …'     → NON-PORTED (Prisma message; RUNTIME.TRANSACTION_SUSPENDED)
+//   'sql: child fails if parent tries …'  → NON-PORTED (Prisma message; RUNTIME.TRANSACTION_COMMIT_FAILED)
+//   'sql: child fails if parent rolls …'  → NON-PORTED (Prisma code P2028; no Prisma 8 test)
+//   'sql: child fails if nested parent …' → NON-PORTED (Prisma code P2028; RUNTIME.TRANSACTION_COMMIT_FAILED)
 //   'mongodb: disallow nested …'          → mongo-skip (postgres port)
 //   'forbidden'                            → NON-PORTED (Prisma-specific API methods)
 //   'rollback query'                       → PORTED (unique constraint → rollback)
