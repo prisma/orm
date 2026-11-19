@@ -131,6 +131,39 @@ describe('resolvePostgresBinding', () => {
       }),
     );
   });
+
+  it('accepts a URL whose root certificate file is missing, leaving the file error to the driver', () => {
+    expect(
+      resolvePostgresBinding({
+        url: 'postgres://u:p@localhost/db?sslrootcert=/definitely/not/a/ca.crt',
+      }),
+    ).toEqual({
+      kind: 'url',
+      url: 'postgres://u:p@localhost/db?sslrootcert=/definitely/not/a/ca.crt',
+    });
+  });
+
+  it('accepts a URL whose client certificate file is missing, leaving the file error to the driver', () => {
+    expect(
+      resolvePostgresBinding({
+        url: 'postgres://u:p@localhost/db?sslcert=/definitely/not/a/client.crt',
+      }),
+    ).toEqual({
+      kind: 'url',
+      url: 'postgres://u:p@localhost/db?sslcert=/definitely/not/a/client.crt',
+    });
+  });
+
+  it('accepts a URL whose client key file is missing, leaving the file error to the driver', () => {
+    expect(
+      resolvePostgresBinding({
+        url: 'postgres://u:p@localhost/db?sslkey=/definitely/not/a/client.key',
+      }),
+    ).toEqual({
+      kind: 'url',
+      url: 'postgres://u:p@localhost/db?sslkey=/definitely/not/a/client.key',
+    });
+  });
 });
 
 describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {
