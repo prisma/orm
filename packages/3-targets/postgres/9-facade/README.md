@@ -232,7 +232,9 @@ await db.execute(db.raw.sql`UPDATE posts SET views = 0`.affectedCount().build())
 
 ### Transactions
 
-`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query`, `execute`, `toSql`, `enums` and `nativeEnums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]`, `transaction` or `runtime()`. A transaction on a serverless connection (`await postgres.connect({ url })`) offers the same members. The type is `PostgresTransactionContext<Contract>`.
+`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query`, `execute`, `toSql`, `enums` and `nativeEnums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]` or `runtime()`. A transaction on a serverless connection (`await postgres.connect({ url })`) offers the same members. The type is `PostgresTransactionContext<Contract>`.
+
+`tx.transaction(async (inner) => ...)` runs its callback in a savepoint, and `inner` has the same type and members as `tx`, so it nests to any depth. It takes no options. When the callback returns, the savepoint is released and the call resolves with the callback's result; when it throws, the work since the savepoint is rolled back, the call rejects with the same error and `tx` can be used again. When a statement inside it failed, Postgres refuses the release, so a callback that catches that error and returns rolls back too and the call rejects with `RUNTIME.TRANSACTION_COMMIT_FAILED`. While the callback runs, `tx` refuses work, a second `tx.transaction(...)` included, with `RUNTIME.TRANSACTION_SUSPENDED`; once the call settles, `inner` refuses work with `RUNTIME.TRANSACTION_CLOSED`. Nothing is committed until the outer callback returns.
 
 ```ts
 await db.transaction(async (tx) => {

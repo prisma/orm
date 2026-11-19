@@ -627,6 +627,43 @@ describe('integration/nested-variant-mutations', () => {
     );
 
     it(
+      'on a relation the parent holds the key for, unlinks the parent only when the linked row is of the variant and matches the criteria',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { comments } = collectionsOf(runtime);
+          await runtime.query('update task_comments set task_id = 1 where id = 1');
+
+          const otherVariant = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('feature').disconnect(),
+          });
+          const otherRow = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('bug').disconnect([{ id: 5 }]),
+          });
+          const bug = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('bug').disconnect([{ id: 5 }, { id: 1 }]),
+          });
+          await runtime.query('update task_comments set task_id = 2 where id = 1');
+          const otherFeature = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('bug').disconnect(),
+          });
+          const feature = await comments.where({ id: 1 }).update({
+            task: (task) => task.variant('feature').disconnect(),
+          });
+
+          expect([otherVariant, otherRow, bug, otherFeature, feature]).toEqual([
+            { id: 1, body: 'Seen it', taskId: 1 },
+            { id: 1, body: 'Seen it', taskId: 1 },
+            { id: 1, body: 'Seen it', taskId: null },
+            { id: 1, body: 'Seen it', taskId: 2 },
+            { id: 1, body: 'Seen it', taskId: null },
+          ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
       'on a relation through a junction, links and unlinks a row of the variant and refuses a row of another',
       async () => {
         await withCollectionRuntime(async (runtime) => {
@@ -664,6 +701,98 @@ describe('integration/nested-variant-mutations', () => {
             { task_id: 2, label_id: 1 },
             { task_id: 3, label_id: 1 },
           ]);
+        }, polyContext.contract);
+      },
+      timeouts.spinUpPpgDev,
+    );
+    it(
+      'create() with onConflict connect links a colliding row of the variant and refuses a row of another before linking it',
+      async () => {
+        await withCollectionRuntime(async (runtime) => {
+          await seed(runtime);
+          const { projects, comments, labels } = collectionsOf(runtime);
+          const variantMismatch = (relation: string) => ({
+            code: 'ORM.RELATION_ROW_MISSING',
+            message: `create() nested mutation for relation "${relation}" found a row of another variant than "bug" on its conflict key`,
+            meta: { kind: 'create', relation, variant: 'bug' },
+          });
+          const asBug = (id: number) => ({ id, title: 'Clash', severity: 'low' });
+
+          const wrong = {
+            childHeld: await rejectionShape(
+              projects.where({ id: 1 }).update({
+                tasks: (tasks) => tasks.variant('bug').create(asBug(2), { onConflict: 'connect' }),
+              }),
+            ),
+            parentHeld: await rejectionShape(
+              comments.where({ id: 1 }).update({
+                task: (task) => task.variant('bug').create(asBug(2), { onConflict: 'connect' }),
+              }),
+            ),
+            manyToMany: await rejectionShape(
+              labels.where({ id: 1 }).update({
+                tasks: (tasks) => tasks.variant('bug').create(asBug(2), { onConflict: 'connect' }),
+              }),
+            ),
+          };
+          const unchanged = {
+            tasks: await storedTasks(runtime),
+            comments: await runtime.query('select id, task_id from task_comments'),
+            links: await links(runtime),
+          };
+          const linked = [
+            await projects.where({ id: 1 }).update({
+              tasks: (tasks) => tasks.variant('bug').create(asBug(1), { onConflict: 'connect' }),
+            }),
+            await comments.where({ id: 1 }).update({
+              task: (task) => task.variant('bug').create(asBug(5), { onConflict: 'connect' }),
+            }),
+            await labels.where({ id: 1 }).update({
+              tasks: (tasks) => tasks.variant('bug').create(asBug(5), { onConflict: 'connect' }),
+            }),
+          ];
+
+          expect(wrong).toEqual({
+            childHeld: expect.objectContaining(variantMismatch('tasks')),
+            parentHeld: expect.objectContaining(variantMismatch('task')),
+            manyToMany: expect.objectContaining(variantMismatch('tasks')),
+          });
+          expect(unchanged).toEqual({
+            tasks: [
+              { id: 1, title: 'Crash', type: 'bug', severity: 'high', project_id: null },
+              { id: 2, title: 'Dark mode', type: 'feature', severity: null, project_id: null },
+              { id: 3, title: 'Hang', type: 'bug', severity: 'low', project_id: 1 },
+              { id: 4, title: 'Search', type: 'feature', severity: null, project_id: 1 },
+              { id: 5, title: 'Freeze', type: 'bug', severity: 'high', project_id: null },
+            ],
+            comments: [{ id: 1, task_id: null }],
+            links: [
+              { task_id: 3, label_id: 1 },
+              { task_id: 4, label_id: 1 },
+            ],
+          });
+          expect(linked).toEqual([
+            { id: 1, name: 'Launch' },
+            { id: 1, body: 'Seen it', taskId: 5 },
+            { id: 1, name: 'ui' },
+          ]);
+          expect({
+            tasks: await storedTasks(runtime),
+            links: await links(runtime),
+          }).toEqual({
+            tasks: [
+              { id: 1, title: 'Crash', type: 'bug', severity: 'high', project_id: 1 },
+              { id: 2, title: 'Dark mode', type: 'feature', severity: null, project_id: null },
+              { id: 3, title: 'Hang', type: 'bug', severity: 'low', project_id: 1 },
+              { id: 4, title: 'Search', type: 'feature', severity: null, project_id: 1 },
+              { id: 5, title: 'Freeze', type: 'bug', severity: 'high', project_id: null },
+            ],
+            links: [
+              { task_id: 3, label_id: 1 },
+              { task_id: 4, label_id: 1 },
+              { task_id: 5, label_id: 1 },
+            ],
+          });
         }, polyContext.contract);
       },
       timeouts.spinUpPpgDev,

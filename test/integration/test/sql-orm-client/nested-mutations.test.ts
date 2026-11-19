@@ -157,6 +157,18 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           { id: 3, name: 'Carol', email: 'carol@example.com', invitedById: 1 },
         ]);
 
+        const empty = await users
+          .where({ id: 1 })
+          .select('id', 'name')
+          .update({ invitedUsers: (invited) => invited.disconnect([]) });
+        expect(empty).toEqual({ id: 1, name: 'Alice' });
+        expect(
+          await runtime.query('select id, invited_by_id from users where id <> 1 order by id'),
+        ).toEqual([
+          { id: 2, invited_by_id: 1 },
+          { id: 3, invited_by_id: 1 },
+        ]);
+
         runtime.resetExecutions();
         const updated = await users
           .where({ id: 1 })
@@ -208,6 +220,46 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           });
 
         expect(updated).toEqual({ id: 2, invitedById: null, invitedBy: null });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() disconnect() with criteria on a to-one relation the parent holds the key for unlinks only a matching linked row',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+          { id: 3, name: 'Carol', email: 'carol@example.com' },
+        ]);
+
+        const unmatched = await users
+          .where({ id: 2 })
+          .select('id', 'name', 'invitedById')
+          .update({
+            name: 'Bob B.',
+            invitedBy: (inviter) => inviter.disconnect([{ id: 3 }]),
+          });
+        const empty = await users
+          .where({ id: 2 })
+          .select('id', 'name', 'invitedById')
+          .update({ invitedBy: (inviter) => inviter.disconnect([]) });
+        const matched = await users
+          .where({ id: 2 })
+          .select('id', 'name', 'invitedById')
+          .update({
+            invitedBy: (inviter) => inviter.disconnect([{ id: 3 }, { email: 'alice@example.com' }]),
+          });
+
+        expect([unmatched, empty, matched]).toEqual([
+          { id: 2, name: 'Bob B.', invitedById: 1 },
+          { id: 2, name: 'Bob B.', invitedById: 1 },
+          { id: 2, name: 'Bob B.', invitedById: null },
+        ]);
       });
     },
     timeouts.spinUpPpgDev,

@@ -1,0 +1,39 @@
+// use prisma-8
+
+// Real emitted fixture for a nested create with onConflict "connect" through variant() without
+// RETURNING. It is emitted against a SQLite adapter that does not report `returning` but keeps
+// `insertOnConflictTarget` (see prisma.config.ts), so the insert names its conflict columns and
+// the ORM reads the linked row back by them.
+
+model User {
+  id   Int    @id
+  name String
+
+  tasks Task[]
+
+  @@map("users")
+}
+
+model Task {
+  id      Int    @id
+  title   String
+  type    String
+  ownerId Int?   @map("owner_id")
+
+  owner User? @relation(fields: [ownerId], references: [id])
+
+  @@discriminator(type)
+  @@map("tasks")
+}
+
+model Bug {
+  severity String?
+
+  @@base(Task, "bug")
+}
+
+model Feature {
+  priority Int?
+
+  @@base(Task, "feature")
+}
