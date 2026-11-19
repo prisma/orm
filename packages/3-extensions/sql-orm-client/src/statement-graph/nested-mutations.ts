@@ -352,9 +352,7 @@ export function addAfterWrite(
         isConditionalUnlink(mutation)
       ) {
         addConditionalUnlink(b, model, parent, relationMutation, mutation);
-      } else if (mutation.kind === 'update') {
-        addLinkedRowWrite(b, model, parent, relationMutation, mutation);
-      } else if (mutation.kind === 'delete') {
+      } else if (mutation.kind === 'update' || mutation.kind === 'delete') {
         addLinkedRowWrite(b, model, parent, relationMutation, mutation);
       }
     }
