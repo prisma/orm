@@ -17,7 +17,7 @@ When a retro lesson could land in multiple surfaces, the team's preference:
 
 ## Recurring-pattern catalogue
 
-Patterns the team has seen multiple times. Each entry: pattern → severity → mitigation surface (where it landed).
+One entry per finished project, newest first: what it delivered, then what went wrong or right, each with a link to where the lesson lives.
 
 - **2026-11-19 — MySQL proof of concept.** Prisma 8 has an early MySQL 8.4 target and a MariaDB 10.11 target that extends it, and every place the shared SQL code assumed Postgres is fixed or filed.
   - A finding recorded as "decided by test" had no slice that owned it, and turned out at close-out to be ordinary ORM writes that MySQL refuses. See [F57](../calibration/failure-modes.md#f57-a-row-in-a-projects-register-of-open-findings-is-marked-decided-by-a-test-and-no-slice-owns-it).
@@ -37,7 +37,6 @@ Patterns the team has seen multiple times. Each entry: pattern → severity → 
   - A release bump carried the branch's later edits into the released upgrade instructions. See [F52](../calibration/failure-modes.md#f52-a-release-bump-archives-pending-upgrade-instructions-and-the-branchs-later-edits-land-in-the-released-copy).
   - The merge queue dropped the pull request on a test fixture that still used `DateTime`'s old meaning. See [F53](../calibration/failure-modes.md#f53-a-name-changes-meaning-and-a-hand-written-source-that-fixturescheck-does-not-emit-keeps-the-old-meaning).
   - The merge queue dropped it again on a journey `main` had changed, because the checks before auto-merge were not run; this was the fourth project in a row ([slice checklist](../calibration/dod.md#pr-side-items)).
-  - The orchestrator offered the operator two options, one of which kept a known failure, instead of fixing it. See [F6](../calibration/failure-modes.md#f6-orchestrator-over-asking-inside-an-approved-workflow-shape).
 - **2026-10-27 — MongoDB authoring structure.** MongoDB contracts written in TypeScript, PSL or Prisma 6 build through one builder, so the same contract written two ways emits the same `contract.json`.
   - The close-out ran from the plan's short checklist instead of the close-out procedure, and skipped the retro, the DoD evidence and the file classification ([close-out rule](../project/README.md#close-out-runs-the-close-out-procedure)).
   - The first pull request merged with four open review threads, one of them a real ADR inconsistency ([slice checklist](../calibration/dod.md#pr-side-items)).
@@ -55,7 +54,6 @@ Patterns the team has seen multiple times. Each entry: pattern → severity → 
   - `main` merged a redesign of the same code while the last slice was being built, and the slice had to be ported after its review ([project rule](../project/README.md#pr-boundaries-under-mid-flight-scope-shifts)).
   - A message reworded by a concurrent merge broke one of the branch's integration tests in the merge queue ([slice checklist](../calibration/dod.md#pr-side-items)).
   - Two background watches on the merge queue failed every query silently and never reported an ejection. See [F54](../calibration/failure-modes.md#f54-auto-merge-is-on-and-the-pr-never-enters-the-merge-queue).
-
 - **2026-10-15 — Collection scopes.** Packages can contribute collection methods computed from a model, which appear under `using`.
   - A design was approved, built and reviewed, then rejected, because an earlier ruling of the operator's never reached the handover ([slice checklist](../calibration/dor.md#plan-side-items)).
   - An order-only method typed as filtering would have let `deleteAll()` compile; a method's type now claims only what the method establishes ([ADR 272](../../docs/architecture%20docs/adrs/ADR%20272%20-%20Packages%20contribute%20collection%20methods%20computed%20from%20a%20model.md#a-contribution)).
