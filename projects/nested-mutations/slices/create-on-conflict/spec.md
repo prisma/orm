@@ -35,7 +35,7 @@ The conflict keys of a call:
 | `'skip'` | the named columns | every primary key and unique constraint of the table |
 | `'connect'` | the named columns | the primary key |
 
-A row can conflict when it gives a non-null value for every column of at least one conflict key. Values count when they come from the row's own data, from the parent link (the foreign key a child-held relation fills in from the parent), from a to-one relation write inside the row (`connect` or `create` on a relation whose key the row holds, which fills that key before the insert), or from a create default the ORM fills in (a generated `cuid()`, `uuid()`, `now()` and the like). The third source was added during dispatch 3 (2026-11-13), under the rule that only a row that cannot conflict is rejected. A column the database fills in (auto-increment, database default) and `null` do not count.
+A row can conflict when it gives a non-null value for every column of at least one conflict key. Values count when they come from the row's own data, from the parent link (the foreign key a child-held relation fills in from the parent), or from a create default the ORM fills in (a generated `cuid()`, `uuid()`, `now()` and the like). A column the database fills in (auto-increment, database default) and `null` do not count.
 
 A row that cannot conflict is rejected while the graph is built, before any statement runs (decided 2026-11-13):
 
@@ -53,8 +53,8 @@ The check is one function over the storage rows after defaults are applied, used
 | Relation layout | `DO UPDATE SET` | Link |
 | --- | --- | --- |
 | Child holds the key (1:N, 1:1 child-held) | the link columns to `excluded.<column>` | the update itself; a child linked to another parent moves to this one, as plain `connect` |
-| Parent holds the key (N:1, 1:1 parent-held) | the first conflict column to `excluded.<column>` | the parent's foreign key, from the row by a `PayloadData` edge, as nested `create` today |
-| Junction (M:N) | the first conflict column to `excluded.<column>` | a junction insert reading the target key by a `PayloadData` edge, with the conflict clause of plain junction `connect` (`ON CONFLICT DO NOTHING` when the junction has a key over exactly its link columns, a plain insert otherwise) |
+| Parent holds the key (N:1, 1:1 parent-held) | the first conflict column to its stored value (`<table>.<column>`) | the parent's foreign key, from the row by a `PayloadData` edge, as nested `create` today |
+| Junction (M:N) | the first conflict column to its stored value (`<table>.<column>`) | a junction insert reading the target key by a `PayloadData` edge, with the conflict clause of plain junction `connect` (`ON CONFLICT DO NOTHING` when the junction has a key over exactly its link columns, a plain insert otherwise) |
 
 The second and third rows assign a column its own proposed value; the costs listed under "Must be resolved before the project closes" in the project spec (triggers, row lock, `UPDATE` privilege, generated column) apply to them as to top-level `upsert`.
 
@@ -73,6 +73,8 @@ The second and third rows assign a column its own proposed value; the costs list
 Each at runtime, while the graph is built; the type-level ones as described under Surface.
 
 - `onConflict: 'skip'` on a to-one (`N:1`, `1:1`) or many-to-many relation: `ORM.OPERATION_UNSUPPORTED`.
+- A `create` or `connect` callback inside a row with either value, on a relation whose foreign key the row holds (`N:1`): `ORM.OPERATION_UNSUPPORTED`, before any statement runs. On a conflict the existing row stays unchanged, so the callback could not apply to it; on a skip the row is not written. The options overload of nested `create` leaves these relations out of the data type.
+- `'connect'` through `variant()` that collides with a row of another variant: `ORM.RELATION_ROW_MISSING`, as nested `connect` through `variant()`. The row is neither linked nor moved.
 - An `onConflict` value other than `'skip'` or `'connect'`: `ORM.ARGUMENT_INVALID`. `conflictOn` naming a field the model does not have: `ORM.FIELD_UNKNOWN`, as on top-level `createAll`.
 - Either value when the relation's target model is a variant stored in its own table: `ORM.OPERATION_UNSUPPORTED`, as top-level `createAll` refuses the option. Slice `nested-variant-creates` adds `variant()` to the mutator; whichever of the two merges second applies the same check to a create through `variant()`.
 - A row that cannot conflict: above.
