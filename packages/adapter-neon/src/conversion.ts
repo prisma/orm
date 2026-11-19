@@ -383,8 +383,6 @@ export const customParsers = {
   [ScalarColumnType.TIME]: normalize_time,
   [ArrayColumnType.TIME_ARRAY]: normalize_array(normalize_time),
   [ScalarColumnType.TIMETZ]: normalize_timez,
-  // Elements are normalized exactly like scalar TIMETZ, offset-stripping included, to keep
-  // array and scalar TIMETZ byte-for-byte consistent. See #7915/#7917 for the offset semantics.
   [ArrayColumnType.TIMETZ_ARRAY]: normalize_array(normalize_timez),
   [ScalarColumnType.DATE]: normalize_date,
   [ArrayColumnType.DATE_ARRAY]: normalize_array(normalize_date),

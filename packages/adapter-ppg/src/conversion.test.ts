@@ -179,7 +179,7 @@ describe('conversion', () => {
 
     it('normalizes elements the same way scalar TIMETZ does', () => {
       const parse = getParser(ArrayColumnType.TIMETZ_ARRAY)
-      expect(parse('{10:30:00+02,11:00:00-05:00,12:00:00}')).toEqual(['10:30:00', '11:00:00', '12:00:00'])
+      expect(parse('{10:30:00+02,11:00:00-05:00,12:00:00}')).toEqual(['08:30:00', '16:00:00', '12:00:00'])
     })
   })
 })
