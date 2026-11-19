@@ -13,9 +13,16 @@ import type { LogEmitter } from '../common/types/Events'
 import type { QueryEngineResultExtensions } from '../common/types/QueryEngine'
 import type { InteractiveTransactionInfo } from '../common/types/Transaction'
 import type { ExecutePlanParams, Executor, ProviderAndConnectionInfo } from './Executor'
+import { backOff } from './utils/backoff'
 import { dateFromEngineTimestamp } from './utils/engine-timestamp'
 
 const debug = Debug('prisma:client:clientEngine:remoteExecutor')
+
+/**
+ * How many times a request is retried after a transient failure before the
+ * error is passed on. Matches the `DataProxyEngine` of Prisma 6.
+ */
+const MAX_RETRIES = 3
 
 export interface RemoteExecutorOptions {
   clientVersion: string
@@ -144,13 +151,47 @@ export class RemoteExecutor implements Executor {
     fetch?: AccelerateExtensionFetch
     batchRequestIdx?: number
   }): Promise<unknown> {
-    const response = await this.#httpClient.request({
-      method,
-      path,
-      headers: this.#headerBuilder.build(),
-      body,
-      fetch,
-    })
+    let response: Response
+
+    for (let attempt = 0; ; attempt++) {
+      try {
+        response = await this.#httpClient.request({
+          method,
+          path,
+          headers: this.#headerBuilder.build(),
+          body,
+          fetch,
+        })
+      } catch (error) {
+        // `fetch` rejects when the request could not be completed at the
+        // network level (connection reset, socket closed, DNS failure, ...).
+        // A cancelled request is not a transient failure, so it is passed on
+        // straight away.
+        if (attempt >= MAX_RETRIES || isAbortError(error)) {
+          throw error
+        }
+        await this.#waitBeforeRetry({ attempt, method, path, reason: (error as Error)?.message ?? String(error) })
+        continue
+      }
+
+      if (!response.ok && isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
+        // Read the body so that the connection can be reused. Only the status
+        // goes into the log message: the body is whatever the server or a proxy
+        // in front of it returned, and it is not ours to put in the logs. If
+        // the last attempt fails too, its body is reported as usual by
+        // `#throwErrorFromResponse`.
+        await response.text().catch(() => {})
+        await this.#waitBeforeRetry({
+          attempt,
+          method,
+          path,
+          reason: `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`,
+        })
+        continue
+      }
+
+      break
+    }
 
     if (!response.ok) {
       await this.#throwErrorFromResponse(response, batchRequestIdx)
@@ -163,6 +204,32 @@ export class RemoteExecutor implements Executor {
     }
 
     return responseJson
+  }
+
+  async #waitBeforeRetry({
+    attempt,
+    method,
+    path,
+    reason,
+  }: {
+    attempt: number
+    method: string
+    path: string
+    reason: string
+  }): Promise<void> {
+    this.#logEmitter.emit('warn', {
+      message: `Attempt ${attempt + 1}/${MAX_RETRIES} failed for ${method} ${path}: ${reason}`,
+      timestamp: new Date(),
+      target: 'RemoteExecutor',
+    })
+
+    const delay = await backOff(attempt)
+
+    this.#logEmitter.emit('warn', {
+      message: `Retrying after ${delay}ms`,
+      timestamp: new Date(),
+      target: 'RemoteExecutor',
+    })
   }
 
   async #throwErrorFromResponse(response: Response, batchRequestIdx?: number): Promise<never> {
@@ -258,6 +325,34 @@ export class RemoteExecutor implements Executor {
         throw new Error(`Unexpected log level: ${event.level satisfies never}`)
     }
   }
+}
+
+/**
+ * Server errors that are retried, the same set the `DataProxyEngine` of
+ * Prisma 6 retried: any 5xx (an overloaded or restarting instance, a gateway
+ * or Cloudflare error, ...) except `504 Gateway Timeout`, where the query may
+ * still be running and sending it again would only make the timeout more
+ * likely.
+ *
+ * Errors the Query Plan Executor reports for the query itself (validation,
+ * constraint violations, transaction errors, resource limits) use 4xx statuses
+ * and are never retried.
+ */
+function isRetryableStatus(status: number): boolean {
+  return status >= 500 && status !== 504
+}
+
+/**
+ * Whether `fetch` rejected because the request was cancelled through an
+ * `AbortSignal`, either explicitly (`AbortError`) or by a deadline such as
+ * `AbortSignal.timeout()` (`TimeoutError`). Such requests are not retried.
+ */
+function isAbortError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+  const name = (error as { name?: unknown }).name
+  return name === 'AbortError' || name === 'TimeoutError'
 }
 
 /**
