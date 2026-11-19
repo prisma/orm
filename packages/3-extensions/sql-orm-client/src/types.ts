@@ -2280,13 +2280,13 @@ export interface RelationMutator<
     data: CreateDisabled<TContract, ModelName, LinkWritesDisabled, NsId> extends true
       ? never
       : ConflictRowCreateInput<TContract, ModelName, NsId>,
-    options: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
+    options?: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
   create(
     data: CreateDisabled<TContract, ModelName, LinkWritesDisabled, NsId> extends true
       ? never
       : readonly ConflictRowCreateInput<TContract, ModelName, NsId>[],
-    options: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
+    options?: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
   connect(
     criterion: LinkWritesDisabled extends true
@@ -2399,13 +2399,13 @@ export interface VariantRelationMutator<
     data: LinkWritesDisabled extends true
       ? never
       : NestedVariantConflictRowCreateInput<TContract, ModelName, VariantValue, NsId>,
-    options: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
+    options?: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
   create(
     data: LinkWritesDisabled extends true
       ? never
       : readonly NestedVariantConflictRowCreateInput<TContract, ModelName, VariantValue, NsId>[],
-    options: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
+    options?: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
 }
 

@@ -57,26 +57,27 @@ test('create through variant() takes skip on a one-to-many relation and connect 
   expectTypeOf([oneToMany, toOne, toOneWithSkip]).toExtend<readonly unknown[]>();
 });
 
+const post = { id: 1, title: 'A', views: 0 };
+const bo = { id: 2, name: 'Bo', email: 'bo@example.com' };
+const crash = { title: 'Crash', severity: 'high' } as const;
+
 test('a create row with options refuses a callback on a relation whose foreign key is on the row', () => {
-  const post = { id: 1, title: 'A', views: 0 };
   const skip: UserUpdate = {
     posts: (posts) =>
       // @ts-expect-error
-      posts.create({ ...post, author: () => [] }, { onConflict: 'skip' }),
+      posts.create({ ...post, author: (a) => a.connect({ id: 1 }) }, { onConflict: 'skip' }),
   };
   const connect: UserUpdate = {
     invitedUsers: (users) =>
       // @ts-expect-error
-      users.create([{ id: 2, name: 'Bo', email: 'bo@example.com', invitedBy: () => [] }], {
-        onConflict: 'connect',
-      }),
+      users.create([{ ...bo, invitedBy: (i) => i.connect({ id: 1 }) }], { onConflict: 'connect' }),
   };
   const variant: PolyUpdate<'Project'> = {
     tasks: (tasks) => {
       const bugs = tasks.variant('bug');
-      // @ts-expect-error
       return bugs.create(
-        { title: 'Crash', severity: 'high', assignee: () => [] },
+        // @ts-expect-error
+        { ...crash, assignee: (a) => a.connect({ id: 1 }) },
         { onConflict: 'skip' },
       );
     },
@@ -85,46 +86,49 @@ test('a create row with options refuses a callback on a relation whose foreign k
   expectTypeOf([skip, connect, variant]).toExtend<readonly unknown[]>();
 });
 
-test('a create row with options takes callbacks on relations keyed on the other side, and a row without options takes every callback', () => {
+test('a create row without options takes the same callbacks on relations whose foreign key is on the row', () => {
+  const skip: UserUpdate = {
+    posts: (posts) => posts.create({ ...post, author: (a) => a.connect({ id: 1 }) }),
+  };
+  const connect: UserUpdate = {
+    invitedUsers: (users) => users.create([{ ...bo, invitedBy: (i) => i.connect({ id: 1 }) }]),
+  };
+  const variant: PolyUpdate<'Project'> = {
+    tasks: (tasks) => {
+      const bugs = tasks.variant('bug');
+      return bugs.create({ ...crash, assignee: (a) => a.connect({ id: 1 }) });
+    },
+  };
+
+  expectTypeOf([skip, connect, variant]).toExtend<readonly unknown[]>();
+});
+
+test('a create row with options takes callbacks on relations keyed on the other side, and options that may be undefined', () => {
+  const maybe = undefined as { readonly onConflict: 'skip' } | undefined;
   const withOptions: UserUpdate = {
     invitedUsers: (users) =>
       users.create(
         {
-          id: 2,
-          name: 'Bo',
-          email: 'bo@example.com',
-          posts: (posts) => posts.create({ id: 1, title: 'A', views: 0 }),
+          ...bo,
+          posts: (posts) => posts.create(post),
           profile: (profile) => profile.create({ id: 1, bio: 'Hi' }),
           tags: (tags) => tags.connect({ id: 'a' }),
         },
         { onConflict: 'connect' },
       ),
   };
-  const withoutOptions: UserUpdate = {
-    posts: (posts) =>
-      posts.create({ id: 1, title: 'A', views: 0, author: (author) => author.connect({ id: 1 }) }),
+  const withMaybeOptions: UserUpdate = {
+    posts: (posts) => posts.create([post], maybe),
   };
   const variantWithOptions: PolyUpdate<'Project'> = {
     tasks: (tasks) =>
-      tasks.variant('bug').create(
-        {
-          title: 'Crash',
-          severity: 'high',
-          comments: (comments) => comments.create({ body: 'Seen' }),
-        },
-        { onConflict: 'skip' },
-      ),
-  };
-  const variantWithoutOptions: PolyUpdate<'Project'> = {
-    tasks: (tasks) =>
-      tasks.variant('bug').create({
-        title: 'Crash',
-        severity: 'high',
-        assignee: (assignee) => assignee.connect({ id: 1 }),
-      }),
+      tasks
+        .variant('bug')
+        .create(
+          { ...crash, comments: (comments) => comments.create({ body: 'Seen' }) },
+          { onConflict: 'skip' },
+        ),
   };
 
-  expectTypeOf([withOptions, withoutOptions, variantWithOptions, variantWithoutOptions]).toExtend<
-    readonly unknown[]
-  >();
+  expectTypeOf([withOptions, withMaybeOptions, variantWithOptions]).toExtend<readonly unknown[]>();
 });
