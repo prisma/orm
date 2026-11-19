@@ -195,6 +195,7 @@
     "./utils/canonical-stringify": "./dist/utils__canonical-stringify.mjs",
     "./utils/casts": "./dist/utils__casts.mjs",
     "./utils/defined": "./dist/utils__defined.mjs",
+    "./utils/guards": "./dist/utils__guards.mjs",
     "./utils/hash-content": "./dist/utils__hash-content.mjs",
     "./utils/internal-error": "./dist/utils__internal-error.mjs",
     "./utils/json": "./dist/utils__json.mjs",

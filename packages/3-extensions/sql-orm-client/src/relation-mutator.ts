@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
+import { isRecord } from '@internal/utils/guards';
 import type {
   CollectionState,
   ConflictRowCreateInput,
@@ -140,7 +141,7 @@ export function isRelationMutationDescriptor(
 
   const candidate = value as { kind?: unknown; state?: unknown; data?: unknown };
   if (candidate.kind === 'update') {
-    return hasFilters(candidate.state) && isObject(candidate.data);
+    return hasFilters(candidate.state) && isRecord(candidate.data);
   }
   if (candidate.kind === 'delete') {
     return hasFilters(candidate.state);
@@ -154,12 +155,8 @@ export function isRelationMutationDescriptor(
   );
 }
 
-function isObject(value: unknown): value is object {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function hasFilters(state: unknown): boolean {
-  return isObject(state) && 'filters' in state && Array.isArray(state.filters);
+  return isRecord(state) && Array.isArray(state['filters']);
 }
 
 export function isRelationMutationCallback(
