@@ -79,11 +79,11 @@ import {
   deleteRows,
   findRows,
   insertRows,
-  type KeySource,
+  type KeyFilter,
+  type KeyFilters,
   type Model,
   type Returns,
   type Shape,
-  type Sources,
   selectAstOf,
   updateRows,
 } from './model-statements';
@@ -109,7 +109,7 @@ export interface Translation extends Builder {
 }
 
 export interface CreateOf {
-  readonly keysFromParent: readonly KeySource[];
+  readonly keysFromParent: readonly KeyFilter[];
   readonly returns: Returns;
   readonly shape: Shape;
   readonly variantValue: string | undefined;
@@ -121,7 +121,7 @@ interface NestedConflict {
 }
 
 export interface BeforeWrite {
-  readonly keys: readonly KeySource[];
+  readonly keys: readonly KeyFilter[];
   readonly nullColumns: Readonly<Record<string, null>>;
   readonly unlinksAfterWrite: boolean;
 }
@@ -237,7 +237,7 @@ function addVariantInOwnTable(
   t: Translation,
   { relation, relatedCollection }: Pick<ParsedRelationMutation, 'relation' | 'relatedCollection'>,
   { data, variant }: Extract<Mutation, { kind: 'create' }>,
-  keys: readonly KeySource[],
+  keys: readonly KeyFilter[],
   added: (base: NodeId) => void,
 ): boolean {
   if (variant === undefined) {
@@ -277,7 +277,7 @@ export function addBeforeWrite(
     assertJunctionMetadataShape(relationMutation);
     assertJunctionPayloadWritable(relationMutation);
   }
-  const keys: KeySource[] = [];
+  const keys: KeyFilter[] = [];
   const nullColumns: Record<string, null> = {};
   let unlinksAfterWrite = false;
   for (const relationMutation of relationMutations) {
@@ -566,7 +566,7 @@ function addLinkedRowWrite(
     );
     return;
   }
-  const sources = {
+  const keyFilters = {
     filters: [
       {
         from: linked,
@@ -577,7 +577,7 @@ function addLinkedRowWrite(
   };
   const set = updateValuesOf(related, mutation.data);
   if (Object.keys(set).length > 0) {
-    addUpdateFirst(t, related, set, sources);
+    addUpdateFirst(t, related, set, keyFilters);
   }
 }
 
@@ -602,7 +602,7 @@ function addParentOwned(
   model: Model,
   { name, relation, relatedCollection }: ParsedRelationMutation,
   mutation: CreateOrConnect,
-): KeySource[] {
+): KeyFilter[] {
   const { contract } = t.context;
   const related = relatedModel(contract, relation, variantOf(mutation));
   const columns = columnMappings(
@@ -622,7 +622,7 @@ function addParentOwned(
       );
     }
     const resolved = nestedConflictOf(t, name, relation, mutation);
-    const keys: KeySource[] = [];
+    const keys: KeyFilter[] = [];
     const added = (from: NodeId) => keys.push({ from, columns });
     if (
       addVariantInOwnTable(
@@ -882,13 +882,19 @@ function addFilteredWrite(
     modelName: relation.to,
     namespaceId: relation.toNamespace,
   };
-  const sources = sourcesOf(t.context.contract, model, relation, related.state.tables, parent);
+  const keyFilters = keyFiltersOf(
+    t.context.contract,
+    model,
+    relation,
+    related.state.tables,
+    parent,
+  );
   if (mutation.kind === 'deleteAll') {
-    addDeleteAll(t, related, sources);
+    addDeleteAll(t, related, keyFilters);
     return;
   }
   if (mutation.kind === 'delete') {
-    addDeleteFirst(t, related, sources);
+    addDeleteFirst(t, related, keyFilters);
     return;
   }
   const set = updateValuesOf(related, mutation.data);
@@ -917,19 +923,19 @@ function addFilteredWrite(
     return;
   }
   if (mutation.kind === 'update') {
-    addUpdateFirst(t, related, set, sources);
+    addUpdateFirst(t, related, set, keyFilters);
     return;
   }
-  addUpdateAll(t, related, set, sources, 'count');
+  addUpdateAll(t, related, set, keyFilters, 'count');
 }
 
-function sourcesOf(
+function keyFiltersOf(
   contract: Contract<SqlStorage>,
   model: Model,
   relation: ResolvedRelation,
   { root, scope }: CollectionTables,
   parent: NodeId,
-): Sources {
+): KeyFilters {
   const localColumns = localColumnsOf(contract, model, relation);
   const { through } = relation;
   if (through === undefined) {

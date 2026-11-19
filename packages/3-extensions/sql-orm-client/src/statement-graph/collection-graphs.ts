@@ -45,12 +45,12 @@ import {
   deleteRows,
   findRows,
   insertRows,
-  type KeySource,
+  type KeyFilter,
+  type KeyFilters,
   type Model,
   type Returns,
   readBack,
   type Shape,
-  type Sources,
   selectAstOf,
   updateRows,
 } from './model-statements';
@@ -116,7 +116,7 @@ export function addUpdateAll(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
-  { filters, links }: Sources,
+  { filters, links }: KeyFilters,
   returns: Returns,
 ): NodeId {
   return updateRows(b, modelOf(collection), set, {
@@ -157,22 +157,22 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
 export function addDeleteAll(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
-  sources: Sources,
+  keyFilters: KeyFilters,
 ): NodeId {
-  return deleteRows(b, collection.state.tables, { where: whereOf(collection), ...sources });
+  return deleteRows(b, collection.state.tables, { where: whereOf(collection), ...keyFilters });
 }
 
 export function addUpdateFirst(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
-  sources: Sources,
+  keyFilters: KeyFilters,
 ): void {
-  const find = addFindOfFirstRelated(b, collection, 'update()', sources);
+  const find = addFindOfFirstRelated(b, collection, 'update()', keyFilters);
   updateRows(b, modelOf(collection), set, {
     where: whereOf(collection),
-    filters: [{ from: find, columns: sameRowColumns(collection) }, ...sources.filters],
-    links: sources.links,
+    filters: [{ from: find, columns: sameRowColumns(collection) }, ...keyFilters.filters],
+    links: keyFilters.links,
     payloads: [],
     owner: { operation: 'update', modelName: collection.modelName },
     returns: 'count',
@@ -184,10 +184,10 @@ export function addUpdateFirst(
 export function addDeleteFirst(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
-  sources: Sources,
+  keyFilters: KeyFilters,
   unlinkFound?: (found: NodeId) => void,
 ): void {
-  const find = addFindOfFirstRelated(b, collection, 'delete()', sources);
+  const find = addFindOfFirstRelated(b, collection, 'delete()', keyFilters);
   unlinkFound?.(find);
   const byFoundKey = [{ from: find, columns: sameRowColumns(collection) }];
   deleteRows(
@@ -196,8 +196,8 @@ export function addDeleteFirst(
     unlinkFound === undefined
       ? {
           where: whereOf(collection),
-          filters: [...byFoundKey, ...sources.filters],
-          links: sources.links,
+          filters: [...byFoundKey, ...keyFilters.filters],
+          links: keyFilters.links,
         }
       : { where: undefined, filters: byFoundKey, links: [] },
   );
@@ -207,7 +207,7 @@ function addFindOfFirstRelated(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   method: string,
-  { filters, links }: Sources,
+  { filters, links }: KeyFilters,
 ): NodeId {
   requireIdentityColumns(collection, method);
   return findRows(b, selectIdentityAst(collection, { ...collection.state, limit: 1 }), {
@@ -359,7 +359,7 @@ export function createGraph(
 
 export interface NestedVariantCreate {
   readonly graph: Graph;
-  readonly keys: readonly KeySource[];
+  readonly keys: readonly KeyFilter[];
   readonly requires: readonly Requires[];
   readonly added: (base: NodeId) => void;
 }
