@@ -152,6 +152,7 @@ describe('typeNeedsGenericModelArg', () => {
 
     expect(argsInfo.typeNeedsGenericModelArg(type)).toBe(true)
   })
+
   test('type reached through many fields is still found when it contains field refs', () => {
     const shared = inputObjectType('Shared', [field('refField', [fieldRef('IntRef')])])
     const middle = Array.from({ length: 50 }, (_, i) =>
@@ -204,6 +205,37 @@ describe('typeNeedsGenericModelArg', () => {
 
     expect(argsInfo.typeNeedsGenericModelArg(a)).toBe(false)
     expect(argsInfo.typeNeedsGenericModelArg(b)).toBe(false)
+  })
+
+  describe('densely connected input types', { timeout: 3000 }, () => {
+    const size = 600
+
+    function denseTypes(lastTypeFields: DMMF.SchemaArg[]) {
+      return Array.from({ length: size }, (_, index) =>
+        inputObjectType(`Input${index}`, [
+          ...Array.from({ length: size }, (_, target) => field(`to${target}`, [inputObjectRef(`Input${target}`)])),
+          ...(index === size - 1 ? lastTypeFields : []),
+        ]),
+      )
+    }
+
+    test('is false when no type contains field refs', () => {
+      const types = denseTypes([field('scalar', [scalarRef('Int')])])
+      const argsInfo = new GenericArgsInfo(dmmf(types))
+
+      for (const type of types) {
+        expect(argsInfo.typeNeedsGenericModelArg(type)).toBe(false)
+      }
+    })
+
+    test('is true for every type when one reachable type contains a field ref', () => {
+      const types = denseTypes([field('refField', [fieldRef('IntRef')])])
+      const argsInfo = new GenericArgsInfo(dmmf(types))
+
+      for (const type of types) {
+        expect(argsInfo.typeNeedsGenericModelArg(type)).toBe(true)
+      }
+    })
   })
 })
 
