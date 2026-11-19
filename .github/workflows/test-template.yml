@@ -576,6 +576,10 @@ jobs:
         working-directory: packages/client-common
 
       - run: pnpm run test
+        name: 'param-graph'
+        working-directory: packages/param-graph
+
+      - run: pnpm run test
         name: 'client-engine-runtime'
         working-directory: packages/client-engine-runtime
 
@@ -1218,6 +1222,11 @@ jobs:
         if: contains(inputs.jobsToRun, '-all-')
         name: 'client-common'
         working-directory: packages/client-common
+
+      - run: pnpm run test
+        if: contains(inputs.jobsToRun, '-all-')
+        name: 'param-graph'
+        working-directory: packages/param-graph
 
       - run: pnpm run test
         if: contains(inputs.jobsToRun, '-all-')
