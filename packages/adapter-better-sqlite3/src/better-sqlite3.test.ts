@@ -1,12 +1,11 @@
 import { ColumnTypeEnum } from '@prisma/driver-adapter-utils'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import { PrismaBetterSqlite3 } from './index'
+import { PrismaBetterSqlite3AdapterFactory } from './better-sqlite3'
 
-describe('PrismaBetterSqlite3Adapter', () => {
-  test('returns Bytes for a BLOB expression with no declared column type', async () => {
-    const adapter = await new PrismaBetterSqlite3({ url: ':memory:' }).connect()
-
+describe('queryRaw', () => {
+  it('returns Bytes for a BLOB expression with no declared column type', async () => {
+    const adapter = await new PrismaBetterSqlite3AdapterFactory({ url: ':memory:' }).connect()
     try {
       const result = await adapter.queryRaw({ sql: "SELECT X'DEADBEEF' AS b", args: [], argTypes: [] })
 
