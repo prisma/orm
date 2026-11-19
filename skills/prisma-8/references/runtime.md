@@ -380,7 +380,7 @@ await db.transaction(async (tx) => {
 });
 ```
 
-An ORM write of more than one statement on `tx.orm` (or `inner.orm`), such as a create with a nested relation, runs in its own savepoint. When one of its statements fails, it rolls back to the savepoint and rejects with the database's error, so none of its rows stay, and the callback can catch the error and continue with `tx` unless the database ended the whole transaction with that error, as MySQL does on a deadlock. While such a write runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`, so await it before sending the next query instead of running both in `Promise.all`.
+An ORM write of more than one statement on `tx.orm` (or `inner.orm`), such as a create with a nested relation, runs in its own savepoint. When one of its statements fails, it rolls back to the savepoint and rejects with the database's error, so none of its rows stay, and the callback can catch the error and continue with `tx`. When the database ended the whole transaction with that error, as MySQL does on a deadlock, the rollback to the savepoint fails, the write rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED` whose `cause` is the database's error, and `tx` is closed. While such a write runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`, so await it before sending the next query instead of running both in `Promise.all`.
 
 `published()` is a method of a custom collection class. A prepared statement runs on what it is given: `ps.query(tx, params)` runs inside the transaction, even when `ps` came from `db.prepare(...)`. `tx.prepare` exists so code inside a transaction needs nothing from the outer client. Preparing sends nothing to the database.
 
