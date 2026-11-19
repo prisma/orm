@@ -1,5 +1,11 @@
 import type { Client } from '@libsql/client'
-import { ColumnTypeEnum, IsolationLevel, SqlMigrationAwareDriverAdapterFactory } from '@prisma/driver-adapter-utils'
+import {
+  type ArgType,
+  ColumnTypeEnum,
+  IsolationLevel,
+  SqlDriverAdapter,
+  SqlMigrationAwareDriverAdapterFactory,
+} from '@prisma/driver-adapter-utils'
 import { describe, expect, test, vi } from 'vitest'
 
 import { PrismaLibSqlAdapterFactoryBase } from './libsql'
@@ -210,9 +216,50 @@ describe.each([
   })
 })
 
+describe('getConnectionInfo', () => {
+  function selectWithParams(adapter: SqlDriverAdapter, count: number) {
+    const argType: ArgType = { scalarType: 'int', arity: 'scalar' }
+    return adapter.queryRaw({
+      sql: `SELECT 1 WHERE 1 IN (${Array.from({ length: count }, () => '?').join(', ')})`,
+      args: Array.from({ length: count }, () => 1),
+      argTypes: Array.from({ length: count }, () => argType),
+    })
+  }
+
+  test.each(['connect', 'connectToShadowDb'] as const)(
+    '%s reports the bind parameter limit of the SQLite build',
+    async (method) => {
+      const adapter = await new PrismaLibSqlAdapterFactory({ url: ':memory:' })[method]()
+      try {
+        const maxBindValues = adapter.getConnectionInfo?.().maxBindValues
+
+        expect(maxBindValues).toBeGreaterThan(999)
+        await expect(selectWithParams(adapter, maxBindValues!)).resolves.toMatchObject({ rows: [[1]] })
+        await expect(selectWithParams(adapter, maxBindValues! + 1)).rejects.toThrow('too many SQL variables')
+      } finally {
+        await adapter.dispose()
+      }
+    },
+  )
+
+  test('leaves maxBindValues unset when the SQLite build does not report it', async () => {
+    const adapter = await new PrismaLibSqlAdapterFactoryMock({ url: ':memory:' }).connect()
+    expect(adapter.getConnectionInfo?.().maxBindValues).toBeUndefined()
+  })
+
+  test('does not report relation join support', async () => {
+    const adapter = await new PrismaLibSqlAdapterFactory({ url: ':memory:' }).connect()
+    try {
+      expect(adapter.getConnectionInfo?.().supportsRelationJoins).toBe(false)
+    } finally {
+      await adapter.dispose()
+    }
+  })
+})
+
 class PrismaLibSqlAdapterFactoryMock extends PrismaLibSqlAdapterFactoryBase {
   connection = {
-    execute: vi.fn(),
+    execute: vi.fn().mockResolvedValue({ columns: ['compile_options'], rows: [] }),
     batch: vi.fn(),
     close: vi.fn(),
     closed: false,
