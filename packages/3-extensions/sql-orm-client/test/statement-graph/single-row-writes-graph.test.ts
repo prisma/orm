@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { parseMutationInput } from '../../src/relation-mutations';
 import { createGraph, updateFirstGraph } from '../../src/statement-graph/collection-graphs';
+import { queryGraph } from '../../src/statement-graph/run-graph';
 import { createCollectionFor, relatedCollectionOf } from '../collection-fixtures';
-import { getTestContext } from '../helpers';
+import { createMockRuntime, getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
 interface SingleRowMutator {
@@ -22,22 +23,22 @@ function parsed(modelName: 'User' | 'Post', input: Record<string, unknown>) {
   );
 }
 
+function firstRowOf(modelName: 'User' | 'Post') {
+  return {
+    context: getTestContext(),
+    state: createCollectionFor(modelName).collection.where({ id: 1 }).state,
+    modelName,
+    namespaceId: 'public',
+  };
+}
+
 function printUpdate(
   input: Record<string, unknown>,
   modelName: 'User' | 'Post' = 'User',
   set: Record<string, unknown> = {},
 ): string {
   return printGraph(
-    updateFirstGraph(
-      {
-        context: getTestContext(),
-        state: createCollectionFor(modelName).collection.where({ id: 1 }).state,
-        modelName,
-        namespaceId: 'public',
-      },
-      set,
-      parsed(modelName, input).relationMutations,
-    ),
+    updateFirstGraph(firstRowOf(modelName), set, parsed(modelName, input).relationMutations),
   );
 }
 
@@ -146,7 +147,7 @@ describe('update() and delete() on a many-to-many relation', () => {
 });
 
 describe('update() and delete() on a relation the parent holds the key for', () => {
-  it('updates the linked row, found by the key the parent holds', () => {
+  it('updates the linked row, found through the key the parent holds', () => {
     expect(
       printUpdate({
         invitedBy: (inviter: SingleRowMutator) =>
@@ -155,14 +156,14 @@ describe('update() and delete() on a relation the parent holds the key for', () 
     ).toBe(
       [
         'n1 Find users where id = 1',
-        "n2 Find users where name = 'Grace' limit 1 <- FilterData n1 (invited_by_id->id)",
-        "n3 Update users set name = 'Grace H.' where name = 'Grace' <- FilterData n2 (id->id), FilterData n1 (invited_by_id->id)",
+        "n2 Find users where name = 'Grace' limit 1 <- JunctionFilterData n1 (id->id; users invited_by_id->id)",
+        "n3 Update users set name = 'Grace H.' where name = 'Grace' <- FilterData n2 (id->id), JunctionFilterData n1 (id->id; users invited_by_id->id)",
         'result: n1',
       ].join('\n'),
     );
   });
 
-  it('reads the key of the linked row from the parent row found before its own Update', () => {
+  it("reads the key of the linked row from the rows the parent's Update matched", () => {
     expect(
       printUpdate(
         { invitedBy: (inviter: SingleRowMutator) => inviter.update({ name: 'Grace H.' }) },
@@ -173,8 +174,8 @@ describe('update() and delete() on a relation the parent holds the key for', () 
       [
         'n1 Find users where id = 1',
         "n2 Update users set name = 'Ada' where id = 1",
-        'n3 Find users limit 1 <- FilterData n1 (invited_by_id->id)',
-        "n4 Update users set name = 'Grace H.' <- FilterData n3 (id->id), FilterData n1 (invited_by_id->id)",
+        'n3 Find users limit 1 <- JunctionFilterData n2 (id->id; users invited_by_id->id)',
+        "n4 Update users set name = 'Grace H.' <- FilterData n3 (id->id), JunctionFilterData n2 (id->id; users invited_by_id->id)",
         'n5 Find users <- FilterData n2 (id->id)',
         'result: n5',
       ].join('\n'),
@@ -190,7 +191,7 @@ describe('update() and delete() on a relation the parent holds the key for', () 
       [
         'n1 Find users where id = 1',
         "n2 Update users set name = 'Ada' where id = 1",
-        'n3 Find users limit 1 <- FilterData n1 (invited_by_id->id)',
+        'n3 Find users limit 1 <- JunctionFilterData n2 (id->id; users invited_by_id->id)',
         'n4 Update users set invited_by_id = null <- FilterData n2 (id->id), FilterData n3 (id->invited_by_id)',
         'n5 Delete users <- FilterData n3 (id->id)',
         'n6 Find users <- FilterData n2 (id->id)',
@@ -207,7 +208,7 @@ describe('update() and delete() on a relation the parent holds the key for', () 
     ).toBe(
       [
         'n1 Find users where id = 1',
-        "n2 Find users where name = 'Grace' limit 1 <- FilterData n1 (invited_by_id->id)",
+        "n2 Find users where name = 'Grace' limit 1 <- JunctionFilterData n1 (id->id; users invited_by_id->id)",
         'n3 Update users set invited_by_id = null <- FilterData n1 (id->id), FilterData n2 (id->invited_by_id)',
         'n4 Delete users <- FilterData n2 (id->id)',
         'n5 Find users <- FilterData n1 (id->id)',
@@ -215,6 +216,32 @@ describe('update() and delete() on a relation the parent holds the key for', () 
       ].join('\n'),
     );
   });
+
+  it.each([
+    ['update', (inviter: SingleRowMutator) => inviter.update({ name: 'Grace H.' })],
+    ['delete', (inviter: SingleRowMutator) => inviter.delete()],
+  ])(
+    "runs no %s of the linked row when the parent's Update matches no row",
+    async (_, invitedBy) => {
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[]]);
+      const users = firstRowOf('User');
+      const graph = updateFirstGraph(
+        users,
+        { name: 'Ada' },
+        parsed('User', { invitedBy }).relationMutations,
+      );
+
+      const rows = await queryGraph(graph, { runtime, context: users.context }, users).toArray();
+
+      expect({
+        rows,
+        statements: runtime.executions.map(({ operation, plan }) =>
+          'ast' in plan ? `${operation} ${plan.ast.kind}` : operation,
+        ),
+      }).toEqual({ rows: [], statements: ['query update'] });
+    },
+  );
 });
 
 describe('rejections of update() and delete() on a relation', () => {

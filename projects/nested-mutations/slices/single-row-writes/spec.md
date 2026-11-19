@@ -45,7 +45,7 @@ Built on the first-row builders of the collection's `update` and `delete` (`upda
 | --- | --- | --- | --- |
 | Child holds the key (1:N, 1:1) | `Find … limit 1` on the child with the caller's filter and an edge from the parent's key to the child's foreign key | the first-row update | the first-row delete |
 | Junction (M:N) | the same `Find`, with the junction subquery of `filtered-many-writes` and the edge into it | the first-row update | the first-row delete; junction rows are left to the database's foreign-key action, as in `deleteAll` |
-| Parent holds the key (N:1) | the target row whose key the parent's foreign key holds, through an edge from the parent's row to the target's key, with the caller's filter | the update | the target row is found as for `update` (through the parent's foreign key read before the parent's update, with the caller's filter); if it is found, the parent's foreign key is set to null in a separate update of the parent, then the target row is deleted by its key. If it is not found, nothing changes |
+| Parent holds the key (N:1) | the target row the updated parent links to: a link from the keys of the rows the parent's update matched, through the parent's table and its foreign key, to the target's key, with the caller's filter; when the parent's update matches no row, nothing runs | the update | the target row is found as for `update` (through the updated parent's foreign key, with the caller's filter); if it is found, the parent's foreign key is set to null in a separate update of the parent, then the target row is deleted by its key. If it is not found, nothing changes |
 
 - On 1:1 with the key on the child, at most one row is related; the slice may write without the `Find` when that keeps the graph smaller, and the graph tests pin whichever it builds.
 - A parent whose foreign key is null has no linked row: nothing changes.
@@ -60,6 +60,7 @@ Runtime and types, with the same builder-typed-contract limit as `filtered-many-
 - `delete` on a required N:1 relation: `ORM.RELATION_MUTATION_UNSUPPORTED`, because the parent's foreign key cannot be set to null (decided 2026-11-13; Prisma 7 offers `delete` only on optional to-one relations).
 - `update` or `delete` on a to-many relation without `where`: `ORM.RELATION_MUTATION_INVALID`.
 - `update` data that sets the field linking the row to the parent: `ORM.RELATION_MUTATION_INVALID` (`problem: 'parent-link-column'`), as for `updateAll`.
+- `update()` data that sets a field of an N:1 relation's foreign key and also has a relation callback on that relation: `ORM.ARGUMENT_INVALID`, while the graph is built (decided 2026-11-19). The two name different rows, and with the target read through the updated parent a nested `delete` would undo the key the caller set.
 
 ### `disconnect` on a required relation
 

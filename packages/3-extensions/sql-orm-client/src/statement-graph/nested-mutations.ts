@@ -20,6 +20,7 @@ import {
   resolveModelTableName,
   resolvePolymorphismInfo,
   resolveRelationTargetColumns,
+  resolveRowIdentityColumns,
 } from '../collection-contract';
 import {
   type CollectionTables,
@@ -529,19 +530,11 @@ function addLinkedRowWrite(
   const localColumns = localColumnsOf(contract, model, relation);
   const targetColumns = resolveRelationTargetColumns(contract, relation);
   const target = mutation.state.tables.root;
-  const linked = parent.rowBeforeWrite ?? parent.node;
   if (mutation.kind === 'delete') {
-    const toTarget = columnMappings(
-      contract,
-      model.tables.root,
-      localColumns,
-      target,
-      targetColumns,
-    );
     addDeleteFirst(
       b,
       related,
-      { filters: [{ from: linked, columns: toTarget }], links: [] },
+      throughUpdatedParent(contract, model, parent, relation, mutation.state.tables),
       (found) => {
         const nulls = Object.fromEntries(localColumns.map((column) => [column, null]));
         updateRows(
@@ -575,19 +568,45 @@ function addLinkedRowWrite(
     );
     return;
   }
-  const keyFilters = {
-    filters: [
-      {
-        from: linked,
-        columns: columnMappings(contract, model.tables.root, localColumns, target, targetColumns),
-      },
-    ],
-    links: [],
-  };
   const set = updateValuesOf(related, mutation.data);
   if (Object.keys(set).length > 0) {
-    addUpdateFirst(b, related, set, keyFilters);
+    addUpdateFirst(
+      b,
+      related,
+      set,
+      throughUpdatedParent(contract, model, parent, relation, mutation.state.tables),
+    );
   }
+}
+
+function throughUpdatedParent(
+  contract: Contract<SqlStorage>,
+  model: Model,
+  parent: ParentWrite,
+  relation: ResolvedRelation,
+  { root, scope }: CollectionTables,
+): KeyFilters {
+  const parentTable = model.tables.root;
+  const { namespaceId, tableName } = parentTable.storage;
+  const keyColumns = resolveRowIdentityColumns(contract, namespaceId, tableName);
+  const updated = scope.aliasTable({ namespaceId, tableName });
+  return {
+    filters: [],
+    links: [
+      {
+        from: parent.node,
+        columns: columnMappings(contract, parentTable, keyColumns, updated, keyColumns),
+        junction: updated.tableSource(contract),
+        targets: columnMappings(
+          contract,
+          updated,
+          localColumnsOf(contract, model, relation),
+          root,
+          resolveRelationTargetColumns(contract, relation),
+        ),
+      },
+    ],
+  };
 }
 
 function rejectFilteredWriteOnToOne({ name, relation, mutations }: ParsedRelationMutation): void {
