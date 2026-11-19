@@ -1,6 +1,5 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { TransactionContext } from '@internal/sql-runtime';
 import { expectTypeOf, test } from 'vitest';
 import type { SqliteTransactionOptions } from '../src/exports/runtime';
 import type { SqliteClient, SqliteTransactionContext } from '../src/runtime/sqlite';
@@ -25,10 +24,15 @@ test('SQLite accepts only Serializable and retains callback inference', () => {
   expectTypeOf(db.transaction).parameter(1).toEqualTypeOf<SqliteTransactionOptions | undefined>();
 });
 
-test('transaction context has the runtime transaction method', () => {
-  expectTypeOf<SqliteTransactionContext<TestContract>['transaction']>().toEqualTypeOf<
-    TransactionContext['transaction']
-  >();
+test('tx.transaction takes one callback, passes a context of the same type and infers the result', () => {
+  type Tx = SqliteTransactionContext<TestContract>;
+  const tx = {} as Tx;
+  expectTypeOf(tx.transaction).parameters.toEqualTypeOf<[(tx: Tx) => PromiseLike<unknown>]>();
+  expectTypeOf(tx.transaction).parameter(0).parameter(0).toEqualTypeOf<Tx>();
+  expectTypeOf(tx.transaction(async () => 42)).toEqualTypeOf<Promise<number>>();
+  expectTypeOf(
+    tx.transaction(async (inner) => inner.transaction(async () => 'value' as const)),
+  ).toEqualTypeOf<Promise<'value'>>();
 });
 
 test('db.transaction infers the callback return type correctly', () => {
