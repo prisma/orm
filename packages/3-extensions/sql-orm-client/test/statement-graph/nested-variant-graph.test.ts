@@ -722,9 +722,9 @@ describe('update and delete on a variant', () => {
       [
         'n1 Find projects_tbl where id = 1',
         "n2 Find tasks where type = 'bug' and title = 'Crash' limit 1 <- FilterData n1 (id->project_id)",
-        "n3 Update tasks set title = 'Seen' where type = 'bug' and title = 'Crash' <- FilterData n2 (id->id)",
+        "n3 Update tasks set title = 'Seen' where type = 'bug' and title = 'Crash' <- FilterData n2 (id->id), FilterData n1 (id->project_id)",
         "n4 Find tasks where type = 'feature' and title = 'Search' limit 1 <- FilterData n1 (id->project_id)",
-        `n5 Delete tasks where ${featureExists(" and tasks.title = 'Search'")} <- FilterData n4 (id->id)`,
+        `n5 Delete tasks where ${featureExists(" and tasks.title = 'Search'")} <- FilterData n4 (id->id), FilterData n1 (id->project_id)`,
         'result: n1',
       ].join('\n'),
     );

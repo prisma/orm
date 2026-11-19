@@ -51,7 +51,7 @@ describe('update() and delete() on a relation the child holds the key for', () =
       [
         'n1 Find users where id = 1',
         "n2 Find posts where title = 'Draft' limit 1 <- FilterData n1 (id->user_id)",
-        "n3 Update posts set views = 5 where title = 'Draft' <- FilterData n2 (id->id)",
+        "n3 Update posts set views = 5 where title = 'Draft' <- FilterData n2 (id->id), FilterData n1 (id->user_id)",
         'result: n1',
       ].join('\n'),
     );
@@ -69,7 +69,7 @@ describe('update() and delete() on a relation the child holds the key for', () =
         'n1 Find users where id = 1',
         "n2 Update users set name = 'Ada' where id = 1",
         "n3 Find posts where title = 'Draft' limit 1 <- FilterData n2 (id->user_id)",
-        "n4 Delete posts where title = 'Draft' <- FilterData n3 (id->id)",
+        "n4 Delete posts where title = 'Draft' <- FilterData n3 (id->id), FilterData n2 (id->user_id)",
         'result: n2',
       ].join('\n'),
     );
@@ -84,7 +84,7 @@ describe('update() and delete() on a relation the child holds the key for', () =
       [
         'n1 Find users where id = 1',
         'n2 Find profiles limit 1 <- FilterData n1 (id->user_id)',
-        "n3 Update profiles set bio = 'New' <- FilterData n2 (id->id)",
+        "n3 Update profiles set bio = 'New' <- FilterData n2 (id->id), FilterData n1 (id->user_id)",
         'result: n1',
       ].join('\n'),
     );
@@ -96,7 +96,7 @@ describe('update() and delete() on a relation the child holds the key for', () =
       [
         'n1 Find users where id = 1',
         "n2 Find profiles where bio = 'Old' limit 1 <- FilterData n1 (id->user_id)",
-        "n3 Delete profiles where bio = 'Old' <- FilterData n2 (id->id)",
+        "n3 Delete profiles where bio = 'Old' <- FilterData n2 (id->id), FilterData n1 (id->user_id)",
         'result: n1',
       ].join('\n'),
     );
@@ -114,9 +114,9 @@ describe('update() and delete() on a relation the child holds the key for', () =
       [
         'n1 Find users where id = 1',
         'n2 Find posts where id = 10 limit 1 <- FilterData n1 (id->user_id)',
-        'n3 Delete posts where id = 10 <- FilterData n2 (id->id)',
+        'n3 Delete posts where id = 10 <- FilterData n2 (id->id), FilterData n1 (id->user_id)',
         'n4 Find posts where id = 11 limit 1 <- FilterData n1 (id->user_id)',
-        'n5 Update posts set views = 1 where id = 11 <- FilterData n4 (id->id)',
+        'n5 Update posts set views = 1 where id = 11 <- FilterData n4 (id->id), FilterData n1 (id->user_id)',
         'result: n1',
       ].join('\n'),
     );
