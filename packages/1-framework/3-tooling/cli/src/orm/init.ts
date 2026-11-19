@@ -114,7 +114,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         // accepted are matched in the handler, where a rejection can name
         // every allowed value.
         target: flag.string({
-          brief: `Database target: ${TARGET_SHORT_NAMES.join(' or ')}`,
+          brief: `Database target: ${TARGET_SHORT_NAMES.join(' or ')}, or the name of a target package`,
           placeholder: 'db',
         }),
         authoring: flag.string({
@@ -181,7 +181,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }
         const document: InitOutput = {
           ok: true,
-          target: error.target.shortName,
+          target: error.target.name,
+          package: error.target.packageName,
           authoring: error.authoring,
           schemaPath: error.schemaPath,
           filesWritten: [],
@@ -274,7 +275,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         const installed = packagesInstalled === 'installed';
         const document: InitOutput = {
           ok: true,
-          target: inputs.target.shortName,
+          target: inputs.target.name,
+          package: inputs.target.packageName,
           authoring: adoptsPrisma7 ? 'prisma7' : inputs.authoring,
           schemaPath: inputs.schemaPath,
           filesWritten: scaffold.filesWritten,
@@ -295,7 +297,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
               }
             : null,
           nextSteps: buildNextSteps({
-            target: inputs.target.shortName,
+            target: inputs.target.name,
             packagesInstalled,
             contractEmitted,
             emitCommand: EMIT_COMMAND,

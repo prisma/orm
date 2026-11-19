@@ -1,7 +1,13 @@
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import { extname, normalize } from 'pathe';
+import validatePackageName from 'validate-npm-package-name';
 import { errorInitAuthoringSchemaPathMismatch, errorInitInvalidFlagValue } from './errors';
-import { findTargetByName, type KnownTarget, TARGET_SHORT_NAMES } from './target-packages';
+import {
+  findTargetByName,
+  TARGET_SHORT_NAMES,
+  type TargetPackage,
+  targetPackageNamed,
+} from './target-packages';
 
 const AUTHORING_VALUES: ReadonlyMap<string, ContractSourceFormat> = new Map([
   ['psl', 'psl'],
@@ -9,17 +15,27 @@ const AUTHORING_VALUES: ReadonlyMap<string, ContractSourceFormat> = new Map([
   ['ts', 'typescript'],
 ]);
 
-export function resolveTarget(value: string | undefined): KnownTarget | undefined {
-  if (value === undefined) return undefined;
-  const mapped = findTargetByName(value);
-  if (mapped === undefined) {
+export const PACKAGE_NAME_PLACEHOLDER = '<package name>';
+
+export function resolveTarget(value: string | undefined): TargetPackage | undefined {
+  return value === undefined ? undefined : resolveTargetName(value);
+}
+
+/** A short name or alias from the list, or the name of a target package that is in no list. */
+export function resolveTargetName(value: string): TargetPackage {
+  if (findTargetByName(value) !== undefined) {
+    return targetPackageNamed(value);
+  }
+  const validation = validatePackageName(value);
+  if (!validation.validForNewPackages) {
     throw errorInitInvalidFlagValue({
       flag: 'target',
       value,
-      allowed: TARGET_SHORT_NAMES,
+      allowed: [...TARGET_SHORT_NAMES, PACKAGE_NAME_PLACEHOLDER],
+      problems: [...(validation.errors ?? []), ...(validation.warnings ?? [])],
     });
   }
-  return mapped;
+  return targetPackageNamed(value);
 }
 
 export function resolveAuthoring(value: string | undefined): ContractSourceFormat | undefined {

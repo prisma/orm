@@ -68,12 +68,54 @@ export const TARGET_SHORT_NAMES: readonly TargetShortName[] = KNOWN_TARGET_PACKA
   (entry) => entry.shortName,
 );
 
-/** The entry `--target` names by its short name or an alias, in any case. */
+/**
+ * The entry `--target` names by its short name or an alias, in any case, or by its package name
+ * exactly.
+ */
 export function findTargetByName(value: string): KnownTarget | undefined {
   const name = value.toLowerCase();
   return KNOWN_TARGET_PACKAGES.find(
-    (entry) => entry.shortName === name || entry.aliases.some((alias) => alias === name),
+    (entry) =>
+      entry.shortName === name ||
+      entry.aliases.some((alias) => alias === name) ||
+      entry.packageName === value,
   );
+}
+
+/**
+ * The target package `init` installs, listed or not. A listed package and an unlisted one run the
+ * same code; listing only names the drivers for the first install and the short name `--json`
+ * reports.
+ */
+export interface TargetPackage {
+  readonly packageName: string;
+  /** What `--json` reports as `target`: the short name of a listed package, otherwise the package name. */
+  readonly name: string;
+  /**
+   * The drivers installed with the package, before its contribution is loaded. Only the list
+   * knows them before the install, so an unlisted package has none here, and its contribution's
+   * `peerPackages` go into the later install.
+   */
+  readonly peerPackages: readonly string[];
+  /** The list entry of a listed package. */
+  readonly listed: KnownTarget | undefined;
+}
+
+export function listedTargetPackage(entry: KnownTarget): TargetPackage {
+  return {
+    packageName: entry.packageName,
+    name: entry.shortName,
+    peerPackages: entry.peerPackages,
+    listed: entry,
+  };
+}
+
+/** The target package `--target <value>` names: a listed one, or an unlisted package by its name. */
+export function targetPackageNamed(value: string): TargetPackage {
+  const listed = findTargetByName(value);
+  return listed === undefined
+    ? { packageName: value, name: value, peerPackages: [], listed: undefined }
+    : listedTargetPackage(listed);
 }
 
 /**

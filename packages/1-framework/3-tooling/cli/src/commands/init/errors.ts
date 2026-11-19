@@ -24,7 +24,7 @@ export function errorInitMissingFlags(options: {
     .map((flag) => {
       switch (flag) {
         case 'target':
-          return `--target ${TARGET_SHORT_NAMES.join('|')}`;
+          return `--target ${[...TARGET_SHORT_NAMES, '<package>'].join('|')}`;
         case 'authoring':
           return '--authoring psl|typescript';
         case 'schema-path':
@@ -54,15 +54,25 @@ export function errorInitInvalidFlagValue(options: {
   readonly flag: string;
   readonly value: string;
   readonly allowed: readonly string[];
+  /** Why the value is not a valid package name, for a flag that also takes one. */
+  readonly problems?: readonly string[];
 }): CliStructuredError {
+  const problems = options.problems ?? [];
+  const asPackageName =
+    problems.length === 0 ? '' : ` It is not a valid package name: ${problems.join('; ')}.`;
   return new CliStructuredError(
     'CLI.INIT_INVALID_FLAG_VALUE',
     `Invalid value for --${options.flag}`,
     {
-      why: `\`--${options.flag} ${options.value}\` is not one of: ${options.allowed.join(', ')}.`,
+      why: `\`--${options.flag} ${options.value}\` is not one of: ${options.allowed.join(', ')}.${asPackageName}`,
       fix: `Use one of: ${options.allowed.map((v) => `--${options.flag} ${v}`).join(', ')}.`,
       docsUrl: docsUrlFor('CLI.INIT_INVALID_FLAG_VALUE'),
-      meta: { flag: options.flag, value: options.value, allowed: options.allowed },
+      meta: {
+        flag: options.flag,
+        value: options.value,
+        allowed: options.allowed,
+        ...(problems.length === 0 ? {} : { problems }),
+      },
     },
   );
 }
