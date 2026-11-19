@@ -132,3 +132,31 @@ test('a create row with options takes callbacks on relations keyed on the other 
 
   expectTypeOf([withOptions, withMaybeOptions, variantWithOptions]).toExtend<readonly unknown[]>();
 });
+
+test('create through variant() of a variant stored in its own table takes no options', () => {
+  const darkMode = { title: 'Dark mode', priority: 1 } as const;
+  const skipOnOwnTable: PolyUpdate<'Project'> = {
+    tasks: (tasks) => {
+      const features = tasks.variant('feature');
+      // @ts-expect-error
+      return features.create(darkMode, { onConflict: 'skip' });
+    },
+  };
+  const connectOnOwnTable: PolyUpdate<'TaskComment'> = {
+    task: (task) => {
+      const feature = task.variant('feature');
+      // @ts-expect-error
+      return feature.create(darkMode, { onConflict: 'connect' });
+    },
+  };
+  const plainOnOwnTable: PolyUpdate<'Project'> = {
+    tasks: (tasks) => tasks.variant('feature').create(darkMode),
+  };
+  const optionsOnBaseTable: PolyUpdate<'TaskComment'> = {
+    task: (task) => task.variant('bug').create(crash, { onConflict: 'connect' }),
+  };
+
+  expectTypeOf([skipOnOwnTable, connectOnOwnTable, plainOnOwnTable, optionsOnBaseTable]).toExtend<
+    readonly unknown[]
+  >();
+});

@@ -2356,6 +2356,36 @@ type NestedVariantConflictRowCreateInput<
     VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>
   >;
 
+type ModelTable<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> =
+  ModelDef<TContract, ModelName, NsId> extends {
+    readonly storage: { readonly table: infer Table extends string };
+  }
+    ? Table
+    : never;
+
+/**
+ * The conflict actions a create through `variant()` takes: none for a variant stored in a table other than its base model's, which the runtime refuses with `ORM.OPERATION_UNSUPPORTED`.
+ */
+type VariantConflictActions<
+  TContract extends Contract<SqlStorage>,
+  BaseModelName extends string,
+  VariantValue extends string,
+  ConflictActions extends NestedCreateConflictAction,
+  NsId extends string = never,
+> = [
+  ModelTable<
+    TContract,
+    VariantModelName<TContract, BaseModelName, VariantValue, NsId>,
+    VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>
+  >,
+] extends [ModelTable<TContract, BaseModelName, NsId>]
+  ? ConflictActions
+  : never;
+
 export interface VariantRelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -2399,13 +2429,23 @@ export interface VariantRelationMutator<
     data: LinkWritesDisabled extends true
       ? never
       : NestedVariantConflictRowCreateInput<TContract, ModelName, VariantValue, NsId>,
-    options?: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
+    options?: RelationCreateOptions<
+      TContract,
+      ModelName,
+      VariantConflictActions<TContract, ModelName, VariantValue, ConflictActions, NsId>,
+      NsId
+    >,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
   create(
     data: LinkWritesDisabled extends true
       ? never
       : readonly NestedVariantConflictRowCreateInput<TContract, ModelName, VariantValue, NsId>[],
-    options?: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
+    options?: RelationCreateOptions<
+      TContract,
+      ModelName,
+      VariantConflictActions<TContract, ModelName, VariantValue, ConflictActions, NsId>,
+      NsId
+    >,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
 }
 
