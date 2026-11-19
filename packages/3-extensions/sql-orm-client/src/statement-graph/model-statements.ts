@@ -15,6 +15,7 @@ import {
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
+import { combineWhereExprs } from '../where-utils';
 import type { WrittenRowOwner } from '../written-keys';
 import { Delete } from './delete';
 import type { ColumnMapping, NodeId } from './edge';
@@ -185,12 +186,18 @@ export interface ReadBack {
   readonly owner: WrittenRowOwner;
 }
 
+export interface OnlyRows {
+  readonly where: AnyExpression;
+  readonly missing: Error;
+}
+
 export function readBack(
   b: Builder,
   model: Model,
   written: NodeId,
   keyColumns: readonly string[],
   { shape, by, owner }: ReadBack,
+  only?: OnlyRows,
 ): NodeId {
   const { graph, context } = b;
   const { contract } = context;
@@ -199,7 +206,7 @@ export function readBack(
   const perRelation = loadsIncludesPerRelation(contract, shape.includes);
   const includes = perRelation ? [] : shape.includes;
   const variantJoins = variantValue === undefined ? variants.size > 0 : variants.has(variantValue);
-  const ast =
+  const read =
     includes.length === 0 && !variantJoins
       ? SelectAst.from(root.tableSource(contract)).withProjection(
           returningProjection(contract, model.modelName, root, selectedFields),
@@ -210,13 +217,24 @@ export function readBack(
           { ...emptyState(model.tables), selectedFields, includes, variantValue },
           'selection',
         );
+  const ast =
+    only === undefined
+      ? read
+      : read.withWhere(
+          combineWhereExprs([...(read.where === undefined ? [] : [read.where]), only.where]),
+        );
   const mappings = projectTableColumns(contract, root, keyColumns).map(
     (column): ColumnMapping => [column, column],
   );
   const found =
     by === 'filter'
       ? findRows(b, ast, { filter: [new FilterData(written, mappings)], requires: [] })
-      : addFindByKeys(graph, new FindByKeys(ast, mappings, owner), written, mappings);
+      : addFindByKeys(
+          graph,
+          new FindByKeys(ast, mappings, owner, only?.missing),
+          written,
+          mappings,
+        );
   return perRelation ? addIncludeNodes(b, found, model, shape.includes) : found;
 }
 
