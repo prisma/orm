@@ -5,6 +5,7 @@ import type {
   DataType,
 } from '@internal/framework-components/codec';
 import {
+  AggregateExpr,
   BinaryExpr,
   CaseExpr,
   CastExpr,
@@ -208,6 +209,26 @@ describe('SQLite built-in codec descriptors', () => {
         CastExpr.as(expression, 'TEXT'),
       );
     }
+  });
+
+  it('returns a 64-bit integer from a statement as decimal text', () => {
+    const expression = ColumnRef.of('records', 'value');
+    const sumAsText = CastExpr.as(AggregateExpr.sum(expression), 'text');
+
+    expect({
+      bigint: sqliteBigintDescriptor.projectRow(expression),
+      bigintNumber: sqliteBigintNumberDescriptor.projectRow(expression),
+      alreadyText: sqliteBigintDescriptor.projectRow(sumAsText),
+    }).toEqual({
+      bigint: CastExpr.as(expression, 'TEXT'),
+      bigintNumber: CastExpr.as(expression, 'TEXT'),
+      alreadyText: sumAsText,
+    });
+    expect(
+      codecDescriptors
+        .filter((descriptor: AnySqliteCodecDescriptor) => descriptor.projectRow !== undefined)
+        .map((descriptor) => descriptor.codecId),
+    ).toEqual(['sqlite/bigint@1', 'sqlite/bigintnumber@1']);
   });
 
   it('keeps authored registries complete, with no codec rendering a named TypeScript type', () => {

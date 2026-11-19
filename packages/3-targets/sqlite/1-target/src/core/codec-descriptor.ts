@@ -24,6 +24,7 @@ const SQLITE_CODEC_DESCRIPTOR_KIND = 'sqlite-codec' as const;
 export interface AnySqliteCodecDescriptor extends AnyCodecDescriptor {
   readonly descriptorKind: typeof SQLITE_CODEC_DESCRIPTOR_KIND;
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr;
+  projectRow?(expression: ProjectionExpr): ProjectionExpr;
 }
 
 export abstract class SqliteCodecDescriptor<P = void>
@@ -96,7 +97,7 @@ export type AdaptedSqliteCodecDescriptor<D extends AnyCodecDescriptorTemplate> =
   keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
   Pick<CodecDescriptor, 'dataType'> &
-  Pick<AnySqliteCodecDescriptor, 'descriptorKind' | 'projectJson'>;
+  Pick<AnySqliteCodecDescriptor, 'descriptorKind' | 'projectJson' | 'projectRow'>;
 
 class SqliteCodecDescriptorAdapter<
   D extends AnyCodecDescriptorTemplate,
