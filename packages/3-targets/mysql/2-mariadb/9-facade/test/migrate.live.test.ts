@@ -179,6 +179,42 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
     },
   );
 
+  it('applies the empty and edge defaults, whose reading a row inserted with only its key then holds', async (test) => {
+    const { contract } = await emitFixture('edge-defaults');
+    await withMysqlDatabase(
+      test,
+      ({ url }) =>
+        withDriver(url, async (driver, family) => {
+          const applied = await apply(
+            family,
+            driver,
+            await plan(driver, family, contract),
+            contract,
+          );
+          if (!applied.ok) throw applied.failure;
+          await driver.query('INSERT INTO `Edge` (`id`) VALUES (1)');
+          const { rows } = await driver.query<Record<string, unknown>>(
+            'SELECT HEX(`noBytes`) AS noBytes, HEX(`bytes`) AS bytes, `blank`, `accented`, `jsonNull`, `jsonString`, `jsonArray`, `jsonObject`, `jsonAccented`, CAST(`zero` AS CHAR) AS zero, CAST(`whole` AS CHAR) AS whole, `off` FROM `Edge`',
+          );
+          expect(rows[0]).toEqual({
+            noBytes: '',
+            bytes: 'C3A900FF',
+            blank: '',
+            accented: 'é€',
+            jsonNull: 'null',
+            jsonString: '""',
+            jsonArray: '[]',
+            jsonObject: '{}',
+            jsonAccented: '{"k":"é€"}',
+            zero: '0.00',
+            whole: '-12',
+            off: '0',
+          });
+        }),
+      SERVER,
+    );
+  });
+
   it.for([
     ['bytes', 'id', false],
     ['bytes', 'unique', true],

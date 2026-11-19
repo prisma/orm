@@ -79,8 +79,11 @@ export const mysqlBigint = sqlDataType('mysql/bigint', {
   casts: { [mysqlInt.id]: asNumeralText },
 });
 
-/** The widest `decimal` MySQL and MariaDB hold: 65 digits, 30 of them after the point. */
+/** The widest `decimal` both servers hold: 65 digits, 30 of them after the point. MariaDB allows 38 after the point; MySQL allows 30. */
 export const MYSQL_WIDEST_DECIMAL = { precision: 65, scale: 30 } as const;
+
+/** The `decimal(10,0)` both servers make of a `decimal` written without a precision. */
+const BARE_DECIMAL = { precision: 10, scale: 0 } as const;
 
 /** The precision and scale of `decimal`: at most 65 digits, at most 30 of them after the point. */
 export const mysqlDecimalParams = arktype({
@@ -98,7 +101,7 @@ export const mysqlDecimalParams = arktype({
       : '';
   return ctx.reject({
     path: ['scale'],
-    message: `scale must be at most the precision: a scale of ${params.scale} is more than a precision of ${params.precision}. Write the scale with the precision, at most ${params.precision}, as in (precision: ${params.precision}, scale: ${Math.min(2, params.precision)}).${unwrittenScale}`,
+    message: `scale must be at most the precision: a scale of ${params.scale} is more than a precision of ${params.precision}. Write a scale of at most ${params.precision}, such as ${Math.min(2, params.precision)}, or a precision of at least ${params.scale}.${unwrittenScale}`,
   });
 });
 
@@ -114,39 +117,68 @@ export function decimalTextDigits(text: string): {
   return { integer: significantWhole.length, fraction: fraction.replace(/0+$/, '').length };
 }
 
-/** The precision and scale `params` give a column, a precision written alone having a scale of 0; `undefined` without a precision, as for the result of an aggregate, which holds any decimal. */
-function decimalColumn(params: DataTypeParams): { precision: number; scale: number } | undefined {
+/** The precision and scale of the column `params` describe, as the server makes it: a `decimal` without a precision is `decimal(10,0)`, and a precision written alone has a scale of 0. */
+export function mysqlDecimalColumn(params: DataTypeParams): {
+  readonly precision: number;
+  readonly scale: number;
+} {
   const precision = integerParam(params, 'precision');
-  if (precision === undefined) return undefined;
+  if (precision === undefined) return BARE_DECIMAL;
   return { precision, scale: integerParam(params, 'scale') ?? 0 };
 }
 
+function counted(count: number, noun: string): string {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`;
+}
+
+/** What a `decimal(precision, scale)` column holds, in digits before and after the point. */
+export function decimalColumnHolds(column: {
+  readonly precision: number;
+  readonly scale: number;
+}): string {
+  const integer = column.precision - column.scale;
+  if (column.scale === 0) return `a whole number of at most ${counted(integer, 'digit')}`;
+  const before = integer === 0 ? 'no digits' : `at most ${counted(integer, 'digit')}`;
+  return `${before} before the point and ${column.scale} after it`;
+}
+
+/** `text`, which is decimal text, when a `decimal(precision, scale)` column holds it without rounding; otherwise refuses it, saying what the column holds and what to change. */
+export function decimalTextInColumn(
+  text: string,
+  column: { readonly precision: number; readonly scale: number },
+): string {
+  const digits = decimalTextDigits(text);
+  const integer = column.precision - column.scale;
+  if (digits.integer <= integer && digits.fraction <= column.scale) return text;
+  const change =
+    digits.fraction > column.scale
+      ? `${text} has ${counted(digits.fraction, 'digit')} after the point: round it to ${column.scale === 0 ? 'a whole number' : column.scale}`
+      : `${text} has ${counted(digits.integer, 'digit')} before the point: keep it below 10^${integer}, or widen the column`;
+  return refuseJsonValue(
+    'mysql/decimal',
+    `a number a decimal(${column.precision},${column.scale}) column holds without rounding: ${decimalColumnHolds(column)}. ${change}.`,
+    text,
+  );
+}
+
+/**
+ * Reads decimal text under a column's `precision` and `scale`. Parameters without a precision are those of no column: every written value is read under no parameters before it is taken into its column, so they hold any decimal. A column written without a precision is the `decimal(10,0)` the server makes; its codec checks a value against that column.
+ */
 const readDecimal: DataTypeReader = (json, params) => {
   if (typeof json !== 'string' || !isDecimalText(json)) {
     return refuseJsonValue('mysql/decimal', 'decimal text, as in "12.50"', json);
   }
-  const column = decimalColumn(params);
-  if (column === undefined) return json;
-  const digits = decimalTextDigits(json);
-  const integer = column.precision - column.scale;
-  if (digits.integer <= integer && digits.fraction <= column.scale) return json;
-  const change =
-    digits.fraction > column.scale
-      ? `${json} has ${digits.fraction} after it: round it to ${column.scale}`
-      : `${json} has ${digits.integer} before it: keep it below 10^${integer}, or widen the column`;
-  return refuseJsonValue(
-    'mysql/decimal',
-    `a number a decimal(${column.precision},${column.scale}) column holds without rounding, with at most ${integer} digits before the point and ${column.scale} after it. ${change}`,
-    json,
-  );
+  return params['precision'] === undefined
+    ? json
+    : decimalTextInColumn(json, mysqlDecimalColumn(params));
 };
 
 /** A value of `decimal(precision, scale)` is written as MySQL and MariaDB print it: no leading zeros, no minus sign on zero, and exactly `scale` digits after the point. */
 const spellDecimal: DataTypeSpelling = (json, params) => {
   if (typeof json !== 'string') return json;
   const printed = printedDecimalText(json);
-  const column = decimalColumn(params);
-  if (column === undefined) return printed;
+  if (params['precision'] === undefined) return printed;
+  const column = mysqlDecimalColumn(params);
   const [whole = '', fraction = ''] = printed.split('.');
   const scaled =
     column.scale === 0
@@ -181,10 +213,7 @@ export const mysqlDecimal = sqlDataType('mysql/decimal', {
   read: readDecimal,
   spell: spellDecimal,
   equalityKey: decimalTextEqualityKey,
-  normalize: (params: DecimalParams): DecimalParams => {
-    if (params.precision === undefined) return { precision: 10, scale: 0 };
-    return params.scale === undefined ? { ...params, scale: 0 } : params;
-  },
+  normalize: (params: DecimalParams): DecimalParams => mysqlDecimalColumn(params),
   casts: {
     [mysqlText.id]: (value) =>
       typeof value === 'string' ? mysqlDecimalText(value) : refuseWrongShape(value, 'text'),

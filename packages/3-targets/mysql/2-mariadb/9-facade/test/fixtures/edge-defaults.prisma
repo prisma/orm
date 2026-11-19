@@ -12,5 +12,6 @@ model Edge {
   jsonObject   Json                             @default(json`{}`)
   jsonAccented Json                             @default(json`{"k": "é€"}`)
   zero         Decimal(precision: 10, scale: 2) @default(0)
+  whole        NumericString                    @default(-12)
   off          Boolean                          @default(false)
 }

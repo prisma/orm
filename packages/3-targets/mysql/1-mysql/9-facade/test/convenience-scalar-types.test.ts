@@ -133,8 +133,24 @@ describe('a MySQL scalar convenience type', () => {
 
   it('refuses a decimal default the column would round or cannot hold, showing the value and what to change', () => {
     expect(failure(model('f Decimal(precision: 10, scale: 2) @default(1.005)'))).toContain(
-      'a number a decimal(10,2) column holds without rounding, with at most 8 digits before the point and 2 after it. 1.005 has 3 after it: round it to 2',
+      'a number a decimal(10,2) column holds without rounding: at most 8 digits before the point and 2 after it. 1.005 has 3 digits after the point: round it to 2.',
     );
+    expect(failure(model('f Decimal(precision: 65, scale: 0) @default(1.5)'))).toContain(
+      'a number a decimal(65,0) column holds without rounding: a whole number of at most 65 digits. 1.5 has 1 digit after the point: round it to a whole number.',
+    );
+  });
+
+  it('reads a default on NumericString without a precision as one of the decimal(10,0) column it makes', () => {
+    const wholeNumber =
+      'a number a decimal(10,0) column holds without rounding: a whole number of at most 10 digits. 12.5 has 1 digit after the point: round it to a whole number.';
+    expect(failure(model('v NumericString @default("12.5")'))).toContain(wholeNumber);
+    expect(failure(model('v NumericString(10) @default("12.5")'))).toContain(wholeNumber);
+    const whole = emit(model('v NumericString @default(12)'));
+    expect(whole.ok && whole.value.storage.namespaces['__unbound__']).toMatchObject({
+      entries: {
+        table: { event: { columns: { v: { default: { kind: 'literal', value: '12' } } } } },
+      },
+    });
   });
 
   it('reads a decimal default written as a number or as text, in the form the column prints it', () => {
@@ -197,7 +213,7 @@ describe('a MySQL scalar convenience type', () => {
   });
 
   const scaleOf30Message =
-    'scale must be at most the precision: a scale of 30 is more than a precision of 10. Write the scale with the precision, at most 10, as in (precision: 10, scale: 2). A scale left unwritten can default to 30.';
+    'scale must be at most the precision: a scale of 30 is more than a precision of 10. Write a scale of at most 10, such as 2, or a precision of at least 30. A scale left unwritten can default to 30.';
 
   it('fills an unwritten scale with 30 whether or not the precision is written, so Decimal(precision: 40) has 10 digits before the point', () => {
     const result = emit(model('v Decimal(precision: 40)', 'w NumericString(40)'));
@@ -314,5 +330,23 @@ describe('a MySQL scalar convenience type in the TypeScript builder', () => {
       explicitData: ['mysql/longblob@1', undefined],
       explicitDoc: ['mysql/json@1', undefined],
     });
+  });
+
+  it('refuses a default with a fraction on a NumericString without a precision, as in PSL', () => {
+    const withDefault = (value: string) =>
+      defineContract({}, ({ type, field, model }) => ({
+        models: {
+          Event: model('Event', {
+            fields: {
+              id: field.column(type.Int()).id(),
+              v: field.column(type.NumericString()).default(value),
+            },
+          }),
+        },
+      }));
+    expect(() => withDefault('12.5')).toThrow(
+      'a number a decimal(10,0) column holds without rounding: a whole number of at most 10 digits. 12.5 has 1 digit after the point: round it to a whole number.',
+    );
+    expect(() => withDefault('12')).not.toThrow();
   });
 });

@@ -252,7 +252,7 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('applies the empty and edge defaults of bytes, text and JSON, which then verify strictly, plan nothing more and fill a row', async (test) => {
+  it('applies the empty and edge defaults of bytes, text and JSON and a whole number on a decimal without a precision, which then verify strictly, plan nothing more and fill a row', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
       withDriver(url, async (driver, family) => {
         const contract = contractWithEdgeDefaults();
@@ -268,7 +268,7 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
         const again = await planAgainst(driver, family, 'app', contract);
         await driver.query('INSERT INTO `Edge` (`id`) VALUES (1)');
         const { rows } = await driver.query<Record<string, unknown>>(
-          'SELECT HEX(`noBytes`) AS noBytes, HEX(`bytes`) AS bytes, `blank`, `accented`, CAST(`jsonNull` AS CHAR) AS jsonNull, CAST(`jsonString` AS CHAR) AS jsonString, CAST(`jsonArray` AS CHAR) AS jsonArray, CAST(`jsonObject` AS CHAR) AS jsonObject, CAST(`jsonAccented` AS CHAR) AS jsonAccented FROM `Edge`',
+          'SELECT HEX(`noBytes`) AS noBytes, HEX(`bytes`) AS bytes, `blank`, `accented`, CAST(`jsonNull` AS CHAR) AS jsonNull, CAST(`jsonString` AS CHAR) AS jsonString, CAST(`jsonArray` AS CHAR) AS jsonArray, CAST(`jsonObject` AS CHAR) AS jsonObject, CAST(`jsonAccented` AS CHAR) AS jsonAccented, CAST(`whole` AS CHAR) AS whole FROM `Edge`',
         );
         expect({
           applied: applied.ok ? true : applied.failure,
@@ -289,6 +289,7 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
             jsonArray: '[]',
             jsonObject: '{}',
             jsonAccented: '{"k": "é€😀"}',
+            whole: '-12',
           },
         });
       }),

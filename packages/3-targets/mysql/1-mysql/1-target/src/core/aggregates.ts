@@ -5,11 +5,13 @@
  *
  * The defaults policy is PostgreSQL's: `count` and `sum` over integers answer as a JS `number`, throwing through the codec's safe-range guard where the value cannot be one, while `countBigInt` and `sumBigInt` answer as a `bigint`. `avg` over an integer is written `CAST(SUM(x) AS DOUBLE) / COUNT(x)`: the exact decimal sum, rounded once to a `double` and divided. `AVG(x)` is a `decimal` that MySQL and MariaDB cut to nine decimal places when they group through a temporary table, so the mean it gives depends on the query plan. For the same reason there is no `avg` over a `decimal` and no `avgDecimal`.
  *
- * `sum` and `avg` over a `double` are a `double`. `sum` over a `decimal` is an exact `decimal`, read as its text with no type parameters, since the total can need more digits than the column.
+ * `sum` and `avg` over a `double` are a `double`. `sum` over a `decimal(p,s)` is the exact `decimal(min(65, p + 22), s)` both servers make of it, and its codec reference carries that precision and scale rather than the column's, since the total can need more digits than the column.
  *
  * `sum` and `avg` over text, dates and times are left out: MySQL reads text as a number, warning, and a date or time as its digits run together, so neither has a result this target can type. `min`/`max` over a duration are left out too, since its text does not sort in the order of the durations.
  */
 
+import type { JsonValue } from '@internal/contract/types';
+import type { CodecRef } from '@internal/framework-components/codec';
 import type { ValueInputAggregateDescriptor } from '@internal/framework-components/components';
 import type { SqlAggregateLowering } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import type { AggregateFn } from '@internal/sql-relational-core/ast';
@@ -31,6 +33,7 @@ import {
   MYSQL_TIMESTAMP_STRING_CODEC_ID,
   MYSQL_TIMESTAMP_TEMPORAL_CODEC_ID,
 } from './codec-ids';
+import { MYSQL_WIDEST_DECIMAL, mysqlDecimalColumn } from './data-types';
 
 type ValueInput = ValueInputAggregateDescriptor['input'];
 
@@ -85,6 +88,23 @@ const meanAsDouble: SqlAggregateLowering = ({ expr }) =>
     returns: { codecId: MYSQL_DOUBLE_CODEC_ID, nullable: true },
     lowering: { targetFamily: 'sql', template: '{{self}} / {{arg0}}' },
   });
+
+/** The 22 digits before the point that `sum` adds to a `decimal` column's precision, up to the widest decimal. */
+const DECIMAL_SUM_EXTRA_DIGITS = 22;
+
+const decimalSumParams = (input: CodecRef | undefined): JsonValue => {
+  const params = input?.typeParams;
+  const column = mysqlDecimalColumn(
+    typeof params === 'object' && params !== null && !Array.isArray(params) ? params : {},
+  );
+  return {
+    precision: Math.min(
+      MYSQL_WIDEST_DECIMAL.precision,
+      column.precision + DECIMAL_SUM_EXTRA_DIGITS,
+    ),
+    scale: column.scale,
+  };
+};
 
 const INTEGER_CODECS = [
   MYSQL_INT_CODEC_ID,
@@ -152,7 +172,12 @@ export const mysqlAggregateDescriptors = [
 
   produces('sum', { kind: 'codec', codecId: MYSQL_DOUBLE_CODEC_ID }, MYSQL_DOUBLE_CODEC_ID),
   produces('avg', { kind: 'codec', codecId: MYSQL_DOUBLE_CODEC_ID }, MYSQL_DOUBLE_CODEC_ID),
-  produces('sum', { kind: 'codec', codecId: MYSQL_DECIMAL_CODEC_ID }, MYSQL_DECIMAL_CODEC_ID),
+  {
+    operation: 'sum',
+    input: { kind: 'codec', codecId: MYSQL_DECIMAL_CODEC_ID },
+    output: { kind: 'codec', codecId: MYSQL_DECIMAL_CODEC_ID, typeParams: decimalSumParams },
+    nullable: true,
+  },
 
   ...orderingDescriptors('min'),
   ...orderingDescriptors('max'),

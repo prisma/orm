@@ -100,6 +100,34 @@ describe('MySQL aggregate descriptors', () => {
     });
   });
 
+  it.each([
+    [
+      { precision: 10, scale: 2 },
+      { precision: 32, scale: 2 },
+    ],
+    [
+      { precision: 40, scale: 30 },
+      { precision: 62, scale: 30 },
+    ],
+    [
+      { precision: 65, scale: 0 },
+      { precision: 65, scale: 0 },
+    ],
+    [undefined, { precision: 32, scale: 0 }],
+  ])(
+    'sums a decimal column of %j as the server types the total, a decimal of %j',
+    (typeParams, total) => {
+      const input: CodecRef = {
+        codecId: 'mysql/decimal@1',
+        ...(typeParams === undefined ? {} : { typeParams }),
+      };
+      expect(registry.resolve('sum', input)?.output).toEqual({
+        codecId: 'mysql/decimal@1',
+        typeParams: total,
+      });
+    },
+  );
+
   it('reads the sum and mean of a bigint read as a number as those of any integer', () => {
     expect({
       sum: resultOf('sum', 'mysql/bigintnumber@1'),
