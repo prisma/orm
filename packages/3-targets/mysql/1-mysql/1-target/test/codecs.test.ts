@@ -217,7 +217,7 @@ describe('the MySQL number codecs name the column they cannot read', () => {
     },
   );
 
-  it.each([
+  it.each<[string | number, string]>([
     ['18014398509481982', 'a sum'],
     [9007199254740994, 'a max or a raw query read as a number'],
   ])(

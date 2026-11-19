@@ -11,7 +11,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecRef } from '@internal/framework-components/codec';
+import { type CodecRef, dataTypeParams } from '@internal/framework-components/codec';
 import type { ValueInputAggregateDescriptor } from '@internal/framework-components/components';
 import type { SqlAggregateLowering } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import type { AggregateFn } from '@internal/sql-relational-core/ast';
@@ -33,7 +33,7 @@ import {
   MYSQL_TIMESTAMP_STRING_CODEC_ID,
   MYSQL_TIMESTAMP_TEMPORAL_CODEC_ID,
 } from './codec-ids';
-import { MYSQL_WIDEST_DECIMAL, mysqlDecimalColumn } from './data-types';
+import { MYSQL_WIDEST_DECIMAL, mysqlDecimal, mysqlDecimalColumn } from './data-types';
 
 type ValueInput = ValueInputAggregateDescriptor['input'];
 
@@ -93,10 +93,7 @@ const meanAsDouble: SqlAggregateLowering = ({ expr }) =>
 const DECIMAL_SUM_EXTRA_DIGITS = 22;
 
 const decimalSumParams = (input: CodecRef | undefined): JsonValue => {
-  const params = input?.typeParams;
-  const column = mysqlDecimalColumn(
-    typeof params === 'object' && params !== null && !Array.isArray(params) ? params : {},
-  );
+  const column = mysqlDecimalColumn(dataTypeParams(mysqlDecimal, input?.typeParams));
   return {
     precision: Math.min(
       MYSQL_WIDEST_DECIMAL.precision,
