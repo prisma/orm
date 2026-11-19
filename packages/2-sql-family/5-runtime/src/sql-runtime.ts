@@ -10,6 +10,7 @@ import {
   checkMiddlewareCompatibility,
   createContextBeneath,
   executeStatement,
+  isRuntimeError,
   type QueryPlan,
   RuntimeCore,
   type RuntimeExecuteOptions,
@@ -1820,31 +1821,33 @@ async function runTransactionOn<R>(
     throw error;
   }
 
-  const markUnclean = (reason: unknown): void => {
-    if (!state.clean) return;
-    state.clean = false;
-    state.reason = reason;
-  };
-
-  return runTransactionLevel(transaction, () => false, fn, {
-    onAborted: async (reason) => markUnclean(reason),
-    markUnclean,
-  });
+  try {
+    return await runAndSettleTransaction(transaction, fn, () => false);
+  } catch (error) {
+    const settlement = settlementOf(transaction);
+    if (settlement?.committed !== true && settlement?.rolledBack !== true) {
+      state.clean = false;
+      state.reason = settleFailureOf(error);
+    }
+    throw error;
+  }
 }
 
-const transactionLevel = Symbol('transactionLevel');
-
-interface TransactionLevel {
-  readonly transaction: RuntimeTransaction;
-  readonly isClosed: () => boolean;
+function settleFailureOf(error: unknown): unknown {
+  if (!isRuntimeError(error)) return error;
+  if (error.code === 'RUNTIME.TRANSACTION_ROLLBACK_FAILED') return error.details?.['rollbackError'];
+  if (error.code === 'RUNTIME.TRANSACTION_COMMIT_FAILED') return error.details?.['commitError'];
+  return error;
 }
 
-interface TransactionLevelTarget {
-  readonly [transactionLevel]: TransactionLevel;
+const contextTransaction = Symbol('contextTransaction');
+
+interface ContextTransactionTarget {
+  readonly [contextTransaction]: RuntimeTransaction;
 }
 
-function isTransactionLevelTarget(value: object): value is TransactionLevelTarget {
-  return transactionLevel in value;
+function hasContextTransaction(value: object): value is ContextTransactionTarget {
+  return contextTransaction in value;
 }
 
 export async function withSavepoint<TCtx, R>(
@@ -1853,21 +1856,23 @@ export async function withSavepoint<TCtx, R>(
   buildMembers: (txCtx: TransactionContext) => TCtx,
 ): Promise<R> {
   invariant(
-    isTransactionLevelTarget(txCtx),
+    hasContextTransaction(txCtx),
     'withSavepoint takes the context that withTransaction or withSavepoint passed to its callback',
   );
-  const enclosing = txCtx[transactionLevel];
-  if (enclosing.isClosed()) throw transactionClosedError();
-  const savepoint = await enclosing.transaction.transaction();
-  return runTransactionLevel(savepoint, enclosing.isClosed, (tx) => fn(buildMembers(tx)), {
-    onAborted: () => savepoint.rollback().catch(() => undefined),
-    markUnclean: () => undefined,
-  });
-}
-
-interface TransactionLevelSettlement {
-  onAborted(reason: unknown): Promise<unknown>;
-  markUnclean(reason: unknown): void;
+  if (txCtx.invalidated) throw transactionClosedError();
+  const savepoint = await txCtx[contextTransaction].transaction();
+  try {
+    return await runAndSettleTransaction(
+      savepoint,
+      (tx) => fn(buildMembers(tx)),
+      () => txCtx.invalidated,
+    );
+  } catch (error) {
+    if (savepoint.signal.aborted && error === savepoint.signal.reason) {
+      await savepoint.rollback().catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 function guardedTransactionContext(
@@ -1877,7 +1882,7 @@ function guardedTransactionContext(
   PreparedStatementQueryTarget &
   PreparedStatementExecuteTarget &
   ActivitySourceTarget &
-  TransactionLevelTarget {
+  ContextTransactionTarget {
   async function* guardedStream<Row>(
     open: () => AsyncIterable<Row>,
   ): AsyncGenerator<Row, void, unknown> {
@@ -1968,15 +1973,14 @@ function guardedTransactionContext(
       return isClosed();
     },
     [activitySource]: guardedSource(transaction),
-    [transactionLevel]: { transaction, isClosed },
+    [contextTransaction]: transaction,
   };
 }
 
-async function runTransactionLevel<R>(
+async function runAndSettleTransaction<R>(
   transaction: RuntimeTransaction,
-  isEnclosingClosed: () => boolean,
   fn: (tx: TransactionContext) => PromiseLike<R>,
-  { onAborted, markUnclean }: TransactionLevelSettlement,
+  isEnclosingClosed: () => boolean,
 ): Promise<R> {
   let invalidated = false;
   const signal = transaction.signal;
@@ -2006,10 +2010,7 @@ async function runTransactionLevel<R>(
     await transaction.commit();
     return result;
   } catch (error) {
-    if (signal.aborted) {
-      await onAborted(signal.reason);
-      throw signal.reason;
-    }
+    if (signal.aborted) throw signal.reason;
     if (!commitRequested) {
       const selected = error;
       invalidated = true;
@@ -2021,7 +2022,6 @@ async function runTransactionLevel<R>(
           settlement.logDroppedError(rollbackError);
           throw selected;
         }
-        markUnclean(rollbackError);
         const wrapped = runtimeError(
           'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
           'Transaction rollback failed after callback error',
@@ -2038,7 +2038,6 @@ async function runTransactionLevel<R>(
     } catch (rollbackError) {
       const settlement = settlementOf(transaction);
       if (settlement?.rolledBack === true) settlement.logDroppedError(rollbackError);
-      else markUnclean(error);
     }
     const wrapped = runtimeError('RUNTIME.TRANSACTION_COMMIT_FAILED', 'Transaction commit failed', {
       commitError: error,

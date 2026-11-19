@@ -125,7 +125,7 @@ describe('tx.transaction on postgres', () => {
     expect(await names(db)).toEqual(['A', 'B', 'C']);
   });
 
-  it('rolls back the innermost of three levels and commits the middle and outer ones', async () => {
+  it('rolls back the innermost of three nested transactions and commits the middle and outer ones', async () => {
     await db.transaction(async (tx) => {
       await insert(tx, 'A');
       await tx.transaction(async (middle) => {

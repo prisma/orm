@@ -32,7 +32,7 @@ const savepointMiddleware = (hooks: Omit<SqlMiddleware, 'name' | 'familyId'>): S
 });
 
 describe('withSavepoint', () => {
-  it('releases the savepoint after the callback resolves, builds the context at each level and names a nested savepoint sp_2', async () => {
+  it('releases the savepoint after the callback resolves, builds the context for each nested call and names a nested savepoint sp_2', async () => {
     const { runtime, events } = createSetup();
     const builder = vi.fn(build);
 
