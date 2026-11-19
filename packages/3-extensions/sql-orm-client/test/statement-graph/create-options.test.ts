@@ -30,7 +30,10 @@ import { printGraph } from './print-graph';
 
 interface VariantMutator {
   variant(value: string): {
-    create(data: object | readonly object[], options?: { onConflict: 'skip' }): unknown;
+    create(
+      data: object | readonly object[],
+      options?: { onConflict: 'skip' | 'connect'; conflictOn?: readonly string[] },
+    ): unknown;
   };
 }
 
@@ -204,6 +207,26 @@ describe('create options on a relation', () => {
         'n4 Insert user_tags on conflict (user_id, tag_id) do nothing <- PayloadData n1 (id->user_id), PayloadData n3 (id->tag_id)',
       ),
     });
+  });
+
+  it('runs a row of onConflict connect on a many-to-many relation without returning, keeping the stored key of a colliding row', async () => {
+    const { collection, runtime } = createCollectionFor(
+      'User',
+      withoutCapabilityKeys(baseContract, ['returning']),
+    );
+    runtime.setNextResults([[{ id: 1 }], [{ id: 'go', name: 'Go' }]]);
+
+    await collection.where({ id: 1 }).update({
+      tags: (tags: Mutator) =>
+        tags.create({ id: 'go', name: 'go' }, { onConflict: 'connect', conflictOn: ['name'] }),
+    } as never);
+
+    expect(runtime.executions.map(({ operation }) => operation)).toEqual([
+      'query',
+      'execute',
+      'query',
+      'execute',
+    ]);
   });
 
   it('counts the parent link toward the conflict key of a row of onConflict skip', () => {
@@ -532,6 +555,25 @@ describe('onConflict on a create through variant()', () => {
     return printGraph(updateFirstGraph(target, {}, relationMutations));
   }
 
+  function printPolyUpdate(modelName: string, input: Record<string, unknown>) {
+    const target = {
+      context: polyContext,
+      state: new Collection({ runtime: createMockRuntime(), context: polyContext }, modelName, {
+        namespaceId: 'public',
+      }).where({ id: 1 }).state,
+      modelName,
+      namespaceId: 'public',
+    };
+    const { relationMutations } = parseMutationInput(
+      polyContext.contract,
+      'public',
+      modelName,
+      input as never,
+      relatedCollectionOf(polyContext),
+    );
+    return printGraph(updateFirstGraph(target, {}, relationMutations));
+  }
+
   it('accepts onConflict skip on a variant stored in the base table', () => {
     expect(
       updateProject((tasks) =>
@@ -546,6 +588,105 @@ describe('onConflict on a create through variant()', () => {
         'result: n1',
       ].join('\n'),
     );
+  });
+
+  it('links a row of onConflict connect only when the colliding row is of the variant, and checks the variant before anything reads the row', () => {
+    const crash = { id: 2, title: 'Crash', severity: 'high' };
+
+    expect({
+      childHeld: updateProject((tasks) =>
+        tasks.variant('bug').create(crash, { onConflict: 'connect' }),
+      ),
+      parentHeld: printPolyUpdate('TaskComment', {
+        task: (task: VariantMutator) =>
+          task.variant('bug').create(crash, { onConflict: 'connect' }),
+      }),
+      manyToMany: printPolyUpdate('Label', {
+        tasks: (tasks: VariantMutator) =>
+          tasks.variant('bug').create(crash, { onConflict: 'connect' }),
+      }),
+    }).toEqual({
+      childHeld: [
+        'n1 Find projects_tbl where id = 1',
+        'n2 Insert tasks on conflict (id) do update <- PayloadData n1 (id->project_id)',
+        'n3 Assert <- Rows n2',
+        'result: n1',
+      ].join('\n'),
+      parentHeld: [
+        'n1 Find task_comments where id = 1',
+        'n2 Insert tasks on conflict (id) do update <- Requires n1',
+        'n3 Assert <- Rows n2',
+        'n4 Update task_comments set nothing where id = 1 <- PayloadData n2 (id->task_id)',
+        'result: n4',
+      ].join('\n'),
+      manyToMany: [
+        'n1 Find labels where id = 1',
+        'n2 Insert tasks on conflict (id) do update <- Requires n1',
+        'n3 Assert <- Rows n2',
+        'n4 Insert task_labels on conflict (task_id, label_id) do nothing <- PayloadData n1 (id->label_id), PayloadData n2 (id->task_id)',
+        'result: n1',
+      ].join('\n'),
+    });
+  });
+
+  it('moves a colliding row of onConflict connect through variant() to the parent only when the row is of the variant', async () => {
+    const runtime = createMockRuntime();
+    const projects = new Collection({ runtime, context: polyContext }, 'Project', {
+      namespaceId: 'public',
+    });
+    runtime.setNextResults([[{ id: 1 }], [{ id: 2, title: 'Crash', type: 'bug', project_id: 1 }]]);
+
+    await projects.where({ id: 1 }).update({
+      tasks: (tasks: VariantMutator) =>
+        tasks.variant('bug').create({ id: 2, title: 'Crash' }, { onConflict: 'connect' }),
+    } as never);
+
+    const insert = runtime.executions[1]?.plan.ast;
+    expect(insert).toMatchObject({
+      kind: 'insert',
+      onConflict: {
+        action: {
+          kind: 'do-update-set',
+          set: {
+            project_id: {
+              kind: 'case',
+              branches: [
+                {
+                  condition: {
+                    kind: 'binary',
+                    left: { kind: 'column-ref', table: 'tasks', column: 'type' },
+                    right: { kind: 'param-ref', value: 'bug' },
+                  },
+                  value: { kind: 'column-ref', table: 'excluded', column: 'project_id' },
+                },
+              ],
+              elseExpr: { kind: 'column-ref', table: 'tasks', column: 'project_id' },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('rejects onConflict connect through variant() when the colliding row is of another variant, before linking it', async () => {
+    const runtime = createMockRuntime();
+    const comments = new Collection({ runtime, context: polyContext }, 'TaskComment', {
+      namespaceId: 'public',
+    });
+    runtime.setNextResults([[{ id: 1 }], [{ id: 2, title: 'Dark mode', type: 'feature' }]]);
+
+    await expect(
+      comments.where({ id: 1 }).update({
+        task: (task: VariantMutator) =>
+          task.variant('bug').create({ id: 2, title: 'Crash' }, { onConflict: 'connect' }),
+      } as never),
+    ).rejects.toMatchObject({
+      code: 'ORM.RELATION_ROW_MISSING',
+      message:
+        'create() nested mutation for relation "task" found a row of another variant than "bug" on its conflict key',
+      meta: { kind: 'create', relation: 'task', variant: 'bug' },
+    });
+    expect(runtime.executions.map(({ operation }) => operation)).toEqual(['query', 'query']);
   });
 
   it('rejects onConflict on a variant stored in its own table', () => {

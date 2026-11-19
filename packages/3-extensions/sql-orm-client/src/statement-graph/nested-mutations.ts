@@ -26,6 +26,7 @@ import {
   type InsertConflict,
   type InsertConflictSkip,
   projectTableColumn,
+  type VariantGuard,
 } from '../mutation-statements';
 import { ormError } from '../orm-errors';
 import {
@@ -100,6 +101,11 @@ export interface CreateOf {
   readonly variantValue: string | undefined;
 }
 
+interface NestedConflict {
+  readonly conflict: InsertConflict;
+  readonly relation: string;
+}
+
 export interface BeforeWrite {
   readonly keys: readonly KeySource[];
   readonly nullColumns: Readonly<Record<string, null>>;
@@ -120,7 +126,7 @@ function insertWithRelations(
   parsed: ParsedMutationInput,
   { keysFromParent, returns, shape, variantValue }: CreateOf,
   storageRow: Record<string, unknown> | undefined,
-  conflict: InsertConflict | undefined,
+  nested: NestedConflict | undefined,
 ): NodeId {
   for (const relationMutation of parsed.relationMutations) {
     rejectUpdateOnly(relationMutation);
@@ -128,19 +134,59 @@ function insertWithRelations(
   const before = addBeforeWrite(t, model, parsed.relationMutations);
   const row =
     storageRow ?? createRowOf(t.context, model, variantValue, parsed.scalarData, undefined);
-  const { childOwned, junctionOwned } = partitionByOwnership(parsed.relationMutations);
-  const readsRow = childOwned.length > 0 || junctionOwned.length > 0;
   return insertRows(t, model, [row], {
-    conflict,
+    conflict: nested?.conflict,
     keys: [...keysFromParent, ...before.keys],
     requires: keysFromParent.length === 0 ? parentRowRequired(t) : [],
     owner: { operation: 'create', modelName: model.modelName },
     returns,
     shape,
-    afterWrite: readsRow
-      ? (inserted) => addAfterWrite(t, model, inserted, parsed.relationMutations)
-      : undefined,
+    afterWrite: afterWriteOf(t, model, parsed.relationMutations, nested),
   });
+}
+
+function afterWriteOf(
+  t: Translation,
+  model: Model,
+  relationMutations: readonly ParsedRelationMutation[],
+  nested: NestedConflict | undefined,
+): ((written: NodeId) => void) | undefined {
+  const { childOwned, junctionOwned } = partitionByOwnership(relationMutations);
+  const readsRow = childOwned.length > 0 || junctionOwned.length > 0;
+  const guard =
+    nested !== undefined && 'link' in nested.conflict ? nested.conflict.guard : undefined;
+  if (!readsRow && guard === undefined) {
+    return undefined;
+  }
+  return (written) => {
+    if (guard !== undefined && nested !== undefined) {
+      addVariantCheck(t, model, written, nested.relation, guard);
+    }
+    if (readsRow) {
+      addAfterWrite(t, model, written, relationMutations);
+    }
+  };
+}
+
+function addVariantCheck(
+  { graph, context }: Translation,
+  model: Model,
+  written: NodeId,
+  relation: string,
+  { column, value }: VariantGuard,
+): void {
+  const discriminator = projectTableColumn(context.contract, model.tables.root, column);
+  graph.add(
+    new Assert(
+      ormError(
+        'ORM.RELATION_ROW_MISSING',
+        `create() nested mutation for relation "${relation}" found a row of another variant than "${value}" on its conflict key`,
+        { meta: { kind: 'create', relation, variant: value } },
+      ),
+      { [column]: value },
+    ),
+    { rows: new Rows(written, [[discriminator, discriminator]]), requires: [] },
+  );
 }
 
 function addLinkedCreates(
@@ -157,7 +203,7 @@ function addLinkedCreates(
   const values = rows.map((row) =>
     createRowOf(t.context, related, mutation.variant, row.scalarData, undefined),
   );
-  const conflict = conflictOf(t, related, name, [], resolved, rows, values);
+  const nested = conflictOf(t, related, name, [], resolved, rows, values, mutation.variant);
   rows.forEach((row, index) => {
     link(
       insertWithRelations(
@@ -166,7 +212,7 @@ function addLinkedCreates(
         row,
         { keysFromParent: [], returns: 'rows', shape: allColumns, variantValue: mutation.variant },
         values[index],
-        conflict,
+        nested,
       ),
     );
   });
@@ -433,9 +479,18 @@ function addChildOwned(
     const values = rows.map((row) =>
       createRowOf(context, related, variantValue, row.scalarData, undefined),
     );
-    const conflict = conflictOf(t, related, name, targetColumns, resolved, rows, values);
+    const nested = conflictOf(
+      t,
+      related,
+      name,
+      targetColumns,
+      resolved,
+      rows,
+      values,
+      variantValue,
+    );
     if (
-      (conflict !== undefined && 'link' in conflict) ||
+      (nested !== undefined && 'link' in nested.conflict) ||
       rows.some((row) => row.relationMutations.length > 0)
     ) {
       rows.forEach((row, index) => {
@@ -445,13 +500,13 @@ function addChildOwned(
           row,
           { keysFromParent: keys, returns: 'count', shape: allColumns, variantValue },
           values[index],
-          conflict,
+          nested,
         );
       });
       return;
     }
     insertRows(t, related, values, {
-      conflict,
+      conflict: nested?.conflict,
       keys,
       requires: [],
       owner: { operation: 'create', modelName: related.modelName },
@@ -768,7 +823,8 @@ function conflictOf(
   resolved: ResolvedConflict | undefined,
   rows: readonly ParsedMutationInput[],
   values: readonly Readonly<Record<string, unknown>>[],
-): InsertConflict | undefined {
+  variantValue: string | undefined,
+): NestedConflict | undefined {
   if (resolved === undefined) {
     return undefined;
   }
@@ -787,7 +843,7 @@ function conflictOf(
     ],
   );
   if (resolved.onConflict === 'skip') {
-    return { columns: resolved.columns };
+    return { conflict: { columns: resolved.columns }, relation: name };
   }
   const targeted = hasContractCapability(contract, 'insertOnConflictTarget');
   if (!targeted) {
@@ -796,10 +852,28 @@ function conflictOf(
     }
   }
   return {
-    columns: connectColumns,
-    targeted,
-    link: parentLinkColumns.length > 0 ? parentLinkColumns : connectColumns.slice(0, 1),
+    conflict: {
+      columns: connectColumns,
+      targeted,
+      link: parentLinkColumns,
+      guard: variantGuardOf(contract, model, variantValue),
+    },
+    relation: name,
   };
+}
+
+function variantGuardOf(
+  contract: Contract<SqlStorage>,
+  { namespaceId, modelName }: Model,
+  variantValue: string | undefined,
+): VariantGuard | undefined {
+  const discriminator =
+    variantValue === undefined
+      ? undefined
+      : resolvePolymorphismInfo(contract, namespaceId, modelName)?.discriminatorColumn;
+  return discriminator === undefined || variantValue === undefined
+    ? undefined
+    : { column: discriminator, value: variantValue };
 }
 
 function addFindAndAssert(

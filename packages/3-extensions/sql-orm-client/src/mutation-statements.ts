@@ -3,6 +3,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   BinaryExpr,
+  CaseExpr,
   ColumnRef,
   DefaultValueExpr,
   DeleteAst,
@@ -24,6 +25,7 @@ import { ormError } from './orm-errors';
 import { buildPrimaryKeyJoinOn } from './query-plan-source';
 import { storageTableForContract } from './storage-resolution';
 import type { AliasedTable } from './table-scope';
+import { paramRefForStorageColumn } from './where-binding';
 import { combineWhereExprs } from './where-utils';
 
 export function projectTableColumn(
@@ -155,15 +157,22 @@ export interface InsertConflictSkip {
   readonly columns: readonly string[];
 }
 
+export interface VariantGuard {
+  readonly column: string;
+  readonly value: string;
+}
+
 export interface InsertConflictLink {
   readonly columns: readonly string[];
   readonly targeted: boolean;
   readonly link: readonly string[];
+  readonly guard: VariantGuard | undefined;
 }
 
 export type InsertConflict = InsertConflictSkip | InsertConflictLink;
 
 function conflictClause(
+  contract: Contract<SqlStorage>,
   target: AliasedTable,
   conflict: InsertConflict | undefined,
 ): InsertOnConflict | undefined {
@@ -171,11 +180,37 @@ function conflictClause(
   if ('link' in conflict) {
     const columns = conflict.targeted ? conflict.columns : [];
     return InsertOnConflict.on(columns.map((column) => target.column(column))).doUpdateSet(
-      Object.fromEntries(conflict.link.map((column) => [column, ColumnRef.of('excluded', column)])),
+      linkAssignments(contract, target, conflict),
     );
   }
   if (conflict.columns.length === 0) return InsertOnConflict.doNothing();
   return InsertOnConflict.on(conflict.columns.map((column) => target.column(column))).doNothing();
+}
+
+function linkAssignments(
+  contract: Contract<SqlStorage>,
+  target: AliasedTable,
+  { columns: [first], link, guard }: InsertConflictLink,
+): Readonly<Record<string, AnyExpression>> {
+  if (link.length === 0 && first !== undefined) {
+    return { [first]: target.column(first) };
+  }
+  const proposed = (column: string): AnyExpression =>
+    guard === undefined
+      ? ColumnRef.of('excluded', column)
+      : CaseExpr.of(
+          [
+            {
+              condition: BinaryExpr.eq(
+                target.column(guard.column),
+                paramRefForStorageColumn(contract, target.storage, guard.column, guard.value),
+              ),
+              value: ColumnRef.of('excluded', column),
+            },
+          ],
+          target.column(column),
+        );
+  return Object.fromEntries(link.map((column) => [column, proposed(column)]));
 }
 
 export function insertAst(
@@ -188,7 +223,7 @@ export function insertAst(
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
   return InsertAst.into(target.tableSource(contract))
     .withRows(normalizedRows)
-    .withOnConflict(conflictClause(target, conflict));
+    .withOnConflict(conflictClause(contract, target, conflict));
 }
 
 function stripUndefinedValues(row: Record<string, unknown>): Record<string, unknown> {

@@ -81,11 +81,12 @@ function refuseUpsertOfColumnsReadBack(
       { meta: { capability: 'returning', action: method } },
     );
   const read = returns.map((column) => column.alias);
+  const unchanged = new Set(['excluded', ast.table.alias ?? ast.table.name]);
   const updated = read.filter((column) => {
     const value = action.set[column];
     return (
       value !== undefined &&
-      !(value.kind === 'column-ref' && value.table === 'excluded' && value.column === column)
+      !(value.kind === 'column-ref' && unchanged.has(value.table) && value.column === column)
     );
   });
   if (updated.length > 0) {
