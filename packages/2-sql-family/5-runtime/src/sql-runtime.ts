@@ -325,7 +325,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #transactionRuntime: TransactionRuntime = {
     route: (driverTx, transaction) =>
       this.queryableRoute(driverTx, 'transaction', () => transaction.activity, {
-        transaction: savepointBeneath(transaction),
+        transaction: savepointOn(transaction),
         runtimeWork: false,
       }),
     startActivity: (route, activity) => this.startActivityOnRoute(route, activity, undefined),
@@ -665,7 +665,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         openTransaction === undefined
           ? (parent, fn, options) =>
               this.transactionOnHeldConnection(connection, owner, parent, fn, options)
-          : savepointBeneath(openTransaction),
+          : savepointOn(openTransaction),
       runtimeWork: false,
     });
   }
@@ -1830,7 +1830,7 @@ async function runTransactionOn<R>(
   }
 }
 
-function savepointBeneath(transaction: OpenTransaction): ActivityRoute['transaction'] {
+function savepointOn(transaction: OpenTransaction): ActivityRoute['transaction'] {
   return async (parent, fn, options) => {
     if (options !== undefined) throw savepointOptionsUnsupportedError(options);
     return runInSavepoint(() => transaction.transactionBeneath(parent), fn);

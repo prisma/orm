@@ -3,7 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { startActivityOn } from '../src/activity-handle';
 import { withTransaction } from '../src/sql-runtime';
 import { testCall } from './client-activity-kinds';
-import { createSetup, type HookEvent, names, rawPlan } from './transaction-activity-fixtures';
+import {
+  createSetup,
+  finalized,
+  type HookEvent,
+  names,
+  rawPlan,
+  trace,
+} from './transaction-activity-fixtures';
 
 function eventOf(events: readonly HookEvent[], name: string): HookEvent | undefined {
   return events.find((candidate) => candidate.name === name);
@@ -230,13 +237,6 @@ describe('the transaction of an activity handle', () => {
   });
 
   describe('opened inside a transaction', () => {
-    const sent = (events: readonly HookEvent[]) =>
-      events
-        .map((event) => (event.name === 'beforeEncode' ? event.sql : event.name))
-        .filter(
-          (name): name is string =>
-            name !== undefined && /^(SAVEPOINT|RELEASE|ROLLBACK|begin|commit|insert)/.test(name),
-        );
     const startedBeneath = (events: readonly HookEvent[]) => {
       const calls: unknown[] = events
         .filter((event) => event.name === 'started:test-call')
@@ -267,20 +267,15 @@ describe('the transaction of an activity handle', () => {
 
       expect({
         results,
-        sent: sent(events),
+        sent: trace(events),
         beneath: startedBeneath(events),
+        finalized: finalized(events),
       }).toEqual({
         results: ['a', 'b'],
-        sent: [
-          'begin',
-          'SAVEPOINT sp_1',
-          'insert a',
-          'RELEASE SAVEPOINT sp_1',
-          'SAVEPOINT sp_2',
-          'RELEASE SAVEPOINT sp_2',
-          'commit',
-        ],
+        sent: 'begin, SAVEPOINT sp_1, insert a, RELEASE SAVEPOINT sp_1, SAVEPOINT sp_2, RELEASE SAVEPOINT sp_2, commit, release',
         beneath: [-1, 0, 1],
+        finalized:
+          'transaction:committed, test-call:committed, statement:committed, transaction:committed, test-call:committed, transaction:committed',
       });
     });
 
@@ -300,14 +295,11 @@ describe('the transaction of an activity handle', () => {
         await tx.execute(rawPlan('insert b'));
       });
 
-      expect(sent(events)).toEqual([
-        'begin',
-        'SAVEPOINT sp_1',
-        'insert a',
-        'ROLLBACK TO SAVEPOINT sp_1',
-        'insert b',
-        'commit',
-      ]);
+      expect({ sent: trace(events), finalized: finalized(events) }).toEqual({
+        sent: 'begin, SAVEPOINT sp_1, insert a, ROLLBACK TO SAVEPOINT sp_1, insert b, commit, release',
+        finalized:
+          'statement:rolled-back, transaction:rolled-back, test-call:committed, statement:committed, transaction:committed',
+      });
     });
 
     it('rejects options with RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED without starting or sending anything', async () => {
@@ -328,8 +320,8 @@ describe('the transaction of an activity handle', () => {
       expect({
         called: fn.mock.calls.length,
         starts: startedBeneath(events).length,
-        sent: sent(events),
-      }).toEqual({ called: 0, starts: 1, sent: ['begin', 'commit'] });
+        sent: trace(events),
+      }).toEqual({ called: 0, starts: 1, sent: 'begin, commit, release' });
     });
 
     it('opens a savepoint on the open transaction of the connection it was opened on', async () => {
@@ -343,13 +335,9 @@ describe('the transaction of an activity handle', () => {
       await transaction.commit();
       await connection.release();
 
-      expect(sent(events)).toEqual([
-        'begin',
-        'SAVEPOINT sp_1',
-        'insert a',
-        'RELEASE SAVEPOINT sp_1',
-        'commit',
-      ]);
+      expect(trace(events)).toBe(
+        'begin, SAVEPOINT sp_1, insert a, RELEASE SAVEPOINT sp_1, commit, release',
+      );
     });
 
     it('opens a savepoint through a withTransaction context, and rejects RUNTIME.TRANSACTION_CLOSED once the context is closed', async () => {
@@ -360,19 +348,14 @@ describe('the transaction of an activity handle', () => {
         await handle.transaction(async (sp) => sp.execute(rawPlan('insert a')));
         return handle;
       });
-      const sentBeforeClosed = sent(events);
+      const sentBeforeClosed = trace(events);
       await expect(call.transaction(async () => undefined)).rejects.toMatchObject({
         code: 'RUNTIME.TRANSACTION_CLOSED',
       });
 
-      expect({ sentBeforeClosed, sent: sent(events) }).toEqual({
-        sentBeforeClosed: [
-          'begin',
-          'SAVEPOINT sp_1',
-          'insert a',
-          'RELEASE SAVEPOINT sp_1',
-          'commit',
-        ],
+      expect({ sentBeforeClosed, sent: trace(events) }).toEqual({
+        sentBeforeClosed:
+          'begin, SAVEPOINT sp_1, insert a, RELEASE SAVEPOINT sp_1, commit, release',
         sent: sentBeforeClosed,
       });
     });
