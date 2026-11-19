@@ -51,7 +51,9 @@ An object built by hand and typed as `TransactionContext`, such as a stub in a t
 
 ```ts
 const ctx: TransactionContext = {
-  invalidated: false,
+  get invalidated() {
+    return inner.invalidated;
+  },
   query: (plan) => inner.query(plan),
   execute: (plan) => inner.execute(plan),
   transaction: (fn) => inner.transaction(fn),
