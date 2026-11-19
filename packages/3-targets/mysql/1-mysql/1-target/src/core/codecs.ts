@@ -267,6 +267,10 @@ export const mysqlBigintDescriptor = new MysqlBigintDescriptor();
 const SAFE_INTEGER_FIX =
   'Read the column as BigInt, which reads a JavaScript bigint, or keep its values within ±(2^53 − 1).';
 
+/** A value read without a column is the result of an aggregate such as `sum` or `count`, whose total can pass the range while every value it adds is within it. */
+const SAFE_INTEGER_RESULT_FIX =
+  'The result does not fit a JavaScript number. Use sumBigInt or countBigInt in place of sum or count, which read a JavaScript bigint.';
+
 function safeIntegerToWrite(value: number, ctx: SqlCodecCallContext): number {
   if (typeof value === 'number' && Number.isSafeInteger(value)) return value;
   throw errorColumnUnwritable({
@@ -285,7 +289,7 @@ function unreadableSafeInteger(wire: string | number, ctx: SqlCodecCallContext):
     column: ctx.column,
     notA: 'an integer within the safe integer range',
     reads: 'a JavaScript number, an integer within ±(2^53 − 1)',
-    fix: SAFE_INTEGER_FIX,
+    fix: ctx.column === undefined ? SAFE_INTEGER_RESULT_FIX : SAFE_INTEGER_FIX,
   });
 }
 
