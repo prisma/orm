@@ -69,3 +69,13 @@ function getEnvVarToUse(binaryType: BinaryType): string {
 
   return envVar
 }
+
+export function allEngineEnvVarsSet(binaries: string[]): boolean {
+  for (const binaryType of binaries) {
+    if (!getBinaryEnvVarPath(binaryType as BinaryType)) {
+      return false
+    }
+  }
+
+  return true
+}
