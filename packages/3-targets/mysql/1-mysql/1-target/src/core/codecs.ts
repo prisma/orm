@@ -267,9 +267,9 @@ export const mysqlBigintDescriptor = new MysqlBigintDescriptor();
 const SAFE_INTEGER_FIX =
   'Read the column as BigInt, which reads a JavaScript bigint, or keep its values within ±(2^53 − 1).';
 
-/** A value read without a column is the result of an aggregate such as `sum` or `count`, whose total can pass the range while every value it adds is within it. */
+/** A value read without a column is an aggregate's result, an aggregate in an include, a computed projection or a raw query's column; the codec cannot tell which, so the fix names each. */
 const SAFE_INTEGER_RESULT_FIX =
-  'The result does not fit a JavaScript number. Use sumBigInt or countBigInt in place of sum or count, which read a JavaScript bigint.';
+  "The value does not fit a JavaScript number. Use an aggregate's BigInt form, such as sumBigInt or countBigInt; for a column's value, such as its min or max, declare the field BigInt, or read it as mysql/bigint@1 in a raw query.";
 
 function safeIntegerToWrite(value: number, ctx: SqlCodecCallContext): number {
   if (typeof value === 'number' && Number.isSafeInteger(value)) return value;

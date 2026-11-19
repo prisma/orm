@@ -217,16 +217,21 @@ describe('the MySQL number codecs name the column they cannot read', () => {
     },
   );
 
-  it('says to use sumBigInt or countBigInt for a result past the safe integer range, which no column holds', async () => {
-    await expect(
-      mysqlBigintNumberDescriptor.factory()(instance).fromWire('18014398509481982', {}),
-    ).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      message:
-        'A mysql/bigintnumber@1 value is 18014398509481982, which is not an integer within the safe integer range. mysql/bigintnumber@1 reads a JavaScript number, an integer within ±(2^53 − 1).',
-      fix: 'The result does not fit a JavaScript number. Use sumBigInt or countBigInt in place of sum or count, which read a JavaScript bigint.',
-    });
-  });
+  it.each([
+    ['18014398509481982', 'a sum'],
+    [9007199254740994, 'a max or a raw query read as a number'],
+  ])(
+    'says what to do for every reader of %s past the safe integer range read without a column, %s',
+    async (wire) => {
+      await expect(
+        mysqlBigintNumberDescriptor.factory()(instance).fromWire(wire, {}),
+      ).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: `A mysql/bigintnumber@1 value is ${wire}, which is not an integer within the safe integer range. mysql/bigintnumber@1 reads a JavaScript number, an integer within ±(2^53 − 1).`,
+        fix: "The value does not fit a JavaScript number. Use an aggregate's BigInt form, such as sumBigInt or countBigInt; for a column's value, such as its min or max, declare the field BigInt, or read it as mysql/bigint@1 in a raw query.",
+      });
+    },
+  );
 
   it('refuses to write a number outside the safe integer range, which the column would not read back', async () => {
     await expect(

@@ -50,6 +50,9 @@ const ledgerDatabase = [
 
 const WIDEST = '9'.repeat(65);
 
+const SAFE_INTEGER_RESULT_FIX =
+  "The value does not fit a JavaScript number. Use an aggregate's BigInt form, such as sumBigInt or countBigInt; for a column's value, such as its min or max, declare the field BigInt, or read it as mysql/bigint@1 in a raw query.";
+
 const itemsDatabase = [
   'CREATE TABLE `Drawer` (`id` int NOT NULL, PRIMARY KEY (`id`))',
   'CREATE TABLE `Item` (`id` int NOT NULL, `on` tinyint(1) NOT NULL, `data` longblob NOT NULL, `doc` json NOT NULL, `extra` json NULL, `drawerId` int NOT NULL, PRIMARY KEY (`id`))',
@@ -247,19 +250,71 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('says to use sumBigInt for a sum past the safe integer range', async (test) => {
-      await withSeededDatabase(test, server, measuresDatabase, async (url) => {
+    it('says what to do for a sum and for a max past the safe integer range, which no column reads', async (test) => {
+      await withSeededDatabase(
+        test,
+        server,
+        [
+          ...measuresDatabase,
+          `INSERT INTO \`Measure\` VALUES (3, 9007199254740993, 0, 0, 0, '', 1)`,
+        ],
+        async (url) => {
+          await using db = server.client({ url, verifyMarker: false });
+          await db.orm.Measure.createAll([measure, { ...measure, id: 2 }]);
+          const refusal = { code: 'RUNTIME.DECODE_FAILED', fix: SAFE_INTEGER_RESULT_FIX };
+          await expect(
+            db.orm.Measure.aggregate((a) => ({ count: a.sum('count') })),
+          ).rejects.toMatchObject(refusal);
+          await expect(
+            db.orm.Measure.aggregate((a) => ({ most: a.max('count') })),
+          ).rejects.toMatchObject(refusal);
+          expect(
+            await db.orm.Measure.where((m) => m.id.lte(2)).aggregate((a) => ({
+              count: a.sumBigInt('count'),
+            })),
+          ).toEqual({ count: 2n * BigInt(Number.MAX_SAFE_INTEGER) });
+        },
+      );
+    });
+
+    it('sums a decimal column with more than 35 digits before the point exactly, at the width of the column', async (test) => {
+      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
-        await db.orm.Measure.createAll([measure, { ...measure, id: 2 }]);
-        await expect(
-          db.orm.Measure.aggregate((a) => ({ count: a.sum('count') })),
-        ).rejects.toMatchObject({
-          code: 'RUNTIME.DECODE_FAILED',
-          fix: 'The result does not fit a JavaScript number. Use sumBigInt or countBigInt in place of sum or count, which read a JavaScript bigint.',
+        await db.orm.Ledger.createAll([
+          { id: 1, wide: WIDEST, cents: '0.01' },
+          { id: 2, wide: '-1', cents: '0.02' },
+        ]);
+        expect(
+          await db.orm.Ledger.aggregate((a) => ({ wide: a.sum('wide'), cents: a.sum('cents') })),
+        ).toEqual({ wide: `${'9'.repeat(64)}8`, cents: '0.03' });
+      });
+    });
+
+    it('compares a prepared decimal parameter with a decimal(65,0) column at full width only when it is declared with the precision and scale', async (test) => {
+      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+        await using db = server.client({ url, verifyMarker: false });
+        const forty = '9'.repeat(40);
+        await db.orm.Ledger.create({ id: 1, wide: forty, cents: '0.00' });
+        const runtime = await db.runtime();
+        const undeclared = await db.prepare({ v: 'mysql/decimal@1' }, (p) =>
+          db.sql.Ledger.select('id')
+            .where((f, fns) => fns.eq(f.wide, p.v))
+            .build(),
+        );
+        const declared = await db.prepare(
+          { v: { codecId: 'mysql/decimal@1', typeParams: { precision: 65, scale: 0 } } },
+          (p) =>
+            db.sql.Ledger.select('id')
+              .where((f, fns) => fns.eq(f.wide, p.v))
+              .build(),
+        );
+        await expect(undeclared.query(runtime, { v: forty }).toArray()).rejects.toMatchObject({
+          code: 'RUNTIME.ENCODE_FAILED',
+          fix: expect.stringContaining(
+            "For a prepared statement's parameter, declare the precision and scale of the column it is compared with",
+          ),
         });
-        expect(await db.orm.Measure.aggregate((a) => ({ count: a.sumBigInt('count') }))).toEqual({
-          count: 2n * BigInt(Number.MAX_SAFE_INTEGER),
-        });
+        expect(await declared.query(runtime, { v: forty }).toArray()).toEqual([{ id: 1 }]);
       });
     });
 
@@ -419,80 +474,6 @@ export function describeOrmScalarTypes(server: LiveServer): void {
               .all(),
           ),
         }).toEqual({ on: [1, 3], off: [2, 4], bytes: [2], byBytes: [1, 4, 3, 2] });
-      });
-    });
-
-    it('writes, reads and finds every value of a decimal column with more than 35 digits before the point', async (test) => {
-      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
-        await using db = server.client({ url, verifyMarker: false });
-        await db.orm.Ledger.createAll([
-          { id: 1, wide: WIDEST, cents: '1.01' },
-          { id: 2, wide: `-${WIDEST}`, cents: '1.00' },
-        ]);
-        const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
-          (await rows).map((row) => row.id);
-        expect({
-          rows: await db.orm.Ledger.orderBy((l) => l.id.asc()).all(),
-          equal: await ids(
-            db.orm.Ledger.where((l) => l.wide.eq(WIDEST))
-              .select('id')
-              .all(),
-          ),
-          inList: await ids(
-            db.orm.Ledger.where((l) => l.wide.in([WIDEST, '1']))
-              .select('id')
-              .all(),
-          ),
-        }).toEqual({
-          rows: [
-            { id: 1, wide: WIDEST, cents: '1.01' },
-            { id: 2, wide: `-${WIDEST}`, cents: '1.00' },
-          ],
-          equal: [1],
-          inList: [1],
-        });
-      });
-    });
-
-    it('compares a filter value with more digits after the point than its column holds without rounding it to the column', async (test) => {
-      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
-        await using db = server.client({ url, verifyMarker: false });
-        await db.orm.Ledger.create({ id: 1, wide: '1', cents: '1.01' });
-        const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
-          (await rows).map((row) => row.id);
-        expect({
-          equal: await ids(
-            db.orm.Ledger.where((l) => l.cents.eq('1.005'))
-              .select('id')
-              .all(),
-          ),
-          inList: await ids(
-            db.orm.Ledger.where((l) => l.cents.in(['1.005']))
-              .select('id')
-              .all(),
-          ),
-          exact: await ids(
-            db.orm.Ledger.where((l) => l.cents.in(['1.010']))
-              .select('id')
-              .all(),
-          ),
-        }).toEqual({ equal: [], inList: [], exact: [1] });
-      });
-    });
-
-    it('says to use sumBigInt for a sum past the safe integer range', async (test) => {
-      await withSeededDatabase(test, server, measuresDatabase, async (url) => {
-        await using db = server.client({ url, verifyMarker: false });
-        await db.orm.Measure.createAll([measure, { ...measure, id: 2 }]);
-        await expect(
-          db.orm.Measure.aggregate((a) => ({ count: a.sum('count') })),
-        ).rejects.toMatchObject({
-          code: 'RUNTIME.DECODE_FAILED',
-          fix: 'The result does not fit a JavaScript number. Use sumBigInt or countBigInt in place of sum or count, which read a JavaScript bigint.',
-        });
-        expect(await db.orm.Measure.aggregate((a) => ({ count: a.sumBigInt('count') }))).toEqual({
-          count: 2n * BigInt(Number.MAX_SAFE_INTEGER),
-        });
       });
     });
 
