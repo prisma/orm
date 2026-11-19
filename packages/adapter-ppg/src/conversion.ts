@@ -435,7 +435,13 @@ function normalize_timez(time: string | null): string | null {
 
 function normalize_money(money: string | null): string | null {
   if (money === null) return null
-  return money.slice(1)
+  // Postgres formats money using `lc_monetary`. Only the default format, e.g. `$1,234.50` or `-$120.00`, is supported.
+  if (!/^-?\$\d{1,3}(,\d{3})*\.\d{2}$/.test(money)) {
+    throw new Error(
+      `Unsupported money format "${money}": only the default lc_monetary format, such as -$1,234.50, is supported`,
+    )
+  }
+  return money.replace(/[^\d.-]/g, '')
 }
 
 /******************/

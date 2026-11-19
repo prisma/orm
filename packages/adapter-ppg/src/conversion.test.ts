@@ -132,13 +132,26 @@ describe('conversion', () => {
   describe('normalize_money', () => {
     const parse = getParser(ScalarColumnType.MONEY)
 
-    test('strips leading currency symbol', () => {
-      expect(parse('$1234.56')).toBe('1234.56')
+    test.each([
+      ['$999.50', '999.50'],
+      ['$1,234.56', '1234.56'],
+      ['-$120.00', '-120.00'],
+      ['-$1,620.00', '-1620.00'],
+      ['$0.00', '0.00'],
+    ])('parses %s as %s', (input, expected) => {
+      expect(parse(input)).toBe(expected)
     })
 
     test('supports arrays of money', () => {
-      expect(getParser(ArrayColumnType.MONEY_ARRAY)('{$1234.56,$7890.12}')).toEqual(['1234.56', '7890.12'])
+      expect(getParser(ArrayColumnType.MONEY_ARRAY)('{"$1,234.56","-$7,890.12"}')).toEqual(['1234.56', '-7890.12'])
     })
+
+    test.each(['5,00 €', '€5.00', '$1.234,50', '$1234.50', '$5'])(
+      'rejects %s, which is not the default format',
+      (input) => {
+        expect(() => parse(input)).toThrow('Unsupported money format')
+      },
+    )
   })
 
   describe('normalize_bool', () => {
