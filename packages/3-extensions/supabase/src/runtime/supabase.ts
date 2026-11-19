@@ -43,6 +43,7 @@ import type {
   SqlExecutionStackWithDriver,
   SqlRuntimeExtensionDescriptor,
   ToSqlMember,
+  TransactionContext,
 } from '@internal/sql-runtime';
 import {
   activitySource,
@@ -103,7 +104,8 @@ export interface RoleBoundDb<
 export type SupabaseTransactionContext<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
-> = PostgresTransactionContext<TContract, TCollections>;
+> = Omit<PostgresTransactionContext<TContract, TCollections>, 'transaction'> &
+  Pick<TransactionContext, 'transaction'>;
 
 /**
  * Query surface for the Supabase-internal contract (`auth`, `storage`). Exposed

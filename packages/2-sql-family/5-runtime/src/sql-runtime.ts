@@ -207,6 +207,7 @@ export interface RuntimeQueryable extends RuntimeScope {}
 
 export interface TransactionContext extends RuntimeQueryable {
   readonly invalidated: boolean;
+  transaction<R>(fn: (tx: TransactionContext) => PromiseLike<R>): Promise<R>;
 }
 
 export type { RuntimeTelemetryEvent, TelemetryOutcome, VerifyMarkerOption };
@@ -1809,7 +1810,6 @@ async function runTransactionOn<R>(
   state: ConnectionState,
 ): Promise<R> {
   validateTransactionTimeout(options?.timeout);
-  let invalidated = false;
   let transaction: RuntimeTransaction;
   try {
     transaction = await connection.transaction(options);
@@ -1821,31 +1821,52 @@ async function runTransactionOn<R>(
     throw error;
   }
 
-  const signal = transaction.signal;
-  let rejectAbort = (_reason: unknown) => {};
-  const aborted = new Promise<never>((_, reject) => {
-    rejectAbort = reject;
-  });
-  void aborted.catch(() => undefined);
-  const onAbort = () => {
-    invalidated = true;
-    rejectAbort(signal.reason);
-  };
-  signal.addEventListener('abort', onAbort, { once: true });
-  if (signal.aborted) onAbort();
+  try {
+    return await runAndSettleTransaction(transaction, fn);
+  } catch (error) {
+    const settlement = settlementOf(transaction);
+    if (settlement?.committed !== true && settlement?.rolledBack !== true) {
+      state.clean = false;
+      state.reason = error;
+    }
+    throw error;
+  }
+}
 
+async function runInSavepoint<R>(
+  transaction: RuntimeTransaction,
+  fn: (tx: TransactionContext) => PromiseLike<R>,
+): Promise<R> {
+  const savepoint = await transaction.transaction();
+  try {
+    return await runAndSettleTransaction(savepoint, fn);
+  } catch (error) {
+    if (savepoint.signal.aborted && error === savepoint.signal.reason) {
+      await savepoint.rollback().catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
+function guardedTransactionContext(
+  transaction: RuntimeTransaction,
+  isClosed: () => boolean,
+): TransactionContext &
+  PreparedStatementQueryTarget &
+  PreparedStatementExecuteTarget &
+  ActivitySourceTarget {
   async function* guardedStream<Row>(
     open: () => AsyncIterable<Row>,
   ): AsyncGenerator<Row, void, unknown> {
-    if (invalidated) {
+    if (isClosed()) {
       throw transactionClosedError();
     }
     for await (const row of open()) {
-      if (invalidated) {
+      if (isClosed()) {
         throw transactionClosedError();
       }
       yield row;
-      if (invalidated) {
+      if (isClosed()) {
         throw transactionClosedError();
       }
     }
@@ -1865,7 +1886,7 @@ async function runTransactionOn<R>(
         plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        if (invalidated) throw transactionClosedError();
+        if (isClosed()) throw transactionClosedError();
         return target.execute(plan, options);
       },
       [preparedStatementQuery]<Params, Row>(
@@ -1882,7 +1903,7 @@ async function runTransactionOn<R>(
         params: Params,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        if (invalidated) throw transactionClosedError();
+        if (isClosed()) throw transactionClosedError();
         return runPreparedExecute(target, ps, params, options);
       },
     };
@@ -1893,7 +1914,7 @@ async function runTransactionOn<R>(
       async startActivity<K extends ClientActivityKind>(
         activity: StartActivity<K>,
       ): Promise<ActivityHandle<K>> {
-        if (invalidated) throw transactionClosedError();
+        if (isClosed()) throw transactionClosedError();
         return guardedHandle(await startActivityOn(target, activity));
       },
       planContentHash(plan: HashablePlan): Promise<string> {
@@ -1918,22 +1939,42 @@ async function runTransactionOn<R>(
     };
   }
 
-  const txContext: TransactionContext &
-    PreparedStatementQueryTarget &
-    PreparedStatementExecuteTarget &
-    ActivitySourceTarget = {
+  return {
     ...guardedQueryable(transaction),
     get invalidated() {
-      return invalidated;
+      return isClosed();
     },
     [activitySource]: guardedSource(transaction),
+    async transaction<R>(fn: (tx: TransactionContext) => PromiseLike<R>): Promise<R> {
+      if (isClosed()) throw transactionClosedError();
+      return runInSavepoint(transaction, fn);
+    },
   };
+}
 
-  const markUnclean = (reason: unknown): void => {
-    if (!state.clean) return;
-    state.clean = false;
-    state.reason = reason;
+async function runAndSettleTransaction<R>(
+  transaction: RuntimeTransaction,
+  fn: (tx: TransactionContext) => PromiseLike<R>,
+): Promise<R> {
+  let invalidated = false;
+  const signal = transaction.signal;
+  let rejectAbort = (_reason: unknown) => {};
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  void aborted.catch(() => undefined);
+  const onAbort = () => {
+    invalidated = true;
+    rejectAbort(signal.reason);
   };
+  signal.addEventListener('abort', onAbort, { once: true });
+  if (signal.aborted) onAbort();
+
+  const settlement = settlementOf(transaction);
+  const txContext = guardedTransactionContext(
+    transaction,
+    () => invalidated || settlement?.closed === true,
+  );
 
   let commitRequested = false;
   try {
@@ -1944,22 +1985,18 @@ async function runTransactionOn<R>(
     await transaction.commit();
     return result;
   } catch (error) {
-    if (signal.aborted) {
-      markUnclean(signal.reason);
-      throw signal.reason;
-    }
+    if (signal.aborted) throw signal.reason;
     if (!commitRequested) {
       const selected = error;
       invalidated = true;
       try {
         await transaction.rollback();
       } catch (rollbackError) {
-        const settlement = settlementOf(transaction);
         if (settlement?.rolledBack === true) {
           settlement.logDroppedError(rollbackError);
           throw selected;
         }
-        markUnclean(rollbackError);
+        await settlement?.abandon();
         const wrapped = runtimeError(
           'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
           'Transaction rollback failed after callback error',
@@ -1970,13 +2007,12 @@ async function runTransactionOn<R>(
       }
       throw selected;
     }
-    if (settlementOf(transaction)?.committed === true) throw error;
+    if (settlement?.committed === true) throw error;
     try {
       await transaction.rollback();
     } catch (rollbackError) {
-      const settlement = settlementOf(transaction);
       if (settlement?.rolledBack === true) settlement.logDroppedError(rollbackError);
-      else markUnclean(error);
+      else await settlement?.abandon();
     }
     const wrapped = runtimeError('RUNTIME.TRANSACTION_COMMIT_FAILED', 'Transaction commit failed', {
       commitError: error,
