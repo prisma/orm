@@ -34,6 +34,8 @@ ORM-owned transactions use ReadCommitted. ORM operations inside an explicit tran
 
 Callback options also accept `timeout` defaults and overrides. Local `undefined` inherits; `null` disables an inherited deadline independently of isolation. Implicit ORM and manual transactions remain untimed. See [callback timeouts](../../../../../docs/reference/transaction-options.md#timeout).
 
+`tx.transaction(async (inner) => ...)` runs the callback in a savepoint, and `inner` has the same type and members as `tx` (`MysqlTransactionContext<Contract>`, which MariaDB's `MariadbTransactionContext` aliases), to any depth. It takes no options. When the callback throws, the work since the savepoint is rolled back, the call rejects with the same error and `tx` can be used again.
+
 ## Environment requirements
 
 `mysql(...)` hands each value to the `mariadb` package, which writes it into the statement as a quoted, escaped literal. A value stays inside its literal only while these hold. Prisma's own SQL meets them; raw SQL, stored procedures and triggers must too. The [driver's README](../3-driver/README.md#environment-requirements) gives the detail.

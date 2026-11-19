@@ -100,12 +100,11 @@ export interface RoleBoundDb<
   ): Promise<R>;
 }
 
-/** A transaction on a role-bound client: the members of a Postgres transaction, run under the bound role. */
+/** A transaction on a role-bound client: a Postgres transaction, run under the bound role. */
 export type SupabaseTransactionContext<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
-> = Omit<PostgresTransactionContext<TContract, TCollections>, 'transaction'> &
-  Pick<TransactionContext, 'transaction'>;
+> = PostgresTransactionContext<TContract, TCollections>;
 
 /**
  * Query surface for the Supabase-internal contract (`auth`, `storage`). Exposed
@@ -463,6 +462,29 @@ export default async function supabase<
       ...ifDefined('collections', options.collections),
     });
 
+    function buildTransactionContext(
+      txCtx: TransactionContext,
+    ): SupabaseTransactionContext<TContract, TCollections> {
+      return withTransactionMembers(txCtx, {
+        ...buildPostgresQueryMembers<TContract, TCollections>(
+          {
+            context,
+            collections: options.collections,
+            sql: appSql,
+            raw,
+            toSql,
+            prepareRuntime: workRuntime,
+          },
+          txCtx,
+        ),
+        enums,
+        nativeEnums,
+        transaction: <R>(
+          fn: (tx: SupabaseTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+        ) => txCtx.transaction((nested) => fn(buildTransactionContext(nested))),
+      });
+    }
+
     const roleBound: RoleBoundDb<TContract, TCollections> = {
       sql: appSql,
       orm: roleOrm,
@@ -487,28 +509,10 @@ export default async function supabase<
             ? local.isolationLevel
             : transactionOptions?.isolationLevel;
         const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
-        return withTransaction(
-          role,
-          (txCtx) =>
-            fn(
-              withTransactionMembers(txCtx, {
-                ...buildPostgresQueryMembers<TContract, TCollections>(
-                  {
-                    context,
-                    collections: options.collections,
-                    sql: appSql,
-                    raw,
-                    toSql,
-                    prepareRuntime: workRuntime,
-                  },
-                  txCtx,
-                ),
-                enums,
-                nativeEnums,
-              }),
-            ),
-          { isolationLevel, timeout },
-        );
+        return withTransaction(role, (txCtx) => fn(buildTransactionContext(txCtx)), {
+          isolationLevel,
+          timeout,
+        });
       },
     };
     return Object.assign(roleBound, { [activitySource]: role[activitySource] });

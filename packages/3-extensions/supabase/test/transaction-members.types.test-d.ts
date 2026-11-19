@@ -4,7 +4,6 @@ import type {
   PostgresTransactionOptions,
 } from '@internal/postgres/runtime';
 import type { Collection } from '@internal/sql-orm-client';
-import type { TransactionContext } from '@internal/sql-runtime';
 import type { Pool } from 'pg';
 import { expectTypeOf, test } from 'vitest';
 import type {
@@ -48,8 +47,14 @@ test('a transaction has no lifecycle members or runtime', () => {
   expectTypeOf<Extract<keyof Tx, 'close' | 'runtime' | typeof Symbol.asyncDispose>>().toBeNever();
 });
 
-test('a transaction has the runtime transaction method, whose callback receives the runtime context', () => {
-  expectTypeOf<Tx['transaction']>().toEqualTypeOf<TransactionContext['transaction']>();
+test('tx.transaction takes one callback, passes a context of the same type and infers the result', () => {
+  const tx = {} as Tx;
+  expectTypeOf(tx.transaction).parameters.toEqualTypeOf<[(tx: Tx) => PromiseLike<unknown>]>();
+  expectTypeOf(tx.transaction).parameter(0).parameter(0).toEqualTypeOf<Tx>();
+  expectTypeOf(tx.transaction(async () => 42)).toEqualTypeOf<Promise<number>>();
+  expectTypeOf(
+    tx.transaction(async (inner) => inner.transaction(async () => 'value' as const)),
+  ).toEqualTypeOf<Promise<'value'>>();
 });
 
 test('a role-bound client and its transaction have the enums and nativeEnums a postgres client has', () => {
@@ -60,10 +65,8 @@ test('a role-bound client and its transaction have the enums and nativeEnums a p
   expectTypeOf<Tx['nativeEnums']>().toEqualTypeOf<Postgres['nativeEnums']>();
 });
 
-test('a role-bound transaction has the members of a postgres transaction', () => {
-  expectTypeOf<Omit<Tx, 'transaction'>>().toEqualTypeOf<
-    Omit<PostgresTransactionContext<Contract, Classes>, 'transaction'>
-  >();
+test('a role-bound transaction is a postgres transaction', () => {
+  expectTypeOf<Tx>().toEqualTypeOf<PostgresTransactionContext<Contract, Classes>>();
 });
 
 test('role callback options use PostgreSQL levels and preserve result inference', () => {
