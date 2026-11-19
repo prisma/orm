@@ -39,6 +39,13 @@ const Comment = model('Comment', {
     body: field.column(textColumn),
   },
 }).sql({ table: 'comments' });
+const Profile = model('Profile', {
+  fields: {
+    id: field.column(integerNumberColumn).id(),
+    userId: field.column(integerNumberColumn).column('user_id').unique(),
+    bio: field.column(textColumn),
+  },
+}).sql({ table: 'profiles' });
 const PostBase = model('Post', {
   fields: {
     id: field.column(integerNumberColumn).id(),
@@ -51,6 +58,7 @@ const contract = defineContract({
   models: {
     User: UserBase.relations({
       posts: rel.hasMany(() => PostBase, { by: 'userId' }),
+      profile: rel.hasOne(() => Profile, { by: 'userId' }),
       tags: rel.manyToMany(() => Tag, { through: () => UserTag, from: 'userId', to: 'tagId' }),
     }).sql({ table: 'users' }),
     Post: PostBase.relations({
@@ -59,6 +67,7 @@ const contract = defineContract({
     Comment: Comment.relations({
       post: rel.belongsTo(PostBase, { from: 'postId', to: 'id' }).sql({ fk: {} }),
     }).sql({ table: 'comments' }),
+    Profile,
     Tag,
     UserTag,
   },
@@ -79,6 +88,7 @@ async function withDatabase(fn: (collections: Collections) => Promise<void>): Pr
     create table users (id integer primary key, name text not null);
     create table posts (id integer primary key, user_id integer, title text not null);
     create table comments (id integer primary key, post_id integer not null, body text not null);
+    create table profiles (id integer primary key, user_id integer not null unique, bio text not null);
     create table tags (id integer primary key, name text not null unique);
     create table user_tags (user_id integer not null, tag_id integer not null, primary key (user_id, tag_id));
     insert into tags values (1, 'SQL');
@@ -221,6 +231,96 @@ describe('integration/nested-mutations on SQLite: create()', () => {
             { id: 11, user_id: 1, title: 'New' },
           ],
           comments: [{ id: 101, post_id: 11 }],
+        });
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'links a child that collides on its key with a post of another user under onConflict connect, with its other fields unchanged, and runs its callbacks under it',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({
+          id: 9,
+          name: 'Other',
+          posts: (posts) => posts.create({ id: 10, title: 'Taken' }),
+        });
+
+        const created = await users
+          .select('id')
+          .include('posts', (posts) => posts.select('id', 'title'))
+          .create({
+            id: 1,
+            name: 'Ada',
+            posts: (posts) =>
+              posts.create(
+                {
+                  id: 10,
+                  title: 'Changed',
+                  comments: (comments) => comments.create({ id: 100, body: 'On the taken post' }),
+                },
+                { onConflict: 'connect' },
+              ),
+          });
+
+        expect({
+          created,
+          posts: rows('select id, user_id, title from posts order by id'),
+          comments: rows('select id, post_id from comments order by id'),
+        }).toEqual({
+          created: { id: 1, posts: [{ id: 10, title: 'Taken' }] },
+          posts: [{ id: 10, user_id: 1, title: 'Taken' }],
+          comments: [{ id: 100, post_id: 10 }],
+        });
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'links an existing author and an existing tag under onConflict connect, unchanged, and creates and links a new tag',
+    async () => {
+      await withDatabase(async ({ users, posts, rows }) => {
+        await users.create({ id: 9, name: 'Other' });
+
+        await posts.create({
+          id: 30,
+          title: 'Linked',
+          author: (author) => author.create({ id: 9, name: 'Changed' }, { onConflict: 'connect' }),
+        });
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          tags: (tags) =>
+            tags.create(
+              [
+                { id: 1, name: 'Changed' },
+                { id: 2, name: 'New' },
+              ],
+              { onConflict: 'connect' },
+            ),
+        });
+
+        expect({
+          users: rows('select id, name from users order by id'),
+          posts: rows('select id, user_id from posts'),
+          tags: rows('select id, name from tags order by id'),
+          userTags: rows('select user_id, tag_id from user_tags order by tag_id'),
+        }).toEqual({
+          users: [
+            { id: 1, name: 'Ada' },
+            { id: 9, name: 'Other' },
+          ],
+          posts: [{ id: 30, user_id: 9 }],
+          tags: [
+            { id: 1, name: 'SQL' },
+            { id: 2, name: 'New' },
+          ],
+          userTags: [
+            { user_id: 1, tag_id: 1 },
+            { user_id: 1, tag_id: 2 },
+          ],
         });
       });
     },
@@ -414,6 +514,86 @@ describe('integration/nested-mutations on SQLite: update()', () => {
           { id: 10, user_id: 9, title: 'Taken' },
           { id: 11, user_id: 1, title: 'New' },
         ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'moves a colliding post of another user under onConflict connect, inserts the others, and links the profile the user already has again without a change',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          profile: (profile) => profile.create({ id: 5, bio: 'Original' }),
+        });
+        await users.create({
+          id: 9,
+          name: 'Other',
+          posts: (posts) => posts.create({ id: 10, title: 'Taken' }),
+        });
+
+        await users.where({ id: 1 }).update({
+          posts: (posts) =>
+            posts.create(
+              [
+                { id: 10, title: 'Changed' },
+                { id: 11, title: 'New' },
+              ],
+              { onConflict: 'connect' },
+            ),
+          profile: (profile) =>
+            profile.create({ id: 5, bio: 'Changed' }, { onConflict: 'connect' }),
+        });
+
+        expect({
+          posts: rows('select id, user_id, title from posts order by id'),
+          profiles: rows('select id, user_id, bio from profiles'),
+        }).toEqual({
+          posts: [
+            { id: 10, user_id: 1, title: 'Taken' },
+            { id: 11, user_id: 1, title: 'New' },
+          ],
+          profiles: [{ id: 5, user_id: 1, bio: 'Original' }],
+        });
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'creates and links a new author under onConflict connect, and links an already linked tag again without a second junction row',
+    async () => {
+      await withDatabase(async ({ users, posts, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          posts: (mutator) => mutator.create({ id: 30, title: 'Post' }),
+          tags: (tags) => tags.connect({ id: 1 }),
+        });
+
+        await posts.where({ id: 30 }).update({
+          author: (author) => author.create({ id: 7, name: 'New' }, { onConflict: 'connect' }),
+        });
+        await users.where({ id: 1 }).update({
+          tags: (tags) => tags.create({ id: 1, name: 'Changed' }, { onConflict: 'connect' }),
+        });
+
+        expect({
+          users: rows('select id, name from users order by id'),
+          posts: rows('select id, user_id from posts'),
+          tags: rows('select id, name from tags order by id'),
+          userTags: rows('select user_id, tag_id from user_tags'),
+        }).toEqual({
+          users: [
+            { id: 1, name: 'Ada' },
+            { id: 7, name: 'New' },
+          ],
+          posts: [{ id: 30, user_id: 7 }],
+          tags: [{ id: 1, name: 'SQL' }],
+          userTags: [{ user_id: 1, tag_id: 1 }],
+        });
       });
     },
     timeouts.databaseOperation,
