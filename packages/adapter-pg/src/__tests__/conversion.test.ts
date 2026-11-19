@@ -58,4 +58,11 @@ describe('customParsers', () => {
   it('parses a money array', () => {
     expect(customParsers[MONEY_ARRAY]('{"$1,234.50","-$5.00"}')).toEqual(['1234.50', '-5.00'])
   })
+
+  it.each(['5,00 €', '€5.00', '$1.234,50', '$1234.50', '$5'])(
+    'rejects money %s, which is not the default format',
+    (input) => {
+      expect(() => customParsers[MONEY](input)).toThrow('Unsupported money format')
+    },
+  )
 })
