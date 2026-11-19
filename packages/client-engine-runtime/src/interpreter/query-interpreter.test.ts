@@ -373,3 +373,69 @@ describe('purifyQueryPlan', () => {
     expect(purifyQueryPlan(plan, vi.fn())).toBeUndefined()
   })
 })
+
+describe('join', () => {
+  function joinPlan(): QueryPlanNode {
+    return {
+      type: 'join',
+      args: {
+        parent: queryNode('SELECT "id", "tagId" FROM "Child"'),
+        children: [
+          {
+            child: queryNode('SELECT "id" FROM "Tag"'),
+            on: [['tagId', 'id']],
+            parentField: 'tag',
+            isRelationUnique: true,
+          },
+        ],
+        canAssumeStrictEquality: true,
+      },
+    }
+  }
+
+  function childResultSet(rows: [number, number | null][]): SqlResultSet {
+    return { columnNames: ['id', 'tagId'], columnTypes: [ColumnTypeEnum.Int32, ColumnTypeEnum.Int32], rows }
+  }
+
+  async function run(parentRows: [number, number | null][]) {
+    const queryable = {
+      provider: 'postgres' as const,
+      adapterName: 'mock',
+      queryRaw: vi
+        .fn()
+        .mockResolvedValueOnce(childResultSet(parentRows))
+        .mockResolvedValueOnce({ columnNames: ['id'], columnTypes: [ColumnTypeEnum.Int32], rows: [[7]] }),
+      executeRaw: vi.fn(),
+    }
+    const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+    const result = await interpreter.run(joinPlan(), {
+      queryable,
+      transactionManager: { enabled: false },
+      scope: {},
+    })
+    return { result, queries: queryable.queryRaw.mock.calls.length }
+  }
+
+  test('skips the child query when there are no parent rows', async () => {
+    await expect(run([])).resolves.toEqual({ result: [], queries: 1 })
+  })
+
+  test('skips the child query when no parent row has a join key', async () => {
+    await expect(run([[1, null]])).resolves.toEqual({ result: [{ id: 1, tagId: null, tag: null }], queries: 1 })
+  })
+
+  test('runs the child query when a parent row has a join key', async () => {
+    await expect(
+      run([
+        [1, null],
+        [2, 7],
+      ]),
+    ).resolves.toEqual({
+      result: [
+        { id: 1, tagId: null, tag: null },
+        { id: 2, tagId: 7, tag: { id: 7 } },
+      ],
+      queries: 2,
+    })
+  })
+})
