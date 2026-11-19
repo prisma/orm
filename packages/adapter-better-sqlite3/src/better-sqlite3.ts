@@ -205,13 +205,14 @@ export class PrismaBetterSqlite3Adapter extends BetterSQLite3Queryable<StdClient
     const tag = '[js::startTransaction]'
     debug('%s options: %O', tag, options)
 
-    try {
-      const release = await this.#mutex.acquire()
+    const release = await this.#mutex.acquire()
 
+    try {
       this.client.prepare('BEGIN').run()
 
       return new BetterSQLite3Transaction(this.client, options, this.adapterOptions, release)
     } catch (e) {
+      release()
       this.onError(e)
     }
   }
