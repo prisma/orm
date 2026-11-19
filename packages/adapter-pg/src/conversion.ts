@@ -310,7 +310,38 @@ function normalize_timestamp(time: string): string {
 }
 
 function normalize_timestamptz(time: string): string {
-  return time.replace(' ', 'T').replace(/[+-]\d{2}(:\d{2})?$/, '+00:00')
+  // PostgreSQL returns TIMESTAMPTZ values in the session timezone (e.g. '2024-01-01 09:26:34-06').
+  // We must convert to UTC rather than merely swapping the offset label.
+  const withSeparator = time.replace(' ', 'T')
+  // Normalise bare hour offsets (e.g. '-06') and hour-with-seconds offsets
+  // (e.g. '+05:53:20', emitted for LMT-era historical timezones) to ±HH:MM so
+  // that Date.parse can handle them. The seconds component is dropped because
+  // JS Date does not support sub-minute offsets and the fractional-second error
+  // is negligible for real-world timestamps.
+  const withFullOffset = withSeparator
+    .replace(/([+-]\d{2}):(\d{2}):\d{2}$/, '$1:$2')
+    .replace(/([+-]\d{2})$/, '$1:00')
+  // JavaScript Date only handles millisecond (3-digit) precision. Extract any extra fractional
+  // digits and reattach after conversion — fractional seconds are unchanged by a timezone shift.
+  const fracMatch = withFullOffset.match(/\.(\d{4,})/)
+  if (fracMatch) {
+    const fullFrac = fracMatch[1]
+    const trimmed = withFullOffset.replace(/\.(\d{4,})/, '.' + fullFrac.slice(0, 3))
+    const d = new Date(trimmed)
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().replace(/\.\d{3}Z$/, '.' + fullFrac + '+00:00')
+    }
+  } else {
+    const d = new Date(withFullOffset)
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().replace(/Z$/, '+00:00')
+    }
+  }
+  // Fallback for any input that Date.parse cannot handle: preserve the
+  // original string with the separator normalised to 'T' and the offset
+  // label rewritten to '+00:00'. This matches the old behaviour and avoids
+  // a thrown RangeError propagating to the caller.
+  return withSeparator.replace(/[+-]\d{2}(:\d{2})?(:\d{2})?$/, '+00:00')
 }
 
 /*
@@ -446,6 +477,11 @@ export function mapArg<A>(arg: A | Date, argType: ArgType): null | unknown[] | s
 function formatDateTime(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
   const ms = date.getUTCMilliseconds()
+  // The '+00:00' suffix tells PostgreSQL that the value is UTC.
+  // For TIMESTAMP WITHOUT TIME ZONE columns PostgreSQL silently ignores the offset,
+  // so this suffix is a safe no-op for those columns while being critical for TIMESTAMPTZ
+  // columns when the database server is not running in the UTC timezone.
+  // See: https://github.com/prisma/prisma/issues/28629
   return (
     pad(date.getUTCFullYear(), 4) +
     '-' +
@@ -458,7 +494,8 @@ function formatDateTime(date: Date): string {
     pad(date.getUTCMinutes()) +
     ':' +
     pad(date.getUTCSeconds()) +
-    (ms ? '.' + String(ms).padStart(3, '0') : '')
+    (ms ? '.' + String(ms).padStart(3, '0') : '') +
+    '+00:00'
   )
 }
 
