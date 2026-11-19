@@ -435,9 +435,9 @@ describe('purifyQueryPlan', () => {
     expect(purified).toBeDefined()
 
     const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
-    const context = {
+    const context: QueryRuntimeOptions = {
       queryable: {
-        provider: 'postgres' as const,
+        provider: 'postgres',
         adapterName: 'mock',
         queryRaw: vi.fn(),
         executeRaw: vi.fn(),
