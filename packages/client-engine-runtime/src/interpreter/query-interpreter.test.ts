@@ -373,7 +373,7 @@ describe('purifyQueryPlan', () => {
     expect(purifyQueryPlan(plan, vi.fn())).toBeUndefined()
   })
 
-  test('does not copy or map result rows when evaluating a purified plan node (#30974)', async () => {
+  test('does not copy result rows when running an already purified plan', async () => {
     const rows = [
       { id: 1, name: 'Alice' },
       { id: 2, name: 'Bob' },
@@ -396,7 +396,27 @@ describe('purifyQueryPlan', () => {
       scope: {},
     })
 
-    // Must return the exact row array reference without performing a redundant copy or map
+    expect(result).toBe(rows)
+  })
+
+  test('does not copy result rows when run purifies the plan itself', async () => {
+    const rows = [
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' },
+    ]
+    const interpreter = new QueryInterpreter({ tracingHelper: noopTracingHelper, serializer: () => rows })
+
+    const result = await interpreter.run(queryNode('SELECT "id", "name" FROM "User"'), {
+      queryable: {
+        provider: 'postgres',
+        adapterName: 'mock',
+        queryRaw: () => Promise.resolve(userResultSet(1, 'Alice')),
+        executeRaw: vi.fn(),
+      },
+      transactionManager: { enabled: false },
+      scope: {},
+    })
+
     expect(result).toBe(rows)
   })
 
