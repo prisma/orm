@@ -2,7 +2,7 @@
 
 One checkbox line per in-scope source test, enumerated up-front from the pinned checkouts (`prisma/prisma@a6d0155`, `prisma/prisma-engines@e922089`). See [`../spec.md`](../spec.md) § Accounting for the full protocol.
 
-**Checkbox protocol:** boxes start `[ ]`. Only the Opus reviewer sub-agent checks `[x]`, and only once satisfied that the test is (a) faithfully ported and passing, (b) faithfully ported as `test.fails` with a `failing.md` entry, or (c) covered by a justified individual `non-ported.md` entry (for the legacy secondary suites, (d) marked `covered-by` an already-ported functional test). Implementer sub-agents never check boxes.
+**Checkbox protocol:** boxes start `[ ]`. Only the Opus reviewer sub-agent checks `[x]`, and only once satisfied that the test is (a) faithfully ported and passing, (b) faithfully ported as `test.fails` with a `failing.md` entry, or (c) covered by a justified individual `non-ported.md` entry (for the legacy secondary suites, (d) marked `covered-by` an already-ported functional test). Implementer sub-agents never check boxes. A box is unchecked again when its non-ported entry's reason stops holding; the line then ends `→ non-ported (not yet ported)` or `→ non-ported (needs re-examination)`, matching the status at the start of the entry (see [`test/integration/test/ports/README.md`](../../../test/integration/test/ports/README.md)).
 
 | Checklist | Source segment | Tests |
 | --- | --- | --- |

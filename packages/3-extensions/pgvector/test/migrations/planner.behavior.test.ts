@@ -378,6 +378,21 @@ describe('NOT NULL column without default uses temporary default', () => {
     ]);
   });
 
+  it('uses the empty-table fallback for pgvector columns without a dimension', async () => {
+    const addCol = await planAddColumn(
+      'embedding',
+      { many: false, dataType: 'pgvector/vector', codecId: 'pg/vector@1', nullable: false },
+      { frameworkComponents: [pgvectorDescriptor] },
+    );
+
+    expect(addCol.precheck.map((p) => p.sql)).toContain(
+      `SELECT NOT EXISTS (SELECT 1 AS "one" FROM ${qualifiedUserTable} LIMIT 1) AS "result"`,
+    );
+    expect(addCol.execute.map((step) => step.sql)).toEqual([
+      `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "embedding" vector NOT NULL`,
+    ]);
+  });
+
   it('uses the empty-table fallback when a codec hook declines a temporary default', async () => {
     const addCol = await planAddColumn(
       'name',

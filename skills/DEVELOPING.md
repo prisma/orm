@@ -34,7 +34,7 @@ The test for placement: *would every Prisma 8 task benefit from the agent having
 
 Where a fact can be *queried* — from the framework source, the installed packages, or the CLI itself — a reference file should teach the query, not transcribe the answer. Transcribed API detail goes stale silently; a lookup procedure stays correct as the framework moves. This is the same principle as *concepts-over-procedures* below, applied to content: prefer *"ask the system with `command --flag`"* over a table of memorised outputs, and prefer `--help` pointers over restating flag lists.
 
-The long-term direction is for versioned API documentation to ship inside the published `@internal/*` packages, with reference files shrinking toward routing plus lookup method. Until that lands, reference files still carry API content inline — which is why the lockstep rule below (skill updates ship in the same PR as framework-surface changes) is load-bearing.
+The long-term direction is for versioned API documentation to ship inside the published `@prisma/orm-*` packages, with reference files shrinking toward routing plus lookup method. Until that lands, reference files still carry API content inline — which is why the lockstep rule below (skill updates ship in the same PR as framework-surface changes) is load-bearing.
 
 ## Authoring rules
 
@@ -97,34 +97,20 @@ Read the diff if you want a before/after; read the rewrite itself if you want th
 
 ### Show façade-only imports in user-authored code
 
-**The principle: every import a user types in their own source files comes from `@internal/<target>/<subpath>` or `@internal/extension-<name>/<subpath>`. A user's `package.json` lists exactly one façade per target plus one façade per extension. They never see `@internal/cli/*`, `@internal/family-*`, `@internal/target-*`, `@internal/adapter-*`, `@internal/driver-*`, `@internal/sql-contract-*`, or `@internal/mongo-contract-*` in a file they own.**
+**The principle: every Prisma ORM import a user types in their own source files comes from the published façade, `@prisma/orm-<target>/<subpath>`, or from an extension's own package, `@prisma/orm-extension-<name>/<subpath>`. The one exception is `definePrismaConfig` in `prisma.config.ts`, which comes from the CLI's `@prisma/cli-engine`. A user's `package.json` lists exactly one façade plus one package per extension, and `@prisma/cli-engine` as a development dependency. They never import the platform packages (`@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*`, `@prisma/orm-toolchain`) in a file they own.**
 
-The façade packages exist for this reason. `@internal/postgres/config` exposes a `defineConfig({ contract, db, extensions, migrations })` that bakes in `family`/`target`/`adapter`/`driver` and auto-routes `.prisma` vs `.ts` contract paths — so the user writes two imports instead of seven. `@internal/postgres/contract-builder` re-exports the TS-builder surface. `@internal/postgres/control` exposes `createPostgresControlClient({ connection, extensions })` instead of asking the user to compose a `createControlClient` call from five internal pieces. `@internal/postgres/runtime` does the same for the runtime client.
+The façade packages exist for this reason. `@prisma/orm-postgres/config` exposes a `defineConfig({ contract, db, extensions, migrations })` that bakes in `family`/`target`/`adapter`/`driver` and auto-routes `.prisma` vs `.ts` contract paths — so the user writes two imports instead of seven. `@prisma/orm-postgres/contract-builder` re-exports the TS-builder surface. `@prisma/orm-postgres/control` exposes `createPostgresControlClient({ connection, extensions })`. `@prisma/orm-postgres/runtime` does the same for the runtime client. The Vite plugin is the façade's `vite-plugin-contract-emit` entry.
 
-A skill that teaches the verbose form has handed the agent a worse mental model than the API is actually capable of. When the user follows the skill's example into their own code, their `package.json` grows seven `@internal/*` entries instead of one. Upgrades are now seven-way coordinated instead of one-line. The drift compounds.
+**Never write a repository workspace name.** The skill ships inside the published packages, and the `@internal/*` names this repository uses for its workspace packages do not exist on npm. `pnpm lint:consumer-internal-imports` fails when a prose line in `SKILL.md`, a file under `references/`, a pending upgrade fragment, or a published upgrade guide for a release after `8.0.0-rc.24` names an `@internal/*` package. In `SKILL.md` and `references/` it also fails on an `@prisma/orm-*` entry that the package does not export; an upgrade guide may name such an entry, because it has to name what a release removed. `detection` patterns and codemod scripts in upgrade instructions are exempt (see [`upgrade-instructions/README.md`](../upgrade-instructions/README.md#checks)), and guides up to `8.0.0-rc.24` keep the names they shipped with. `packages/0-shared/publish-surface/src/shells.ts` maps each workspace package to the published entry that carries it; use it to find the published name.
 
-**Verify each user-authored import:**
-
-```bash
-rg "from '@internal/" skills/prisma-8/references/<topic>.md \
-  | rg -v '@internal/(postgres|mongo|sqlite|extension-|[a-z]+-plugin-)' \
-  | rg -v 'framework-rendered'
-```
-
-Anything that prints is a likely defect: a user-authored example is importing from an internal package. Either rewrite it onto the façade, or annotate the surrounding prose so it reads as framework-rendered rather than user-typed.
-
-The exclusion list covers the three sanctioned sources of user-authored `@internal/*` imports: target façades (`postgres`, `mongo`, `sqlite`), extension façades (`extension-<name>`), and build-tool plugin packages (`<bundler>-plugin-<purpose>`, e.g. `@internal/vite-plugin-contract-emit`). Build-tool plugins are themselves one-package-per-integration façades — they ship their own public surface and are not internal to a target package.
-
-**The framework-rendered exception.** Some files in a user's project are written *by* the framework, not by the user — chiefly `migrations/<scope>/<timestamp>/migration.ts`, which `prisma migration plan` renders. Those files import from `@internal/postgres/migration` (or `@internal/sqlite/migration` for SQLite). A skill describing those files should:
+**The framework-rendered exception.** Some files in a user's project are written *by* the framework, not by the user — chiefly `migrations/<scope>/<timestamp>/migration.ts`, which `prisma migration plan` renders. Those files import from the façade's `/migration` subpath (`@prisma/orm-postgres/migration`, `@prisma/orm-sqlite/migration`). A skill describing those files should:
 
 1. Make explicit that the imports are framework-managed.
 2. Not show those imports as if the user typed them.
 
-The framework-rendered migration scaffold uses the target façade's `/migration` subpath — the same façade-only convention as the rest of the project.
+**Worked example — the contract skill re-audit.** Commit `e41f02c1b` rewrote every user-authored example in `references/contract.md` against the façade. The `prisma.config.ts` example went from seven imports across the platform packages to two: today `@prisma/orm-postgres/config` and `@prisma/orm-extension-pgvector/control`. The TS builder example uses `@prisma/orm-postgres/contract-builder`, with `@prisma/orm-postgres/family` and `@prisma/orm-postgres/target` as the `family`/`target` packs (a less-obvious façade subpath worth knowing about). At the time the façades still had workspace names, so the diff shows those; the published names above are what to write now.
 
-**Worked example — the contract skill re-audit.** Commit `e41f02c1b` rewrote every user-authored example in `references/contract.md` against the façade. The `prisma.config.ts` example went from seven imports across `@internal/{cli,adapter-postgres,driver-postgres,family-sql,target-postgres,sql-contract-psl}` to two imports from `@internal/{postgres/config, extension-pgvector/control}`. The TS builder example moved off `@internal/sql-contract-ts/contract-builder` onto `@internal/postgres/contract-builder`, and uses `@internal/postgres/family` and `@internal/postgres/target` as the `family`/`target` packs (a less-obvious façade subpath worth knowing about). Read the diff for a before/after.
-
-Commit `bf742221c` (`examples: migrate to @internal/<target> façade imports`) does the same migration across nine example apps in `examples/`. Those apps are the canonical worked references; cite them when a skill needs a concrete example to point at.
+The example apps in `examples/` import the published façades and are the canonical worked references; cite them when a skill needs a concrete example to point at.
 
 ### Other authoring rules
 

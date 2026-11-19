@@ -8,9 +8,11 @@ export default defineConfig({
     'src/exports/control.ts',
     'src/exports/contract-types.ts',
     'src/exports/family.ts',
+    'src/exports/init.ts',
     'src/exports/migration.ts',
     'src/exports/runtime.ts',
     'src/exports/static.ts',
     'src/exports/target.ts',
   ],
+  copy: [{ from: 'src/init/*.md' }],
 });

@@ -1,9 +1,41 @@
-import { createRequire } from 'node:module';
-import { CliStructuredError } from '@internal/errors/control';
-import { suppressIdleConnectionErrors } from '@internal/utils/suppress-idle-connection-errors';
-import { join } from 'pathe';
+import { type } from 'arktype';
 import { redactUrlCredentials } from '../../utils/url-credentials';
-import type { TargetId } from './templates/code-templates';
+import type { InitContribution } from './init-contribution';
+
+/**
+ * How long the CLI waits for a target package's probe. Prisma's own probes give the driver 20
+ * seconds to connect and 20 more to answer, so they settle inside it.
+ */
+export const PROBE_DEADLINE_MILLIS = 60_000;
+
+const TIMED_OUT = Symbol('timed-out');
+
+/**
+ * The probe's answer, or `TIMED_OUT` when it has not settled by the deadline, at which point the
+ * probe's signal is aborted so it can close its client.
+ */
+async function withinDeadline<T>(
+  probe: (signal: AbortSignal) => Promise<T>,
+): Promise<T | typeof TIMED_OUT> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve(TIMED_OUT);
+    }, PROBE_DEADLINE_MILLIS);
+  });
+  try {
+    return await Promise.race([probe(controller.signal), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const ProbeResultSchema = type({ kind: "'server-version'", serverVersion: 'string' })
+  .or({ kind: "'version-unreadable'", detail: 'string' })
+  .or({ kind: "'driver-missing'", driver: 'string', cause: 'string' })
+  .or({ kind: "'driver-failed'", driver: 'string', cause: 'string' });
 
 /**
  * Result of an attempted database probe (FR8.3). `kind` is the
@@ -17,7 +49,7 @@ export type ProbeOutcome =
   | {
       readonly kind: 'ok';
       readonly serverVersion: string;
-      readonly minVersion: string;
+      readonly minVersion: string | undefined;
       readonly meetsMinimum: true;
       readonly message: string;
     }
@@ -29,53 +61,34 @@ export type ProbeOutcome =
       readonly message: string;
     }
   | {
-      readonly kind: 'no-database-url';
-      readonly minVersion: string;
+      readonly kind: 'no-database-url' | 'unsupported' | 'timed-out';
+      readonly minVersion: string | undefined;
       readonly meetsMinimum: null;
       readonly message: string;
     }
   | {
-      readonly kind: 'connection-failed';
-      readonly minVersion: string;
-      readonly meetsMinimum: null;
-      readonly cause: string;
-      readonly message: string;
-    }
-  | {
-      readonly kind: 'driver-missing';
-      readonly minVersion: string;
+      readonly kind:
+        | 'connection-failed'
+        | 'driver-missing'
+        | 'driver-failed'
+        | 'version-unreadable'
+        | 'invalid-result';
+      readonly minVersion: string | undefined;
       readonly meetsMinimum: null;
       readonly cause: string;
       readonly message: string;
     };
 
 export interface ProbeContext {
-  readonly baseDir: string;
-  readonly target: TargetId;
   readonly databaseUrl: string | undefined;
-  readonly minVersion: string;
+  readonly packageName: string;
+  readonly contribution: Pick<InitContribution, 'probe' | 'serverRequirement'>;
 }
 
 /**
- * Optional injection seam exposed for unit tests so the probe logic
- * (env handling, version parsing, comparator, message formatting) can
- * be exercised without a live database. Production callers omit this
- * argument and get the real `pg` / `mongodb` driver path.
- */
-export interface ProbeOverrides {
-  readonly probePostgres?: (databaseUrl: string) => Promise<DriverResult>;
-  readonly probeMongo?: (databaseUrl: string) => Promise<DriverResult>;
-  readonly requireFromBaseDir?: (baseDir: string, moduleId: string) => unknown;
-}
-
-interface DriverResult {
-  readonly serverVersion: string;
-}
-
-/**
- * Connects (when configured) to the user's database and returns a
- * structured outcome describing whether the server meets the declared
- * minimum (FR8.1). Pure with respect to its inputs: no I/O happens
+ * Connects (when configured) to the user's database through the target
+ * package's probe and returns a structured outcome describing whether the
+ * server meets the minimum the package states (FR8.1). No I/O happens
  * unless `databaseUrl` is set.
  *
  * The outcome is shaped so that `--strict-probe` can branch on the
@@ -86,14 +99,13 @@ interface DriverResult {
  *   `--strict-probe` (the spec scopes strict-probe to "probe
  *   *failures*", and a successful probe that finds an old server is
  *   not a failure).
- * - `no-database-url` / `connection-failed` / `driver-missing` —
- *   warning by default, fatal under `--strict-probe`.
+ * - `no-database-url` / `connection-failed` / `timed-out` / `driver-missing` /
+ *   `version-unreadable` / `invalid-result` / `unsupported` — warning by
+ *   default, fatal under `--strict-probe`.
  */
-export async function probeServerVersion(
-  ctx: ProbeContext,
-  overrides: ProbeOverrides = {},
-): Promise<ProbeOutcome> {
-  const { databaseUrl, minVersion, target } = ctx;
+export async function probeServerVersion(ctx: ProbeContext): Promise<ProbeOutcome> {
+  const { databaseUrl, contribution } = ctx;
+  const minVersion = contribution.serverRequirement?.minVersion;
   if (databaseUrl === undefined || databaseUrl.trim().length === 0) {
     return {
       kind: 'no-database-url',
@@ -103,30 +115,20 @@ export async function probeServerVersion(
         'Skipped --probe-db: DATABASE_URL is not set in the current shell environment. (init does not read .env for the probe; export the variable or drop --probe-db.)',
     };
   }
+  if (contribution.probe === undefined) {
+    return {
+      kind: 'unsupported',
+      minVersion,
+      meetsMinimum: null,
+      message: `Skipped --probe-db: ${ctx.packageName} cannot check the server.`,
+    };
+  }
 
-  let driverResult: DriverResult;
+  let answer: unknown;
   try {
-    if (target === 'postgres') {
-      driverResult =
-        overrides.probePostgres !== undefined
-          ? await overrides.probePostgres(databaseUrl)
-          : await defaultProbePostgres(databaseUrl, ctx.baseDir, overrides);
-    } else {
-      driverResult =
-        overrides.probeMongo !== undefined
-          ? await overrides.probeMongo(databaseUrl)
-          : await defaultProbeMongo(databaseUrl, ctx.baseDir, overrides);
-    }
+    const { probe } = contribution;
+    answer = await withinDeadline((signal) => probe(databaseUrl, signal));
   } catch (err) {
-    if (err instanceof DriverMissingError) {
-      return {
-        kind: 'driver-missing',
-        minVersion,
-        meetsMinimum: null,
-        cause: err.message,
-        message: `Skipped --probe-db: ${err.message}. (Run with install enabled, or install the driver yourself, then re-run \`prisma orm init --probe-db\`.)`,
-      };
-    }
     const cause = redactUrlCredentials(causeMessage(err));
     return {
       kind: 'connection-failed',
@@ -137,22 +139,96 @@ export async function probeServerVersion(
     };
   }
 
-  const meets = compareVersionPrefix(driverResult.serverVersion, minVersion);
-  if (meets < 0) {
+  if (answer === TIMED_OUT) {
+    return {
+      kind: 'timed-out',
+      minVersion,
+      meetsMinimum: null,
+      message: `--probe-db gave up: the probe of ${ctx.packageName} did not finish within ${PROBE_DEADLINE_MILLIS / 1000} seconds.`,
+    };
+  }
+  const result = ProbeResultSchema(answer);
+  if (result instanceof type.errors) {
+    const cause = redactUrlCredentials(
+      `the probe of ${ctx.packageName} gave a malformed answer: ${result.summary}`,
+    );
+    return {
+      kind: 'invalid-result',
+      minVersion,
+      meetsMinimum: null,
+      cause,
+      message: `Skipped --probe-db: ${cause}.`,
+    };
+  }
+  if (result.kind === 'driver-missing') {
+    const cause = redactUrlCredentials(
+      `\`${result.driver}\` could not be loaded by ${ctx.packageName} (cause: ${result.cause})`,
+    );
+    return {
+      kind: 'driver-missing',
+      minVersion,
+      meetsMinimum: null,
+      cause,
+      message: `Skipped --probe-db: ${cause}. (Run with install enabled, or install the driver yourself, then re-run \`prisma orm init --probe-db\`.)`,
+    };
+  }
+  if (result.kind === 'driver-failed') {
+    const cause = redactUrlCredentials(
+      `\`${result.driver}\` is installed but could not be loaded by ${ctx.packageName} (cause: ${result.cause})`,
+    );
+    return {
+      kind: 'driver-failed',
+      minVersion,
+      meetsMinimum: null,
+      cause,
+      message: `Skipped --probe-db: ${cause}.`,
+    };
+  }
+  if (result.kind === 'version-unreadable') {
+    const cause = redactUrlCredentials(result.detail);
+    return {
+      kind: 'version-unreadable',
+      minVersion,
+      meetsMinimum: null,
+      cause,
+      message: `--probe-db connected to the server, but could not read its version: ${cause}.`,
+    };
+  }
+  const { serverVersion } = result;
+  if (!/\d/.test(serverVersion)) {
+    return {
+      kind: 'version-unreadable',
+      minVersion,
+      meetsMinimum: null,
+      cause: `the probe of ${ctx.packageName} reported the version ${JSON.stringify(serverVersion)}`,
+      message: `--probe-db connected to the server, but could not read its version: the probe of ${ctx.packageName} reported the version ${JSON.stringify(serverVersion)}.`,
+    };
+  }
+
+  if (minVersion === undefined) {
+    return {
+      kind: 'ok',
+      serverVersion,
+      minVersion,
+      meetsMinimum: true,
+      message: `--probe-db: server reports version ${serverVersion}.`,
+    };
+  }
+  if (compareVersionPrefix(serverVersion, minVersion) < 0) {
     return {
       kind: 'below-minimum',
-      serverVersion: driverResult.serverVersion,
+      serverVersion,
       minVersion,
       meetsMinimum: false,
-      message: `--probe-db: server reports version ${driverResult.serverVersion}, below the declared minimum (${minVersion}). Some queries may fail until the server is upgraded.`,
+      message: `--probe-db: server reports version ${serverVersion}, below the declared minimum (${minVersion}). Some queries may fail until the server is upgraded.`,
     };
   }
   return {
     kind: 'ok',
-    serverVersion: driverResult.serverVersion,
+    serverVersion,
     minVersion,
     meetsMinimum: true,
-    message: `--probe-db: server reports version ${driverResult.serverVersion} (>= ${minVersion}).`,
+    message: `--probe-db: server reports version ${serverVersion} (>= ${minVersion}).`,
   };
 }
 
@@ -188,117 +264,7 @@ function parseNumericParts(version: string): readonly number[] {
   return (match[1] ?? '').split('.').map((part) => Number.parseInt(part, 10));
 }
 
-class DriverMissingError extends Error {}
-
 function causeMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
-}
-
-async function defaultProbePostgres(
-  databaseUrl: string,
-  baseDir: string,
-  overrides: ProbeOverrides,
-): Promise<DriverResult> {
-  const pg = requirePeer<{ Client: new (cfg: { connectionString: string }) => PgClient }>(
-    'pg',
-    baseDir,
-    overrides,
-  );
-  const client = suppressIdleConnectionErrors(new pg.Client({ connectionString: databaseUrl }));
-  try {
-    await client.connect();
-    const result = await client.query('SELECT version() as version');
-    const versionString = String(result?.rows?.[0]?.version ?? '');
-    const parsed = parsePostgresVersion(versionString);
-    return { serverVersion: parsed };
-  } finally {
-    await client.end().catch(() => undefined);
-  }
-}
-
-interface PgClient {
-  on(event: 'error', listener: (err: Error) => void): unknown;
-  connect(): Promise<void>;
-  query(sql: string): Promise<{ rows: ReadonlyArray<{ version: string }> }>;
-  end(): Promise<void>;
-}
-
-/**
- * Extracts the numeric prefix from a Postgres `version()` row, e.g.
- *
- *   `PostgreSQL 14.10 on x86_64-pc-linux-gnu, ...`  → `"14.10"`
- *   `PostgreSQL 16beta1 on …`                       → `"16"` (we
- *      conservatively drop the suffix; minimum-version comparisons
- *      treat 16beta1 as 16, which is what every reasonable user
- *      expects).
- *
- * Exported for unit tests.
- */
-export function parsePostgresVersion(versionString: string): string {
-  const match = versionString.match(/PostgreSQL\s+(\d+(?:\.\d+)?)/i);
-  if (match === null || match[1] === undefined) {
-    throw new CliStructuredError(
-      'CLI.INIT_PROBE_FAILED',
-      `Could not parse PostgreSQL version from \`${versionString}\``,
-    );
-  }
-  return match[1];
-}
-
-async function defaultProbeMongo(
-  databaseUrl: string,
-  baseDir: string,
-  overrides: ProbeOverrides,
-): Promise<DriverResult> {
-  const mongodb = requirePeer<{
-    MongoClient: new (
-      url: string,
-    ) => {
-      connect(): Promise<unknown>;
-      db(name?: string): {
-        admin(): { command(cmd: Record<string, unknown>): Promise<{ version?: string }> };
-      };
-      close(): Promise<void>;
-    };
-  }>('mongodb', baseDir, overrides);
-  const client = new mongodb.MongoClient(databaseUrl);
-  await client.connect();
-  try {
-    const buildInfo = await client.db().admin().command({ buildInfo: 1 });
-    const versionString = String(buildInfo.version ?? '');
-    if (versionString.length === 0) {
-      throw new CliStructuredError(
-        'CLI.INIT_PROBE_FAILED',
-        'buildInfo did not include a `version` field',
-      );
-    }
-    return { serverVersion: versionString };
-  } finally {
-    await client.close().catch(() => undefined);
-  }
-}
-
-/**
- * Loads a peer driver (`pg` / `mongodb`) from the user's project
- * `node_modules`. We deliberately resolve from `baseDir` rather than
- * from the CLI bundle — the CLI does not depend on `pg` or `mongodb`
- * directly, but the user's `init`-generated `package.json` does (via
- * the target facade). Failure to resolve is folded into a typed
- * `DriverMissingError` so `probeServerVersion` can map it to a
- * `driver-missing` outcome rather than letting a `MODULE_NOT_FOUND`
- * leak as a generic connection failure.
- */
-function requirePeer<T>(moduleId: string, baseDir: string, overrides: ProbeOverrides): T {
-  try {
-    if (overrides.requireFromBaseDir !== undefined) {
-      return overrides.requireFromBaseDir(baseDir, moduleId) as T;
-    }
-    const requireFromBase = createRequire(join(baseDir, 'package.json'));
-    return requireFromBase(moduleId) as T;
-  } catch (err) {
-    throw new DriverMissingError(
-      `\`${moduleId}\` is not installed in this project (resolved from ${baseDir}; cause: ${causeMessage(err)})`,
-    );
-  }
 }

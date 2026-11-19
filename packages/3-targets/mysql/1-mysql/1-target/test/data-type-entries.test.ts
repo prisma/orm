@@ -14,19 +14,23 @@ describe('how PSL writes MySQL values', () => {
     expect(entry?.print('hi')).toBe('hi');
   });
 
-  it('reads a whole number as the narrowest MySQL integer type that holds it', () => {
+  it('reads a whole number as the narrowest MySQL integer type that holds it, and any other number as a decimal', () => {
     const written = entries['mysql/bigint']?.written;
     const classify =
       written?.kind === 'plain' && 'classify' in written ? written.classify : undefined;
     expect([
       classify?.('42'),
       classify?.('3000000000'),
-      classify?.('1.5'),
+      classify?.('1.50'),
+      classify?.('-0.000001'),
+      classify?.('9223372036854775808'),
       classify?.('NaN'),
     ]).toEqual([
       { type: 'mysql/int', value: 42 },
       { type: 'mysql/bigint', value: '3000000000' },
-      undefined,
+      { type: 'mysql/decimal', value: '1.50' },
+      { type: 'mysql/decimal', value: '-0.000001' },
+      { type: 'mysql/decimal', value: '9223372036854775808' },
       undefined,
     ]);
   });

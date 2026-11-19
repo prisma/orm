@@ -15,6 +15,7 @@ import {
   frameworkComponents,
   loadExampleContract,
 } from './example-contract';
+import { contractWithScalarTypes } from './migrations/contracts';
 
 const autoincrement = { kind: 'function', expression: 'autoincrement()' } as const;
 
@@ -172,6 +173,112 @@ describe('introspecting a MySQL database made by hand', {
             },
           }),
         );
+      }),
+    );
+  });
+
+  it('verifies a table made by hand with a column of each scalar convenience type and its default', async (test) => {
+    const contract = contractWithScalarTypes();
+    const measureDdl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`count\` bigint NOT NULL DEFAULT 7,
+      \`ratio\` double NOT NULL DEFAULT 0.25,
+      \`amount\` decimal(65,30) NOT NULL DEFAULT 1.5,
+      \`price\` decimal(10,2) NOT NULL DEFAULT '-0.5',
+      \`label\` text NULL,
+      \`name\` varchar(40) NOT NULL DEFAULT 'it''s',
+      \`on\` tinyint(1) NOT NULL DEFAULT TRUE,
+      \`data\` longblob NOT NULL DEFAULT (X'00FF'),
+      \`doc\` json NOT NULL DEFAULT ('{"a": "it''s", "b": [1, null]}'),
+      \`extra\` json NULL,
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [measureDdl], async (driver) => {
+        const actual = await introspect(driver, contract);
+        const measure = actual.tables['Measure']?.columns ?? {};
+        expect({
+          amount: measure['amount']?.resolvedDefault,
+          price: measure['price']?.resolvedDefault,
+          ratio: measure['ratio']?.resolvedDefault,
+          on: measure['on']?.resolvedDefault,
+          data: measure['data']?.resolvedDefault,
+          doc: measure['doc']?.resolvedDefault,
+          issues: mysql.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
+        }).toEqual({
+          amount: { kind: 'literal', value: `1.5${'0'.repeat(29)}` },
+          price: { kind: 'literal', value: '-0.50' },
+          ratio: { kind: 'literal', value: 0.25 },
+          on: { kind: 'literal', value: true },
+          data: { kind: 'literal', value: '00FF' },
+          doc: { kind: 'literal', value: { a: "it's", b: [1, null] } },
+          issues: [],
+        });
+      }),
+    );
+  });
+
+  it.for([
+    ["('abcd')", '61626364'],
+    ["('é€😀')", 'C3A9E282ACF09F9880'],
+    ["('')", ''],
+    ["(_binary X'FF00')", 'FF00'],
+  ])(
+    'reads the default %s on a longblob column as the bytes a row of it holds',
+    async ([written, rowHex], test) => {
+      const contract = contractWithScalarTypes();
+      const ddl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`data\` longblob NOT NULL DEFAULT ${written},
+      PRIMARY KEY (\`id\`)
+    )`;
+      await withMysqlDatabase(test, ({ url }) =>
+        withExampleTables(url, [ddl], async (driver) => {
+          const data = (await introspect(driver, contract)).tables['Measure']?.columns['data'];
+          await driver.query('INSERT INTO `Measure` (`id`) VALUES (1)');
+          const { rows } = await driver.query<{ hex: string }>(
+            'SELECT HEX(`data`) AS hex FROM `Measure`',
+          );
+          expect({
+            row: rows[0]?.hex,
+            resolvedDefault: data?.resolvedDefault,
+            unreadable: data?.defaultUnreadable,
+          }).toEqual({
+            row: rowHex,
+            resolvedDefault: { kind: 'literal', value: rowHex },
+            unreadable: undefined,
+          });
+        }),
+      );
+    },
+  );
+
+  it('keeps a literal binary and varbinary default as reported, since MySQL cuts it at its first zero byte, though it reports an expression default whole', async (test) => {
+    const ddl = `CREATE TABLE \`Fixed\` (
+      \`id\` int NOT NULL,
+      \`cut\` binary(4) NOT NULL DEFAULT 'a\\0b',
+      \`gone\` varbinary(8) NOT NULL DEFAULT 0x00ff,
+      \`whole\` varbinary(8) NOT NULL DEFAULT (0x00ff),
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [ddl], async (driver) => {
+        const columns = (await introspect(driver)).tables['Fixed']?.columns ?? {};
+        await driver.query('INSERT INTO `Fixed` (`id`) VALUES (1)');
+        const { rows } = await driver.query<Record<string, string>>(
+          'SELECT HEX(`cut`) AS cut, HEX(`gone`) AS gone, HEX(`whole`) AS whole FROM `Fixed`',
+        );
+        expect({
+          row: rows[0],
+          reported: [columns['cut']?.default, columns['gone']?.default, columns['whole']?.default],
+          cut: columns['cut']?.resolvedDefault,
+          gone: columns['gone']?.resolvedDefault,
+        }).toEqual({
+          row: { cut: '61006200', gone: '00FF', whole: '00FF' },
+          reported: ['0x61', '0x', '0x00ff'],
+          cut: { kind: 'function', expression: '0x61' },
+          gone: { kind: 'function', expression: '0x' },
+        });
       }),
     );
   });

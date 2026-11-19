@@ -48,13 +48,13 @@ Each has its own design record in this folder.
 
 ### Generated files import from the module the target package names
 
-[Generated files import from the module the target package names](../../docs/architecture%20docs/adrs/ADR%20323%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md)
+[Generated files import from the module the target package names](../../docs/architecture%20docs/adrs/ADR%20324%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md)
 
 The config a target package's `defineConfig` builds says which module `contract.d.ts` imports its types from and which module a rendered `migration.ts` imports from. The emitter writes those names. It no longer reads the application's `package.json`, and no table of Prisma's package names is consulted when a file is generated.
 
 ### `init` gets everything about a target from the target's package
 
-[adrs/init-contribution.md](adrs/init-contribution.md)
+[ADR 325 - init gets everything about a target from the target package](../../docs/architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)
 
 A target package exports an init contribution: its label, starter contract, `db.ts` content, environment example, driver packages, quick reference text and an optional server probe. `init` resolves the package, installs it, loads the contribution and then writes files. The package is named by a short name from a list the CLI holds of packages Prisma vouches for, or by its npm package name.
 

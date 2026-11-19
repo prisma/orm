@@ -64,7 +64,7 @@ describe(
         });
 
         expect(inputs).toMatchObject({
-          target: 'postgres',
+          target: { shortName: 'postgres' },
           schemaPath: 'prisma/schema.prisma',
           contractSource: {
             kind: 'prisma7-schema',
@@ -89,7 +89,7 @@ describe(
           prompt,
         });
 
-        expect(inputs.target).toBe('postgres');
+        expect(inputs.target.shortName).toBe('postgres');
       });
 
       it('accepts a --target that agrees with the provider', async () => {
@@ -106,7 +106,7 @@ describe(
           prompt,
         });
 
-        expect(inputs.target).toBe('postgres');
+        expect(inputs.target.shortName).toBe('postgres');
       });
 
       it('refuses a --target that disagrees with the provider, before anything is asked', async () => {
@@ -149,7 +149,7 @@ describe(
           prompt,
         });
 
-        expect(inputs.target).toBe('postgres');
+        expect(inputs.target.shortName).toBe('postgres');
       });
 
       it('refuses any other provider and lists the supported ones', async () => {
@@ -329,7 +329,7 @@ describe(
         writePrisma7Schema();
         const { prompt, calls } = scriptedPrompt({
           [PRISMA7_QUESTION]: false,
-          'What database are you using?': 'mongo',
+          'What database are you using?': 'mongodb',
           'How do you want to write your schema?': 'typescript',
         });
 
@@ -337,7 +337,7 @@ describe(
 
         expect(calls.map((call) => call.kind)).toEqual(['confirm', 'select', 'select', 'text']);
         expect(inputs).toMatchObject({
-          target: 'mongo',
+          target: { shortName: 'mongodb' },
           authoring: 'typescript',
           schemaPath: 'src/prisma/contract.ts',
           contractSource: {
@@ -394,7 +394,10 @@ describe(
         });
 
         expect(calls.map((call) => call.question)).not.toContain(PRISMA7_QUESTION);
-        expect(inputs).toMatchObject({ target: 'mongo', contractSource: { kind: 'starter' } });
+        expect(inputs).toMatchObject({
+          target: { shortName: 'mongodb' },
+          contractSource: { kind: 'starter' },
+        });
       });
 
       it('is not asked for a provider with no known target', async () => {

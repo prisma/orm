@@ -21,7 +21,7 @@ A `prisma orm init`-scaffolded project (any target).
   - The exact command (`prisma migration plan --name no-op`) and its full output.
   - A numbered list of steps to reproduce.
 - [ ] Agent collects the environment block:
-  - Prisma 8 version (from `pnpm ls @internal/postgres` or similar).
+  - Prisma 8 version (from `pnpm ls @prisma/orm-postgres` or similar).
   - Node version (`node -v`).
   - Package manager + version.
   - OS.

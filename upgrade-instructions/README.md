@@ -35,6 +35,8 @@ Published guides and historical chain discovery remain intact. Corrections to pu
 
 ## Checks
 
+**Name only published packages in prose.** An app guide is read by an application's agent, and an extension guide by an extension author outside this repository; neither can import the repository's `@internal/*` workspace packages. In the prose of a pending fragment, and of every published guide for a release after `8.0.0-rc.24`, name the published `@prisma/orm-*` entry instead; `packages/0-shared/publish-surface/src/shells.ts` maps each workspace package to it. `pnpm lint:consumer-internal-imports` fails on a prose line that names an `@internal/*` package. It does not check that an `@prisma/orm-*` entry still exists, because a guide has to name the entries a release removed. Two things are not prose and are not checked, because they must match what extension code contains, workspace names included: the patterns of a change's `detection` block, and codemod scripts. Guides up to `8.0.0-rc.24` stay as they shipped.
+
 `pnpm check:upgrade-coverage` checks committed Git trees. Explicit `--prev` and `--head` take committed refs; commit working changes before relying on these checks.
 
 - `--mode pr --prev <target-base> --head <candidate>` requires the PR's new audience declarations. A release version bump automatically selects release completeness checks. CI uses event-pinned refs, including the effective merged tree for merge groups.

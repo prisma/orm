@@ -11,8 +11,8 @@ Each slice is one PR, branched from `main`. A slice starts only after the one be
 | 1 | PostgreSQL `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes`; explicit renames with deprecated aliases; ADR 316 | TML-3715 | Merged, prisma/orm#30942 |
 | 2 | PostgreSQL `Json` as a convenience type that defaults to `json`; explicit name `PlainJson`; `jsonColumn` renamed; `sql.String` renamed `sql.Varchar`; ADR 316 amended; the duplicate ADR 316 renumbered | TML-3789 | Merged, prisma/orm#31065 |
 | 3 | MongoDB convenience types; `Int`, `Float` and `Boolean` stop being deprecated; the deprecation warning fires wherever a deprecated name is written; `type.Int64()` removed with an upgrade instruction; new ADR with the shared rules and MongoDB's table | TML-3790 | Merged, prisma/orm#31067 |
-| 4 | SQLite convenience types and explicit renames; new `Boolean` and `Decimal` codecs; column helpers renamed; shared decimal and boolean value code | TML-3790, TML-3562, TML-3782 | In progress |
-| 5 | MySQL convenience types for all eight names, with the codecs it lacks: bigint as number, float, double, decimal, boolean, bytes and JSON; the plain-JSON check shared with MongoDB | TML-3790, TML-3783 | Not started |
+| 4 | SQLite convenience types and explicit renames; new `Boolean` and `Decimal` codecs; column helpers renamed; shared decimal and boolean value code | TML-3790, TML-3562, TML-3782 | Merged, prisma/orm#31086 |
+| 5 | MySQL convenience types for all eight names, with the codecs it lacks: bigint as number, float, double, decimal, boolean, bytes and JSON; the plain-JSON check shared with MongoDB | TML-3790, TML-3783 | In progress |
 | 6 | Close-out: final retro, definition-of-done evidence, long-lived docs checked, this folder deleted | TML-3715 | Not started |
 
 Slice 2 reuses the closed prisma/orm#30966 (branch `tml-3789-json-convenience-type`) as a reference: it already declares the type choice and `PlainJson`. The default flips to `json`, and everything that handled a contract change is left out.
@@ -46,3 +46,9 @@ The architect and principal engineer design reviews of 2026-11-17 are in `review
 ## Follow-ups to file at close-out
 
 - The deprecation warner exists in both the SQL and MongoDB PSL interpreters (`deprecated-type-names.ts` in each) because a shared home would be the framework; move it to `@internal/psl-parser/interpret` when a framework change is allowed.
+
+## Follow-ups filed during the MySQL slice
+
+- TML-3890: `Float(storage: float)` and an explicit `Float4` on MySQL and MariaDB, left out because a `float` column reads back from a row rounded to six significant digits.
+- TML-3891: refuse an `@id`, `@unique` or `@@unique` on a `Bytes`, `Json` or `String(storage: text)` field on MySQL and MariaDB when the contract is authored, not only when `db migrate` fails.
+- TML-3892: `Decimal(precision: n)` without a `scale` keeps a scale of 30 on MySQL and MariaDB, where PostgreSQL gives a scale of 0.

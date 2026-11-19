@@ -1,3 +1,4 @@
+import type { SqlColumnRef } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import type { StructuredError, StructuredErrorOptions } from '@internal/utils/structured-error';
 import { structuredError } from '@internal/utils/structured-error';
@@ -94,6 +95,55 @@ export function errorTemporalNonIsoCalendar(codecId: string, calendarId: string)
       fix: 'Convert the value with .withCalendar("iso8601") before writing if the ISO projection is what you mean to store.',
       meta: { codecId, calendarId },
     },
+  );
+}
+
+function holderOf(codecId: string, column: SqlColumnRef | undefined, value: string): string {
+  return column === undefined
+    ? `A ${codecId} value is ${value}`
+    : `Column "${column.table}"."${column.name}" holds ${value}`;
+}
+
+function columnMeta(codecId: string, column: SqlColumnRef | undefined, received: string) {
+  return {
+    codecId,
+    ...(column === undefined ? {} : { table: column.table, column: column.name }),
+    received: received.slice(0, 100),
+  };
+}
+
+/** A codec read a value from the database that its application value cannot hold, such as an integer past the safe integer range read as a JavaScript number. `reads` says what the codec reads, and `fix` what to change. */
+export function errorColumnUnreadable(options: {
+  readonly codecId: string;
+  readonly received: string;
+  readonly column: SqlColumnRef | undefined;
+  readonly notA: string;
+  readonly reads: string;
+  readonly fix: string;
+}): StructuredError {
+  const { codecId, received, column, notA, reads, fix } = options;
+  return mysqlError(
+    'RUNTIME.DECODE_FAILED',
+    `${holderOf(codecId, column, received)}, which is not ${notA}. ${codecId} reads ${reads}.`,
+    { fix, meta: columnMeta(codecId, column, received) },
+  );
+}
+
+/** A codec was given a value its column cannot hold, before the value reached the database. `holds` says what the column holds. */
+export function errorColumnUnwritable(options: {
+  readonly codecId: string;
+  readonly received: string;
+  readonly column: SqlColumnRef | undefined;
+  readonly holds: string;
+  readonly fix: string;
+}): StructuredError {
+  const { codecId, received, column, holds, fix } = options;
+  const target =
+    column === undefined ? `a ${codecId} value` : `column "${column.table}"."${column.name}"`;
+  return mysqlError(
+    'RUNTIME.ENCODE_FAILED',
+    `Cannot write ${received} to ${target}, which holds ${holds}.`,
+    { fix, meta: columnMeta(codecId, column, received) },
   );
 }
 

@@ -19,10 +19,14 @@ const ada = { id: 1, name: 'Ada', email: 'ada@example.com' };
 
 describe('conflictKeysOf', () => {
   it.each([
-    ['without conflictOn: every primary key and unique constraint', [], [['id'], ['email']]],
-    ['with conflictOn: the named columns', ['email', 'name'], [['email', 'name']]],
-  ] as const)('gives the keys %s', (_, conflictColumns, keys) => {
-    expect(conflictKeysOf(context.contract, 'public', 'users', conflictColumns)).toEqual(keys);
+    ['skip without conflictOn', 'skip', [], [['id'], ['email']]],
+    ['connect without conflictOn', 'connect', [], [['id']]],
+    ['skip with conflictOn', 'skip', ['email', 'name'], [['email', 'name']]],
+    ['connect with conflictOn', 'connect', ['email'], [['email']]],
+  ] as const)('gives the keys of %s', (_, onConflict, conflictColumns, keys) => {
+    expect(
+      conflictKeysOf(context.contract, 'public', 'users', onConflict, conflictColumns),
+    ).toEqual(keys);
   });
 });
 
@@ -92,11 +96,11 @@ describe('the row check of onConflict skip on a table', () => {
         contract,
         call,
         { namespaceId: 'public', tableName: 'badges' },
-        { columns: [] },
+        { onConflict: 'skip', columns: [] },
         [{ code: 'gold' }],
         () => [],
       ),
-    ).toBeUndefined();
+    ).toEqual([['id'], ['code']]);
   });
 
   it('refuses a table with no primary key, unique constraint or unique index', () => {
@@ -105,7 +109,7 @@ describe('the row check of onConflict skip on a table', () => {
         contract,
         { ...call, modelName: 'Log' },
         { namespaceId: 'public', tableName: 'logs' },
-        { columns: [] },
+        { onConflict: 'skip', columns: [] },
         [{ message: 'hello' }],
         () => [],
       ),
@@ -115,6 +119,32 @@ describe('the row check of onConflict skip on a table', () => {
         message:
           'createAll() on model "Log" has nothing to skip on: table "logs" has no primary key, unique constraint or unique index over columns, so onConflict "skip" cannot skip any row',
         meta: { method: 'createAll()', problem: 'no-conflict-key' },
+      }),
+    );
+  });
+
+  it('refuses onConflict connect without conflictOn on a table with no primary key', () => {
+    const nested = {
+      action: 'create() nested mutation for relation "logs"',
+      modelName: 'Log',
+      meta: { kind: 'create', relation: 'logs' },
+    };
+
+    expect(() =>
+      requireRowsThatCanConflict(
+        contract,
+        nested,
+        { namespaceId: 'public', tableName: 'logs' },
+        { onConflict: 'connect', columns: [] },
+        [{ message: 'hello' }],
+        () => [],
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message:
+          'create() nested mutation for relation "logs" on model "Log" has nothing to connect on: table "logs" has no primary key, so onConflict "connect" needs conflictOn',
+        meta: { kind: 'create', relation: 'logs', problem: 'no-conflict-key' },
       }),
     );
   });

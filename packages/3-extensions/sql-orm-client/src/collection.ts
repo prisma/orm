@@ -2140,6 +2140,7 @@ export class CollectionBase<
       { action: method, modelName: this.modelName, meta: { method, model: this.modelName } },
       this.namespaceId,
       options,
+      ['skip'],
       createAll
         ? variantInOwnTableOf(
             this.contract,

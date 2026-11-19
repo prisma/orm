@@ -1,6 +1,6 @@
 # Upgrade Prisma 8 (user app)
 
-This reference upgrades a project that **consumes** Prisma 8 via the public package API (`@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, the contract files in `prisma/`, etc.). Package names below are the published `@prisma/orm-*` names, which is what `package.json`, the lockfile, and the registry use; the other references in this skill spell import paths as `@internal/<target>`, and SKILL.md explains that mapping. If the project is itself a Prisma 8 *extension*, use [`upgrade-extension.md`](upgrade-extension.md) instead — or both, if the repo contains both an app and an extension package.
+This reference upgrades a project that **consumes** Prisma 8 via the public package API (`@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, the contract files in `prisma/`, etc.). Package names below are the published `@prisma/orm-*` names, which is what `package.json`, the lockfile, and the registry use. The other references in this skill use the same names. If the project is itself a Prisma 8 *extension*, use [`upgrade-extension.md`](upgrade-extension.md) instead — or both, if the repo contains both an app and an extension package.
 
 The per-transition instructions this reference reads live under [`../upgrading/app/upgrades/`](../upgrading/app/upgrades/).
 

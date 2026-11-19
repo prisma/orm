@@ -2,18 +2,6 @@ import type { NextAction } from '@prisma/cli-engine/protocol';
 import { extname } from 'pathe';
 import { DB_SIGN_COMMAND, EMIT_COMMAND } from '../../orm/init-diagnostics';
 import { formatAddArgs, formatAddDevArgs, type PackageManager } from './detect-package-manager';
-import type { TargetId } from './templates/code-templates';
-
-// biome-ignore lint/plugin/no-family-vocabulary: a datasource provider read from the user's schema, and its target; Prisma 7 has no provider of this name, so a schema that names it was written for Prisma 6
-const PRISMA6_ONLY_PROVIDERS: ReadonlyMap<string, TargetId> = new Map([['mongodb', 'mongo']]);
-
-/**
- * The target of a `datasource` provider that exists only up to Prisma 6, which makes its schema a Prisma 6 schema; `undefined` for any other provider.
- */
-export function prisma6OnlyTarget(provider: string | undefined): TargetId | undefined {
-  return provider === undefined ? undefined : PRISMA6_ONLY_PROVIDERS.get(provider);
-}
-
 /**
  * What a Prisma 6 project needs to run Prisma 8 beside Prisma 6 with the Prisma 6 schema as the
  * contract source. Both CLIs are published as `prisma`, and the Prisma 6 CLI reads

@@ -41,7 +41,7 @@ On every SQL target, `sql.String(n)` is renamed `sql.Varchar(n)`, with `sql.Stri
 
 ## `ts-renamed-postgres-json-column-helper`
 
-The detection matches a file that imports or re-exports `jsonColumn` from `@prisma/orm-postgres/adapter/column-types`, `@prisma/orm-target-postgres/adapter/column-types` or `@internal/adapter-postgres/column-types`, or imports one of them as a namespace and reads `jsonColumn` from it. In that file, rename the import or re-export and every use of the name. Any other form, such as a dynamic import, fails type-checking because the export is gone; rename it where the compiler reports it:
+The detection matches a file that imports or re-exports `jsonColumn` from `@prisma/orm-postgres/adapter/column-types`, `@prisma/orm-target-postgres/adapter/column-types` or the Prisma repository's workspace package for it, or imports one of them as a namespace and reads `jsonColumn` from it. In that file, rename the import or re-export and every use of the name. Any other form, such as a dynamic import, fails type-checking because the export is gone; rename it where the compiler reports it:
 
 ```ts
 import { plainJsonColumn } from '@prisma/orm-postgres/adapter/column-types';
