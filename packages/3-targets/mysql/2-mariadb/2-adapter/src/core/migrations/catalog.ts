@@ -83,7 +83,7 @@ function quotedDefault(
 }
 
 /**
- * The column's default and `EXTRA` as MySQL 8.4 reports them. MariaDB reports no default as the text `NULL`, a literal quoted, bytes as `X'00ff'`, which MySQL reports as the generated default `0x00ff`, and a function such as `current_timestamp(3)` unquoted with no `DEFAULT_GENERATED` flag, whose text MySQL reports byte by byte; an unquoted number is a literal on both servers.
+ * The column's default and `EXTRA` as MySQL 8.4 reports them, except on a `binary` or `varbinary` column, whose quoted default is passed on as MariaDB reports it (see `quotedDefault`). MariaDB reports no default as the text `NULL`, a literal quoted, bytes as `X'00ff'`, which MySQL reports as the generated default `0x00ff`, and a function such as `current_timestamp(3)` unquoted with no `DEFAULT_GENERATED` flag, whose text MySQL reports byte by byte; an unquoted number is a literal on both servers.
  */
 function mysqlDefault(row: MysqlColumnRow): Pick<MysqlColumnRow, 'column_default' | 'extra'> {
   const reported = row.column_default;
