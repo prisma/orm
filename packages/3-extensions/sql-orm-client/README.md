@@ -485,7 +485,7 @@ On a many-to-many relation, `deleteAll` deletes the related rows and does not de
 
 ### Updating or deleting one related row
 
-`r.where(w).update(data)` and `r.where(w).delete()` change or delete the first related row the filter matches; on a to-one relation, `r.update(data)` and `r.delete()` change or delete the linked row, and `where` narrows it. Which row among several matching rows is first is unspecified, as for a collection's `update` and `delete` without `orderBy`. A row is related as for `updateAll` and `deleteAll`; on a relation the record holds the key for, the related row is the one its foreign key points at.
+`r.where(w).update(data)` and `r.where(w).delete()` change or delete the first related row the filter matches; on a to-one relation, `r.update(data)` and `r.delete()` change or delete the linked row, and `where` narrows it. Which row among several matching rows is first is unspecified, as for a collection's `update` and `delete` without `orderBy`. The `UPDATE` or `DELETE` re-checks that the row is still related to the record, so a row that another transaction linked to a different record in the meantime is left unchanged. A row is related as for `updateAll` and `deleteAll`; on a relation the record holds the key for, the related row is the one its foreign key points at.
 
 ```ts
 await db.User.where({ id: 1 }).update({
