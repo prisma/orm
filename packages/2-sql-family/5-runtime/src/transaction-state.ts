@@ -8,6 +8,7 @@ export interface TransactionSettlementState {
   readonly committed: boolean;
   /** The driver's `ROLLBACK` resolved. */
   readonly rolledBack: boolean;
+  readonly closed: boolean;
   /** Passes an `activityEnded` error the caller does not receive to the transaction's log, so it is not lost. */
   logDroppedError(error: unknown): void;
   abandon(): Promise<void>;

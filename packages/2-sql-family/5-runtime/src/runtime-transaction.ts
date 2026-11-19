@@ -107,7 +107,11 @@ abstract class TransactionBase
       startActivity: (clientActivity) => runtime.startActivity(this.route, clientActivity),
       planContentHash: (plan) => runtime.planContentHash(plan, activity),
     };
+    const isClosed = () => this.isClosed;
     this[transactionSettlement] = {
+      get closed() {
+        return isClosed();
+      },
       get committed() {
         return entry.state === 'committed';
       },

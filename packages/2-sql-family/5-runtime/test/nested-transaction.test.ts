@@ -242,4 +242,39 @@ describe('TransactionContext.transaction', () => {
       expect(ends).toEqual(ends.map(() => 1));
     },
   );
+
+  it.each([
+    { enclosing: 'the outer transaction', depth: 0 },
+    { enclosing: 'a savepoint', depth: 1 },
+  ])(
+    'closes the context of a nested call still running when $enclosing returned, and its open stream',
+    async ({ depth }) => {
+      const { runtime } = createSetup();
+      const opened = deferred();
+      const proceed = deferred();
+      let inner: TransactionContext | undefined;
+      let rows: AsyncIterator<unknown> | undefined;
+      let nested: Promise<unknown> = Promise.resolve();
+      const leave = async (ctx: TransactionContext) => {
+        nested = ctx.transaction(async (nestedCtx) => {
+          inner = nestedCtx;
+          rows = nestedCtx.query(rawPlan('select id from t'))[Symbol.asyncIterator]();
+          await rows.next();
+          opened.resolve();
+          await proceed.promise;
+        });
+        await opened.promise;
+      };
+
+      const run = withTransaction(runtime, (tx) =>
+        depth === 0 ? leave(tx) : tx.transaction((middle) => leave(middle)),
+      );
+      await run.catch(() => undefined);
+
+      expect(inner?.invalidated).toBe(true);
+      await rejectsWith(Promise.resolve(rows?.next()), 'TRANSACTION_CLOSED');
+      proceed.resolve();
+      await nested.catch(() => undefined);
+    },
+  );
 });

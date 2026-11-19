@@ -1970,7 +1970,11 @@ async function runAndSettleTransaction<R>(
   signal.addEventListener('abort', onAbort, { once: true });
   if (signal.aborted) onAbort();
 
-  const txContext = guardedTransactionContext(transaction, () => invalidated);
+  const settlement = settlementOf(transaction);
+  const txContext = guardedTransactionContext(
+    transaction,
+    () => invalidated || settlement?.closed === true,
+  );
 
   let commitRequested = false;
   try {
@@ -1988,7 +1992,6 @@ async function runAndSettleTransaction<R>(
       try {
         await transaction.rollback();
       } catch (rollbackError) {
-        const settlement = settlementOf(transaction);
         if (settlement?.rolledBack === true) {
           settlement.logDroppedError(rollbackError);
           throw selected;
@@ -2004,11 +2007,10 @@ async function runAndSettleTransaction<R>(
       }
       throw selected;
     }
-    if (settlementOf(transaction)?.committed === true) throw error;
+    if (settlement?.committed === true) throw error;
     try {
       await transaction.rollback();
     } catch (rollbackError) {
-      const settlement = settlementOf(transaction);
       if (settlement?.rolledBack === true) settlement.logDroppedError(rollbackError);
       else await settlement?.abandon();
     }
