@@ -1061,6 +1061,25 @@ model users {
 
 exports[`introspection: findUnique where unique: warnings 1`] = `null`;
 
+exports[`introspection: queryRaw - Json column is returned as an object: datamodel 1`] = `
+"generator client {
+  provider = "prisma-client-js"
+  output = "***"
+}
+
+datasource mysql {
+  provider = "mysql"
+}
+
+model posts {
+  id   Int    @id
+  data String @mysql.LongText
+}
+"
+`;
+
+exports[`introspection: queryRaw - Json column is returned as an object: warnings 1`] = `null`;
+
 exports[`introspection: update where composite PK: datamodel 1`] = `
 "generator client {
   provider = "prisma-client-js"
