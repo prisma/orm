@@ -132,7 +132,7 @@ Each is one test, at the level named.
 
 **Type tests:**
 
-- [ ] On `MysqlTransactionContext`, `SqliteTransactionContext` and `SupabaseTransactionContext`: `tx.transaction` has one parameter, its callback receives a context of the same type as `tx`, and the call infers the callback's result. `MariadbTransactionContext['transaction']` is `MysqlTransactionContext['transaction']`.
+- [ ] On `MysqlTransactionContext`, `SqliteTransactionContext` and `SupabaseTransactionContext`: `tx.transaction` has one parameter, its callback receives a context of the same type as `tx`, and the call infers the callback's result.
 - [ ] `SupabaseTransactionContext` equals `PostgresTransactionContext`.
 
 **Greps:**
@@ -164,6 +164,10 @@ The project plan estimated 400. The operator's cap is about 500.
   - `pnpm --filter <pkg> test` for `@internal/sqlite`, `@internal/mysql`, `@internal/mariadb`, `@internal/mysql-live-tests` (with `MYSQL_URL` and `MARIADB_URL` set) and `@internal/extension-supabase`.
   - `pnpm --filter <pkg> lint` for the same packages, and `pnpm lint:deps`.
   - `pnpm lint:skills` and `pnpm check:upgrade-coverage --mode pr --prev $(git rev-parse origin/main) --head HEAD`.
+
+## Amendments
+
+- **After the PR opened: no type test for the MariaDB alias.** The type-test done condition also asked that `MariadbTransactionContext['transaction']` is `MysqlTransactionContext['transaction']`, which needed a new test file in the MariaDB facade. `MariadbTransactionContext` is a type alias of `MysqlTransactionContext`, so the test compared a type with itself. The live suite covers MariaDB's behaviour. Removed on the operator's review.
 
 ## Open Questions
 
