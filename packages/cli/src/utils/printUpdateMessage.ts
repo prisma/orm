@@ -10,36 +10,28 @@ export function printUpdateMessage(checkResult: Check.Result | 0 | void): void {
     return
   }
 
-  let boxHeight = 4
-  let majorText = ''
-
   const currentVersionInstalled = checkResult.data.previous_version
   const latestVersionAvailable = checkResult.data.current_version
+  const updateLine = `${blue('Update available')} ${currentVersionInstalled} -> ${latestVersionAvailable}`
 
-  const prismaCLICommand = makeInstallCommand(checkResult.data.package, checkResult.data.release_tag)
-  const prismaClientCommand = makeInstallCommand('@prisma/client', checkResult.data.release_tag, {
-    canBeGlobal: false,
-    canBeDev: false,
-  })
+  const isMajorUpdate = Number(currentVersionInstalled.split('.')[0]) < Number(latestVersionAvailable.split('.')[0])
 
-  try {
-    const [majorInstalled] = currentVersionInstalled.split('.')
-    const [majorLatest] = latestVersionAvailable.split('.')
-
-    if (majorInstalled < majorLatest) {
-      majorText = `\nThis is a major update - please follow the guide at\nhttps://pris.ly/d/major-version-upgrade\n\n`
-      boxHeight = boxHeight + 4
-    }
-  } catch (e) {}
-
-  const boxText = `\n${blue(
-    'Update available',
-  )} ${currentVersionInstalled} -> ${latestVersionAvailable}\n${majorText}Run the following to update
+  let boxText: string
+  if (isMajorUpdate) {
+    boxText = `\n${updateLine}\n\nThis is a major update - please follow the guide at\nhttps://pris.ly/d/major-version-upgrade`
+  } else {
+    const prismaCLICommand = makeInstallCommand(checkResult.data.package, checkResult.data.release_tag)
+    const prismaClientCommand = makeInstallCommand('@prisma/client', checkResult.data.release_tag, {
+      canBeGlobal: false,
+      canBeDev: false,
+    })
+    boxText = `\n${updateLine}\nRun the following to update
   ${bold(prismaCLICommand)}
   ${bold(prismaClientCommand)}`
+  }
 
   const boxedMessage = drawBox({
-    height: boxHeight,
+    height: 4,
     width: 59,
     str: boxText,
     horizontalPadding: 2,
