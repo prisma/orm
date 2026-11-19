@@ -265,9 +265,56 @@ A `Boolean` column has the data type `sqlite/boolean`, stored as `integer`: 1 fo
 
 A `DateTime` default is written with the `datetime` tag, as in ``@default(datetime`2024-01-01T00:00:00Z`)``, a `Date`, `Time` or `Duration` default with the `date`, `time` or `duration` tag, and a `Json` default with the `json` tag. A `DateTime` column has the data type `sqlite/datetime`, a `Date` column `sqlite/date`, a `Time` column `sqlite/time`, a `Duration` column `sqlite/duration` and a `Json` column `sqlite/json`, all stored as `text`. A `DateTime` default is stored as the instant in UTC with three fraction digits, the text every row holds, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
 
-## MySQL
+## MySQL and MariaDB
 
-Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.DateTime())`. `sql.Varchar(n)` and `sql.Char(n)` exist on every SQL target. `sql.String(n)` is a deprecated alias of `sql.Varchar(n)`; it reports `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
+MariaDB shares MySQL's types, so everything in this section holds for both servers unless it names one. Write a TypeScript field as `field.column(type.X())` with the type of the PSL name, such as `field.column(type.Decimal({ precision: 10, scale: 2 }))` or `field.column(type.Bool())`. `sql.Varchar(n)` and `sql.Char(n)` exist on every SQL target. `sql.String(n)` is a deprecated alias of `sql.Varchar(n)`; it reports `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
+
+MySQL has convenience types for its scalars. Each is a type choice ([ADR 279](../architecture%20docs/adrs/ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)): its `storage` and `as` arguments choose one explicit type below, and the contract stores only that type ([ADR 322](../architecture%20docs/adrs/ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md)). `storage` names the MySQL column type. An explicit type is named after its column type, or, where that would be a convenience name, after the second name MySQL also gives the column type and PostgreSQL's explicit type already uses: `INT4`, `INT8`, `FLOAT8`, `NUMERIC` and `BOOL`. So a `storage` value and the explicit type it gives often differ: `Float(storage: double)` is `Float8`. `Int`, `BigInt` and `String` give the codecs they gave before, so no contract changes.
+
+| Convenience type | `as` | `storage` | Becomes | Column |
+| --- | --- | --- | --- | --- |
+| `Int(storage?)` | | `int` | `Int4` | `int` |
+| `BigInt(as?, storage?)` | `bigint` (default), `number` | `bigint` | `Int8BigInt`, `Int8Number` | `bigint` |
+| `Float(storage?)` | | `double` | `Float8` | `double` |
+| `Decimal(storage?, precision?, scale?)` | | `decimal` | `NumericString(p, s)`, `p` 65 and `s` 30 where not written | `decimal(p,s)` |
+| `String(storage?, length?)` | | `varchar` (default), `text` | `Varchar(191)` unless `length` is written, `Text` | `varchar(n)`, `text` |
+| `Boolean(storage?)` | | `tinyint` | `Bool` | `tinyint(1)` |
+| `Bytes(storage?)` | | `longblob` | `Longblob` | `longblob` |
+| `Json(storage?)` | | `json` | `PlainJson` | `json`; on MariaDB `longtext` with a `json_valid` check |
+
+```prisma
+model Product {
+  id        Int                              @id @default(autoincrement())
+  name      String
+  price     Decimal(precision: 10, scale: 2)
+  rating    Float
+  sold      BigInt(as: number)               @default(0)
+  inStock   Boolean                          @default(true)
+  thumbnail Bytes
+  details   Json
+  notes     String(storage: text)?
+}
+```
+
+`Float` takes `storage: double` only. A MySQL `float` column reads back from a row rounded to six significant digits and never matches an equality filter on a number, so Prisma does not write one yet. A `double` holds every JavaScript number but `NaN` and the infinities, which a write refuses with `RUNTIME.ENCODE_FAILED`; `-0` is written as `0`.
+
+A bare `Decimal` is `decimal(65,30)`. MySQL's own bare `decimal` is `decimal(10,0)`, which holds no digits after the point; `NumericString` written without arguments is that column, and its contract records it as `decimal(10,0)`, as `NumericString(10)` records a scale of 0. A default on it is stored as the column prints it, so `@default("12.0")` is `12`, and one with digits after the point, such as `@default("12.5")`, is refused. A `Decimal` is decimal text, read as the server prints it, padded to the column's scale: `"1.5"` written to a `decimal(10,2)` reads `"1.50"`, and a filter on `"1.5"` finds it. Every value the column holds can be written and filtered. Every value of a `Decimal` that a query writes or compares is sent as `CAST(? AS DECIMAL(65,s))`, because both servers compare a text value inside `in` as a floating-point number, so `in(['0.1', '0.2'])` would find a stored `0.100000000000000000000000000001`. `s` is the number of digits after the point that can be sent for the column: 30 for a column with at most 35 digits before the point, and fewer for a wider one, so that the cast holds every value of the column. A value with more than `s` digits after the point, or more than `65 − s` before it, is refused with `RUNTIME.ENCODE_FAILED`, as is text that is not a decimal, such as `"1e5"`. Any other value is sent unchanged: a write with more digits after the point than the column's scale is rounded to the column by the server, and a filter value is compared as written, so `"1.005"` does not find a stored `"1.01"` in a `decimal(10,2)`. For a `decimal(65,0)`, `s` is 0, so `"1.5"` is refused. For a `decimal(64,0)`, `s` is 1, so `"1.5"` is written as `2` and `"1.25"` is refused. A prepared statement's `Decimal` parameter is cast with the type parameters its declaration gives. Declared as `'mysql/decimal@1'` alone, it belongs to no column and is cast to the widest decimal, with `s` 30, so it refuses a value with more than 35 digits before the point. Declare it with the precision and scale of the column it is compared with, as in `{ codecId: 'mysql/decimal@1', typeParams: { precision: 65, scale: 0 } }`. In raw SQL, `param(value, { codecId: 'mysql/decimal@1' })` takes no precision, so it is cast the same way. To send a wider value, pass it as text without `param()` and cast it in the SQL to the type of the column it is compared with or written to. For a `decimal(65,0)` column that is ``db.raw.sql`SELECT id FROM Ledger WHERE wide = CAST(${value} AS DECIMAL(65,0))` ``. A cast to a type with fewer digits after the point than the value has rounds the value without an error. Text sent this way is cast only where the SQL casts it, and both servers compare text with a decimal inside `IN`, and MariaDB inside `BETWEEN`, as a floating-point number. A `Decimal` takes equality, ordering, `sum`, `min` and `max`, and has no `avg`: MySQL and MariaDB cut a decimal mean to nine digits after the point when they group through a temporary table, so it depends on the query plan. The `sum` of a `decimal(p,s)` is a `decimal(min(65, p + 22), s)`: `s` digits after the point and up to 22 more digits before it than the column, at most 65 in all. A total is exact while it fits those 65 digits. A column of more than 43 digits leaves its total fewer than 22 extra digits, and none for a 65-digit column such as a bare `Decimal`, where two rows can need more. Such a total may come back as the largest value of its type, with no error or warning: the server caps it whenever it groups the rows through a temporary table, which depends on the query plan, not on the query alone. For example, a `groupBy` on a column without an index is capped on both servers, and so is an `include()` over several parents on MariaDB. Only a total with no grouping is always exact: a `groupBy` on a column with an index is exact when the server reads the groups from the index, and capped when it chooses a temporary table, as it can when the query also filters on another column. Do not rely on a decimal `sum` that could need more than 65 digits.
+
+A `scale` larger than the `precision` is refused. An unwritten `scale` of `Decimal` is 30 even when `precision` is written: `Decimal(precision: 40)` is `decimal(40,30)`, which holds 10 digits before the point, and `Decimal(precision: 10)` is refused. This differs from PostgreSQL, where `Decimal(precision: 40)` has a scale of 0, and from MySQL's own `decimal(40)` and `NumericString(40)`, which have a scale of 0. Write both `precision` and `scale`, as in `Decimal(precision: 40, scale: 0)`, to get the same column on every target.
+
+`BigInt(as: number)` reads a `bigint` column as a JavaScript `number` and refuses a value outside ±(2^53 − 1) on write, and on read with `RUNTIME.DECODE_FAILED` naming the column. `count`, a `sum` of integers and a `min` or `max` of such a column read as a `number` too and are refused the same way past that range; use `countBigInt` or `sumBigInt`, or declare the field `BigInt`, which reads a `bigint`.
+
+`String` is `varchar(191)`, which MySQL can index. `String(storage: text)` is a `text` column, of up to 65,535 bytes. Both compare by the database's default collation. With each server's own default that is without regard to case, and MySQL compares trailing spaces where MariaDB ignores them; a database created with another collation, such as `utf8mb4_bin`, compares by its rules.
+
+A `Boolean` is a `tinyint(1)` holding 0 or 1, which is what MySQL writes for `TRUE` and `FALSE`. Both servers store any small integer in the column, but `= TRUE` matches only 1, so a read of any value other than 0 or 1 raises `RUNTIME.DECODE_FAILED` naming the column, in a row and through an `include()`. A `Boolean` field takes equality filters. A default is `@default(true)` or `@default(false)`, which a migration writes as `DEFAULT 1` or `DEFAULT 0`.
+
+A `Bytes` value is a `Uint8Array`. It takes equality filters and ordering, which compares bytes one by one. A default is written with the `longblob` tag and hex text, ``@default(longblob`00ff`)``, which a migration writes as `DEFAULT (X'00ff')`; ``@default(longblob``)`` is an empty value. Introspection reads a bytes default as the bytes a row of the column holds: a default written as text, such as `DEFAULT ('abc')`, is its UTF-8 bytes.
+
+A `Json` value is the JSON document. A write refuses a value that is not plain JSON, such as a `Date`, a `bigint` or `NaN` at any depth, with `RUNTIME.ENCODE_FAILED` naming its path. JSON `null` reads as `null`, as SQL `NULL` does; writing `null` writes SQL `NULL`, which a required field refuses. MySQL stores a document in a normal form: it sorts the keys of an object, keeps the last of duplicate keys, and reads `1e2` as `100.0`. MariaDB stores the text as written. A `Json` field has no equality filter and no ordering, as PostgreSQL's `json` has none. A default is written with the `json` tag, ``@default(json`{"a": 1}`)``, which a migration writes as `DEFAULT ('{"a":1}')`. On MariaDB a `json` column is `longtext COLLATE utf8mb4_bin` with a column check `json_valid(col)`; introspection reports that column as `json`.
+
+A `Bytes`, `Json` or `String(storage: text)` field cannot be an `@id`, and on MySQL it cannot be `@unique` or `@@unique` either. MySQL needs a prefix length to index a `longblob` or `text` column, which Prisma does not write, and indexes a `json` column only through a generated column. Nothing refuses these before `db migrate`, which fails with `MIGRATION.EXECUTION_FAILED`: "BLOB/TEXT column 'key' used in key specification without a key length" for bytes and text, and "JSON column 'key' supports indexing only via generated columns on a specified JSON path" on MySQL for JSON. MariaDB refuses the primary key the same way, with the bytes and text message for all three, and accepts a unique constraint on these columns, which it keeps as a hash; on a `Json` field it compares the stored text.
+
+A text, bytes or JSON default is written as an expression, such as `DEFAULT ('x')`, because MySQL accepts no plain literal default on those columns. MariaDB reports a default holding a character outside three-byte UTF-8, such as an emoji, with `?` in its place, so such a default on a text or JSON field does not verify on MariaDB. MySQL's migration planner does not change a column's type yet, so changing a field between these types is reported by `db verify` and refused by `migration plan`.
 
 MySQL has the convenience date and time types ([ADR 315](../architecture%20docs/adrs/ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md)). The defaults need no `Temporal`. A bare `DateTime` is `DatetimeJsDate(3)`, a `datetime(3)` column, the type `DateTime` named before, so its contract is unchanged.
 
@@ -282,9 +329,16 @@ The precision in brackets is the default when none is written. Every instant is 
 
 | PSL name | TS helper | Codec id | Storage type | Application type |
 | --- | --- | --- | --- | --- |
-| `String` | — | `sql/varchar@1` | `varchar(191)` | `string` |
-| `Int` | — | `mysql/int@1` | `int` | `number` |
-| `BigInt` | — | `mysql/bigint@1` | `bigint` | `bigint` |
+| `Int4` | `field.column(type.Int4())` | `mysql/int@1` | `int` | `number` |
+| `Int8BigInt` | `field.column(type.Int8BigInt())` | `mysql/bigint@1` | `bigint` | `bigint` |
+| `Int8Number` | `field.column(type.Int8Number())` | `mysql/bigintnumber@1` | `bigint` | `number` (safe-integer range) |
+| `Float8` | `field.column(type.Float8())` | `mysql/double@1` | `double` | `number` |
+| `NumericString(p?, s?)` | `field.column(type.NumericString(p, s))` | `mysql/decimal@1` | `decimal(p,s)` | `string`, decimal text such as `"12.50"` |
+| `Varchar(n)` | `field.column(type.Varchar(n))` | `sql/varchar@1` | `varchar(n)` | `string` |
+| `Text` | `field.column(type.Text())` | `mysql/text@1` | `text` | `string` |
+| `Bool` | `field.column(type.Bool())` | `mysql/boolean@1` | `tinyint(1)` | `boolean` |
+| `Longblob` | `field.column(type.Longblob())` | `mysql/longblob@1` | `longblob` | `Uint8Array` |
+| `PlainJson` | `field.column(type.PlainJson())` | `mysql/json@1` | `json` | `JsonValue` |
 | `DatetimeJsDate(p?)` | — | `mysql/datetime@1` | `datetime(p)` | `Date` |
 | `DatetimeTemporal(p?)` | — | `mysql/datetime-temporal@1` | `datetime(p)` | `Temporal.Instant` |
 | `DatetimeString(p?)` | — | `mysql/datetime-string@1` | `datetime(p)` | `string`, the instant in UTC (ISO 8601) |
@@ -299,7 +353,7 @@ The precision in brackets is the default when none is written. Every instant is 
 | `sql.Varchar(n)` | `field.column(type.sql.Varchar(n))` | `sql/varchar@1` | `varchar(n)` | `string` |
 | `sql.Char(n)` | `field.column(type.sql.Char(n))` | `sql/char@1` | `char(n)` | `string` |
 
-A default is written with the tag of its column type: `datetime`, `timestamp`, `date`, `time` or `duration`, as in ``@default(datetime`2024-01-01T00:00:00`)``. [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the stored form of each.
+A number default is written as a number, such as `@default(1.5)` on a `Decimal` or `Float`, and a `Decimal` default may also be quoted text, `@default("0.07")`; it is stored as the column prints it, and one with more digits after the point than the column's scale is refused. A date, time, bytes or JSON default is written with the tag of its column type: `datetime`, `timestamp`, `date`, `time`, `duration`, `longblob` or `json`, as in ``@default(datetime`2024-01-01T00:00:00`)``. [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the stored form of each.
 
 ## Across targets
 
@@ -307,19 +361,19 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 
 | Concept | Prisma 6/7 name | PostgreSQL | SQLite | MySQL | MongoDB |
 | --- | --- | --- | --- | --- | --- |
-| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` (an `Int4`) | — (`Int` stores a 64-bit `integer`) | `Int` | `Int` (an `Int32`) |
-| 64-bit integer | `BigInt` | `BigInt` (an `Int8BigInt`) | `BigInt` (an `IntegerBigInt`) | `BigInt` | `BigInt` (an `Int64BigInt`) |
-| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigInt(as: number)` | `BigInt(as: number)` (an `IntegerNumber`) | — | `BigInt(as: number)` (an `Int64Number`) |
-| double | `Float` | `Float` | `Float` (a `Real`) | — | `Float` (a `Double`) |
-| decimal | `Decimal` | `Decimal` (a `NumericString`) | `Decimal` (a `DecimalString`) | — | `Decimal` (a `Decimal128`) |
-| boolean | `Boolean` | `Boolean` | `Boolean` (an `IntegerBoolean`) | — | `Boolean` (a `Bool`) |
+| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` (an `Int4`) | — (`Int` stores a 64-bit `integer`) | `Int` (an `Int4`) | `Int` (an `Int32`) |
+| 64-bit integer | `BigInt` | `BigInt` (an `Int8BigInt`) | `BigInt` (an `IntegerBigInt`) | `BigInt` (an `Int8BigInt`) | `BigInt` (an `Int64BigInt`) |
+| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigInt(as: number)` | `BigInt(as: number)` (an `IntegerNumber`) | `BigInt(as: number)` (an `Int8Number`) | `BigInt(as: number)` (an `Int64Number`) |
+| double | `Float` | `Float` | `Float` (a `Real`) | `Float` (a `Float8`) | `Float` (a `Double`) |
+| decimal | `Decimal` | `Decimal` (a `NumericString`) | `Decimal` (a `DecimalString`) | `Decimal` (a `NumericString(65, 30)`) | `Decimal` (a `Decimal128`) |
+| boolean | `Boolean` | `Boolean` | `Boolean` (an `IntegerBoolean`) | `Boolean` (a `Bool`) | `Boolean` (a `Bool`) |
 | timestamp | `DateTime` | `DateTime` (a `TimestamptzJsDate(3)`) | `DateTime` (a `DatetimeJsDate`) | `DateTime` (a `DatetimeJsDate(3)`) | `DateTime` (a `DateJsDate`) |
 | calendar date | `DateTime @db.Date` (on MongoDB an instant; see below) | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) | `Date` (a `DateString`) |
 | time of day | `DateTime @db.Time` | `Time` (a `TimeString`) | `Time` (a `TimeString`) | `Time` (a `TimeString(6)`) | `Time` (a `TimeString`) |
 | duration | — | `Duration` (an `IntervalString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) | `Duration` (a `DurationString`) |
-| text | `String` | `String` | `String` (a `Text`) | `String` | `String` (a `BsonString`) |
-| bytes | `Bytes` | `Bytes` | `Bytes` (a `Blob`) | — | `Bytes` (a `Binary`) |
-| JSON | `Json` (a `jsonb` column on PostgreSQL) | `Json` (a `PlainJson`), `Json(storage: jsonb)` (a `Jsonb`) | `Json` (a `PlainJson`) | — | `Json` (a `PlainJson`) |
+| text | `String` | `String` | `String` (a `Text`) | `String` (a `Varchar(191)`) | `String` (a `BsonString`) |
+| bytes | `Bytes` | `Bytes` | `Bytes` (a `Blob`) | `Bytes` (a `Longblob`) | `Bytes` (a `Binary`) |
+| JSON | `Json` (a `jsonb` column on PostgreSQL) | `Json` (a `PlainJson`), `Json(storage: jsonb)` (a `Jsonb`) | `Json` (a `PlainJson`) | `Json` (a `PlainJson`) | `Json` (a `PlainJson`) |
 | any value | — | — | — | — | `Bson` |
 | ObjectId | `String @db.ObjectId` (MongoDB) | — | — | — | `ObjectId` |
 

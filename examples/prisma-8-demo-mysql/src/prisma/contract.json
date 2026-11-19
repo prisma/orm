@@ -12,6 +12,10 @@
       "model": "Post",
       "namespace": "__unbound__"
     },
+    "Product": {
+      "model": "Product",
+      "namespace": "__unbound__"
+    },
     "User": {
       "model": "User",
       "namespace": "__unbound__"
@@ -178,6 +182,114 @@
               },
               "namespaceId": "__unbound__",
               "table": "Post"
+            }
+          },
+          "Product": {
+            "fields": {
+              "details": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "inStock": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/boolean@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "notes": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mysql/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "price": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "rating": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/double@1",
+                  "kind": "scalar"
+                }
+              },
+              "sold": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/bigintnumber@1",
+                  "kind": "scalar"
+                }
+              },
+              "thumbnail": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/longblob@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "details": {
+                  "column": "details"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "inStock": {
+                  "column": "inStock"
+                },
+                "name": {
+                  "column": "name"
+                },
+                "notes": {
+                  "column": "notes"
+                },
+                "price": {
+                  "column": "price"
+                },
+                "rating": {
+                  "column": "rating"
+                },
+                "sold": {
+                  "column": "sold"
+                },
+                "thumbnail": {
+                  "column": "thumbnail"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Product"
             }
           },
           "User": {
@@ -380,6 +492,82 @@
               },
               "uniques": []
             },
+            "Product": {
+              "columns": {
+                "details": {
+                  "codecId": "mysql/json@1",
+                  "dataType": "mysql/json",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "inStock": {
+                  "codecId": "mysql/boolean@1",
+                  "dataType": "mysql/boolean",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                },
+                "notes": {
+                  "codecId": "mysql/text@1",
+                  "dataType": "mysql/text",
+                  "nullable": true
+                },
+                "price": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "rating": {
+                  "codecId": "mysql/double@1",
+                  "dataType": "mysql/double",
+                  "nullable": false
+                },
+                "sold": {
+                  "codecId": "mysql/bigintnumber@1",
+                  "dataType": "mysql/bigint",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "thumbnail": {
+                  "codecId": "mysql/longblob@1",
+                  "dataType": "mysql/longblob",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "User": {
               "columns": {
                 "email": {
@@ -446,7 +634,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "e5204ea7419455b72c116d69a1487d13716cb36a17aaf355fd880275065a9a23"
+    "storageHash": "5e81775de42c006fbb5fcc3d03a8f0ad5a11e28e7f9d382bf5ef4e676cd46fb9"
   },
   "capabilities": {
     "sql": {

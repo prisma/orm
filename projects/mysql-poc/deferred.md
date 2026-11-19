@@ -71,9 +71,11 @@ The MySQL driver refuses a statement sent on a held connection after `release()`
 
 MariaDB has `INSERT … RETURNING` and `DELETE … RETURNING` but not `UPDATE … RETURNING`. MariaDB reports `returning: false`, as MySQL does, and every ORM write works through the slice 4 read-back (probed on 10.11). Splitting the capability would save a round trip on MariaDB inserts and deletes. It touches about ten places in `sql-orm-client`, the SQL builder's typed `ReturningCapability` and its three checks, and the Postgres and SQLite capability lists: about 400–700 lines of shared code, additive only if `returning` keeps its meaning for every statement kind.
 
-## MariaDB JSON and boolean columns (slice 6a, 2026-11-06)
+## MariaDB JSON and boolean columns (slice 6a, 2026-11-06) — resolved by the scalar convenience types
 
 MariaDB stores `JSON` as `longtext` with a `CHECK (json_valid(col))` constraint, and booleans as `tinyint(1)`. MySQL has neither data type yet, so nothing breaks today. When MySQL gets them, MariaDB needs its own data types that read these catalog forms.
+
+Resolved: MySQL now has `mysql/json` and `mysql/boolean`, and MariaDB shares them. MariaDB's catalog reader reads `information_schema.CHECK_CONSTRAINTS` and reports a `longtext` column with a column-level `json_valid` check named after the column as `json`, the text MySQL reports for the same column; it already reported a signed `tinyint(1)` as MySQL does. So MariaDB needs no data types of its own (`packages/3-targets/mysql/2-mariadb/2-adapter/src/core/migrations/catalog.ts`).
 
 ## MariaDB sessions set `tx_isolation`, which MariaDB 11.1 and later deprecate (slice 6a code review, 2026-11-06) — resolved in slice 6b-2
 
@@ -99,9 +101,11 @@ A read with includes reads every row before returning any, under both include st
 
 Resolved: the MySQL target contributes aggregate descriptors as the Postgres target does (`packages/3-targets/mysql/1-mysql/1-target/src/core/aggregates.ts`), listed by the MySQL adapter and, through its metadata, the MariaDB adapter. `count` and `sum` over integers read as numbers through the new codec `mysql/bigintnumber@1`; `countBigInt` and `sumBigInt` as bigints; `avg` over an integer is `CAST(SUM(x) AS DOUBLE) / COUNT(x)`, read through the new codec `mysql/double@1`, because `AVG(x)` is cut to nine decimal places when the server groups through a temporary table. MySQL's live include tests cover scalar includes and `combine()`, on both servers.
 
-## `mysql/bigintnumber@1` and `mysql/double` have no authoring name (slice 6b-2, 2026-11-18)
+## `mysql/bigintnumber@1` and `mysql/double` have no authoring name (slice 6b-2, 2026-11-18) — resolved by the scalar convenience types
 
 The two codecs type aggregate results only. No PSL type or `type.*` helper writes a column of them, because MySQL's explicit type names are still to be decided under ADR 322, so no aggregate takes them as input, and `mysql/double` claims no `double` column the catalog reports: introspection and `db verify` read a `double` column as they did before it existed. When ADR 322 names them, give them catalog texts and the aggregate rows over them, as Postgres's `Int8Number` and `Float8` have.
+
+Resolved: they are the explicit types `Int8Number` (`BigInt(as: number)`) and `Float8` (`Float`). `mysql/double` claims the catalog text `double`, so a `double` column is introspected and verified as `mysql/double`, and `sum`, `avg`, `min` and `max` take a column of either codec.
 
 ## `having` compares the mean of integers as `AVG`'s rounded decimal (slice 6b-2 round 2, 2026-11-18)
 

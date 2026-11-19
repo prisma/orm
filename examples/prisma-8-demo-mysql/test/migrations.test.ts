@@ -39,7 +39,7 @@ describe.skipIf(serverUrl === undefined)(
         exitCode: 0,
         result: {
           ok: true,
-          migrationsApplied: 2,
+          migrationsApplied: 3,
           perSpace: [
             {
               spaceId: 'app',
@@ -49,6 +49,7 @@ describe.skipIf(serverUrl === undefined)(
                 { label: expect.stringMatching(/^Create index Post_authorId_idx_\w+ on Post$/) },
                 { label: 'Add foreign key Post_authorId_fkey on Post' },
                 { label: 'Create table Event' },
+                { label: 'Create table Product' },
               ],
             },
           ],

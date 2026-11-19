@@ -167,7 +167,7 @@ authoring: {
 | Tag | Data type | Registered by |
 | --- | --- | --- |
 | `sql` | `sql/expression` | the SQL family |
-| `json` | `pg/json`; `sqlite/json` | each SQL target |
+| `json` | `pg/json`; `sqlite/json`; `mysql/json` | each SQL target |
 | `date`, `time`, `timetz`, `timestamp`, `timestamptz`, `interval` | the Postgres type of the same name | the Postgres target |
 | `bytea` | `pg/bytea`; the body is the hex text PostgreSQL prints, `` bytea`\x68656c6c6f` `` | the Postgres target |
 | `datetime` | `sqlite/datetime` | the SQLite target |
@@ -177,6 +177,7 @@ authoring: {
 | `blob` | `sqlite/blob`; the body is hex, `` blob`68656c6c6f` `` | the SQLite target |
 | `datetime`, `timestamp`, `date`, `time` | the MySQL type of the same name | the MySQL target |
 | `duration` | `mysql/duration` | the MySQL target |
+| `longblob` | `mysql/longblob`; the body is hex, `` longblob`68656c6c6f` `` | the MySQL target |
 | `json` | `mongo/json` | the MongoDB target |
 | `date` | `mongo/date`; the body is ISO 8601 with a UTC offset, stored as the text `Date.toISOString()` writes | the MongoDB target |
 | `time` | `mongo/time`; a time of day, stored with three fraction digits | the MongoDB target |
@@ -306,6 +307,10 @@ SQLite stores text, integers, reals and blobs, so its target declares `sqlite/te
 `sqlite/datetime@1` represents `sqlite/datetime` and `sqlite/json@1` represents `sqlite/json`. `sqlite/integer@1`, `sqlite/bigint@1`, `sqlite/bigintnumber@1` and `sql/int@1` all represent `sqlite/integer`: SQLite enforces no narrower integer range, so whether the application holds a `bigint` or a `number` is a codec's choice.
 
 It declares two more data types for values SQLite has no column type for ([ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md)). `sqlite/decimal` is stored as `sqlite/text`: decimal text without an exponent, without leading zeros and without a minus sign on zero, keeping trailing zeros. A default is written as quoted text, which it casts from `sqlite/text`, or as a whole number, which it casts from `sqlite/integer`; a number with a fraction is a `sqlite/real`, which it does not cast from. `sqlite/boolean` is stored as `sqlite/integer`, 0 or 1, and a default is written `true` or `false`. Each has one codec, `sqlite/decimal@1` and `sqlite/boolean@1`. `sqlite/boolean` is not represented by the codecs of `sqlite/integer`: it is a data type of its own that the same column type stores.
+
+### MySQL's scalar types
+
+Besides `mysql/int`, `mysql/bigint` and `mysql/text`, the MySQL target declares `mysql/decimal`, `mysql/double`, `mysql/boolean`, `mysql/longblob` and `mysql/json`, each named after the column type that stores it ([ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md)). `mysql/decimal` takes an optional `precision` from 1 to 65 and `scale` from 0 to 30. A column written without them is given the `decimal(10,0)` the server makes, or a scale of 0 for a precision alone, when the contract is built. Type parameters without a precision are those of no column, under which it reads any decimal, because a written value is first read under no type parameters and only then into its column; until the column's parameters are written, `mysql/decimal@1` checks a default against the `decimal(10,0)` the server makes. Its value is decimal text with exactly `scale` digits after the point, as the server prints it. A default is written as quoted text or as a number, which it casts from `mysql/int` and `mysql/bigint`, so a PSL number with a fraction is a `mysql/decimal`. `mysql/double` is a finite number and casts from the integer types and `mysql/decimal`. `mysql/boolean` claims `tinyint(1)` only, and a default is written `true` or `false`. `mysql/longblob` is stored as upper-case hex text and written with the `longblob` tag. `mysql/json` is the JSON document itself and written with the `json` tag; MariaDB's catalog reader reports MariaDB's `longtext` with a `json_valid` column check as `json`. Each has one codec, `mysql/decimal@1`, `mysql/double@1`, `mysql/boolean@1`, `mysql/longblob@1` and `mysql/json@1`, except `mysql/bigint`, which `mysql/bigint@1` and `mysql/bigintnumber@1` both represent.
 
 ### MySQL's date and time types
 

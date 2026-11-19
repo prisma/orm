@@ -97,6 +97,51 @@ describe('converting a MariaDB column row to the form MySQL 8.4 reports', () => 
     ).toBe('DEFAULT_GENERATED on update current_timestamp()');
   });
 
+  it.each([
+    ["X'00ff'", '0x00ff'],
+    ["X'C328'", '0xC328'],
+    ["X''", '0x'],
+  ])(
+    'reads the bytes literal %s as the hexadecimal literal MySQL reports, %s',
+    (mariadb, mysql) => {
+      expect(converted('longblob', mariadb)).toEqual({
+        type: 'longblob',
+        default: mysql,
+        extra: 'DEFAULT_GENERATED',
+      });
+    },
+  );
+
+  it.each([
+    ['longblob', "'abc'", '0x616263'],
+    ['blob', "'é'", '0xc3a9'],
+    ['longblob', "'a\\0b'", '0x610062'],
+  ])(
+    'reads the text default of a %s column, %s, as the expression default of the bytes it stores that MySQL reports, %s',
+    (type, mariadb, mysql) => {
+      expect(converted(type, mariadb)).toEqual({
+        type,
+        default: mysql,
+        extra: 'DEFAULT_GENERATED',
+      });
+    },
+  );
+
+  it.each([
+    ['varbinary(8)', "'\\0?'"],
+    ['binary(4)', "'a\\0\\0\\0'"],
+    ['varbinary(10)', "''"],
+  ])(
+    'keeps the default of a %s column, %s, as MariaDB reports it, since a byte that is not UTF-8 is reported as a question mark',
+    (type, mariadb) => {
+      expect(converted(type, mariadb)).toEqual({ type, default: mariadb, extra: '' });
+    },
+  );
+
+  it('reports the text of a function default byte by byte, as MySQL reports an expression default', () => {
+    expect(converted('longblob', "_binary'é'").default).toBe("_binary'\u00c3\u00a9'");
+  });
+
   it('leaves an auto_increment column as MariaDB reports it', () => {
     expect(converted('int(11)', null, 'auto_increment')).toEqual({
       type: 'int',
@@ -138,6 +183,81 @@ describe('reading the MariaDB catalog', () => {
       columns: [{ column_type: 'int', column_default: '7' }],
       readsExpression: false,
       expressionIsNull: true,
+    });
+  });
+});
+
+describe('reading MariaDB JSON columns', () => {
+  function catalogDriver(
+    columns: readonly MysqlColumnRow[],
+    checks: readonly { table_name: string; constraint_name: string; check_clause: string }[],
+  ): { driver: SqlControlDriverInstance<'mariadb'>; statements: string[] } {
+    const statements: string[] = [];
+    return {
+      statements,
+      driver: {
+        familyId: 'sql',
+        targetId: 'mariadb',
+        async query<Row>(sql: string) {
+          statements.push(sql);
+          const rows = sql.includes('information_schema.COLUMNS')
+            ? columns
+            : sql.includes('information_schema.CHECK_CONSTRAINTS')
+              ? checks
+              : sql.includes('information_schema.TABLES')
+                ? [{ table_name: 'T' }]
+                : [];
+          return { rows: rows as Row[] };
+        },
+        async close() {},
+      },
+    };
+  }
+
+  const named = (name: string, columnType: string): MysqlColumnRow => ({
+    ...column(columnType),
+    column_name: name,
+  });
+
+  it('reports a longtext column with its column-level json_valid check as json, as MySQL does, and any other longtext as longtext', async () => {
+    const { driver, statements } = catalogDriver(
+      [
+        named('doc', 'longtext'),
+        named('plain', 'longtext'),
+        named('otherCheck', 'longtext'),
+        named('tableCheck', 'longtext'),
+        named('notLongtext', 'text'),
+      ],
+      [
+        { table_name: 'T', constraint_name: 'doc', check_clause: 'json_valid(`doc`)' },
+        {
+          table_name: 'T',
+          constraint_name: 'otherCheck',
+          check_clause: 'octet_length(`otherCheck`) < 10',
+        },
+        { table_name: 'T', constraint_name: 'named', check_clause: 'json_valid(`tableCheck`)' },
+        {
+          table_name: 'T',
+          constraint_name: 'notLongtext',
+          check_clause: 'json_valid(`notLongtext`)',
+        },
+        { table_name: 'Other', constraint_name: 'plain', check_clause: 'json_valid(`plain`)' },
+      ],
+    );
+    const catalog = await readMariadbCatalog(driver);
+    const checkQuery = statements.find((sql) => sql.includes('CHECK_CONSTRAINTS'));
+    expect({
+      columns: Object.fromEntries(catalog.columns.map((row) => [row.column_name, row.column_type])),
+      readsColumnLevelChecksOnly: checkQuery?.includes("LEVEL = 'Column'"),
+    }).toEqual({
+      columns: {
+        doc: 'json',
+        plain: 'longtext',
+        otherCheck: 'longtext',
+        tableCheck: 'longtext',
+        notLongtext: 'text',
+      },
+      readsColumnLevelChecksOnly: true,
     });
   });
 });
