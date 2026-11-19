@@ -250,7 +250,7 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('says what to do for a sum and for a max past the safe integer range, which no column reads', async (test) => {
+    it('says what to do for a sum, a max and a raw query past the safe integer range, which no column reads', async (test) => {
       await withSeededDatabase(
         test,
         server,
@@ -267,6 +267,13 @@ export function describeOrmScalarTypes(server: LiveServer): void {
           ).rejects.toMatchObject(refusal);
           await expect(
             db.orm.Measure.aggregate((a) => ({ most: a.max('count') })),
+          ).rejects.toMatchObject(refusal);
+          await expect(
+            db.query(
+              db.raw.sql`SELECT \`count\` FROM \`Measure\` WHERE \`id\` = ${3}`
+                .returnsRow({ count: 'mysql/bigintnumber@1' })
+                .build(),
+            ),
           ).rejects.toMatchObject(refusal);
           expect(
             await db.orm.Measure.where((m) => m.id.lte(2)).aggregate((a) => ({
@@ -290,6 +297,48 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
+    it('sums a decimal past the widest decimal exactly without grouping, and as the largest value of its type, with no error, in a groupBy and on MariaDB in an include', async (test) => {
+      await withSeededDatabase(
+        test,
+        server,
+        [
+          ...measuresDatabase,
+          'INSERT INTO `Shelf` VALUES (2)',
+          `INSERT INTO \`Measure\` VALUES (1, 0, 0, ${DECIMAL_MAX}, 0, '', 1), (2, 0, 0, ${DECIMAL_MAX}, 0, '', 1), (3, 0, 0, -${DECIMAL_MAX}, 0, '', 2), (4, 0, 0, -${DECIMAL_MAX}, 0, '', 2)`,
+        ],
+        async (url) => {
+          await using db = server.client({ url, verifyMarker: false });
+          const exact = `1${'9'.repeat(35)}.${'9'.repeat(29)}8`;
+          const ungrouped = await db.orm.Measure.where((m) => m.shelfId.eq(1)).aggregate((a) => ({
+            total: a.sum('amount'),
+          }));
+          const grouped = await db.orm.Measure.groupBy('shelfId').aggregate((a) => ({
+            total: a.sum('amount'),
+          }));
+          const included = await db.orm.Shelf.include('measures', (m) => m.sum('amount'))
+            .orderBy((shelf) => shelf.id.asc())
+            .all();
+          const includedTotal =
+            server.expected.includedSumPastWidestDecimal === 'exact' ? exact : DECIMAL_MAX;
+          expect({
+            ungrouped,
+            grouped: [...grouped].sort((a, b) => a.shelfId - b.shelfId),
+            included,
+          }).toEqual({
+            ungrouped: { total: exact },
+            grouped: [
+              { shelfId: 1, total: DECIMAL_MAX },
+              { shelfId: 2, total: `-${DECIMAL_MAX}` },
+            ],
+            included: [
+              { id: 1, measures: includedTotal },
+              { id: 2, measures: `-${includedTotal}` },
+            ],
+          });
+        },
+      );
+    });
+
     it('compares a prepared decimal parameter with a decimal(65,0) column at full width only when it is declared with the precision and scale', async (test) => {
       await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
@@ -310,8 +359,9 @@ export function describeOrmScalarTypes(server: LiveServer): void {
         );
         await expect(undeclared.query(runtime, { v: forty }).toArray()).rejects.toMatchObject({
           code: 'RUNTIME.ENCODE_FAILED',
+          message: `Cannot write "${forty}" to a mysql/decimal@1 value declared without a precision: a value sent for it can have at most 35 digits before the point and 30 after it.`,
           fix: expect.stringContaining(
-            "For a prepared statement's parameter, declare the precision and scale of the column it is compared with",
+            'or declare the precision and scale of the column the value is compared with or written to',
           ),
         });
         expect(await declared.query(runtime, { v: forty }).toArray()).toEqual([{ id: 1 }]);

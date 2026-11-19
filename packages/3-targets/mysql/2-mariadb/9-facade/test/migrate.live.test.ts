@@ -194,7 +194,7 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
           if (!applied.ok) throw applied.failure;
           await driver.query('INSERT INTO `Edge` (`id`) VALUES (1)');
           const { rows } = await driver.query<Record<string, unknown>>(
-            'SELECT HEX(`noBytes`) AS noBytes, HEX(`bytes`) AS bytes, `blank`, `accented`, `jsonNull`, `jsonString`, `jsonArray`, `jsonObject`, `jsonAccented`, CAST(`zero` AS CHAR) AS zero, CAST(`whole` AS CHAR) AS whole, `off` FROM `Edge`',
+            'SELECT HEX(`noBytes`) AS noBytes, HEX(`bytes`) AS bytes, `blank`, `accented`, `jsonNull`, `jsonString`, `jsonArray`, `jsonObject`, `jsonAccented`, CAST(`zero` AS CHAR) AS zero, CAST(`whole` AS CHAR) AS whole, CAST(`wholeText` AS CHAR) AS wholeText, CAST(`wholeNumber` AS CHAR) AS wholeNumber, CAST(`zeroText` AS CHAR) AS zeroText, `off` FROM `Edge`',
           );
           expect(rows[0]).toEqual({
             noBytes: '',
@@ -208,6 +208,9 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
             jsonAccented: '{"k":"é€"}',
             zero: '0.00',
             whole: '-12',
+            wholeText: '12',
+            wholeNumber: '12',
+            zeroText: '0',
             off: '0',
           });
         }),

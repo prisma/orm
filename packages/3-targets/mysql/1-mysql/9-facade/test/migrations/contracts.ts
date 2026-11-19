@@ -158,7 +158,7 @@ export function contractWithScalarTypes() {
   }));
 }
 
-/** A table whose defaults are the empty or edge values of the bytes, text and JSON columns, whose reported forms differ from the others, and a whole number on a `decimal` written without a precision. */
+/** A table whose defaults are the empty or edge values of the bytes, text and JSON columns, whose reported forms differ from the others, and whole numbers, some written with a zero fraction, on a `decimal` written without a precision. */
 export function contractWithEdgeDefaults() {
   return defineContract({}, ({ field, model, type }) => ({
     models: {
@@ -176,6 +176,8 @@ export function contractWithEdgeDefaults() {
           jsonAccented: field.column(type.Json()).default({ k: 'é€😀' }),
           zero: field.column(type.Decimal({ precision: 10, scale: 2 })).default('0'),
           whole: field.column(type.NumericString()).default('-12'),
+          wholeText: field.column(type.NumericString()).default('12.0'),
+          zeroText: field.column(type.NumericString()).default('0.0'),
           off: field.column(type.Boolean()).default(false),
           tiny: field.column(type.Float()).default(5e-324),
         },

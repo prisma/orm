@@ -123,17 +123,31 @@ describe('a MySQL scalar convenience type', () => {
     });
   });
 
-  it('emits sql.Varchar(191) as String does, and NumericString without arguments as a bare decimal', () => {
+  it('emits sql.Varchar(191) as String does', () => {
     expect(emitted(model('v sql.Varchar(191)'))).toBe(emitted(model('v String')));
-    const bare = emit(model('v NumericString'));
-    expect(bare.ok && bare.value.storage.namespaces['__unbound__']).toMatchObject({
-      entries: { table: { event: { columns: { v: { codecId: 'mysql/decimal@1' } } } } },
+  });
+
+  it('emits NumericString without a precision or a scale as the decimal(10,0) the server makes, with the storage and storage hash of NumericString(10, 0)', () => {
+    const storageOf = (written: string) => {
+      const result = emit(model(`v ${written}`));
+      if (!result.ok) throw new Error(JSON.stringify(result.failure));
+      return JSON.parse(JSON.stringify(result.value.storage));
+    };
+    const tenZero = storageOf('NumericString(10, 0)');
+    expect(tenZero.namespaces['__unbound__'].entries.table.event.columns.v).toMatchObject({
+      codecId: 'mysql/decimal@1',
+      typeParams: { precision: 10, scale: 0 },
     });
+    expect([
+      storageOf('NumericString'),
+      storageOf('NumericString(10)'),
+      storageOf('Decimal(precision: 10, scale: 0)'),
+    ]).toEqual([tenZero, tenZero, tenZero]);
   });
 
   it('refuses a decimal default the column would round or cannot hold, showing the value and what to change', () => {
     expect(failure(model('f Decimal(precision: 10, scale: 2) @default(1.005)'))).toContain(
-      'a number a decimal(10,2) column holds without rounding: at most 8 digits before the point and 2 after it. 1.005 has 3 digits after the point: round it to 2.',
+      'a number a decimal(10,2) column holds without rounding: at most 8 digits before the point and 2 after it. 1.005 has 3 digits after the point: round it to at most 2 digits after the point.',
     );
     expect(failure(model('f Decimal(precision: 65, scale: 0) @default(1.5)'))).toContain(
       'a number a decimal(65,0) column holds without rounding: a whole number of at most 65 digits. 1.5 has 1 digit after the point: round it to a whole number.',
@@ -149,6 +163,31 @@ describe('a MySQL scalar convenience type', () => {
     expect(whole.ok && whole.value.storage.namespaces['__unbound__']).toMatchObject({
       entries: {
         table: { event: { columns: { v: { default: { kind: 'literal', value: '12' } } } } },
+      },
+    });
+  });
+
+  it('stores a default on NumericString without a precision as the decimal(10,0) column prints it', () => {
+    const result = emit(
+      model(
+        'text   NumericString @default("12.0")',
+        'number NumericString @default(12.0)',
+        'zero   NumericString @default("0.0")',
+        'ten    NumericString(10) @default("-12.00")',
+      ),
+    );
+    expect(result.ok && result.value.storage.namespaces['__unbound__']).toMatchObject({
+      entries: {
+        table: {
+          event: {
+            columns: {
+              text: { default: { kind: 'literal', value: '12' } },
+              number: { default: { kind: 'literal', value: '12' } },
+              zero: { default: { kind: 'literal', value: '0' } },
+              ten: { default: { kind: 'literal', value: '-12' } },
+            },
+          },
+        },
       },
     });
   });
@@ -223,7 +262,7 @@ describe('a MySQL scalar convenience type', () => {
           event: {
             columns: {
               v: { codecId: 'mysql/decimal@1', typeParams: { precision: 40, scale: 30 } },
-              w: { codecId: 'mysql/decimal@1', typeParams: { precision: 40 } },
+              w: { codecId: 'mysql/decimal@1', typeParams: { precision: 40, scale: 0 } },
             },
           },
         },
@@ -348,5 +387,29 @@ describe('a MySQL scalar convenience type in the TypeScript builder', () => {
       'a number a decimal(10,0) column holds without rounding: a whole number of at most 10 digits. 12.5 has 1 digit after the point: round it to a whole number.',
     );
     expect(() => withDefault('12')).not.toThrow();
+  });
+
+  it('builds NumericString without a precision or a scale as the decimal(10,0) the server makes, and stores its default as that column prints it, as in PSL', () => {
+    const storageOf = (args: readonly [] | readonly [number] | readonly [number, number]) =>
+      JSON.parse(
+        JSON.stringify(
+          defineContract({}, ({ type, field, model }) => ({
+            models: {
+              Event: model('Event', {
+                fields: {
+                  id: field.column(type.Int()).id(),
+                  v: field.column(type.NumericString(...args)).default('12.0'),
+                },
+              }),
+            },
+          })).storage,
+        ),
+      );
+    const tenZero = storageOf([10, 0]);
+    expect(tenZero.namespaces['__unbound__'].entries.table.Event.columns.v).toMatchObject({
+      typeParams: { precision: 10, scale: 0 },
+      default: { kind: 'literal', value: '12' },
+    });
+    expect([storageOf([]), storageOf([10])]).toEqual([tenZero, tenZero]);
   });
 });

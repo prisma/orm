@@ -113,20 +113,23 @@ describe('MySQL aggregate descriptors', () => {
       { precision: 65, scale: 0 },
       { precision: 65, scale: 0 },
     ],
-    [undefined, { precision: 32, scale: 0 }],
+    [{ precision: 10 }, { precision: 32, scale: 0 }],
   ])(
     'sums a decimal column of %j as the server types the total, a decimal of %j',
     (typeParams, total) => {
-      const input: CodecRef = {
-        codecId: 'mysql/decimal@1',
-        ...(typeParams === undefined ? {} : { typeParams }),
-      };
+      const input: CodecRef = { codecId: 'mysql/decimal@1', typeParams };
       expect(registry.resolve('sum', input)?.output).toEqual({
         codecId: 'mysql/decimal@1',
         typeParams: total,
       });
     },
   );
+
+  it('gives the sum of a decimal reference without a precision, which is of no column, no precision either', () => {
+    expect(registry.resolve('sum', { codecId: 'mysql/decimal@1' })?.output).toStrictEqual({
+      codecId: 'mysql/decimal@1',
+    });
+  });
 
   it('reads the sum and mean of a bigint read as a number as those of any integer', () => {
     expect({

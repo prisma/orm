@@ -34,13 +34,14 @@ import { errorColumnUnreadable, errorColumnUnwritable, mysqlError } from './erro
 
 type DecimalParams = typeof mysqlDecimalParams.infer;
 
-/** The digits before and after the point of the `DECIMAL(65, fraction)` a parameter of a column with `params` is cast to: 30 after the point, the most MySQL allows, unless the column needs more than 35 before it. */
+/** The digits before and after the point of the `DECIMAL(65, fraction)` a parameter of a column with `params` is cast to: 30 after the point, the most MySQL allows, unless the column needs more than 35 before it. Parameters without a precision are of no column, and are cast to the widest decimal, `DECIMAL(65,30)`. */
 function decimalParameterDigits(params: DataTypeParams): {
   readonly integer: number;
   readonly fraction: number;
 } {
-  const column = mysqlDecimalColumn(params);
   const { precision: widest, scale: finest } = MYSQL_WIDEST_DECIMAL;
+  const column =
+    params['precision'] === undefined ? MYSQL_WIDEST_DECIMAL : mysqlDecimalColumn(params);
   const fraction = Math.min(finest, widest - (column.precision - column.scale));
   return { integer: widest - fraction, fraction };
 }
@@ -56,39 +57,47 @@ function describeReceived(value: unknown): string {
   return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }
 
-function digitsAfterPoint(count: number): string {
-  return count === 0 ? 'none after it' : `${count} after it`;
+function digits(count: number): string {
+  return `${count} ${count === 1 ? 'digit' : 'digits'}`;
 }
 
-/** The refusal of decimal text the parameter's cast would round or clamp: it says what the column holds and, separately, what can be sent for it. */
+/** The refusal of decimal text the parameter's cast would round or clamp: it says what the column holds and, separately, what can be sent for it. A value declared without a precision has no column, so it says what can be sent and how to declare the column it is compared with. */
 function errorDecimalUnsendable(
   received: string,
   params: DataTypeParams,
   ctx: SqlCodecCallContext,
 ): StructuredError {
-  const column = mysqlDecimalColumn(params);
   const { integer, fraction } = decimalParameterDigits(params);
-  const sendable = `at most ${integer} digits before the point and ${digitsAfterPoint(fraction)}`;
-  const columnType = `decimal(${column.precision},${column.scale})`;
+  const sendable = `at most ${integer} digits before the point and ${fraction === 0 ? 'none' : fraction} after it`;
   const target =
     ctx.column === undefined
       ? `a ${MYSQL_DECIMAL_CODEC_ID} value`
       : `column "${ctx.column.table}"."${ctx.column.name}"`;
-  const declared = params['precision'] !== undefined;
-  const message = declared
-    ? `Cannot write ${received} to ${target}: a ${columnType} column holds ${decimalColumnHolds(column)}, and a value sent for it can have ${sendable}.`
-    : `Cannot write ${received} to ${target}, which has no precision: it is sent as a value of a ${columnType} column, which holds ${decimalColumnHolds(column)}, and can have ${sendable}.`;
-  const round = `${fraction === 0 ? 'Round the value to a whole number' : `Round the value to at most ${fraction} ${fraction === 1 ? 'digit' : 'digits'} after the point`}, and keep it below 10^${integer}.`;
-  return mysqlError('RUNTIME.ENCODE_FAILED', message, {
-    fix: declared
-      ? round
-      : `${round} For a prepared statement's parameter, declare the precision and scale of the column it is compared with, as in { codecId: '${MYSQL_DECIMAL_CODEC_ID}', typeParams: { precision: 65, scale: 0 } }.`,
-    meta: {
-      codecId: MYSQL_DECIMAL_CODEC_ID,
-      ...(ctx.column === undefined ? {} : { table: ctx.column.table, column: ctx.column.name }),
-      received: received.slice(0, 100),
-    },
-  });
+  const round =
+    fraction === 0
+      ? `Round the value to a whole number of at most ${digits(integer)}`
+      : `Round the value to at most ${digits(fraction)} after the point and keep at most ${digits(integer)} before it`;
+  const meta = {
+    codecId: MYSQL_DECIMAL_CODEC_ID,
+    ...(ctx.column === undefined ? {} : { table: ctx.column.table, column: ctx.column.name }),
+    received: received.slice(0, 100),
+  };
+  if (params['precision'] === undefined) {
+    return mysqlError(
+      'RUNTIME.ENCODE_FAILED',
+      `Cannot write ${received} to ${target} declared without a precision: a value sent for it can have ${sendable}.`,
+      {
+        fix: `${round}, or declare the precision and scale of the column the value is compared with or written to, as in { codecId: '${MYSQL_DECIMAL_CODEC_ID}', typeParams: { precision: 65, scale: 0 } }.`,
+        meta,
+      },
+    );
+  }
+  const column = mysqlDecimalColumn(params);
+  return mysqlError(
+    'RUNTIME.ENCODE_FAILED',
+    `Cannot write ${received} to ${target}: a decimal(${column.precision},${column.scale}) column holds ${decimalColumnHolds(column)}, and a value sent for it can have ${sendable}.`,
+    { fix: `${round}.`, meta },
+  );
 }
 
 /** The text the codec sends for an application value: decimal text without leading zeros or a minus sign on zero, which the parameter's cast holds exactly. */
@@ -131,7 +140,7 @@ export class MysqlDecimalCodec extends CodecImpl<
       fix: 'Read the column with a type that holds its value, or rewrite the row with a decimal number.',
     });
   }
-  /** The value, refused unless the column holds it: a column without a precision is the `decimal(10,0)` the server makes, which the data type cannot tell from no column. */
+  /** The value, refused unless the column holds it. A default is checked before the target writes the parameters the server gives a column written without them, so parameters without a precision are checked as the `decimal(10,0)` the server makes. */
   fromDataTypeValue(value: DataTypeValue<string>): string {
     return decimalTextInColumn(value.value, mysqlDecimalColumn(this.dataTypeParams));
   }

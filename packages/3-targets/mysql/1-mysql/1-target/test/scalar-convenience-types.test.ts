@@ -163,6 +163,15 @@ describe('the MySQL explicit scalar types', () => {
         { name: 'scale', value: 2 },
       ],
     ],
+    [
+      'NumericString',
+      [10, 0],
+      'Decimal',
+      [
+        { name: 'precision', value: 10 },
+        { name: 'scale', value: 0 },
+      ],
+    ],
     ['Varchar', [191], 'String', []],
     ['Varchar', [40], 'String', [{ name: 'length', value: 40 }]],
     ['Text', [], 'String', [{ name: 'storage', value: 'text' }]],
@@ -179,7 +188,7 @@ describe('the MySQL explicit scalar types', () => {
     ['NumericString', []],
     ['NumericString', [10]],
   ])(
-    'has no convenience call for %s(%j), whose scale a type choice cannot leave unwritten',
+    'has no convenience call for %s(%j) as written, since every Decimal call writes a scale',
     (explicit, args) => {
       expect(findAuthoringTypeChoiceCall({ namespace, call: { path: [explicit], args } })).toBe(
         undefined,

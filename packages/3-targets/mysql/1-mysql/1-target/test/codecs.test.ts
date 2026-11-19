@@ -218,10 +218,10 @@ describe('the MySQL number codecs name the column they cannot read', () => {
   );
 
   it.each<[string | number, string]>([
-    ['18014398509481982', 'a sum'],
-    [9007199254740994, 'a max or a raw query read as a number'],
+    ['18014398509481982', 'handed over as decimal text'],
+    [9007199254740994, 'handed over as a number'],
   ])(
-    'says what to do for every reader of %s past the safe integer range read without a column, %s',
+    'says what to do with %s, past the safe integer range and read without a column, %s',
     async (wire) => {
       await expect(
         mysqlBigintNumberDescriptor.factory()(instance).fromWire(wire, {}),

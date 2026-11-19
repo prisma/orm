@@ -152,8 +152,8 @@ export function decimalTextInColumn(
   if (digits.integer <= integer && digits.fraction <= column.scale) return text;
   const change =
     digits.fraction > column.scale
-      ? `${text} has ${counted(digits.fraction, 'digit')} after the point: round it to ${column.scale === 0 ? 'a whole number' : column.scale}`
-      : `${text} has ${counted(digits.integer, 'digit')} before the point: keep it below 10^${integer}, or widen the column`;
+      ? `${text} has ${counted(digits.fraction, 'digit')} after the point: round it to ${column.scale === 0 ? 'a whole number' : `at most ${counted(column.scale, 'digit')} after the point`}`
+      : `${text} has ${counted(digits.integer, 'digit')} before the point: keep it ${integer === 0 ? 'between -1 and 1' : `to at most ${counted(integer, 'digit')} before the point`}, or widen the column`;
   return refuseJsonValue(
     'mysql/decimal',
     `a number a decimal(${column.precision},${column.scale}) column holds without rounding: ${decimalColumnHolds(column)}. ${change}.`,
@@ -162,7 +162,7 @@ export function decimalTextInColumn(
 }
 
 /**
- * Reads decimal text under a column's `precision` and `scale`. Parameters without a precision are those of no column: every written value is read under no parameters before it is taken into its column, so they hold any decimal. A column written without a precision is the `decimal(10,0)` the server makes; its codec checks a value against that column.
+ * Reads decimal text under a column's `precision` and `scale`. Parameters without a precision are those of no column, so they hold any decimal: a written value is read first under no parameters, and then again under its column's. A column written without a precision is given the `decimal(10,0)` the server makes when the contract is built; until then its codec checks a default against that column.
  */
 const readDecimal: DataTypeReader = (json, params) => {
   if (typeof json !== 'string' || !isDecimalText(json)) {

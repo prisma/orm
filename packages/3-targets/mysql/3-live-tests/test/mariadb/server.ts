@@ -34,5 +34,6 @@ export const mariadbLiveServer: LiveServer = {
     oversizedOrderedInclude: 'returns every row',
     havingAboveExactMean: 'keeps the group',
     writeReadingWrittenTable: 'runs',
+    includedSumPastWidestDecimal: 'the largest value',
   },
 };
