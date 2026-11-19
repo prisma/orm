@@ -205,7 +205,6 @@ export default function postgresServerless<
       const adapter = stack.adapter.create(stack);
       const driver = driverDescriptor.create({
         cursor: toDriverCursorOptions(cursor),
-        preparedStatements: options.prepare !== 'client',
       });
 
       const pgClient = suppressIdleConnectionErrors(
@@ -224,6 +223,7 @@ export default function postgresServerless<
         adapter,
         driver,
         ...toRuntimeOptions(options),
+        prepare: options.prepare,
         closeRefusal: 'when-idle',
       });
       const connection = createConnection(runtime);

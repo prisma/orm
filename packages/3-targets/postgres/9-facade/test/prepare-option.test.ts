@@ -1,60 +1,58 @@
+import type * as DriverModule from '@internal/driver-postgres/runtime';
+import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { contractFromJson } from '../src/static/contract-from-json';
 import type { Contract } from './fixtures/generated/contract';
 import fixtureContractJson from './fixtures/generated/contract.json' with { type: 'json' };
 
-interface RecordedQuery {
-  readonly name?: string | undefined;
-  readonly text?: string | undefined;
-  readonly values?: readonly unknown[] | undefined;
-}
-
 const recorded = vi.hoisted(() => ({
-  queries: [] as RecordedQuery[],
+  requests: [] as SqlExecuteRequest[],
 }));
 
-vi.mock('pg', () => {
-  /** Records query configuration objects for assertions and resolves with a fixed single-row result. */
-  function query(request: unknown) {
-    if (typeof request === 'object' && request !== null) {
-      recorded.queries.push(request as RecordedQuery);
-    }
-    return Promise.resolve({ rows: [{ id: 1 }], rowCount: 1 });
+vi.mock('@internal/driver-postgres/runtime', async (importOriginal) => {
+  const actual = await importOriginal<typeof DriverModule>();
+
+  function createRecordingDriver() {
+    return {
+      connect: vi.fn().mockResolvedValue(undefined),
+      acquireConnection: vi.fn().mockResolvedValue({
+        release: vi.fn().mockResolvedValue(undefined),
+      }),
+      async *query(request: SqlExecuteRequest) {
+        recorded.requests.push(request);
+        yield { id: 1 };
+      },
+      execute: vi.fn().mockImplementation(async (request: SqlExecuteRequest) => {
+        recorded.requests.push(request);
+        return { affectedRows: 1 };
+      }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
   }
 
-  class Pool {
-    on = vi.fn().mockReturnThis();
-    connect = vi.fn().mockImplementation(async () => ({
-      query,
-      release: vi.fn(),
-      on: vi.fn(),
-      off: vi.fn(),
-      removeListener: vi.fn(),
-    }));
-    end = vi.fn().mockResolvedValue(undefined);
-    totalCount = 0;
-    idleCount = 0;
-    waitingCount = 0;
-  }
-
-  class Client {
-    on = vi.fn().mockReturnThis();
-    connect = vi.fn().mockResolvedValue(undefined);
-    query = vi.fn().mockImplementation(query);
-    end = vi.fn().mockResolvedValue(undefined);
-  }
-
-  return { Pool, Client };
+  return {
+    ...actual,
+    default: { ...actual.default, create: createRecordingDriver },
+  };
 });
 
 import postgres from '../src/runtime/postgres';
 import postgresServerless from '../src/runtime/postgres-serverless';
 
+type PrepareMode = 'client' | 'database' | undefined;
+
 const fixtureContract = contractFromJson<Contract>(fixtureContractJson);
 const url = 'postgres://localhost:5432/db';
 
-async function runPreparedQueryThroughPostgres(prepare?: 'client' | 'database'): Promise<void> {
+function sentRequests() {
+  return recorded.requests.map((request) => ({
+    params: request.params,
+    hasHandle: Object.hasOwn(request, 'preparedStatementHandle'),
+  }));
+}
+
+async function runPreparedQueryThroughPostgres(prepare: PrepareMode) {
   await using db = postgres({
     contract: fixtureContract,
     url,
@@ -67,11 +65,12 @@ async function runPreparedQueryThroughPostgres(prepare?: 'client' | 'database'):
       .where((f, fns) => fns.eq(f.id, p.id))
       .build(),
   );
-  expect(await prepared.query(db.runtime(), { id: 41 }).toArray()).toEqual([{ id: 1 }]);
-  expect(await prepared.query(db.runtime(), { id: 42 }).toArray()).toEqual([{ id: 1 }]);
+  await prepared.query(db.runtime(), { id: 41 }).toArray();
+  await prepared.query(db.runtime(), { id: 42 }).toArray();
+  return sentRequests();
 }
 
-async function runPreparedQueryThroughServerless(prepare?: 'client' | 'database'): Promise<void> {
+async function runPreparedQueryThroughServerless(prepare: PrepareMode) {
   const serverless = postgresServerless({
     contract: fixtureContract,
     verifyMarker: false,
@@ -84,62 +83,37 @@ async function runPreparedQueryThroughServerless(prepare?: 'client' | 'database'
       .where((f, fns) => fns.eq(f.id, p.id))
       .build(),
   );
-  expect(await prepared.query(db.runtime(), { id: 41 }).toArray()).toEqual([{ id: 1 }]);
-  expect(await prepared.query(db.runtime(), { id: 42 }).toArray()).toEqual([{ id: 1 }]);
+  await prepared.query(db.runtime(), { id: 41 }).toArray();
+  await prepared.query(db.runtime(), { id: 42 }).toArray();
+  return sentRequests();
 }
 
+const withHandle = [
+  { params: [41], hasHandle: true },
+  { params: [42], hasHandle: true },
+];
+const withoutHandle = [
+  { params: [41], hasHandle: false },
+  { params: [42], hasHandle: false },
+];
+
 beforeEach(() => {
-  recorded.queries.length = 0;
+  recorded.requests.length = 0;
 });
 
-describe('postgres() prepare option', () => {
-  it('uses server-side prepared statements by default', async () => {
-    await runPreparedQueryThroughPostgres();
-
-    expect(recorded.queries.length).toBeGreaterThan(0);
-    expect(recorded.queries.at(-1)?.name).toBe('pn_1');
+describe.each([
+  ['postgres()', runPreparedQueryThroughPostgres],
+  ['postgresServerless()', runPreparedQueryThroughServerless],
+])('the %s prepare option', (_facade, runPreparedQuery) => {
+  it('hands the driver a prepared-statement handle by default', async () => {
+    expect(await runPreparedQuery(undefined)).toEqual(withHandle);
   });
 
-  it('uses server-side prepared statements when prepare is database', async () => {
-    await runPreparedQueryThroughPostgres('database');
-
-    expect(recorded.queries.length).toBeGreaterThan(0);
-    expect(recorded.queries.at(-1)?.name).toBe('pn_1');
+  it('hands the driver a prepared-statement handle when prepare is database', async () => {
+    expect(await runPreparedQuery('database')).toEqual(withHandle);
   });
 
-  it('issues anonymous queries when prepare is client', async () => {
-    await runPreparedQueryThroughPostgres('client');
-
-    expect(recorded.queries.length).toBeGreaterThan(0);
-    expect(recorded.queries.slice(-2).map(({ name, values }) => ({ name, values }))).toEqual([
-      { name: undefined, values: [41] },
-      { name: undefined, values: [42] },
-    ]);
-  });
-});
-
-describe('postgresServerless() prepare option', () => {
-  it('uses server-side prepared statements by default', async () => {
-    await runPreparedQueryThroughServerless();
-
-    expect(recorded.queries.length).toBeGreaterThan(0);
-    expect(recorded.queries.at(-1)?.name).toBe('pn_1');
-  });
-
-  it('uses server-side prepared statements when prepare is database', async () => {
-    await runPreparedQueryThroughServerless('database');
-
-    expect(recorded.queries.length).toBeGreaterThan(0);
-    expect(recorded.queries.at(-1)?.name).toBe('pn_1');
-  });
-
-  it('issues anonymous queries when prepare is client', async () => {
-    await runPreparedQueryThroughServerless('client');
-
-    expect(recorded.queries.length).toBeGreaterThan(0);
-    expect(recorded.queries.slice(-2).map(({ name, values }) => ({ name, values }))).toEqual([
-      { name: undefined, values: [41] },
-      { name: undefined, values: [42] },
-    ]);
+  it('sends prepared statements without a handle when prepare is client', async () => {
+    expect(await runPreparedQuery('client')).toEqual(withoutHandle);
   });
 });

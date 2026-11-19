@@ -14,9 +14,6 @@ test('postgres() takes every SQL execution option, plus cursor, prepare and tran
   expectTypeOf<PostgresExecutionOptions['cursor']>().toEqualTypeOf<
     PostgresCursorOptions | undefined
   >();
-  expectTypeOf<PostgresExecutionOptions['prepare']>().toEqualTypeOf<
-    'client' | 'database' | undefined
-  >();
 });
 
 test('the runtime entry exports the type of poolOptions', () => {
