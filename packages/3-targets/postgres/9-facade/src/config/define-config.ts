@@ -1,24 +1,21 @@
-import postgresAdapter from '@internal/adapter-postgres/control';
-import type {
-  ContractConfig,
-  FormatterConfig,
-  PrismaNextConfig,
-} from '@internal/config/config-types';
+import type { ContractConfig, FormatterConfig, PrismaConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
 } from '@internal/config/config-types';
-import postgresDriver from '@internal/driver-postgres/control';
-import sql from '@internal/family-sql/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
-import { typescriptContractFromPath } from '@internal/sql-contract-ts/config-types';
+import {
+  refuseOtherTargetOnLoad,
+  typescriptContractFromPath,
+} from '@internal/sql-contract-ts/config-types';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
-import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
+import { contractBuilderModule, contractTypesModule, controlComponents } from './components';
+import { moduleBase } from './module-base';
 
 export interface PostgresConfigOptions {
   /** A contract file path (`.prisma` or `.ts`), or a ready `ContractConfig` such as `prisma7Schema(...)`. */
@@ -34,9 +31,11 @@ export interface PostgresConfigOptions {
   readonly formatter?: FormatterConfig;
 }
 
+const postgresContractTarget = { target: postgresPackRef, contractBuilderModule };
+
 function contractConfigFromPath(contractPath: string, output: string): ContractConfig {
   return extname(contractPath) === '.ts'
-    ? typescriptContractFromPath(contractPath, output)
+    ? typescriptContractFromPath(contractPath, output, postgresContractTarget)
     : prismaContract(contractPath, {
         output,
         target: postgresPackRef,
@@ -59,22 +58,22 @@ function resolveContractConfig(options: PostgresConfigOptions): ContractConfig {
     explicitOutput ??
     options.contract.output ??
     (firstInput !== undefined ? defaultContractOutputPath(firstInput) : undefined);
-  return { ...options.contract, ...ifDefined('output', output) };
+  return {
+    ...refuseOtherTargetOnLoad(options.contract, postgresContractTarget),
+    ...ifDefined('output', output),
+  };
 }
 
-export function defineConfig(options: PostgresConfigOptions): PrismaNextConfig<'sql', 'postgres'> {
+export function defineConfig(options: PostgresConfigOptions): PrismaConfig<'sql', 'postgres'> {
   const extensions = options.extensions ?? [];
   const contractConfig = resolveContractConfig(options);
 
   return coreDefineConfig({
-    family: sql,
-    target: postgres,
-    adapter: postgresAdapter,
-    driver: postgresDriver,
+    ...controlComponents,
     extensions,
-    contract: contractConfig,
+    contract: { ...contractConfig, typesModule: contractTypesModule },
+    migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
-    ...ifDefined('migrations', options.migrations),
     ...ifDefined('formatter', options.formatter),
   });
 }

@@ -1,4 +1,3 @@
-import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
@@ -39,11 +38,11 @@ export async function renderSnapshotDeclarations(args: {
   readonly client: Pick<ControlClient, 'renderContractDts'>;
   readonly contractJson: unknown;
   readonly contractJsonPath: string;
-  readonly resolveImportSpecifier: ImportSpecifierResolver;
+  readonly typesModule: string;
 }): Promise<Result<string, CliStructuredError>> {
   const rendered = await args.client.renderContractDts({
     contract: args.contractJson,
-    resolveImportSpecifier: args.resolveImportSpecifier,
+    typesModule: args.typesModule,
   });
   if (!rendered.ok) {
     return notOk(errorContractDtsRenderFailed(args.contractJsonPath, rendered.failure));

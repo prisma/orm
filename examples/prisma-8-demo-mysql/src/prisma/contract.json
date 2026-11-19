@@ -453,8 +453,11 @@
       "defaultInInsert": true,
       "enums": true,
       "foreignKeys": true,
+      "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "limit": true,
-      "orderBy": true
+      "orderBy": true,
+      "outerReferencesInDerivedTables": true
     }
   },
   "extensions": {},

@@ -273,11 +273,13 @@ describe('a namespace rename typed at the prompt, then planned again', () => {
     const first: PlannedQuestions = {
       dataLoss: [dropReceipt, retypeNote],
       accessChanges: [],
+      temporaryValues: [],
       namespaces,
     };
     const second: PlannedQuestions = {
       dataLoss: [retypeNote],
       accessChanges: [],
+      temporaryValues: [],
       namespaces: { removed: [], added: [] },
     };
 
@@ -322,6 +324,7 @@ describe('a namespace rename typed at the prompt, then planned again', () => {
     const first: PlannedQuestions = {
       dataLoss: [drop('Invoice', 0), drop('Receipt', 1)],
       accessChanges: [],
+      temporaryValues: [],
       namespaces: { removed: ['billing'], added: ['finance'] },
     };
     const asked: string[] = [];
@@ -354,8 +357,8 @@ describe('a namespace rename typed at the prompt, then planned again', () => {
       replan: async (planned) =>
         ok(
           planned.length === 1
-            ? { dataLoss: [drop('Invoice', 0)], accessChanges: [] }
-            : { dataLoss: [], accessChanges: [] },
+            ? { dataLoss: [drop('Invoice', 0)], accessChanges: [], temporaryValues: [] }
+            : { dataLoss: [], accessChanges: [], temporaryValues: [] },
         ),
     });
 

@@ -1,0 +1,80 @@
+// use prisma-8
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  role  Role
+  posts Post[]
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId Int
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model Counter {
+  id  Int    @id
+  big BigInt
+}
+
+model Account {
+  id     Int     @id
+  name   String
+  events Event[]
+}
+
+model Event {
+  id        BigInt   @id
+  at        DateTime
+  account   Account  @relation(fields: [accountId], references: [id])
+  accountId Int
+}
+
+model Author {
+  id    Int    @id
+  notes Note[]
+}
+
+model Note {
+  id       Int     @id
+  body     String
+  summary  String?
+  author   Author  @relation(fields: [authorId], references: [id])
+  authorId Int
+}
+
+model Tick {
+  at    DateTime @id
+  label String
+}
+
+model Task {
+  id       Int     @id
+  title    String
+  type     String
+  parentId Int?
+  parent   Task?   @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks Task[]  @relation("Subtasks")
+
+  @@discriminator(type)
+}
+
+model Bug {
+  severity String
+
+  @@base(Task, "bug")
+}
+
+model Feature {
+  priority Int
+
+  @@base(Task, "feature")
+  @@map("Feature")
+}

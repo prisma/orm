@@ -36,14 +36,14 @@ describe('a read of a field helper the MongoDB builder does not have', () => {
   it.each([
     ['objectId', 'field.scalar(type.ObjectId())'],
     ['string', 'field.scalar(type.String())'],
-    ['double', 'field.scalar(type.Double())'],
-    ['int32', 'field.scalar(type.Int32())'],
-    ['bool', 'field.scalar(type.Bool())'],
+    ['double', 'field.scalar(type.Float())'],
+    ['int32', 'field.scalar(type.Int())'],
+    ['bool', 'field.scalar(type.Boolean())'],
     ['date', 'field.scalar(type.DateTime())'],
-    ['int64', 'field.scalar(type.Int64())'],
-    ['int64Number', 'field.scalar(type.Int64Number())'],
-    ['decimal128', 'field.scalar(type.Decimal128())'],
-    ['binary', 'field.scalar(type.Binary())'],
+    ['int64', 'field.scalar(type.BigInt())'],
+    ['int64Number', "field.scalar(type.BigInt({ as: 'number' }))"],
+    ['decimal128', 'field.scalar(type.Decimal())'],
+    ['binary', 'field.scalar(type.Bytes())'],
     ['json', 'field.scalar(type.Json())'],
     ['bson', 'field.scalar(type.Bson())'],
     ['vector', 'field.scalar(type.Vector()), or field.scalar(type.Vector(n)) for a length n'],
@@ -58,6 +58,8 @@ describe('a read of a field helper the MongoDB builder does not have', () => {
   it.each([
     ['mongo/string@1', 'field.scalar(type.String())'],
     ['mongo/objectId@1', 'field.scalar(type.ObjectId())'],
+    ['mongo/int64@1', 'field.scalar(type.BigInt())'],
+    ['mongo/int64Number@1', "field.scalar(type.BigInt({ as: 'number' }))"],
     ['mongo/vector@1', 'field.scalar(type.Vector())'],
   ])('refuses field.scalar given the codec id %s, naming the type to write', (codecId, rewrite) => {
     expect(() => Reflect.apply(field.scalar, field, [codecId])).toThrow(

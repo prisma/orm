@@ -12,8 +12,10 @@ import {
   type MongoContract,
   ownStoredNameOf,
   propertyBsonTypesOf,
+  type SelectedVariant,
+  selectedVariantOf,
   validatorDocumentShapesOf,
-  variantFilterOf,
+  variantFilter,
 } from '@internal/mongo-contract';
 import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
@@ -48,7 +50,8 @@ export interface TypeChange {
   readonly field: string;
   readonly from: FieldShape;
   readonly to: FieldShape;
-  readonly filter: Document | undefined;
+  /** The variant whose documents the change is about; `undefined` for a root model's documents. */
+  readonly variant: SelectedVariant | undefined;
   /** The cast's types, when every old type casts to the new one keeping what the values mean; `undefined` when only a conversion can change the values. */
   readonly cast: Pick<CastFieldOptions, 'from' | 'to' | 'list'> | undefined;
 }
@@ -124,7 +127,7 @@ export function castFieldCallOf(change: TypeChange): CastFieldCall | undefined {
         collection: change.collection,
         field: change.field,
         ...change.cast,
-        ...(change.filter === undefined ? {} : { filter: change.filter }),
+        ...(change.variant === undefined ? {} : { filter: variantFilter(change.variant) }),
       });
 }
 
@@ -166,7 +169,7 @@ export function planFieldTypeChanges(
             field: storedName,
             from,
             to,
-            filter: variantFilterOf(input.contract.domain, destination),
+            variant: selectedVariantOf(input.contract.domain, destination),
           }),
         ];
       });
@@ -219,11 +222,8 @@ export function planValidatorTypeChanges(input: {
     const planned = new Map<string, TypeChange>();
     for (const { shape, field, from, to } of changes) {
       const whole = shape.discriminator === undefined || sameEverywhere(field, shape.rootIndex);
-      const filter =
-        whole || shape.discriminator === undefined
-          ? undefined
-          : { [shape.discriminator.field]: shape.discriminator.value };
-      const key = JSON.stringify([shape.rootIndex, field, filter ?? null]);
+      const variant = whole ? undefined : shape.discriminator;
+      const key = JSON.stringify([shape.rootIndex, field, variant ?? null]);
       if (planned.has(key)) continue;
       planned.set(
         key,
@@ -234,7 +234,7 @@ export function planValidatorTypeChanges(input: {
           field,
           from,
           to,
-          filter,
+          variant,
         }),
       );
     }

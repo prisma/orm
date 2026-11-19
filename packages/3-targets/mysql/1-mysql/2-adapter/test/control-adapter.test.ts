@@ -53,7 +53,16 @@ function catalogDriver(tables: readonly string[], rows: readonly Record<string, 
 describe('MysqlControlAdapter', () => {
   it('reports the capabilities of MySQL 8.4', () => {
     expect(mysqlAdapterCapabilities).toEqual({
-      sql: { orderBy: true, limit: true, foreignKeys: true, enums: true, defaultInInsert: true },
+      sql: {
+        orderBy: true,
+        limit: true,
+        foreignKeys: true,
+        enums: true,
+        defaultInInsert: true,
+        jsonAgg: true,
+        outerReferencesInDerivedTables: true,
+        jsonAggWithoutTruncation: true,
+      },
     });
   });
 
@@ -197,8 +206,8 @@ describe('MysqlControlAdapter', () => {
     expect(await adapter.updateMarker(driver, 'app', 'sha256:other', destination)).toBe(false);
     expect(await adapter.updateMarker(driver, 'app', 'sha256:old', destination)).toBe(true);
     expect(driver.statements).toEqual([
-      'SELECT core_hash, invariants FROM `_prisma_marker` WHERE space = ? FOR UPDATE',
-      'SELECT core_hash, invariants FROM `_prisma_marker` WHERE space = ? FOR UPDATE',
+      'SELECT core_hash, meta, invariants FROM `_prisma_marker` WHERE space = ? FOR UPDATE',
+      'SELECT core_hash, meta, invariants FROM `_prisma_marker` WHERE space = ? FOR UPDATE',
       'UPDATE `_prisma_marker` SET core_hash = ?, profile_hash = ?, updated_at = CURRENT_TIMESTAMP(3), invariants = ? WHERE space = ? AND core_hash = ?',
     ]);
   });
@@ -207,8 +216,8 @@ describe('MysqlControlAdapter', () => {
     const adapter: SqlControlAdapter<'mysql'> = createAdapter();
     const queryLoweringRefusal = {
       code: 'RUNTIME.AST_UNSUPPORTED',
-      message: 'Lowering queries is not yet supported on MySQL.',
-      meta: { target: 'mysql', feature: 'Lowering queries' },
+      message: 'Lowering queries is not yet supported on MySQL and MariaDB.',
+      meta: { feature: 'Lowering queries' },
     };
     await expect(adapter.lowerToExecuteRequest({} as never)).rejects.toMatchObject(
       queryLoweringRefusal,
@@ -232,11 +241,11 @@ describe('MysqlControlAdapter', () => {
     const refusal = { code: 'RUNTIME.DDL_UNSUPPORTED', meta: { surface: 'control-adapter' } };
     await expect(adapter.lowerToExecuteRequest(new OtherDdl())).rejects.toMatchObject({
       ...refusal,
-      message: 'The MySQL control adapter cannot lower the DDL node "other".',
+      message: 'The MySQL and MariaDB control adapter cannot lower the DDL node "other".',
     });
     await expect(adapter.lowerToExecuteRequest(new ForeignDdl())).rejects.toMatchObject({
       ...refusal,
-      message: 'The MySQL control adapter cannot lower the DDL node "drop-type".',
+      message: 'The MySQL and MariaDB control adapter cannot lower the DDL node "drop-type".',
     });
   });
 

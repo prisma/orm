@@ -57,10 +57,12 @@ describe('tokenizeMysqlSql', () => {
     ]);
   });
 
-  it('refuses an executable /*! comment, but not an optimizer hint', () => {
-    expect(() => tokenizeMysqlSql('SELECT /*!80000 1 */')).toThrow(
-      expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }),
-    );
+  it("refuses an executable /*! comment, and MariaDB's /*M! one, but not an optimizer hint", () => {
+    for (const sql of ['SELECT /*!80000 1 */', 'SELECT /*M!100100 1 */']) {
+      expect(() => tokenizeMysqlSql(sql)).toThrow(
+        expect.objectContaining({ code: 'RUNTIME.AST_INVALID', meta: { position: 7 } }),
+      );
+    }
     expect(placeholders('SELECT /*+ SET_VAR(a = 1) */ ?1')).toEqual(['?1']);
   });
 });

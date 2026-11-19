@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
-import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import { detect } from 'package-manager-detector/detect';
 import { basename, dirname, isAbsolute, join, relative } from 'pathe';
 import type { PackageManager } from '../commands/init/detect-package-manager';
-import { formatRunCommand } from '../commands/init/detect-package-manager';
+import { formatRunCommand, formatRunScriptCommand } from '../commands/init/detect-package-manager';
 import {
   errorInitInvalidManifest,
   errorInitInvalidTsconfig,
@@ -27,19 +26,9 @@ import {
 } from '../commands/init/prisma7-side-by-side';
 import { findStaleArtifacts, removeDependency } from '../commands/init/reinit-cleanup';
 import { legacySkillDirs } from '../commands/init/skill-sources';
-import {
-  configFile,
-  dbFile,
-  prisma7ConfigFile,
-  scaffoldSpecifierResolverFor,
-  starterSchema,
-} from '../commands/init/templates/code-templates';
-import { envExampleContent, envFileContent } from '../commands/init/templates/env';
-import {
-  prisma7QuickReferenceMd,
-  quickReferenceMd,
-} from '../commands/init/templates/quick-reference';
-import { minimalProjectReadmeMd } from '../commands/init/templates/readme';
+import { configFile, prisma7ConfigFile } from '../commands/init/templates/code-templates';
+import { envExampleContent } from '../commands/init/templates/env';
+import { requirementsBlock } from '../commands/init/templates/quick-reference';
 import {
   defaultTsConfig,
   mergeTsConfig,
@@ -132,8 +121,6 @@ export interface ScaffoldOutcome {
   readonly notes: readonly string[];
   /** The project already pins `@types/node` itself, so the install leaves it alone. */
   readonly hasTypesNode: boolean;
-  /** Resolves the package names the scaffolded files import — and install. */
-  readonly resolveImportSpecifier: ImportSpecifierResolver;
 }
 
 /**
@@ -211,9 +198,9 @@ function planScaffold(ctx: {
   readonly cwd: string;
   readonly inputs: ResolvedInitInputs;
   readonly packageManager: PackageManager;
-  readonly resolveImportSpecifier: ImportSpecifierResolver;
 }): ScaffoldPlan {
-  const { cwd, inputs, packageManager, resolveImportSpecifier } = ctx;
+  const { cwd, inputs, packageManager } = ctx;
+  const { contribution } = inputs;
   const warnings: string[] = [];
   const source = inputs.contractSource;
   // Prisma 8's files never go under the Prisma 7 schema's directory: that
@@ -224,62 +211,51 @@ function planScaffold(ctx: {
     ? inputs.schemaPath
     : `./${inputs.schemaPath}`;
   const runPrefix = formatRunCommand(packageManager, 'prisma', '').trimEnd();
+  const requirements = requirementsBlock(
+    contribution.label,
+    contribution.serverRequirement,
+    runPrefix,
+    contribution.probe !== undefined,
+  );
 
   const renames = planConfigRename(cwd, inputs, warnings);
 
-  const files: FileEntry[] =
-    source.kind === 'starter'
-      ? [
-          {
-            path: inputs.schemaPath,
-            content: starterSchema(inputs.target, source.authoring, resolveImportSpecifier),
-          },
-          {
-            path: CONFIG_FILE,
-            content: configFile(inputs.target, configContractPath, resolveImportSpecifier),
-          },
-          {
-            path: join(outputDir, 'db.ts'),
-            content: dbFile(inputs.target, resolveImportSpecifier),
-          },
-          {
-            path: QUICK_REFERENCE_FILE,
-            content: quickReferenceMd(
-              inputs.target,
-              source.authoring,
-              inputs.schemaPath,
-              runPrefix,
-              resolveImportSpecifier,
-            ),
-          },
-        ]
-      : [
-          {
-            path: CONFIG_FILE,
-            content: prisma7ConfigFile(
-              inputs.target,
-              source.schemaPath,
-              outputDir,
-              resolveImportSpecifier,
-            ),
-          },
-          {
-            path: join(outputDir, 'db.ts'),
-            content: dbFile(inputs.target, resolveImportSpecifier),
-          },
-          {
-            path: QUICK_REFERENCE_FILE,
-            content: prisma7QuickReferenceMd(
-              inputs.target,
-              source.schemaPath,
-              outputDir,
-              runPrefix,
-              source.prisma7Config,
-              resolveImportSpecifier,
-            ),
-          },
-        ];
-  files.push({ path: ENV_EXAMPLE_FILE, content: envExampleContent(inputs.target) });
+  const files: FileEntry[] = [];
+  if (source.kind === 'starter') {
+    files.push(
+      { path: inputs.schemaPath, content: contribution.starterContract(source.authoring) },
+      { path: CONFIG_FILE, content: configFile(configContractPath, contribution.configModule) },
+      { path: join(outputDir, 'db.ts'), content: contribution.databaseFile() },
+      {
+        path: QUICK_REFERENCE_FILE,
+        content: contribution.quickReference({
+          mode: source.authoring,
+          schemaPath: inputs.schemaPath,
+          cliCommand: runPrefix,
+          requirements,
+        }),
+      },
+    );
+  } else {
+    files.push(
+      {
+        path: CONFIG_FILE,
+        content: prisma7ConfigFile(source.schemaPath, outputDir, contribution.configModule),
+      },
+      { path: join(outputDir, 'db.ts'), content: contribution.databaseFile() },
+      {
+        path: QUICK_REFERENCE_FILE,
+        content: source.quickReference({
+          schemaPath: source.schemaPath,
+          outputDir,
+          cliCommand: runPrefix,
+          requirements,
+          prisma7Config: source.prisma7Config,
+        }),
+      },
+    );
+  }
+  files.push({ path: ENV_EXAMPLE_FILE, content: envExampleContent(contribution.envExample()) });
 
   if (existsSync(join(cwd, ENV_EXAMPLE_FILE))) {
     warnings.push(
@@ -296,7 +272,7 @@ function planScaffold(ctx: {
         '.env already exists; leaving it untouched. Compare with .env.example for any new keys.',
       );
     } else {
-      files.push({ path: '.env', content: envFileContent(inputs.target) });
+      files.push({ path: '.env', content: contribution.envExample() });
     }
   }
 
@@ -399,7 +375,7 @@ function planScaffold(ctx: {
   const gitattributesPath = join(cwd, '.gitattributes');
   const nextGitattributes = mergeGitattributes(
     existsSync(gitattributesPath) ? readFileSync(gitattributesPath, 'utf-8') : undefined,
-    requiredGitattributesLines(outputDir, inputs.target),
+    requiredGitattributesLines(outputDir),
   );
   if (nextGitattributes !== null) {
     files.push({ path: '.gitattributes', content: nextGitattributes });
@@ -410,7 +386,8 @@ function planScaffold(ctx: {
   }
 
   // The README describes a fresh scaffold; a Prisma 7 project has its own.
-  if (source.kind === 'starter' && existsSync(join(cwd, 'src/index.ts'))) {
+  const { readme } = contribution;
+  if (source.kind === 'starter' && readme !== undefined && existsSync(join(cwd, 'src/index.ts'))) {
     if (existsSync(join(cwd, 'README.md'))) {
       warnings.push('README.md already exists; leaving it untouched.');
     } else {
@@ -420,12 +397,11 @@ function planScaffold(ctx: {
           : basename(cwd);
       files.push({
         path: 'README.md',
-        content: minimalProjectReadmeMd(
-          inputs.target,
-          inputs.schemaPath,
-          sanitisePackageName(declaredName),
-          packageManager,
-        ),
+        content: readme({
+          projectName: sanitisePackageName(declaredName),
+          contractPath: inputs.schemaPath,
+          runScript: (script) => formatRunScriptCommand(packageManager, script),
+        }),
       });
     }
   }
@@ -480,8 +456,7 @@ export function scaffoldProject(ctx: {
   readonly inputs: ResolvedInitInputs;
   readonly packageManager: PackageManager;
 }): ScaffoldOutcome {
-  const resolveImportSpecifier = scaffoldSpecifierResolverFor(ctx.inputs.target);
-  const plan = planScaffold({ ...ctx, resolveImportSpecifier });
+  const plan = planScaffold(ctx);
 
   const filesWritten: string[] = [];
   const filesDeleted: string[] = [];
@@ -554,6 +529,5 @@ export function scaffoldProject(ctx: {
     warnings: plan.warnings,
     notes,
     hasTypesNode: plan.hasTypesNode,
-    resolveImportSpecifier,
   };
 }

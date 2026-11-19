@@ -2,7 +2,7 @@ import mysqlAdapter, {
   createMysqlControlAdapter,
   readMysqlCatalog,
 } from '@internal/adapter-mysql/control';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { createMysqlControlDriverDescriptor } from '@internal/driver-mysql/control';
 import sql, { type SqlControlAdapterDescriptor } from '@internal/family-sql/control';
 import type { TargetPackRef } from '@internal/framework-components/components';
@@ -14,10 +14,10 @@ import { createMysqlDefineConfig } from '../../src/config/define-config';
 const mariadbMeta = { ...mysqlPackRef, targetId: 'mariadb', id: 'mariadb' } as const;
 
 const mariadbComponents = {
+  family: sql,
   pack: mariadbMeta satisfies TargetPackRef<'sql', 'mariadb'>,
   target: createMysqlControlTargetDescriptor({
     descriptorMeta: mariadbMeta,
-    migrationModule: '@internal/mariadb/migration',
   }),
   adapter: {
     ...mysqlAdapter,
@@ -25,7 +25,13 @@ const mariadbComponents = {
     id: 'mariadb',
     create: (stack) => createMysqlControlAdapter(stack, { readCatalog: readMysqlCatalog }),
   } satisfies SqlControlAdapterDescriptor<'mariadb'>,
-  driver: createMysqlControlDriverDescriptor('mariadb'),
+  driver: createMysqlControlDriverDescriptor({
+    target: { targetId: 'mariadb', displayName: 'MariaDB' },
+    checkViolationErrors: [4025],
+  }),
+  typesModule: '@acme/mariadb/contract-types',
+  migrationModule: '#migration-helpers',
+  contractBuilderModule: '@prisma/orm-mariadb/contract-builder',
 };
 
 describe('createMysqlDefineConfig', () => {
@@ -34,7 +40,7 @@ describe('createMysqlDefineConfig', () => {
       contract: './prisma/contract.prisma',
       db: { connection: 'mysql://root@localhost:3306/app' },
     });
-    expectTypeOf(config).toEqualTypeOf<PrismaNextConfig<'sql', 'mariadb'>>();
+    expectTypeOf(config).toEqualTypeOf<PrismaConfig<'sql', 'mariadb'>>();
     expect({
       family: config.family,
       target: config.target,
@@ -42,6 +48,8 @@ describe('createMysqlDefineConfig', () => {
       driver: config.driver,
       output: config.contract?.output,
       inputs: config.contract?.source.inputs,
+      typesModule: config.contract?.typesModule,
+      migrations: config.migrations,
     }).toEqual({
       family: sql,
       target: mariadbComponents.target,
@@ -49,6 +57,8 @@ describe('createMysqlDefineConfig', () => {
       driver: mariadbComponents.driver,
       output: './prisma/contract.json',
       inputs: ['./prisma/contract.prisma'],
+      typesModule: '@acme/mariadb/contract-types',
+      migrations: { module: '#migration-helpers' },
     });
   });
 
@@ -63,21 +73,35 @@ describe('createMysqlDefineConfig', () => {
     });
   });
 
-  it.each([
-    './prisma/contract.ts',
-    './prisma/contract.mts',
-    './prisma/contract.cts',
-    './prisma/contract.tsx',
-  ])('refuses the TypeScript contract %s', (contract) => {
-    expect(() => createMysqlDefineConfig(mariadbComponents)({ contract })).toThrow(
-      expect.objectContaining({
-        name: 'StructuredError',
-        code: 'CONFIG.VALIDATION_FAILED',
-        message: `defineConfig for target "mariadb" cannot build a contract from "${contract}", which is a TypeScript contract.`,
-        why: 'Target "mariadb" builds contracts from Prisma schemas and does not support TypeScript contracts.',
-        fix: 'Point `contract` at a Prisma schema: a .prisma file, a folder of them, or a glob.',
-        meta: { contract },
-      }),
-    );
+  it('reads a TypeScript contract with the TypeScript provider', () => {
+    const config = createMysqlDefineConfig(mariadbComponents)({
+      contract: './prisma/contract.ts',
+      output: 'generated',
+    });
+    expect({
+      format: config.contract?.source.format,
+      output: config.contract?.output,
+      inputs: config.contract?.source.inputs,
+    }).toEqual({
+      format: 'typescript',
+      output: 'generated/contract.json',
+      inputs: ['./prisma/contract.ts'],
+    });
   });
+
+  it.each(['./prisma/contract.mts', './prisma/contract.cts', './prisma/contract.tsx'])(
+    'refuses the TypeScript contract %s, which is not a .ts file',
+    (contract) => {
+      expect(() => createMysqlDefineConfig(mariadbComponents)({ contract })).toThrow(
+        expect.objectContaining({
+          name: 'StructuredError',
+          code: 'CONFIG.VALIDATION_FAILED',
+          message: `The config for target "mariadb" cannot read the contract "${contract}".`,
+          why: 'A TypeScript contract must be a .ts file.',
+          fix: 'Rename the contract to a .ts file, or point `contract` at a Prisma schema: a .prisma file, a folder of them, or a glob.',
+          meta: { contract },
+        }),
+      );
+    },
+  );
 });

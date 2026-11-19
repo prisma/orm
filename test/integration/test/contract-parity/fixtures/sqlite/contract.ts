@@ -2,7 +2,7 @@
  * The type constructors, id generators and relation shapes the planner golden fixture leaves out, so the parity test compares them with their emitted types.
  */
 
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import { defineContract } from '@internal/sqlite/contract-builder';
 
 // The foreign key defaults turn backing indexes off, so only a foreign key that asks for one gets it.
@@ -66,8 +66,8 @@ export const contract = defineContract(
     const Profile = model('Profile', {
       fields: {
         id: field.column(type.sql.Char(27)).id().onCreate(gen.ksuid()),
-        userId: field.column(type.sql.Char(36)),
-        rank: field.column(integerColumn),
+        userId: field.column(type.sql.Char(36)).unique(),
+        rank: field.column(integerNumberColumn),
       },
     });
 

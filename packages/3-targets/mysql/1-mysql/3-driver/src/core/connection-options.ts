@@ -67,25 +67,29 @@ const FIXED_OPTIONS: ConnectionConfig & { readonly permitRedirect: false } = {
 };
 
 /** Refuses the URL. `parameters` names the parameters at fault; no value from the URL goes into the error, because a URL carries the password. */
-function invalidBinding(reason: string, parameters: readonly string[]): Error {
-  return structuredError('RUNTIME.BINDING_INVALID', `MySQL connection URL: ${reason}`, {
+function invalidBinding(displayName: string, reason: string, parameters: readonly string[]): Error {
+  return structuredError('RUNTIME.BINDING_INVALID', `${displayName} connection URL: ${reason}`, {
     meta: { received: parameters.join(', '), reason },
   });
 }
 
 /** Parses `url` as the Postgres facade does, refusing it without the parser's error, which carries the whole URL. */
-function parseUrl(url: string): URL {
+function parseUrl(url: string, displayName: string): URL {
   try {
     return new URL(url);
   } catch {
-    throw invalidBinding('the URL cannot be parsed', []);
+    throw invalidBinding(displayName, 'the URL cannot be parsed', []);
   }
 }
 
-function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlParameters } {
-  const parsed = parseUrl(url);
+function readUrl(
+  url: string,
+  displayName: string,
+): { readonly parsed: URL; readonly parameters: UrlParameters } {
+  const parsed = parseUrl(url, displayName);
   if (parsed.searchParams.has('charset')) {
     throw invalidBinding(
+      displayName,
       'the driver always uses utf8mb4, because it reads each statement as utf8mb4 to find its placeholders; remove the charset parameter',
       ['charset'],
     );
@@ -97,12 +101,14 @@ function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlP
   if (parameters instanceof type.errors) {
     const invalid = names.filter((name) => parameters.some((error) => error.path[0] === name));
     throw invalidBinding(
+      displayName,
       invalid.map((name) => `${name} must be ${PARAMETER_FORMS[name]}`).join('; '),
       invalid,
     );
   }
   if (parameters.sslcert !== undefined && parameters.sslkey === undefined) {
     throw invalidBinding(
+      displayName,
       "sslcert names the client's certificate and needs sslkey; to check the server's certificate against a CA file, as sslcert did in Prisma 7, use sslrootcert",
       ['sslcert'],
     );
@@ -110,27 +116,37 @@ function readUrl(url: string): { readonly parsed: URL; readonly parameters: UrlP
   return { parsed, parameters };
 }
 
-function readPem(parameter: 'sslcert' | 'sslkey' | 'sslrootcert', path: string): string {
+function readPem(
+  displayName: string,
+  parameter: 'sslcert' | 'sslkey' | 'sslrootcert',
+  path: string,
+): string {
   try {
     return readFileSync(path, 'utf8');
   } catch {
-    throw invalidBinding(`the file ${parameter} names cannot be read`, [parameter]);
+    throw invalidBinding(displayName, `the file ${parameter} names cannot be read`, [parameter]);
   }
 }
 
 /**
  * The TLS settings the URL gives, read as `pg-connection-string` reads them for the Postgres driver: `ssl=true` turns TLS on and `ssl=false` off; `sslcert`, `sslkey`, `sslrootcert` or `sslmode` turn it on, with the certificate, key and CA read from the files they name. `sslmode=disable` turns it off; `no-verify` accepts any server certificate; every other mode verifies the certificate and the host name, as `verify-full` does.
  */
-function tlsOptions(parameters: UrlParameters): ConnectionConfig['ssl'] {
+function tlsOptions(parameters: UrlParameters, displayName: string): ConnectionConfig['ssl'] {
   const { sslcert, sslkey, sslrootcert, sslmode } = parameters;
   if ([sslcert, sslkey, sslrootcert, sslmode].every((value) => value === undefined)) {
     return parameters.ssl;
   }
   if (sslmode === 'disable') return false;
   return {
-    ...ifDefined('cert', sslcert === undefined ? undefined : readPem('sslcert', sslcert)),
-    ...ifDefined('key', sslkey === undefined ? undefined : readPem('sslkey', sslkey)),
-    ...ifDefined('ca', sslrootcert === undefined ? undefined : readPem('sslrootcert', sslrootcert)),
+    ...ifDefined(
+      'cert',
+      sslcert === undefined ? undefined : readPem(displayName, 'sslcert', sslcert),
+    ),
+    ...ifDefined('key', sslkey === undefined ? undefined : readPem(displayName, 'sslkey', sslkey)),
+    ...ifDefined(
+      'ca',
+      sslrootcert === undefined ? undefined : readPem(displayName, 'sslrootcert', sslrootcert),
+    ),
     ...(sslmode === 'no-verify' ? { rejectUnauthorized: false } : {}),
   };
 }
@@ -139,6 +155,7 @@ function connectionOptions(
   parsed: URL,
   parameters: UrlParameters,
   connectTimeoutMs: number | undefined,
+  displayName: string,
 ): ConnectionConfig {
   return {
     host: decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1'),
@@ -146,7 +163,7 @@ function connectionOptions(
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
     database: decodeURIComponent(parsed.pathname.slice(1)),
-    ...ifDefined('ssl', tlsOptions(parameters)),
+    ...ifDefined('ssl', tlsOptions(parameters, displayName)),
     allowPublicKeyRetrieval: parameters.allowPublicKeyRetrieval ?? false,
     connectTimeout: connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
     initSql: [...SESSION_SETUP],
@@ -154,13 +171,13 @@ function connectionOptions(
   };
 }
 
-/** The `mariadb` options for one connection to the server a `mysql://` URL names. Ignores a URL parameter the driver does not read, as `pg` does, and refuses a charset. */
+/** The `mariadb` options for one connection to the server a URL names. Ignores a URL parameter the driver does not read, as `pg` does, and refuses a charset. A refusal names the database as `displayName`. */
 export function mysqlConnectionOptions(
   url: string,
-  settings?: { readonly connectTimeoutMs?: number | undefined },
+  settings: { readonly connectTimeoutMs?: number | undefined; readonly displayName: string },
 ): ConnectionConfig {
-  const { parsed, parameters } = readUrl(url);
-  return connectionOptions(parsed, parameters, settings?.connectTimeoutMs);
+  const { parsed, parameters } = readUrl(url, settings.displayName);
+  return connectionOptions(parsed, parameters, settings.connectTimeoutMs, settings.displayName);
 }
 
 /** How long a connection may stay idle before the pool, and the driver's cancel connection, close it. */
@@ -171,11 +188,15 @@ export function mysqlPoolIdleTimeoutMillis(poolOptions?: MysqlPoolOptions): numb
 /**
  * The `mariadb` pool options for a `mysql://` URL, sized and timed as the Postgres driver's `pg.Pool`: it opens a connection only when one is needed (`minimumIdle: 0`), closes one idle for `idleTimeoutMillis`, and waits `connectionTimeoutMillis` both to open a connection and for a pooled one to come free.
  */
-export function mysqlPoolOptions(url: string, poolOptions?: MysqlPoolOptions): PoolConfig {
-  const { parsed, parameters } = readUrl(url);
+export function mysqlPoolOptions(
+  url: string,
+  displayName: string,
+  poolOptions?: MysqlPoolOptions,
+): PoolConfig {
+  const { parsed, parameters } = readUrl(url, displayName);
   const timeoutMs = poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS;
   return {
-    ...connectionOptions(parsed, parameters, timeoutMs),
+    ...connectionOptions(parsed, parameters, timeoutMs, displayName),
     acquireTimeout: timeoutMs,
     minimumIdle: 0,
     idleTimeout: Math.ceil(mysqlPoolIdleTimeoutMillis(poolOptions) / 1000),

@@ -1,12 +1,12 @@
 # Prisma 8 — Queries (Mongo)
 
-> Load this guide when `db.ts` imports from `@internal/mongo/runtime`.
+> Load this guide when `db.ts` imports from `@prisma/orm-mongo/runtime`.
 
 Shared concepts (result consumption, script teardown, cross-target pitfalls, capability gaps) live in [`queries.md`](./queries.md).
 
 ## Key Concepts
 
-**Mongo** (`mongo({ contract, ... })` from `@internal/mongo/runtime`):
+**Mongo** (`mongo({ contract, ... })` from `@prisma/orm-mongo/runtime`):
 
 - **`db.orm.<root>`** — ORM, lowercased plural contract root (`db.orm.users`, `db.orm.posts`). Same fluent chaining; `.where({ field: value })` object equality is the idiomatic filter form.
 - **`db.query`** — typed aggregation-pipeline builder. Start with `db.query.from('<root>')`, chain `.match(...)` / `.project(...)` / `.group(...)` / `.lookup(...)`, terminal with `.build()`. Run via `(await db.runtime()).query(plan)` for anything that returns documents; `execute(plan)` is only for a write you want an affected count from, and it throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED` on a find or aggregate.
@@ -78,7 +78,7 @@ const posts = await db.orm.posts
 // → Array<{ title, authorId, createdAt, author: { name, email, ... } }>
 ```
 
-Relation names match the contract's `@relation` field names. Nested includes follow the same chaining rules as the parent collection.
+Relation names match the contract's `@relation` field names. `.include(...)` takes only the relation name: there is no refinement callback, so the included documents cannot be filtered, ordered or limited, and their own relations are not loaded. Only a reference relation on a single field can be included; an embedded relation is already part of the document, and naming one in `.include(...)` is a type error.
 
 ## Workflow — ORM writes
 
@@ -210,7 +210,7 @@ Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.p
 
 ## Workflow — Prepared statements (`db.prepare`)
 
-The concept: `db.prepare(declaration, (p) => plan)` builds a query-builder plan once and runs it many times with different values. The declaration names each parameter's codec (`{ email: 'mongo/string@1' }`, or `{ codecId: 'mongo/string@1', nullable: true }` to allow `null`); unknown codec ids fail to compile. The callback receives one placeholder per name and puts it where a value goes: filter operators (`eq`, `in`, …), update operators (`set`, `push`, …), insert documents, `fn.literal(p.x)`, and `limit` / `skip` (with a codec whose input is a number, such as `mongo/int32@1`). Each run encodes the value with the declared codec. Preparing opens no connection; run the handle against `await db.runtime()`:
+The concept: `db.prepare(declaration, (p) => plan)` builds a query-builder plan or an ORM read once and runs it many times with different values. The declaration names each parameter's codec (`{ email: 'mongo/string@1' }`, or `{ codecId: 'mongo/string@1', nullable: true }` to allow `null`); unknown codec ids fail to compile. The callback receives one placeholder per name and puts it where a value goes: filter operators (`eq`, `in`, …), update operators (`set`, `push`, …), insert documents, `fn.literal(p.x)`, and `limit` / `skip` (with a codec whose input is a number, such as `mongo/int32@1`). Each run encodes the value with the declared codec. Preparing opens no connection; run the handle against `await db.runtime()`:
 
 ```typescript
 const byAuthor = await db.prepare(
@@ -228,7 +228,18 @@ const runtime = await db.runtime();
 const recent = await byAuthor.query(runtime, { authorId: someHexId, take: 10 }).toArray();
 ```
 
-An `updateOne`, `updateMany`, `deleteOne` or `deleteMany` plan gives a handle with `execute(runtime, params)` as well as `query`, resolving `{ affectedRows }`. `runtime.prepare(...)` is the same thing on a `MongoRuntime`. A declared name the plan never uses throws `RUNTIME.PREPARE_UNUSED_PARAM`; a placeholder in a `db.raw` command throws `RUNTIME.PREPARE_RAW_PLACEHOLDER`; a placeholder whose name, codec id or nullability the declaration does not give throws `RUNTIME.PREPARE_UNDECLARED_PARAM`; a missing value at run time throws `RUNTIME.PREPARE_MISSING_PARAM`. A `db.raw` command with no placeholders can be prepared and is sent as written on each run. ORM reads (`.prepared.all()`) cannot be prepared yet. Design: [ADR 318](../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
+An `updateOne`, `updateMany`, `deleteOne` or `deleteMany` plan gives a handle with `execute(runtime, params)` as well as `query`, resolving `{ affectedRows }`. `runtime.prepare(...)` on a `MongoRuntime` takes query-builder and raw plans only, not ORM reads. A declared name the plan never uses throws `RUNTIME.PREPARE_UNUSED_PARAM`; a placeholder in a `db.raw` command throws `RUNTIME.PREPARE_RAW_PLACEHOLDER`; a placeholder whose name, codec id or nullability the declaration does not give throws `RUNTIME.PREPARE_UNDECLARED_PARAM`; a missing value at run time throws `RUNTIME.PREPARE_MISSING_PARAM`. A `db.raw` command with no placeholders can be prepared and is sent as written on each run.
+
+ORM reads are prepared through `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()`. The handle's `query(runtime, params)` returns what the ad-hoc read returns: a row stream, `Row | null`, or `Row` (rejecting with `RUNTIME.NO_ROWS` when nothing matches). It has no `execute`.
+
+```typescript
+const byEmail = await db.prepare({ email: 'mongo/string@1', take: 'mongo/int32@1' }, (p) =>
+  db.orm.users.where({ email: p.email }).include('posts').limit(p.take).prepared.all(),
+);
+const users = await byEmail.query(await db.runtime(), { email: 'alice@example.com', take: 5 }).toArray();
+```
+
+In an ORM read, a placeholder goes in `limit`, `offset`, a scalar field's value in an object-form `where`, or the operand of a comparison (`$eq`, `$ne`, `$gt`, …) or an item of `$in` / `$nin` on a scalar field in a filter-expression `where`. Its codec must be the field's codec (the element codec on a list field, where it matches one item), and it may be nullable only on a nullable field that is not a list. Anything else (another operator, `$expr`, a value object, a whole list) throws `ORM.ARGUMENT_INVALID` when the `where` is built. ORM writes cannot be prepared; a write on a collection whose `where` holds a placeholder throws `ORM.ARGUMENT_INVALID`. `first()` and `firstOrThrow()` set the limit to 1, so a declared `limit` placeholder there throws `RUNTIME.PREPARE_UNUSED_PARAM`. Design: [ADR 318](../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
 
 ## Common Pitfalls (Mongo)
 

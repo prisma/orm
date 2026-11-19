@@ -33,6 +33,17 @@ export interface FieldTypeSpec {
   readonly valueObject?: string;
   /** The enum whose values the field takes. */
   readonly valueSet?: string;
+  /** Whether the field holds a dictionary of its value object. */
+  readonly dict?: boolean;
+  /** The value objects a union field holds, in place of its codec. */
+  readonly union?: readonly string[];
+}
+
+/** An embed relation: its stored name, the embedded model, and whether it holds one object or a list. */
+export interface EmbedSpec {
+  readonly field: string;
+  readonly model: string;
+  readonly cardinality?: '1:1' | '1:N';
 }
 
 export interface ModelSpec {
@@ -42,14 +53,20 @@ export interface ModelSpec {
   readonly types?: Readonly<Record<string, FieldTypeSpec>>;
   /** The stored name of each field stored under a name other than its own. */
   readonly storedAs?: Readonly<Record<string, string>>;
-  /** The stored name of each embed relation, keyed by relation name. */
-  readonly embeds?: Readonly<Record<string, string>>;
+  /** The stored name of each embed relation, keyed by relation name, embedding model `Embedded` as a list; or the relation in full. */
+  readonly embeds?: Readonly<Record<string, string | EmbedSpec>>;
   readonly relations?: readonly string[];
   readonly base?: string;
   /** The model whose documents embed this one's. */
   readonly owner?: string;
   readonly discriminator?: string;
   readonly variants?: Readonly<Record<string, string>>;
+}
+
+/** An enum: its codec, a string by default, and the stored value of each member. */
+export interface EnumSpec {
+  readonly codecId?: string;
+  readonly members: Readonly<Record<string, unknown>>;
 }
 
 export interface CollectionSpec {
@@ -82,19 +99,30 @@ function validatorJsonSchemaOf(spec: CollectionSpec): Record<string, unknown> | 
   return spec.jsonSchema ?? (spec.required === undefined ? undefined : jsonSchema(spec.required));
 }
 
+function valueObjectType(name: string) {
+  return {
+    kind: 'valueObject',
+    plane: 'storage',
+    namespaceId: '__unbound__',
+    entityKind: 'valueObject',
+    entityName: name,
+  };
+}
+
+function embedSpecOf(embed: string | EmbedSpec): EmbedSpec {
+  return typeof embed === 'string' ? { field: embed, model: 'Embedded' } : embed;
+}
+
 function contractField(spec: FieldTypeSpec | undefined) {
   return {
     type:
-      spec?.valueObject === undefined
-        ? { kind: 'scalar', codecId: spec?.codecId ?? 'mongo/string@1' }
-        : {
-            kind: 'valueObject',
-            plane: 'storage',
-            namespaceId: '__unbound__',
-            entityKind: 'valueObject',
-            entityName: spec.valueObject,
-          },
+      spec?.union !== undefined
+        ? { kind: 'union', members: spec.union.map(valueObjectType) }
+        : spec?.valueObject === undefined
+          ? { kind: 'scalar', codecId: spec?.codecId ?? 'mongo/string@1' }
+          : valueObjectType(spec.valueObject),
     nullable: spec?.nullable ?? false,
+    ...(spec?.dict === true ? { dict: true } : {}),
     ...(spec?.many === true ? { many: { elementNullable: false } } : {}),
     ...(spec?.valueSet === undefined
       ? {}
@@ -114,6 +142,7 @@ export function contract(
   models: Readonly<Record<string, ModelSpec>>,
   collections: Readonly<Record<string, CollectionSpec>>,
   valueObjects: Readonly<Record<string, Readonly<Record<string, FieldTypeSpec>>>> = {},
+  enums: Readonly<Record<string, EnumSpec>> = {},
 ): MongoContract {
   return {
     target: 'mongo',
@@ -126,6 +155,22 @@ export function contract(
     domain: {
       namespaces: {
         __unbound__: {
+          ...(Object.keys(enums).length === 0
+            ? {}
+            : {
+                enum: Object.fromEntries(
+                  Object.entries(enums).map(([name, spec]) => [
+                    name,
+                    {
+                      codecId: spec.codecId ?? 'mongo/string@1',
+                      members: Object.entries(spec.members).map(([member, value]) => ({
+                        name: member,
+                        value,
+                      })),
+                    },
+                  ]),
+                ),
+              }),
           models: Object.fromEntries(
             Object.entries(models).map(([name, spec]) => [
               name,
@@ -142,9 +187,12 @@ export function contract(
                       on: { localFields: ['otherId'], targetFields: ['_id'] },
                     },
                   ]),
-                  ...Object.keys(spec.embeds ?? {}).map((relation) => [
+                  ...Object.entries(spec.embeds ?? {}).map(([relation, embed]) => [
                     relation,
-                    { to: { model: 'Embedded', namespace: '__unbound__' }, cardinality: '1:N' },
+                    {
+                      to: { model: embedSpecOf(embed).model, namespace: '__unbound__' },
+                      cardinality: embedSpecOf(embed).cardinality ?? '1:N',
+                    },
                   ]),
                 ]),
                 storage: {
@@ -156,9 +204,9 @@ export function contract(
                     ? {}
                     : {
                         relations: Object.fromEntries(
-                          Object.entries(spec.embeds).map(([relation, field]) => [
+                          Object.entries(spec.embeds).map(([relation, embed]) => [
                             relation,
-                            { field },
+                            { field: embedSpecOf(embed).field },
                           ]),
                         ),
                       }),

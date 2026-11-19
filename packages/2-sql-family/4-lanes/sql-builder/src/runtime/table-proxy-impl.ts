@@ -5,6 +5,7 @@ import type { Functions, Subquery } from '@internal/sql-relational-core/function
 import { createIndexReferences } from '@internal/sql-relational-core/index-reference';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import type {
   AggregateFunctions,
   Expression,
@@ -26,14 +27,13 @@ import type {
   Scope,
   ScopeField,
   ScopeTable,
-  StorageTableToScopeTable,
 } from '../scope';
-import type { NamespaceTable, TableProxyContract } from '../types/db';
+import type { TableProxyContract } from '../types/db';
 import type { JoinedTables } from '../types/joined-tables';
 import type { DeleteQuery, InsertQuery, UpdateQuery } from '../types/mutation-query';
 import type { SelectQuery } from '../types/select-query';
 import type { LateralBuilder } from '../types/shared';
-import type { TableProxy } from '../types/table-proxy';
+import type { TableProxy, TableScopeTable } from '../types/table-proxy';
 import { BuilderBase, type BuilderContext, emptyState, tableToScope } from './builder-base';
 import { JoinedTablesImpl } from './joined-tables-impl';
 import {
@@ -60,7 +60,7 @@ export class TableProxyImpl<
   implements TableProxy<C, NsId, Name, Alias, AvailableScope, QC>
 {
   declare readonly [JoinOuterScope]: JoinSource<
-    StorageTableToScopeTable<NamespaceTable<C, NsId, Name>>,
+    TableScopeTable<C, NsId, Name>,
     Alias
   >[typeof JoinOuterScope];
 
@@ -101,7 +101,11 @@ export class TableProxyImpl<
     const refs = Object.fromEntries(
       Object.entries(this.#table.columns).map(([name, column]) => [
         name,
-        { codecId: column.codecId, nullable: column.nullable },
+        {
+          codecId: column.codecId,
+          nullable: column.nullable,
+          ...ifDefined('codec', this.#scope.topLevel[name]?.codec),
+        },
       ]),
     );
     return blindCast<

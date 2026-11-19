@@ -1,0 +1,24 @@
+// use prisma-8
+
+// Real emitted fixture for SQLite's Decimal and BigIntNumber fields.
+
+model Invoice {
+  id      Int          @id
+  total   Decimal
+  rebate  Decimal?
+  visits  BigIntNumber
+
+  lines InvoiceLine[]
+
+  @@map("invoice")
+}
+
+model InvoiceLine {
+  id        Int     @id
+  invoiceId Int     @map("invoice_id")
+  amount    Decimal
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("invoice_line")
+}

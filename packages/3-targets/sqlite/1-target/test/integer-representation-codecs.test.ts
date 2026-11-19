@@ -1,8 +1,20 @@
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
-import { AggregateExpr, CastExpr } from '@internal/sql-relational-core/ast';
+import {
+  AggregateExpr,
+  BinaryExpr,
+  CaseExpr,
+  CastExpr,
+  FunctionCallExpr,
+  LiteralExpr,
+} from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { hexJsonProjection } from '../src/core/blob-json-projection';
 import { SQLITE_BIGINT_NUMBER_CODEC_ID } from '../src/core/codec-ids';
-import { sqliteBigintDescriptor, sqliteBigintNumberDescriptor } from '../src/core/codecs';
+import {
+  sqliteBigintDescriptor,
+  sqliteBigintNumberDescriptor,
+  sqliteIntegerDescriptor,
+} from '../src/core/codecs';
 import { fromContractJson, toContractJson } from './contract-json';
 
 const instanceCtx: CodecInstanceContext = { name: 'test' };
@@ -17,6 +29,22 @@ const wrongTyped = (value: unknown): never => value as never;
 describe('sqlite/bigint@1 number wire values', () => {
   const codec = sqliteBigintDescriptor.factory()(instanceCtx);
 
+  it('reads the exact integer the driver returns at both 64-bit extremes', async () => {
+    expect(await codec.fromWire(9223372036854775807n, {})).toBe(9223372036854775807n);
+    expect(await codec.fromWire(-9223372036854775808n, {})).toBe(-9223372036854775808n);
+  });
+
+  it.each([
+    [new Uint8Array([0x35]), "x'35'"],
+    [['35'], "x'35'"],
+  ])('refuses the blob %j a row or an include carries', async (wire, received) => {
+    await expect(codec.fromWire(wire as never, {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `A sqlite/bigint@1 value is bytes ${received}, which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.`,
+      meta: { codecId: 'sqlite/bigint@1', received },
+    });
+  });
+
   it('reads a safe-integer number wire value exactly', async () => {
     expect(await codec.fromWire(42, {})).toBe(42n);
     expect(await codec.fromWire(9007199254740991, {})).toBe(9007199254740991n);
@@ -27,7 +55,7 @@ describe('sqlite/bigint@1 number wire values', () => {
     await expect(codec.fromWire(9007199254740992, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'sqlite/bigint@1 wire number must be an integer within the safe integer range, got 9007199254740992',
+        'A sqlite/bigint@1 value is 9007199254740992, which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
       meta: { codecId: 'sqlite/bigint@1', received: '9007199254740992' },
     });
     await expect(codec.fromWire(-9007199254740992, {})).rejects.toMatchObject({
@@ -36,11 +64,20 @@ describe('sqlite/bigint@1 number wire values', () => {
     });
   });
 
+  it('refuses a whole number past 64 bits, which SQLite stores as a REAL', async () => {
+    await expect(codec.fromWire(1e20, {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message:
+        'A sqlite/bigint@1 value is 100000000000000000000, which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
+      meta: { codecId: 'sqlite/bigint@1', received: '100000000000000000000' },
+    });
+  });
+
   it('rejects a non-integral number wire value with a structured error', async () => {
     await expect(codec.fromWire(1.5, {})).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       message:
-        'sqlite/bigint@1 wire number must be an integer within the safe integer range, got 1.5',
+        'A sqlite/bigint@1 value is 1.5, which is not stored as a 64-bit integer. sqlite/bigint@1 reads integers from -9223372036854775808 to 9223372036854775807.',
       meta: { codecId: 'sqlite/bigint@1', received: '1.5' },
     });
   });
@@ -54,6 +91,20 @@ describe('sqlite/bigint@1 number wire values', () => {
       message: 'sqlite/bigint@1 value must be a bigint, got number 9',
       meta: { codecId: 'sqlite/bigint@1', received: 'number' },
     });
+  });
+
+  it.each([
+    [2n ** 63n, '9223372036854775808'],
+    [2n ** 64n, '18446744073709551616'],
+    [-(2n ** 63n) - 1n, '-9223372036854775809'],
+  ])('refuses to write %s, which SQLite cannot store', async (value, received) => {
+    const refusal = {
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: `sqlite/bigint@1 value must be an integer from -9223372036854775808 to 9223372036854775807, which SQLite stores, got ${received}`,
+      meta: { codecId: 'sqlite/bigint@1', received },
+    };
+    await expect(codec.toWire(value, {})).rejects.toMatchObject(refusal);
+    expect(() => codec.toDataTypeValue(value)).toThrow(expect.objectContaining(refusal));
   });
 
   // A schema literal (`BigInt @default(0)`) reaches the JSON boundary as a
@@ -85,37 +136,37 @@ describe('sqlite/bigintnumber@1', () => {
 
     it('throws at 2^53 on every wire form', async () => {
       await expect(codec.fromWire(9007199254740992, {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
       await expect(codec.fromWire('9007199254740992', {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
       await expect(codec.fromWire(9007199254740992n, {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
     });
 
     it('throws at -(2^53)', async () => {
       await expect(codec.fromWire(-9007199254740992n, {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
       await expect(codec.fromWire('-9007199254740992', {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
     });
 
     it('throws on decimal text a Number() coercion would silently round', async () => {
       await expect(codec.fromWire('9007199254740993', {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
     });
 
     it('throws on non-integral wire values', async () => {
       await expect(codec.fromWire(1.5, {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.',
       );
       await expect(codec.fromWire('1.5', {})).rejects.toThrow(
-        'sqlite/bigintnumber@1 wire value must be a decimal string',
+        'A sqlite/bigintnumber@1 value is "1.5", which is not an integer within the safe integer range.',
       );
     });
 
@@ -190,17 +241,37 @@ describe('sqlite/bigintnumber@1', () => {
     });
   });
 
-  // An aggregate whose result this codec carries reaches the projection already
-  // cast to text, so the driver never reads a wide integer off the wire. The
-  // projection has to answer with the codec's canonical JSON form whatever
-  // expression it is handed.
-  it('projects a text-cast aggregate as text', () => {
+  it('projects an integer as decimal text, a blob as the array of its hex text, and any other value as it is', () => {
     const lowered = CastExpr.as(new AggregateExpr('count', undefined), 'text');
     expect(
       sqliteBigintNumberDescriptor.projectJson(lowered, {
         codecId: SQLITE_BIGINT_NUMBER_CODEC_ID,
       }),
-    ).toEqual(CastExpr.as(lowered, 'TEXT'));
+    ).toEqual(
+      CaseExpr.of(
+        [
+          {
+            condition: BinaryExpr.eq(
+              FunctionCallExpr.of('typeof', [lowered]),
+              LiteralExpr.of('integer'),
+            ),
+            value: CastExpr.as(lowered, 'TEXT'),
+          },
+        ],
+        hexJsonProjection(lowered),
+      ),
+    );
+  });
+
+  it.each([
+    [new Uint8Array([0x35]), "x'35'"],
+    [['35'], "x'35'"],
+  ])('refuses the blob %j a row or an include carries', async (wire, received) => {
+    await expect(codec.fromWire(wire as never, {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `A sqlite/bigintnumber@1 value is bytes ${received}, which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      meta: { codecId: 'sqlite/bigintnumber@1', received },
+    });
   });
 
   it('carries the numeric ordering traits', () => {
@@ -209,5 +280,67 @@ describe('sqlite/bigintnumber@1', () => {
 
   it('renders a default as a number literal', () => {
     expect(sqliteBigintNumberDescriptor.renderValueLiteral?.('42')).toBe('42');
+  });
+});
+
+describe('sqlite/integer@1 guards the safe integer range as sqlite/bigintnumber@1 does', () => {
+  const codec = sqliteIntegerDescriptor.factory()(instanceCtx);
+
+  it('writes and reads an integer within the safe range, and negative zero as zero', async () => {
+    expect({
+      written: await codec.toWire(9007199254740991, {}),
+      read: await codec.fromWire(-9007199254740991, {}),
+      negativeZero: await codec.toWire(-0, {}),
+    }).toEqual({ written: 9007199254740991, read: -9007199254740991, negativeZero: 0 });
+  });
+
+  it.each([9007199254740992, -9007199254740992, 1.5])('refuses to write %d', async (value) => {
+    await expect(codec.toWire(value, {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: `sqlite/integer@1 value must be an integer within the safe integer range, got ${value}`,
+      meta: { codecId: 'sqlite/integer@1', received: String(value) },
+    });
+  });
+
+  it('refuses to write a value that is not a number', async () => {
+    await expect(codec.toWire(wrongTyped(9n), {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: 'sqlite/integer@1 value must be a number, got bigint 9',
+    });
+  });
+
+  it.each([9007199254740992, 1.5])('refuses to read the number %d', async (wire) => {
+    await expect(codec.fromWire(wire, {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `A sqlite/integer@1 value is ${wire}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+    });
+  });
+
+  it.each([
+    [1.5, '1.5'],
+    ['9007199254740992', '"9007199254740992"'],
+    ['abc', '"abc"'],
+  ])('names the column of a stored %j it cannot read', async (wire, shown) => {
+    await expect(
+      codec.fromWire(wire, { column: { table: 'meter', name: 'peak' } }),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `Column "meter"."peak" holds ${shown}, which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      meta: { codecId: 'sqlite/integer@1', table: 'meter', column: 'peak', received: String(wire) },
+    });
+  });
+
+  it.each([
+    ['one byte a row carries', new Uint8Array([0x35]), '35'],
+    ['bytes a row carries', new Uint8Array([0x00, 0xff]), '00FF'],
+    ['the hex text of bytes an include carries', ['35'], '35'],
+  ])('refuses %s, naming them as bytes', async (_name, wire, hex) => {
+    await expect(
+      codec.fromWire(wrongTyped(wire), { column: { table: 'meter', name: 'peak' } }),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `Column "meter"."peak" holds bytes x'${hex}', which is not an integer within the safe integer range. sqlite/integer@1 reads integers from -9007199254740991 to 9007199254740991.`,
+      meta: { codecId: 'sqlite/integer@1', table: 'meter', column: 'peak', received: `x'${hex}'` },
+    });
   });
 });

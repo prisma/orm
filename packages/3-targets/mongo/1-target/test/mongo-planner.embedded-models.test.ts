@@ -29,7 +29,7 @@ function users(seed: string, address: Record<string, FieldTypeSpec>) {
         collection: 'users',
         fields: ['_id', 'email'],
         types: { _id: OBJECT_ID, email: STRING },
-        embeds: { addresses: 'addresses' },
+        embeds: { addresses: { field: 'addresses', model: 'Address' } },
       },
       Address: { owner: 'User', fields: Object.keys(address), types: address },
     },
@@ -55,7 +55,8 @@ function addressStatement(kind: 'convert' | 'backfill', field: string): Resolved
 }
 
 describe('MongoMigrationPlanner, a field of an embedded model', () => {
-  it('plans no rewrite of the owner documents for a removed field, and warns', async () => {
+  it('removes the key of a removed field from the owner documents, and does not warn', async () => {
+    const label = 'Remove key "street" at path "$[*]" in field addresses of collection users';
     expect(
       await outcome(
         plan({
@@ -65,15 +66,35 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
         }),
       ),
     ).toEqual({
-      operations: [],
-      dataLoss: [],
-      warnings: [
+      operations: [label],
+      dataLoss: [
         {
-          kind: 'documentsNotRewritten',
-          why: NOT_A_STATEMENT,
-          summary: 'Field "Address.street" of embedded model "Address" is removed',
+          operationIndex: 0,
+          subject: { kind: 'field', namespaceId: NS, model: 'Address', field: 'street' },
+          loss: 'drop',
+          label,
         },
       ],
+      warnings: [],
+    });
+  });
+
+  it('renames the key of a renamed field in the owner documents, and does not warn', async () => {
+    expect(
+      await outcome(
+        plan({
+          from: users('from', { street: STRING }),
+          to: users('to', { road: STRING }),
+          schema: live,
+          statements: [renameField('Address', 'street', 'Address', 'road')],
+        }),
+      ),
+    ).toEqual({
+      operations: [
+        'Rename key "street" to "road" at path "$[*]" in field addresses of collection users',
+      ],
+      dataLoss: [],
+      warnings: [],
     });
   });
 
@@ -99,7 +120,9 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
     });
   });
 
-  it('plans no fill for a new required field or an optional field made required, and warns', async () => {
+  it('fills a new required field, leaves an optional field made required to the document check, and does not warn', async () => {
+    const fill = (key: string) =>
+      `Fill key "${key}" at path "$[*]" in field addresses of collection users where it is missing or null`;
     expect(
       await outcome(
         plan({
@@ -108,45 +131,12 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
           schema: live,
         }),
       ),
-    ).toEqual({
-      operations: [],
-      dataLoss: [],
-      warnings: [
-        {
-          kind: 'documentsNotRewritten',
-          why: NOT_A_STATEMENT,
-          summary: 'Field "Address.city" of embedded model "Address" becomes required',
-        },
-        {
-          kind: 'documentsNotRewritten',
-          why: NOT_A_STATEMENT,
-          summary: 'Field "Address.country" of embedded model "Address" is new and required',
-        },
-      ],
-    });
+    ).toEqual({ operations: [fill('country')], dataLoss: [], warnings: [] });
   });
 
-  it('refuses a rename, a convert and a backfill of the field', () => {
-    const why =
-      'Fields of an embedded model are not rewritten in this release. Leave out this statement.';
-    expect([
-      refusal(
-        plan({
-          from: users('from', { street: STRING }),
-          to: users('to', { road: STRING }),
-          schema: live,
-          statements: [renameField('Address', 'street', 'Address', 'road')],
-        }),
-      ),
-      refusal(
-        plan({
-          from: users('from', { zip: STRING }),
-          to: users('to', { zip: INT }),
-          schema: live,
-          statements: [addressStatement('convert', 'zip')],
-        }),
-      ),
-      refusal(
+  it('plans a backfill of the field as a fill whose value is a placeholder', async () => {
+    expect(
+      await outcome(
         plan({
           from: users('from', { city: OPTIONAL_STRING }),
           to: users('to', { city: STRING }),
@@ -154,31 +144,24 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
           statements: [addressStatement('backfill', 'city')],
         }),
       ),
-    ]).toEqual([
-      [
-        {
-          kind: 'statementRefused',
-          summary:
-            'Cannot rename field "Address.street" to "Address.road": model "Address" is embedded in the documents of model "User"',
-          why,
-        },
+    ).toEqual({
+      operations: [
+        'Fill key "city" at path "$[*]" in field addresses of collection users where it is missing or null',
       ],
-      [
-        {
-          kind: 'statementRefused',
-          summary:
-            'Cannot convert field "Address.zip": model "Address" is embedded in the documents of model "User"',
-          why,
-        },
-      ],
-      [
-        {
-          kind: 'statementRefused',
-          summary:
-            'Cannot backfill field "Address.city": model "Address" is embedded in the documents of model "User"',
-          why,
-        },
-      ],
+      dataLoss: [],
+      warnings: [],
+    });
+  });
+
+  it('removes the key the origin stores under the name a rename takes, and refuses the plan', () => {
+    const result = plan({
+      from: users('from', { a: OPTIONAL_STRING, b: OPTIONAL_STRING }),
+      to: users('to', { a: OPTIONAL_STRING }),
+      schema: live,
+      statements: [renameField('Address', 'b', 'Address', 'a')],
+    });
+    expect(refusal(result).map(({ summary }) => summary)).toEqual([
+      'Cannot rename field "Address.b" to "Address.a": the migration writes a key that another of its operations reads (Rename key "b" to "a" at path "$[*]" in field addresses of collection users; Remove key "a" at path "$[*]" in field addresses of collection users)',
     ]);
   });
 
@@ -214,6 +197,89 @@ describe('MongoMigrationPlanner, a field of an embedded model', () => {
           'Cannot rename model "Address" to "Location": model "Address" is embedded in the documents of model "User"',
         why: 'Embedded models are not renamed in this release. Leave out this statement.',
       },
+    ]);
+  });
+
+  it('refuses a rename of the embedded model when a rename of its field comes with it', () => {
+    const named = (seed: string, embedded: string, field: string) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'users',
+            fields: ['_id', 'email'],
+            types: { _id: OBJECT_ID, email: STRING },
+            embeds: { addresses: 'addresses' },
+          },
+          [embedded]: { owner: 'User', fields: [field], types: { [field]: STRING } },
+        },
+        { users: {} },
+      );
+
+    expect(
+      refusal(
+        plan({
+          from: named('from', 'Address', 'street'),
+          to: named('to', 'Location', 'line1'),
+          schema: live,
+          statements: [
+            renameModel('Address', 'Location'),
+            renameField('Location', 'street', 'Location', 'line1'),
+          ],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename model "Address" to "Location": model "Address" is embedded in the documents of model "User"',
+        why: 'Embedded models are not renamed in this release. Leave out this statement.',
+      },
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename field "Location.street" to "Location.line1": model "Location" is embedded in the documents of model "User"',
+        why: 'A statement renames a field of an embedded model only while the model stays embedded. Leave out this statement.',
+      },
+    ]);
+  });
+});
+
+describe('MongoMigrationPlanner, a value object held at a root field and inside an embedded model', () => {
+  const holding = (seed: string, meta: Record<string, FieldTypeSpec>) =>
+    contract(
+      seed,
+      {
+        User: {
+          collection: 'users',
+          fields: ['_id', 'meta'],
+          types: { _id: OBJECT_ID, meta: { codecId: '', valueObject: 'Meta', nullable: true } },
+          embeds: { addresses: { field: 'addresses', model: 'Address' } },
+        },
+        Address: {
+          owner: 'User',
+          fields: ['meta'],
+          types: { meta: { codecId: '', valueObject: 'Meta' } },
+        },
+      },
+      { users: {} },
+      { Meta: meta },
+    );
+
+  it('removes a removed key at every place', async () => {
+    expect(
+      (
+        await outcome(
+          plan({
+            from: holding('from', { w: STRING, h: STRING }),
+            to: holding('to', { w: STRING }),
+            schema: live,
+          }),
+        )
+      ).operations,
+    ).toEqual([
+      'Remove key "h" at path "$" in field meta of collection users',
+      'Remove key "h" at path "$[*].meta" in field addresses of collection users',
     ]);
   });
 });

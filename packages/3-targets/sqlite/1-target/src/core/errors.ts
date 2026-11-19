@@ -1,4 +1,5 @@
 import { CliStructuredError } from '@internal/errors/control';
+import type { SqlColumnRef } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import type { StructuredError, StructuredErrorOptions } from '@internal/utils/structured-error';
 import { structuredError } from '@internal/utils/structured-error';
@@ -27,6 +28,72 @@ export function sqliteError(
   options?: StructuredErrorOptions,
 ): StructuredError {
   return structuredError(code, message, options);
+}
+
+const SHOWN_CHARACTERS = 100;
+/** The bytes an error shows, which their hex text cut to 100 characters holds. */
+const SHOWN_BYTES = SHOWN_CHARACTERS / 2;
+
+interface StoredText {
+  readonly text: string;
+  readonly longer: boolean;
+}
+
+/** A stored value's text as an error shows it: the first 100 characters, followed by `...` when the value is longer. */
+const shownText = ({ text, longer }: StoredText): string =>
+  longer || text.length > SHOWN_CHARACTERS ? `${text.slice(0, SHOWN_CHARACTERS)}...` : text;
+
+/** The hex text of the bytes an error shows, from the row's `Uint8Array` or from the array of their hex text an include carries. */
+function blobHexText(value: unknown): StoredText | undefined {
+  if (value instanceof Uint8Array) {
+    const shownBytes = value.subarray(0, SHOWN_BYTES);
+    const text = Buffer.from(shownBytes.buffer, shownBytes.byteOffset, shownBytes.byteLength)
+      .toString('hex')
+      .toUpperCase();
+    return { text, longer: value.byteLength > SHOWN_BYTES };
+  }
+  if (!Array.isArray(value) || value.length !== 1) return undefined;
+  const [hex]: readonly unknown[] = value;
+  return typeof hex === 'string' ? { text: hex, longer: false } : undefined;
+}
+
+/**
+ * A stored value a codec cannot read, named by its column where the read knows it, as in `Column "account"."active" holds 2, which is not 0 or 1. sqlite/boolean@1 reads 0 as false and 1 as true.`
+ */
+export function errorColumnUnreadable(options: {
+  readonly codecId: string;
+  readonly received: unknown;
+  readonly column: SqlColumnRef | undefined;
+  readonly notA: string;
+  readonly reads: string;
+}): StructuredError {
+  const { codecId, received, column, notA, reads } = options;
+  const hex = blobHexText(received);
+  const receivedText =
+    hex !== undefined
+      ? `x'${shownText(hex)}'`
+      : shownText({ text: String(received), longer: false });
+  const shownReceived =
+    hex !== undefined
+      ? `bytes ${receivedText}`
+      : typeof received === 'string'
+        ? JSON.stringify(receivedText)
+        : receivedText;
+  const holder =
+    column === undefined
+      ? `A ${codecId} value is ${shownReceived}`
+      : `Column "${column.table}"."${column.name}" holds ${shownReceived}`;
+  return sqliteError(
+    'RUNTIME.DECODE_FAILED',
+    `${holder}, which is not ${notA}. ${codecId} reads ${reads}.`,
+    {
+      meta: {
+        codecId,
+        ...(column === undefined ? {} : { table: column.table, column: column.name }),
+        received: receivedText,
+      },
+    },
+  );
 }
 
 /**

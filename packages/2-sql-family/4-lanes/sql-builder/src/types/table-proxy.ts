@@ -127,6 +127,26 @@ export type ColumnRefs<
   >;
 };
 
+type ColumnInputTypes<
+  C extends TableProxyContract,
+  NsId extends string,
+  Name extends string,
+> = StorageColumnMapAt<ExtractStorageColumnInputTypes<C>, NsId, Name>;
+
+/** The table's columns as scope fields, with each column's resolved input type. */
+export type TableScopeTable<
+  C extends TableProxyContract,
+  NsId extends string,
+  Name extends string,
+> = StorageTableToScopeTable<NamespaceTable<C, NsId, Name>, ColumnInputTypes<C, NsId, Name>>;
+
+/** The scope a table's callbacks see before any join. */
+export type TableScope<
+  C extends TableProxyContract,
+  NsId extends string,
+  Name extends string,
+> = DefaultScope<Name, NamespaceTable<C, NsId, Name>, ColumnInputTypes<C, NsId, Name>>;
+
 export type ContractToQC<
   C extends TableProxyContract,
   NsId extends string = string,
@@ -143,19 +163,16 @@ export type WhereFilter<
   C extends TableProxyContract,
   NsId extends keyof C['storage']['namespaces'] & string,
   Name extends TableNamesInNamespace<C, NsId>,
-> = ExpressionBuilder<
-  DefaultScope<Name, NamespaceTable<C, NsId, Name>>,
-  ContractToQC<C, NsId, Name>
->;
+> = ExpressionBuilder<TableScope<C, NsId, Name>, ContractToQC<C, NsId, Name>>;
 
 export interface TableProxy<
   C extends TableProxyContract,
   NsId extends string,
   Name extends string,
   Alias extends string = Name,
-  AvailableScope extends Scope = DefaultScope<Name, NamespaceTable<C, NsId, Name>>,
+  AvailableScope extends Scope = TableScope<C, NsId, Name>,
   QC extends QueryContext = ContractToQC<C, NsId, Name>,
-> extends JoinSource<StorageTableToScopeTable<NamespaceTable<C, NsId, Name>>, Alias>,
+> extends JoinSource<TableScopeTable<C, NsId, Name>, Alias>,
     WithSelect<QC, AvailableScope, EmptyRow>,
     WithJoin<QC, AvailableScope, C['capabilities']> {
   /** The table's columns, for naming in a raw statement's row spec. */

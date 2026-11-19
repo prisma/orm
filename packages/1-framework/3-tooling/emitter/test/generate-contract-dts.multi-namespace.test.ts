@@ -2,7 +2,7 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract } from './utils';
+import { createTestContract, TEST_TYPES_MODULE } from './utils';
 
 const mockSqlHook = createMockSpi();
 
@@ -21,7 +21,7 @@ describe('generateContractDts domain namespace handling', () => {
         },
       },
     };
-    const dts = generateContractDts(contract, mockSqlHook, [], HASHES);
+    const dts = generateContractDts(contract, mockSqlHook, [], HASHES, TEST_TYPES_MODULE);
     expect(dts).toContain('readonly public:');
   });
 
@@ -34,7 +34,7 @@ describe('generateContractDts domain namespace handling', () => {
         },
       },
     };
-    const dts = generateContractDts(contract, mockSqlHook, [], HASHES);
+    const dts = generateContractDts(contract, mockSqlHook, [], HASHES, TEST_TYPES_MODULE);
     expect(dts).toContain('readonly "report data":');
   });
 
@@ -81,7 +81,7 @@ describe('generateContractDts domain namespace handling', () => {
         },
       },
     };
-    const dts = generateContractDts(contract, mockSqlHook, [], HASHES);
+    const dts = generateContractDts(contract, mockSqlHook, [], HASHES, TEST_TYPES_MODULE);
     // No flat top-level models map is emitted, so there is no `Models` export
     // and no `ContractType<…, models>` second argument to drop fields into.
     expect(dts).not.toContain('export type Models');
@@ -103,7 +103,7 @@ describe('generateContractDts domain namespace handling', () => {
     };
     let thrown: unknown;
     try {
-      generateContractDts(contract, mockSqlHook, [], HASHES);
+      generateContractDts(contract, mockSqlHook, [], HASHES, TEST_TYPES_MODULE);
     } catch (error) {
       thrown = error;
     }

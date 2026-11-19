@@ -1,6 +1,7 @@
 import type { CodecTypes } from '../types/codec-types';
 import { citextAuthoringTypes } from './authoring';
 import { citextDataTypes } from './data-types';
+import { moduleBase } from './module-base';
 import { citextCodecRegistry } from './registry';
 
 const citextPackMetaBase = {
@@ -17,7 +18,7 @@ const citextPackMetaBase = {
     codecTypes: {
       codecDescriptors: Array.from(citextCodecRegistry.values()),
       import: {
-        package: '@internal/extension-citext/codec-types',
+        package: `${moduleBase}/codec-types`,
         named: 'CodecTypes',
         alias: 'CitextTypes',
       },

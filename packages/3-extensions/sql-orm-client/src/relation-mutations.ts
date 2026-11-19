@@ -66,7 +66,7 @@ export function parseMutationInput(
 
     if (!isRelationMutationCallback(value)) {
       throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
+        'ORM.ARGUMENT_INVALID',
         `Relation field "${fieldName}" on model "${modelName}" expects a mutator callback`,
         { meta: { relation: fieldName, model: modelName, problem: 'missing-callback' } },
       );
@@ -88,7 +88,7 @@ export function parseMutationInput(
       (relation.cardinality === 'N:1' || relation.cardinality === '1:1')
     ) {
       throw ormError(
-        'ORM.RELATION_MUTATION_UNSUPPORTED',
+        'ORM.OPERATION_UNSUPPORTED',
         `Relation "${fieldName}" on model "${modelName}" is a to-one relation and takes one operation, not ${mutations.length}`,
         {
           meta: {
@@ -119,7 +119,7 @@ function invalidRelationField(
 ) {
   const at = index === undefined ? '' : ` at index ${index}`;
   return ormError(
-    'ORM.RELATION_MUTATION_INVALID',
+    'ORM.ARGUMENT_INVALID',
     `Relation field "${fieldName}" on model "${modelName}" ${nested ? `returned a nested array${at}; return one flat array of mutations` : `returned an invalid mutation descriptor${at}`}`,
     {
       meta: {
@@ -179,7 +179,7 @@ export function assertJunctionPayloadWritable({
 
   const cols = through.requiredPayloadColumns.map((c) => `\`${c}\``).join(', ');
   throw ormError(
-    'ORM.RELATION_MUTATION_UNSUPPORTED',
+    'ORM.OPERATION_UNSUPPORTED',
     `Cannot \`${mutation.kind}\` on relation \`${name}\`: its junction \`${through.table}\` has required column(s) ${cols} the relation API can't populate. Write the \`${through.table}\` junction directly or use the SQL builder.`,
     {
       meta: {

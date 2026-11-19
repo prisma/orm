@@ -21,19 +21,21 @@ export const sqlFamilyAuthoringTypes = {
 export function sqlTargetTypeConstructors<const SizeType extends string>(input: {
   readonly sizeType: SizeType;
 }) {
+  const varchar = {
+    kind: 'typeConstructor',
+    documentation: 'Variable-length text with a required maximum character length.',
+    args: [{ kind: 'value', dataType: input.sizeType, name: 'length' }],
+    output: {
+      codecId: 'sql/varchar@1',
+      typeParams: {
+        length: { kind: 'arg', index: 0 },
+      },
+    },
+  } as const;
   return {
     sql: {
-      String: {
-        kind: 'typeConstructor',
-        documentation: 'Variable-length text with a required maximum character length.',
-        args: [{ kind: 'value', dataType: input.sizeType, name: 'length' }],
-        output: {
-          codecId: 'sql/varchar@1',
-          typeParams: {
-            length: { kind: 'arg', index: 0 },
-          },
-        },
-      },
+      Varchar: varchar,
+      String: { ...varchar, deprecated: { replacement: 'sql.Varchar' } },
       Char: {
         kind: 'typeConstructor',
         documentation: 'Fixed-length text with a required character length.',

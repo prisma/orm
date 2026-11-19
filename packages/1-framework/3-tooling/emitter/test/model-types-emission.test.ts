@@ -2,7 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { generateContractDts } from '../src/generate-contract-dts';
 import { createMockSpi } from './mock-spi';
-import { createTestContract } from './utils';
+import { createTestContract, TEST_TYPES_MODULE } from './utils';
 
 const HASHES = {
   storageHash: '0000000000000000000000000000000000000000000000000000000000000001',
@@ -40,9 +40,10 @@ const sqlSpi = createMockSpi();
 
 const mongoSpi = createMockSpi({
   id: 'mongo',
-  getFamilyImports: () => [
-    "import type { MongoCollection, MongoContractWithTypeMaps, MongoTypeMaps, RelationKeys } from '@internal/mongo-contract';",
-  ],
+  getFamilyImports: (typesModule) =>
+    ['MongoCollection', 'MongoContractWithTypeMaps', 'MongoTypeMaps', 'RelationKeys'].map(
+      (symbol) => ({ moduleSpecifier: typesModule, symbol, typeOnly: true }),
+    ),
 });
 
 function modelsBlock(dts: string): string {
@@ -56,7 +57,7 @@ describe('Models namespace and models constant emission', () => {
     const contract = sqlContract({
       public: { Item: { fields: { id: int() }, relations: {}, storage: {} } },
     });
-    const dts = generateContractDts(contract, sqlSpi, [], HASHES);
+    const dts = generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE);
     const modelsStart = dts.indexOf('export namespace Models');
     const typeMapsStart = dts.indexOf('export type TypeMaps');
     expect(dts.indexOf('export type FieldInputTypes')).toBeLessThan(modelsStart);
@@ -76,7 +77,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Item = {
           id: FieldOutputTypes["public"]["Item"]["id"];
@@ -217,7 +220,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_User = {
           id: FieldOutputTypes["public"]["User"]["id"];
@@ -284,7 +289,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_User = {
           id: FieldOutputTypes["public"]["User"]["id"];
@@ -345,7 +352,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    const dts = generateContractDts(contract, sqlSpi, [], HASHES, { supportsNamespaces: false });
+    const dts = generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE, {
+      supportsNamespaces: false,
+    });
     expect(modelsBlock(dts)).toMatchInlineSnapshot(`
       "export namespace Models {
         export type User = {
@@ -388,7 +397,7 @@ describe('Models namespace and models constant emission', () => {
       },
     });
     for (const options of [undefined, {}, { supportsNamespaces: true }]) {
-      const dts = generateContractDts(contract, sqlSpi, [], HASHES, options);
+      const dts = generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE, options);
       expect(dts).toContain('export type unbound_User = {');
       expect(dts).toContain('  __unbound__: {\n    User: Models.unbound_User;\n  };');
     }
@@ -475,7 +484,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Task = {
           id: FieldOutputTypes["public"]["Task"]["id"];
@@ -549,7 +560,7 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    const dts = generateContractDts(contract, sqlSpi, [], HASHES);
+    const dts = generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE);
     expect(dts).toContain(
       'readonly variants: { readonly b: { readonly namespace: "b" & NamespaceId; readonly model: "Epic" }; readonly c: { readonly namespace: "c" & NamespaceId; readonly model: "Epic" } }',
     );
@@ -656,7 +667,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Task = {
           id: FieldOutputTypes["public"]["Task"]["id"];
@@ -731,7 +744,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Task = {
           id: FieldOutputTypes["public"]["Task"]["id"];
@@ -836,7 +851,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     );
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Task = {
           id: FieldOutputTypes["public"]["Task"]["id"];
@@ -905,7 +922,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type public_Order = {
           id: FieldOutputTypes["public"]["Order"]["id"];
@@ -978,7 +997,9 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(modelsBlock(generateContractDts(contract, mongoSpi, [], HASHES))).toMatchInlineSnapshot(`
+    expect(
+      modelsBlock(generateContractDts(contract, mongoSpi, [], HASHES, TEST_TYPES_MODULE)),
+    ).toMatchInlineSnapshot(`
       "export namespace Models {
         export type unbound_User = {
           _id: FieldOutputTypes["__unbound__"]["User"]["_id"];
@@ -1017,7 +1038,7 @@ describe('Models namespace and models constant emission', () => {
       a_b: { C: { fields: { id: int() }, relations: {}, storage: {} } },
       a: { b_C: { fields: { id: int() }, relations: {}, storage: {} } },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_TYPE_NAME_COLLISION',
         message: expect.stringContaining('a_b.C'),
@@ -1040,7 +1061,7 @@ describe('Models namespace and models constant emission', () => {
         AnyTask: { fields: { id: int() }, relations: {}, storage: {} },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_TYPE_NAME_COLLISION',
         meta: { memberName: 'public_AnyTask', sources: ['public.AnyTask', 'public.Any<Task>'] },
@@ -1052,7 +1073,7 @@ describe('Models namespace and models constant emission', () => {
     const contract = sqlContract({
       'my-schema': { Item: { fields: { id: int() }, relations: {}, storage: {} } },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_TYPE_NAME_INVALID',
         meta: { memberName: 'my-schema_Item', source: 'my-schema.Item' },
@@ -1077,7 +1098,7 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_RELATION_TARGET_MISSING',
         meta: {
@@ -1106,7 +1127,7 @@ describe('Models namespace and models constant emission', () => {
         },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_RELATION_TARGET_MISSING',
         meta: {
@@ -1124,7 +1145,7 @@ describe('Models namespace and models constant emission', () => {
         Bug: { fields: { id: int() }, relations: {}, base: ref('Ghost'), storage: {} },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_BASE_MISSING',
         message: expect.stringContaining('public.Bug'),
@@ -1146,7 +1167,7 @@ describe('Models namespace and models constant emission', () => {
         Bug: { fields: {}, relations: {}, base: ref('Task'), storage: {} },
       },
     });
-    expect(() => generateContractDts(contract, sqlSpi, [], HASHES)).toThrow(
+    expect(() => generateContractDts(contract, sqlSpi, [], HASHES, TEST_TYPES_MODULE)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.MODEL_VARIANT_MISSING',
         message: expect.stringContaining('public.Task'),

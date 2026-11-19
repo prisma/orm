@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -18,8 +18,8 @@ import { describe, expect, it } from 'vitest';
 
 const UserTag = model('UserTag', {
   fields: {
-    userId: field.column(integerColumn).column('user_id'),
-    tagId: field.column(integerColumn).column('tag_id'),
+    userId: field.column(integerNumberColumn).column('user_id'),
+    tagId: field.column(integerNumberColumn).column('tag_id'),
   },
 })
   .attributes(({ fields, constraints }) => ({
@@ -27,22 +27,22 @@ const UserTag = model('UserTag', {
   }))
   .sql({ table: 'user_tags' });
 const Tag = model('Tag', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn).unique() },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn).unique() },
 }).sql({ table: 'tags' });
 const UserBase = model('User', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn) },
 }).sql({ table: 'users' });
 const Comment = model('Comment', {
   fields: {
-    id: field.column(integerColumn).id(),
-    postId: field.column(integerColumn).column('post_id'),
+    id: field.column(integerNumberColumn).id(),
+    postId: field.column(integerNumberColumn).column('post_id'),
     body: field.column(textColumn),
   },
 }).sql({ table: 'comments' });
 const PostBase = model('Post', {
   fields: {
-    id: field.column(integerColumn).id(),
-    userId: field.column(integerColumn).column('user_id').optional(),
+    id: field.column(integerNumberColumn).id(),
+    userId: field.column(integerNumberColumn).column('user_id').optional(),
     title: field.column(textColumn),
   },
   relations: { author: rel.belongsTo(UserBase, { from: 'userId', to: 'id' }).sql({ fk: {} }) },
@@ -67,6 +67,7 @@ const contract = defineContract({
 type Collections = {
   readonly users: Collection<typeof contract, 'User'>;
   readonly posts: Collection<typeof contract, 'Post'>;
+  readonly comments: Collection<typeof contract, 'Comment'>;
   readonly rows: (sql: string) => unknown[];
 };
 
@@ -113,6 +114,7 @@ async function withDatabase(fn: (collections: Collections) => Promise<void>): Pr
     await fn({
       users: new Collection({ runtime, context }, 'User', { namespaceId }),
       posts: new Collection({ runtime, context }, 'Post', { namespaceId }),
+      comments: new Collection({ runtime, context }, 'Comment', { namespaceId }),
       rows,
     });
   } finally {
@@ -169,6 +171,57 @@ describe('integration/nested-mutations on SQLite: create()', () => {
         expect(created).toEqual({ id: 10, title: 'Hello', author: { id: 5, name: 'Ada' } });
         expect(rows('select id, user_id from posts')).toEqual([{ id: 10, user_id: 5 }]);
         expect(rows('select id, post_id from comments')).toEqual([{ id: 100, post_id: 10 }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'skips a child that collides with an unrelated row under onConflict skip and runs callbacks only under inserted children',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({
+          id: 9,
+          name: 'Other',
+          posts: (posts) => posts.create({ id: 10, title: 'Taken' }),
+        });
+
+        const created = await users
+          .select('id')
+          .include('posts', (posts) => posts.select('id', 'title'))
+          .create({
+            id: 1,
+            name: 'Ada',
+            posts: (posts) =>
+              posts.create(
+                [
+                  {
+                    id: 10,
+                    title: 'Clash',
+                    comments: (comments) => comments.create({ id: 100, body: 'Skipped' }),
+                  },
+                  {
+                    id: 11,
+                    title: 'New',
+                    comments: (comments) => comments.create({ id: 101, body: 'Kept' }),
+                  },
+                ],
+                { onConflict: 'skip' },
+              ),
+          });
+
+        expect({
+          created,
+          posts: rows('select id, user_id, title from posts order by id'),
+          comments: rows('select id, post_id from comments order by id'),
+        }).toEqual({
+          created: { id: 1, posts: [{ id: 11, title: 'New' }] },
+          posts: [
+            { id: 10, user_id: 9, title: 'Taken' },
+            { id: 11, user_id: 1, title: 'New' },
+          ],
+          comments: [{ id: 101, post_id: 11 }],
+        });
       });
     },
     timeouts.databaseOperation,
@@ -274,6 +327,52 @@ describe('integration/nested-mutations on SQLite: update()', () => {
   );
 
   it(
+    'refuses disconnect() on a relation whose foreign key is required, before any statement runs',
+    async () => {
+      await withDatabase(async ({ users, posts, comments, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          posts: (children) => children.create([{ id: 10, title: 'Post' }]),
+        });
+        await comments.create({ id: 100, postId: 10, body: 'Hi' });
+        const refused = (relation: string) =>
+          expect.objectContaining({
+            code: 'ORM.OPERATION_UNSUPPORTED',
+            meta: {
+              kind: 'disconnect',
+              relation,
+              reason: 'required-foreign-key',
+              model: 'Comment',
+              fields: ['postId'],
+            },
+          });
+
+        await expect(
+          comments.where({ id: 100 }).update({
+            body: 'Edited',
+            // @ts-expect-error
+            post: (post) => post.disconnect(),
+          }),
+        ).rejects.toThrow(refused('post'));
+        await expect(
+          posts.where({ id: 10 }).update({
+            title: 'Edited',
+            // @ts-expect-error
+            comments: (children) => children.disconnect(),
+          }),
+        ).rejects.toThrow(refused('comments'));
+
+        expect(rows('select id, post_id, body from comments')).toEqual([
+          { id: 100, post_id: 10, body: 'Hi' },
+        ]);
+        expect(rows('select id, title from posts')).toEqual([{ id: 10, title: 'Post' }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
     'resolves null and writes nothing when no row matches',
     async () => {
       await withDatabase(async ({ users, rows }) => {
@@ -284,6 +383,37 @@ describe('integration/nested-mutations on SQLite: update()', () => {
         expect(updated).toBeNull();
         expect(rows('select id from tags order by id')).toEqual([{ id: 1 }]);
         expect(rows('select user_id from user_tags')).toEqual([]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'skips a child that collides on conflictOn with a post of another user and links the others',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({ id: 1, name: 'Ada' });
+        await users.create({
+          id: 9,
+          name: 'Other',
+          posts: (posts) => posts.create({ id: 10, title: 'Taken' }),
+        });
+
+        await users.where({ id: 1 }).update({
+          posts: (posts) =>
+            posts.create(
+              [
+                { id: 10, title: 'Clash' },
+                { id: 11, title: 'New' },
+              ],
+              { onConflict: 'skip', conflictOn: ['id'] },
+            ),
+        });
+
+        expect(rows('select id, user_id, title from posts order by id')).toEqual([
+          { id: 10, user_id: 9, title: 'Taken' },
+          { id: 11, user_id: 1, title: 'New' },
+        ]);
       });
     },
     timeouts.databaseOperation,

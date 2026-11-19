@@ -148,6 +148,21 @@ it('checks monotonic time before commit even when the timer has not run', async 
   await runtime.close();
 });
 
+it('refuses a statement sent on the connection once the deadline passed', async () => {
+  const { runtime, driver } = createSetup();
+  const connection = await runtime.connection();
+  const transaction = await connection.transaction({ timeout: 10 });
+  vi.spyOn(performance, 'now').mockReturnValue(20);
+
+  await expect(connection.execute(rawPlan('update on connection'))).rejects.toMatchObject({
+    code: 'RUNTIME.TRANSACTION_TIMEOUT',
+  });
+  expect(driver.execute).not.toHaveBeenCalled();
+  await transaction.rollback();
+  await connection.release();
+  await runtime.close();
+});
+
 it('excludes acquisition and BEGIN but starts the clock before post-BEGIN setup', async () => {
   const acquisition = deferred();
   const beginning = deferred();

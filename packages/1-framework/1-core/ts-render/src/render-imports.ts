@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import { contractError } from './contract-errors';
 import type { ImportRequirement } from './ts-expression';
 
@@ -47,7 +48,7 @@ import type { ImportRequirement } from './ts-expression';
  */
 export function renderImports(requirements: readonly ImportRequirement[]): string {
   const byModule = aggregateByModule(requirements);
-  const entries = [...byModule.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const entries = [...byModule.entries()].sort(([a], [b]) => compareCodeUnits(a, b));
   return entries
     .map(([moduleSpecifier, group]) => renderModuleImport(moduleSpecifier, group))
     .join('\n');
@@ -145,14 +146,14 @@ function attributesEqual(
 function stringifyAttributes(attrs: Readonly<Record<string, string>> | null): string {
   if (attrs === null) return '(none)';
   const entries = Object.entries(attrs)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => compareCodeUnits(a, b))
     .map(([k, v]) => `${k}: ${JSON.stringify(v)}`);
   return `{ ${entries.join(', ')} }`;
 }
 
 function renderModuleImport(moduleSpecifier: string, group: ModuleImportGroup): string {
   const attrs = buildAttributesClause(group.attributes);
-  const defaultEntries = [...group.defaults.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const defaultEntries = [...group.defaults.entries()].sort(([a], [b]) => compareCodeUnits(a, b));
   const hasNamed = group.named.size > 0;
 
   // More than one distinct default symbol can't share a single import
@@ -232,11 +233,7 @@ function renderNamedBindingsList(group: ModuleImportGroup, statementTypeOnly: bo
 }
 
 function compareNamedBindings(a: NamedBinding, b: NamedBinding): number {
-  if (a.symbol !== b.symbol) return a.symbol < b.symbol ? -1 : 1;
-  const aAlias = a.alias ?? '';
-  const bAlias = b.alias ?? '';
-  if (aAlias === bAlias) return 0;
-  return aAlias < bAlias ? -1 : 1;
+  return compareCodeUnits(a.symbol, b.symbol) || compareCodeUnits(a.alias ?? '', b.alias ?? '');
 }
 
 function namedBindingKey(symbol: string, alias: string | null): string {
@@ -252,7 +249,7 @@ function renderNamedBinding(binding: NamedBinding, statementTypeOnly: boolean): 
 function buildAttributesClause(attrs: Readonly<Record<string, string>> | null): string {
   if (attrs === null) return '';
   const entries = Object.entries(attrs)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => compareCodeUnits(a, b))
     .map(([k, v]) => `${k}: ${JSON.stringify(v)}`);
   if (entries.length === 0) return '';
   return ` with { ${entries.join(', ')} }`;

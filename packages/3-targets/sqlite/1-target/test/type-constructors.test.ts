@@ -22,11 +22,10 @@ describe('the type constructors the SQLite target contributes', () => {
       ...sqliteScalarTypeConstructors,
       ...sqliteAuthoringTypes,
     });
-    expect(Object.keys(sqliteAuthoringTypes)).toEqual(['sql', 'BigIntNumber', 'temporal']);
   });
 
-  it('contributes the family’s sql.String, whose length is a value of sqlite/real', () => {
-    expect(sqliteAuthoringTypes.sql.String.args).toEqual([
+  it('contributes the family’s sql.Varchar, whose length is a value of sqlite/real', () => {
+    expect(sqliteAuthoringTypes.sql.Varchar.args).toEqual([
       { kind: 'value', dataType: 'sqlite/real', name: 'length' },
     ]);
   });
@@ -50,20 +49,28 @@ describe('the type constructors the SQLite target contributes', () => {
 
   const allConstructors = {
     ...sqliteAuthoringTypes.sql,
-    BigIntNumber: sqliteAuthoringTypes.BigIntNumber,
     ...sqliteScalarAuthoringTypes,
     ...sqliteDateTimeTypeConstructors,
   };
 
   const scalarNames = [
-    ['String', 'sqlite/text@1', 'text'],
+    ['IntegerNumber', 'sqlite/integer@1', 'integer'],
+    ['IntegerBigInt', 'sqlite/bigint@1', 'integer'],
+    ['Real', 'sqlite/real@1', 'real'],
+    ['DecimalString', 'sqlite/decimal@1', 'text'],
+    ['IntegerBoolean', 'sqlite/boolean@1', 'integer'],
+    ['Text', 'sqlite/text@1', 'text'],
+    ['Blob', 'sqlite/blob@1', 'blob'],
+    ['PlainJson', 'sqlite/json@1', 'text'],
     ['Int', 'sqlite/integer@1', 'integer'],
     ['BigInt', 'sqlite/bigint@1', 'integer'],
     ['Float', 'sqlite/real@1', 'real'],
-    ['Decimal', 'sqlite/text@1', 'text'],
-    ['DateTime', 'sqlite/datetime@1', 'text'],
-    ['Json', 'sqlite/json@1', 'text'],
+    ['Decimal', 'sqlite/decimal@1', 'text'],
+    ['Boolean', 'sqlite/boolean@1', 'integer'],
+    ['String', 'sqlite/text@1', 'text'],
     ['Bytes', 'sqlite/blob@1', 'blob'],
+    ['Json', 'sqlite/json@1', 'text'],
+    ['BigIntNumber', 'sqlite/integer@1', 'integer'],
     ['DatetimeJsDate', 'sqlite/datetime@1', 'text'],
     ['DatetimeTemporal', 'sqlite/datetime-temporal@1', 'text'],
     ['DatetimeString', 'sqlite/datetime-string@1', 'text'],
@@ -72,6 +79,7 @@ describe('the type constructors the SQLite target contributes', () => {
     ['TimeString', 'sqlite/time-string@1', 'text'],
     ['TimeTemporal', 'sqlite/time-temporal@1', 'text'],
     ['DurationString', 'sqlite/duration-string@1', 'text'],
+    ['DateTime', 'sqlite/datetime@1', 'text'],
     ['Date', 'sqlite/date-string@1', 'text'],
     ['Time', 'sqlite/time-string@1', 'text'],
     ['Duration', 'sqlite/duration-string@1', 'text'],

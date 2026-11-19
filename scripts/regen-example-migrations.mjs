@@ -308,10 +308,13 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
       'export default definePrismaConfig({\n' +
       '  orm: defineConfig({\n' +
       '    ...realConfig.orm,\n' +
-      `    contract: prismaContract('${schemaSrc}', {\n` +
-      '      target: postgresPackRef,\n' +
-      '      createNamespace: postgresCreateNamespace,\n' +
-      '    }),\n' +
+      '    contract: {\n' +
+      `      ...prismaContract('${schemaSrc}', {\n` +
+      '        target: postgresPackRef,\n' +
+      '        createNamespace: postgresCreateNamespace,\n' +
+      '      }),\n' +
+      '      typesModule: realConfig.orm.contract.typesModule,\n' +
+      '    },\n' +
       '  }),\n' +
       '});\n'
     );
@@ -326,7 +329,10 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
     'export default definePrismaConfig({\n' +
     '  orm: defineConfig({\n' +
     '    ...realConfig.orm,\n' +
-    `    contract: mongoContract('${schemaSrc}', { target: mongoTargetPack }),\n` +
+    '    contract: {\n' +
+    `      ...mongoContract('${schemaSrc}', { target: mongoTargetPack }),\n` +
+    '      typesModule: realConfig.orm.contract.typesModule,\n' +
+    '    },\n' +
     '  }),\n' +
     '});\n'
   );

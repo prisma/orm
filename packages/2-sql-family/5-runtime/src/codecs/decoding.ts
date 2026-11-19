@@ -105,10 +105,15 @@ function rawQueryDecodeContext(
 
   const aliases: string[] = [];
   const codecs = new Map<string, Codec>();
+  const manyAliases = new Set<string>();
   for (const [name, column] of Object.entries(ast.result.columns)) {
     aliases.push(name);
+    const codec = column.codec ?? { codecId: column.codecId };
     if (contractCodecs) {
-      codecs.set(name, contractCodecs.forCodecRef({ codecId: column.codecId }));
+      codecs.set(name, contractCodecs.forCodecRef(codec));
+    }
+    if (codec.many) {
+      manyAliases.add(name);
     }
   }
 
@@ -117,7 +122,7 @@ function rawQueryDecodeContext(
     codecs,
     columnRefs: new Map(),
     includeAliases: EMPTY_INCLUDE_ALIASES,
-    manyAliases: EMPTY_MANY_ALIASES,
+    manyAliases,
     aliasSource: 'row-spec',
   };
 }

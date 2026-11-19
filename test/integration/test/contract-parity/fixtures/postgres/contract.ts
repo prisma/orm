@@ -189,7 +189,7 @@ const Account = model('Account', {
 const Profile = model('Profile', {
   fields: {
     id: field.column(type.Char(27)).id().onCreate(gen.ksuid()),
-    userId: field.column(type.Char(36)),
+    userId: field.column(type.Char(36)).unique(),
     rank: field.column(int4Column),
     settings: field.column(arktypeJson(arktype({ theme: 'string', fontSize: 'number' }))),
   },

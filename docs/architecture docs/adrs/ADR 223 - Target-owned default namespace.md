@@ -40,11 +40,13 @@ readonly defaultNamespaceId: string;
 |---|---|
 | Postgres | `public` |
 | SQLite | `__unbound__` |
+| MySQL | `__unbound__` |
+| MariaDB | `__unbound__` (MySQL's target metadata) |
 | Mongo | `__unbound__` |
 
 **Authoring is the sole consumer.** When authoring lowers a contract (the TS builder's `build-contract.ts` and the PSL interpreter), it stamps a bare model/table's namespace coordinate from `definition.target.defaultNamespaceId`. No framework or family package names a target for this fact, and **no `targetId === 'postgres'` default-namespace branch exists anywhere** — the descriptor field is the single source.
 
-(Targets still legitimately differ in *grammar/validation* — Postgres reserves the `unbound` keyword for the late-binding opt-in; SQLite rejects `namespace { … }` blocks because it has no schema concept. Those are target-shaped rules within the SQL family, distinct from the default-namespace fact, and are not governed by this ADR.)
+(Targets still legitimately differ in *grammar/validation* — Postgres reserves the `unbound` keyword for the late-binding opt-in; SQLite rejects `namespace { … }` blocks because it has no schema concept, and so do MySQL and MariaDB, whose target metadata sets `supportsNamespaces: false`. Those are target-shaped rules within the SQL family, distinct from the default-namespace fact, and are not governed by this ADR.)
 
 **Runtime resolves bare names from the contract's sole namespace — it needs no per-target default.** The contract carries the target only as an id *string* (`contract.target`), not the descriptor object. It does not need one: `defaultNamespaceId` is an *authoring-time placement* fact, and once authoring has lowered the contract every model/table already sits in an explicit namespace. A bare name (`db.User`) therefore resolves to "the contract's one namespace" — no inference, no guess. The domain-access helpers (`domainModelsAtDefaultNamespace` / `domainValueObjectsAtDefaultNamespace`) return that namespace's entities via `soleDomainNamespaceId`, which **throws** when the contract declares zero or more than one namespace rather than silently picking one. The bare-name resolvers (`resolveStorageTable` / `resolveDomainModel`) scan the contract's namespaces for the named entity; for the single-namespace contracts in scope the scan is exact. Explicit cross-namespace selection and bare-name collision ergonomics — the only cases where a stored default would change the answer — are [TML-2550](https://linear.app/prisma-company/issue/TML-2550), which selects a namespace explicitly rather than defaulting.
 

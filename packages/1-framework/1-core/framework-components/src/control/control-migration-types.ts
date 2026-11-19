@@ -15,13 +15,13 @@ import { ifDefined } from '@internal/utils/defined';
 import type { Result } from '@internal/utils/result';
 import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import type { TargetBoundComponentDescriptor } from '../shared/framework-components';
-import type { ImportSpecifierResolver } from '../shared/import-specifier-resolver';
 import type {
   ControlAdapterInstance,
   ControlDriverInstance,
   ControlFamilyInstance,
 } from './control-instances';
 import type { OperationContext } from './control-operation-results';
+import type { DatabasePolicies } from './database-policies';
 import type {
   AppliedMigrationStatement,
   EnumValueCoordinateJson,
@@ -277,18 +277,9 @@ export interface MigrationPlanWithAuthoringSurface extends MigrationPlan {
    * `migration.ts`. Output may start with a shebang; when it does, the caller
    * should make the resulting file executable.
    *
-   * `resolveImportSpecifier` rewrites every package name the rendered file
-   * imports for the import root the consuming application installed (ADR
-   * 242), exactly as the same resolver does for `contract.d.ts` — a
-   * scaffolded migration is a file the application keeps, so every name in
-   * it has to be one the application can resolve. The caller supplies it
-   * rather than the plan capturing it, because the project a plan is
-   * rendered into is known at the render call and not at planning time: `db
-   * init` and `db update` build plans they never render. Pass
-   * {@link import('../shared/import-specifier-resolver').keepInternalSpecifiers}
-   * to emit workspace names unchanged.
+   * `migrationModule` is the module the rendered file imports its base class, its CLI entrypoint and every operation helper from: the config's `migrations.module`. The caller supplies it rather than the plan capturing it, because `db init` and `db update` build plans they never render.
    */
-  renderTypeScript(resolveImportSpecifier: ImportSpecifierResolver): string;
+  renderTypeScript(migrationModule: string): string;
 }
 
 // ============================================================================
@@ -771,6 +762,8 @@ export interface MigrationRunnerPerSpaceOptions<
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly destinationContract: unknown;
   readonly policy: MigrationOperationPolicy;
+  /** When set, the marker update at the end of the run records these as the database's policies. */
+  readonly databasePolicies?: DatabasePolicies;
   readonly executionChecks?: MigrationRunnerExecutionChecks;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   /**
@@ -819,6 +812,12 @@ export interface MigrationRunner<
   execute(options: {
     readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
     readonly perSpaceOptions: ReadonlyArray<MigrationRunnerPerSpaceOptions<TFamilyId, TTargetId>>;
+    /**
+     * The database's policies as the caller saw them when it checked the run. Once it holds its
+     * lock, and before it applies the first space, the runner compares them with the application
+     * space's marker and fails the run as a concurrent change when they differ.
+     */
+    readonly expectedDatabasePolicies?: DatabasePolicies;
   }): Promise<MigrationRunnerResult>;
 }
 

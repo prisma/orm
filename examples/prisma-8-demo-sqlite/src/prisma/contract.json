@@ -149,7 +149,7 @@
               "viewCount": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "kind": "scalar"
                 }
               }
@@ -491,7 +491,7 @@
                   }
                 },
                 "viewCount": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
                   "nullable": true
                 }
@@ -692,7 +692,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "38ba9948da5dd02051336dcd63474c601a073c1e63741d1fcca0e8692e978708"
+    "storageHash": "58f983997d83814809882ae60784356aa5db298701ad75502b09f01bafe83971"
   },
   "execution": {
     "executionHash": "711ee7a9f9952ece816afa0be8a7beb696460439dd0added45acb86d7072b8fe",
@@ -752,8 +752,10 @@
       "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "limit": true,
       "orderBy": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true
     }
   },

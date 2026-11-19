@@ -41,8 +41,13 @@ const rows: readonly (readonly [convenience: string, explicit: string])[] = [
   ['String(storage: char, length: 3)', 'Char(3)'],
   ['Boolean', 'Bool'],
   ['Bytes', 'Bytea'],
+  ['Json', 'PlainJson'],
+  ['Json(storage: json)', 'PlainJson'],
+  ['Json(storage: jsonb)', 'Jsonb'],
   ['BigInt[]', 'Int8BigInt[]'],
   ['String?', 'Text?'],
+  ['Json[]', 'PlainJson[]'],
+  ['Json(storage: jsonb)?', 'Jsonb?'],
 ];
 
 describe('a convenience scalar type', () => {
@@ -94,7 +99,45 @@ model Account {
     expect(await readPsl(convenience)).toEqual(await readPsl(explicit));
   });
 
+  it('emits, for Json, the contract PlainJson and Jsonb emit, through a types {} alias and with JSON defaults', async () => {
+    const convenience = `// use prisma-8
+
+types {
+  Payload = Json @default(json\`{}\`)
+  Document = Json(storage: jsonb)
+}
+
+model Account {
+  id       Int                  @id
+  payload  Payload
+  document Document?
+  settings Json(storage: jsonb) @default(json\`{"theme": "dark"}\`)
+  tags     Json[]               @default([json\`"a"\`])
+  raw      Json?                @default(json\`null\`)
+}
+`;
+    const explicit = `// use prisma-8
+
+types {
+  Payload = PlainJson @default(json\`{}\`)
+  Document = Jsonb
+}
+
+model Account {
+  id       Int4        @id
+  payload  Payload
+  document Document?
+  settings Jsonb       @default(json\`{"theme": "dark"}\`)
+  tags     PlainJson[] @default([json\`"a"\`])
+  raw      PlainJson?  @default(json\`null\`)
+}
+`;
+    expect(await readPsl(convenience)).toEqual(await readPsl(explicit));
+  });
+
   it.each([
+    ['Json(storage: text)', 'Argument \\"storage\\" of Json is text; write one of: json, jsonb.'],
+    ['Json @db.Json', '@db.Json is no longer supported; use PlainJson in type position'],
     [
       'BigInt(storage: numeric, as: number)',
       'Argument \\"storage\\" of BigInt cannot be numeric with as: number; write one of: int8.',

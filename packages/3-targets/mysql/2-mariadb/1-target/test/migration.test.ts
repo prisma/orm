@@ -1,6 +1,7 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { ControlStack } from '@internal/framework-components/control';
 import { col } from '@internal/sql-relational-core/contract-free';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import mariadbControlTarget from '../src/core/migrations/control-target';
 import { MariadbMigration } from '../src/core/migrations/mariadb-migration';
@@ -46,7 +47,7 @@ describe('a MariaDB migration', () => {
       { packageDir: '/p', fromHash: null, toHash: 'b'.repeat(64), snapshotsImportPath: '../s' },
       'app',
     );
-    const source = empty.renderTypeScript((specifier) => specifier);
+    const source = empty.renderTypeScript(workspaceMigrationModule.mariadb);
     const modules = [...source.matchAll(/from '(@internal\/[^']+)'/g)].map(([, module]) => module);
     expect({ targetId: empty.targetId, modules: [...new Set(modules)] }).toEqual({
       targetId: 'mariadb',

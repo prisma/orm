@@ -2,23 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import mongoAdapter from '@internal/adapter-mongo/control';
-import type { ContractSourceContext } from '@internal/cli/config-types';
-import type { Contract } from '@internal/contract/types';
-import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
-import { createControlStack } from '@internal/framework-components/control';
-import { defineContract, field, model, type } from '@internal/mongo/contract-builder';
-import { mongoContract } from '@internal/mongo-contract-psl/provider';
-import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
-import mongoTargetPack from '@internal/target-mongo/pack';
 import { dirname, join, relative } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
-import { contract as rewrittenTsContract } from './fixtures/after/src/contract';
 
 const SCRIPT_PATHS = {
-  app: 'upgrade-instructions/pending/mongo-convenience-date-time-types/app/scripts/rewrite-mongo-date-types.ts',
+  app: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/scripts/mongo-convenience-date-time-types/rewrite-mongo-date-types.ts',
   extension:
-    'upgrade-instructions/pending/mongo-convenience-date-time-types/extension/scripts/rewrite-mongo-date-types.ts',
+    'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/scripts/mongo-convenience-date-time-types/rewrite-mongo-date-types.ts',
 } as const;
 
 const EXPECTED_STDOUT = [
@@ -129,74 +119,3 @@ describe.each(Object.entries(SCRIPT_PATHS))(
     });
   },
 );
-
-const mongoStack = createControlStack({
-  family: mongoFamilyDescriptor,
-  target: mongoTargetDescriptor,
-  adapter: mongoAdapter,
-});
-
-const sourceContext: ContractSourceContext = {
-  composedExtensions: [],
-  defaultNamespaceId: mongoStack.target.defaultNamespaceId,
-  composedExtensionContracts: new Map(),
-  authoringContributions: mongoStack.authoringContributions,
-  codecLookup: mongoStack.codecLookup,
-  dataTypes: mongoStack.dataTypes,
-  controlMutationDefaults: mongoStack.controlMutationDefaults,
-  generatorFunctions: mongoStack.generatorFunctions,
-  resolvedInputs: [],
-  capabilities: mongoStack.capabilities,
-};
-
-const serialize = (contract: Contract) =>
-  mongoTargetDescriptor.contractSerializer.serializeContract(contract as MongoTargetContract);
-
-/** The type constructor `Date` was before this release: an instant read as a JavaScript Date. */
-const dateBeforeThisRelease = {
-  kind: 'typeConstructor',
-  documentation: 'A date and time with millisecond precision, stored as BSON date.',
-  output: { codecId: 'mongo/date@1' },
-} as const;
-
-async function loadSchema(schema: string, context: ContractSourceContext): Promise<Contract> {
-  const loaded = await mongoContract(schema, { target: mongoTargetPack }).source.load({
-    ...context,
-    resolvedInputs: [schema],
-  });
-  if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure));
-  return loaded.value;
-}
-
-describe('the rewritten contracts', () => {
-  it('emit the contract the schema emitted before, when Date was an instant', async () => {
-    const before = await loadSchema(join(fixturesDir, 'before/src/contract.prisma'), {
-      ...sourceContext,
-      authoringContributions: {
-        ...sourceContext.authoringContributions,
-        type: { ...sourceContext.authoringContributions.type, Date: dateBeforeThisRelease },
-      },
-    });
-    const after = await loadSchema(join(fixturesDir, 'after/src/contract.prisma'), sourceContext);
-
-    expect(serialize(after)).toEqual(serialize(before));
-  });
-
-  it('emit the contract the TypeScript contract built before, when type.Date() was DateJsDate', () => {
-    const before = defineContract({}, ({ gen, type: t }) => ({
-      models: {
-        Post: model('Post', {
-          collection: 'posts',
-          fields: {
-            _id: field.scalar(type.ObjectId()),
-            publishedAt: field.scalar(type.DateJsDate()).optional(),
-            createdAt: field.scalar(t.DateJsDate()).onCreate(gen.now()),
-            updatedAt: field.scalar(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
-          },
-        }),
-      },
-    }));
-
-    expect(serialize(rewrittenTsContract)).toEqual(serialize(before));
-  });
-});

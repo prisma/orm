@@ -14,13 +14,13 @@ const DETECTIONS = [
     module: '@internal/target-postgres/migration',
   },
   {
-    guide: 'upgrade-instructions/pending/migration-free-functions-not-exported/app/instructions.md',
+    guide: 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md',
     id: 'create-extension-not-exported',
     module: '@prisma/orm-postgres/migration',
   },
   {
     guide:
-      'upgrade-instructions/pending/migration-free-functions-not-exported/extension/instructions.md',
+      'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md',
     id: 'create-extension-not-exported',
     module: '@internal/target-postgres/migration',
   },
@@ -51,7 +51,7 @@ describe.each(DETECTIONS)('$id detection in $guide', ({ guide, id, module }) => 
 describe('create-extension-not-exported detection', () => {
   it('matches an import of createExtension that is never called', () => {
     const guide =
-      'upgrade-instructions/pending/migration-free-functions-not-exported/app/instructions.md';
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md';
     const matches = (content: string) =>
       detectionPatterns(guide, 'create-extension-not-exported').some((pattern) =>
         pattern.test(content),
@@ -68,7 +68,7 @@ describe.each([
   ['app', '@prisma/orm-postgres/migration'],
   ['extension', '@internal/target-postgres/migration'],
 ] as const)('the %s data-transform-not-exported detection', (audience, module) => {
-  const guide = `upgrade-instructions/pending/migration-free-functions-not-exported/${audience}/instructions.md`;
+  const guide = `skills/prisma-8/upgrading/${audience}/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md`;
   const matches = (content: string) =>
     detectionPatterns(guide, 'data-transform-not-exported').some((pattern) =>
       pattern.test(content),

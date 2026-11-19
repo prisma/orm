@@ -14,7 +14,7 @@ import {
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { hashContent } from '@internal/utils/hash-content';
 import { ormError } from './orm-errors';
-import type { RuntimeQueryable } from './types';
+import type { CollectionQueryable } from './types';
 
 type Annotations = ReadonlyMap<string, AnnotationValue<unknown, OperationKind>>;
 
@@ -127,7 +127,7 @@ function activitySourceOf(queryable: RuntimeScope, method: string): ActivitySour
 export async function runOrmCall<Result>(
   queryable: RuntimeScope,
   call: OrmCall<Result>,
-  run: (queryable: RuntimeQueryable) => Promise<Result>,
+  run: (queryable: CollectionQueryable) => Promise<Result>,
 ): Promise<Result> {
   const handle = await startOrmCall(activitySourceOf(queryable, call.method), call);
   if (handle.intercepted !== undefined) {
@@ -148,7 +148,7 @@ export async function runOrmCall<Result>(
 export function streamOrmCall<Row>(
   queryable: RuntimeScope,
   call: OrmCall<Row[]>,
-  run: (queryable: RuntimeQueryable) => AsyncIterableResult<Row>,
+  run: (queryable: CollectionQueryable) => AsyncIterableResult<Row>,
 ): AsyncIterableResult<Row> {
   return new AsyncIterableResult(
     new OrmCallRows(activitySourceOf(queryable, call.method), call, run),
@@ -163,7 +163,7 @@ const done = { done: true, value: undefined } as const;
 class OrmCallRows<Row> implements AsyncGenerator<Row, void, unknown> {
   readonly #source: ActivitySource;
   readonly #call: OrmCall<Row[]>;
-  readonly #run: (queryable: RuntimeQueryable) => AsyncIterableResult<Row>;
+  readonly #run: (queryable: CollectionQueryable) => AsyncIterableResult<Row>;
   #state: 'idle' | 'running' | 'intercepted' | 'finished' = 'idle';
   #handle: ActivityHandle<'orm-call'> | undefined;
   #inner: AsyncIterator<Row, void, unknown> | undefined;
@@ -175,7 +175,7 @@ class OrmCallRows<Row> implements AsyncGenerator<Row, void, unknown> {
   constructor(
     source: ActivitySource,
     call: OrmCall<Row[]>,
-    run: (queryable: RuntimeQueryable) => AsyncIterableResult<Row>,
+    run: (queryable: CollectionQueryable) => AsyncIterableResult<Row>,
   ) {
     this.#source = source;
     this.#call = call;
@@ -383,7 +383,7 @@ const preparedOrmCall = Symbol('preparedOrmCall');
 
 export type PreparedOrmCall<DbRow, Result> = (
   target: RuntimeScope,
-  rows: (queryable: RuntimeQueryable) => AsyncIterableResult<DbRow>,
+  rows: (queryable: CollectionQueryable) => AsyncIterableResult<DbRow>,
   hashInput: CallHashInput,
 ) => Result;
 

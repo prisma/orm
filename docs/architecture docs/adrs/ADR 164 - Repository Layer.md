@@ -51,10 +51,12 @@ Repository operations compose these primitives to implement multi-query workflow
 | UPDATE / DELETE without RETURNING | Target lacks RETURNING | SELECT the matching keys; write with the caller's filter (many rows) or by the selected key (one row); then SELECT by those keys, with any new key value the update set, or return the rows read first (DELETE) |
 | UPSERT without RETURNING | Target lacks RETURNING | INSERT with an update on conflict, then SELECT by the create's values for the conflict columns |
 | Nested creates | Parent + children across tables | Ordered INSERTs within a transaction, propagating generated keys |
+| Includes where the contract lacks `sql.jsonAgg`, `sql.outerReferencesInDerivedTables` or `sql.jsonAggWithoutTruncation` | The database cannot run the one-query include correctly: it rejects the outer reference inside the include's derived table, or it can shorten an oversized JSON array without an error | One query per relation: SELECT the parent rows, then for each include one SELECT of the related rows of all those parents, filtered by the parents' identity, and attach each related row to its parent in memory. Paging, `distinct` and aggregates still run in SQL, per parent. Every parent table needs a primary key or a unique key with no nullable column; without one the read fails with `ORM.ROW_IDENTITY_MISSING`. A very large set of parents is split across several statements per include |
 
 ### 6) Transaction policy
 
-- **Mutations** spanning multiple statements default to transactional (wrap in `transaction`)
+- **Mutations** spanning multiple statements default to transactional (wrap in `transaction`), including the statements that load the includes of the rows they return
+- **Reads** spanning multiple statements, such as a read whose includes load with one query per relation, open no transaction: each statement runs on its own, and inside a caller's transaction they run on it
 - Detailed transaction policy, isolation level selection, and retry semantics are deferred to a follow-up ADR
 
 ### 7) Relationship to ORM lane
@@ -79,6 +81,7 @@ The repository layer reads **contract capabilities** (ADR 031) to choose between
 
 - When `RETURNING` is available, a CREATE can be lowered to a single statement; when absent, the repository issues INSERT + SELECT. A database without `RETURNING` reports at most one generated value per statement, so an operation that would need several generated keys back (a multi-row create returning rows) is refused before it runs
 - When CTE-based nested mutations are feasible (e.g., writable CTEs on Postgres), prefer single-statement lowering via the lane; otherwise, fall back to multi-statement orchestration
+- Includes load with the one-query include, a correlated subquery per include that aggregates the related rows into JSON, when the contract's `sql` group reports `jsonAgg`, `outerReferencesInDerivedTables` and `jsonAggWithoutTruncation`. When it lacks any of them, includes load with one query per relation, and a prepared read with includes is refused, because a prepared read is one statement. There is no user switch between the two (ADR 296)
 - Strategy selection is deterministic given the same contract and capabilities — no runtime feature detection
 
 ## Consequences
@@ -96,6 +99,28 @@ The repository layer reads **contract capabilities** (ADR 031) to choose between
 - **Larger test matrix**: each multi-query strategy needs testing per target, multiplying the conformance surface
 - **Transaction overhead**: mutation operations pay for transaction coordination even when a single statement would suffice on capable targets
 - **Reduced predictability**: users of the repository layer see operations that may issue varying numbers of statements depending on target capabilities
+- **A read whose includes load with one query per relation can see more than one snapshot.** Its statements run one after another without a transaction, so each sees the data committed when it runs. A child committed between two statements can appear, a child whose parent was deleted in between is missing, and a to-one child can disagree with its parent's foreign key column. Prisma 7, ActiveRecord and Django load relations the same way and have the same cost.
+- **Loading one query per relation has limits the one-query include does not:**
+  - A read with includes does not stream. It holds every row in memory until its last statement completes, then yields them.
+  - Middleware that inspects statements sees each per-relation statement as a plain `SELECT` with no `LIMIT`, since paging runs per parent inside it. The `lints` middleware reports `LINT.NO_LIMIT` for it, and the `budgets` middleware counts it as unbounded.
+  - Child rows are attached to their parent by the decoded values of the parent's identity, and the child statement filters on those values written back through the key's codec. A key whose codec cannot reproduce the stored value, such as a `datetime(6)` read as a JavaScript `Date`, which has only milliseconds, matches no stored row, so its parent gets no children.
+  - A child row that fails to decode raises the runtime's ordinary decode error. Child rows that tie on the caller's order come back in the order of the child's identity, which each per-relation statement adds to its `ORDER BY`.
+
+## Alternatives considered
+
+For writes on a database without `RETURNING`:
+
+- **Refuse every write that returns rows,** leaving only the methods that return counts. Rejected: it keeps one statement per call, but leaves the ORM close to unusable on such a database.
+- **Report generated keys as rows, or as a `generatedKeys` member of a family write result.** Rejected: a database without `RETURNING` reports at most one generated value per statement, so neither shape can be filled for a multi-row insert, and rows a write returns are what `RETURNING` already means. The driver instead reports the one value as an optional `insertId` on the statement's statistics (`SqlStatementStats` in `packages/2-sql-family/4-lanes/relational-core/src/ast/driver-types.ts`).
+- **A framework result type that each family binds.** Rejected: the value must be optional, because a middleware can answer a statement in place of the database and leave it out, and a generic result type cannot be named by middleware written once for every client ([ADR 271 — The runtime middleware observes a tree of activities, each started, ended and finalized](ADR%20271%20-%20The%20runtime%20middleware%20observes%20a%20tree%20of%20activities%2C%20each%20started%2C%20ended%20and%20finalized.md)).
+- **A follow-up `SELECT LAST_INSERT_ID()`.** Rejected: it costs another round trip, and it puts a MySQL function in code shared by every target.
+
+For includes on a database that cannot run the one-query include:
+
+- **Rewrite the one-query include so the correlation sits in the subquery's own `WHERE`, and check each array's length against `COUNT(*)`.** Rejected: it builds every aggregate twice per level of nesting, recognises a shortened array only by matching error text, and cannot express `distinct`, paged scalar includes or `combine`.
+- **One query that joins parents and children, with duplicates removed in memory.** Rejected: paging per parent cannot be written, and several to-many includes multiply the rows returned.
+- **A loader that reads every child row and pages, removes duplicates and aggregates in memory.** Rejected: it reads rows the caller did not ask for, and it matches rows on the foreign key column's text, which is wrong under a case-insensitive collation. The per-relation statements page, remove duplicates and aggregate in SQL, and match rows on decoded identity values.
+- **Run a read with includes in a transaction at REPEATABLE READ, so that all its statements see one snapshot.** Rejected: it costs two more round trips and holds a connection for the whole read, on every read with includes, to remove an inconsistency the ORMs that load relations the same way also accept. A transaction at READ COMMITTED, the level of the transactions the ORM opens itself, would not help: each statement there still sees the latest committed data.
 
 ## Related ADRs
 

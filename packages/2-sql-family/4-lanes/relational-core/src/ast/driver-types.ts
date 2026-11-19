@@ -93,6 +93,7 @@ export interface SqlConnection extends SqlQueryable {
 export interface SqlTransaction extends SqlQueryable {
   commit(): Promise<void>;
   rollback(): Promise<void>;
+  savepoint(name: string): Promise<SqlTransaction>;
 }
 
 export interface SqlQueryable {

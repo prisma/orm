@@ -48,6 +48,7 @@ describe('variant', () => {
       title: string;
       projectId: number | null;
       reporterId: number | null;
+      pinnedById: number | null;
       severity: string;
       assigneeId: number | null;
       type: 'bug';
@@ -126,5 +127,14 @@ describe('a write on a polymorphic base', () => {
       await withProject.update({ title: 'y' }),
     ).toEqualTypeOf<TaskWithProjectRow | null>();
     expectTypeOf(await withProject.deleteAll().toArray()).toEqualTypeOf<TaskWithProjectRow[]>();
+  });
+});
+
+describe('update data on a polymorphic model', () => {
+  test('rejects the discriminator on a variant and on the base model', () => {
+    // @ts-expect-error
+    tasks.features().where({ id: 1 }).updateAll({ type: 'bug' });
+    // @ts-expect-error
+    tasks.where({ id: 1 }).updateAll({ type: 'bug' });
   });
 });

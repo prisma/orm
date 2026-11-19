@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
@@ -23,7 +23,7 @@ const familyInstance = sql.create(
 const firstContract = familyInstance.deserializeContract(
   defineContract({
     models: {
-      User: model('User', { fields: { id: field.column(integerColumn).id() } }).sql({
+      User: model('User', { fields: { id: field.column(integerNumberColumn).id() } }).sql({
         table: 'user',
       }),
     },
@@ -35,7 +35,7 @@ const secondContract = familyInstance.deserializeContract(
     models: {
       User: model('User', {
         fields: {
-          id: field.column(integerColumn).id(),
+          id: field.column(integerNumberColumn).id(),
           email: field.column(textColumn),
         },
       }).sql({ table: 'user' }),

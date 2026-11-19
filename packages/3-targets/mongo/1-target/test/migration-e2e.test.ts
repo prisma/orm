@@ -231,6 +231,7 @@ describe('migration file E2E', () => {
       from: '0'.repeat(64),
       to: '1'.repeat(64),
       snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+      migrationModule: '@internal/target-mongo/migration',
     } as const;
 
     it('produces ops.json identical to direct factory invocation', async () => {
@@ -403,6 +404,47 @@ describe('migration file E2E', () => {
       );
     });
 
+    it('reproduces renameStoredKey, removeStoredKey and fillStoredKey', async () => {
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { FillStoredKeyCall, RemoveStoredKeyCall, RenameStoredKeyCall } = await import(
+        '../src/core/migrations/op-factory-call'
+      );
+      const { serializeMongoOps } = await import('../src/core/migrations/mongo-ops-serializer');
+      const calls = [
+        new RenameStoredKeyCall({
+          collection: 'users',
+          field: 'addresses',
+          path: '$[*].street',
+          to: 'line1',
+        }),
+        new RemoveStoredKeyCall({
+          collection: 'users',
+          field: 'profile',
+          path: "$.addresses[*]['zip code']",
+          filter: { kind: 'admin' },
+        }),
+        new FillStoredKeyCall({
+          collection: 'users',
+          field: 'addresses',
+          path: '$[*].city',
+          value: { $literal: '$none' },
+        }),
+      ];
+
+      const tsSource = renderCallsToTypeScript(calls, defaultMeta);
+      await writeFile(
+        join(tmpDir, 'migration.ts'),
+        tsSource.replace("'@internal/target-mongo/migration'", `'${factoryExport}'`),
+      );
+      await writeContractFixtures(defaultMeta);
+
+      const result = await runFile('migration.ts');
+      expect(result.exitCode).toBe(0);
+      expect(JSON.parse(await readFile(join(tmpDir, 'ops.json'), 'utf-8'))).toEqual(
+        JSON.parse(serializeMongoOps(await Promise.all(calls.map((call) => call.toOp())))),
+      );
+    });
+
     it('reproduces a filled data transform scaffold with a variant filter', async () => {
       const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
       const { DataTransformCall } = await import('../src/core/migrations/op-factory-call');
@@ -508,6 +550,7 @@ describe('migration file E2E', () => {
         from: 'a'.repeat(64),
         to: 'b'.repeat(64),
         snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+        migrationModule: '@internal/target-mongo/migration',
       } as const;
       const tsSource = renderCallsToTypeScript(calls, meta);
       const resolvedSource = tsSource.replace(
@@ -694,6 +737,7 @@ describe('migration file E2E', () => {
         from: '0'.repeat(64),
         to: '1'.repeat(64),
         snapshotsImportPath: SNAPSHOTS_IMPORT_PATH,
+        migrationModule: '@internal/target-mongo/migration',
       } as const;
       const migrationSource = renderCallsToTypeScript(calls, directRunMeta).replace(
         "'@internal/target-mongo/migration'",
