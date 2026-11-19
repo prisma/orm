@@ -90,6 +90,7 @@ describe('the Prisma 7 result document', () => {
       expect(run.presented?.presentation.json).toEqual({
         ok: true,
         target: 'postgres',
+        package: '@prisma/orm-postgres',
         authoring: 'prisma7',
         schemaPath: 'prisma/schema.prisma',
         filesWritten: [

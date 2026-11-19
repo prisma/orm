@@ -137,7 +137,7 @@ During `prisma orm init`, dependency installation failed. The first install, of 
 
 ### CLI.INIT_INVALID_FLAG_VALUE
 
-A flag passed to `prisma orm init` has a value outside its allowed set (for example `--target` with something other than `postgres` or `mongodb`). Maps to init exit code 2 (PRECONDITION). Payload: `flag`, `value`, `allowed`.
+A flag passed to `prisma orm init` has a value outside its allowed set (for example `--target` with a value that is neither a short name in the list of known target packages, such as `postgres` or `mongodb`, nor a valid npm package name). Maps to init exit code 2 (PRECONDITION). Payload: `flag`, `value`, `allowed`, and, for `--target`, `problems`: why the value is not a valid package name, as `validate-npm-package-name` reports it.
 
 ### CLI.INIT_INVALID_MANIFEST
 

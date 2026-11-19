@@ -200,10 +200,10 @@ describe('init prompts', () => {
     );
 
     it(
-      'rejects an unknown --target value with the allowed set',
+      'rejects a --target that is no known name and no package name, with the allowed set',
       async () => {
         const run = await harness().run(
-          ['orm', 'init', '--target', 'sqlite', '--authoring', 'psl', ...NO_PACKAGE_WORK, '--json'],
+          ['orm', 'init', '--target', 'SQLite', '--authoring', 'psl', ...NO_PACKAGE_WORK, '--json'],
           { cwd: projectDir },
         );
 
@@ -212,7 +212,7 @@ describe('init prompts', () => {
           ok: false,
           error: {
             code: 'CLI.INIT_INVALID_FLAG_VALUE',
-            meta: { flag: 'target', allowed: ['postgres', 'mongodb'] },
+            meta: { flag: 'target', allowed: ['postgres', 'mongodb', '<package name>'] },
           },
         });
       },
