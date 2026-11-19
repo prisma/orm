@@ -1844,4 +1844,18 @@ export const scenarios = [
       data: ['some', 'array', 1, 2, 3, { object: 'value' }],
     },
   },
+  {
+    name: 'queryRaw - Json column is returned as an object',
+    up: `
+      create table posts (
+        id int primary key not null,
+        data JSON not null
+      );
+      insert into posts (id, data) values (1, '{"x": 42}');
+    `,
+    do: async (client) => {
+      return await client.$queryRaw`select data from posts`
+    },
+    expect: [{ data: { x: 42 } }],
+  },
 ] as Input['scenarios']
