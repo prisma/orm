@@ -56,3 +56,75 @@ test('create through variant() takes skip on a one-to-many relation and connect 
 
   expectTypeOf([oneToMany, toOne, toOneWithSkip]).toExtend<readonly unknown[]>();
 });
+
+test('a create row with options refuses a callback on a relation whose foreign key is on the row', () => {
+  const post = { id: 1, title: 'A', views: 0 };
+  const skip: UserUpdate = {
+    posts: (posts) =>
+      // @ts-expect-error
+      posts.create({ ...post, author: () => [] }, { onConflict: 'skip' }),
+  };
+  const connect: UserUpdate = {
+    invitedUsers: (users) =>
+      // @ts-expect-error
+      users.create([{ id: 2, name: 'Bo', email: 'bo@example.com', invitedBy: () => [] }], {
+        onConflict: 'connect',
+      }),
+  };
+  const variant: PolyUpdate<'Project'> = {
+    tasks: (tasks) => {
+      const bugs = tasks.variant('bug');
+      // @ts-expect-error
+      return bugs.create(
+        { title: 'Crash', severity: 'high', assignee: () => [] },
+        { onConflict: 'skip' },
+      );
+    },
+  };
+
+  expectTypeOf([skip, connect, variant]).toExtend<readonly unknown[]>();
+});
+
+test('a create row with options takes callbacks on relations keyed on the other side, and a row without options takes every callback', () => {
+  const withOptions: UserUpdate = {
+    invitedUsers: (users) =>
+      users.create(
+        {
+          id: 2,
+          name: 'Bo',
+          email: 'bo@example.com',
+          posts: (posts) => posts.create({ id: 1, title: 'A', views: 0 }),
+          profile: (profile) => profile.create({ id: 1, bio: 'Hi' }),
+          tags: (tags) => tags.connect({ id: 'a' }),
+        },
+        { onConflict: 'connect' },
+      ),
+  };
+  const withoutOptions: UserUpdate = {
+    posts: (posts) =>
+      posts.create({ id: 1, title: 'A', views: 0, author: (author) => author.connect({ id: 1 }) }),
+  };
+  const variantWithOptions: PolyUpdate<'Project'> = {
+    tasks: (tasks) =>
+      tasks.variant('bug').create(
+        {
+          title: 'Crash',
+          severity: 'high',
+          comments: (comments) => comments.create({ body: 'Seen' }),
+        },
+        { onConflict: 'skip' },
+      ),
+  };
+  const variantWithoutOptions: PolyUpdate<'Project'> = {
+    tasks: (tasks) =>
+      tasks.variant('bug').create({
+        title: 'Crash',
+        severity: 'high',
+        assignee: (assignee) => assignee.connect({ id: 1 }),
+      }),
+  };
+
+  expectTypeOf([withOptions, withoutOptions, variantWithOptions, variantWithoutOptions]).toExtend<
+    readonly unknown[]
+  >();
+});

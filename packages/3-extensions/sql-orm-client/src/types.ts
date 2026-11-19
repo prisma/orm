@@ -1957,9 +1957,10 @@ export interface NestedCreateOptions<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ConflictAction extends NestedCreateConflictAction = NestedCreateConflictAction,
+  NsId extends string = never,
 > {
   readonly onConflict: ConflictAction;
-  readonly conflictOn?: readonly (keyof DefaultModelRow<TContract, ModelName> & string)[];
+  readonly conflictOn?: readonly (keyof DefaultModelRow<TContract, ModelName, NsId> & string)[];
 }
 
 export interface RelationMutationCreate<
@@ -2269,13 +2270,23 @@ export interface RelationMutator<
     data: CreateDisabled<TContract, ModelName, LinkWritesDisabled, NsId> extends true
       ? never
       : MutationCreateInput<TContract, ModelName, NsId>,
-    options?: RelationCreateOptions<TContract, ModelName, ConflictActions>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
   create(
     data: CreateDisabled<TContract, ModelName, LinkWritesDisabled, NsId> extends true
       ? never
       : readonly MutationCreateInput<TContract, ModelName, NsId>[],
-    options?: RelationCreateOptions<TContract, ModelName, ConflictActions>,
+  ): RelationMutationCreate<TContract, ModelName, NsId>;
+  create(
+    data: CreateDisabled<TContract, ModelName, LinkWritesDisabled, NsId> extends true
+      ? never
+      : ConflictRowCreateInput<TContract, ModelName, NsId>,
+    options: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
+  ): RelationMutationCreate<TContract, ModelName, NsId>;
+  create(
+    data: CreateDisabled<TContract, ModelName, LinkWritesDisabled, NsId> extends true
+      ? never
+      : readonly ConflictRowCreateInput<TContract, ModelName, NsId>[],
+    options: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
   connect(
     criterion: LinkWritesDisabled extends true
@@ -2325,6 +2336,26 @@ type NestedVariantCreateInput<
     VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>
   >;
 
+type NestedVariantConflictRowCreateInput<
+  TContract extends Contract<SqlStorage>,
+  BaseModelName extends string,
+  VariantValue extends string,
+  NsId extends string = never,
+> = Omit<
+  ConflictRowCreateInput<TContract, BaseModelName, NsId>,
+  DiscriminatorFieldName<TContract, BaseModelName, NsId>
+> &
+  RowCreateFields<
+    TContract,
+    VariantModelName<TContract, BaseModelName, VariantValue, NsId>,
+    VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>
+  > &
+  ConflictRowRelationFields<
+    TContract,
+    VariantModelName<TContract, BaseModelName, VariantValue, NsId>,
+    VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>
+  >;
+
 export interface VariantRelationMutator<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -2358,13 +2389,23 @@ export interface VariantRelationMutator<
     data: LinkWritesDisabled extends true
       ? never
       : NestedVariantCreateInput<TContract, ModelName, VariantValue, NsId>,
-    options?: RelationCreateOptions<TContract, ModelName, ConflictActions>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
   create(
     data: LinkWritesDisabled extends true
       ? never
       : readonly NestedVariantCreateInput<TContract, ModelName, VariantValue, NsId>[],
-    options?: RelationCreateOptions<TContract, ModelName, ConflictActions>,
+  ): RelationMutationCreate<TContract, ModelName, NsId>;
+  create(
+    data: LinkWritesDisabled extends true
+      ? never
+      : NestedVariantConflictRowCreateInput<TContract, ModelName, VariantValue, NsId>,
+    options: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
+  ): RelationMutationCreate<TContract, ModelName, NsId>;
+  create(
+    data: LinkWritesDisabled extends true
+      ? never
+      : readonly NestedVariantConflictRowCreateInput<TContract, ModelName, VariantValue, NsId>[],
+    options: RelationCreateOptions<TContract, ModelName, ConflictActions, NsId>,
   ): RelationMutationCreate<TContract, ModelName, NsId>;
 }
 
@@ -2416,9 +2457,10 @@ type RelationCreateOptions<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ConflictActions extends NestedCreateConflictAction,
+  NsId extends string = never,
 > = [ConflictActions] extends [never]
   ? never
-  : NestedCreateOptions<TContract, ModelName, ConflictActions>;
+  : NestedCreateOptions<TContract, ModelName, ConflictActions, NsId>;
 
 type RelationConflictActions<
   TContract extends Contract<SqlStorage>,
@@ -2590,6 +2632,40 @@ export type MutationCreateInput<
   NsId extends string = never,
 > = NestedCreateInput<TContract, ModelName, NsId> &
   RelationMutationFields<TContract, ModelName, 'create', NsId>;
+
+type RowKeyedRelationNames<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = {
+  [K in RelationNames<TContract, ModelName, NsId>]: RelationCardinality<
+    TContract,
+    ModelName,
+    K,
+    NsId
+  > extends 'N:1'
+    ? K
+    : never;
+}[RelationNames<TContract, ModelName, NsId>];
+
+type ConflictRowRelationFields<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = Omit<
+  RelationMutationFields<TContract, ModelName, 'create', NsId>,
+  RowKeyedRelationNames<TContract, ModelName, ConcreteNsId<NsId>>
+>;
+
+/**
+ * The data of a nested create row with `onConflict`: a callback on a many-to-one relation, whose foreign key is on the row, is left out, because it would write before the database decides whether the row conflicts.
+ */
+export type ConflictRowCreateInput<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = NestedCreateInput<TContract, ModelName, NsId> &
+  ConflictRowRelationFields<TContract, ModelName, NsId>;
 
 export type MutationCreateInputWithRelations<
   TContract extends Contract<SqlStorage>,

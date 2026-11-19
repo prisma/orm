@@ -3,6 +3,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import type {
   CollectionState,
+  ConflictRowCreateInput,
   FilteredRelationMutator,
   MutationCreateInput,
   NestedCreateOptions,
@@ -54,7 +55,11 @@ export function createRelationMutator<
     create(
       data:
         | MutationCreateInput<TContract, ModelName>
-        | readonly MutationCreateInput<TContract, ModelName>[],
+        | ConflictRowCreateInput<TContract, ModelName>
+        | readonly (
+            | MutationCreateInput<TContract, ModelName>
+            | ConflictRowCreateInput<TContract, ModelName>
+          )[],
       options?: NestedCreateOptions<TContract, ModelName>,
     ) {
       const rows = Array.isArray(data) ? [...data] : [data];
@@ -73,7 +78,11 @@ export function createRelationMutator<
         create: (
           data:
             | MutationCreateInput<TContract, ModelName>
-            | readonly MutationCreateInput<TContract, ModelName>[],
+            | ConflictRowCreateInput<TContract, ModelName>
+            | readonly (
+                | MutationCreateInput<TContract, ModelName>
+                | ConflictRowCreateInput<TContract, ModelName>
+              )[],
           options?: NestedCreateOptions<TContract, ModelName>,
         ): RelationMutationCreate<TContract, ModelName> => ({
           ...mutator.create(data, options),
