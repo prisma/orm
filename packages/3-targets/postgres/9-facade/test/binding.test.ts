@@ -90,6 +90,85 @@ describe('resolvePostgresBinding', () => {
       'Unable to determine pg binding type from pg input',
     );
   });
+
+  it('accepts a URL that leaves the host blank', () => {
+    expect(resolvePostgresBinding({ url: 'postgres://u:p@/db' })).toEqual({
+      kind: 'url',
+      url: 'postgres://u:p@/db',
+    });
+  });
+
+  it('accepts a URL that leaves the user blank', () => {
+    expect(resolvePostgresBinding({ url: 'postgres://:p@localhost/db' })).toEqual({
+      kind: 'url',
+      url: 'postgres://:p@localhost/db',
+    });
+  });
+
+  it('still refuses a URL whose host is malformed rather than blank', () => {
+    expect(() => resolvePostgresBinding({ url: 'postgres://u:p@[/db' })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'Postgres URL must be a valid URL',
+      }),
+    );
+  });
+
+  it('refuses a URL with a user but no host and no path, as pg does', () => {
+    expect(() => resolvePostgresBinding({ url: 'postgres://u@' })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'Postgres URL must be a valid URL',
+      }),
+    );
+  });
+
+  it('refuses a URL with a user but no host that only names one in a query, as pg does', () => {
+    expect(() => resolvePostgresBinding({ url: 'postgres://u@?host=/tmp' })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'Postgres URL must be a valid URL',
+      }),
+    );
+  });
+
+  it('accepts a URL whose root certificate file is missing, leaving the file error to the driver', () => {
+    expect(
+      resolvePostgresBinding({
+        url: 'postgres://u:p@localhost/db?sslrootcert=/definitely/not/a/ca.crt',
+      }),
+    ).toEqual({
+      kind: 'url',
+      url: 'postgres://u:p@localhost/db?sslrootcert=/definitely/not/a/ca.crt',
+    });
+  });
+
+  it('accepts a URL whose client certificate file is missing, leaving the file error to the driver', () => {
+    expect(
+      resolvePostgresBinding({
+        url: 'postgres://u:p@localhost/db?sslcert=/definitely/not/a/client.crt',
+      }),
+    ).toEqual({
+      kind: 'url',
+      url: 'postgres://u:p@localhost/db?sslcert=/definitely/not/a/client.crt',
+    });
+  });
+
+  it('accepts a URL whose client key file is missing, leaving the file error to the driver', () => {
+    expect(
+      resolvePostgresBinding({
+        url: 'postgres://u:p@localhost/db?sslkey=/definitely/not/a/client.key',
+      }),
+    ).toEqual({
+      kind: 'url',
+      url: 'postgres://u:p@localhost/db?sslkey=/definitely/not/a/client.key',
+    });
+  });
+
+  it('accepts a URL whose TLS settings pg refuses, leaving that error to the driver', () => {
+    const url = 'postgres://u:p@localhost/db?uselibpqcompat=true&sslmode=verify-ca';
+    expect(resolvePostgresBinding({ url })).toEqual({ kind: 'url', url });
+  });
 });
 
 describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {

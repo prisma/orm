@@ -8,6 +8,7 @@ export default defineConfig({
     'src/exports/canonical-stringify.ts',
     'src/exports/casts.ts',
     'src/exports/defined.ts',
+    'src/exports/guards.ts',
     'src/exports/hash-content.ts',
     'src/exports/internal-error.ts',
     'src/exports/json.ts',

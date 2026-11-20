@@ -6,6 +6,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "One-package Mongo setup for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",

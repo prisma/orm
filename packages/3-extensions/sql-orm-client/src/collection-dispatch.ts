@@ -26,6 +26,7 @@ import type { Codec, SqlCodecCallContext } from '@internal/sql-relational-core/a
 import type { Preparable } from '@internal/sql-relational-core/plan';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { blindCast } from '@internal/utils/casts';
+import { isRecord } from '@internal/utils/guards';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
@@ -987,16 +988,12 @@ function parseCombineEnvelope(include: IncludeExpr, raw: unknown): Record<string
     );
   }
   const parsed = parseIncludePayload(raw);
-  if (!isPlainObjectEnvelope(parsed)) {
+  if (!isRecord(parsed)) {
     throw new InternalError(
       `combine() envelope for include "${include.relationName}" has unexpected shape (expected object, got ${describeEnvelopeShape(parsed)}); this indicates a planner or decoder bug.`,
     );
   }
   return parsed;
-}
-
-function isPlainObjectEnvelope(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function describeEnvelopeShape(value: unknown): string {
@@ -1066,7 +1063,7 @@ async function consumeScalarInclude(
     return emptyAggregateResult(resolved, codec);
   }
   const parsed = parseIncludePayload(raw);
-  if (!isPlainObjectEnvelope(parsed)) {
+  if (!isRecord(parsed)) {
     throw new InternalError(
       `scalar() envelope for include "${include.relationName}" has unexpected shape (expected object, got ${describeEnvelopeShape(parsed)}); this indicates a planner or decoder bug.`,
     );
@@ -1098,7 +1095,7 @@ function parseIncludedRows(include: IncludeExpr, value: unknown): Record<string,
 
   const rows: Record<string, unknown>[] = [];
   for (const item of parsed) {
-    if (!isPlainObjectEnvelope(item)) {
+    if (!isRecord(item)) {
       throw new InternalError(
         `Include row envelope for relation "${include.relationName}" has unexpected shape (expected object, got ${describeEnvelopeShape(item)}); this indicates a planner or decoder bug.`,
       );

@@ -3,7 +3,7 @@ import { ifDefined } from '@internal/utils/defined';
 import type { PackageOperations } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { type } from 'arktype';
-import { join } from 'pathe';
+import { join, relative } from 'pathe';
 import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
 import {
   formatAddArgs,
@@ -14,15 +14,23 @@ import {
   errorInitContributionUnavailable,
   errorInitInvalidManifest,
   errorInitTargetPackageNotInstalled,
+  errorInitTargetPackageNotVerified,
   type InstallReason,
   type PackagesAdded,
   packagesAddedAction,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
+import {
+  firstInstallDrivers,
+  PRISMA_ORM_PACKAGE_KEYWORD,
+  type TargetPackage,
+} from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
 import { normalizeError } from './normalize-error';
-import { type ImportFromProject, isInstalledInProject } from './project-modules';
+import { keywordsOf } from './package-manifest';
+import { type ImportFromProject, installedManifest } from './project-modules';
+import type { LookUpRegistryKeywords, RegistryLookup } from './registry-keywords';
 
 const InitContributionSchema = type({
   label: 'string',
@@ -97,11 +105,8 @@ export interface PreparedTargetPackage {
   readonly warnings: readonly string[];
 }
 
-/** Installs `packageName` with `dotenv` and `peerPackages`, then loads its init contribution. */
-export type PrepareTargetPackage = (
-  packageName: string,
-  peerPackages: readonly string[],
-) => Promise<PreparedTargetPackage>;
+/** Installs the target package with `dotenv` and the drivers the list names, then loads its init contribution. */
+export type PrepareTargetPackage = (target: TargetPackage) => Promise<PreparedTargetPackage>;
 
 /**
  * The target package was installed, then could not be used. The caller adds the instruction to
@@ -127,34 +132,44 @@ export class TargetPackageInstallFailed extends Error {
 
 /**
  * Installs the target package with `dotenv`, the package every init installs, and the driver
- * packages the caller names, leaving out those the project already declares, then loads the
- * package's init contribution from the project. Under `--skip-install` the package must already be
- * installed. Each refusal happens before any file is written.
+ * packages its list entry names, leaving out those the project already declares, then loads the
+ * package's init contribution from the project. A package in no list must first list the Prisma 8
+ * keyword. Under `--skip-install` the package must already be installed. Each refusal happens
+ * before any file is written.
  */
 export function createTargetPackagePreparation(ctx: {
   readonly cwd: string;
+  readonly env: Readonly<Record<string, string | undefined>>;
   readonly packages: PackageOperations;
   readonly packageManager: PackageManager;
   readonly install: boolean;
   readonly importFromProject: ImportFromProject;
+  readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
+  readonly signal: AbortSignal;
 }): PrepareTargetPackage {
-  return async (packageName, peerPackages) => {
+  return async (target) => {
+    const { packageName } = target;
+    const drivers = firstInstallDrivers(target);
     rejectUnparseableManifest(ctx.cwd);
+    const declaredBefore = declaredPackages(ctx.cwd);
+    const manifestPath = installedManifest(ctx.cwd, packageName);
+    // Asking again for a package the project declares rewrites its declared range, which a
+    // refusal later would leave behind; the later install puts those in place instead. The
+    // target package is left out only when it is also on disk, since init loads it now.
+    const targetInPlace = manifestPath !== undefined && declaredBefore.has(packageName);
+    const installsTarget = ctx.install && !targetInPlace;
+    if (target.listed === undefined) {
+      await checkTargetPackageKeyword(ctx, packageName, { manifestPath, installsTarget });
+    }
     const warnings: string[] = [];
     let installed: readonly string[] = [];
     let added: PackagesAdded | undefined;
     let ranCommand: string | undefined;
 
     if (ctx.install) {
-      const declaredBefore = declaredPackages(ctx.cwd);
-      // Asking again for a package the project declares rewrites its declared range, which a
-      // refusal later would leave behind; the later install puts those in place instead. The
-      // target package is left out only when it is also on disk, since init loads it now.
-      const targetInPlace =
-        declaredBefore.has(packageName) && isInstalledInProject(ctx.cwd, packageName);
       const deps = [
-        ...(targetInPlace ? [] : [packageName]),
-        ...['dotenv', ...peerPackages].filter((dep) => !declaredBefore.has(dep)),
+        ...(installsTarget ? [packageName] : []),
+        ...['dotenv', ...drivers].filter((dep) => !declaredBefore.has(dep)),
       ];
       const installFailure = await installProjectDependencies({
         packages: ctx.packages,
@@ -170,18 +185,103 @@ export function createTargetPackagePreparation(ctx: {
       }
       // A target package already in place counts as installed, so the later install leaves it
       // alone too and the project keeps the version it has.
-      installed = targetInPlace ? [packageName, ...deps] : deps;
+      installed = installsTarget ? deps : [packageName, ...deps];
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
       added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
     }
 
     try {
-      const contribution = await loadContribution(ctx, packageName, peerPackages, ranCommand);
+      const contribution = await loadContribution(ctx, target, ranCommand);
       return { contribution, installed, added, warnings };
     } catch (error) {
       throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
     }
   };
+}
+
+/**
+ * Installing a package runs its install scripts, so a name that is not meant for Prisma 8, such as
+ * a mistyped short name, is refused before anything is installed. The copy checked is the one init
+ * will use: the installed one when init will not install the package, otherwise the registry's.
+ * Under `--skip-install` a package that is not installed is left to the "not installed" refusal.
+ */
+async function checkTargetPackageKeyword(
+  ctx: {
+    readonly cwd: string;
+    readonly env: Readonly<Record<string, string | undefined>>;
+    readonly packageManager: PackageManager;
+    readonly install: boolean;
+    readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
+    readonly signal: AbortSignal;
+  },
+  packageName: string,
+  copy: {
+    /** The installed `package.json`, when the project has the package on disk. */
+    readonly manifestPath: string | undefined;
+    /** Whether init's first install installs the package, so the registry's copy is the one used. */
+    readonly installsTarget: boolean;
+  },
+): Promise<void> {
+  const { manifestPath } = copy;
+  if (!ctx.install && manifestPath === undefined) {
+    return;
+  }
+  const lookup: KeywordLookup =
+    manifestPath === undefined || copy.installsTarget
+      ? await ctx.lookUpRegistryKeywords(packageName, { env: ctx.env, signal: ctx.signal })
+      : installedKeywords(ctx.cwd, manifestPath);
+  const refusal = {
+    packageName,
+    installCommand: installCommand(ctx.packageManager, [packageName]),
+    updateCommand: installCommand(ctx.packageManager, [`${packageName}@latest`]),
+  };
+  switch (lookup.kind) {
+    case 'read':
+      if (!lookup.keywords.includes(PRISMA_ORM_PACKAGE_KEYWORD)) {
+        throw errorInitTargetPackageNotVerified({
+          ...refusal,
+          reason: 'keyword-missing',
+          registry: lookup.registry,
+        });
+      }
+      return;
+    case 'not-found':
+      throw errorInitTargetPackageNotVerified({
+        ...refusal,
+        reason: 'not-found',
+        registry: lookup.registry,
+      });
+    case 'lookup-failed':
+      throw errorInitTargetPackageNotVerified({
+        ...refusal,
+        reason: 'lookup-failed',
+        registry: lookup.registry,
+        cause: lookup.cause,
+      });
+  }
+}
+
+/** A registry lookup, or the read of the installed copy, which has no registry. */
+type KeywordLookup =
+  | RegistryLookup
+  | { readonly kind: 'read'; readonly registry: undefined; readonly keywords: readonly string[] }
+  | { readonly kind: 'lookup-failed'; readonly registry: undefined; readonly cause: string };
+
+function installedKeywords(cwd: string, manifestPath: string): KeywordLookup {
+  try {
+    return {
+      kind: 'read',
+      registry: undefined,
+      keywords: keywordsOf(JSON.parse(readFileSync(manifestPath, 'utf-8'))),
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      kind: 'lookup-failed',
+      registry: undefined,
+      cause: `${relative(cwd, manifestPath)} cannot be read as JSON: ${reason}`,
+    };
+  }
 }
 
 async function loadContribution(
@@ -191,30 +291,37 @@ async function loadContribution(
     readonly install: boolean;
     readonly importFromProject: ImportFromProject;
   },
-  packageName: string,
-  peerPackages: readonly string[],
+  target: TargetPackage,
   /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
   ranCommand: string | undefined,
 ): Promise<InitContribution> {
+  const { packageName } = target;
+  const unlisted = target.listed === undefined;
   const entrypoint = await ctx.importFromProject(ctx.cwd, `${packageName}/init`);
   switch (entrypoint.kind) {
     case 'not-installed':
       throw errorInitTargetPackageNotInstalled({
         packageName,
-        installCommand: installCommand(ctx.packageManager, [packageName, ...peerPackages]),
+        installCommand: installCommand(ctx.packageManager, [
+          packageName,
+          ...firstInstallDrivers(target),
+        ]),
         ranCommand,
+        unlisted,
       });
     case 'not-exported':
       throw errorInitContributionUnavailable({
         packageName,
         reason: 'no-entrypoint',
         detail: undefined,
+        unlisted,
       });
     case 'unloadable':
       throw errorInitContributionUnavailable({
         packageName,
         reason: 'unloadable',
         detail: causeMessage(entrypoint.cause),
+        unlisted,
       });
     case 'loaded':
       break;
@@ -225,6 +332,7 @@ async function loadContribution(
       packageName,
       reason: 'invalid-shape',
       detail: contributionProblems(contribution),
+      unlisted,
     });
   }
   return contribution;

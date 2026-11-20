@@ -7,7 +7,7 @@ import {
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
-import { seedPosts, seedProfiles, seedUsers } from './runtime-helpers';
+import { seedPosts, seedProfiles, seedTags, seedUsers, seedUserTags } from './runtime-helpers';
 
 describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy) => {
   it(
@@ -720,6 +720,248 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
 
         const userRows = await runtime.query<{ id: number }>('select id from users');
         expect(userRows).toEqual([]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() where().update() and where().delete() change the first matching post of the parent only',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+        await seedTwoUsersWithPosts(runtime);
+        const update = (data: Parameters<typeof users.update>[0]) =>
+          users.where({ id: 1 }).select('id', 'name').update(data);
+
+        const updated = await update({
+          posts: (posts) => posts.where({ title: 'Draft' }).update({ views: 100 }),
+        });
+        const afterUpdate = await postRows(runtime);
+        const unmatched = await update({
+          posts: (posts) => [
+            posts.where({ title: 'Missing' }).update({ views: 0 }),
+            posts.where({ title: 'Missing' }).delete(),
+          ],
+        });
+        const afterUnmatched = await postRows(runtime);
+        const deleted = await update({
+          posts: (posts) => posts.where({ title: 'Draft' }).delete(),
+        });
+
+        expect([updated, unmatched, deleted]).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 1, name: 'Alice' },
+          { id: 1, name: 'Alice' },
+        ]);
+        expect(afterUpdate).toEqual([
+          { id: 10, title: 'Draft', user_id: 1, views: 100 },
+          { id: 11, title: 'Kept', user_id: 1, views: 20 },
+          { id: 20, title: 'Draft', user_id: 2, views: 3 },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(await postRows(runtime)).toEqual([
+          { id: 11, title: 'Kept', user_id: 1, views: 20 },
+          { id: 20, title: 'Draft', user_id: 2, views: 3 },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() update() and delete() on a to-one relation change the linked row only when it matches',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com' },
+        ]);
+        await seedProfiles(runtime, [
+          { id: 100, userId: 1, bio: 'Old' },
+          { id: 200, userId: 2, bio: 'Old' },
+        ]);
+        const profileRows = () =>
+          runtime.query('select id, user_id, bio from profiles order by id');
+
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.update({ bio: 'New' }) });
+        const afterUpdate = await profileRows();
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.where({ bio: 'Old' }).delete() });
+        const afterUnmatched = await profileRows();
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.where({ bio: 'New' }).delete() });
+
+        expect(afterUpdate).toEqual([
+          { id: 100, user_id: 1, bio: 'New' },
+          { id: 200, user_id: 2, bio: 'Old' },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(await profileRows()).toEqual([{ id: 200, user_id: 2, bio: 'Old' }]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() where().update() and where().delete() on a many-to-many relation change the first matching related row only',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com' },
+        ]);
+        await seedTags(runtime, [
+          { id: 't1', name: 'SQL' },
+          { id: 't2', name: 'Swift' },
+          { id: 't3', name: 'Go' },
+        ]);
+        await seedUserTags(runtime, [
+          { userId: 1, tagId: 't1' },
+          { userId: 1, tagId: 't3' },
+          { userId: 2, tagId: 't2' },
+        ]);
+        const tagRows = () => runtime.query('select id, name from tags order by id');
+
+        await users.where({ id: 1 }).update({
+          tags: (tags) => tags.where((tag) => tag.name.like('S%')).update({ name: 'Postgres' }),
+        });
+        const afterUpdate = await tagRows();
+        await users.where({ id: 1 }).update({
+          tags: (tags) => [
+            tags.where((tag) => tag.name.like('X%')).update({ name: 'None' }),
+            tags.where((tag) => tag.name.like('X%')).delete(),
+          ],
+        });
+        const afterUnmatched = await tagRows();
+        await users.where({ id: 1 }).update({
+          tags: (tags) => tags.where({ name: 'Go' }).delete(),
+        });
+
+        expect(afterUpdate).toEqual([
+          { id: 't1', name: 'Postgres' },
+          { id: 't2', name: 'Swift' },
+          { id: 't3', name: 'Go' },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(await tagRows()).toEqual([
+          { id: 't1', name: 'Postgres' },
+          { id: 't2', name: 'Swift' },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() update() and delete() on a relation the parent holds the key for change the linked row only when it matches',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+          { id: 3, name: 'Carol', email: 'carol@example.com' },
+        ]);
+        const userRows = () =>
+          runtime.query('select id, name, invited_by_id from users order by id');
+        const bob = users.where({ id: 2 }).select('id', 'invitedById');
+
+        await bob.update({
+          name: 'Bob B.',
+          invitedBy: (inviter) => inviter.update({ name: 'Alice A.' }),
+        });
+        const afterUpdate = await userRows();
+        const unmatched = await bob.update({
+          invitedBy: (inviter) => inviter.where({ name: 'Nobody' }).delete(),
+        });
+        const notLinked = await users
+          .where({ id: 3 })
+          .select('id', 'invitedById')
+          .update({ invitedBy: (inviter) => inviter.delete() });
+        const afterUnmatched = await userRows();
+        const deleted = await bob.update({ invitedBy: (inviter) => inviter.delete() });
+
+        expect([unmatched, notLinked, deleted]).toEqual([
+          { id: 2, invitedById: 1 },
+          { id: 3, invitedById: null },
+          { id: 2, invitedById: null },
+        ]);
+        expect(afterUpdate).toEqual([
+          { id: 1, name: 'Alice A.', invited_by_id: null },
+          { id: 2, name: 'Bob B.', invited_by_id: 1 },
+          { id: 3, name: 'Carol', invited_by_id: null },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(await userRows()).toEqual([
+          { id: 2, name: 'Bob B.', invited_by_id: null },
+          { id: 3, name: 'Carol', invited_by_id: null },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() delete() on a relation the parent holds the key for deletes the row its filter found, even when the filter depends on the link',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+        await seedUsers(runtime, [
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+        ]);
+
+        const updated = await users
+          .where({ id: 2 })
+          .select('id', 'invitedById')
+          .update({
+            invitedBy: (inviter) =>
+              inviter.where((user) => user.invitedUsers.some({ id: 2 })).delete(),
+          });
+
+        expect(updated).toEqual({ id: 2, invitedById: null });
+        expect(await runtime.query('select id, invited_by_id from users order by id')).toEqual([
+          { id: 2, invited_by_id: null },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'update() refuses delete() on a relation the parent holds a required key for, before any statement runs',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const posts = createReturningPostsCollection(runtime, strategy);
+        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
+        await seedPosts(runtime, [{ id: 10, title: 'Post', userId: 1, views: 1 }]);
+
+        runtime.resetExecutions();
+        await expect(
+          posts.where({ id: 10 }).update({
+            // @ts-expect-error
+            author: (author) => author.delete(),
+          }),
+        ).rejects.toThrow(
+          expect.objectContaining({
+            code: 'ORM.OPERATION_UNSUPPORTED',
+            meta: {
+              kind: 'delete',
+              relation: 'author',
+              reason: 'required-foreign-key',
+              model: 'Post',
+              fields: ['userId'],
+            },
+          }),
+        );
+        expect(runtime.executions).toEqual([]);
       });
     },
     timeouts.spinUpPpgDev,

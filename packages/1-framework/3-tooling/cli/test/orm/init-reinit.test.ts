@@ -158,10 +158,10 @@ describe('re-scaffolding over an existing project', () => {
     );
 
     it(
-      'rejects an unknown --target before asking for anything',
+      'rejects a --target that is no known name and no package name before asking for anything',
       async () => {
         const run = await harness().run(
-          ['orm', 'init', '--target', 'sqlite', '--authoring', 'psl', ...NO_PACKAGE_WORK, '--json'],
+          ['orm', 'init', '--target', 'SQLite', '--authoring', 'psl', ...NO_PACKAGE_WORK, '--json'],
           { cwd: projectDir },
         );
 

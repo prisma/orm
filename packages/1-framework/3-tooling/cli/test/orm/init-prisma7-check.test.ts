@@ -16,6 +16,7 @@ import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
 import { declareAddedPackages, withoutFakeAdditions } from '../utils/fake-package-manager';
+import { noRegistryLookup } from '../utils/registry-keywords';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
@@ -64,6 +65,7 @@ function harness(packageManager?: PackageManagerId) {
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
       importFromProject: (cwd, specifier) =>
         specifier.endsWith('/init') ? loadInit(cwd, specifier) : loadTargetConfig(cwd, specifier),
+      lookUpRegistryKeywords: noRegistryLookup,
     }),
   };
   return createTestCli({

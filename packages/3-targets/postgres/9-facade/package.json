@@ -6,6 +6,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "One-liner lazy Postgres client composition for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "scripts": {
     "build": "tsdown",
     "emit": "cd ../../../../test/integration && node ../../packages/1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/sql-builder/fixtures/prisma.config.no-pgvector.ts && cp test/sql-builder/fixtures/generated-no-pgvector/contract.json test/sql-builder/fixtures/generated-no-pgvector/contract.d.ts ../../packages/3-targets/postgres/9-facade/test/fixtures/generated/",
@@ -39,6 +42,7 @@
     "@types/node": "catalog:",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
+    "pg-connection-string": "^2.14.0",
     "temporal-spec": "1.0.1",
     "tinyglobby": "catalog:"
   },

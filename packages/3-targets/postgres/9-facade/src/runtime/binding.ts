@@ -8,6 +8,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Client, Pool } from 'pg';
+import { parse } from 'pg-connection-string';
 import { postgresError } from '../errors';
 import { DEFAULT_CONNECT_TIMEOUT_MILLIS, type PostgresPoolOptions } from './postgres-options';
 
@@ -45,6 +46,13 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
+function isUrlSyntaxError(error: unknown): boolean {
+  return (
+    error instanceof URIError ||
+    (error instanceof TypeError && 'code' in error && error.code === 'ERR_INVALID_URL')
+  );
+}
+
 export function validatePostgresUrl(url: string, extension = 'postgres'): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
@@ -57,9 +65,14 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
-      meta: { extension, reason: 'unparseable url' },
-    });
+    const withHost = trimmed.replace(/^([^:/?#]+:\/\/[^/?#]*@)(\/|$|\?|#)/, '$1localhost$2');
+    try {
+      parsed = new URL(withHost);
+    } catch {
+      throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+        meta: { extension, reason: 'unparseable url' },
+      });
+    }
   }
 
   if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
@@ -75,6 +88,15 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
         },
       },
     );
+  }
+
+  try {
+    parse(trimmed);
+  } catch (error) {
+    if (!isUrlSyntaxError(error)) return trimmed;
+    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+      meta: { extension, reason: 'unparseable url' },
+    });
   }
 
   return trimmed;

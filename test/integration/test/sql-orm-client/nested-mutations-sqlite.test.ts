@@ -753,4 +753,213 @@ describe('integration/nested-mutations on SQLite: update()', () => {
     },
     timeouts.databaseOperation,
   );
+
+  it(
+    'where().update() and where().delete() change the first matching post of the parent only',
+    async () => {
+      await withDatabase(async (collections) => {
+        await seedTwoParents(collections);
+        const { users, rows } = collections;
+        const update = (data: Parameters<typeof users.update>[0]) =>
+          users.where({ id: 1 }).select('id', 'name').update(data);
+
+        const updated = await update({
+          posts: (posts) => posts.where({ title: 'Draft' }).update({ title: 'Published' }),
+        });
+        const afterUpdate = rows(postRowsSql);
+        const unmatched = await update({
+          posts: (posts) => [
+            posts.where({ title: 'Missing' }).update({ title: 'Seen' }),
+            posts.where({ title: 'Missing' }).delete(),
+          ],
+        });
+        const afterUnmatched = rows(postRowsSql);
+        const deleted = await update({
+          posts: (posts) => posts.where({ title: 'Kept' }).delete(),
+        });
+
+        expect([updated, unmatched, deleted]).toEqual([
+          { id: 1, name: 'Alice' },
+          { id: 1, name: 'Alice' },
+          { id: 1, name: 'Alice' },
+        ]);
+        expect(afterUpdate).toEqual([
+          { id: 10, title: 'Published', user_id: 1 },
+          { id: 11, title: 'Kept', user_id: 1 },
+          { id: 20, title: 'Draft', user_id: 2 },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(rows(postRowsSql)).toEqual([
+          { id: 10, title: 'Published', user_id: 1 },
+          { id: 20, title: 'Draft', user_id: 2 },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() and delete() on a to-one relation change the linked row only when it matches',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Alice',
+          profile: (profile) => profile.create({ id: 100, bio: 'Old' }),
+        });
+        await users.create({
+          id: 2,
+          name: 'Bob',
+          profile: (profile) => profile.create({ id: 200, bio: 'Old' }),
+        });
+        const profiles = 'select id, user_id, bio from profiles order by id';
+
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.update({ bio: 'New' }) });
+        const afterUpdate = rows(profiles);
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.where({ bio: 'Old' }).delete() });
+        const afterUnmatched = rows(profiles);
+        await users
+          .where({ id: 1 })
+          .update({ profile: (profile) => profile.where({ bio: 'New' }).delete() });
+
+        expect(afterUpdate).toEqual([
+          { id: 100, user_id: 1, bio: 'New' },
+          { id: 200, user_id: 2, bio: 'Old' },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(rows(profiles)).toEqual([{ id: 200, user_id: 2, bio: 'Old' }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'where().update() and where().delete() on a many-to-many relation change the first matching related row only',
+    async () => {
+      await withDatabase(async ({ users, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          tags: (tags) => [tags.connect({ id: 1 }), tags.create([{ id: 2, name: 'Go' }])],
+        });
+        await users.create({
+          id: 2,
+          name: 'Grace',
+          tags: (tags) => tags.create([{ id: 3, name: 'Swift' }]),
+        });
+        const tagRows = 'select id, name from tags order by id';
+
+        await users.where({ id: 1 }).update({
+          tags: (tags) => tags.where((tag) => tag['name']!.like('S%')).update({ name: 'Postgres' }),
+        });
+        const afterUpdate = rows(tagRows);
+        await users.where({ id: 1 }).update({
+          tags: (tags) => [
+            tags.where((tag) => tag['name']!.like('X%')).update({ name: 'None' }),
+            tags.where((tag) => tag['name']!.like('X%')).delete(),
+          ],
+        });
+        const afterUnmatched = rows(tagRows);
+        await users.where({ id: 1 }).update({
+          tags: (tags) => tags.where({ name: 'Go' }).delete(),
+        });
+
+        expect(afterUpdate).toEqual([
+          { id: 1, name: 'Postgres' },
+          { id: 2, name: 'Go' },
+          { id: 3, name: 'Swift' },
+        ]);
+        expect(afterUnmatched).toEqual(afterUpdate);
+        expect(rows(tagRows)).toEqual([
+          { id: 1, name: 'Postgres' },
+          { id: 3, name: 'Swift' },
+        ]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'update() and delete() on a relation the parent holds the key for change the linked row only when it matches',
+    async () => {
+      await withDatabase(async ({ users, posts, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          posts: (children) => children.create([{ id: 10, title: 'Linked' }]),
+        });
+        await users.create({ id: 2, name: 'Grace' });
+        await posts.create({ id: 11, title: 'Unlinked' });
+        const linked = posts.where({ id: 10 }).select('id', 'userId');
+
+        await linked.update({
+          title: 'Linked again',
+          author: (author) => author.update({ name: 'Ada L.' }),
+        });
+        const afterUpdate = rows('select id, name from users order by id');
+        const unmatched = await linked.update({
+          author: (author) => author.where({ name: 'Nobody' }).delete(),
+        });
+        const notLinked = await posts
+          .where({ id: 11 })
+          .select('id', 'userId')
+          .update({ author: (author) => author.delete() });
+        const deleted = await linked.update({ author: (author) => author.delete() });
+
+        expect(afterUpdate).toEqual([
+          { id: 1, name: 'Ada L.' },
+          { id: 2, name: 'Grace' },
+        ]);
+        expect([unmatched, notLinked, deleted]).toEqual([
+          { id: 10, userId: 1 },
+          { id: 11, userId: null },
+          { id: 10, userId: null },
+        ]);
+        expect(rows('select id, name from users order by id')).toEqual([{ id: 2, name: 'Grace' }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'refuses delete() on a relation the parent holds a required key for, with the rows unchanged',
+    async () => {
+      await withDatabase(async ({ users, comments, rows }) => {
+        await users.create({
+          id: 1,
+          name: 'Ada',
+          posts: (children) => children.create([{ id: 10, title: 'Post' }]),
+        });
+        await comments.create({ id: 100, postId: 10, body: 'Hi' });
+
+        await expect(
+          comments.where({ id: 100 }).update({
+            body: 'Edited',
+            // @ts-expect-error
+            post: (post) => post.delete(),
+          }),
+        ).rejects.toThrow(
+          expect.objectContaining({
+            code: 'ORM.OPERATION_UNSUPPORTED',
+            meta: {
+              kind: 'delete',
+              relation: 'post',
+              reason: 'required-foreign-key',
+              model: 'Comment',
+              fields: ['postId'],
+            },
+          }),
+        );
+        expect(rows('select id, post_id, body from comments')).toEqual([
+          { id: 100, post_id: 10, body: 'Hi' },
+        ]);
+        expect(rows('select id from posts')).toEqual([{ id: 10 }]);
+      });
+    },
+    timeouts.databaseOperation,
+  );
 });

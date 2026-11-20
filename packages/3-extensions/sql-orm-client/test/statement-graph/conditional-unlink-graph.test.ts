@@ -116,6 +116,17 @@ describe('disconnect with criteria on a relation the parent holds the key for', 
     );
   });
 
+  it('leaves out of the Update that unlinks the parent before a nested delete the update defaults of fields the parent sets itself', () => {
+    expect(
+      printUpdate(
+        updateDefaultContract(),
+        'Article',
+        { author: (author: Disconnectable & { delete(): unknown }) => author.delete() },
+        { updatedAt: new Date('2021-01-01T00:00:00.000Z') },
+      ),
+    ).toMatch(/^n\d Update articles set author_id = null <- /m);
+  });
+
   it('adds no Update for an explicit empty list of criteria', () => {
     expect(
       printUpdate(updateDefaultContract(), 'Article', {
