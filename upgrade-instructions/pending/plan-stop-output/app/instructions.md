@@ -82,13 +82,18 @@ In the control API, pass one `{ verb: 'allow', text: 'User' }` in `statements`, 
 An `answerQuestions` callback that read `question.question` builds the text with `questionText`:
 
 ```ts
-import { questionText } from '@prisma/orm-toolchain/cli/control-api';
+import { type PlanAnswer, questionText } from '@prisma/orm-toolchain/cli/control-api';
 
 answerQuestions: async (questions) => {
-  for (const question of questions) console.log(questionText(question, { bin: 'prisma' }));
-  return questions.map(({ subject, verbs }) => ({ verb: verbs[0] ?? 'delete', text: subject }));
+  const answers: PlanAnswer[] = [];
+  for (const question of questions) {
+    answers.push(await askUser(questionText(question, { bin: 'prisma' }), question.verbs));
+  }
+  return answers;
 },
 ```
+
+`askUser` stands for the callback's own way of getting an answer. It returns one of the question's `verbs` with its text: the question's `subject` for `delete`, `allow` or `convert`, and `<subject>:<new name>` for `rename`.
 
 # A `--rename` to a name the contract does not have
 
