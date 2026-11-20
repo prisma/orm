@@ -27,9 +27,9 @@ Prisma 8 moves fast, and your training data about it is very likely outdated. Th
 
 ## Pre-conditions
 
-Check these before acting on anything below. Halt on the first one that fails and tell the user what is missing. Pre-conditions 1 and 3 describe an application. In a package that builds a target or is a Prisma extension, check only pre-condition 2.
+Check these before acting on anything below. Halt on the first one that fails and tell the user what is missing. Pre-conditions 1 and 3 describe an application that is already set up. Check only pre-condition 2 in a package that builds a target or is a Prisma extension, and when setting up a new project, which creates what 1 and 3 check.
 
-1. **The project is on Prisma 8.** `prisma.config.ts` exports `definePrismaConfig({ orm: ... })`, and `package.json` depends on `@prisma/orm-postgres`, `@prisma/orm-sqlite`, or `@prisma/orm-mongo`. A project with `schema.prisma` and `@prisma/client` is Prisma 7 or earlier; this skill does not apply to it, and its instructions will break such a project.
+1. **The project is on Prisma 8.** `prisma.config.ts` exports `definePrismaConfig({ orm: ... })`, and `package.json` depends on a target package: `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`, or another package whose `/config` module `prisma.config.ts` imports `defineConfig` from. A project with `schema.prisma` and `@prisma/client` is Prisma 7 or earlier; this skill does not apply to it, and its instructions will break such a project.
 2. **The skill matches the installed version.** Compare `metadata.library_version` in this file's frontmatter with the installed `@prisma/orm-*` version in `package.json`. If they differ, run `prisma skills sync` and re-read this file before continuing.
 3. **The contract artefacts exist.** `contract.json` and `contract.d.ts` sit next to the contract source named by `prisma.config.ts`. If they are missing or older than the source, run `prisma contract emit` first; every query and migration instruction below assumes current artefacts.
 
