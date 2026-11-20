@@ -59,6 +59,10 @@ A brief may add gates specific to the work:
 - [ ] If the dispatch renders SQL, lowers an AST, or validates user input, the reviewer brief grants an execution budget and names the three SQL probes from [`failure-modes.md § F34`](./failure-modes.md#f34-the-in-loop-reviewer-passes-sql-lowering-by-reading-it-a-review-that-runs-the-code-finds-injection-and-invalid-sql): a hostile value through every public entry point, the new construct compiled through every wrapper on its path and run on a database, and each cited database rule quoted and tested on both sides. "Trust the implementer's gates" never means "read only".
 - [ ] If the dispatch changes a codec (code that encodes and decodes stored values), the reviewer brief grants an execution budget and names the three codec probes from the same entry: build each value the way the driver produces it, write with the raw driver a stored document the codec must refuse and read it back, and remove the fix to show which test fails.
 - [ ] If the dispatch parses text the database reports back (defaults, type names, introspection output), the reviewer brief grants an execution budget and names the three probes from [`failure-modes.md § F35`](./failure-modes.md#f35-code-that-parses-database-reported-text-passes-review-by-reading-it-only-a-comparison-with-what-the-database-returns-finds-wrong-values): the real column created on PGlite and its reported text read back, each newly accepted value compared with what the database itself says about the same object (the stored value after `INSERT ... DEFAULT VALUES` for a default, a catalog query for a type name or other introspection output), and every check that compares the code with itself named along with the independent check that would fail. `db verify` agreeing with infer is not evidence of a correct value.
+- [ ] If the change alters the SQL of a write (adds a subquery, a join or a lock), the reviewer runs many concurrent writes through the ORM against each database it reaches and checks that none deadlocks. One-connection tests cannot show this. ([F58](./failure-modes.md#f58-a-rewrite-that-makes-a-write-statement-run-passes-every-single-connection-test-and-deadlocks-under-concurrent-writes))
+- [ ] If the change adds or edits an error message, the reviewer reads it as a user would: it says what the user has, what is wrong with it, and what to change, without our function names or internal terms. ([F59](./failure-modes.md#f59-a-user-facing-message-describes-the-problem-through-our-function-names-or-internals))
+- [ ] If the change adds a check on something the user supplies, the reviewer lists every way that thing can be supplied and confirms the check runs on each. Example: a contract given to the config as a file path was checked, and one given as an object was not.
+- [ ] If the change rewrites code samples in docs or READMEs, the reviewer checks that each rewritten sample still does what the old one did, because nothing type-checks them. Example: a sample was moved to a call that accepts the same plan but does not return its rows, and the code after it still read rows.
 
 ## Slice-DoD overlay
 
@@ -69,6 +73,7 @@ In addition to the canonical slice DoD:
 - If the slice touches `packages/3-*-extensions/**`, the slice plan must include a `pnpm fixtures:check` dispatch step.
 - If the slice touches package boundaries / imports, the slice plan must include `pnpm lint:deps`.
 - If the slice changes typed surfaces consumed elsewhere, the slice plan must include a downstream `pnpm typecheck` after the producing package's `pnpm build`.
+- If a slice adds a test that needs a database server or another service, the plan names the CI job that runs the test, that job starts the service, and the test fails in CI when the service is missing (it may skip locally). (Added 2026-11-19, MySQL proof of concept: four MySQL integration files skipped in CI for the whole project.)
 - If a dispatch adds a JavaScript or TypeScript file outside a package, `projects/` included, the checks include `pnpm lint:ratchets`: CI's Lint job runs it over those files too. (Added 2026-10-07, lsp-find-references: a QA driver under `projects/` failed CI's Lint job on a bare `throw new Error`.)
 
 ### PR-side items
@@ -90,6 +95,7 @@ In addition to the canonical slice DoD:
 - [ ] `drive-qa-plan` script exists + ≥1 `drive-qa-run` report exists.
 - [ ] No unresolved 🛑 Blocker findings.
 - [ ] Script names **both** consumer audiences (see [`patterns.md § Consumer audiences`](./patterns.md#consumer-audiences)) where relevant — OR explicit "N/A — no user-observable change" with a one-line rationale.
+- [ ] If the change affects what an editor shows, QA checks the editor itself, not only the language server's replies: the edit that was applied, where the cursor ends up, and the suggestions that follow, with any editor setting they need turned on.
 
 #### Slice-close ritual (added 2026-05-21 retro)
 
