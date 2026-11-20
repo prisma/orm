@@ -43,10 +43,10 @@ import {
   parseRenameStatement,
   type StatementSide,
 } from './parse-rename';
-import { possibleNewNames } from './possible-new-names';
+import { possibleNewNames, variantBaseText } from './possible-new-names';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
-import { variantBaseText, variantValue } from './variants';
+import { variantValue } from './variants';
 
 /**
  * The origin contract statements resolve against, or where the command looked
@@ -1487,18 +1487,20 @@ function newNameRefusal(
   const parent = statement.from.slice(0, -1).join('.');
   const sameParent = statement.to.slice(0, -1).join('.') === parent;
   const name = statement.to.at(-1) ?? '';
+  const names = {
+    origin: state.origin.contract,
+    destination: state.destination.contract,
+    renames: [...state.renames, ...laterRenames(state, later)],
+  };
   const rename = {
     entity: ENTITY_WORDS[from.entity],
     from: statement.from.join('.'),
     to: statement.to.join('.'),
-    candidates: possibleNewNames(subjectRead(from), {
-      origin: state.origin.contract,
-      destination: state.destination.contract,
-      renames: [...state.renames, ...laterRenames(state, later)],
-    }).map((each) => (from.entity === 'model' || parent === '' ? each : `${parent}.${each}`)),
+    candidates: possibleNewNames(subjectRead(from), names).map((each) =>
+      from.entity === 'model' || parent === '' ? each : `${parent}.${each}`,
+    ),
     destinationRef: state.destinationRef,
-    variantOf:
-      from.entity === 'model' ? variantBaseText(state.origin.contract, from.coordinate) : undefined,
+    variantOf: from.entity === 'model' ? variantBaseText(names, from.coordinate) : undefined,
   };
   const missing = () =>
     to === undefined ? errorRenameToMissingName(statement, rename) : undefined;

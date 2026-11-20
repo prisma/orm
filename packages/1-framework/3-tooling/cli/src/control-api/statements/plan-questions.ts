@@ -53,11 +53,12 @@ import {
   sameModel,
   valueObjectFieldAfterRenames,
   valueObjectFields,
+  variantBaseText,
 } from './possible-new-names';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
-import { variantBaseText, variantValue, variantValueChanged } from './variants';
+import { variantValue, variantValueChanged } from './variants';
 
 /** A verb a plan question accepts. */
 export type PlanQuestionVerb = 'rename' | 'convert' | ConsentVerb;
@@ -510,10 +511,10 @@ function renameAnswer(
   subject: MigrationSubject,
   text: string,
   rename: RenameTarget,
-  contracts: StatementContracts,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
 ): QuestionAnswer {
   const { destinationRef } = contracts;
-  const variantOf = variantOfModel(subject, contracts.origin);
+  const variantOf = variantOfModel(subject, contracts);
   const kind = subject.kind === 'storage' ? 'data' : ENTITY_WORDS[subject.kind];
   const keep =
     subject.kind === 'model' || subject.kind === 'storage'
@@ -556,9 +557,14 @@ function renameAnswer(
 
 const NEW_NAME = '<new name>';
 
-/** The base of a model subject that is a variant, as a `--rename` writes it; its new name must be a variant of that base too. */
-function variantOfModel(subject: MigrationSubject, origin: ContractWithDomain): string | undefined {
-  return subject.kind === 'model' ? variantBaseText(origin, subject) : undefined;
+/** The base of a model subject that is a variant, as the contract names it and a `--rename` writes it; its new name must be a variant of that base too. */
+function variantOfModel(
+  subject: MigrationSubject,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): string | undefined {
+  return subject.kind === 'model'
+    ? variantBaseText(contractsAndRenames(contracts), subject)
+    : undefined;
 }
 
 const SNAPSHOT_RECOVERY_WAY =
@@ -637,7 +643,7 @@ function modelRenameWay(
   const to = only !== undefined && newNames.length === 1 ? only : NEW_NAME;
   const flag = statementFlag({ verb: 'rename', text: `${name}:${to}` });
   const renamed = `If model "${name}" was renamed`;
-  const variantOf = variantBaseText(contracts.origin, model);
+  const variantOf = variantBaseText(contractsAndRenames(contracts), model);
   const meaning = renameMeaning(
     `model "${name}"`,
     'say so first',
@@ -805,7 +811,7 @@ function newNameProblem(
       (each) => `${parent}${each}`,
     ),
     destinationRef: contracts.destinationRef,
-    variantOf: variantOfModel(subject, contracts.origin),
+    variantOf: variantOfModel(subject, contracts),
   };
   if (!namesBeside(destinationSubject, contracts.destination).includes(name)) {
     return missingNameReason(rename);

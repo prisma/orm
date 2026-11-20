@@ -1,5 +1,5 @@
 /**
- * The rename lines `migration plan` and `db update` print for a removed variant and for a rename to a name another field holds work when a careful reader follows them (SQLite).
+ * The rename lines `migration plan` and `db update` print for a removed variant, also when the same change renames its base, and for a rename to a name another field holds work when a careful reader follows them (SQLite).
  *
  * Each journey reads the line, changes the contract as it says, runs the command with the flags it gives, and checks the data.
  */
@@ -54,6 +54,30 @@ const DEFECT = `
 model Defect {
   severity String?
   @@base(Task, "defect")
+}
+`;
+
+function works(variants: string): string {
+  return `// use prisma-8
+
+model Work {
+  id   Int    @id
+  type String
+  @@discriminator(type)
+  @@map("task")
+}
+${variants}
+model Epic {
+  scope String?
+  @@base(Work, "epic")
+}
+`;
+}
+
+const DEFECT_OF_WORK = `
+model Defect {
+  severity String?
+  @@base(Work, "defect")
 }
 `;
 
@@ -112,6 +136,47 @@ withTempDir(({ createTempDir }) => {
       timeouts.spinUpPpgDev,
     );
   });
+
+  describe.each(COMMANDS)(
+    'Journey R3 (SQLite): a removed variant whose base the same change renames, with %s',
+    (command) => {
+      it(
+        'names the base by its new name, and keeps the rows as the line says',
+        async () => {
+          const journey = sqliteJourney(createTempDir, command);
+          await start(
+            journey,
+            tasks(BUG),
+            `INSERT INTO "task" (id, type, severity, scope) VALUES (1, 'bug', 'high', NULL), (2, 'epic', NULL, 'big');`,
+            'R3.01',
+          );
+          await emit(journey, works(''), 'R3.02');
+          const rename = linesOf(await refusal(journey, ['--rename', 'Task:Work'], 'R3.03')).find(
+            (line) => line.includes(': --rename '),
+          );
+          expect(rename, 'R3.03: the base as the contract names it now').toBe(
+            `If the model was renamed, add it to the contract under its new name as a variant of model "Work" and run \`prisma-test contract emit\`; then keep its data: --rename 'Bug:<new name>'`,
+          );
+
+          await emit(journey, works(DEFECT_OF_WORK), 'R3.04');
+          await planAndApply(
+            journey,
+            ['--rename', 'Task:Work', ...flagsOf(rename ?? '', 'Defect')],
+            'R3.05',
+          );
+          expect(
+            await rows(journey, 'SELECT id, type, severity, scope FROM "task" ORDER BY id'),
+            'R3.05: kept as the new variant of Work',
+          ).toEqual([
+            { id: 1, type: 'defect', severity: 'high', scope: null },
+            { id: 2, type: 'epic', severity: null, scope: 'big' },
+          ]);
+          await expectSettled(journey, 'R3.06');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
 
   describe.each(COMMANDS)(
     'Journey R2 (SQLite): a --rename to the name another field holds, with %s',

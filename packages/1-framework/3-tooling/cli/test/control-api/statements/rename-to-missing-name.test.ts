@@ -214,6 +214,70 @@ describe('the new names a removed model can have', () => {
     });
   });
 
+  it('name the base of a removed variant as the contract names it now, and no base when the contract has none', async () => {
+    const renamedBase = contractOf({
+      app: {
+        models: {
+          Ticket: { fields: ['id', 'kind'], discriminator: 'kind', variants: { task: 'Task' } },
+          Task: { fields: ['id'], base: 'Ticket' },
+        },
+      },
+    });
+    const noHierarchy = contractOf({ app: { models: { Audit: { fields: ['id'] } } } });
+    const texts = async (destination: typeof renamedBase, renames: readonly string[]) => {
+      const statements = renames.map((text) => ({ verb: 'rename' as const, text }));
+      const [question] = await askedAbout({
+        origin: variantOrigin,
+        destination,
+        losses: [bugRemoved],
+        statements,
+      });
+      const [rename] = question?.answers ?? [];
+      return {
+        refusal: `${rename?.meaning}: ${rename?.flag.text}`,
+        prompt: rename?.promptMeaning,
+        typed: question?.validate('rename', 'Bug:Nope'),
+        flagError: (
+          failureShape(
+            resolveStatements({
+              statements: [...statements, { verb: 'rename', text: 'Bug:Nope' }],
+              origin: { kind: 'contract', contract: variantOrigin },
+              destination,
+            }),
+          ) as { readonly nextActions: readonly string[] }
+        ).nextActions,
+      };
+    };
+
+    expect({
+      renamedBase: await texts(renamedBase, ['Issue:Ticket']),
+      noHierarchy: await texts(noHierarchy, []),
+    }).toEqual({
+      renamedBase: {
+        refusal:
+          'If the model was renamed, add it to the contract under its new name as a variant of model "Ticket" and run `{bin} contract emit`; then keep its data: Bug:<new name>',
+        prompt:
+          'rename works only once the contract has the model under its new name as a variant of model "Ticket": stop this command, add it to the contract, run `{bin} contract emit`, and run this command again',
+        typed:
+          'the contract has no model "Nope" to rename "Bug" to. If model "Bug" was renamed to "Nope", stop this command, add model "Nope" to the contract as a variant of model "Ticket", run `{bin} contract emit`, and run this command again.',
+        flagError: [
+          'If model "Bug" was renamed to "Nope", add model "Nope" to the contract as a variant of model "Ticket", run `{bin} contract emit`, and run this command again.',
+        ],
+      },
+      noHierarchy: {
+        refusal:
+          'If the model was renamed, add it to the contract under its new name and run `{bin} contract emit`; then keep its data: Bug:<new name>',
+        prompt:
+          'rename works only once the contract has the model under its new name: stop this command, add it to the contract, run `{bin} contract emit`, and run this command again',
+        typed:
+          'the contract has no model "Nope" to rename "Bug" to. If model "Bug" was renamed to "Nope", stop this command, add model "Nope" to the contract, run `{bin} contract emit`, and run this command again.',
+        flagError: [
+          'If model "Bug" was renamed to "Nope", add model "Nope" to the contract, run `{bin} contract emit`, and run this command again.',
+        ],
+      },
+    });
+  });
+
   it('leave out a name a later --rename gives, whatever the order of the flags', () => {
     const origin = contractOf({
       app: { models: { Bug: { fields: ['id'] }, Task: { fields: ['id'] } } },

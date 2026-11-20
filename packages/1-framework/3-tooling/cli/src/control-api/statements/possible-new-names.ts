@@ -8,7 +8,7 @@ import {
   type ResolvedMigrationStatement,
   type ValueObjectFieldCoordinate,
 } from '@internal/framework-components/control';
-import { newVariantsOfBase } from './variants';
+import { isBaseModel, newVariantsOfBase, variantBase } from './variants';
 
 /** The two contracts of a change, and the renames resolved between them so far. */
 export interface ContractsAndRenames {
@@ -45,6 +45,23 @@ export function modelAfterRenames(
   return destination?.domain.namespaces[moved.namespaceId]?.models[moved.model] === undefined
     ? undefined
     : moved;
+}
+
+/**
+ * The base of a variant of the origin, as the destination names it after the renames and a
+ * `--rename` writes it; `undefined` when the model is no variant, or the destination has no such
+ * base.
+ */
+export function variantBaseText(
+  { origin, destination, renames }: ContractsAndRenames,
+  variant: ModelCoordinate,
+): string | undefined {
+  const base = variantBase(origin, variant);
+  const now =
+    base === undefined ? undefined : (modelAfterRenames(base, renames, destination) ?? base);
+  return now !== undefined && isBaseModel(destination, now)
+    ? modelStatementText(destination, now)
+    : undefined;
 }
 
 /** The namespace a rename gives `namespaceId`, if any. */
