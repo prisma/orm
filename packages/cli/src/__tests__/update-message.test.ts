@@ -103,10 +103,50 @@ describe('update available message', () => {
       })
       const message = ctx.mocked['console.error'].mock.calls[0][0]
       expect(message).toContain('7.10.1 -> 8.0.0-rc.34')
-      expect(message).toContain('https://pris.ly/d/major-version-upgrade')
+      expect(message).toContain('https://www.prisma.io/docs/guides/upgrade-prisma-orm/v8')
       expect(message).not.toContain('prisma@latest')
       expect(message).not.toContain('@prisma/client@latest')
       expect(message).toMatchSnapshot()
+    })
+
+    it.each([
+      ['5.22.0', '6.0.0', 'v6'],
+      ['6.19.0', '7.0.0', 'v7'],
+      ['7.10.1', '8.0.0', 'v8'],
+      // skipping a major links to the guide of the version being upgraded to
+      ['6.19.0', '8.0.0-rc.34', 'v8'],
+      ['9.4.0', '10.0.0', 'v10'],
+    ])('major update %s -> %s links to the %s upgrade guide', (previousVersion, currentVersion, guide) => {
+      printUpdateMessage({
+        status: 'ok',
+        // @ts-ignore
+        data: {
+          previous_version: previousVersion,
+          current_version: currentVersion,
+          package: 'prisma',
+          release_tag: 'latest',
+          outdated: true,
+        },
+      })
+      const message = ctx.mocked['console.error'].mock.calls[0][0]
+      const links = message.match(/https:\/\/\S+/g)
+      expect(links).toEqual([`https://www.prisma.io/docs/guides/upgrade-prisma-orm/${guide}`])
+    })
+
+    it('minor update does not link to an upgrade guide', () => {
+      printUpdateMessage({
+        status: 'ok',
+        // @ts-ignore
+        data: {
+          previous_version: '7.9.0',
+          current_version: '7.10.1',
+          package: 'prisma',
+          release_tag: 'latest',
+          outdated: true,
+        },
+      })
+      const message = ctx.mocked['console.error'].mock.calls[0][0]
+      expect(message).not.toContain('https://')
     })
   })
 
