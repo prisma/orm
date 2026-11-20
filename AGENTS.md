@@ -57,7 +57,7 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 - Keep tests concise; omit "should": `.agents/rules/omit-should-in-tests.mdc`.
 - In sql-orm-client tests, assert the whole result shape (`toEqual`/snapshot) with explicit `select`: `.agents/rules/sql-orm-client-whole-shape-assertions.mdc`.
 - Keep docs current (READMEs, rules, links): `.agents/rules/doc-maintenance.mdc`.
-- These types exist to hold values a JS number would round, so never route a `Decimal`/`bigint`/int8 through one for convenience (`Number()`, a `Symbol.toPrimitive` override); use the type's own methods (`a.lt(b)`).
+- `Decimal`/`bigint`/int8 exist to hold values a JS number would round, so never convert one to a number for convenience without proving it fits, nor override `valueOf`/`Symbol.toPrimitive` to make operators work; use `Decimal`'s own methods (`a.lt(b)`).
 
 ## Typesafety rules
 
