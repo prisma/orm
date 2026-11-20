@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795146373144,
+  "lastUpdate": 1795148112840,
   "repoUrl": "https://github.com/prisma/orm",
   "entries": {
     "Benchmark.js Benchmark": [
@@ -459390,6 +459390,401 @@ window.BENCHMARK_DATA = {
             "range": "±0.83%",
             "unit": "ops/sec",
             "extra": "90 samples"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "kush.zingade@gmail.com",
+            "name": "Kush Zingade",
+            "username": "UgaTheDev"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "24dd4c25f3dc4e3d1bcf8097653f9a353c002391",
+          "message": "fix(adapter-pg,adapter-neon,adapter-ppg): support TIMETZ[] columns (#30148)\n\nFixes #29397\nBase branch: `v7` (the Prisma 8 `main` tree no longer contains the\n`adapter-*` packages).\n\n## Problem\n\nAny query touching a `timetz[]` column fails with a deserialization\nerror surfaced as `P2010`:\n\n```\nError in performing request: UnsupportedNativeDataType\n```\n\nRoot cause (posted on #29397): in\n`packages/adapter-pg/src/conversion.ts`, the `ArrayColumnType`\nmap has no entry for `TIMETZ_ARRAY` (OID 1270), `fieldToColumnType`\ntherefore has no case for it,\nand no parser is registered for it. The OID is below\n`FIRST_NORMAL_OBJECT_ID`, so it is not treated\nas a user type either and falls straight through to `default:`, which\nthrows\n`UnsupportedNativeDataType`. Scalar `timetz` (OID 1266) is handled; only\nthe array form is missing.\n\n`adapter-neon` and `adapter-ppg` carry copies of the same conversion\ntable and have the identical\ngap, so all three are fixed here.\n\n## Change\n\nFor each of the three adapters:\n\n1. `TIMETZ_ARRAY: 1270` added to `ArrayColumnType`.\n2. `fieldToColumnType` maps it to `ColumnTypeEnum.TimeArray`, alongside\n`TIME_ARRAY` — matching how\n   scalar `TIMETZ` already shares `ColumnTypeEnum.Time` with `TIME`.\n3. The array parser is registered as `normalize_array(normalize_timez)`,\ni.e. the element\n   normalizer is the *existing* scalar `TIMETZ` normalizer, used as-is.\n\n## Scope: array mapping only\n\nThis PR is deliberately \"stop throwing\" and nothing more.\n\n`normalize_timez` strips the UTC offset from the value, which is the\nbehavior discussed in #7915 /\n#7917. That behavior is **intentionally reused unchanged** here, so\n`timetz[]` elements deserialize\nbyte-for-byte identically to a scalar `timetz` column on the same\nconnection. Whatever the\nmaintainers decide about `timetz` offset semantics will then apply to\nscalars and arrays together,\nwith no separate array code path to remember. This PR does not preempt\nthat decision.\n\n## Tests\n\n- `packages/adapter-pg/src/__tests__/timetz-array.test.ts` (new)\n- `packages/adapter-neon/src/__tests__/timetz-array.test.ts` (new)\n- `packages/adapter-ppg/src/conversion.test.ts` (new\n`describe('TIMETZ[]')` block, following the\n  file's existing `getParser(oid)` pattern)\n\nEach asserts that OID 1270 maps to `TimeArray` and that the registered\nparser normalizes elements\nexactly like the scalar path (`'{10:30:00+02,11:00:00-05:00,12:00:00}'`\n→\n`['10:30:00', '11:00:00', '12:00:00']`).\n\nVerified failing on `v7` before the fix with\n`UnsupportedNativeDataType`, passing after. Full unit\nsuites for all three adapter packages are green (`adapter-pg` 57,\n`adapter-neon` 10, `adapter-ppg`\n43 tests).\n\nNot covered: an end-to-end `driver-adapters` integration test against a\nreal `timetz[]` column,\nsince that would need a schema fixture in the functional test suite.\nHappy to add one if you'd\nprefer the coverage there instead of / in addition to the unit level.\n\n<!-- This is an auto-generated comment: release notes by coderabbit.ai\n-->\n<!-- coderabbit-ai-generated:v1 -->\n\n## Summary by CodeRabbit\n\n* **New Features**\n* Added support for PostgreSQL `TIMETZ[]` fields, with timezone offsets\nnormalized to UTC when reading values and UTC times formatted when\nwriting them.\n* Added end-to-end coverage for round-tripping arrays, including\ndiffering offsets and `NULL` values.\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n\n---------\n\nSigned-off-by: Kush Zingade <kush.zingade@gmail.com>\nSigned-off-by: willbot <w.a.madden+machine@gmail.com>\nSigned-off-by: Will Madden <madden@prisma.io>\nCo-authored-by: willbot <w.a.madden+machine@gmail.com>\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>",
+          "timestamp": "2026-11-20T05:05:09+01:00",
+          "tree_id": "2c29d7066bdf0551f97cf7a84175c654d258f4c3",
+          "url": "https://github.com/prisma/orm/commit/24dd4c25f3dc4e3d1bcf8097653f9a353c002391"
+        },
+        "date": 1795148070864,
+        "tool": "benchmarkjs",
+        "benches": [
+          {
+            "name": "interpreter: simple select",
+            "value": 131692,
+            "range": "±1.31%",
+            "unit": "ops/sec",
+            "extra": "81 samples"
+          },
+          {
+            "name": "interpreter: findUnique",
+            "value": 119610,
+            "range": "±1.19%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "interpreter: join (1:N)",
+            "value": 67627,
+            "range": "±0.85%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "interpreter: sequence",
+            "value": 72092,
+            "range": "±1.71%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "interpreter: deep nested join",
+            "value": 22381,
+            "range": "±0.43%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "serializer: 10 rows x 3 cols",
+            "value": 1442774,
+            "range": "±0.59%",
+            "unit": "ops/sec",
+            "extra": "91 samples"
+          },
+          {
+            "name": "serializer: 50 rows x 8 cols",
+            "value": 130539,
+            "range": "±0.34%",
+            "unit": "ops/sec",
+            "extra": "98 samples"
+          },
+          {
+            "name": "serializer: 100 rows x 8 cols",
+            "value": 65222,
+            "range": "±0.79%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "getBinaryTargetForCurrentPlatform",
+            "value": 1181,
+            "range": "±0.95%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "client generation ~50 Models",
+            "value": 1.61,
+            "range": "±18.84%",
+            "unit": "ops/sec",
+            "extra": "13 samples"
+          },
+          {
+            "name": "typescript compilation ~50 Models",
+            "value": 1.03,
+            "range": "±17.75%",
+            "unit": "ops/sec",
+            "extra": "10 samples"
+          },
+          {
+            "name": "@prisma/client size",
+            "value": 71.06599235534668,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client size",
+            "value": 10.426462173461914,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.d.ts size",
+            "value": 2.372147560119629,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.js size",
+            "value": 0.17815494537353516,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "dotPlusAtPrismaClientFolder.zip size",
+            "value": 28.726787567138672,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "client generation 100 models with relations",
+            "value": 0.44,
+            "range": "±14.31%",
+            "unit": "ops/sec",
+            "extra": "7 samples"
+          },
+          {
+            "name": "compile findUnique (uncached baseline)",
+            "value": 8184,
+            "range": "±24.35%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "compile findMany filtered (uncached baseline)",
+            "value": 8112,
+            "range": "±0.43%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "compile blog post page (uncached baseline)",
+            "value": 1787,
+            "range": "±1.01%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "parameterize findUnique",
+            "value": 479810,
+            "range": "±0.58%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "parameterize findMany",
+            "value": 237950,
+            "range": "±0.45%",
+            "unit": "ops/sec",
+            "extra": "93 samples"
+          },
+          {
+            "name": "parameterize blog post page query",
+            "value": 163797,
+            "range": "±0.62%",
+            "unit": "ops/sec",
+            "extra": "98 samples"
+          },
+          {
+            "name": "findUnique by id",
+            "value": 7693,
+            "range": "±2.81%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findFirst with simple where",
+            "value": 8289,
+            "range": "±1.67%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findMany 10 records",
+            "value": 7086,
+            "range": "±1.97%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "findMany with orderBy",
+            "value": 6954,
+            "range": "±1.73%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with filter",
+            "value": 7774,
+            "range": "±1.42%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findMany with pagination",
+            "value": 8329,
+            "range": "±1.17%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findUnique with 1:1 include",
+            "value": 3990,
+            "range": "±2.09%",
+            "unit": "ops/sec",
+            "extra": "81 samples"
+          },
+          {
+            "name": "findUnique with 1:N include",
+            "value": 3290,
+            "range": "±2.16%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "findUnique with nested includes",
+            "value": 1547,
+            "range": "±1.95%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findMany with includes",
+            "value": 1444,
+            "range": "±1.49%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findMany with select",
+            "value": 12783,
+            "range": "±1.72%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findMany with nested select",
+            "value": 6463,
+            "range": "±1.63%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findMany with OR filter",
+            "value": 6376,
+            "range": "±1.86%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findMany with complex filters",
+            "value": 4481,
+            "range": "±1.88%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with contains filter",
+            "value": 5338,
+            "range": "±1.82%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "count all",
+            "value": 16412,
+            "range": "±1.88%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "count with filter",
+            "value": 13497,
+            "range": "±1.34%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "aggregate sum/avg",
+            "value": 12043,
+            "range": "±1.67%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "groupBy with count",
+            "value": 12601,
+            "range": "±1.70%",
+            "unit": "ops/sec",
+            "extra": "81 samples"
+          },
+          {
+            "name": "create single record",
+            "value": 5020,
+            "range": "±1.29%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "create with nested",
+            "value": 2067,
+            "range": "±2.42%",
+            "unit": "ops/sec",
+            "extra": "80 samples"
+          },
+          {
+            "name": "update single record",
+            "value": 7371,
+            "range": "±1.56%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "updateMany",
+            "value": 10660,
+            "range": "±1.35%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "transaction sequential",
+            "value": 1884,
+            "range": "±2.28%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "transaction batch",
+            "value": 1923,
+            "range": "±1.46%",
+            "unit": "ops/sec",
+            "extra": "81 samples"
+          },
+          {
+            "name": "blog post page query",
+            "value": 1185,
+            "range": "±1.41%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "blog listing page query",
+            "value": 1474,
+            "range": "±1.24%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "user profile page query",
+            "value": 1429,
+            "range": "±1.26%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "order history query",
+            "value": 2662,
+            "range": "±1.72%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "product search query",
+            "value": 5153,
+            "range": "±1.30%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
           }
         ]
       }
