@@ -48,7 +48,8 @@ describe('a relation callback that returns an array of operations', () => {
         'n2 Insert users <- PayloadData n1 (id->invited_by_id)',
         'n3 Update users set nothing where id = 11 <- PayloadData n1 (id->invited_by_id)',
         'n4 Update users set invited_by_id = null where id = 12 <- FilterData n1 (id->invited_by_id)',
-        'result: n1',
+        'n5 Find users <- FilterData n1 (id->id)',
+        'result: n5',
       ].join('\n'),
     );
   });
