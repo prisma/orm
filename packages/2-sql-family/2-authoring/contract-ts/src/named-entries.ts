@@ -6,19 +6,25 @@ export type NameSite =
       readonly kind: 'namespace';
       readonly modelName: string | undefined;
       readonly tableName: string | undefined;
+      readonly entityKind: string | undefined;
+      readonly entityName: string | undefined;
     }
   | { readonly kind: 'table'; readonly namespaceId: string }
   | { readonly kind: 'column'; readonly tableName: string }
   | { readonly kind: 'model'; readonly namespaceId: string | undefined }
   | { readonly kind: 'field'; readonly modelName: string | undefined }
   | { readonly kind: 'relation'; readonly modelName: string | undefined }
-  | { readonly kind: 'enum'; readonly namespaceId: string | undefined }
+  | { readonly kind: 'enum'; readonly namespaceId: string }
   | { readonly kind: 'valueSet'; readonly namespaceId: string }
   | { readonly kind: 'valueObject' }
   | { readonly kind: 'valueObjectField'; readonly valueObjectName: string }
   | { readonly kind: 'databaseType' }
-  | { readonly kind: 'extensionPack' }
   | { readonly kind: 'entity'; readonly entityKind: string; readonly namespaceId: string };
+
+/** An author's object of named entries: what its entries are, and the model that holds them. */
+export type NamedEntriesSite =
+  | { readonly kind: 'field' | 'relation'; readonly modelName: string | undefined }
+  | { readonly kind: 'model' | 'enum' | 'databaseType' | 'extensionPack' };
 
 /** How an error message names what the name names, such as `A table in namespace "public"`. */
 function nameSiteSubject(site: NameSite): string {
@@ -26,6 +32,9 @@ function nameSiteSubject(site: NameSite): string {
     case 'namespace':
       if (site.modelName !== undefined) return `The namespace of model "${site.modelName}"`;
       if (site.tableName !== undefined) return `The namespace of table "${site.tableName}"`;
+      if (site.entityKind !== undefined && site.entityName !== undefined) {
+        return `The namespace of "${site.entityKind}" entity "${site.entityName}"`;
+      }
       return 'A namespace';
     case 'table':
       return `A table in namespace "${site.namespaceId}"`;
@@ -44,9 +53,7 @@ function nameSiteSubject(site: NameSite): string {
         ? 'A relation of a model'
         : `A relation of model "${site.modelName}"`;
     case 'enum':
-      return site.namespaceId === undefined
-        ? 'An enum'
-        : `An enum in namespace "${site.namespaceId}"`;
+      return `An enum in namespace "${site.namespaceId}"`;
     case 'valueSet':
       return `A value set in namespace "${site.namespaceId}"`;
     case 'valueObject':
@@ -55,20 +62,47 @@ function nameSiteSubject(site: NameSite): string {
       return `A field of value object "${site.valueObjectName}"`;
     case 'databaseType':
       return 'A database type';
-    case 'extensionPack':
-      return 'An extension pack';
     case 'entity':
       return `A "${site.entityKind}" entity in namespace "${site.namespaceId}"`;
   }
 }
 
-/** The error metadata that says what the name names and locates it. */
-function nameSiteMeta(site: NameSite): Record<string, string> {
-  const meta: Record<string, string> = {};
+/** The fields of the site that locate it, leaving out those it does not know. */
+function definedFields(site: object): Record<string, string> {
+  const fields: Record<string, string> = {};
   for (const [key, value] of Object.entries(site)) {
-    if (typeof value === 'string') meta[key] = value;
+    if (typeof value === 'string') fields[key] = value;
   }
-  return meta;
+  return fields;
+}
+
+/** The error metadata that says what the name names and locates it. An entity's `kind` is its entity kind, as in `CONTRACT.NAME_DUPLICATE`. */
+function nameSiteMeta(site: NameSite): Record<string, string> {
+  return site.kind === 'entity'
+    ? { kind: site.entityKind, namespaceId: site.namespaceId }
+    : definedFields(site);
+}
+
+/** How an error message names an author's object of named entries, such as `The fields of model "User"`. */
+function namedEntriesSiteSubject(site: NamedEntriesSite): string {
+  switch (site.kind) {
+    case 'field':
+      return site.modelName === undefined
+        ? 'The fields of a model'
+        : `The fields of model "${site.modelName}"`;
+    case 'relation':
+      return site.modelName === undefined
+        ? 'The relations of a model'
+        : `The relations of model "${site.modelName}"`;
+    case 'model':
+      return 'The models of the contract';
+    case 'enum':
+      return 'The enums of the contract';
+    case 'databaseType':
+      return 'The database types of the contract';
+    case 'extensionPack':
+      return 'The extensions of the contract';
+  }
 }
 
 /** Why `name` cannot be an object's own key, if it cannot. */
@@ -132,15 +166,15 @@ export function namedEntriesFrom<Entry>(
 }
 
 /**
- * Refuses an author's object of named entries whose prototype is not the plain object one. In an object literal, a key written as `__proto__` sets the object's prototype and stores no entry, so no write ever sees that name.
+ * Refuses an author's object of named entries that is not a plain object: its prototype is neither the plain object one nor `null`. A key written as `__proto__` in an object literal replaces the prototype and stores no entry, so no write ever sees that name.
  */
-export function assertPlainNamedEntries(entries: object, site: NameSite): void {
+export function assertPlainNamedEntries(entries: object, site: NamedEntriesSite): void {
   const prototype = Object.getPrototypeOf(entries);
   if (prototype === Object.prototype || prototype === null) return;
   throw contractError(
     'CONTRACT.NAME_UNUSABLE_AS_KEY',
-    `${nameSiteSubject(site)} is written under the key "__proto__" in an object literal. JavaScript takes that key as the prototype of the object and stores no entry under it. Choose another name.`,
-    { meta: { name: '__proto__', ...nameSiteMeta(site), reason: 'object-literal-prototype' } },
+    `${namedEntriesSiteSubject(site)} are not a plain object: their prototype has been replaced. A key written as "__proto__" in an object literal does this. Use a plain object, and choose another name for a "__proto__" key.`,
+    { meta: { ...definedFields(site), reason: 'prototype-replaced' } },
   );
 }
 
@@ -149,4 +183,6 @@ export const namespaceNameSite: NameSite = {
   kind: 'namespace',
   modelName: undefined,
   tableName: undefined,
+  entityKind: undefined,
+  entityName: undefined,
 };

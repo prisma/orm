@@ -259,6 +259,8 @@ function writeDiscriminatorValueSets(
       kind: 'namespace',
       modelName: model.modelName,
       tableName: undefined,
+      entityKind: undefined,
+      entityName: undefined,
     });
     if (Object.hasOwn(namespaceValueSets, valueSetName)) {
       throw contractError(
@@ -420,6 +422,8 @@ export function buildSqlContractFromDefinition(
         kind: 'namespace',
         modelName: undefined,
         tableName: table.tableName,
+        entityKind: undefined,
+        entityName: undefined,
       }),
       table.tableName,
       lowerTable(table, tableLoweringContext),
@@ -443,6 +447,8 @@ export function buildSqlContractFromDefinition(
         kind: 'namespace',
         modelName: domain.modelName,
         tableName: undefined,
+        entityKind: undefined,
+        entityName: undefined,
       }),
       domain.modelName,
       domain.model,

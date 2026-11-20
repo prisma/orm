@@ -438,10 +438,10 @@ function assertPlainContractRecords(records: {
   readonly extensions?: object | undefined;
 }): void {
   if (records.models !== undefined) {
-    assertPlainNamedEntries(records.models, { kind: 'model', namespaceId: undefined });
+    assertPlainNamedEntries(records.models, { kind: 'model' });
   }
   if (records.enums !== undefined) {
-    assertPlainNamedEntries(records.enums, { kind: 'enum', namespaceId: undefined });
+    assertPlainNamedEntries(records.enums, { kind: 'enum' });
   }
   if (records.databaseTypes !== undefined) {
     assertPlainNamedEntries(records.databaseTypes, { kind: 'databaseType' });

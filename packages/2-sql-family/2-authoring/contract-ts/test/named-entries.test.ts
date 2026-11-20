@@ -2,14 +2,31 @@ import { describe, expect, it } from 'vitest';
 import {
   assertPlainNamedEntries,
   ensureNamedEntries,
+  type NamedEntriesSite,
   type NameSite,
   namedEntriesFrom,
+  namespaceNameSite,
   nameUnusableAsKeyReason,
   readNamedEntry,
   writeNamedEntry,
 } from '../src/named-entries';
 
 const tableSite: NameSite = { kind: 'table', namespaceId: 'public' };
+
+function namespaceSite(fields: {
+  readonly modelName?: string;
+  readonly tableName?: string;
+  readonly entityKind?: string;
+  readonly entityName?: string;
+}): NameSite {
+  return {
+    kind: 'namespace',
+    modelName: fields.modelName,
+    tableName: fields.tableName,
+    entityKind: fields.entityKind,
+    entityName: fields.entityName,
+  };
+}
 
 describe('nameUnusableAsKeyReason', () => {
   it('gives a reason for __proto__', () => {
@@ -57,11 +74,7 @@ describe('writeNamedEntry', () => {
   it('refuses __proto__ with the kind and location of the name', () => {
     const entries: Record<string, number> = {};
     expect(() =>
-      writeNamedEntry(entries, '__proto__', 1, {
-        kind: 'namespace',
-        modelName: 'User',
-        tableName: undefined,
-      }),
+      writeNamedEntry(entries, '__proto__', 1, namespaceSite({ modelName: 'User' })),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
@@ -75,55 +88,67 @@ describe('writeNamedEntry', () => {
 
   it.each<readonly [NameSite, string, Record<string, string>]>([
     [
-      { kind: 'namespace', modelName: undefined, tableName: 'users' },
+      namespaceSite({ tableName: 'users' }),
       'The namespace of table "users"',
-      { tableName: 'users' },
+      { kind: 'namespace', tableName: 'users' },
     ],
-    [{ kind: 'namespace', modelName: undefined, tableName: undefined }, 'A namespace', {}],
     [
-      { kind: 'table', namespaceId: 'public' },
-      'A table in namespace "public"',
-      { namespaceId: 'public' },
+      namespaceSite({ entityKind: 'gadget', entityName: 'g1' }),
+      'The namespace of "gadget" entity "g1"',
+      { kind: 'namespace', entityKind: 'gadget', entityName: 'g1' },
     ],
-    [{ kind: 'column', tableName: 'users' }, 'A column of table "users"', { tableName: 'users' }],
+    [namespaceNameSite, 'A namespace', { kind: 'namespace' }],
+    [tableSite, 'A table in namespace "public"', { kind: 'table', namespaceId: 'public' }],
+    [
+      { kind: 'column', tableName: 'users' },
+      'A column of table "users"',
+      { kind: 'column', tableName: 'users' },
+    ],
     [
       { kind: 'model', namespaceId: 'public' },
       'A model in namespace "public"',
-      { namespaceId: 'public' },
+      { kind: 'model', namespaceId: 'public' },
     ],
-    [{ kind: 'model', namespaceId: undefined }, 'A model', {}],
-    [{ kind: 'field', modelName: 'User' }, 'A field of model "User"', { modelName: 'User' }],
-    [{ kind: 'field', modelName: undefined }, 'A field of a model', {}],
-    [{ kind: 'relation', modelName: 'User' }, 'A relation of model "User"', { modelName: 'User' }],
+    [{ kind: 'model', namespaceId: undefined }, 'A model', { kind: 'model' }],
+    [
+      { kind: 'field', modelName: 'User' },
+      'A field of model "User"',
+      { kind: 'field', modelName: 'User' },
+    ],
+    [{ kind: 'field', modelName: undefined }, 'A field of a model', { kind: 'field' }],
+    [
+      { kind: 'relation', modelName: 'User' },
+      'A relation of model "User"',
+      { kind: 'relation', modelName: 'User' },
+    ],
+    [{ kind: 'relation', modelName: undefined }, 'A relation of a model', { kind: 'relation' }],
     [
       { kind: 'enum', namespaceId: 'public' },
       'An enum in namespace "public"',
-      { namespaceId: 'public' },
+      { kind: 'enum', namespaceId: 'public' },
     ],
     [
       { kind: 'valueSet', namespaceId: 'public' },
       'A value set in namespace "public"',
-      { namespaceId: 'public' },
+      { kind: 'valueSet', namespaceId: 'public' },
     ],
-    [{ kind: 'valueObject' }, 'A value object', {}],
+    [{ kind: 'valueObject' }, 'A value object', { kind: 'valueObject' }],
     [
       { kind: 'valueObjectField', valueObjectName: 'Address' },
       'A field of value object "Address"',
-      { valueObjectName: 'Address' },
+      { kind: 'valueObjectField', valueObjectName: 'Address' },
     ],
-    [{ kind: 'databaseType' }, 'A database type', {}],
+    [{ kind: 'databaseType' }, 'A database type', { kind: 'databaseType' }],
     [
       { kind: 'entity', entityKind: 'gadget', namespaceId: 'public' },
       'A "gadget" entity in namespace "public"',
-      { entityKind: 'gadget', namespaceId: 'public' },
+      { kind: 'gadget', namespaceId: 'public' },
     ],
-  ])('words %o as its subject and meta', (site, subject, locating) => {
+  ])('words %o as its subject and meta', (site, subject, meta) => {
     expect(() => writeNamedEntry({}, '__proto__', 1, site)).toThrow(
       expect.objectContaining({
-        message: expect.stringMatching(
-          new RegExp(`^${subject.replace(/"/g, '\\"')} is named "__proto__"`),
-        ),
-        meta: { name: '__proto__', kind: site.kind, ...locating, reason: 'name-not-a-key' },
+        message: `${subject} is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.`,
+        meta: { name: '__proto__', ...meta, reason: 'name-not-a-key' },
       }),
     );
   });
@@ -132,21 +157,16 @@ describe('writeNamedEntry', () => {
 describe('ensureNamedEntries', () => {
   it('stores an empty object under a new name and returns it', () => {
     const entries: Record<string, Record<string, number>> = {};
-    const site: NameSite = { kind: 'namespace', modelName: undefined, tableName: undefined };
-    const inner = ensureNamedEntries(entries, 'constructor', site);
+    const inner = ensureNamedEntries(entries, 'constructor', namespaceNameSite);
     inner['User'] = 1;
     expect(entries).toEqual({ constructor: { User: 1 } });
-    expect(ensureNamedEntries(entries, 'constructor', site)).toBe(inner);
+    expect(ensureNamedEntries(entries, 'constructor', namespaceNameSite)).toBe(inner);
   });
 
   it('refuses __proto__', () => {
-    expect(() =>
-      ensureNamedEntries({}, '__proto__', {
-        kind: 'namespace',
-        modelName: undefined,
-        tableName: undefined,
-      }),
-    ).toThrow(expect.objectContaining({ code: 'CONTRACT.NAME_UNUSABLE_AS_KEY' }));
+    expect(() => ensureNamedEntries({}, '__proto__', namespaceNameSite)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.NAME_UNUSABLE_AS_KEY' }),
+    );
   });
 });
 
@@ -174,6 +194,10 @@ describe('namedEntriesFrom', () => {
 });
 
 describe('assertPlainNamedEntries', () => {
+  class UserFields {
+    id = 1;
+  }
+
   it.each([
     ['a plain object', { constructor: 1, User: 2 }],
     ['an object with no prototype', Object.create(null)],
@@ -181,19 +205,33 @@ describe('assertPlainNamedEntries', () => {
     expect(() => assertPlainNamedEntries(entries, { kind: 'databaseType' })).not.toThrow();
   });
 
-  it('refuses an object literal whose __proto__ key replaced its prototype', () => {
-    const entries = { id: 1, __proto__: { id: 2 } };
+  it.each([
+    ['an object literal with a __proto__ key', { id: 1, __proto__: { id: 2 } }],
+    ['a class instance', new UserFields()],
+    ['an object made from another object', Object.create({ id: 2 })],
+  ])('refuses %s', (_label, entries) => {
     expect(() => assertPlainNamedEntries(entries, { kind: 'field', modelName: 'User' })).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
         message:
-          'A field of model "User" is written under the key "__proto__" in an object literal. JavaScript takes that key as the prototype of the object and stores no entry under it. Choose another name.',
-        meta: {
-          name: '__proto__',
-          kind: 'field',
-          modelName: 'User',
-          reason: 'object-literal-prototype',
-        },
+          'The fields of model "User" are not a plain object: their prototype has been replaced. A key written as "__proto__" in an object literal does this. Use a plain object, and choose another name for a "__proto__" key.',
+        meta: { kind: 'field', modelName: 'User', reason: 'prototype-replaced' },
+      }),
+    );
+  });
+
+  it.each<readonly [NamedEntriesSite, string]>([
+    [{ kind: 'field', modelName: undefined }, 'The fields of a model'],
+    [{ kind: 'relation', modelName: 'User' }, 'The relations of model "User"'],
+    [{ kind: 'relation', modelName: undefined }, 'The relations of a model'],
+    [{ kind: 'model' }, 'The models of the contract'],
+    [{ kind: 'enum' }, 'The enums of the contract'],
+    [{ kind: 'databaseType' }, 'The database types of the contract'],
+    [{ kind: 'extensionPack' }, 'The extensions of the contract'],
+  ])('words %o as its subject', (site, subject) => {
+    expect(() => assertPlainNamedEntries(Object.create({}), site)).toThrow(
+      expect.objectContaining({
+        message: expect.stringMatching(new RegExp(`^${subject} are not a plain object`)),
       }),
     );
   });

@@ -13,7 +13,6 @@ import {
   ensureNamedEntries,
   type NameSite,
   namedEntriesFrom,
-  namespaceNameSite,
   readNamedEntry,
   writeNamedEntry,
 } from './named-entries';
@@ -39,7 +38,13 @@ export function collectEntityFromColumn(
   namespaceId: string,
   entityRef: NonNullable<ColumnTypeDescriptor['entityRef']>,
 ): void {
-  const forNs = ensureNamedEntries(collected, namespaceId, namespaceNameSite);
+  const forNs = ensureNamedEntries(collected, namespaceId, {
+    kind: 'namespace',
+    modelName: undefined,
+    tableName: undefined,
+    entityKind: entityRef.entityKind,
+    entityName: entityRef.entityName,
+  });
   const forKind = readNamedEntry(forNs, entityRef.entityKind) ?? {};
   const existing = readNamedEntry(forKind, entityRef.entityName);
   if (existing !== undefined && existing !== entityRef.entity) {

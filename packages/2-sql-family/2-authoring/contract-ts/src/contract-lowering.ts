@@ -73,7 +73,6 @@ import { isEnumTypeHandle } from './enum-type';
 import {
   ensureNamedEntries,
   namedEntriesFrom,
-  namespaceNameSite,
   readNamedEntry,
   writeNamedEntry,
 } from './named-entries';
@@ -1332,7 +1331,13 @@ function lowerPackEntityHandles(
       );
     }
     for (const row of authoring.lowerEntityHandles({ handles, defaultNamespaceId })) {
-      const forNamespace = ensureNamedEntries(pack, row.namespaceId, namespaceNameSite);
+      const forNamespace = ensureNamedEntries(pack, row.namespaceId, {
+        kind: 'namespace',
+        modelName: undefined,
+        tableName: undefined,
+        entityKind: row.entityKind,
+        entityName: row.key,
+      });
       const forKind = readNamedEntry(forNamespace, row.entityKind) ?? {};
       forNamespace[row.entityKind] = forKind;
       const existing = readNamedEntry(forKind, row.key);
