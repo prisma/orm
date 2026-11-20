@@ -1,5 +1,5 @@
 /**
- * Journey: a MySQL schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` and `storage:` choice, emits each field as the explicit type it chooses, migrates, and `db verify` finds no difference, the `now()` defaults and an index on a `Duration` included. The ORM cannot write to MySQL yet, so each row is written through the raw SQL lane, with every value a parameter its column's codec encodes, and read back through the ORM, at the top level and through an include. A value with more fraction digits than its column holds is written rounded down. The database fills `@default(now())` for an instant, a date and a time of day, each within the time of the write. Changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the planner names. A bare `DateTime` emits the contract `DatetimeJsDate(3)` emits, as `DateTime` did before the convenience types. Skipped when `MYSQL_URL` is not set.
+ * Journey: a MySQL schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` and `storage:` choice, emits each field as the explicit type it chooses, migrates, and `db verify` finds no difference, the `now()` defaults and an index on a `Duration` included. Each row is written through the raw SQL lane, with every value a parameter its column's codec encodes, and read back through the ORM, at the top level and through an include. A value with more fraction digits than its column holds is written rounded down. The database fills `@default(now())` for an instant, a date and a time of day, each within the time of the write. Changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the planner names. A bare `DateTime` emits the contract `DatetimeJsDate(3)` emits, as `DateTime` did before the convenience types. Skipped when `MYSQL_URL` is not set.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { JsonValue } from '@internal/contract/types';
@@ -139,7 +139,6 @@ function comparableFields(row: Readonly<Record<string, unknown>> | null | undefi
   return Object.fromEntries(DATE_TIME_FIELDS.map((name) => [name, comparable(row?.[name])]));
 }
 
-/** Whether `clock`, a UTC time of day, is the time of an instant from `earliest` to `latest`, on either of their UTC dates. */
 /** The ORM reads a contract loaded at run time without its relation names, so the include is typed here. */
 interface CalendarsWithEvents {
   select(field: 'id'): {
@@ -150,6 +149,7 @@ interface CalendarsWithEvents {
   };
 }
 
+/** Whether `clock`, a UTC time of day, is the time of an instant from `earliest` to `latest`, on either of their UTC dates. */
 function isClockBetween(clock: unknown, earliest: number, latest: number): boolean {
   if (typeof clock !== 'string') return false;
   const dates = new Set([earliest, latest].map((ms) => new Date(ms).toISOString().slice(0, 10)));
