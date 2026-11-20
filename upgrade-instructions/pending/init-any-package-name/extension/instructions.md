@@ -17,7 +17,7 @@ This applies to a package that adds a target and exports an init contribution, o
 
 Check these against your package:
 
-- **The package name.** `--target` accepts a package name that is scoped (`@acme/prisma-orm`) or begins `prisma-orm-` (`prisma-orm-acmedb`). `init` refuses any other value before it changes anything, so an unscoped package with another name cannot be set up with `init`.
+- **The package name.** For a package that is not in Prisma's list of short names, `--target` accepts its name as published, with no version or tag, when the name is scoped (`@acme/prisma-orm`) or begins `prisma-orm-` (`prisma-orm-acmedb`). `init` refuses any other value before it changes anything, so an unscoped package with another name cannot be set up with `init`.
 - **The first install.** `init` does not know your drivers before your package is installed, and it does not read the registry. It installs your package and `dotenv`, and the package manager handles your required peer dependencies its own way. A package manager set up to refuse a package whose peers are missing fails that install, and `init` reports the failure. After loading your contribution, `init` declares its `peerPackages` in a later install. Your `init` entrypoint is loaded between the two installs, so it must load without the drivers present.
 - **Other required peers.** `init` installs only `peerPackages`. Tell your users in your README about any other peer your package requires.
 - **`--json`.** The result reports your package name as both `target` and `package`.
