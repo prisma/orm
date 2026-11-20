@@ -248,7 +248,7 @@ class Parameterizer {
       return this.#getOrCreatePlaceholder(jsonValue, type)
     }
 
-    const type = getPrimitivePlaceholderType(value)
+    const type = getPrimitivePlaceholderType(value, mask)
     if (!matchesPrimitiveMask(type, mask)) {
       return value
     }
@@ -297,7 +297,7 @@ class Parameterizer {
       const allValid = items.every((item) => validateListElement(item, edge))
       if (allValid && items.length > 0) {
         const decodedItems = items.map((item) => decodeIfTagged(item))
-        const innerType = inferListElementType(items)
+        const innerType = inferListElementType(items, getScalarMask(edge))
         const type: PlaceholderType = { type: 'List', inner: innerType }
         return this.#getOrCreatePlaceholder(decodedItems, type)
       }
@@ -426,7 +426,7 @@ const JSON_COMPARISON_FILTERS = new Set(['gt', 'gte', 'lt', 'lte'])
 const MAX_INT = 2 ** 31 - 1
 const MIN_INT = -(2 ** 31)
 
-function getPrimitivePlaceholderType(value: string | number | boolean): PlaceholderType {
+function getPrimitivePlaceholderType(value: string | number | boolean, mask: number): PlaceholderType {
   switch (typeof value) {
     case 'boolean':
       return { type: 'Boolean' }
@@ -437,6 +437,10 @@ function getPrimitivePlaceholderType(value: string | number | boolean): Placehol
       }
       if (MIN_INT <= value && value <= MAX_INT) {
         return { type: 'Int' }
+      }
+      // Integer-valued floats like 1e20 lose precision when inlined into the query compiler.
+      if (!(mask & ScalarMask.BigInt) && mask & ScalarMask.Float) {
+        return { type: 'Float' }
       }
       return { type: 'BigInt' }
 
@@ -488,7 +492,7 @@ function getTaggedPlaceholderType(tag: JsonInputTaggedValue['$type']): Placehold
  * Infers the widest placeholder type that accommodates all elements in a list.
  * For example, a list containing both Int and Float values infers Float.
  */
-function inferListElementType(items: unknown[]): PlaceholderType {
+function inferListElementType(items: unknown[], mask: number): PlaceholderType {
   let widest: PlaceholderType = { type: 'Any' }
 
   for (const item of items) {
@@ -497,7 +501,7 @@ function inferListElementType(items: unknown[]): PlaceholderType {
 
     switch (classified.kind) {
       case 'primitive':
-        itemType = getPrimitivePlaceholderType(classified.value)
+        itemType = getPrimitivePlaceholderType(classified.value, mask)
         break
       case 'taggedScalar':
         itemType = getTaggedPlaceholderType(classified.tag) ?? { type: 'Any' }
@@ -566,8 +570,8 @@ function validateListElement(item: unknown, edge: InputEdge): boolean {
       return false
 
     case 'primitive': {
-      const type = getPrimitivePlaceholderType(classified.value)
       const mask = getScalarMask(edge)
+      const type = getPrimitivePlaceholderType(classified.value, mask)
       return mask !== 0 && matchesPrimitiveMask(type, mask)
     }
 

@@ -90,6 +90,14 @@ export function mapIsolationLevel(level: IsolationLevel): sql.IIsolationLevel {
   }
 }
 
+/**
+ * Whether a number must be bound as FLOAT explicitly. mssql infers BIGINT for integer-valued numbers
+ * outside the INT range, which rejects floats such as 1e20.
+ */
+export function isFloatArg(arg: unknown, argType: ArgType): arg is number {
+  return typeof arg === 'number' && (argType.dbType === 'FLOAT' || argType.dbType === 'REAL')
+}
+
 export function mapArg<A>(arg: A | BigInt | Date, argType: ArgType): null | number | BigInt | string | Buffer | A {
   if (arg === null) {
     return null
