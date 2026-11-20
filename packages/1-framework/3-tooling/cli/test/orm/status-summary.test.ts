@@ -237,6 +237,18 @@ describe('buildStatusNextActions', () => {
     ['nothing is pending', settled],
     ['no migrations exist', { ...settled, everySpaceEmpty: true, pendingCount: 1 }],
     ['the marker is off the graph', { ...settled, markerDiverged: true, pendingCount: 1 }],
+    [
+      "another space's marker is off the graph and no path reaches the target",
+      {
+        ...settled,
+        markerDiverged: true,
+        noPath: {
+          origin: atMarker('a'.repeat(64)),
+          targetHash: 'b'.repeat(64),
+          target: { kind: 'app' as const, explicitTarget: false, refName: undefined },
+        },
+      },
+    ],
   ])('suggests nothing when %s', (_, args) => {
     expect(buildStatusNextActions(args)).toEqual([]);
   });

@@ -223,7 +223,7 @@ export function buildStatusNextActions(args: {
   readonly invocation: CliInvocation;
 }): readonly NextAction[] {
   const { noPath, invocation } = args;
-  if (args.everySpaceEmpty) {
+  if (args.everySpaceEmpty || args.markerDiverged) {
     return [];
   }
   if (noPath !== undefined) {
@@ -244,7 +244,7 @@ export function buildStatusNextActions(args: {
         : []),
     ];
   }
-  if (args.markerDiverged || args.pendingCount === 0) {
+  if (args.pendingCount === 0) {
     return [];
   }
   const to =
