@@ -88,6 +88,10 @@ Stopping point for the open upgrade issues: every urgent and high issue is close
 
 Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgent and start immediately. They were already required for GA; what changed is the order. They move to the top of the editor and tools stream. The VS Code extension work that depends on them (items 2 and 3 of that stream) waits on them. Background from 2026-09-28: several emulators of each type can run, so status is a list; the eval found that stopping `prisma dev` leaves the emulator processes running and no stop or cleanup command exists.
 
+## Changes of 2026-11-20
+
+- The Prisma Studio command (stream 3, row 1b) moves from Must to Aim. It can ship after GA, but before is preferred, and Will expects it to be a small piece of work (Will, 2026-11-20). Until it ships, the docs tell Prisma 8 users to run `npx prisma@prev studio`.
+
 ## Changes of 2026-11-18
 
 - New Must work, owned by Will: capabilities by database version (stream 6, row 10). It lands before GA because it changes contract content and the names users import.
