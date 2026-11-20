@@ -324,3 +324,27 @@ describe('resolveStatements, origin contract unknown', () => {
     expect(expectValue(result)).toEqual([]);
   });
 });
+
+describe('a model rename whose new name reads as more than one thing', () => {
+  it('says the name is ambiguous, not that the contract lacks a model of that name', () => {
+    const shop = { models: { Shop: { fields: ['id', 'details'] } } };
+    const result = resolve(
+      ['Legacy:Shop.details'],
+      contractOf({
+        a: { models: { Legacy: {}, ...shop.models } },
+        b: { enums: { Shop: ['details'] } },
+      }),
+      contractOf({ a: shop, b: { enums: { Shop: ['details'] } } }),
+    );
+
+    expect(failureShape(result)).toEqual({
+      code: UNRESOLVED,
+      summary: 'Cannot resolve statement "--rename Legacy:Shop.details"',
+      why: '"Shop.details" resolves both as model "Shop" field "details" and as enum "Shop" value "details".',
+      nextActions: [
+        'Name it with its namespace: a.Shop.details for the field, b.Shop.details for the enum value.',
+      ],
+      meta: { statement: 'Legacy:Shop.details', verb: 'rename' },
+    });
+  });
+});

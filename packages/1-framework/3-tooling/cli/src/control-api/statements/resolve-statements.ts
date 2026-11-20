@@ -43,7 +43,11 @@ import {
   parseRenameStatement,
   type StatementSide,
 } from './parse-rename';
-import { possibleNewNames, variantBaseAfterRenames } from './possible-new-names';
+import {
+  namespaceAfterRenames,
+  possibleNewNames,
+  variantBaseAfterRenames,
+} from './possible-new-names';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
 import { variantValue } from './variants';
@@ -94,6 +98,8 @@ interface Refusal {
   readonly modelWithoutCounterpart?: string;
   /** Set when the name is a value object's rather than a model's: the value object's name. */
   readonly valueObject?: string;
+  /** Set when the name reads as more than one thing of the contract. */
+  readonly ambiguous?: true;
 }
 
 type ModelLookup =
@@ -559,6 +565,7 @@ function oneReading(
     (reading) => `${qualifiedReading(reading)} for the ${ENTITY_WORDS[reading.entity]}`,
   );
   return notOk({
+    ambiguous: true,
     reason: `"${text}" resolves ${joinedAs(readings.map(readingText))}`,
     fix:
       unnameable === undefined
@@ -700,6 +707,7 @@ function readSide(
     const dotted = readField(state, side, undefined, first, `${second}.${third}`);
     if (qualified.ok && dotted.ok) {
       return notOk({
+        ambiguous: true,
         reason: `"${first}.${second}.${third}" resolves both as namespace "${first}" model "${second}" field "${third}" and as model "${first}" field "${second}.${third}"`,
         fix: `Give the field a stored name without "." with @map, or rename namespace "${first}" or model "${first}", so that only one reading resolves.`,
       });
@@ -728,6 +736,7 @@ function readSide(
   const asValueObjectField = readValueObjectField(state, side, undefined, first, second);
   if (asModel.ok && asField.ok) {
     return notOk({
+      ambiguous: true,
       reason: `"${first}.${second}" resolves both as namespace "${first}" model "${second}" and as model "${first}" field "${second}"`,
       fix: 'Write the field as namespace.Model.field if you mean the field.',
     });
@@ -1505,6 +1514,8 @@ function newNameRefusal(
   };
   const missing = () =>
     to === undefined ? errorRenameToMissingName(statement, rename) : undefined;
+  const destinationNamespace = (namespaceId: string) =>
+    namespaceAfterRenames(namespaceId, names.renames) ?? namespaceId;
   const hadBefore = () =>
     to?.entity === from.entity ? errorRenameToNameHadBefore(statement, rename) : undefined;
   switch (from.entity) {
@@ -1534,7 +1545,7 @@ function newNameRefusal(
     case 'enumValue': {
       if (!sameParent) return undefined;
       const { namespaceId, enum: enumName, member } = from.coordinate;
-      const lookup = lookupEnum(state.destination, namespaceId, enumName);
+      const lookup = lookupEnum(state.destination, destinationNamespace(namespaceId), enumName);
       if (lookup.kind !== 'found' || lookup.members.includes(member)) return undefined;
       if (lookup.members.includes(name))
         return from.members.includes(name) ? hadBefore() : undefined;
@@ -1543,7 +1554,11 @@ function newNameRefusal(
     case 'valueObjectField': {
       if (!sameParent) return undefined;
       const { namespaceId, valueObject, field } = from.coordinate;
-      const lookup = lookupValueObject(state.destination, namespaceId, valueObject);
+      const lookup = lookupValueObject(
+        state.destination,
+        destinationNamespace(namespaceId),
+        valueObject,
+      );
       if (lookup.kind !== 'found') return undefined;
       const fields = Object.keys(lookup.valueObject.fields);
       if (fields.includes(field)) return undefined;
@@ -1617,7 +1632,10 @@ function resolveStatement(
   const from = readSide(state, 'old', statement.from);
   if (!from.ok) return notOk(oldSideRefusal(state, statement, later, from.failure));
   const to = readSide(state, 'new', statement.to);
-  const refusal = newNameRefusal(state, statement, later, from.value, to.ok ? to.value : undefined);
+  const refusal =
+    !to.ok && to.failure.ambiguous === true
+      ? undefined
+      : newNameRefusal(state, statement, later, from.value, to.ok ? to.value : undefined);
   if (refusal !== undefined) return notOk(refusal);
   if (
     !to.ok &&

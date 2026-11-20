@@ -134,3 +134,67 @@ describe('resolveStatements, namespace renames', () => {
     ).toEqual([namespace, model]);
   });
 });
+
+describe('a rename to a missing name inside a renamed namespace', () => {
+  const origin = contractOf({
+    app: { models: { User: {} } },
+    billing: {
+      models: { Invoice: {} },
+      enums: { Status: ['OLD'] },
+      valueObjects: { Line: ['note'] },
+    },
+  });
+  const destination = contractOf({
+    app: { models: { User: {} } },
+    finance: {
+      models: { Invoice: {} },
+      enums: { Status: ['NEW'] },
+      valueObjects: { Line: ['label'] },
+    },
+  });
+
+  it('offers the names the contract adds under the new namespace, and the offered rename resolves', () => {
+    const offered = (text: string) =>
+      failureShape(resolve(['billing:finance', text], origin, destination));
+
+    expect({
+      enumValue: offered('finance.Status.OLD:finance.Status.NOPE'),
+      valueObjectField: offered('finance.Line.note:finance.Line.nope'),
+      followed: expectValue(
+        resolve(
+          [
+            'billing:finance',
+            'finance.Status.OLD:finance.Status.NEW',
+            'finance.Line.note:finance.Line.label',
+          ],
+          origin,
+          destination,
+        ),
+      ).length,
+    }).toEqual({
+      enumValue: {
+        code: UNRESOLVED,
+        summary:
+          'The contract has no enum value "finance.Status.NOPE" to rename "finance.Status.OLD" to.',
+        why: 'The contract adds enum value "finance.Status.NEW".',
+        nextActions: [
+          'If enum value "finance.Status.OLD" was renamed to "finance.Status.NOPE", add enum value "finance.Status.NOPE" to the contract, run `{bin} contract emit`, and run this command again.',
+          'If enum value "finance.Status.OLD" was renamed to "finance.Status.NEW", use --rename finance.Status.OLD:finance.Status.NEW in place of --rename finance.Status.OLD:finance.Status.NOPE',
+        ],
+        meta: { statement: 'finance.Status.OLD:finance.Status.NOPE', verb: 'rename' },
+      },
+      valueObjectField: {
+        code: UNRESOLVED,
+        summary:
+          'The contract has no value object field "finance.Line.nope" to rename "finance.Line.note" to.',
+        why: 'The contract adds value object field "finance.Line.label".',
+        nextActions: [
+          'If value object field "finance.Line.note" was renamed to "finance.Line.nope", add value object field "finance.Line.nope" to the contract, run `{bin} contract emit`, and run this command again.',
+          'If value object field "finance.Line.note" was renamed to "finance.Line.label", use --rename finance.Line.note:finance.Line.label in place of --rename finance.Line.note:finance.Line.nope',
+        ],
+        meta: { statement: 'finance.Line.note:finance.Line.nope', verb: 'rename' },
+      },
+      followed: 3,
+    });
+  });
+});
