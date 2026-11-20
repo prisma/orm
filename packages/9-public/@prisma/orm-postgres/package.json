@@ -26,6 +26,7 @@
     "@types/node": "catalog:",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
+    "pg-connection-string": "^2.14.0",
     "temporal-spec": "1.0.1",
     "tinyglobby": "catalog:"
   },

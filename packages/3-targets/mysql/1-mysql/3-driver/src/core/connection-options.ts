@@ -73,20 +73,33 @@ function invalidBinding(displayName: string, reason: string, parameters: readonl
   });
 }
 
-/** Parses `url` as the Postgres facade does, refusing it without the parser's error, which carries the whole URL. */
-function parseUrl(url: string, displayName: string): URL {
+/** Parses `url` as the Postgres facade does, refusing it without the parser's error, which carries the whole URL. A URL that leaves the host blank parses with a placeholder host, and `hostGiven` says the URL named none, so the connector falls back to its default. */
+function parseUrl(
+  url: string,
+  displayName: string,
+): { readonly parsed: URL; readonly hostGiven: boolean } {
   try {
-    return new URL(url);
+    const parsed = new URL(url);
+    return { parsed, hostGiven: parsed.hostname !== '' };
   } catch {
-    throw invalidBinding(displayName, 'the URL cannot be parsed', []);
+    const withHost = url.replace('@/', '@localhost/');
+    try {
+      return { parsed: new URL(withHost), hostGiven: false };
+    } catch {
+      throw invalidBinding(displayName, 'the URL cannot be parsed', []);
+    }
   }
 }
 
 function readUrl(
   url: string,
   displayName: string,
-): { readonly parsed: URL; readonly parameters: UrlParameters } {
-  const parsed = parseUrl(url, displayName);
+): {
+  readonly parsed: URL;
+  readonly parameters: UrlParameters;
+  readonly hostGiven: boolean;
+} {
+  const { parsed, hostGiven } = parseUrl(url, displayName);
   if (parsed.searchParams.has('charset')) {
     throw invalidBinding(
       displayName,
@@ -113,7 +126,7 @@ function readUrl(
       ['sslcert'],
     );
   }
-  return { parsed, parameters };
+  return { parsed, parameters, hostGiven };
 }
 
 function readPem(
@@ -155,12 +168,19 @@ function connectionOptions(
   parsed: URL,
   parameters: UrlParameters,
   connectTimeoutMs: number | undefined,
+  hostGiven: boolean,
   displayName: string,
 ): ConnectionConfig {
   return {
-    host: decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1'),
+    ...ifDefined(
+      'host',
+      hostGiven ? decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1') : undefined,
+    ),
     ...ifDefined('port', parsed.port === '' ? undefined : Number(parsed.port)),
-    user: decodeURIComponent(parsed.username),
+    ...ifDefined(
+      'user',
+      parsed.username === '' ? process.env['USER'] : decodeURIComponent(parsed.username),
+    ),
     password: decodeURIComponent(parsed.password),
     database: decodeURIComponent(parsed.pathname.slice(1)),
     ...ifDefined('ssl', tlsOptions(parameters, displayName)),
@@ -176,8 +196,14 @@ export function mysqlConnectionOptions(
   url: string,
   settings: { readonly connectTimeoutMs?: number | undefined; readonly displayName: string },
 ): ConnectionConfig {
-  const { parsed, parameters } = readUrl(url, settings.displayName);
-  return connectionOptions(parsed, parameters, settings.connectTimeoutMs, settings.displayName);
+  const { parsed, parameters, hostGiven } = readUrl(url, settings.displayName);
+  return connectionOptions(
+    parsed,
+    parameters,
+    settings.connectTimeoutMs,
+    hostGiven,
+    settings.displayName,
+  );
 }
 
 /** How long a connection may stay idle before the pool, and the driver's cancel connection, close it. */
@@ -193,10 +219,10 @@ export function mysqlPoolOptions(
   displayName: string,
   poolOptions?: MysqlPoolOptions,
 ): PoolConfig {
-  const { parsed, parameters } = readUrl(url, displayName);
+  const { parsed, parameters, hostGiven } = readUrl(url, displayName);
   const timeoutMs = poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS;
   return {
-    ...connectionOptions(parsed, parameters, timeoutMs, displayName),
+    ...connectionOptions(parsed, parameters, timeoutMs, hostGiven, displayName),
     acquireTimeout: timeoutMs,
     minimumIdle: 0,
     idleTimeout: Math.ceil(mysqlPoolIdleTimeoutMillis(poolOptions) / 1000),

@@ -5117,6 +5117,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      pg-connection-string:
+        specifier: ^2.14.0
+        version: 2.14.0
       temporal-spec:
         specifier: 1.0.1
         version: 1.0.1
@@ -6137,6 +6140,9 @@ importers:
       pg:
         specifier: ^8.22.0
         version: 8.22.0
+      pg-connection-string:
+        specifier: ^2.14.0
+        version: 2.14.0
       temporal-polyfill:
         specifier: ^1.0.8
         version: 1.0.8
