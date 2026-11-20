@@ -13,6 +13,7 @@ import {
   type ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import { postgresContractToSchema } from '../../src/core/migrations/postgres-contract-to-schema';
@@ -185,7 +186,7 @@ function plan(
 }
 
 function renderedCalls(result: ReturnType<typeof plan>): readonly string[] {
-  const rendered = result.plan.renderTypeScript((specifier) => specifier);
+  const rendered = result.plan.renderTypeScript(workspaceMigrationModule.postgres);
   return rendered.split('\n').flatMap((line) => {
     const call = /this\.\w+\(.*\)/.exec(line);
     return call === null ? [] : [call[0]];

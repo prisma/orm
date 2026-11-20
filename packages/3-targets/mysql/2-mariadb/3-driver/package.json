@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@internal/driver-mysql": "workspace:8.0.0-rc.24",
-    "@internal/framework-components": "workspace:8.0.0-rc.24"
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
+    "@internal/target-mariadb": "workspace:8.0.0-rc.24"
   },
   "devDependencies": {
     "@internal/sql-contract": "workspace:8.0.0-rc.24",

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@prisma/orm-sqlite/adapter/column-types';
+import { integerNumberColumn, textColumn } from '@prisma/orm-sqlite/adapter/column-types';
 import sqliteAdapterDescriptor, {
   createSqliteBuiltinCodecLookup,
   SqliteControlAdapter,
@@ -37,9 +37,9 @@ const controlAdapter = sqliteAdapterDescriptor.create(controlStack);
 
 const fw = [sqliteTargetDescriptor, sqliteAdapterDescriptor, sqliteDriverDescriptor] as const;
 
-export const int = field.column(integerColumn);
+export const int = field.column(integerNumberColumn);
 export const text = field.column(textColumn);
-export { integerColumn, textColumn };
+export { integerNumberColumn, textColumn };
 
 export type Driver = {
   readonly familyId: 'sql';

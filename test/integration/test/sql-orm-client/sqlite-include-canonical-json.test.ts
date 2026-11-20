@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  bigintColumn,
   blobColumn,
-  integerColumn,
-  jsonColumn,
+  integerBigIntColumn,
+  integerNumberColumn,
+  plainJsonColumn,
   textColumn,
 } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
@@ -45,21 +45,21 @@ const STRING_CONTAINING_JSON = '{"not":"a document"}';
 
 const Reading = model('Reading', {
   fields: {
-    id: field.column(integerColumn).id(),
-    counter: field.column(bigintColumn).optional(),
+    id: field.column(integerNumberColumn).id(),
+    counter: field.column(integerBigIntColumn).optional(),
     payload: field.column(blobColumn).optional(),
-    document: field.column(jsonColumn).optional(),
+    document: field.column(plainJsonColumn).optional(),
     label: field.column(textColumn).optional(),
   },
 }).sql({ table: 'canon_readings' });
 
 const Station = model('Station', {
   fields: {
-    id: field.column(integerColumn).id(),
-    readingId: field.column(integerColumn).column('reading_id'),
+    id: field.column(integerNumberColumn).id(),
+    readingId: field.column(integerNumberColumn).column('reading_id'),
     // A per-station tally past a double's integers, so an aggregate over it has
     // something to lose.
-    weight: field.column(bigintColumn).optional(),
+    weight: field.column(integerBigIntColumn).optional(),
   },
   relations: {
     reading: rel.belongsTo(Reading, { from: 'readingId', to: 'id' }).sql({ fk: {} }),
@@ -279,14 +279,14 @@ describe('integration/sqlite include canonical JSON', () => {
     const exactTotal = (WIDE_BIGINT + 2n).toString();
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
+      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': A sqlite/bigintnumber@1 value is "${exactTotal}", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
       details: { table: 'canon_stations', column: 'stations', codec: 'sqlite/bigintnumber@1' },
       cause: {
         name: 'StructuredError',
-        message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
+        message: `A sqlite/bigintnumber@1 value is "${exactTotal}", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
         code: 'RUNTIME.DECODE_FAILED',
         meta: { codecId: 'sqlite/bigintnumber@1', received: exactTotal },
       },
@@ -294,9 +294,8 @@ describe('integration/sqlite include canonical JSON', () => {
   });
 
   // A sum is a value SQLite computes, so it leaves the database as an INTEGER
-  // rather than the text a bigint column stores — and `node:sqlite` refuses an
-  // integer a JS number cannot hold. The target's descriptor answers with the
-  // cast that makes the wire form text, which is what the bigint codec reads.
+  // rather than the text a bigint column stores. The target's descriptor answers
+  // with the cast that makes the wire form text, which the bigint codec reads.
   it('carries a top-level sumBigInt past 2^53 through the ORM', async () => {
     const stats = await readings!.aggregate((aggregate) => ({
       total: aggregate.sumBigInt('counter'),
@@ -316,7 +315,7 @@ describe('integration/sqlite include canonical JSON', () => {
 
     expect(shape).toEqual({
       name: 'StructuredError',
-      message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${WIDE_BIGINT}`,
+      message: `A sqlite/bigintnumber@1 value is "${WIDE_BIGINT}", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
       code: 'RUNTIME.DECODE_FAILED',
       meta: { codecId: 'sqlite/bigintnumber@1', received: WIDE_BIGINT.toString() },
     });

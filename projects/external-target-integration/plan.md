@@ -36,6 +36,7 @@ Nothing below starts until the two design records are approved.
 - **Outcome:** `prisma orm init --target <any package>` works. Prisma's SQLite and MySQL packages export an init contribution and are scaffolded by package name, as the first real test of the mechanism. The guide for authors of target packages exists.
 - **Builds on:** pull requests 1 and 2. Its end-to-end test needs both: `init` on an unlisted package, then an emit that compiles.
 - **Hands on:** the project's definition of done.
+- **To decide first:** how `init` learns an unlisted package's required driver peers before its first install. A listed package's drivers come from the list; a target package declares its driver as a required peer (ADR 219), so it must go into the same install.
 
 ## Order
 
@@ -62,7 +63,7 @@ Pull requests 1 and 2 touch different files, except the facades' `package.json` 
 
 - [ ] Verify every item of the definition of done in [spec.md](spec.md).
 - [ ] Final retro.
-- [ ] Move the two design records into `docs/architecture docs/adrs/` with numbers and status Accepted, add the supersession note to the public npm packages record, and add both to the index.
+- [ ] Move the `init` design record into `docs/architecture docs/adrs/` with a number and status Accepted, and add it to the index. It moves with the pull request that implements it. The generated imports record already moved, with the pull request that implemented it, and the public packages record carries its supersession note.
 - [ ] Move the durable parts of `sql-server-team.md` into the author guide; delete the rest.
 - [ ] Strip repository references to `projects/external-target-integration/`.
 - [ ] Delete `projects/external-target-integration/`.

@@ -51,10 +51,7 @@ function setupSqliteJourney(
   const configPath = join(testDir, 'prisma.config.ts');
   const config = readFileSync(sqlitePslConfigFixture, 'utf-8')
     .replace('{{DB_PATH}}', () => dbPath)
-    .replace(
-      "migrations: { dir: 'migrations' }",
-      () => `migrations: { dir: './${migrationsDir}' }`,
-    );
+    .replace("migrations: { dir: 'migrations',", () => `migrations: { dir: './${migrationsDir}',`);
   writeFileSync(configPath, config, 'utf-8');
   writeProjectManifest(testDir);
   return { testDir, configPath, outputDir: testDir, dbPath, migrationsDir };

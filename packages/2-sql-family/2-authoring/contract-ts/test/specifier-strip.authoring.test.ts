@@ -231,6 +231,8 @@ describe('typescriptContractFromPath under a specifier default policy', () => {
         'fixtures/managed-user-contract.ts',
       );
       const config = typescriptContractFromPath('./fixtures/managed-user-contract.ts', undefined, {
+        target: postgresTargetPack,
+        contractBuilderModule: '@prisma/orm-postgres/contract-builder',
         defaultControlPolicy: 'external',
         createNamespace: createTestSqlNamespace,
       });

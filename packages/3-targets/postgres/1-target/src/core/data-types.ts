@@ -35,10 +35,10 @@ import {
   readJsonString,
   refuseJsonValue,
   refuseWrongShape,
-  storedNumeralText,
 } from '@internal/framework-components/codec';
 import { type SqlTypeText, sqlDataType, sqlRawDataType } from '@internal/sql-contract/data-type';
 import type { ReportedSqlType } from '@internal/sql-schema-ir/types';
+import { isDecimalText, printedDecimalText } from '@internal/type-implementations/decimal';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';
 import { counted, withoutTrailing } from '@internal/utils/text';
 import { type as arktype } from 'arktype';
@@ -73,9 +73,6 @@ function integerParam(params: DataTypeParams, name: string): number | undefined 
   return typeof value === 'number' ? value : undefined;
 }
 
-/** A decimal numeral: an optional minus sign, digits, and an optional fraction. */
-const DECIMAL_NUMERAL_TEXT = /^-?\d+(?:\.\d+)?$/;
-
 /**
  * Numeric text in the form PostgreSQL *prints*, which is narrower than the form it accepts.
  *
@@ -106,9 +103,7 @@ function fitsNumeric(text: string, precision: number, scale: number): boolean {
 const readNumeric: DataTypeReader = (json, params) => {
   if (typeof json !== 'string' || !STORED_NUMERIC_TEXT.test(json)) {
     const printed =
-      typeof json === 'string' && DECIMAL_NUMERAL_TEXT.test(json)
-        ? storedNumeralText(json)
-        : undefined;
+      typeof json === 'string' && isDecimalText(json) ? printedDecimalText(json) : undefined;
     return refuseJsonValue(
       'pg/numeric',
       printed === undefined ? 'a decimal string' : `"${printed}", as PostgreSQL writes this value`,
@@ -583,7 +578,7 @@ const MONEY_RANGE_TEXT = 'from -92233720368547758.08 to 92233720368547758.07';
 
 /** The cents a decimal numeral holds, or undefined when it has a third significant fraction digit or lies outside `money`'s range. */
 function moneyCents(text: string): bigint | undefined {
-  if (!DECIMAL_NUMERAL_TEXT.test(text)) return undefined;
+  if (!isDecimalText(text)) return undefined;
   const negative = text.startsWith('-');
   const [whole = '', fraction = ''] = text.replace(/^-/, '').split('.');
   if (withoutTrailing(fraction, '0').length > 2) return undefined;

@@ -239,7 +239,7 @@ describe('written defaults a column refuses', () => {
     ]);
   });
 
-  it('refuses a plain form this target has no data type for, as SQLite has none for a boolean', () => {
+  it('refuses a plain form this target has no data type for', () => {
     const entries = Object.fromEntries(
       Object.entries(fixtureDataTypeSupport.entries).filter(([key]) => key !== 'pg/bool'),
     );

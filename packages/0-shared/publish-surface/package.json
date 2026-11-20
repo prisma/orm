@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Canonical map of internal workspace packages to published @prisma/orm-* entrypoints (ADR 242), plus the import-root modes emission resolves generated import specifiers through",
+  "description": "Canonical map of internal workspace packages to published @prisma/orm-* entrypoints (ADR 242)",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -34,7 +34,7 @@
     "src"
   ],
   "exports": {
-    "./import-roots": "./dist/import-roots.mjs",
+    "./platform-entrypoints": "./dist/platform-entrypoints.mjs",
     "./shells": "./dist/shells.mjs",
     "./package.json": "./package.json"
   },

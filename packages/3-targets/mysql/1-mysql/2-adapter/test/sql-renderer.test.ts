@@ -1,6 +1,8 @@
 import {
   AggregateExpr,
   AndExpr,
+  type AnyExpression,
+  type AnyParamRef,
   type AnyQueryAst,
   BinaryExpr,
   CaseExpr,
@@ -32,6 +34,7 @@ import {
   OrExpr,
   ParamRef,
   PreparedParamRef,
+  type ProjectionExpr,
   ProjectionItem,
   RawExpr,
   RawQueryAst,
@@ -41,12 +44,26 @@ import {
   UpdateAst,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
+import {
+  buildMysqlCodecDescriptorRegistry,
+  MysqlCodecDescriptor,
+} from '@internal/target-mysql/codec-descriptor';
 import { createMysqlBuiltinCodecLookup } from '@internal/target-mysql/codecs';
+import { mysqlText } from '@internal/target-mysql/data-types';
+import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
 import { describe, expect, it } from 'vitest';
-import { renderMysqlSql } from '../src/core/sql-renderer';
+import { MysqlSqlRenderer } from '../src/core/sql-renderer';
 
-const codecs = createMysqlBuiltinCodecLookup();
-const lower = (ast: AnyQueryAst) => renderMysqlSql(ast, undefined, codecs);
+const renderer = new MysqlSqlRenderer(
+  createMysqlBuiltinCodecLookup(),
+  mysqlTargetDescriptorMetaRuntime,
+);
+/** Renders `ast` and records what it rendered as a snapshot, so every input below pins the SQL MySQL is sent. */
+const lower = (ast: AnyQueryAst) => {
+  const lowered = renderer.render(ast, undefined);
+  expect(lowered).toMatchSnapshot();
+  return lowered;
+};
 const sqlOf = (ast: AnyQueryAst) => lower(ast).sql;
 
 const id = ColumnRef.of('user', 'id');
@@ -105,12 +122,119 @@ describe('MySQL lowering of a select', () => {
     ]);
   });
 
+  it('writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included', () => {
+    const amount = ColumnRef.of('t', 'amount');
+    const decimalParam = (value: string) =>
+      ParamRef.of(value, {
+        codec: { codecId: 'mysql/decimal@1', typeParams: { precision: 65, scale: 30 } },
+      });
+    expect({
+      eq: sqlOf(selectId.withWhere(BinaryExpr.eq(amount, decimalParam('0.1')))),
+      in: lower(
+        selectId.withWhere(
+          BinaryExpr.in(amount, ListExpression.of([decimalParam('0.1'), decimalParam('99')])),
+        ),
+      ),
+      prepared: sqlOf(
+        selectId.withWhere(
+          BinaryExpr.eq(amount, PreparedParamRef.of('a', { codecId: 'mysql/decimal@1' })),
+        ),
+      ),
+      insert: sqlOf(
+        InsertAst.into(TableSource.named('t')).withRows([{ amount: decimalParam('1.50') }]),
+      ),
+      update: sqlOf(UpdateAst.table(TableSource.named('t')).withSet({ amount: decimalParam('2') })),
+    }).toEqual({
+      eq: 'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` = CAST(?1 AS DECIMAL(65,30))',
+      in: {
+        sql: 'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` IN (CAST(?1 AS DECIMAL(65,30)), CAST(?2 AS DECIMAL(65,30)))',
+        params: [
+          { kind: 'literal', value: '0.1' },
+          { kind: 'literal', value: '99' },
+        ],
+      },
+      prepared:
+        'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` = CAST(?1 AS DECIMAL(65,30))',
+      insert: 'INSERT INTO `t` (`amount`) VALUES (CAST(?1 AS DECIMAL(65,30)))',
+      update: 'UPDATE `t` SET `amount` = CAST(?1 AS DECIMAL(65,30))',
+    });
+  });
+
+  it('casts a decimal param to a DECIMAL that holds every value of its column, past 35 digits before the point included', () => {
+    const amount = ColumnRef.of('t', 'amount');
+    const param = (typeParams: { precision: number; scale: number }) =>
+      ParamRef.of('1', { codec: { codecId: 'mysql/decimal@1', typeParams } });
+    expect([
+      whereOf(BinaryExpr.eq(amount, param({ precision: 65, scale: 0 }))),
+      whereOf(BinaryExpr.eq(amount, param({ precision: 50, scale: 10 }))),
+    ]).toEqual([
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` = CAST(?1 AS DECIMAL(65,0))',
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `t`.`amount` = CAST(?1 AS DECIMAL(65,25))',
+    ]);
+  });
+
+  it('writes the expression a codec wraps a param in, and refuses one that drops or repeats the param', () => {
+    class Wrapping extends MysqlCodecDescriptor<void> {
+      override readonly dataType = mysqlText.id;
+      override readonly traits = ['equality'] as const;
+      override readonly paramsSchema = undefined;
+      constructor(
+        override readonly codecId: string,
+        private readonly wrap: (parameter: AnyParamRef) => AnyExpression,
+      ) {
+        super();
+      }
+      protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+        return expression;
+      }
+      protected override wrappedParameter(parameter: AnyParamRef): AnyExpression {
+        return this.wrap(parameter);
+      }
+      override factory(): never {
+        throw new Error('not built in this test');
+      }
+    }
+    const wrapping = new MysqlSqlRenderer(
+      buildMysqlCodecDescriptorRegistry([
+        new Wrapping('x/geometry@1', (p) => FunctionCallExpr.of('ST_GeomFromText', [p])),
+        new Wrapping('x/compared@1', (p) => BinaryExpr.eq(p, LiteralExpr.of(1))),
+        new Wrapping('x/dropped@1', () => LiteralExpr.of(1)),
+        new Wrapping('x/twice@1', (p) => BinaryExpr.eq(p, p)),
+      ]),
+      mysqlTargetDescriptorMetaRuntime,
+    );
+    const where = (codecId: string) => () =>
+      wrapping.render(
+        selectId.withWhere(BinaryExpr.eq(email, ParamRef.of('v', { codec: { codecId } }))),
+        undefined,
+      ).sql;
+    const refusal = (codecId: string) =>
+      expect.objectContaining({
+        code: 'RUNTIME.CODEC_DESCRIPTOR_INVALID',
+        message: `Codec "${codecId}" wraps a value of this query in an expression that does not hold that value exactly once.`,
+      });
+    expect(where('x/geometry@1')()).toBe(
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `user`.`email` = ST_GeomFromText(?1)',
+    );
+    expect(where('x/compared@1')()).toBe(
+      'SELECT `user`.`id` AS `id` FROM `user` WHERE `user`.`email` = (?1 = 1)',
+    );
+    expect(where('x/dropped@1')).toThrow(refusal('x/dropped@1'));
+    expect(where('x/twice@1')).toThrow(refusal('x/twice@1'));
+  });
+
   it('refuses a param whose codec the registry lacks', () => {
     expect(() =>
       sqlOf(
         selectId.withWhere(BinaryExpr.eq(id, ParamRef.of(1, { codec: { codecId: 'pg/x@1' } }))),
       ),
-    ).toThrow(expect.objectContaining({ code: 'RUNTIME.PARAM_REF_MISSING_CODEC' }));
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.PARAM_REF_MISSING_CODEC',
+        message:
+          'A value in this query uses codec "pg/x@1", which no extension given to the client provides.',
+      }),
+    );
   });
 
   it('numbers params in the order the runtime encodes them', () => {
@@ -305,7 +429,12 @@ describe('MySQL lowering of expressions', () => {
     'refuses the literal %s, which only a caller value could supply',
     (value) => {
       expect(() => projectionOf(LiteralExpr.of(value))).toThrow(
-        expect.objectContaining({ code: 'RUNTIME.AST_UNSUPPORTED' }),
+        expect.objectContaining({
+          code: 'RUNTIME.AST_UNSUPPORTED',
+          message: expect.stringMatching(
+            /^Prisma writes only numbers, booleans and NULL into MySQL SQL as literals, and this query has an? (string|date|object|array) literal; pass the value as a parameter instead$/,
+          ),
+        }),
       );
     },
   );
@@ -387,6 +516,8 @@ describe('MySQL placeholder check', () => {
     expect(() => sqlOf(RawQueryAst.affectedCount(['SELECT ? + ', ParamRef.of(1)]))).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
+        message:
+          'The SQL has placeholders ["?","?1"] for 1 value(s); each value needs its own numbered placeholder, and the SQL may contain no other placeholder.',
         meta: { placeholders: ['?', '?1'], params: 1 },
       }),
     );
@@ -396,7 +527,8 @@ describe('MySQL placeholder check', () => {
     expect(() => sqlOf(RawQueryAst.affectedCount(['SELECT ', ParamRef.of('a'), '0 AS x']))).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.PARAM_PLACEHOLDER_MISMATCH',
-        message: expect.stringContaining('digit right after an interpolated value'),
+        message:
+          "Raw SQL puts a digit right after an interpolated value, which would become part of the value's placeholder",
       }),
     );
   });
@@ -499,7 +631,14 @@ describe('MySQL lowering of JSON for includes', () => {
           JsonObjectExpr.entry('x', new CodecJsonValueProjection(rows('x'), { codecId: 'pg/x@1' })),
         ]),
       ),
-    ).toThrow(expect.objectContaining({ code: 'RUNTIME.PARAM_REF_MISSING_CODEC' }));
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.PARAM_REF_MISSING_CODEC',
+        message:
+          'A column this query reads in an include uses codec "pg/x@1", which no extension given to the client provides.',
+        fix: 'Add the extension that provides codec "pg/x@1" to the client\'s `extensions`.',
+      }),
+    );
   });
 });
 
@@ -733,7 +872,7 @@ describe('MySQL lowering of a statement embedded in raw SQL', () => {
   it('renders a select part inside a RawExpr in expression position', () => {
     const exists = new RawExpr({
       parts: ['EXISTS (', selectUsers(ParamRef.of(2)), ')'],
-      returns: { codecId: 'mysql/bool@1', nullable: false },
+      returns: { codecId: 'mysql/boolean@1', nullable: false },
     });
     expect(
       lower(selectId.withWhere(AndExpr.of([BinaryExpr.eq(email, ParamRef.of('a@b.c')), exists]))),
@@ -760,11 +899,28 @@ describe('MySQL lowering of a statement embedded in raw SQL', () => {
         .withReturning([ProjectionItem.of('id', id)]),
     ],
     ['a delete', DeleteAst.from(user).withReturning([ProjectionItem.of('id', id)])],
-  ])('refuses %s with RETURNING, which MySQL lacks', (_name, ast) => {
+  ])('refuses %s with RETURNING, which MySQL lacks', (name, ast) => {
     expect(() => sqlOf(RawQueryAst.affectedCount(['WITH x AS (', ast, ') SELECT 1']))).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.AST_UNSUPPORTED',
-        meta: expect.objectContaining({ feature: 'returning' }),
+        message: `MySQL cannot return the rows ${name} writes; it has no RETURNING`,
+        meta: { target: 'mysql', feature: 'returning' },
+      }),
+    );
+  });
+
+  it('names the database it renders for in a refusal, and carries its target id', () => {
+    const other = new MysqlSqlRenderer(createMysqlBuiltinCodecLookup(), {
+      targetId: 'other',
+      displayName: 'Other',
+    });
+    const fullJoin = fromUser.withJoins([
+      JoinAst.full(TableSource.named('post'), BinaryExpr.eq(id, ColumnRef.of('post', 'userId'))),
+    ]);
+    expect(() => other.render(fullJoin, undefined)).toThrow(
+      expect.objectContaining({
+        message: 'Other has no FULL JOIN',
+        meta: { target: 'other', feature: 'full-join' },
       }),
     );
   });

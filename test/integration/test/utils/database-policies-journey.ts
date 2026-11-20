@@ -32,7 +32,7 @@ import {
   sqlitePslConfigFixture,
 } from './journey-test-helpers';
 
-export type ContractVersion = 'base' | 'next' | 'unique';
+export type ContractVersion = 'base' | 'next' | 'unique' | 'renamed';
 
 export type PolicyTarget = 'postgres' | 'sqlite' | 'mysql' | 'mongo';
 
@@ -73,6 +73,16 @@ model User {
   @@map("user")
 }
 `,
+  renamed: `// use prisma-8
+
+model User {
+  id       Int     @id
+  email    String
+  nickname String?
+
+  @@map("user")
+}
+`,
 };
 
 const MONGO_CONTRACTS = {
@@ -105,6 +115,16 @@ model User {
   @@map("users")
 }
 `,
+  renamed: `// use prisma-8
+
+model User {
+  id       ObjectId @id @map("_id")
+  email    String
+  nickname String?
+
+  @@map("users")
+}
+`,
 };
 
 const POSTGRES_CONFIG = `import postgresAdapter from '@internal/adapter-postgres/control';
@@ -123,13 +143,16 @@ export default definePrismaConfig({
     adapter: postgresAdapter,
     driver: postgresDriver,
     extensions: [],
-    contract: prismaContract('./contract.prisma', {
-      output: 'contract.json',
-      target: postgres,
-      createNamespace: postgresCreateNamespace,
-    }),
+    contract: {
+      ...prismaContract('./contract.prisma', {
+        output: 'contract.json',
+        target: postgres,
+        createNamespace: postgresCreateNamespace,
+      }),
+      typesModule: '@internal/postgres/contract-types',
+    },
     db: { connection: {{CONNECTION}} },
-    migrations: { dir: 'migrations' },
+    migrations: { dir: 'migrations', module: '@internal/postgres/migration' },
   }),
 });
 `;
@@ -182,11 +205,12 @@ export function writeContract(project: PolicyProject, version: ContractVersion):
   writeFileSync(join(project.ctx.testDir, 'contract.prisma'), contracts[version], 'utf-8');
 }
 
-/** Emits `version` and plans a migration to it from the latest migration, returning the contract it ends at. */
+/** Emits `version` and plans a migration to it from the latest migration, with `statements`, returning the contract it ends at. */
 export async function planTo(
   project: PolicyProject,
   version: ContractVersion,
   name: string,
+  statements: readonly string[] = [],
 ): Promise<string> {
   const previous = getLatestMigrationDir(project.ctx);
   writeContract(project, version);
@@ -196,6 +220,7 @@ export async function planTo(
     '--name',
     name,
     ...(previous === undefined ? [] : ['--from', previous]),
+    ...statements,
   ]);
   expect(planned.exitCode, `plan ${name}: ${planned.stdout}\n${planned.stderr}`).toBe(0);
   return latestMigrationTo(project);

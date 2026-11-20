@@ -193,12 +193,14 @@ describe('a transaction activity driven by hand', () => {
     expect(transactionStages(setup.events)).toEqual(['finalized:transaction:unknown']);
   });
 
-  it('finalizes nothing more when commit or rollback settles again after the transaction ended', async () => {
+  it('finalizes nothing more when commit or rollback is called again after the transaction ended', async () => {
     const setup = createSetup();
     const transaction = await begin(setup);
 
     await transaction.commit();
-    await transaction.rollback();
+    await expect(transaction.rollback()).rejects.toMatchObject({
+      code: 'RUNTIME.TRANSACTION_CLOSED',
+    });
     await transaction.commit();
 
     expect([...stages(setup.events), ...transactionStages(setup.events)]).toEqual([

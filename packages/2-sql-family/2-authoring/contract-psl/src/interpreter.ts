@@ -69,6 +69,7 @@ import {
   type PslDiagnosticCollector,
   type Resolution,
   type ResolvedAttribute,
+  type ResolvedAttributeArg,
   type ResolvedEntityReference,
   type SymbolTable,
   typeAliasAttributeNames,
@@ -104,15 +105,21 @@ import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-deriv
 import {
   buildSqlContractFromDefinition,
   type CheckNode,
+  columnsPhrase,
   composedExtensionPackRefs,
   type EnumTypeHandle,
   type FieldNode,
   type ForeignKeyNode,
   type IndexNode,
   type ModelNode,
+  mergeSharedTable,
   type PrimaryKeyNode,
   type RelationNode,
   type ScalarMemberNode,
+  type SharedForeignKeyView,
+  type SharedTableMerge,
+  type SharedTableRefusal,
+  type TableSharer,
   type UniqueConstraintNode,
   type ValueObjectFieldNode,
   type ValueObjectMemberNode,
@@ -165,6 +172,8 @@ import {
   modelAttributeSpecsFrom,
   modelSpecContext,
   PSL_CHECK_ON_STI_VARIANT,
+  PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT,
+  PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
 import type { ValueObjectTypes } from './value-object-default';
@@ -550,8 +559,17 @@ interface RelationIndexLocation {
   readonly location: ReturnType<DiagnosticSource['at']>;
 }
 
+/** Where a unique, index or foreign key of a model is written, and the arguments it is written with. */
+interface ConstraintSite {
+  readonly label: string;
+  readonly location: ReturnType<DiagnosticSource['at']>;
+  /** The written arguments of an index or unique, as the advice for a scoped index reuses them; absent for a foreign key and a contributed attribute. */
+  readonly indexArguments?: readonly string[];
+}
+
 interface BuildModelNodeResult {
   readonly modelNode: ModelNode;
+  readonly constraintSites: ReadonlyMap<object, ConstraintSite>;
   readonly relationIndexLocations: readonly RelationIndexLocation[];
   readonly fkRelationMetadata: FkRelationMetadata<ModelSymbol>[];
   readonly invalidFkPairings: InvalidModelFkPairing<ModelSymbol>[];
@@ -754,12 +772,28 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       (entry): entry is { field: FieldSymbol; relation: ResolvedAttribute<FieldAttributeAst> } =>
         Boolean(entry.relation),
     );
+  const constraintSites = new Map<object, ConstraintSite>();
+  const sited = <T extends object>(node: T, site: ConstraintSite): T => {
+    constraintSites.set(node, site);
+    return node;
+  };
   const uniqueConstraints: UniqueConstraintNode[] = resolvedFields
     .filter((field) => field.isUnique)
-    .map((field) => ({
-      columns: [field.columnName],
-      ...ifDefined('name', field.uniqueName),
-    }));
+    .map((resolved) => {
+      const attribute = getAttribute(resolved.field.attributes, 'unique');
+      return sited(
+        { columns: [resolved.columnName], ...ifDefined('name', resolved.uniqueName) },
+        {
+          label: '@unique',
+          location: source.at(attribute?.span ?? resolved.field.span),
+          indexArguments: [
+            `[${resolved.field.name}]`,
+            'unique: true',
+            ...writtenArguments(attribute?.args ?? []),
+          ],
+        },
+      );
+    });
   const indexNodes: IndexNode[] = [];
   const checkNodes: CheckNode[] = [];
   const foreignKeyNodes: ForeignKeyNode[] = [];
@@ -892,10 +926,21 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       if (!columnNames) {
         continue;
       }
-      uniqueConstraints.push({
-        columns: columnNames,
-        ...ifDefined('name', parsed.map),
-      });
+      const [writtenFields, ...rest] = writtenArguments(modelAttribute.args);
+      uniqueConstraints.push(
+        sited(
+          { columns: columnNames, ...ifDefined('name', parsed.map) },
+          {
+            label: '@@unique',
+            location: source.at(modelAttribute.span),
+            indexArguments: [
+              ...(writtenFields === undefined ? [] : [writtenFields]),
+              'unique: true',
+              ...rest,
+            ],
+          },
+        ),
+      );
       continue;
     }
     if (modelAttribute.name === 'index') {
@@ -929,28 +974,35 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         columnNames = mapped;
       }
       indexNodes.push(
-        // PSL attribute arguments are assembled one at a time, so the
-        // compiler cannot see either union arm; the interpreter's own
-        // span-anchored diagnostics reject both invalid shapes first.
-        blindCast<
-          IndexNode,
-          'dynamically assembled from PSL arguments; the interpreter diagnoses both invalid shapes and lowerAuthoredIndex re-checks'
-        >({
-          ...ifDefined('columns', columnNames),
-          ...ifDefined(
-            'expression',
-            parsed.expression === undefined
-              ? undefined
-              : sqlTextFromStored(parsed.expression.value.value),
-          ),
-          where:
-            parsed.where === undefined ? undefined : sqlTextFromStored(parsed.where.value.value),
-          unique: parsed.unique,
-          name: parsed.name,
-          map: parsed.map,
-          type: parsed.type,
-          options: parsed.options,
-        }),
+        sited(
+          // PSL attribute arguments are assembled one at a time, so the
+          // compiler cannot see either union arm; the interpreter's own
+          // span-anchored diagnostics reject both invalid shapes first.
+          blindCast<
+            IndexNode,
+            'dynamically assembled from PSL arguments; the interpreter diagnoses both invalid shapes and lowerAuthoredIndex re-checks'
+          >({
+            ...ifDefined('columns', columnNames),
+            ...ifDefined(
+              'expression',
+              parsed.expression === undefined
+                ? undefined
+                : sqlTextFromStored(parsed.expression.value.value),
+            ),
+            where:
+              parsed.where === undefined ? undefined : sqlTextFromStored(parsed.where.value.value),
+            unique: parsed.unique,
+            name: parsed.name,
+            map: parsed.map,
+            type: parsed.type,
+            options: parsed.options,
+          }),
+          {
+            label: '@@index',
+            location: source.at(modelAttribute.span),
+            indexArguments: writtenArguments(modelAttribute.args),
+          },
+        ),
       );
       continue;
     }
@@ -1058,7 +1110,12 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
             { meta: { attribute: modelAttribute.name, modelName: model.name } },
           );
         }
-        indexNodes.push(lowered.index);
+        indexNodes.push(
+          sited(lowered.index, {
+            label: `@@${modelAttribute.name}`,
+            location: source.at(modelAttribute.span),
+          }),
+        );
         continue;
       }
       const slot = modelAttributeEntities[contributedModelAttribute.attribute] ?? {};
@@ -1215,20 +1272,25 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       }
       const crossTargetTableName = resolvedTable;
 
-      foreignKeyNodes.push({
-        columns: localColumns,
-        references: {
-          model: fieldTypeName,
-          table: crossTargetTableName,
-          columns: referencedColumns,
-          namespaceId: crossTargetNamespaceId,
-          spaceId: fieldTypeContractSpaceId,
-        },
-        ...ifDefined('name', parsedRelation.map),
-        ...ifDefined('onDelete', onDelete),
-        ...ifDefined('onUpdate', onUpdate),
-        ...ifDefined('index', parsedRelation.index),
-      });
+      foreignKeyNodes.push(
+        sited(
+          {
+            columns: localColumns,
+            references: {
+              model: fieldTypeName,
+              table: crossTargetTableName,
+              columns: referencedColumns,
+              namespaceId: crossTargetNamespaceId,
+              spaceId: fieldTypeContractSpaceId,
+            },
+            ...ifDefined('name', parsedRelation.map),
+            ...ifDefined('onDelete', onDelete),
+            ...ifDefined('onUpdate', onUpdate),
+            ...ifDefined('index', parsedRelation.index),
+          },
+          { label: '@relation', location: source.at(relationAttribute.relation.span) },
+        ),
+      );
       if (typeof parsedRelation.index === 'string') {
         relationIndexLocations.push({
           namespaceId: modelNamespaceId,
@@ -1364,19 +1426,24 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       : undefined;
 
     const targetTableName = storageName(targetModel, input.physicalNames);
-    foreignKeyNodes.push({
-      columns: localColumns,
-      references: {
-        model: targetModel.name,
-        table: targetTableName,
-        columns: referencedColumns,
-        namespaceId: targetNamespaceId,
-      },
-      ...ifDefined('name', parsedRelation.map),
-      ...ifDefined('onDelete', onDelete),
-      ...ifDefined('onUpdate', onUpdate),
-      ...ifDefined('index', parsedRelation.index),
-    });
+    foreignKeyNodes.push(
+      sited(
+        {
+          columns: localColumns,
+          references: {
+            model: targetModel.name,
+            table: targetTableName,
+            columns: referencedColumns,
+            namespaceId: targetNamespaceId,
+          },
+          ...ifDefined('name', parsedRelation.map),
+          ...ifDefined('onDelete', onDelete),
+          ...ifDefined('onUpdate', onUpdate),
+          ...ifDefined('index', parsedRelation.index),
+        },
+        { label: '@relation', location: source.at(relationAttribute.relation.span) },
+      ),
+    );
     if (typeof parsedRelation.index === 'string') {
       relationIndexLocations.push({
         namespaceId: modelNamespaceId,
@@ -1436,6 +1503,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       ...ifDefined('control', controlPolicy),
     },
     fkRelationMetadata: resultFkRelationMetadata,
+    constraintSites,
     relationIndexLocations,
     invalidFkPairings: resultInvalidFkPairings,
     crossSpaceRelations: resultCrossSpaceRelations,
@@ -2039,9 +2107,13 @@ function materializeStiVariantStorageColumns(
   baseDeclarations: ReadonlyMap<string, BaseDeclaration>,
   stiVariantKeys: ReadonlySet<string>,
   defaultNamespaceId: string,
-): { modelNodes: ModelNode[]; stiBaseFieldsByBase: Map<string, readonly string[]> } {
+): {
+  modelNodes: ModelNode[];
+  stiBaseFieldsByBase: Map<string, readonly string[]>;
+  refusals: readonly StiRefusal[];
+} {
   if (stiVariantKeys.size === 0) {
-    return { modelNodes: [...modelNodes], stiBaseFieldsByBase: new Map() };
+    return { modelNodes: [...modelNodes], stiBaseFieldsByBase: new Map(), refusals: [] };
   }
 
   const keyOf = (node: ModelNode) =>
@@ -2049,6 +2121,7 @@ function materializeStiVariantStorageColumns(
   const nodeByModel = new Map(modelNodes.map((node) => [keyOf(node), node]));
   type StiColumn = ModelNode['fields'][number];
   const stiColumnsByBase = new Map<string, StiColumn[]>();
+  const variantsByBase = new Map<string, ModelNode[]>();
 
   for (const variantKey of stiVariantKeys) {
     const variantNode = nodeByModel.get(variantKey);
@@ -2069,6 +2142,28 @@ function materializeStiVariantStorageColumns(
       claimed.push({ ...field, nullable: true });
     }
     stiColumnsByBase.set(baseDecl.base.key, claimed);
+    variantsByBase.set(baseDecl.base.key, [
+      ...(variantsByBase.get(baseDecl.base.key) ?? []),
+      variantNode,
+    ]);
+  }
+
+  const mergedByBase = new Map<string, SharedTableMerge<ForeignKeyNode>>();
+  const refusals: StiRefusal[] = [];
+  for (const [baseKey, variants] of variantsByBase) {
+    const baseNode = nodeByModel.get(baseKey);
+    if (baseNode === undefined) continue;
+    const merged = mergeSharedTable({
+      tableName: baseNode.tableName,
+      base: tableSharerOf(baseNode),
+      variants: variants.map((variant) => ({
+        ...tableSharerOf(variant),
+        uniques: variant.uniques ?? [],
+      })),
+      viewOf: foreignKeyNodeView,
+    });
+    mergedByBase.set(baseKey, merged);
+    refusals.push(...merged.refusals.map((refusal) => ({ baseKey, refusal })));
   }
 
   // The materialised columns exist on the base STORAGE table so the variants'
@@ -2087,14 +2182,52 @@ function materializeStiVariantStorageColumns(
   const enriched = modelNodes.map((node): ModelNode => {
     // STI variant: contributes a domain model but no storage table of its own.
     if (stiVariantKeys.has(keyOf(node))) {
-      return { ...node, sharesBaseTable: true };
+      const { uniques: _uniques, indexes: _indexes, foreignKeys: _foreignKeys, ...variant } = node;
+      return { ...variant, sharesBaseTable: true };
     }
-    const stiColumns = stiColumnsByBase.get(keyOf(node));
-    if (!stiColumns || stiColumns.length === 0) return node;
-    return { ...node, fields: [...node.fields, ...stiColumns] };
+    const merged = mergedByBase.get(keyOf(node));
+    if (merged === undefined) return node;
+    const { indexes, foreignKeys } = merged;
+    return {
+      ...node,
+      fields: [...node.fields, ...(stiColumnsByBase.get(keyOf(node)) ?? [])],
+      ...(indexes.length > 0 ? { indexes } : {}),
+      ...(foreignKeys.length > 0 ? { foreignKeys } : {}),
+    };
   });
 
-  return { modelNodes: enriched, stiBaseFieldsByBase };
+  return { modelNodes: enriched, stiBaseFieldsByBase, refusals };
+}
+
+/** What the variants of one base declared that the shared table refuses. */
+interface StiRefusal {
+  readonly baseKey: string;
+  readonly refusal: SharedTableRefusal<ForeignKeyNode>;
+}
+
+function tableSharerOf(node: ModelNode): TableSharer<ForeignKeyNode> {
+  return {
+    modelName: node.modelName,
+    columns: new Set(node.fields.map((field) => field.columnName)),
+    defaultedColumns: new Set(
+      node.fields.filter((field) => field.default !== undefined).map((field) => field.columnName),
+    ),
+    foreignKeys: node.foreignKeys ?? [],
+    indexes: node.indexes ?? [],
+  };
+}
+
+function foreignKeyNodeView(foreignKey: ForeignKeyNode): SharedForeignKeyView {
+  const { columns, references, constraint, index, ...rest } = foreignKey;
+  const { columns: targetColumns, ...target } = references;
+  return {
+    columns,
+    targetColumns,
+    rest: { ...rest, target, constraint: constraint ?? true, index: index ?? true },
+    constraint: constraint !== false,
+    derivesIndex: index === undefined || index === true,
+    namedIndex: typeof index === 'string' ? index : undefined,
+  };
 }
 
 /**
@@ -2165,6 +2298,95 @@ function relationIndexRefusal(
   );
   if (at === undefined) return undefined;
   return { at, message: error.fix === undefined ? error.message : `${error.message} ${error.fix}` };
+}
+
+/** The discriminator column of a variant's base, as a `where` condition names it. */
+function discriminatorColumnOf(
+  baseDecl: BaseDeclaration,
+  discriminatorDeclarations: ReadonlyMap<string, DiscriminatorDeclaration>,
+  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
+): string | undefined {
+  const fieldName = discriminatorDeclarations.get(baseDecl.base.key)?.fieldName;
+  const field = fieldName === undefined ? undefined : baseDecl.base.model.fields[fieldName];
+  return field === undefined ? undefined : physicalNames.get(field);
+}
+
+function writtenArguments(args: readonly ResolvedAttributeArg[]): readonly string[] {
+  return args.map((arg) => (arg.kind === 'named' ? `${arg.name}: ${arg.value}` : arg.value));
+}
+
+/** A column as `sql` template text names it: bare when it is a plain lower-case identifier, otherwise in double quotes, which every SQL target reads as a quoted identifier. */
+function sqlColumnReference(column: string): string {
+  return /^[a-z_][a-z0-9_]*$/.test(column) ? column : `"${column.replaceAll('"', '""')}"`;
+}
+
+/** How the PSL source reports a refusal of what an STI variant declares on its shared table. */
+interface StiRefusalContext {
+  readonly baseDecl: BaseDeclaration;
+  readonly site: ConstraintSite | undefined;
+  readonly discriminatorColumn: string | undefined;
+  /** Some one-to-one relation to the variant needs a unique on exactly these columns. */
+  readonly backsSingularRelation: (columns: readonly string[]) => boolean;
+}
+
+/**
+ * The diagnostic for a refusal of what an STI variant declares on its base's table. An index or unique is reported only while the base's discriminator is known, since its advice is an index scoped to the variant's discriminator value; otherwise the missing discriminator is reported instead.
+ */
+function stiRefusalDiagnostic(
+  { refusal }: StiRefusal,
+  context: StiRefusalContext,
+): PslDiagnostic | undefined {
+  const { baseDecl, site, discriminatorColumn } = context;
+  const variant = baseDecl.model.name;
+  const base = baseDecl.base.model.name;
+  const at = site?.location ?? baseDecl.source.at(baseDecl.span);
+  if (refusal.kind === 'defaultedForeignKey') {
+    return {
+      code: PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT,
+      message: `Model "${variant}" declares a foreign key on (${refusal.foreignKey.columns.join(', ')}), but ${columnsPhrase(refusal.columns)} has a default, which the rows of the other variants of "${base}" get too (single-table inheritance). Remove the default.`,
+      ...at,
+    };
+  }
+  if (refusal.kind === 'foreignKey') {
+    const columns = refusal.columns.join(', ');
+    const declared = refusal.foreignKey.columns.join(', ');
+    const shared = columnsPhrase(refusal.columns);
+    const message = !refusal.otherDeclaresOne
+      ? refusal.otherIsBase
+        ? `Model "${variant}" declares a foreign key on (${declared}), but its base model "${base}" also maps ${shared} without it (single-table inheritance). Every row of "${base}" would have to satisfy it; give the field of "${variant}" its own column with @map.`
+        : `Model "${variant}" declares a foreign key on (${declared}), but "${refusal.other}" also maps ${shared} in the table of "${base}" without it (single-table inheritance). Every "${refusal.other}" row would have to satisfy it; give the field of "${variant}" its own column with @map.`
+      : refusal.otherIsBase
+        ? `Model "${variant}" shares the table of its base model "${base}" (single-table inheritance) and declares a foreign key on (${columns}) that differs from the one "${base}" declares there. Every row would have to satisfy both; keep only one of the two relations.`
+        : `Models "${variant}" and "${refusal.other}" share the table of their base model "${base}" (single-table inheritance) and declare different foreign keys on (${columns}). Every row would have to satisfy both; give each variant its own column.`;
+    return { code: PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT, message, ...at };
+  }
+  if (discriminatorColumn === undefined || baseDecl.value === undefined) return undefined;
+  const label = site?.label ?? (refusal.kind === 'unique' ? '@@unique' : '@@index');
+  const shared = `Model "${variant}" shares the table of its base model "${base}" (single-table inheritance)`;
+  if (refusal.kind === 'index' && refusal.namedDifferentlyBy !== undefined) {
+    return {
+      code: PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
+      message: `${shared}, and "${refusal.namedDifferentlyBy}" already declares this index there under another name. Give both the same name.`,
+      ...at,
+    };
+  }
+  if (refusal.kind === 'unique' && context.backsSingularRelation(refusal.unique.columns)) {
+    return {
+      code: PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
+      message: `${shared}, so "${label}" cannot be stored there, and a one-to-one relation from a single-table variant is not supported yet.`,
+      ...at,
+    };
+  }
+  const condition = `where: sql\`${sqlColumnReference(discriminatorColumn)} = '${baseDecl.value.replaceAll("'", "''")}'\``;
+  const advice =
+    site?.indexArguments === undefined
+      ? `Limit it to this variant's rows with ${condition.replace('where: ', '')} if the attribute takes a condition, or give its field a column of its own.`
+      : `Scope it to this variant instead: @@index(${[...site.indexArguments, condition].join(', ')})`;
+  return {
+    code: PSL_UNSCOPED_INDEX_ON_STI_VARIANT,
+    message: `${shared}, so "${label}" would also cover the rows of other variants. Without a condition, only the backing index of one of its own relations is accepted. ${advice}`,
+    ...at,
+  };
 }
 
 export function interpretPslDocumentToSqlContract(
@@ -2545,6 +2767,7 @@ export function interpretPslDocumentToSqlContract(
   const modelNodes = new Map<ModelSymbol, ModelNode>();
   const fkRelationMetadata: FkRelationMetadata<ModelSymbol>[] = [];
   const relationIndexLocations: RelationIndexLocation[] = [];
+  const constraintSites = new Map<object, ConstraintSite>();
   const invalidFkPairings: InvalidModelFkPairing<ModelSymbol>[] = [];
   const backrelationCandidates: ModelBackrelationCandidate<ModelSymbol>[] = [];
   const crossSpaceRelationsByModel = new Map<ModelSymbol, RelationNode[]>();
@@ -2615,6 +2838,7 @@ export function interpretPslDocumentToSqlContract(
     modelNodes.set(model, { ...result.modelNode, namespaceId });
     fkRelationMetadata.push(...result.fkRelationMetadata);
     relationIndexLocations.push(...result.relationIndexLocations);
+    for (const [node, site] of result.constraintSites) constraintSites.set(node, site);
     invalidFkPairings.push(...result.invalidFkPairings);
     backrelationCandidates.push(...result.backrelationCandidates);
     if (result.crossSpaceRelations.length > 0) {
@@ -2790,13 +3014,68 @@ export function interpretPslDocumentToSqlContract(
       stiVariantKeys,
       defaultNamespaceId,
     );
-  const { modelNodes: stiColumnModelNodes, stiBaseFieldsByBase } =
-    materializeStiVariantStorageColumns(
-      mtiLinkedModelNodes,
-      baseDeclarations,
-      stiVariantKeys,
-      defaultNamespaceId,
+  const {
+    modelNodes: stiColumnModelNodes,
+    stiBaseFieldsByBase,
+    refusals: stiRefusals,
+  } = materializeStiVariantStorageColumns(
+    mtiLinkedModelNodes,
+    baseDeclarations,
+    stiVariantKeys,
+    defaultNamespaceId,
+  );
+  const stiBaseTables = new Map<string, string>();
+  for (const variantKey of stiVariantKeys) {
+    const baseDecl = baseDeclarations.get(variantKey);
+    const nodeOf = (key: string | undefined) =>
+      mtiLinkedModelNodes.find(
+        (node) =>
+          modelCoordinateKey(node.namespaceId ?? defaultNamespaceId, node.modelName) === key,
+      );
+    const variantNode = nodeOf(variantKey);
+    const baseNode = nodeOf(baseDecl?.base.key);
+    if (variantNode === undefined || baseNode === undefined) continue;
+    stiBaseTables.set(
+      `${variantNode.namespaceId ?? defaultNamespaceId}\0${variantNode.tableName}`,
+      baseNode.tableName,
     );
+  }
+  const oneToOneRelations = [...modelRelations.values()]
+    .flat()
+    .filter((relation) => relation.cardinality === '1:1');
+  for (const stiRefusal of stiRefusals) {
+    const { refusal } = stiRefusal;
+    const variantKey = [...stiVariantKeys].find(
+      (key) =>
+        baseDeclarations.get(key)?.base.key === stiRefusal.baseKey &&
+        baseDeclarations.get(key)?.model.name === refusal.variant,
+    );
+    const baseDecl = variantKey === undefined ? undefined : baseDeclarations.get(variantKey);
+    invariant(baseDecl !== undefined, "a shared-table refusal names one of the base's variants");
+    const node =
+      refusal.kind === 'foreignKey' || refusal.kind === 'defaultedForeignKey'
+        ? refusal.foreignKey
+        : refusal.kind === 'unique'
+          ? refusal.unique
+          : refusal.index;
+    const diagnostic = stiRefusalDiagnostic(stiRefusal, {
+      baseDecl,
+      site: constraintSites.get(node),
+      discriminatorColumn: discriminatorColumnOf(
+        baseDecl,
+        discriminatorDeclarations,
+        physicalNames,
+      ),
+      backsSingularRelation: (columns) =>
+        oneToOneRelations.some(
+          (relation) =>
+            relation.toModel === refusal.variant &&
+            relation.on.childColumns.length === columns.length &&
+            relation.on.childColumns.every((column) => columns.includes(column)),
+        ),
+    });
+    if (diagnostic !== undefined) diagnostics.push(diagnostic);
+  }
 
   if (
     diagnostics.length > 0 ||
@@ -2900,7 +3179,14 @@ export function interpretPslDocumentToSqlContract(
       input.dataTypes.lookup,
     );
   } catch (error) {
-    const refusal = relationIndexRefusal(error, relationIndexLocations);
+    const refusal = relationIndexRefusal(
+      error,
+      relationIndexLocations.map((location) => ({
+        ...location,
+        tableName:
+          stiBaseTables.get(`${location.namespaceId}\0${location.tableName}`) ?? location.tableName,
+      })),
+    );
     if (refusal === undefined) throw error;
     diagnostics.push({
       code: 'PSL_INVALID_RELATION_ATTRIBUTE',

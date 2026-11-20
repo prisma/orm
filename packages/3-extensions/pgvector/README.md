@@ -37,16 +37,11 @@ The pack declares the extension in the unbound namespace, so it is found through
 Add the extension to your `prisma.config.ts`:
 
 ```typescript
-import { defineConfig } from '@internal/cli/config-types';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import sql from '@internal/family-sql/control';
-import postgres from '@internal/target-postgres/control';
+import { defineConfig } from '@internal/postgres/config';
 import pgvector from '@internal/extension-pgvector/control';
 
 export default defineConfig({
-  family: sql,
-  target: postgres,
-  adapter: postgresAdapter,
+  contract: './prisma/schema.prisma',
   extensions: [pgvector],
 });
 ```
@@ -82,7 +77,7 @@ export const contract = defineContract({
 });
 ```
 
-The `vector(N)` factory is registered through the unified `CodecDescriptor<{ length: number }>` shape — `paramsSchema` validates the dimension at the contract boundary and the curried `factory` materializes the runtime codec at context construction. The column's TypeScript type, `Vector<N>`, comes from the `ParameterizedOutputTypesForTypeParams` type function the `codec-types` entry exports; both `defineContract` and the emitted `contract.d.ts` apply it. See [ADR 208 — Higher-order codecs for parameterized types](../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) for the descriptor model. Every pgvector column must declare an explicit dimension via `vector(N)`; the runtime codec is constructed against `{ length: N }`, so an undimensioned form has no honest descriptor signature.
+The `vector(N?)` factory is registered through the unified `CodecDescriptor<{ length?: number }>` shape — `paramsSchema` validates the dimension at the contract boundary when specified, and the curried `factory` materializes the runtime codec at context construction. A `vector(N)` column's TypeScript type, `Vector<N>`, comes from the `ParameterizedOutputTypesForTypeParams` type function the `codec-types` entry exports; both `defineContract` and the emitted `contract.d.ts` apply it. See [ADR 208 — Higher-order codecs for parameterized types](../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) for the descriptor model. A column declared with `vector()` (in PSL, `pgvector.Vector`) is the PostgreSQL type `vector`, which holds vectors of different lengths; it reads as `number[]`. The codec checks that a `vector(N)` value has exactly N finite numbers and a `vector()` value 1 to 16,000. PostgreSQL's distance operators require two vectors of equal length. [ADR 212 — AST-bound codec resolution](../../../docs/architecture%20docs/adrs/ADR%20212%20-%20AST-bound%20codec%20resolution.md#honest-descriptor-signatures) describes how both forms retain explicit codec identity.
 
 ### Runtime Setup
 

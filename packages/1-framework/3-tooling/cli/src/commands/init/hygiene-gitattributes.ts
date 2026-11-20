@@ -1,5 +1,3 @@
-import type { TargetId } from './templates/code-templates';
-
 /**
  * The `.gitattributes` entries written for a freshly initialised project
  * (FR3.4). Mirrors the relevant subset of the repo-root
@@ -51,15 +49,9 @@ const STORE_GITATTRIBUTES_LINES: readonly string[] = [
 
 /**
  * Computes the `.gitattributes` lines this scaffold expects to own. Each
- * line has the shape `<path> linguist-generated`. The `target` parameter
- * is currently unused but accepted for symmetry with the other hygiene
- * helpers and to leave room for target-specific entries (e.g. a future
- * family-specific artifact) without a signature break.
+ * line has the shape `<path> linguist-generated`.
  */
-export function requiredGitattributesLines(
-  schemaDir: string,
-  _target: TargetId,
-): readonly string[] {
+export function requiredGitattributesLines(schemaDir: string): readonly string[] {
   const dir = schemaDir === '.' ? '' : schemaDir.replace(/\/+$/, '');
   const prefix = dir === '' ? '' : `${dir}/`;
   return [

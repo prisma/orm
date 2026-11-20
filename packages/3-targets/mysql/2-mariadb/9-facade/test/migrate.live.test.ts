@@ -14,7 +14,29 @@ import mariadb from '@internal/target-mariadb/control';
 import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import { describe, expect, it } from 'vitest';
+import { defineContract } from '../src/exports/contract-builder';
 import { emitFixture } from './emit';
+
+/** A table with one key on a `Bytes`, a `Json` or a `String(storage: text)` field, as `key` says. */
+function contractWithKeyOn(key: 'bytes' | 'json' | 'text', kind: 'id' | 'unique') {
+  return defineContract({}, ({ field, model, type }) => {
+    const column = {
+      bytes: () => field.column(type.Bytes()),
+      json: () => field.column(type.Json()),
+      text: () => field.column(type.String({ storage: 'text' })),
+    }[key]();
+    return {
+      models: {
+        Keyed: model('Keyed', {
+          fields:
+            kind === 'id'
+              ? { key: column.id() }
+              : { id: field.column(type.Int()).id(), key: column.unique() },
+        }),
+      },
+    };
+  });
+}
 
 const SERVER = 'MARIADB_URL';
 const frameworkComponents = [mariadb, mariadbAdapter];
@@ -103,6 +125,8 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
   it.for([
     ['the example contract', 'example'],
     ['a contract with literal and function defaults', 'defaults'],
+    ['a column of each scalar convenience type with its default', 'scalar-types'],
+    ['the empty and edge defaults of bytes, text and JSON', 'edge-defaults'],
   ] as const)(
     'applies %s, which then verifies strictly, plans nothing more and signs as unchanged',
     async ([, fixture], test) => {
@@ -149,6 +173,82 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
               markers: { app: contract.storage.storageHash },
               signed: ['unchanged'],
             });
+          }),
+        SERVER,
+      );
+    },
+  );
+
+  it('applies the empty and edge defaults, whose reading a row inserted with only its key then holds', async (test) => {
+    const { contract } = await emitFixture('edge-defaults');
+    await withMysqlDatabase(
+      test,
+      ({ url }) =>
+        withDriver(url, async (driver, family) => {
+          const applied = await apply(
+            family,
+            driver,
+            await plan(driver, family, contract),
+            contract,
+          );
+          if (!applied.ok) throw applied.failure;
+          await driver.query('INSERT INTO `Edge` (`id`) VALUES (1)');
+          const { rows } = await driver.query<Record<string, unknown>>(
+            'SELECT HEX(`noBytes`) AS noBytes, HEX(`bytes`) AS bytes, `blank`, `accented`, `jsonNull`, `jsonString`, `jsonArray`, `jsonObject`, `jsonAccented`, CAST(`zero` AS CHAR) AS zero, CAST(`whole` AS CHAR) AS whole, CAST(`wholeText` AS CHAR) AS wholeText, CAST(`wholeNumber` AS CHAR) AS wholeNumber, CAST(`zeroText` AS CHAR) AS zeroText, `off` FROM `Edge`',
+          );
+          expect(rows[0]).toEqual({
+            noBytes: '',
+            bytes: 'C3A900FF',
+            blank: '',
+            accented: 'é€',
+            jsonNull: 'null',
+            jsonString: '""',
+            jsonArray: '[]',
+            jsonObject: '{}',
+            jsonAccented: '{"k":"é€"}',
+            zero: '0.00',
+            whole: '-12',
+            wholeText: '12',
+            wholeNumber: '12',
+            zeroText: '0',
+            off: '0',
+          });
+        }),
+      SERVER,
+    );
+  });
+
+  it.for([
+    ['bytes', 'id', false],
+    ['bytes', 'unique', true],
+    ['text', 'id', false],
+    ['text', 'unique', true],
+    ['json', 'id', false],
+    ['json', 'unique', true],
+  ] as const)(
+    'applies a key on a %s field, @%s, only where the scalar type reference says MariaDB accepts it (%s)',
+    async ([key, kind, accepted], test) => {
+      const contract = contractWithKeyOn(key, kind);
+      await withMysqlDatabase(
+        test,
+        ({ url }) =>
+          withDriver(url, async (driver, family) => {
+            const applied = await apply(
+              family,
+              driver,
+              await plan(driver, family, contract),
+              contract,
+            );
+            expect(applied.ok ? 'applied' : applied.failure).toEqual(
+              accepted
+                ? 'applied'
+                : expect.objectContaining({
+                    code: 'MIGRATION.EXECUTION_FAILED',
+                    why: expect.stringContaining(
+                      "BLOB/TEXT column 'key' used in key specification without a key length",
+                    ),
+                  }),
+            );
           }),
         SERVER,
       );

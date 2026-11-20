@@ -10,7 +10,7 @@ import type { Scalars, Shape } from '@prisma/orm-postgres/family-contract/types'
 import type { ResultType } from '@prisma/orm-postgres/components/runtime';
 ```
 
-On Mongo the imports are `./prisma/contract`, `@prisma/orm-mongo/family-contract/types`, and `@prisma/orm-mongo/components/runtime`.
+On Mongo the imports are `./prisma/contract`, `@prisma/orm-mongo/family-contract`, and `@prisma/orm-mongo/components/runtime`.
 
 ## The model
 

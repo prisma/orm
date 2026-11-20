@@ -374,7 +374,7 @@ describe('a nested create of a variant stored in its own table', () => {
     const row = { ...darkMode, comments: () => 'not an operation' };
     const topLevel = topLevelFeatureCreate(row);
 
-    expect(topLevel).toMatchObject({ code: 'ORM.RELATION_MUTATION_INVALID' });
+    expect(topLevel).toMatchObject({ code: 'ORM.ARGUMENT_INVALID' });
     expect(nestedFeatureCreate(row)).toMatchObject({
       code: topLevel.code,
       message: topLevel.message,
@@ -604,18 +604,100 @@ describe('connect and disconnect on a variant stored in its own table', () => {
 });
 
 describe('disconnect on a variant', () => {
-  it('is refused on a relation the parent holds the key for while the graph is built', () => {
+  it('adds no Update for an explicit empty list of criteria', () => {
     expect(
-      thrownBy(() =>
+      [
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('bug').disconnect([]),
+        }),
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => tasks.variant('bug').disconnect([]),
+        }),
+      ].map((graph) => printGraph(graph)),
+    ).toEqual([
+      ['n1 Find task_comments where id = 1', 'result: n1'].join('\n'),
+      ['n1 Find projects_tbl where id = 1', 'result: n1'].join('\n'),
+    ]);
+  });
+
+  it('unlinks the parent only when the linked row is of the variant, on a variant stored in the base table', () => {
+    expect(
+      printGraph(
         updateOf('TaskComment', {
           task: (task: VariantMutator) => task.variant('bug').disconnect(),
         }),
       ),
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        "n2 Update task_comments set task_id = null where task_id in (select id from tasks where type = 'bug') <- FilterData n1 (id->id)",
+        'n3 Find task_comments <- FilterData n1 (id->id)',
+        'result: n3',
+      ].join('\n'),
+    );
+  });
+
+  it('unlinks the parent only when the linked row is of the variant and matches the criteria, on a variant stored in its own table', () => {
+    expect(
+      printGraph(
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('feature').disconnect([{ id: 2 }]),
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        `n2 Update task_comments set task_id = null where task_id in (select id from tasks where ${featureTwo}) <- FilterData n1 (id->id)`,
+        'n3 Find task_comments <- FilterData n1 (id->id)',
+        'result: n3',
+      ].join('\n'),
+    );
+  });
+
+  it('is refused on a relation the child holds the key for when that key is required', () => {
+    const json = structuredClone(polyContractJson);
+    json.storage.namespaces.public.entries.table.tasks.columns.project_id.nullable = false;
+    json.domain.namespaces.public.models.Task.fields.projectId.nullable = false;
+    json.domain.namespaces.public.models.Task.relations.project.nullable = false;
+    const required = buildTestContextFromContract(
+      serializer.deserializeContract<PolyContract>(json),
+    );
+    const projects = new Collection(
+      { runtime: createMockRuntime(), context: required },
+      'Project',
+      {
+        namespaceId: 'public',
+      },
+    );
+
+    expect(
+      thrownBy(() =>
+        updateFirstGraph(
+          {
+            context: required,
+            state: projects.where({ id: 1 }).state,
+            modelName: 'Project',
+            namespaceId: 'public',
+          },
+          {},
+          parsed(
+            'Project',
+            { tasks: (tasks: VariantMutator) => tasks.variant('bug').disconnect() },
+            required,
+          ).relationMutations,
+        ),
+      ),
     ).toMatchObject({
-      code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+      code: 'ORM.OPERATION_UNSUPPORTED',
       message:
-        'disconnect() nested mutation for relation "task" is not available on a variant, because the parent holds the key of the related row',
-      meta: { kind: 'disconnect', relation: 'task', reason: 'variant-parent-owned' },
+        'disconnect() nested mutation for relation "tasks" cannot set "projectId" of model "Task" to null, because the foreign key is required',
+      meta: {
+        kind: 'disconnect',
+        relation: 'tasks',
+        reason: 'required-foreign-key',
+        model: 'Task',
+        fields: ['projectId'],
+      },
     });
   });
 });
@@ -712,5 +794,62 @@ describe('updateAll and deleteAll on a variant', () => {
       message: topLevel.message,
       meta: topLevel.meta,
     });
+  });
+});
+
+describe('the discriminator in update data', () => {
+  const refusal = { code: 'ORM.FIELD_IMMUTABLE', meta: { model: 'Task', field: 'type' } };
+
+  it('is refused by every top-level update before any statement runs', async () => {
+    const runtime = createMockRuntime();
+    const tasks = new Collection({ runtime, context }, 'Task', { namespaceId: 'public' });
+    const calls: (() => unknown)[] = [
+      () => tasks.where({ id: 1 }).update({ type: 'bug' } as never),
+      () => tasks.where({ id: 1 }).updateAll({ type: 'bug' } as never),
+      () =>
+        tasks
+          .variant('feature')
+          .where({ id: 1 })
+          .updateAll({ type: 'bug' } as never),
+      () =>
+        tasks
+          .variant('bug')
+          .where({ id: 1 })
+          .updateAll({ type: 'feature' } as never),
+      () => tasks.where({ id: 1 }).updateAndCount({ type: 'bug' } as never),
+      () =>
+        tasks.variant('bug').upsert({
+          create: { id: 1, title: 'Crash', projectId: 1, severity: 'high' } as never,
+          update: { type: 'feature' } as never,
+          conflictOn: { id: 1 } as never,
+        }),
+    ];
+
+    const errors = await Promise.all(
+      calls.map((call) =>
+        Promise.resolve()
+          .then(call)
+          .then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+      ),
+    );
+
+    expect(errors).toMatchObject(calls.map(() => refusal));
+    expect(runtime.executions).toEqual([]);
+  });
+
+  it('is refused in nested updateAll data, with and without variant()', () => {
+    const errors = [
+      (tasks: VariantMutator & FilteredMutator) => tasks.updateAll({ type: 'bug' }),
+      (tasks: VariantMutator & FilteredMutator) =>
+        tasks.where({ title: 'Crash' }).updateAll({ type: 'bug' }),
+      (tasks: VariantMutator) => tasks.variant('feature').updateAll({ type: 'bug' }),
+      (tasks: VariantMutator) =>
+        tasks.variant('bug').where({ title: 'Crash' }).updateAll({ type: 'feature' }),
+    ].map((tasks) => thrownBy(() => updateOf('Project', { tasks })));
+
+    expect(errors).toMatchObject(errors.map(() => refusal));
   });
 });

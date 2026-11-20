@@ -2,9 +2,10 @@ import mysqlPack from '@internal/target-mysql/pack';
 import { describe, expect, it } from 'vitest';
 import { mariadbTargetDescriptorMeta } from '../src/core/descriptor-meta';
 import mariadbControlTarget from '../src/core/migrations/control-target';
+import mariadbRuntimeTarget from '../src/core/runtime/runtime-target';
 
 describe('the MariaDB target descriptor', () => {
-  it('names MariaDB and sets tx_isolation, since MariaDB 10.11 has no transaction_isolation', () => {
+  it('names MariaDB and runs every session in UTC, as MySQL does', () => {
     expect({
       targetId: mariadbTargetDescriptorMeta.targetId,
       id: mariadbTargetDescriptorMeta.id,
@@ -14,7 +15,7 @@ describe('the MariaDB target descriptor', () => {
       targetId: 'mariadb',
       id: 'mariadb',
       displayName: 'MariaDB',
-      sessionSettings: { time_zone: '+00:00', tx_isolation: 'READ-COMMITTED' },
+      sessionSettings: { time_zone: '+00:00' },
     });
   });
 
@@ -40,7 +41,21 @@ describe('the MariaDB target descriptor', () => {
     }).toEqual({
       instance: { familyId: 'sql', targetId: 'mariadb' },
       targetId: 'mariadb',
-      sessionSettings: { time_zone: '+00:00', tx_isolation: 'READ-COMMITTED' },
+      sessionSettings: { time_zone: '+00:00' },
+    });
+  });
+
+  it('builds a runtime target that carries the MariaDB target id and display name', () => {
+    expect({
+      targetId: mariadbRuntimeTarget.targetId,
+      displayName: mariadbRuntimeTarget.displayName,
+      sessionSettings: mariadbRuntimeTarget.sessionSettings,
+      instance: mariadbRuntimeTarget.create(),
+    }).toEqual({
+      targetId: 'mariadb',
+      displayName: 'MariaDB',
+      sessionSettings: { time_zone: '+00:00' },
+      instance: { familyId: 'sql', targetId: 'mariadb' },
     });
   });
 });

@@ -1,49 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mergeTables } from '../src/merge-tables';
-import type { ColumnDescription, ModelStorage, TableDescription } from '../src/storage-description';
-
-function column(modelName: string, columnName: string, nullable = true): ColumnDescription {
-  return {
-    columnName,
-    descriptor: { codecId: 'pg/text@1' },
-    nullable,
-    many: false,
-    default: undefined,
-    enumTypeHandle: undefined,
-    valueObject: undefined,
-    site: { kind: 'field', modelName, fieldName: columnName },
-  };
-}
-
-function table(
-  tableName: string,
-  columns: readonly ColumnDescription[],
-  namespaceId = 'public',
-): TableDescription {
-  return {
-    namespaceId,
-    tableName,
-    columns,
-    control: undefined,
-    id: undefined,
-    uniques: [],
-    indexes: [],
-    checks: [],
-    foreignKeys: [],
-  };
-}
-
-function ownTable(description: TableDescription): ModelStorage {
-  return { kind: 'ownTable', modelName: 'Model', table: description };
-}
-
-function baseTable(
-  modelName: string,
-  tableName: string,
-  columns: readonly ColumnDescription[],
-): ModelStorage {
-  return { kind: 'baseTable', modelName, namespaceId: 'public', tableName, columns };
-}
+import { baseTable, column, ownTable, table } from './merge-tables-support';
 
 describe('mergeTables', () => {
   it('keeps one table per namespace and table name, in model order', () => {

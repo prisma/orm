@@ -8,6 +8,7 @@ import { setFallbackTemporal } from '@internal/type-implementations/temporal';
 import { blindCast } from '@internal/utils/casts';
 import { Temporal as fallbackTemporal } from 'temporal-polyfill/full/implementation';
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
+import { recordedAccessChangesOf } from '../core/migrations/access-changes';
 import { diffPostgresSchema } from '../core/migrations/diff-database-schema';
 import { createPostgresMigrationPlanner } from '../core/migrations/planner';
 import type { PostgresPlanTargetDetails } from '../core/migrations/planner-target-details';
@@ -44,6 +45,7 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
     },
     classifySubjectGranularity: postgresDiffSubjectGranularity,
     classifyEntityKind: postgresDiffSubjectEntityKind,
+    accessChangesOf: recordedAccessChangesOf,
     migrations: {
       createPlanner(adapter: SqlControlAdapter<'postgres'>) {
         return createPostgresMigrationPlanner(adapter);

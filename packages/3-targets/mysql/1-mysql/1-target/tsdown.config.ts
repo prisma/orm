@@ -2,6 +2,7 @@ import { defineConfig } from '@repo/tsdown';
 
 export default defineConfig({
   entry: [
+    'src/exports/aggregates.ts',
     'src/exports/codec-descriptor.ts',
     'src/exports/codec-ids.ts',
     'src/exports/codec-types.ts',
@@ -12,6 +13,7 @@ export default defineConfig({
     'src/exports/data-types.ts',
     'src/exports/ddl.ts',
     'src/exports/default-normalizer.ts',
+    'src/exports/descriptor-meta-runtime.ts',
     'src/exports/errors.ts',
     'src/exports/marker-lock.ts',
     'src/exports/migration.ts',

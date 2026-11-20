@@ -17,13 +17,35 @@ import {
 
 const sameIds = columnMappings('users', 'users', [['id', 'id']]);
 
+interface StubTransaction {
+  readonly query: (...args: Parameters<MockRuntime['query']>) => unknown;
+  readonly execute: (...args: Parameters<MockRuntime['execute']>) => unknown;
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
+}
+
+function callbackTransaction(tx: StubTransaction) {
+  return async <R>(fn: (scope: StubTransaction) => PromiseLike<R>): Promise<R> => {
+    try {
+      const result = await fn(tx);
+      await tx.commit();
+      return result;
+    } catch (error) {
+      await tx.rollback();
+      throw error;
+    }
+  };
+}
+
 function withTransaction(runtime: MockRuntime) {
-  const open = vi.fn(async () => ({
-    query: runtime.query.bind(runtime),
-    execute: runtime.execute.bind(runtime),
-    commit: async () => undefined,
-    rollback: async () => undefined,
-  }));
+  const open = vi.fn(
+    callbackTransaction({
+      query: runtime.query.bind(runtime),
+      execute: runtime.execute.bind(runtime),
+      commit: async () => undefined,
+      rollback: async () => undefined,
+    }),
+  );
   return { runtime: Object.assign(runtime, { transaction: open }), open };
 }
 
@@ -102,7 +124,7 @@ describe('the transaction a graph runs in', () => {
     const throughTransaction: string[] = [];
     const commit = vi.fn(async () => undefined);
     Object.assign(runtime, {
-      transaction: vi.fn(async () => ({
+      transaction: callbackTransaction({
         query: (...args: Parameters<MockRuntime['query']>) => {
           throughTransaction.push('query');
           return runtime.query(...args);
@@ -113,7 +135,7 @@ describe('the transaction a graph runs in', () => {
         },
         commit,
         rollback: async () => undefined,
-      })),
+      }),
     });
     runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Bea' }], []]);
     const users = collection.include('posts').where({ name: 'Ada' }) as unknown as {
@@ -153,7 +175,7 @@ describe('the transaction a graph runs in', () => {
       );
     };
     Object.assign(runtime, {
-      transaction: vi.fn(async () => ({
+      transaction: callbackTransaction({
         query: (...args: Parameters<MockRuntime['query']>) =>
           failingThird(() => runtime.query(...args)),
         execute: (...args: Parameters<MockRuntime['execute']>) => {
@@ -162,7 +184,7 @@ describe('the transaction a graph runs in', () => {
         },
         commit,
         rollback,
-      })),
+      }),
     });
     runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Bea' }], []]);
     const users = collection.include('posts').where({ name: 'Ada' }) as unknown as {

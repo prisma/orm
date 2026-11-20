@@ -7,16 +7,13 @@
     "**/*.test-d.ts",
     "**/*.config.ts",
     "**/exports/**",
-    "src/codecs/encoding.ts",
-    "src/codecs/decoding.ts",
-    "src/codecs/validation.ts",
     "src/runtime-spi.ts",
     "src/middleware/sql-middleware.ts"
   ],
   "thresholds": {
-    "lines": 90,
-    "branches": 80,
+    "lines": 95,
+    "branches": 92,
     "functions": 92,
-    "statements": 90
+    "statements": 95
   }
 }

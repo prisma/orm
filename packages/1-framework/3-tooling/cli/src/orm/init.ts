@@ -14,27 +14,23 @@ import {
 } from '../commands/init/output';
 import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import {
-  type TargetId,
-  targetPackageName,
-  targetPeerPackages,
-} from '../commands/init/templates/code-templates';
-import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
+import { KNOWN_TARGET_PACKAGES, TARGET_SHORT_NAMES } from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
 import { buildInitNextActions, initPresentations } from './init-blocks';
 import { EMIT_COMMAND, emitFailedFinding, installFailedFinding } from './init-diagnostics';
 import { emitScaffoldedContract } from './init-emit';
-import { type ResolvedInitInputs, resolveInitInputs } from './init-inputs';
-import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
 import {
-  createPrisma7SourceCheck,
-  type ImportFromProject,
-  importFromProject,
-  Prisma7CheckInstallFailed,
-} from './init-prisma7-check';
+  InitInstallFailedBeforeWriting,
+  type ResolvedInitInputs,
+  resolveInitInputs,
+} from './init-inputs';
+import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
+import { createPrisma7SourceCheck } from './init-prisma7-check';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
+import { createTargetPackagePreparation } from './init-target-package';
 import { normalizeError } from './normalize-error';
+import { type ImportFromProject, importFromProject } from './project-modules';
 
 /** Each of these is a finding on a completed run, not an error. */
 const INIT_EXIT_CODES = {
@@ -57,17 +53,23 @@ function probeWarning(
     case 'below-minimum':
       return { warning: outcome.message, fatal: undefined };
     case 'no-database-url':
+    case 'invalid-result':
     case 'connection-failed':
+    case 'timed-out':
     case 'driver-missing':
+    case 'driver-failed':
+    case 'version-unreadable':
+    case 'unsupported':
       return strictProbe
         ? { warning: undefined, fatal: outcome.message }
         : { warning: outcome.message, fatal: undefined };
   }
 }
 
-function outputTarget(target: TargetId): InitOutput['target'] {
-  return target === 'mongo' ? 'mongodb' : 'postgres';
-}
+const [FIRST_TARGET, SECOND_TARGET] = KNOWN_TARGET_PACKAGES;
+const PRISMA6_ONLY_LABELS = KNOWN_TARGET_PACKAGES.filter(
+  (entry) => entry.provider.writtenBy === 6,
+).map((entry) => entry.label);
 
 function causeMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -92,31 +94,29 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'In a Prisma 7 project, pass --from-prisma7-schema (or answer yes when asked)\n' +
         'to use the existing schema.prisma as the contract source.\n' +
         '\n' +
-        // biome-ignore lint/plugin/no-family-vocabulary: names the database on purpose — user-facing help for the one database whose schemas only Prisma 6 wrote
-        'In a Prisma 6 MongoDB project, init changes nothing: it prints how to install\n' +
+        `In a Prisma 6 ${PRISMA6_ONLY_LABELS.join(' or ')} project, init changes nothing: it prints how to install\n` +
         'Prisma 8 beside Prisma 6 and read schema.prisma through prisma6Schema in\n' +
         'prisma.config.ts, keeping the Prisma 6 CLI as an alias with its own config.\n' +
         'Passing --target and --authoring sets up a starter in the same project instead,\n' +
         'which breaks the Prisma 6 CLI.',
       examples: [
         'orm init',
-        // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'orm init --target postgres --authoring psl',
-        // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'orm init --target mongodb --authoring typescript --json',
+        `orm init --target ${FIRST_TARGET.shortName} --authoring psl`,
+        `orm init --target ${SECOND_TARGET.shortName} --authoring typescript --json`,
         'orm init --skip-install',
-        // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'orm init --target postgres --keep-previous-facade',
+        `orm init --target ${FIRST_TARGET.shortName} --keep-previous-facade`,
         'orm init --from-prisma7-schema prisma/schema.prisma --confirm my-app',
       ],
     },
     args: {
       flags: {
         // Not flag.enum: the aliases and capitalizations init has always
-        // accepted (postgresql, mongodb, ts, any case) are matched in the
-        // handler, where a rejection can name every allowed value.
-        // biome-ignore lint/plugin/no-family-vocabulary: names the targets on purpose — user-facing flag help listing the accepted values
-        target: flag.string({ brief: 'Database target: postgres or mongodb', placeholder: 'db' }),
+        // accepted are matched in the handler, where a rejection can name
+        // every allowed value.
+        target: flag.string({
+          brief: `Database target: ${TARGET_SHORT_NAMES.join(' or ')}`,
+          placeholder: 'db',
+        }),
         authoring: flag.string({
           brief: 'Schema authoring style: psl or typescript',
           placeholder: 'style',
@@ -132,7 +132,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           brief: 'Connect to DATABASE_URL once and check the server version',
         }),
         strictProbe: flag.boolean({ brief: 'Treat a failed --probe-db as fatal' }),
-        skipInstall: flag.boolean({ brief: 'Skip dependency installation and contract emission' }),
+        skipInstall: flag.boolean({
+          brief:
+            'Skip dependency installation and contract emission; the target package must already be installed',
+        }),
         keepPreviousFacade: flag.boolean({
           brief: 'Keep the previous target package in package.json when switching targets',
         }),
@@ -158,36 +161,43 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           cwd: ctx.cwd,
           flags: args.flags,
           prompt: ctx.prompt,
-          checkPrisma7Source: createPrisma7SourceCheck({
+          prepareTargetPackage: createTargetPackagePreparation({
             cwd: ctx.cwd,
             packages: ctx.packages,
             packageManager,
             install: !args.flags.skipInstall,
             importFromProject: injected.importFromProject,
           }),
+          checkPrisma7Source: createPrisma7SourceCheck({
+            cwd: ctx.cwd,
+            importFromProject: injected.importFromProject,
+          }),
           warn,
           packageManager,
         });
       } catch (error) {
-        if (!(error instanceof Prisma7CheckInstallFailed)) {
+        if (!(error instanceof InitInstallFailedBeforeWriting)) {
           throw error;
         }
         const document: InitOutput = {
           ok: true,
-          target: outputTarget(error.target),
-          authoring: 'prisma7',
+          target: error.target.shortName,
+          authoring: error.authoring,
           schemaPath: error.schemaPath,
           filesWritten: [],
           filesDeleted: [],
           filesRenamed: [],
           packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
           contractEmitted: false,
-          prisma7: {
-            schemaPath: error.schemaPath,
-            configRenamedTo: null,
-            scriptsRewritten: [],
-            packagesMoved: [],
-          },
+          prisma7:
+            error.authoring === 'prisma7'
+              ? {
+                  schemaPath: error.schemaPath,
+                  configRenamedTo: null,
+                  scriptsRewritten: [],
+                  packagesMoved: [],
+                }
+              : null,
           nextSteps: [...NEXT_STEPS_BEFORE_SCAFFOLD],
           warnings,
         };
@@ -225,9 +235,9 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // workspace or catalog, is left alone: only a declared major below 7 moves.
       const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
       const deps = [
-        targetPackageName(inputs.target, scaffold.resolveImportSpecifier),
+        inputs.target.packageName,
         'dotenv',
-        ...targetPeerPackages(inputs.target),
+        ...inputs.contribution.peerPackages,
         ...(moveClient ? ['@prisma/client@7'] : []),
       ];
       const depsToInstall = deps.filter((dep) => !inputs.preinstalled.includes(dep));
@@ -264,7 +274,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         const installed = packagesInstalled === 'installed';
         const document: InitOutput = {
           ok: true,
-          target: outputTarget(inputs.target),
+          target: inputs.target.shortName,
           authoring: adoptsPrisma7 ? 'prisma7' : inputs.authoring,
           schemaPath: inputs.schemaPath,
           filesWritten: scaffold.filesWritten,
@@ -285,7 +295,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
               }
             : null,
           nextSteps: buildNextSteps({
-            target: outputTarget(inputs.target),
+            target: inputs.target.shortName,
             packagesInstalled,
             contractEmitted,
             emitCommand: EMIT_COMMAND,
@@ -382,15 +392,11 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // Opt-in, and after the install so the target driver is resolvable from
       // the project's own node_modules.
       if (inputs.probeDb) {
-        const outcome = await probeServerVersion(
-          {
-            baseDir: ctx.cwd,
-            target: inputs.target,
-            databaseUrl: ctx.env['DATABASE_URL'],
-            minVersion: MIN_SERVER_VERSION[inputs.target],
-          },
-          {},
-        );
+        const outcome = await probeServerVersion({
+          databaseUrl: ctx.env['DATABASE_URL'],
+          packageName: inputs.target.packageName,
+          contribution: inputs.contribution,
+        });
         const probe = probeWarning(outcome, inputs.strictProbe);
         if (probe.warning !== undefined) {
           warn(probe.warning);

@@ -60,6 +60,9 @@ export interface PostgresTransactionContext<
     PostgresQueryMembers<TContract, TCollections> {
   readonly enums: NamespacedEnums<TContract>;
   readonly nativeEnums: NamespacedNativeEnums<TContract>;
+  transaction<R>(
+    fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+  ): Promise<R>;
 }
 
 export interface PostgresQueryMembersOptions<
@@ -185,6 +188,22 @@ export function buildPostgresRuntimeBoundMembers<
     return prepareQuery<D, Q, CT>(workRuntime, declaration, callback);
   }
 
+  function buildTransactionContext(
+    txCtx: TransactionContext,
+  ): PostgresTransactionContext<TContract, TCollections> {
+    return withTransactionMembers(txCtx, {
+      ...buildPostgresQueryMembers(
+        { context, collections, sql, raw, toSql, prepareRuntime: workRuntime },
+        txCtx,
+      ),
+      enums,
+      nativeEnums,
+      transaction: <R>(
+        fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+      ) => txCtx.transaction((nested) => fn(buildTransactionContext(nested))),
+    });
+  }
+
   return {
     orm,
 
@@ -208,25 +227,10 @@ export function buildPostgresRuntimeBoundMembers<
           ? local.isolationLevel
           : transactionOptions?.isolationLevel;
       const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
-      return withTransaction(
-        workRuntime,
-        (txCtx) => {
-          const tx: PostgresTransactionContext<TContract, TCollections> = withTransactionMembers(
-            txCtx,
-            {
-              ...buildPostgresQueryMembers(
-                { context, collections, sql, raw, toSql, prepareRuntime: workRuntime },
-                txCtx,
-              ),
-              enums,
-              nativeEnums,
-            },
-          );
-
-          return fn(tx);
-        },
-        { isolationLevel, timeout },
-      );
+      return withTransaction(workRuntime, (txCtx) => fn(buildTransactionContext(txCtx)), {
+        isolationLevel,
+        timeout,
+      });
     },
   };
 }

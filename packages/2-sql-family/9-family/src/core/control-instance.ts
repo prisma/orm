@@ -14,6 +14,7 @@ import type {
   DiffSubjectGranularity,
   MarkerDestination,
   MarkerHashes,
+  MigrationAccessChange,
   MigrationPlanOperation,
   OperationPreview,
   OperationPreviewCapable,
@@ -615,6 +616,14 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     { readonly classifyEntityKind?: (nodeKind: string) => string | undefined },
     'reading the target-descriptor classifyEntityKind hook'
   >(target).classifyEntityKind;
+  // Read lazily, like `diffSchema`: construction-only stub descriptors omit it, and the throw
+  // happens at call time.
+  const targetAccessChangesOf = blindCast<
+    {
+      readonly accessChangesOf?: SqlControlTargetDescriptor<TTargetId, unknown>['accessChangesOf'];
+    },
+    'the stack target is this SQL target descriptor, whose accessChangesOf a construction-only stub may omit'
+  >(target).accessChangesOf;
   // `contract infer` needs each extension pack's already-assembled contract,
   // carried as-is (no merging — that is the contract-spaces machinery's
   // concern), paired with the `spaceId` its descriptor was registered under
@@ -1068,6 +1077,15 @@ export function createSqlFamilyInstance<TTargetId extends string>(
 
     storageNameOf(operation: MigrationPlanOperation): string {
       return storageNameOfOperation(operation);
+    },
+
+    accessChangesOf(
+      operations: readonly MigrationPlanOperation[],
+    ): readonly MigrationAccessChange[] {
+      if (targetAccessChangesOf === undefined) {
+        throw missingDescriptorOperationError(target.targetId, 'accessChangesOf');
+      }
+      return targetAccessChangesOf(operations);
     },
 
     toSchemaView(schema: SqlSchemaIRNode): CoreSchemaView {

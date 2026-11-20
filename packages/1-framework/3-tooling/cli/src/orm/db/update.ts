@@ -60,7 +60,7 @@ import {
 } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag, permitPolicyChangeFlag } from '../flags';
-import { baseDirFor, migrationsDirFor } from '../migration/paths';
+import { migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
 import { controlProgressReporter } from '../progress';
@@ -135,12 +135,17 @@ interface ConsentStatement {
   readonly text: string;
 }
 
-function subjectEntryJson(entry: AskedSubject, answeredBy: ConsentStatement | undefined) {
+/** An entry a dry run lists: answered by a flag, or by a data protection setting that permits it. */
+function subjectEntryJson(
+  entry: AskedSubject,
+  answeredBy: ConsentStatement | undefined,
+  permitted: boolean,
+) {
   return {
     operationIndex: entry.operationIndex,
     subject: migrationSubjectJson(entry.subject),
     text: entry.text,
-    answered: answeredBy !== undefined,
+    answered: permitted || answeredBy !== undefined,
     ...ifDefined('answeredBy', answeredBy),
     ...ifDefined('removedNamespace', entry.removedNamespace),
   };
@@ -164,18 +169,26 @@ function removedNamespacesJson(
 }
 
 /** The data-loss entries a dry run lists, each with how it loses data and whether a flag answers it. */
-function dataLossEntriesJson(entries: readonly AskedDataLoss[], given: readonly StatementText[]) {
+function dataLossEntriesJson(
+  entries: readonly AskedDataLoss[],
+  given: readonly StatementText[],
+  permitted: boolean,
+) {
   const answered = answeredByFlags(entries, 'delete', given);
   return entries.map((entry, index) => ({
-    ...subjectEntryJson(entry, answered[index]),
+    ...subjectEntryJson(entry, answered[index], permitted),
     ...ifDefined('loss', entry.loss),
   }));
 }
 
 /** The access entries a dry run lists, each marked answered when an `--allow` it was given answers it. */
-function accessEntriesJson(entries: readonly AskedSubject[], given: readonly StatementText[]) {
+function accessEntriesJson(
+  entries: readonly AskedSubject[],
+  given: readonly StatementText[],
+  permitted: boolean,
+) {
   const answered = answeredByFlags(entries, 'allow', given);
-  return entries.map((entry, index) => subjectEntryJson(entry, answered[index]));
+  return entries.map((entry, index) => subjectEntryJson(entry, answered[index], permitted));
 }
 
 function updateDocument(inputs: {
@@ -224,12 +237,21 @@ function updateDocument(inputs: {
     ...ifDefined('perSpace', value.perSpace),
     ...ifDefined('changedStorageEntities', value.changedStorageEntities),
     ...ifDefined('databasePoliciesUpdated', value.databasePoliciesUpdated),
+    ...ifDefined('permitted', value.permitted),
     appliedStatements: value.appliedStatements,
     temporaryValues: value.temporaryValues,
     ...(value.mode === 'plan'
       ? {
-          dataLoss: dataLossEntriesJson(value.dataLoss, inputs.statements),
-          accessChanges: accessEntriesJson(value.accessChanges, inputs.statements),
+          dataLoss: dataLossEntriesJson(
+            value.dataLoss,
+            inputs.statements,
+            value.permitted?.includes('dataLoss') === true,
+          ),
+          accessChanges: accessEntriesJson(
+            value.accessChanges,
+            inputs.statements,
+            value.permitted?.includes('accessWidening') === true,
+          ),
           removedNamespaces: removedNamespacesJson(value, inputs.statements),
           addedNamespaces: value.namespaces?.added ?? [],
         }
@@ -389,7 +411,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: snapshotContractPath,
-          projectDir: baseDirFor(ctx.config),
+          config: ctx.config,
           client,
         });
         if (!preflight.ok) {

@@ -32,19 +32,11 @@ Compose the pack into your application contract via `extensions`. The pack's con
 
 ```ts
 // prisma.config.ts
-import { defineConfig } from '@internal/cli/config-types';
-import postgresAdapter from '@internal/adapter-postgres/control';
-import sql from '@internal/family-sql/control';
-import postgres from '@internal/target-postgres/control';
-import postgresPackRef from '@internal/target-postgres/pack';
-import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { defineConfig } from '@internal/postgres/config';
 import supabasePack from '@internal/extension-supabase/pack';
 
 export default defineConfig({
-  family: sql,
-  target: postgres,
-  adapter: postgresAdapter,
-  contract: prismaContract('./src/contract.prisma', { target: postgresPackRef }),
+  contract: './src/contract.prisma',
   extensions: [supabasePack],
 });
 ```
@@ -92,7 +84,7 @@ const users = await admin.supabase
   .toArray();
 ```
 
-A role-bound client offers `sql`, `orm`, `raw`, `prepare`, `query`, `execute`, `toSql`, `enums`, `nativeEnums` and `transaction`. `enums` and `nativeEnums` are the application contract's, as on a `postgres()` client, and every role-bound client and transaction shares the same objects. `query(plan)` and `execute(plan)` have the types they have on a `postgres()` client and on `tx`, and run under the bound role. For an ORM plan, `query` yields the database rows, not the result the ORM builds from them. `toSql(plan)` returns `{ sql, params }` with no database: `params` are the plan's values before codecs encode them, middleware rewrites (`beforeCompile`) are not applied, a plan with `prepare` bind sites throws `RUNTIME.PREPARE_BIND_ON_ADHOC`, and a plan built for another contract throws `PLAN.HASH_MISMATCH`. A plan from `db.asServiceRole().supabase` belongs to the Supabase contract, so render it with `db.asServiceRole().supabase.toSql(plan)`. Creating the client has no side effects beyond checking `jwtSecret` or `jwksUrl`, `cursor`, `transactionOptions` and the database input: the pool is created on the first query, so `db.asAnon().toSql(plan)` works with no database. Inside `transaction(async (tx) => ...)`, `tx` offers the same query members with the same types: `sql`, `orm`, `raw`, `prepare`, `query`, `execute`, `toSql`, `enums` and `nativeEnums`. The transaction runs every statement under the bound role. `tx` has no `transaction`. The type is `SupabaseTransactionContext<Contract>`, which has the members of a Postgres transaction.
+A role-bound client offers `sql`, `orm`, `raw`, `prepare`, `query`, `execute`, `toSql`, `enums`, `nativeEnums` and `transaction`. `enums` and `nativeEnums` are the application contract's, as on a `postgres()` client, and every role-bound client and transaction shares the same objects. `query(plan)` and `execute(plan)` have the types they have on a `postgres()` client and on `tx`, and run under the bound role. For an ORM plan, `query` yields the database rows, not the result the ORM builds from them. `toSql(plan)` returns `{ sql, params }` with no database: `params` are the plan's values before codecs encode them, middleware rewrites (`beforeCompile`) are not applied, a plan with `prepare` bind sites throws `RUNTIME.PREPARE_BIND_ON_ADHOC`, and a plan built for another contract throws `PLAN.HASH_MISMATCH`. A plan from `db.asServiceRole().supabase` belongs to the Supabase contract, so render it with `db.asServiceRole().supabase.toSql(plan)`. Creating the client has no side effects beyond checking `jwtSecret` or `jwksUrl`, `cursor`, `transactionOptions` and the database input: the pool is created on the first query, so `db.asAnon().toSql(plan)` works with no database. Inside `transaction(async (tx) => ...)`, `tx` offers the same query members with the same types: `sql`, `orm`, `raw`, `prepare`, `query`, `execute`, `toSql`, `enums` and `nativeEnums`. The transaction runs every statement under the bound role. `tx.transaction(async (inner) => ...)` runs the callback in a savepoint, under the bound role, and `inner` has the same type and members as `tx`, to any depth. The type is `SupabaseTransactionContext<Contract>`, which is `PostgresTransactionContext<Contract>`.
 
 ```ts
 const userDb = await db.asUser(jwt);
@@ -115,7 +107,7 @@ A prepared statement runs on what it is given. `ps.query(roleBound, params)` run
 
 Pass `collections` to give models custom collection classes: `supabase({ contract, url, jwksUrl, collections: { Profile: ProfileCollection } })`, where `ProfileCollection` extends `Collection<Contract, 'Profile'>` from `@prisma/orm-postgres/orm-client`. Every role-bound client's `.orm` (from `asUser`, `asAnon` and `asServiceRole`) then returns a `ProfileCollection` for `Profile`. So does `tx.orm` inside a role-bound client's `transaction(...)`. The classes do not reach the `.supabase` ORM over `auth.*` and `storage.*`.
 
-Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-family-sql/runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the first query, the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back, and the error `runtime.connection.release.error` when the connection taken for an activity's own transaction fails to release after the transaction settles. The runtime for `auth.*` and `storage.*` reads logs to it too. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'`; see the `mode` paragraph below. Without `log`, the runtime drops these events.
+Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-family-sql/runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the first query, the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. The runtime for `auth.*` and `storage.*` reads logs to it too. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'`; see the `mode` paragraph below. Without `log`, the runtime drops these events.
 
 `mode` is `'strict'` by default, and every `budgets()` violation throws. Pass `mode: 'permissive'` and a violation whose severity is `'warn'` goes to `log.warn` instead, and the query runs; a violation whose severity is `'error'` still throws. `budgets()` gives latency `'warn'` and the row count `'error'` by default, so a row-count limit warns only with `severities: { rowCount: 'warn' }`.
 

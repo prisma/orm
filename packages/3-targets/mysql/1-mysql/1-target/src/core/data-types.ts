@@ -1,51 +1,40 @@
 /**
- * The data types this target owns: the MySQL integer, character, date and time types, a duration
- * stored as varchar, and a native `enum('A','B')` column type whose name is the text MySQL's catalog
- * prints for it.
+ * The data types this target owns: the MySQL integer, decimal, floating-point, character, date and time types, a duration stored as varchar, and a native `enum('A','B')` column type whose name is the text MySQL's catalog prints for it.
  *
  * ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
 import {
+  asFloat,
+  asNumeralText,
   type Cast,
+  castUnchanged,
   type DataType,
   type DataTypeId,
   type DataTypeParams,
   type DataTypeReader,
   type DataTypeSpelling,
   dateTimeStoredText,
+  decimalTextEqualityKey,
   INT32_RANGE,
   INT64_RANGE,
-  numeralText,
+  readJsonBoolean,
   readJsonInteger,
   readJsonIntegerText,
+  readJsonMatching,
   readJsonString,
   refuseJsonValue,
+  refuseWrongShape,
 } from '@internal/framework-components/codec';
 import { sqlDataType, sqlRawDataType } from '@internal/sql-contract/data-type';
+import { isDecimalText, printedDecimalText } from '@internal/type-implementations/decimal';
 import { ISO_DURATION_AS_WRITTEN } from '@internal/type-implementations/duration';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktype } from 'arktype';
 import { mysqlError } from './errors';
 import { quoteLiteral } from './sql-utils';
-
-const unchanged: Cast = (value) => value;
-
-function wrongShape(value: JsonValue, expected: string): never {
-  throw structuredError(
-    'CONTRACT.CAST_REFUSED',
-    `Expected ${expected}, got ${JSON.stringify(value)}.`,
-    {
-      why: 'A cast reads the stored form of the type it takes values of.',
-      fix: 'Hand the cast a value in the shape its source type stores.',
-    },
-  );
-}
-
-const asNumeralText: Cast = (value) =>
-  typeof value === 'number' ? numeralText(value) : wrongShape(value, 'a number');
 
 function integerParam(params: DataTypeParams, name: string): number | undefined {
   const value = params[name];
@@ -71,7 +60,7 @@ export const mysqlText = sqlDataType('mysql/text', {
   casts: {},
 });
 
-const fromText: Readonly<Record<string, Cast>> = { [mysqlText.id]: unchanged };
+const fromText: Readonly<Record<string, Cast>> = { [mysqlText.id]: castUnchanged };
 
 /** A signed 32-bit integer, stored as a JSON number. */
 export const mysqlInt = sqlDataType('mysql/int', {
@@ -88,6 +77,207 @@ export const mysqlBigint = sqlDataType('mysql/bigint', {
     return json;
   },
   casts: { [mysqlInt.id]: asNumeralText },
+});
+
+/** The widest `decimal` both servers hold: 65 digits, 30 of them after the point. MariaDB allows 38 after the point; MySQL allows 30. */
+export const MYSQL_WIDEST_DECIMAL = { precision: 65, scale: 30 } as const;
+
+/** The `decimal(10,0)` both servers make of a `decimal` written without a precision. */
+const BARE_DECIMAL = { precision: 10, scale: 0 } as const;
+
+/** The precision and scale of `decimal`: at most 65 digits, at most 30 of them after the point. */
+export const mysqlDecimalParams = arktype({
+  'precision?': 'number.integer >= 1 & number.integer <= 65',
+  'scale?': 'number.integer >= 0 & number.integer <= 30',
+}).narrow((params, ctx) => {
+  if (params.scale === undefined) return true;
+  if (params.precision === undefined) {
+    return ctx.reject({ path: ['scale'], message: 'scale requires a precision' });
+  }
+  if (params.scale <= params.precision) return true;
+  const unwrittenScale =
+    params.scale === MYSQL_WIDEST_DECIMAL.scale
+      ? ` A scale left unwritten can default to ${MYSQL_WIDEST_DECIMAL.scale}.`
+      : '';
+  return ctx.reject({
+    path: ['scale'],
+    message: `scale must be at most the precision: a scale of ${params.scale} is more than a precision of ${params.precision}. Write a scale of at most ${params.precision}, such as ${Math.min(2, params.precision)}, or a precision of at least ${params.scale}.${unwrittenScale}`,
+  });
+});
+
+type DecimalParams = typeof mysqlDecimalParams.infer;
+
+/** The digits before and after the point of decimal text, without leading zeros or trailing zeros after the point. */
+export function decimalTextDigits(text: string): {
+  readonly integer: number;
+  readonly fraction: number;
+} {
+  const [whole = '', fraction = ''] = text.replace(/^-/, '').split('.');
+  const significantWhole = whole.replace(/^0+/, '');
+  return { integer: significantWhole.length, fraction: fraction.replace(/0+$/, '').length };
+}
+
+/** The precision and scale of a column written with `params`, as the server makes it when the contract is built: a `decimal` without a precision is `decimal(10,0)`, and a precision written alone has a scale of 0. Code that reads a codec reference uses `mysqlDecimalColumnOfReference`. */
+export function mysqlDecimalColumnAsCreated(params: DataTypeParams): {
+  readonly precision: number;
+  readonly scale: number;
+} {
+  const precision = integerParam(params, 'precision');
+  if (precision === undefined) return BARE_DECIMAL;
+  return { precision, scale: integerParam(params, 'scale') ?? 0 };
+}
+
+/** The precision and scale of the column a decimal codec reference's `params` name, or `undefined` when they have no precision: a reference without a precision, such as a raw or prepared parameter's, belongs to no column. */
+export function mysqlDecimalColumnOfReference(
+  params: DataTypeParams,
+): { readonly precision: number; readonly scale: number } | undefined {
+  return params['precision'] === undefined ? undefined : mysqlDecimalColumnAsCreated(params);
+}
+
+function counted(count: number, noun: string): string {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`;
+}
+
+/** What a `decimal(precision, scale)` column holds, in digits before and after the point. */
+export function decimalColumnHolds(column: {
+  readonly precision: number;
+  readonly scale: number;
+}): string {
+  const integer = column.precision - column.scale;
+  if (column.scale === 0) return `a whole number of at most ${counted(integer, 'digit')}`;
+  const before = integer === 0 ? 'no digits' : `at most ${counted(integer, 'digit')}`;
+  return `${before} before the point and ${column.scale} after it`;
+}
+
+/** `text`, which is decimal text, when a `decimal(precision, scale)` column holds it without rounding; otherwise refuses it, saying what the column holds and what to change. */
+export function decimalTextInColumn(
+  text: string,
+  column: { readonly precision: number; readonly scale: number },
+): string {
+  const digits = decimalTextDigits(text);
+  const integer = column.precision - column.scale;
+  if (digits.integer <= integer && digits.fraction <= column.scale) return text;
+  const change =
+    digits.fraction > column.scale
+      ? `${text} has ${counted(digits.fraction, 'digit')} after the point: round it to ${column.scale === 0 ? 'a whole number' : `at most ${counted(column.scale, 'digit')} after the point`}`
+      : `${text} has ${counted(digits.integer, 'digit')} before the point: keep it ${integer === 0 ? 'between -1 and 1' : `to at most ${counted(integer, 'digit')} before the point`}, or widen the column`;
+  return refuseJsonValue(
+    'mysql/decimal',
+    `a number a decimal(${column.precision},${column.scale}) column holds without rounding: ${decimalColumnHolds(column)}. ${change}.`,
+    text,
+  );
+}
+
+/**
+ * Reads decimal text under a column's `precision` and `scale`. Parameters without a precision are those of no column, so they hold any decimal: a written value is read first under no parameters, and then again under its column's. A column written without a precision is given the `decimal(10,0)` the server makes when the contract is built; until then its codec checks a default against that column.
+ */
+const readDecimal: DataTypeReader = (json, params) => {
+  if (typeof json !== 'string' || !isDecimalText(json)) {
+    return refuseJsonValue('mysql/decimal', 'decimal text, as in "12.50"', json);
+  }
+  const column = mysqlDecimalColumnOfReference(params);
+  return column === undefined ? json : decimalTextInColumn(json, column);
+};
+
+/** A value of `decimal(precision, scale)` is written as MySQL and MariaDB print it: no leading zeros, no minus sign on zero, and exactly `scale` digits after the point. */
+const spellDecimal: DataTypeSpelling = (json, params) => {
+  if (typeof json !== 'string') return json;
+  const printed = printedDecimalText(json);
+  const column = mysqlDecimalColumnOfReference(params);
+  if (column === undefined) return printed;
+  const [whole = '', fraction = ''] = printed.split('.');
+  const scaled =
+    column.scale === 0
+      ? whole
+      : `${whole}.${fraction.slice(0, column.scale).padEnd(column.scale, '0')}`;
+  return printedDecimalText(scaled);
+};
+
+/** Decimal text as `mysql/decimal` stores it. Throws `CONTRACT.CAST_REFUSED` for text that is not a decimal. */
+export function mysqlDecimalText(text: string): string {
+  if (isDecimalText(text)) return printedDecimalText(text);
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `"${text}" is not a decimal number. Write decimal text, as in "12.50".`,
+    {
+      why: 'A Decimal field holds an exact decimal number, written as an optional minus sign, digits, and an optional point and digits after it.',
+      fix: 'Write the value as decimal text, as in "12.50" or "-3".',
+    },
+  );
+}
+
+/**
+ * An exact decimal number, stored as its decimal text so that no digit is lost. A column holds at most `precision` digits, `scale` of them after the point; MySQL and MariaDB print every value with `scale` digits after the point, so `1.5` in a `decimal(10,2)` reads `1.50`, and the two are one value.
+ */
+export const mysqlDecimal = sqlDataType('mysql/decimal', {
+  params: mysqlDecimalParams,
+  texts: [
+    { text: 'decimal', written: true },
+    { text: 'decimal({precision})', written: true },
+    { text: 'decimal({precision},{scale})', written: true, catalog: true },
+  ],
+  read: readDecimal,
+  spell: spellDecimal,
+  equalityKey: decimalTextEqualityKey,
+  normalize: (params: DecimalParams): DecimalParams => mysqlDecimalColumnAsCreated(params),
+  casts: {
+    [mysqlText.id]: (value) =>
+      typeof value === 'string' ? mysqlDecimalText(value) : refuseWrongShape(value, 'text'),
+    [mysqlInt.id]: asNumeralText,
+    [mysqlBigint.id]: castUnchanged,
+  },
+});
+
+/** A finite IEEE 754 double, stored as a JSON number: MySQL and MariaDB hold no NaN or infinity. */
+export const mysqlDouble = sqlDataType('mysql/double', {
+  texts: [{ text: 'double', written: true, catalog: true }],
+  read: (json) =>
+    typeof json === 'number' && Number.isFinite(json)
+      ? json
+      : refuseJsonValue('mysql/double', 'a finite number', json),
+  casts: {
+    [mysqlInt.id]: asFloat,
+    [mysqlBigint.id]: asFloat,
+    [mysqlDecimal.id]: asFloat,
+  },
+});
+
+/** A boolean, stored as `tinyint(1)` holding 0 or 1, which is what MySQL's own `BOOL`, `TRUE` and `FALSE` are. It claims `tinyint(1)` only, so other `tinyint` widths stay free for an integer type. */
+export const mysqlBoolean = sqlDataType('mysql/boolean', {
+  texts: [{ text: 'tinyint(1)', written: true, catalog: true }],
+  read: (json) => readJsonBoolean('mysql/boolean', json),
+  casts: {},
+});
+
+const UPPERCASE_HEX = /^(?:[0-9A-F]{2})*$/;
+const HEX_TEXT = /^(?:[0-9A-Fa-f]{2})*$/;
+
+/** Bytes, stored as their upper-case hexadecimal text. */
+export const mysqlLongblob = sqlDataType('mysql/longblob', {
+  texts: [{ text: 'longblob', written: true, catalog: true }],
+  read: (json) =>
+    readJsonMatching('mysql/longblob', json, UPPERCASE_HEX, 'upper-case hexadecimal text'),
+  casts: {},
+});
+
+/** The upper-case hex `mysql/longblob` stores for the hex text a `longblob` tag holds, `68656c6c6f`. Throws `CONTRACT.CAST_REFUSED` for text that is not hex. */
+export function mysqlLongblobFromHexText(text: string): string {
+  if (HEX_TEXT.test(text)) return text.toUpperCase();
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `"${text}" is not hex text: write two hexadecimal digits for each byte, as in longblob\`68656c6c6f\`.`,
+    {
+      why: 'A Bytes value is written as hex text, two hexadecimal digits for each byte.',
+      fix: 'Write the bytes as hex text, as in longblob`68656c6c6f`.',
+    },
+  );
+}
+
+/** A JSON document, stored as the document itself. MariaDB names the column `longtext` with a `json_valid` check; its catalog reader reports that column as `json`. */
+export const mysqlJson = sqlDataType('mysql/json', {
+  texts: [{ text: 'json', written: true, catalog: true }],
+  read: (json) => json,
+  casts: {},
 });
 
 /** The length of `varchar`, which MySQL requires, up to the largest it accepts. */
@@ -295,7 +485,7 @@ export function renderMysqlEnumType(values: readonly string[] | undefined): stri
   if (values === undefined || values.length === 0) {
     throw mysqlError(
       'CONTRACT.TYPE_PARAMS_INVALID',
-      'A MySQL enum column type needs at least one member.',
+      'An enum column type on MySQL or MariaDB needs at least one member.',
       {
         why: 'A native enum column is written with its members, and this column has none.',
         fix: 'Type the column with a PSL enum or an enumType() that declares its members.',
@@ -331,6 +521,11 @@ export const mysqlDataTypes: readonly DataType[] = [
   mysqlText,
   mysqlInt,
   mysqlBigint,
+  mysqlDecimal,
+  mysqlDouble,
+  mysqlBoolean,
+  mysqlLongblob,
+  mysqlJson,
   mysqlVarchar,
   mysqlChar,
   mysqlDatetime,

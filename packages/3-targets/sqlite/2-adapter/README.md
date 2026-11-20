@@ -118,7 +118,7 @@ flowchart TD
 - Used in `contract.d.ts` generation
 
 **Column Types Export (`column-types.ts`)**
-- Exports column descriptors for built-in types: `textColumn`, `integerColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `datetimeTemporalColumn`, `datetimeStringColumn`, `dateStringColumn`, `dateTemporalColumn`, `timeStringColumn`, `timeTemporalColumn`, `durationStringColumn`, `jsonColumn`, `bigintColumn`, and ``rawColumn(sql`geometry`)`` for a column of any other type, its type written as a `sql` literal and used as given (ADR 273)
+- Exports column descriptors for built-in types: `textColumn`, `integerNumberColumn`, `realColumn`, `blobColumn`, `datetimeColumn`, `datetimeTemporalColumn`, `datetimeStringColumn`, `dateStringColumn`, `dateTemporalColumn`, `timeStringColumn`, `timeTemporalColumn`, `durationStringColumn`, `plainJsonColumn`, `integerBigIntColumn`, `decimalStringColumn`, `integerBooleanColumn`, and ``rawColumn(sql`geometry`)`` for a column of any other type, its type written as a `sql` literal and used as given (ADR 273)
 - Uses `as const` to preserve literal `codecId` types through the type system
 
 **Types Export (`types.ts`)**
@@ -187,7 +187,7 @@ Parameters are written as numbered placeholders (`?1`, `?2`, ...). The number is
 ## Exports
 
 - `./codec-types`: SQLite codec types (`CodecTypes`, `JsonValue`)
-- `./column-types`: Column type descriptors (`textColumn`, `integerColumn`, `realColumn`, `blobColumn`, the date and time columns such as `datetimeColumn` and `dateStringColumn`, `jsonColumn`, `bigintColumn`, `rawColumn`)
+- `./column-types`: Column type descriptors (`textColumn`, `integerNumberColumn`, `realColumn`, `blobColumn`, the date and time columns such as `datetimeColumn` and `dateStringColumn`, `plainJsonColumn`, `integerBigIntColumn`, `decimalStringColumn`, `integerBooleanColumn`, `rawColumn`)
 - `./types`: SQLite-specific types
 - `./control`: Control-plane entry point (stubbed for future migration support)
 - `./runtime`: Runtime-plane entry point (runtime adapter descriptor)

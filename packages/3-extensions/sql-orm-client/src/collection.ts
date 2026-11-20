@@ -41,7 +41,6 @@ import {
 import {
   addressedModel,
   assertDistinctOnCapability,
-  assertInsertConflictSkipCapability,
   assertLockCapability,
   assertReturningCapability,
   columnOfCallerField,
@@ -50,7 +49,6 @@ import {
   isToOneCardinality,
   type ResolvedRelation,
   resolveIncludeRelation,
-  resolveInsertConflictColumns,
   resolveModelTableName,
   resolvePolymorphismInfo,
   resolveUpsertConflictColumns,
@@ -156,6 +154,7 @@ import {
   updateFirstGraph,
   upsertGraph,
 } from './statement-graph/collection-graphs';
+import { resolveConflict, variantInOwnTableOf } from './statement-graph/conflict-keys';
 import { Graph } from './statement-graph/graph';
 import { describeCollectionRead } from './statement-graph/read-graph';
 import { executeGraph, queryGraph } from './statement-graph/run-graph';
@@ -165,7 +164,9 @@ import {
   type AggregateIncludeReducers,
   type AggregateResult,
   type AggregateSpec,
+  type CallContext,
   type CollectionContext,
+  type CollectionQueryable,
   type CollectionState,
   type CollectionTypeState,
   type DefaultCollectionTypeState,
@@ -189,7 +190,6 @@ import {
   type RelationTargetNamespace,
   type ResolvedCreateInput,
   type ResolvedScalarCreateInput,
-  type RuntimeQueryable,
   type ScalarUpdateInput,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
@@ -1697,7 +1697,7 @@ export class CollectionBase<
     };
   }
 
-  #on(queryable: RuntimeQueryable): CollectionContext<TContract> {
+  #on(queryable: CollectionQueryable): CallContext<TContract> {
     return { ...this.ctx, runtime: queryable };
   }
 
@@ -1958,7 +1958,7 @@ export class CollectionBase<
   }
 
   async #create(
-    queryable: RuntimeQueryable,
+    queryable: CollectionQueryable,
     data:
       | ResolvedCreateInput<TContract, ModelName, State['variantValue'], State['nsId']>
       | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
@@ -2097,7 +2097,7 @@ export class CollectionBase<
     >[],
     method: 'create()' | 'createAll()',
     conflictSkip?: InsertConflictSkip,
-  ): (queryable: RuntimeQueryable) => AsyncIterableResult<Row> {
+  ): (queryable: CollectionQueryable) => AsyncIterableResult<Row> {
     if (data.length === 0) {
       const generator = async function* (): AsyncGenerator<Row, void, unknown> {};
       return () => new AsyncIterableResult(generator());
@@ -2130,45 +2130,32 @@ export class CollectionBase<
     method: string,
   ): InsertConflictSkip | undefined {
     if (options === undefined) return undefined;
-
-    if (options.onConflict !== 'skip') {
-      throw ormError(
-        'ORM.ARGUMENT_INVALID',
-        `${method} onConflict must be "skip"; received ${JSON.stringify(options.onConflict)}`,
-        { meta: { method, model: this.modelName } },
-      );
-    }
-
-    if (method === 'createAll()') {
-      this.#assertConflictSkipNotOnMtiVariant(method);
-    } else {
+    const createAll = method === 'createAll()';
+    if (!createAll) {
       this.#assertNotMtiVariant(method);
     }
-
-    const conflictOn = options.conflictOn ?? [];
-    assertInsertConflictSkipCapability(this.contract, method, conflictOn.length > 0);
-
-    return {
-      columns: resolveInsertConflictColumns(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        conflictOn,
-      ),
-    };
+    const { columns } = resolveConflict(
+      this.contract,
+      { action: method, modelName: this.modelName, meta: { method, model: this.modelName } },
+      this.namespaceId,
+      options,
+      ['skip'],
+      createAll
+        ? variantInOwnTableOf(
+            this.contract,
+            this.namespaceId,
+            this.modelName,
+            this.state.variantValue,
+          )
+        : undefined,
+    );
+    return { columns };
   }
 
   #assertNotMtiVariant(method: string): void {
     this.#refuseOnMtiVariant(
       method,
       `${method} is not supported for MTI variant "${this.#variantModelName()}" on model "${this.modelName}". Use createAll() instead.`,
-    );
-  }
-
-  #assertConflictSkipNotOnMtiVariant(method: string): void {
-    this.#refuseOnMtiVariant(
-      method,
-      `The onConflict option is not supported on variant "${this.#variantModelName()}" of model "${this.modelName}" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.`,
     );
   }
 
@@ -2421,7 +2408,7 @@ export class CollectionBase<
   }
 
   async #update(
-    queryable: RuntimeQueryable,
+    queryable: CollectionQueryable,
     data: MutationUpdateInput<TContract, ModelName, State['nsId']>,
   ): Promise<Row | null> {
     const input = blindCast<

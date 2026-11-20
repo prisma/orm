@@ -34,6 +34,29 @@ function printUpdate(
   );
 }
 
+function printUpdateOf(modelName: 'User' | 'Post', input: Record<string, unknown>): string {
+  const context = getTestContext();
+  const parsed = parseMutationInput(
+    context.contract,
+    'public',
+    modelName,
+    input as never,
+    relatedCollectionOf(context),
+  );
+  return printGraph(
+    updateFirstGraph(
+      {
+        context,
+        state: createCollectionFor(modelName).collection.where({ id: 1 }).state,
+        modelName,
+        namespaceId: 'public',
+      },
+      {},
+      parsed.relationMutations,
+    ),
+  );
+}
+
 describe('updateFirstGraph with relation operations', () => {
   describe('a relation the parent holds the key for', () => {
     it('finds the row to connect and copies its key into the values of the Update', () => {
@@ -78,6 +101,39 @@ describe('updateFirstGraph with relation operations', () => {
         ].join('\n'),
       );
     });
+
+    it('unlinks the parent on disconnect with criteria only when the linked row matches one', () => {
+      expect(
+        printUpdate({
+          invitedBy: (inviter: Mutator) => inviter.disconnect([{ id: 2 }, { email: 'g@h.io' }]),
+        }),
+      ).toBe(
+        [
+          'n1 Find users where id = 1',
+          'n2 Update users set invited_by_id = null where invited_by_id in (select id from users where id = 2) <- FilterData n1 (id->id)',
+          "n3 Update users set invited_by_id = null where invited_by_id in (select id from users where email = 'g@h.io') <- FilterData n1 (id->id)",
+          'n4 Find users <- FilterData n1 (id->id)',
+          'result: n4',
+        ].join('\n'),
+      );
+    });
+
+    it('unlinks the parent on disconnect with criteria after its own Update', () => {
+      expect(
+        printUpdate(
+          { invitedBy: (inviter: Mutator) => inviter.disconnect([{ id: 2 }]) },
+          { name: 'Ada' },
+        ),
+      ).toBe(
+        [
+          'n1 Find users where id = 1',
+          "n2 Update users set name = 'Ada' where id = 1",
+          'n3 Update users set invited_by_id = null where invited_by_id in (select id from users where id = 2) <- FilterData n2 (id->id)',
+          'n4 Find users <- FilterData n2 (id->id)',
+          'result: n4',
+        ].join('\n'),
+      );
+    });
   });
 
   describe('a relation the child holds the key for', () => {
@@ -105,22 +161,84 @@ describe('updateFirstGraph with relation operations', () => {
       );
     });
 
+    it('adds no Update for an explicit empty list of criteria', () => {
+      expect(printUpdate({ invitedUsers: (invited: Mutator) => invited.disconnect([]) })).toBe(
+        ['n1 Find users where id = 1', 'result: n1'].join('\n'),
+      );
+    });
+
     it('sets the key to null on every child of the parent, or on those the criterion matches', () => {
-      expect(printUpdate({ posts: (posts: Mutator) => posts.disconnect() })).toBe(
+      expect(printUpdate({ invitedUsers: (invited: Mutator) => invited.disconnect() })).toBe(
         [
           'n1 Find users where id = 1',
-          'n2 Update posts set user_id = null <- FilterData n1 (id->user_id)',
+          'n2 Update users set invited_by_id = null <- FilterData n1 (id->invited_by_id)',
           'result: n1',
         ].join('\n'),
       );
-      expect(printUpdate({ posts: (posts: Mutator) => posts.disconnect([{ id: 10 }]) })).toBe(
+      expect(
+        printUpdate({ invitedUsers: (invited: Mutator) => invited.disconnect([{ id: 10 }]) }),
+      ).toBe(
         [
           'n1 Find users where id = 1',
-          'n2 Update posts set user_id = null where id = 10 <- FilterData n1 (id->user_id)',
+          'n2 Update users set invited_by_id = null where id = 10 <- FilterData n1 (id->invited_by_id)',
           'result: n1',
         ].join('\n'),
       );
     });
+  });
+
+  describe('a disconnect that would set a required foreign key to null', () => {
+    it.each([
+      [
+        'a relation the parent holds the key for',
+        'Post',
+        { author: (author: Mutator) => author.disconnect() },
+        'author',
+        'Post',
+        'userId',
+      ],
+      [
+        'a to-many relation the child holds the key for',
+        'User',
+        { posts: (posts: Mutator) => posts.disconnect() },
+        'posts',
+        'Post',
+        'userId',
+      ],
+      [
+        'a to-many relation the child holds the key for, with criteria',
+        'User',
+        { posts: (posts: Mutator) => posts.disconnect([{ id: 10 }]) },
+        'posts',
+        'Post',
+        'userId',
+      ],
+      [
+        'a to-one relation the child holds the key for',
+        'User',
+        { profile: (profile: Mutator) => profile.disconnect() },
+        'profile',
+        'Profile',
+        'userId',
+      ],
+    ] as const)(
+      'is rejected on %s while the graph is built',
+      (_, modelName, input, relation, model, field) => {
+        expect(() => printUpdateOf(modelName, input)).toThrow(
+          expect.objectContaining({
+            code: 'ORM.OPERATION_UNSUPPORTED',
+            message: `disconnect() nested mutation for relation "${relation}" cannot set "${field}" of model "${model}" to null, because the foreign key is required`,
+            meta: {
+              kind: 'disconnect',
+              relation,
+              reason: 'required-foreign-key',
+              model,
+              fields: [field],
+            },
+          }),
+        );
+      },
+    );
   });
 
   describe('a many-to-many relation', () => {
@@ -164,7 +282,7 @@ describe('updateFirstGraph with relation operations', () => {
     it('rejects a disconnect without criteria while the graph is built', () => {
       expect(() => printUpdate({ tags: (tags: Mutator) => tags.disconnect() })).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_INVALID',
+          code: 'ORM.ARGUMENT_INVALID',
           message: 'disconnect() nested mutation for relation "tags" requires criterion',
           meta: { kind: 'disconnect', relation: 'tags', problem: 'missing-criterion' },
         }),
@@ -187,11 +305,14 @@ describe('updateFirstGraph with relation operations', () => {
   });
 
   it('rejects an empty disconnect criterion on a relation the child holds the key for', () => {
-    expect(() => printUpdate({ posts: (posts: Mutator) => posts.disconnect([{}]) })).toThrow(
+    expect(() =>
+      printUpdate({ invitedUsers: (invited: Mutator) => invited.disconnect([{}]) }),
+    ).toThrow(
       expect.objectContaining({
-        code: 'ORM.RELATION_MUTATION_INVALID',
-        message: 'disconnect() nested mutation for relation "posts" requires non-empty criterion',
-        meta: { kind: 'disconnect', relation: 'posts', problem: 'empty-criterion' },
+        code: 'ORM.ARGUMENT_INVALID',
+        message:
+          'disconnect() nested mutation for relation "invitedUsers" requires non-empty criterion',
+        meta: { kind: 'disconnect', relation: 'invitedUsers', problem: 'empty-criterion' },
       }),
     );
   });
@@ -199,7 +320,7 @@ describe('updateFirstGraph with relation operations', () => {
   it('rejects an empty disconnect criterion on a many-to-many relation', () => {
     expect(() => printUpdate({ tags: (tags: Mutator) => tags.disconnect([{}]) })).toThrow(
       expect.objectContaining({
-        code: 'ORM.RELATION_MUTATION_INVALID',
+        code: 'ORM.ARGUMENT_INVALID',
         message: 'disconnect() nested mutation for relation "tags" requires non-empty criterion',
         meta: { kind: 'disconnect', relation: 'tags', problem: 'empty-criterion' },
       }),

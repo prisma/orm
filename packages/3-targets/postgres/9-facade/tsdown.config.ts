@@ -6,6 +6,8 @@ export default defineConfig({
     'contract-builder': 'src/exports/contract-builder.ts',
     control: 'src/exports/control.ts',
     family: 'src/exports/family.ts',
+    'contract-types': 'src/exports/contract-types.ts',
+    init: 'src/exports/init.ts',
     migration: 'src/exports/migration.ts',
     runtime: 'src/exports/runtime.ts',
     serverless: 'src/exports/serverless.ts',
@@ -16,4 +18,5 @@ export default defineConfig({
     'internal/transaction-members': 'src/exports/internal-transaction-members.ts',
     'internal/validate-contract': 'src/exports/internal-validate-contract.ts',
   },
+  copy: [{ from: 'src/init/*.md' }],
 });

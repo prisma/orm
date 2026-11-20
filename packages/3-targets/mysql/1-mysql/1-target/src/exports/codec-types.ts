@@ -3,9 +3,12 @@
  */
 
 import type { ExtractCodecTypes } from '@internal/sql-relational-core/ast';
+import { mysqlBooleanDescriptor } from '../core/boolean-codec';
 import {
   mysqlBigintDescriptor,
+  mysqlBigintNumberDescriptor,
   mysqlDatetimeDescriptor,
+  mysqlDoubleDescriptor,
   mysqlEnumDescriptor,
   mysqlIntDescriptor,
   mysqlSqlCharDescriptor,
@@ -25,6 +28,9 @@ import {
   mysqlTimestampTemporalDescriptor,
   mysqlTimeTemporalDescriptor,
 } from '../core/date-time-codecs';
+import { mysqlDecimalDescriptor } from '../core/decimal-codec';
+import { mysqlJsonDescriptor } from '../core/json-codec';
+import { mysqlLongblobDescriptor } from '../core/longblob-codec';
 
 const codecDescriptorMap = {
   char: mysqlSqlCharDescriptor,
@@ -33,6 +39,12 @@ const codecDescriptorMap = {
   text: mysqlTextDescriptor,
   int: mysqlIntDescriptor,
   bigint: mysqlBigintDescriptor,
+  bigintnumber: mysqlBigintNumberDescriptor,
+  double: mysqlDoubleDescriptor,
+  decimal: mysqlDecimalDescriptor,
+  boolean: mysqlBooleanDescriptor,
+  longblob: mysqlLongblobDescriptor,
+  json: mysqlJsonDescriptor,
   datetime: mysqlDatetimeDescriptor,
   'datetime-temporal': mysqlDatetimeTemporalDescriptor,
   'datetime-string': mysqlDatetimeStringDescriptor,

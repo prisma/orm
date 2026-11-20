@@ -37,12 +37,15 @@ type Token =
   | { readonly kind: 'string'; readonly text: string }
   | { readonly kind: 'punctuation'; readonly text: string };
 
-const PRISMA_MIGRATION_MODULE = /^@(prisma|internal)\/.+\/migration$/;
+function isPackageModule(module: string): boolean {
+  return !module.startsWith('./') && !module.startsWith('../') && !module.startsWith('/');
+}
+
 const NAME_START = /[A-Za-z_$]/;
 const NAME_PART = /[\w$]/;
 
 /**
- * Whether the source calls the `placeholder` it imports from a Prisma migration module, by the
+ * Whether the source calls a `placeholder` it imports from a package, by the
  * local name it imports it under or through a namespace import. Comments and the text of strings
  * are not code, so a `placeholder(` there is not a call.
  */
@@ -70,7 +73,7 @@ function placeholderImports(tokens: readonly Token[]): {
       (each, at) => at > index && each.kind === 'name' && each.text === 'from',
     );
     const module = tokens[fromAt + 1];
-    if (fromAt < 0 || module?.kind !== 'string' || !PRISMA_MIGRATION_MODULE.test(module.text)) {
+    if (fromAt < 0 || module?.kind !== 'string' || !isPackageModule(module.text)) {
       return;
     }
     const clause = tokens.slice(index + 1, fromAt);

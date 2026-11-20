@@ -56,10 +56,15 @@ function db() {
 
 describe('contract-bound raw statements', () => {
   it('reads a column reference off the table proxy', () => {
-    expect(db().public.users.columns.id).toEqual({ codecId: 'pg/int4@1', nullable: false });
+    expect(db().public.users.columns.id).toEqual({
+      codecId: 'pg/int4@1',
+      nullable: false,
+      codec: { codecId: 'pg/int4@1' },
+    });
     expect(db().public.users.columns.invited_by_id).toEqual({
       codecId: 'pg/int4@1',
       nullable: true,
+      codec: { codecId: 'pg/int4@1' },
     });
   });
 
@@ -90,8 +95,8 @@ describe('contract-bound raw statements', () => {
     expect((plan.ast as RawQueryAst).result).toEqual({
       kind: 'rows',
       columns: {
-        id: { codecId: 'pg/int4@1', nullable: false },
-        email: { codecId: 'pg/text@1', nullable: false },
+        id: { codecId: 'pg/int4@1', nullable: false, codec: { codecId: 'pg/int4@1' } },
+        email: { codecId: 'pg/text@1', nullable: false, codec: { codecId: 'pg/text@1' } },
         post_count: { codecId: 'pg/int8@1', nullable: false },
       },
     });
@@ -294,7 +299,11 @@ describe('a storage namespace named raw', () => {
       rawCodecInferer: { inferCodec: () => 'pg/text@1' },
     });
 
-    expect(db['raw']?.['Note']?.columns['id']).toEqual({ codecId: 'pg/text@1', nullable: false });
+    expect(db['raw']?.['Note']?.columns['id']).toEqual({
+      codecId: 'pg/text@1',
+      nullable: false,
+      codec: { codecId: 'pg/text@1' },
+    });
   });
 
   it('builds a query against its tables', () => {
@@ -359,7 +368,7 @@ describe("the refs a row-spec'd statement publishes", () => {
     });
 
     expect(inner.returns).toEqual({
-      id: { codecId: 'pg/int4@1', nullable: false },
+      id: { codecId: 'pg/int4@1', nullable: false, codec: { codecId: 'pg/int4@1' } },
       email: { codecId: 'pg/text@1', nullable: true },
     });
   });
@@ -378,7 +387,9 @@ describe("the refs a row-spec'd statement publishes", () => {
 
     expect((outer.ast as RawQueryAst).result).toEqual({
       kind: 'rows',
-      columns: { id: { codecId: 'pg/int4@1', nullable: false } },
+      columns: {
+        id: { codecId: 'pg/int4@1', nullable: false, codec: { codecId: 'pg/int4@1' } },
+      },
     });
   });
 

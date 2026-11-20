@@ -2,6 +2,7 @@ import type {
   MigrationSubject,
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import type { PlannerProducedMongoMigration } from '../src/core/migrations/planner-produced-migration';
 import {
@@ -66,7 +67,7 @@ const live = [schemaCollection('users')];
 function rendered(result: ReturnType<typeof plan>): readonly string[] {
   if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
   const source = (result.plan as PlannerProducedMongoMigration)
-    .renderTypeScript((specifier) => specifier)
+    .renderTypeScript(workspaceMigrationModule.mongo)
     .replace(/\s+/g, '')
     .replace(/,\}/g, '}');
   return source.match(/(?:rename|remove)StoredKey\(\{[^)]*\}\)/g) ?? [];

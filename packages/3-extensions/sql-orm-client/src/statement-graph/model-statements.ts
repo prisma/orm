@@ -6,7 +6,7 @@ import { loadsIncludesPerRelation } from '../include-strategy';
 import {
   deleteAst,
   groupRowsByColumnSignature,
-  type InsertConflictSkip,
+  type InsertConflict,
   insertAst,
   projectTableColumns,
   returningProjection,
@@ -72,7 +72,7 @@ export const allColumns: Shape = {
 };
 
 export interface InsertWrite {
-  readonly conflict: InsertConflictSkip | undefined;
+  readonly conflict: InsertConflict | undefined;
   readonly keys: readonly KeySource[];
   readonly junction: JunctionWrite | undefined;
   readonly requires: readonly Requires[];
@@ -120,6 +120,14 @@ export function insertRows(
     requires,
     owner,
   });
+  if (conflict !== undefined && 'link' in conflict) {
+    if (afterWrite === undefined && returns === 'count') {
+      return inserted;
+    }
+    const linked = readBack(b, model, inserted, conflict.columns, { shape, by: 'keys', owner });
+    afterWrite?.(linked);
+    return returns === 'count' ? inserted : linked;
+  }
   afterWrite?.(inserted);
   return readBackRows(b, model, inserted, { returns, shape, by: 'keys', owner });
 }

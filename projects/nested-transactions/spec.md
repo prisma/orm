@@ -31,9 +31,9 @@ Layers, from the database up:
 flowchart BT
   D["Driver: SqlTransaction.savepoint(name) → SqlTransaction<br/>commit() = RELEASE, rollback() = ROLLBACK TO"]
   F["Framework: a savepoint is a 'transaction' activity<br/>beneath the outer transaction activity"]
-  R["SQL runtime: transaction() on a transaction opens a savepoint, name counter,<br/>suspend guard, withSavepoint(txCtx, fn, buildMembers)"]
+  R["SQL runtime: transaction() on a transaction opens a savepoint, name counter,<br/>suspend guard, transaction(fn) on the transaction context"]
   O["ORM: run-graph calls transaction() inside a transaction too, without options"]
-  P["Facades (Postgres, MySQL, SQLite, Supabase):<br/>tx.transaction(cb) wired to withSavepoint"]
+  P["Facades (Postgres, MySQL, SQLite, Supabase):<br/>tx.transaction(cb) wraps the runtime context's transaction(fn)"]
   D --> R
   F --> R
   R --> O
@@ -82,10 +82,10 @@ Each decision was reached in a design discussion with the operator. The research
    - **`RELEASE` fails:** try `ROLLBACK TO`. If it succeeds, the outer transaction stays usable and the nested call throws `TRANSACTION_COMMIT_FAILED`.
    - **`ROLLBACK TO` fails:** every level up to the outer transaction is invalidated, so its next statement fails with `RUNTIME.TRANSACTION_CLOSED`, and the outer settle destroys the connection, as `withTransaction` does after a failed rollback today.
    - **A middleware `activityStarted` hook refuses the savepoint:** no `SAVEPOINT` is sent, the nested call rejects, and the outer transaction stays usable.
-10. **Facades wire `tx.transaction` to a shared runtime helper.**
-    - The SQL runtime exports `withSavepoint(txCtx, fn, buildMembers)`. It holds all the savepoint logic: opening, the guard, settling and the error paths.
-    - Each facade (Postgres, MySQL, SQLite, Supabase) adds `transaction: (fn) => withSavepoint(txCtx, fn, buildMembers)` to the members it builds, and `buildMembers` adds `transaction` again for the child context.
-    - The operator chose this over moving nesting into `withTransaction` itself. The shape is revisited after the first facade is done.
+10. **The runtime's transaction context has `transaction(fn)`, and each facade wraps it.**
+    - The context that `withTransaction` passes to its callback has `transaction(fn)`. It holds all the savepoint logic: opening, the guard, settling and the error paths. `fn` receives a nested context of the same kind.
+    - Each facade (Postgres, MySQL, SQLite, Supabase) adds `transaction: (fn) => txCtx.transaction((nested) => fn(buildMembers(nested)))` to the members it builds, so the nested callback gets the facade's members.
+    - The first shape was an exported `withSavepoint(txCtx, fn, buildMembers)`, which the operator chose over moving nesting into `withTransaction` itself, to be reviewed after the first facade. That function had to find the transaction behind `txCtx` through a hidden member. The operator reviewed it during slice 4 and chose the method on the context.
 
 ## Non-goals
 
@@ -129,7 +129,7 @@ None. No contract entity, emitter output or `contract.json` shape changes.
 
 ## Transitional-shape constraints
 
-- Each merged slice leaves `tx.transaction(cb)` either absent or complete for a given facade, never present and partly working.
+- Each merged slice leaves `tx.transaction(cb)` either absent or complete for a given facade, never present and partly working. One exception, chosen by the operator: between slices 4 and 5, `tx` on MySQL, SQLite and Supabase has the runtime's `transaction(fn)`, whose nested callback receives the runtime context without the facade's members.
 - The framework activity change can land before any runtime uses it; nothing calls it with a transaction parent until the runtime does.
 
 ## Project Definition of Done

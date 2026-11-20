@@ -17,15 +17,17 @@
   "dependencies": {
     "@internal/adapter-mysql": "workspace:8.0.0-rc.24",
     "@internal/family-sql": "workspace:8.0.0-rc.24",
+    "@internal/framework-components": "workspace:8.0.0-rc.24",
     "@internal/sql-contract": "workspace:8.0.0-rc.24",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.24",
+    "@internal/sql-runtime": "workspace:8.0.0-rc.24",
+    "@internal/target-mariadb": "workspace:8.0.0-rc.24",
     "@internal/target-mysql": "workspace:8.0.0-rc.24"
   },
   "devDependencies": {
     "@internal/driver-mariadb": "workspace:8.0.0-rc.24",
     "@internal/driver-mysql": "workspace:8.0.0-rc.24",
-    "@internal/framework-components": "workspace:8.0.0-rc.24",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.24",
-    "@internal/target-mariadb": "workspace:8.0.0-rc.24",
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",
@@ -46,8 +48,10 @@
     "src"
   ],
   "exports": {
+    "./adapter": "./dist/adapter.mjs",
     "./codec-types": "./dist/codec-types.mjs",
     "./control": "./dist/control.mjs",
+    "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

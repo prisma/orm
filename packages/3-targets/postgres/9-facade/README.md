@@ -1,6 +1,6 @@
 # @internal/postgres
 
-One-package Postgres setup for Prisma 8. Install this single package to get config, runtime, and all transitive type dependencies.
+One-package Postgres setup for Prisma 8. Install this package and the `pg` driver to get config, runtime, and all transitive type dependencies. `pg` and `@types/pg` are peer dependencies, so the application declares them itself.
 
 Callback isolation is configured with factory `transactionOptions` and `transaction(fn, options?)`, using `PostgresTransactionOptions`. Import `{ IsolationLevel }` from `@prisma/orm-postgres/runtime` or `@prisma/orm-postgres/serverless` and use `IsolationLevel.Serializable` in either option position. Both entries share the same const object; string literals remain accepted. Pooled and serverless clients share all four isolation literals; PostgreSQL treats ReadUncommitted as ReadCommitted. See [transaction isolation](../../../../docs/reference/transaction-options.md) for precedence, validation and explicit-only defaults.
 
@@ -79,7 +79,7 @@ Inside a request, `db` does everything the `db` from `postgres()` does: `db.orm`
 
 ### `@internal/postgres/config`
 
-Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files).
+Simplified `defineConfig` that pre-wires all Postgres internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, `migrations.dir`, and `formatter` (the indent and line endings `contract format` and the language server use for PSL files). A contract built for another target is refused with `CONTRACT.TARGET_MISMATCH` when it loads, whether it comes from a path or a ready `ContractConfig`.
 
 #### A PSL source with a default control policy
 
@@ -132,7 +132,7 @@ export default definePrismaConfig({
 
 What the project needs around that file:
 
-- A `package.json` that depends on `@prisma/orm-postgres` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `@prisma/cli-engine` is not a direct dependency of the project: `prisma/config` re-exports `definePrismaConfig` from it, and the generated `contract.d.ts` imports only `@prisma/orm-postgres/...`. `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports; without one it imports workspace-internal names that are not published.
+- A `package.json` that depends on `@prisma/orm-postgres`, `pg` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `@prisma/cli-engine` is not a direct dependency of the project: `prisma/config` re-exports `definePrismaConfig` from it, and the generated `contract.d.ts` imports only `@prisma/orm-postgres/...`. `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports; without one it imports workspace-internal names that are not published.
 - `db.connection` is the same database URL Prisma 7 has in its own `prisma.config.ts` (`datasource.url`). Prisma 8 does not read Prisma 7's config, so pass it here too, usually from the same `DATABASE_URL` variable.
 - The Prisma 7 schema stays as Prisma 7 wants it: the `datasource` block carries `provider` only. Prisma 7 rejects `url` in the schema (it moved to `prisma.config.ts`), and this source ignores it.
 - The commands print prose to the terminal. When stdout is a pipe or a file, it receives only the command's plain data lines, such as one line per migration. Pass `--json` to get JSON.
@@ -213,7 +213,7 @@ Reads are buffered by default. Pass `cursor` (typed `PostgresCursorOptions`, `{ 
 
 `supabase()` from `@internal/extension-supabase/runtime` takes the same options, `cursor` and `poolOptions` included, and the `url`, `pg` and `binding` inputs except a `pg.Client`.
 
-Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the first query, the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back, and the error `runtime.connection.release.error` when the connection taken for an activity's own transaction fails to release after the transaction settles. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events. `postgresServerless()` accepts the same option.
+Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the first query, the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events. `postgresServerless()` accepts the same option.
 
 ### Running plans and rendering SQL
 
@@ -232,7 +232,9 @@ await db.execute(db.raw.sql`UPDATE posts SET views = 0`.affectedCount().build())
 
 ### Transactions
 
-`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query`, `execute`, `toSql`, `enums` and `nativeEnums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]`, `transaction` or `runtime()`. A transaction on a serverless connection (`await postgres.connect({ url })`) offers the same members. The type is `PostgresTransactionContext<Contract>`.
+`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query`, `execute`, `toSql`, `enums` and `nativeEnums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]` or `runtime()`. A transaction on a serverless connection (`await postgres.connect({ url })`) offers the same members. The type is `PostgresTransactionContext<Contract>`.
+
+`tx.transaction(async (inner) => ...)` runs its callback in a savepoint, and `inner` has the same type and members as `tx`, so it nests to any depth. It takes no options. When the callback returns, the savepoint is released and the call resolves with the callback's result; when it throws, the work since the savepoint is rolled back, the call rejects with the same error and `tx` can be used again. When a statement inside it failed, Postgres refuses the release, so a callback that catches that error and returns rolls back too and the call rejects with `RUNTIME.TRANSACTION_COMMIT_FAILED`. While the callback runs, `tx` refuses work, a second `tx.transaction(...)` included, with `RUNTIME.TRANSACTION_SUSPENDED`; once the call settles, `inner` refuses work with `RUNTIME.TRANSACTION_CLOSED`. Nothing is committed until the outer callback returns.
 
 ```ts
 await db.transaction(async (tx) => {
@@ -298,6 +300,12 @@ export default class M extends Migration {
 MigrationCLI.run(import.meta.url, M);
 ```
 
+`defineConfig` names this module in `migrations.module`, the module rendered migration files import from.
+
+### `@internal/postgres/contract-types`
+
+Re-exports, as types only, the framework contract types, the SQL family contract types and the Postgres codec and operation types: everything a generated `contract.d.ts` imports. `defineConfig` names this module in `contract.typesModule`. Published as `@prisma/orm-postgres/contract-types`.
+
 ### `@internal/postgres/family`
 
 Re-exports the SQL family pack (the value passed as `family:` to `defineContract`).
@@ -317,6 +325,10 @@ Re-exports the Postgres target pack (the value passed as `target:` to `defineCon
 `PostgresServerlessConnection<Contract>` is `PostgresClient<Contract>` without `connect`: `sql`, `raw`, `enums`, `nativeEnums`, `toSql`, `context`, `contract` and `stack` (the same objects as on the serverless client), plus `orm`, `query(plan)`, `execute(plan)`, `runtime()`, `transaction(fn)`, `prepare(...)`, `close()` and `[Symbol.asyncDispose]`.
 
 Each `connect()` call creates a fresh `pg.Client`, connects it to the database, and wraps it in a fresh runtime. When the database refuses the connection, rejects the credentials, or does not answer within 20 seconds, `connect()` rejects with `DRIVER.CONNECTION_FAILED` and ends the `pg.Client`. No `pg.Pool` is allocated. `close()` and `[Symbol.asyncDispose]` close the runtime once, which ends its `pg.Client`. After that, `db.runtime()` throws `DRIVER.NOT_CONNECTED` ("Postgres connection is closed"). ORM queries, `db.transaction(...)` and `db.prepare(...)` go through the runtime: `close()` waits until the runtime has been idle for one turn of the event loop, then ends the `pg.Client`, and work that starts after that rejects with `DRIVER.NOT_CONNECTED` ("Runtime is closed"). A connection has one database connection, a `pg.Client`, so inside `db.transaction(async (tx) => ...)` run every query through `tx`. Reads are buffered by default. To stream on some paths only, create a second serverless client with `cursor: { batchSize }` and open connections from it only on those paths; they read through `pg-cursor` in batches. On such a connection, finish or `break` a `for await` over a read before sending another query through `db`: the cursor holds the only database connection until the loop ends, so a query inside the loop waits forever. For the same reason, an iterator started by hand with `next()` and never finished or returned holds the client query lock, and `close()` waits for it for ever, as it does for a `db.runtime().connection()` that is never released. Behind Cloudflare Hyperdrive, reads with cursors on hang, so those paths hang there and the paths whose connections come from the serverless client without the option do not.
+
+### `@internal/postgres/init`
+
+The init contribution `prisma orm init` loads after installing the package: its default export is an `InitContribution` (from `@internal/cli/init-contribution`) holding the PSL and TypeScript starter contracts, `db.ts`, the `.env.example` body, the quick reference and README (the `init-*.md` files in `src/init/`, copied into `dist/`), the quick reference for a project that keeps its Prisma 7 schema (init writes that project's config itself, around `@internal/postgres/config`, whose `prisma7Schema` export is what tells init the package takes a Prisma 7 schema), the minimum server version from `@internal/target-postgres/server-version`, and the `--probe-db` probe, which reads `SELECT version()` through `pg` and answers `version-unreadable` when the row holds no PostgreSQL version. Every module it names, such as `prisma.config.ts`'s `defineConfig` import, is this package's own published name. It imports no framework code that runs. Published as `@prisma/orm-postgres/init`.
 
 ### `@internal/postgres/static`
 

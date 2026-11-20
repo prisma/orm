@@ -1382,9 +1382,36 @@
                     "namespaceId": "public",
                     "tableName": "people"
                   }
+                },
+                {
+                  "index": {
+                    "name": "tasks_bug_assignee_person_id_idx_ce44cebc"
+                  },
+                  "source": {
+                    "columns": [
+                      "bug_assignee_person_id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "tasks"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "people"
+                  }
                 }
               ],
               "indexes": [
+                {
+                  "columns": [
+                    "bug_assignee_person_id"
+                  ],
+                  "name": "tasks_bug_assignee_person_id_idx_ce44cebc",
+                  "prefix": "tasks_bug_assignee_person_id_idx",
+                  "unique": false
+                },
                 {
                   "columns": [
                     "project_id"
@@ -1591,7 +1618,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "1376354380b2b293896ec99d3b1805587e86f558eec845c8b875881df449d0ce"
+    "storageHash": "5e1e59007251086853ee4ed0aafbb7c0a1153034d8c68e9d58c19e7c693cdbf9"
   },
   "capabilities": {
     "postgres": {

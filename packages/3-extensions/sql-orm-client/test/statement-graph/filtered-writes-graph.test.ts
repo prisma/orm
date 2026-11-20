@@ -97,21 +97,21 @@ describe('updateAll and deleteAll on a one-to-many relation in update()', () => 
     [
       'on the to-one relation Post.author',
       () => graphOf({ author: (author: Mutator) => author.deleteAll() }, 'Post'),
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       'deleteAll() nested mutation for relation "author" is only supported on to-many relations',
       { kind: 'deleteAll', relation: 'author', reason: 'to-one-relation' },
     ],
     [
       'on the to-one relation User.profile',
       () => graphOf({ profile: (profile: Mutator) => profile.updateAll({ bio: 'New' }) }),
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       'updateAll() nested mutation for relation "profile" is only supported on to-many relations',
       { kind: 'updateAll', relation: 'profile', reason: 'to-one-relation' },
     ],
     [
       'with updateAll() data that sets the field linking the children to the parent',
       () => graphOf({ posts: (posts: Mutator) => posts.updateAll({ title: 'a', userId: 2 }) }),
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       'updateAll() nested mutation for relation "posts" cannot set "userId", which links the related rows to their parent',
       { kind: 'updateAll', relation: 'posts', problem: 'parent-link-column', fields: ['userId'] },
     ],
@@ -125,7 +125,7 @@ describe('updateAll and deleteAll on a one-to-many relation in update()', () => 
               ? [{ field: 'user_id', value: 2 }]
               : [],
         }),
-      'ORM.RELATION_MUTATION_INVALID',
+      'ORM.ARGUMENT_INVALID',
       'updateAll() nested mutation for relation "posts" cannot set "userId", which links the related rows to their parent',
       { kind: 'updateAll', relation: 'posts', problem: 'parent-link-column', fields: ['userId'] },
     ],
@@ -156,7 +156,7 @@ describe('updateAll and deleteAll on a one-to-many relation in update()', () => 
           ),
         );
       },
-      'ORM.RELATION_MUTATION_UNSUPPORTED',
+      'ORM.OPERATION_UNSUPPORTED',
       'updateAll() is only supported in update() nested mutations',
       { kind: 'updateAll', relation: 'posts' },
     ],
