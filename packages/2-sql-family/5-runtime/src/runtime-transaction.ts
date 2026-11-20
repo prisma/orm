@@ -61,7 +61,6 @@ export interface TransactionRuntime {
   trackInFlight<T>(operation: () => Promise<T>): Promise<T>;
   register(queryable: SqlQueryable, transaction: OpenTransaction): void;
   unregister(queryable: SqlQueryable, transaction: OpenTransaction): void;
-  markHeld(driverTx: SqlTransaction, driverSavepoint: SqlTransaction): void;
   onConnectionReleased(connection: SqlConnection, teardown: () => Promise<void>): void;
 }
 
@@ -199,7 +198,6 @@ abstract class TransactionBase
       await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
       throw error;
     }
-    this.runtime.markHeld(this.driverTx, driverSavepoint);
     return new Savepoint(
       this.runtime,
       driverSavepoint,

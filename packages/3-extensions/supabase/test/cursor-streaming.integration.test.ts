@@ -4,6 +4,7 @@ import { SignJWT } from 'jose';
 import { Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type SupabaseDb, supabase } from '../src/exports/runtime';
+import { grantDevDatabaseSchema } from './fixtures/dev-database-grants';
 import type { Contract } from './fixtures/example-app/contract';
 import contractJson from './fixtures/example-app/contract.json' with { type: 'json' };
 import { fixtureJwt } from './fixtures/example-app/db';
@@ -11,22 +12,11 @@ import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mo
 
 const contract = contractFromJson<Contract>(contractJson);
 
-async function grantDevDatabaseSchema(connectionString: string): Promise<void> {
+async function grantSchemas(connectionString: string): Promise<void> {
   await withClient(connectionString, async (client) => {
     await client.query('GRANT USAGE ON SCHEMA auth TO service_role');
     await client.query('GRANT SELECT ON TABLE auth.users TO service_role');
-    await client.query(
-      'GRANT USAGE ON SCHEMA _prisma_dev_wal TO anon, authenticated, service_role',
-    );
-    await client.query(
-      'GRANT ALL ON ALL TABLES IN SCHEMA _prisma_dev_wal TO anon, authenticated, service_role',
-    );
-    await client.query(
-      'GRANT ALL ON ALL SEQUENCES IN SCHEMA _prisma_dev_wal TO anon, authenticated, service_role',
-    );
-    await client.query(
-      'GRANT EXECUTE ON FUNCTION _prisma_dev_wal.capture_event() TO anon, authenticated, service_role',
-    );
+    await grantDevDatabaseSchema(client);
   });
 }
 
@@ -57,12 +47,11 @@ describe('a Supabase client with cursor set, against a real Postgres', () => {
   beforeEach(async () => {
     database = await createDevDatabase();
     await withClient(database.connectionString, setUpSupabaseMockSchema);
-    await grantDevDatabaseSchema(database.connectionString);
+    await grantSchemas(database.connectionString);
     db = await supabase({
       contract,
       url: database.connectionString,
       jwtSecret: fixtureJwt,
-      verifyMarker: false,
       cursor: { batchSize: 4 },
     });
   }, timeouts.spinUpPpgDev);
@@ -151,7 +140,6 @@ describe('a Supabase client with cursor set, against a real Postgres', () => {
         contract,
         pg: pool,
         jwtSecret: fixtureJwt,
-        verifyMarker: false,
         cursor: { batchSize: 4 },
       });
       try {

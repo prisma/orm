@@ -305,6 +305,50 @@ describe('acquireRawConnection', () => {
     expect(acquireConnectionSpy).toHaveBeenCalledOnce();
   });
 
+  function pendingMarkerReader() {
+    let finishRead: () => void = () => {};
+    const readMarker = vi.fn<(queryable: SqlQueryable) => Promise<MarkerReadResult>>(
+      () =>
+        new Promise((resolve) => {
+          finishRead = () => resolve({ kind: 'absent' });
+        }),
+    );
+    return { readMarker, finishRead: () => finishRead() };
+  }
+
+  it('reads the marker through the driver before it is admitted after close() beneath an open activity', async () => {
+    const { readMarker, finishRead } = pendingMarkerReader();
+    const { runtime, driver, acquireConnectionSpy } = createTestSetup({
+      readMarker,
+      closeRefusal: 'at-once',
+    });
+    void runtime.close();
+
+    const acquiring = runtime.acquireRawConn(activityParent({ open: true }));
+    await afterIdleTurns();
+    expect(acquireConnectionSpy).not.toHaveBeenCalled();
+
+    finishRead();
+    await (await acquiring).release();
+    expect(readMarker.mock.calls).toEqual([[driver]]);
+    expect(acquireConnectionSpy).toHaveBeenCalledOnce();
+  });
+
+  it('keeps close() waiting while the marker read it starts runs', async () => {
+    const { readMarker, finishRead } = pendingMarkerReader();
+    const { runtime, driver } = createTestSetup({ readMarker });
+
+    const acquiring = runtime.acquireRawConn();
+    const closing = runtime.close();
+    expect(await settlesWithin(closing)).toBe('pending');
+    expect(driver.close).not.toHaveBeenCalled();
+
+    finishRead();
+    await (await acquiring).release();
+    await closing;
+    expect(driver.close).toHaveBeenCalledOnce();
+  });
+
   it('is refused after close() has started beneath an activity that has ended', async () => {
     const { runtime, acquireConnectionSpy } = createTestSetup({ closeRefusal: 'at-once' });
     void runtime.close();
