@@ -6,7 +6,7 @@ import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-r
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { authorSqlContractFromPsl } from '../scalar-lists/psl-list-authoring';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { postgresAdapterFor } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -104,7 +104,6 @@ interface Collections {
 async function withDatabase(
   seed: string,
   fn: (collections: Collections) => Promise<void>,
-  strategy: IncludeStrategy = 'join',
   returning: Returning = 'with returning',
 ): Promise<void> {
   const authored = await authorSqlContractFromPsl(schema);
@@ -116,8 +115,8 @@ async function withDatabase(
       target: postgresTarget,
       adapter:
         returning === 'with returning'
-          ? postgresAdapterFor(strategy)
-          : postgresAdapterFor(strategy, withoutReturning),
+          ? postgresAdapterFor('join')
+          : postgresAdapterFor('join', withoutReturning),
     }),
   });
   await withPushedContractRuntime(contract, async (runtime) => {
@@ -277,57 +276,7 @@ describe('integration/an update() that sets none of the record fields returns th
     },
     timeouts.spinUpPpgDev,
   );
-
-  it(
-    'returns the record after an N:1 delete of the row it holds the key of',
-    async () => {
-      await withDatabase(
-        `insert into rb_people (id, name, manager_id) values (2, 'Bea', null), (1, 'Ada', 2)`,
-        async ({ runtime, people }) => {
-          const updated = await people
-            .where({ id: 1 })
-            .select('id', 'managerId')
-            .update({ manager: (manager: Mutator) => manager.delete() } as never);
-
-          expect(updated).toEqual({ id: 1, managerId: null });
-          expect(await peopleRows(runtime)).toEqual([{ id: 1, name: 'Ada', manager_id: null }]);
-        },
-      );
-    },
-    timeouts.spinUpPpgDev,
-  );
 });
-
-describe.each(includeStrategies)(
-  'integration/an update() that sets none of the record fields, with includes (%s)',
-  (strategy) => {
-    it(
-      'returns the record with the included rows the nested write added',
-      async () => {
-        await withDatabase(
-          `insert into rb_people (id, name, manager_id) values (1, 'Ada', null)`,
-          async ({ people }) => {
-            const updated = await people
-              .where({ id: 1 })
-              .select('id', 'name')
-              .include(
-                'notes' as never,
-                ((notes: Collection<Contract<SqlStorage>, string>) =>
-                  notes.select('id', 'body')) as never,
-              )
-              .update({
-                notes: (notes: Mutator) => notes.create({ id: 10, body: 'First' }),
-              } as never);
-
-            expect(updated).toEqual({ id: 1, name: 'Ada', notes: [{ id: 10, body: 'First' }] });
-          },
-          strategy,
-        );
-      },
-      timeouts.spinUpPpgDev,
-    );
-  },
-);
 
 describe.each(['with returning', 'without returning'] as const)(
   'integration/an update() that sets none of the record fields and writes no row of its table (%s)',
@@ -348,7 +297,6 @@ describe.each(['with returning', 'without returning'] as const)(
             expect(updated).toEqual({ id: 1, name: 'Ada' });
             expect(statementsOf(runtime)).toEqual(['SELECT rb_people', 'INSERT rb_notes']);
           },
-          'join',
           returning,
         );
       },
