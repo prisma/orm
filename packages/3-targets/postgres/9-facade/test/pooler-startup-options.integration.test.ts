@@ -7,8 +7,8 @@ import postgresTarget from '@internal/target-postgres/control';
 import {
   createDevDatabase,
   type DevDatabase,
-  type PoolerStandIn,
-  startPoolerStandIn,
+  type PrismaPostgresPoolerStandIn,
+  startPrismaPostgresPoolerStandIn,
   timeouts,
 } from '@repo/test-utils';
 import pg from 'pg';
@@ -22,13 +22,13 @@ import contractJson from './fixtures/generated/contract.json' with { type: 'json
 const contract = contractFromJson<Contract>(contractJson);
 const options = { contract, verifyMarker: false as const };
 
-describe('a pooler that accepts only DateStyle, TimeZone and extra_float_digits as startup options', () => {
+describe('a stand-in for the Prisma Postgres pooler, which accepts only DateStyle, TimeZone and extra_float_digits as startup options', () => {
   let database: DevDatabase;
-  let pooler: PoolerStandIn;
+  let pooler: PrismaPostgresPoolerStandIn;
 
   beforeAll(async () => {
     database = await createDevDatabase();
-    pooler = await startPoolerStandIn(database.connectionString);
+    pooler = await startPrismaPostgresPoolerStandIn(database.connectionString);
   }, timeouts.spinUpPpgDev);
 
   afterAll(async () => {

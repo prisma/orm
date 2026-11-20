@@ -24,7 +24,7 @@ function parametersOf(message: Buffer): StartupParameters {
 }
 
 /** The settings the Prisma Postgres pooler accepts as `-c` startup options. It refuses a connection whose startup options name any other. */
-export const POOLER_STARTUP_SETTINGS: readonly string[] = [
+export const PRISMA_POSTGRES_POOLER_STARTUP_SETTINGS: readonly string[] = [
   'DateStyle',
   'TimeZone',
   'extra_float_digits',
@@ -33,16 +33,39 @@ export const POOLER_STARTUP_SETTINGS: readonly string[] = [
 const POOLER_REFUSAL =
   'Failed to connect to upstream database. Please contact Prisma support if the problem persists.';
 
-/** A server that stands in for the Prisma Postgres pooler: it refuses a startup whose options set anything outside {@link POOLER_STARTUP_SETTINGS}, and passes every other connection through to the upstream database. */
-export interface PoolerStandIn {
+/** A server that stands in for the Prisma Postgres pooler: it refuses a startup whose options set anything outside {@link PRISMA_POSTGRES_POOLER_STARTUP_SETTINGS}, and passes every other connection through to the upstream database. */
+export interface PrismaPostgresPoolerStandIn {
   /** The upstream URL, pointed at the stand-in. */
   readonly url: string;
   close(): Promise<void>;
 }
 
+/** Splits startup options into words as PostgreSQL does: whitespace separates words, and a backslash makes the next character part of the word. */
+function startupOptionWords(options: string): string[] {
+  const words: string[] = [];
+  let word: string | undefined;
+  let escaped = false;
+  for (const character of options) {
+    if (escaped) {
+      word = (word ?? '') + character;
+      escaped = false;
+    } else if (character === '\\') {
+      word ??= '';
+      escaped = true;
+    } else if (/\s/.test(character)) {
+      if (word !== undefined) words.push(word);
+      word = undefined;
+    } else {
+      word = (word ?? '') + character;
+    }
+  }
+  if (word !== undefined) words.push(word);
+  return words;
+}
+
 function settingNamesOf(options: string): string[] {
   const names: string[] = [];
-  const words = options.split(/\s+/).filter((word) => word !== '');
+  const words = startupOptionWords(options);
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index] ?? '';
     const assignment = word === '-c' ? words[++index] : word.replace(/^(-c|--)/, '');
@@ -51,11 +74,12 @@ function settingNamesOf(options: string): string[] {
   return names;
 }
 
-function refusesStartup(parameters: StartupParameters): boolean {
-  const allowed = new Set(POOLER_STARTUP_SETTINGS.map((name) => name.toLowerCase()));
-  return settingNamesOf(parameters['options'] ?? '').some(
-    (name) => !allowed.has(name.toLowerCase()),
+/** Whether the Prisma Postgres pooler refuses a connection with these startup options: whether they set anything outside {@link PRISMA_POSTGRES_POOLER_STARTUP_SETTINGS}. */
+export function prismaPostgresPoolerRefusesOptions(options: string): boolean {
+  const allowed = new Set(
+    PRISMA_POSTGRES_POOLER_STARTUP_SETTINGS.map((name) => name.toLowerCase()),
   );
+  return settingNamesOf(options).some((name) => !allowed.has(name.toLowerCase()));
 }
 
 function fatalErrorResponse(message: string): Buffer {
@@ -66,7 +90,9 @@ function fatalErrorResponse(message: string): Buffer {
   return Buffer.concat([header, fields]);
 }
 
-export async function startPoolerStandIn(upstreamUrl: string): Promise<PoolerStandIn> {
+export async function startPrismaPostgresPoolerStandIn(
+  upstreamUrl: string,
+): Promise<PrismaPostgresPoolerStandIn> {
   const upstream = new URL(upstreamUrl);
   const sockets = new Set<Socket>();
   const track = (socket: Socket) => {
@@ -89,7 +115,7 @@ export async function startPoolerStandIn(upstreamUrl: string): Promise<PoolerSta
           continue;
         }
         client.off('data', onData);
-        if (refusesStartup(parametersOf(message))) {
+        if (prismaPostgresPoolerRefusesOptions(parametersOf(message)['options'] ?? '')) {
           client.end(fatalErrorResponse(POOLER_REFUSAL));
           return;
         }

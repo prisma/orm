@@ -1,3 +1,4 @@
+import { PRISMA_POSTGRES_POOLER_STARTUP_SETTINGS } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { postgresRenderCheckExpressions } from '../src/core/check-expressions';
 import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
@@ -27,5 +28,13 @@ describe('postgresTargetDescriptorMeta', () => {
       postgresTargetDescriptorMeta.sessionSettings,
       postgresRuntimeTargetDescriptor.sessionSettings,
     ]).toEqual([settings, settings]);
+  });
+
+  it('declares only session settings the Prisma Postgres pooler accepts as startup options', () => {
+    expect(
+      Object.keys(postgresRuntimeTargetDescriptor.sessionSettings ?? {}).filter(
+        (name) => !PRISMA_POSTGRES_POOLER_STARTUP_SETTINGS.includes(name),
+      ),
+    ).toEqual([]);
   });
 });

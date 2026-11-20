@@ -1,8 +1,6 @@
 import type { SqlStorage } from '@internal/sql-contract/types';
-import postgresTarget from '@internal/target-postgres/runtime';
 import {
   createContract,
-  POOLER_STARTUP_SETTINGS,
   type StartupParameterRecorder,
   startStartupParameterRecorder,
   timeouts,
@@ -12,16 +10,6 @@ import postgres from '../src/runtime/postgres';
 import postgresServerless from '../src/runtime/postgres-serverless';
 
 const contract = createContract<SqlStorage>();
-
-describe('the session settings of the PostgreSQL target', () => {
-  it('are all settings the Prisma Postgres pooler accepts as startup options', () => {
-    const declared = Object.keys(postgresTarget.sessionSettings ?? {});
-    expect({
-      declared,
-      refusedByThePooler: declared.filter((name) => !POOLER_STARTUP_SETTINGS.includes(name)),
-    }).toEqual({ declared: ['DateStyle'], refusedByThePooler: [] });
-  });
-});
 
 describe('a connection the client opens from a URL', () => {
   let recorder: StartupParameterRecorder;
