@@ -324,10 +324,10 @@ export async function executeMigrateShowPlan(
         unreachableSpaceFailure(
           {
             spaceId: outcome.spaceId,
-            marker:
+            fromHash:
               outcome.kind === 'marker-outside-graph'
-                ? { storageHash: outcome.markerHash, invariants: [] }
-                : outcome.liveMarker,
+                ? outcome.markerHash
+                : contractHashAtMarker(outcome.liveMarker),
             targetHash: outcome.targetHash,
           },
           {

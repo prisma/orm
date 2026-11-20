@@ -238,7 +238,7 @@ describe('executeMigrate with no path to the target', () => {
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
       buildPathNotFoundFailure(
         'app',
-        markerAt(APP_HEAD),
+        APP_HEAD,
         ELSEWHERE,
         ELSEWHERE,
         invocationIn(projectDir),
@@ -254,7 +254,7 @@ describe('executeMigrate with no path to the target', () => {
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
       buildPathNotFoundFailure(
         'app',
-        markerAt(ELSEWHERE),
+        ELSEWHERE,
         APP_HEAD,
         undefined,
         invocationIn(projectDir),
@@ -274,7 +274,7 @@ describe('executeMigrate with no path to the target', () => {
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
       buildPathNotFoundFailure(
         'app',
-        markerAt(APP_HEAD),
+        APP_HEAD,
         ELSEWHERE,
         'production',
         invocationIn(projectDir),
@@ -290,7 +290,7 @@ describe('executeMigrate with no path to the target', () => {
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
       buildPathNotFoundFailure(
         'app',
-        null,
+        EMPTY_CONTRACT_HASH,
         ELSEWHERE,
         ELSEWHERE,
         invocationIn(projectDir),
@@ -300,7 +300,7 @@ describe('executeMigrate with no path to the target', () => {
 
   it('advises installing another version of the extension when an extension space has no path', () => {
     const failure = unreachableSpaceFailure(
-      { spaceId: 'pgvector', marker: markerAt(DELETED), targetHash: ELSEWHERE },
+      { spaceId: 'pgvector', fromHash: DELETED, targetHash: ELSEWHERE },
       {
         appSpaceId: 'app',
         target: { kind: 'ref', ref: { name: 'production', hash: APP_HEAD, invariants: [] } },

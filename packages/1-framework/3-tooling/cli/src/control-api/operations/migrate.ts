@@ -252,7 +252,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
         unreachableSpaceFailure(
           {
             spaceId: outcome.spaceId,
-            marker: outcome.liveMarker,
+            fromHash: contractHashAtMarker(outcome.liveMarker),
             targetHash: outcome.targetHash,
           },
           { appSpaceId: aggregate.app.spaceId, target, invocation: options.invocation },
@@ -877,14 +877,11 @@ function buildSuccess(args: BuildSuccessArgs): MigrateSuccess {
 /**
  * `MIGRATION.PATH_UNREACHABLE` for a space with no path from its marker to its target. The
  * application space is advised to plan the missing migration; an extension space's migrations come
- * with the extension, so its advice is to install a version that has them.
+ * with the extension, so its advice is to install a version that has them. `fromHash` is the
+ * contract the path would start from: the one the marker names, or an offline `--from`.
  */
 export function unreachableSpaceFailure(
-  space: {
-    readonly spaceId: string;
-    readonly marker: ContractMarkerRecordLike | null;
-    readonly targetHash: string;
-  },
+  space: { readonly spaceId: string; readonly fromHash: string; readonly targetHash: string },
   run: {
     readonly appSpaceId: string;
     readonly target: MigrateTarget | undefined;
@@ -894,7 +891,7 @@ export function unreachableSpaceFailure(
   if (space.spaceId === run.appSpaceId) {
     return buildPathNotFoundFailure(
       space.spaceId,
-      space.marker,
+      space.fromHash,
       space.targetHash,
       toArgumentFor(run.target),
       run.invocation,
@@ -902,7 +899,7 @@ export function unreachableSpaceFailure(
   }
   return errorExtensionPathUnreachable({
     spaceId: space.spaceId,
-    fromHash: space.marker?.storageHash ?? EMPTY_CONTRACT_HASH,
+    fromHash: space.fromHash,
     targetHash: space.targetHash,
     command: 'db migrate',
     invocation: run.invocation,
@@ -954,25 +951,16 @@ export function buildNeverPlannedFailure(
  */
 export function buildPathNotFoundFailure(
   spaceId: string,
-  marker: ContractMarkerRecordLike | null,
+  fromHash: string,
   targetHash: string,
   toArgument: string | undefined,
   invocation: CliInvocation,
 ): CliStructuredError {
-  const fromHash = marker?.storageHash ?? EMPTY_CONTRACT_HASH;
-  const fromText = marker === null ? 'the empty contract' : `the current state "${fromHash}"`;
-  // The app-case phrasing names the user-visible condition (a
-  // contract has been emitted that no on-disk migration reaches) so
-  // the error reads naturally for the app space. Extension spaces
-  // see the same condition expressed against the offending space.
-  const summary =
-    spaceId === 'app'
-      ? 'Current contract has no planned migration path'
-      : `Current contract has no planned migration path for contract space "${spaceId}"`;
+  const fromText = fromHash === EMPTY_CONTRACT_HASH ? 'the empty contract' : `"${fromHash}"`;
   const meta: PathUnreachableMeta = { spaceId, fromHash, targetHash, kind: 'pathUnreachable' };
   return errorPathUnreachable(
     {
-      summary,
+      summary: 'Current contract has no planned migration path',
       why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
       meta,
     },

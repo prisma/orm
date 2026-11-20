@@ -10,7 +10,7 @@ import {
   type PathUnreachableAdvice,
 } from './cli-errors';
 import { chooseAction, runCommandAction } from './next-actions';
-import { type CliInvocation, cliCommand } from './printed-command';
+import { type CliInvocation, cliCommand, dbMigrateRerun } from './printed-command';
 
 /** An extension space a command could not bring to its head, and the command that tried. */
 export interface UnplannableExtensionSpace {
@@ -33,7 +33,10 @@ const INSTALL_MATCHING =
 
 /** The way out for an extension space: only another version of the extension changes its migrations. */
 function extensionAdvice(space: UnplannableExtensionSpace): PathUnreachableAdvice {
-  const rerun = cliCommand(space.invocation, space.command, space.invocation.rerunArgs ?? []);
+  const rerun =
+    space.command === 'db migrate'
+      ? dbMigrateRerun(space.invocation)
+      : cliCommand(space.invocation, space.command);
   const list = cliCommand(space.invocation, 'migration list', ['--space', space.spaceId]);
   return {
     fix: `The migrations of extension space "${space.spaceId}" come with the extension. ${INSTALL_MATCHING}, then run \`${rerun}\` again. List the space's migrations with \`${list}\`.`,

@@ -6,6 +6,7 @@ import {
   type SchemaDiffIssue,
   schemaCheckWhy,
 } from '@internal/framework-components/control';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
@@ -428,7 +429,7 @@ describe('migrate', () => {
     const cwd = await buildProject();
     mocks.migrate.mockResolvedValue(
       notOk(
-        buildPathNotFoundFailure('app', null, C2, C2, {
+        buildPathNotFoundFailure('app', EMPTY_CONTRACT_HASH, C2, C2, {
           cwd,
           configPath: undefined,
           dbGiven: false,

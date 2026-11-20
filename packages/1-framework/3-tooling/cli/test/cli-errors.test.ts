@@ -94,13 +94,7 @@ describe('errorPathUnreachable', () => {
     // Drive the real failure producer so the `why` text is the one users see,
     // not a stub — then assert it composes with the fix without both
     // independently telling the user to run `migration plan`.
-    const failure = buildPathNotFoundFailure(
-      'app',
-      { storageHash: fromHash, invariants: [] },
-      targetHash,
-      targetHash,
-      INVOCATION,
-    );
+    const failure = buildPathNotFoundFailure('app', fromHash, targetHash, targetHash, INVOCATION);
     const envelope = failure.toEnvelope();
 
     // why: names both endpoints + the absence of an edge; does NOT itself
@@ -122,7 +116,7 @@ describe('errorPathUnreachable', () => {
   it('omits --from in the fix and names the empty contract when the space has no marker', () => {
     const envelope = buildPathNotFoundFailure(
       'app',
-      null,
+      EMPTY_CONTRACT_HASH,
       targetHash,
       targetHash,
       INVOCATION,
@@ -135,13 +129,7 @@ describe('errorPathUnreachable', () => {
   });
 
   it('leaves --to out of both steps when the target is the emitted contract, which no migration or ref names yet', () => {
-    const error = buildPathNotFoundFailure(
-      'app',
-      { storageHash: fromHash, invariants: [] },
-      targetHash,
-      undefined,
-      INVOCATION,
-    );
+    const error = buildPathNotFoundFailure('app', fromHash, targetHash, undefined, INVOCATION);
 
     expect(error.nextActions?.slice(0, 2)).toEqual([
       {
@@ -167,13 +155,7 @@ describe('errorPathUnreachable', () => {
   });
 
   it('names a ref target by its name in both steps', () => {
-    const error = buildPathNotFoundFailure(
-      'app',
-      { storageHash: fromHash, invariants: [] },
-      targetHash,
-      'production',
-      INVOCATION,
-    );
+    const error = buildPathNotFoundFailure('app', fromHash, targetHash, 'production', INVOCATION);
 
     expect(error.nextActions?.slice(0, 2)).toEqual([
       {
@@ -186,7 +168,13 @@ describe('errorPathUnreachable', () => {
   });
 
   it('leaves out --from and --to when the space has no marker and the target is the emitted contract', () => {
-    const error = buildPathNotFoundFailure('app', null, targetHash, undefined, INVOCATION);
+    const error = buildPathNotFoundFailure(
+      'app',
+      EMPTY_CONTRACT_HASH,
+      targetHash,
+      undefined,
+      INVOCATION,
+    );
 
     expect(error.nextActions?.slice(0, 2)).toEqual([
       {
@@ -199,13 +187,11 @@ describe('errorPathUnreachable', () => {
   });
 
   it('repeats the --config and --db the CLI was given, so the commands run as printed', () => {
-    const error = buildPathNotFoundFailure(
-      'app',
-      { storageHash: fromHash, invariants: [] },
-      targetHash,
-      undefined,
-      { cwd: '/project', configPath: 'apps/api/prisma.config.ts', dbGiven: true },
-    );
+    const error = buildPathNotFoundFailure('app', fromHash, targetHash, undefined, {
+      cwd: '/project',
+      configPath: 'apps/api/prisma.config.ts',
+      dbGiven: true,
+    });
 
     expect(
       error.nextActions?.map((action) => (action.kind === 'run-command' ? action.command : null)),
@@ -220,13 +206,10 @@ describe('errorPathUnreachable', () => {
   });
 
   it('applies with the db migrate the user ran, flags included', () => {
-    const error = buildPathNotFoundFailure(
-      'app',
-      { storageHash: fromHash, invariants: [] },
-      targetHash,
-      'production',
-      { ...INVOCATION, rerunArgs: ['--to', 'production', '--permit-policy-change'] },
-    );
+    const error = buildPathNotFoundFailure('app', fromHash, targetHash, 'production', {
+      ...INVOCATION,
+      rerunArgs: ['--to', 'production', '--permit-policy-change'],
+    });
 
     expect(error.nextActions?.slice(0, 2)).toEqual([
       {
@@ -239,6 +222,22 @@ describe('errorPathUnreachable', () => {
         label: 'Apply it',
         command: '{bin} db migrate --to production --permit-policy-change',
       },
+    ]);
+  });
+
+  it('applies with a bare db migrate when the space has no migrations, whatever --to the run had', () => {
+    const error = buildNeverPlannedFailure('app', targetHash, 'migrations', {
+      ...INVOCATION,
+      rerunArgs: ['--to', 'production'],
+    });
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: '{bin} migration plan --name <slug>',
+      },
+      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
     ]);
   });
 

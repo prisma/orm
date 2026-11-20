@@ -3,6 +3,7 @@ import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildProject,
+  C1,
   C2,
   harness,
   mocks,
@@ -55,6 +56,52 @@ describe('db migrate --show, a ref that declares policies', () => {
     );
 
     expect(run.exitCode).toBe(0);
+  });
+});
+
+describe('db migrate --show with no path to the target', () => {
+  it('advises applying with the flags of the run', async () => {
+    const cwd = await buildProject();
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
+      hash: C1,
+      invariants: [],
+    });
+
+    const run = await harness(ormConfig(cwd)).run(
+      [
+        'db',
+        'migrate',
+        '--show',
+        '--from',
+        C2,
+        '--to',
+        'production',
+        '--permit-policy-change',
+        '--json',
+      ],
+      { cwd },
+    );
+
+    expect(run.json.at(-1)).toMatchObject({
+      envelope: {
+        ok: false,
+        error: {
+          code: 'MIGRATION.PATH_UNREACHABLE',
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: 'Plan the missing edge',
+              command: expect.stringContaining(
+                `migration plan --from ${C2} --to production --name <slug>`,
+              ),
+            }),
+            expect.objectContaining({
+              label: 'Apply it',
+              command: expect.stringContaining('db migrate --to production --permit-policy-change'),
+            }),
+          ]),
+        },
+      },
+    });
   });
 });
 
