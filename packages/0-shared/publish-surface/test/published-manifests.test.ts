@@ -21,19 +21,42 @@ function manifestOf(dir: string): { readonly exports: object; readonly keywords:
   };
 }
 
+function listsKeyword(dir: string): boolean {
+  const { keywords } = manifestOf(dir);
+  return Array.isArray(keywords) && keywords.includes(INIT_KEYWORD);
+}
+
+/** The database packages, and any other package init could load an init contribution from. */
+const targetShells = [...publicShells].filter(
+  ([, shell]) => shell.kind === 'facade' || Object.hasOwn(manifestOf(shell.dir).exports, './init'),
+);
+
 describe('published manifests', () => {
-  it('list the keyword init requires on every package that exports ./init', () => {
-    const withInit = [...publicShells].filter(([, shell]) =>
-      Object.hasOwn(manifestOf(shell.dir).exports, './init'),
+  it('cover every database package', () => {
+    expect(targetShells.map(([name]) => name)).toEqual(
+      expect.arrayContaining([
+        '@prisma/orm-postgres',
+        '@prisma/orm-mongo',
+        '@prisma/orm-sqlite',
+        '@prisma/orm-mysql',
+        '@prisma/orm-mariadb',
+      ]),
     );
-    const missing = withInit
-      .filter(([, shell]) => {
-        const { keywords } = manifestOf(shell.dir);
-        return !(Array.isArray(keywords) && keywords.includes(INIT_KEYWORD));
-      })
+  });
+
+  it('list the keyword init requires on every database package', () => {
+    const missing = targetShells
+      .filter(([, shell]) => !listsKeyword(shell.dir))
       .map(([name]) => name);
 
-    expect(withInit.length).toBeGreaterThan(0);
+    expect(missing).toEqual([]);
+  });
+
+  it('list the keyword on each internal package a database package is built from', () => {
+    const missing = targetShells.flatMap(([, shell]) =>
+      shell.packages.filter((pkg) => !listsKeyword(pkg.dir)).map((pkg) => pkg.name),
+    );
+
     expect(missing).toEqual([]);
   });
 });
