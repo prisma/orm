@@ -26,7 +26,7 @@ pnpm lint:deps              # when imports/exports/architectural structure chang
 pnpm --filter <pkg> test    # each package whose source or tests changed
 # when changes affect PGlite / PG / mongo paths, the emit / migrate / run cycle, or a command's behaviour: the integration and e2e files that cover them (F44)
 pnpm fixtures:check         # when IR / emitter / serialiser changes
-pnpm --filter <pkg> test --coverage   # every package whose source changed, shared ones included: CI's Coverage check enforces each package's own thresholds
+pnpm --filter <pkg> test --coverage   # every package whose source or tests changed, shared ones included: CI's Coverage check enforces each package's own thresholds
 pnpm check:upgrade-coverage --mode pr --prev <PR base sha> --head HEAD   # when packages/3-extensions/** or examples/** change
 ```
 

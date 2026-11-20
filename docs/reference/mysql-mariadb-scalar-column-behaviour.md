@@ -68,8 +68,9 @@ On MariaDB a `json` column has a row in `information_schema.check_constraints` w
 
 | Column | Primary key / unique without a prefix length | Equality and ordering |
 | --- | --- | --- |
-| `int`, `bigint`, `double`, `decimal`, `varchar(191)`, `tinyint(1)` | Both allowed, both servers. | Exact, given the parameter forms in section 2. |
-| `float` | Both allowed. | Ordering works; equality with a number parameter never matches unless it is `CAST(? AS FLOAT)`. |
+| `int`, `bigint`, `double`, `decimal`, `tinyint(1)` | Both allowed, both servers. | Exact, given the parameter forms in section 2. |
+| `varchar(191)` | Both allowed, both servers. | By the column's collation, as the `text` row below describes: case-insensitive on both servers with their default collations. |
+| `float` | Both allowed. | Ordering works; equality with a number parameter matches only a value a `float` holds exactly, such as `1`; `0.1` matches no row unless the parameter is `CAST(? AS FLOAT)`, because the parameter is compared as a double. |
 | `text`, `longblob` | Primary key refused on both (error 1170). Unique refused on MySQL; allowed on MariaDB (a hash-based long unique). | `longblob` compares and orders bytewise on both (empty < `00` < `0000` < `41` < `61` < `FF`). `varchar` and `text` compare case-insensitively on both; trailing spaces are ignored on MariaDB (`utf8mb4_general_ci`, a PAD SPACE collation) and significant on MySQL (`utf8mb4_0900_ai_ci`, NO PAD). |
 | `json` | MySQL: neither (error 3152, JSON is indexed only through generated columns). MariaDB: primary key refused, unique allowed. | MySQL: `v = ?` with a string compares the JSON value with a JSON string, so an object never matches; `v = CAST(? AS JSON)` compares JSON values (key order ignored, `1` = `1.0`); ordering is MySQL's JSON order. `JSON_EQUALS` does not exist. MariaDB: `v = ?` compares the stored text, so key order and spacing matter; `JSON_EQUALS(v, ?)` compares values but, in a `WHERE`, also matched the SQL `NULL` row (it returns `NULL` for that row in a select list), so it needs `v IS NOT NULL AND`. |
 | `tinyint(1)` with 0, 1, 2, -1 stored | | `v = TRUE`, `v = ?` with `true` and `v = 1` match only `1`; `WHERE v` and `v IS TRUE` match `1`, `2` and `-1`. Both. |
@@ -84,7 +85,7 @@ On MariaDB a `json` column has a row in `information_schema.check_constraints` w
 | `double` | Shortest round-trip number; negative zero as `-0.0` | same, negative zero as `0` | the column |
 | `decimal` | JSON number with every digit and the scale's zeros (`1.500000000000000000000000000000`), which `JSON.parse` rounds | same | `CAST(v AS CHAR)` |
 | `varchar`, `text` | JSON string | same | the column |
-| `tinyint(1)` | JSON number as stored (`2` stays `2`) | same | the column, or `v <> 0` for JSON `true`/`false` (`NULL` stays `null`) |
+| `tinyint(1)` | JSON number as stored (`2` stays `2`) | same | the column. `v <> 0` gives JSON `true`/`false` (`NULL` stays `null`) but is lossy: a stored `2` and a stored `1` both become `true` |
 | `longblob` | The string `"base64:type251:AP8="` | Raw bytes inside the string, not valid UTF-8; the whole document comes back as bytes | `TO_BASE64(v)` gives plain base64 on both |
 | `json` | Nested as a JSON document, normalised as in section 1 | Nested as a document, verbatim | the column on both |
 
