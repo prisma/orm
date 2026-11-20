@@ -8,6 +8,7 @@ import {
   refuseUnusedConsents,
 } from '../../../src/control-api/statements/plan-questions';
 import { promptPlanQuestions } from '../../../src/orm/plan-question-prompt';
+import { textsOf } from './plan-question-fixtures';
 import { contractOf } from './statement-fixtures';
 
 const origin = contractOf({
@@ -83,7 +84,7 @@ describe('--delete with a namespace of the origin contract', () => {
     ).toBe(true);
   });
 
-  it('says once, on the first question about the removed namespace, that --delete of it answers them all', async () => {
+  it('says once, on the first question about the removed namespace, that --delete of it answers them all, and does not say its models were removed', async () => {
     const questions: string[] = [];
     await askPlanQuestions({
       plan,
@@ -96,15 +97,15 @@ describe('--delete with a namespace of the origin contract', () => {
       originKnown: true,
       destination,
       answer: async (batch) => {
-        questions.push(...batch.map(({ question }) => question));
+        questions.push(...textsOf(batch).prompts);
         return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
       },
       replan: async () => ok(plan),
     });
 
     expect(questions).toEqual([
-      'Removing model "billing.Invoice" would delete its data.\nThe plan would run: Drop table "invoice".\nThe destination contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go.',
-      'Removing model "billing.Receipt" would delete its data.\nThe plan would run: Drop table "receipt".\nrename keeps its data under the new name; delete lets its data go.',
+      'This change would delete the data of model "billing.Invoice".\nThe operation of the plan that does this: Drop table "invoice".\nThe contract no longer has namespace "billing".\nrename works once the contract has the model under its new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go.',
+      'This change would delete the data of model "billing.Receipt".\nThe operation of the plan that does this: Drop table "receipt".\nrename works once the contract has the model under its new name; delete lets its data go.',
     ]);
   });
 
@@ -125,7 +126,7 @@ describe('--delete with a namespace of the origin contract', () => {
       originKnown: true,
       destination: to,
       answer: async (batch) => {
-        questions.push(...batch.map(({ question }) => question));
+        questions.push(...textsOf(batch).prompts);
         return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
       },
       replan: async () => ok(withAdded),
@@ -140,7 +141,7 @@ describe('--delete with a namespace of the origin contract', () => {
     });
 
     expect(await firstQuestion(renamed, ['finance'])).toBe(
-      'Removing model "billing.Invoice" would delete its data.\nThe plan would run: Drop table "invoice".\nThe destination contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:finance keeps the data of namespace "billing" under namespace "finance".',
+      'This change would delete the data of model "billing.Invoice".\nThe operation of the plan that does this: Drop table "invoice".\nThe contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:finance keeps the data of namespace "billing" under namespace "finance".',
     );
   });
 
@@ -152,7 +153,7 @@ describe('--delete with a namespace of the origin contract', () => {
     });
 
     expect(await firstQuestion(renamed, ['finance', 'ledger'])).toBe(
-      'Removing model "billing.Invoice" would delete its data.\nThe plan would run: Drop table "invoice".\nThe destination contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:<new namespace> keeps the data of namespace "billing" under namespace "finance" or "ledger".',
+      'This change would delete the data of model "billing.Invoice".\nThe operation of the plan that does this: Drop table "invoice".\nThe contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:<new namespace> keeps the data of namespace "billing" under namespace "finance" or "ledger".',
     );
   });
 
@@ -447,7 +448,7 @@ describe('the namespaces the planner reports', () => {
       originKnown: true,
       destination,
       answer: async (batch) => {
-        questions.push(...batch.map(({ question }) => question));
+        questions.push(...textsOf(batch).prompts);
         return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
       },
       replan: async () => ok(notRemoved),

@@ -194,7 +194,7 @@ function namespaceAnswerLines(result: MigrationCommandResult): readonly { label:
   });
 }
 
-/** The entries a dry run lists, one group per answer: a `--delete` answers every operation of its subject, an `--allow` one operation. */
+/** The entries a dry run lists, one group per flag: a `--delete` or an `--allow` answers every operation of its subject. */
 function answerGroups<TEntry extends { readonly text: string; readonly operationIndex: number }>(
   entries: readonly { readonly entry: TEntry; readonly verb: 'delete' | 'allow' }[],
 ): readonly {
@@ -203,8 +203,8 @@ function answerGroups<TEntry extends { readonly text: string; readonly operation
   readonly entries: readonly TEntry[];
 }[] {
   const groups = new Map<string, { verb: 'delete' | 'allow'; text: string; entries: TEntry[] }>();
-  entries.forEach(({ entry, verb }, index) => {
-    const key = verb === 'delete' ? `delete ${entry.text}` : `allow ${index}`;
+  entries.forEach(({ entry, verb }) => {
+    const key = `${verb} ${entry.text}`;
     const group = groups.get(key) ?? { verb, text: entry.text, entries: [] };
     group.entries.push(entry);
     groups.set(key, group);

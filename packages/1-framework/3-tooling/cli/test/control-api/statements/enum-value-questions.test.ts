@@ -1,6 +1,7 @@
 import { asNamespaceId } from '@internal/contract/types';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { questionText } from '../../../src/control-api/statements/plan-question-text';
 import {
   askPlanQuestions,
   consentDescription,
@@ -59,10 +60,13 @@ describe('a question about an enum value', () => {
   it('names the value through its enum, and offers to rename it to the one new member, or delete it', async () => {
     const [question] = await questionsOf();
 
-    expect(question).toMatchObject({
+    expect({
+      ...question,
+      question: question === undefined ? undefined : questionText(question),
+    }).toMatchObject({
       subject: 'Status.ARCHIVED',
       question:
-        'Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.\nThe plan would run: Change values in "Task"."status".\nrename keeps it in the data under the new name; delete removes it from the data.',
+        'Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.\nThe operation of the plan that does this: Change values in "Task"."status".\nrename keeps it in the data under the new name; delete removes it from the data.',
       verbs: ['rename', 'delete'],
       forms: { rename: 'Status.ARCHIVED:Status.RETIRED' },
     });
@@ -113,11 +117,11 @@ describe('a question about an enum value', () => {
       replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
-    expect(asked.map(({ subject, question }) => ({ subject, question }))).toEqual([
+    expect(asked.map((each) => ({ subject: each.subject, question: questionText(each) }))).toEqual([
       {
         subject: 'Status.ARCHIVED',
         question:
-          'Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.\nThe plan would run:\n- Remove value "archived" from column "status" of "task"\n- Remove value "archived" from column "tags" of "note"\n- Remove value "archived" at path "$[*].meta.status" in column "visits" of "ticket"\nrename keeps it in the data under the new name; delete removes it from the data.',
+          'Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.\nThe operations of the plan that do this:\n- Remove value "archived" from column "status" of "task"\n- Remove value "archived" from column "tags" of "note"\n- Remove value "archived" at path "$[*].meta.status" in column "visits" of "ticket"\nrename keeps it in the data under the new name; delete removes it from the data.',
       },
     ]);
   });
@@ -165,6 +169,7 @@ describe('a question about an enum value', () => {
         ways: [
           `Keep ${subject}: ${edits.map(({ remove, replaceWith }) => `${remove} -> ${replaceWith}`).join('; ')}.`,
         ],
+        waysGiveDelete: false,
       }),
       answer: async (batch) => {
         asked.push(...batch);
@@ -173,11 +178,11 @@ describe('a question about an enum value', () => {
       replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
-    expect(asked).toMatchObject([
+    expect(asked.map((each) => ({ ...each, question: questionText(each) }))).toMatchObject([
       {
         verbs: ['delete'],
         question:
-          'This change would remove the stored value of enum value "Status.ARCHIVED" from the data that holds it.\nThe plan would run: Remove value "archived".\nDelete loses it.\nKeep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).\ndelete removes it from the data.',
+          'This change would remove the stored value of enum value "Status.ARCHIVED" from the data that holds it.\nThe operation of the plan that does this: Remove value "archived".\nDelete loses it.\nKeep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).\ndelete removes it from the data.',
         keepDataWays: [
           'Keep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).',
         ],
@@ -229,6 +234,7 @@ describe('a question about an enum value', () => {
         ways: [
           `Keep ${subject} with ${edits.length} edits among ${subjects.map(({ text }) => text).join(', ')}.`,
         ],
+        waysGiveDelete: false,
       }),
       answer: async (batch) => {
         asked.push(...batch);
@@ -246,7 +252,7 @@ describe('a question about an enum value', () => {
         subject: 'Status.OPEN',
         keepDataWays: ['Keep Status.OPEN with 1 edits among Status.ARCHIVED, Status.OPEN.'],
       },
-      { subject: 'Status.OLD', keepDataWays: undefined },
+      { subject: 'Status.OLD', keepDataWays: [] },
     ]);
   });
 
@@ -355,7 +361,7 @@ describe("an enum member's planner advice beside the command's own route", () =>
       origin,
       originKnown: true,
       destination,
-      keepDataEditAdvice: () => ({ lead: undefined, ways: commandWays }),
+      keepDataEditAdvice: () => ({ lead: undefined, ways: commandWays, waysGiveDelete: false }),
       answer: async (batch) => {
         asked.push(...batch);
         return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
@@ -370,9 +376,10 @@ describe("an enum member's planner advice beside the command's own route", () =>
     members: readonly string[],
     commandWays: readonly string[],
   ) {
-    return (await askedOf(BEFORE, destination, members, commandWays)).map(
-      ({ subject, question }) => ({ subject, planner: question.includes('Planner advice') }),
-    );
+    return (await askedOf(BEFORE, destination, members, commandWays)).map((each) => ({
+      subject: each.subject,
+      planner: questionText(each).includes('Planner advice'),
+    }));
   }
 
   it('leaves out the planner advice for members that swap stored values when the command gives its own route', async () => {
@@ -413,10 +420,10 @@ describe("an enum member's planner advice beside the command's own route", () =>
       ['Two runs.'],
     );
     expect(
-      asked.map(({ subject, question }) => ({
-        subject,
-        planner: question.includes('Planner advice'),
-        command: question.includes('Two runs.'),
+      asked.map((each) => ({
+        subject: each.subject,
+        planner: questionText(each).includes('Planner advice'),
+        command: questionText(each).includes('Two runs.'),
       })),
     ).toEqual([
       { subject: 'Status.ACTIVE', planner: true, command: false },

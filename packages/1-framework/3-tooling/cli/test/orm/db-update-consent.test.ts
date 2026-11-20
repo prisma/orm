@@ -28,20 +28,23 @@ describe('db update questions', () => {
     expect((envelopeOf(run.json) as { readonly error: unknown }).error).toEqual({
       code: 'CLI.CONSENT_REQUIRED',
       severity: 'error',
-      summary: 'This change needs 3 answers: "audit_old", "Legacy", "User".',
+      summary:
+        'This change would lose data and change access: "audit_old", model "Legacy", "User".',
       why: [
-        'This change would delete the data in "audit_old", which no model of the origin contract stores.',
-        'The plan would run: Drop table "audit_old".',
+        'This change would delete the data in "audit_old", which no model of the contract before this change stores.',
+        'The operation of the plan that does this: Drop table "audit_old".',
+        '',
         'Removing model "Legacy" would delete its data.',
-        'The plan would run: Drop table "Legacy".',
-        'This change would widen who can read and write the data of "User".',
-        'The plan would run: Disable row-level security on "User".',
+        'The operation of the plan that does this: Drop table "Legacy".',
+        '',
+        'Access to the data of "User" would widen.',
+        'The operation of the plan that does this: Disable row-level security on "User".',
       ].join('\n'),
       nextActions: [
         { kind: 'user-choice', label: 'If the data in "audit_old" can go: --delete audit_old' },
         {
           kind: 'user-choice',
-          label: `If model "Legacy" was renamed, keep its data: --rename 'Legacy:<new name>'`,
+          label: `If model "Legacy" was renamed, first add it to the contract under its new name; then keep its data: --rename 'Legacy:<new name>'`,
         },
         { kind: 'user-choice', label: 'If the data of model "Legacy" can go: --delete Legacy' },
         { kind: 'user-choice', label: 'To allow the change to "User": --allow User' },
@@ -56,61 +59,49 @@ describe('db update questions', () => {
     });
   });
 
-  it('gives the --allow once for each access change of a model, and following it applies', async () => {
-    const userAccess = (operationIndex: number, label: string) =>
-      accessChangeQuestion(
-        {
-          operationIndex,
-          label,
-          subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'User' },
-          widens: true,
-        },
-        contracts,
-      );
+  it('asks once about every access change of a model, and one --allow allows them all', async () => {
+    const userAccess = (operationIndex: number, label: string) => ({
+      operationIndex,
+      label,
+      subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'User' } as const,
+      widens: true,
+    });
     mocks.dbUpdate.mockImplementation(
       askThenApply(() => [
-        userAccess(0, 'Disable row-level security on "User"'),
-        userAccess(1, 'Drop policy "readers" on "User"'),
+        accessChangeQuestion(
+          [
+            userAccess(0, 'Disable row-level security on "User"'),
+            userAccess(1, 'Drop policy "readers" on "User"'),
+          ],
+          contracts,
+        ),
       ]),
     );
 
     const refused = await harness().run(['db', 'update', '--json'], { cwd: project.dir });
-    const applied = await harness().run(
-      ['db', 'update', '--allow', 'User', '--allow', 'User', '--json'],
-      {
-        cwd: project.dir,
-      },
-    );
+    const applied = await harness().run(['db', 'update', '--allow', 'User', '--json'], {
+      cwd: project.dir,
+    });
 
     expect((envelopeOf(refused.json) as { readonly error: unknown }).error).toEqual({
       code: 'CLI.CONSENT_REQUIRED',
       severity: 'error',
-      summary: 'This change needs 2 answers about "User".',
+      summary: 'Access to the data of "User" would widen.',
       why: [
-        'This change would widen who can read and write the data of "User".',
-        'The plan would run: Disable row-level security on "User".',
-        'This change would widen who can read and write the data of "User".',
-        'The plan would run: Drop policy "readers" on "User".',
+        'The operations of the plan that do this:',
+        '- Disable row-level security on "User"',
+        '- Drop policy "readers" on "User"',
       ].join('\n'),
-      nextActions: [
-        {
-          kind: 'user-choice',
-          label: 'To allow both changes to "User", one flag each: --allow User --allow User',
-        },
-      ],
+      nextActions: [{ kind: 'user-choice', label: 'To allow both changes: --allow User' }],
       meta: {
-        unanswered: [
-          { subject: 'User', verbs: ['allow'] },
-          { subject: 'User', verbs: ['allow'] },
-        ],
+        subject: 'User',
+        verbs: ['allow'],
+        unanswered: [{ subject: 'User', verbs: ['allow'] }],
       },
     });
     expect({ exitCode: applied.exitCode, answers }).toEqual({
       exitCode: 0,
-      answers: [
-        { verb: 'allow', text: 'User' },
-        { verb: 'allow', text: 'User' },
-      ],
+      answers: [{ verb: 'allow', text: 'User' }],
     });
   });
 
@@ -189,18 +180,80 @@ describe('db update questions', () => {
     expect(answers.map((answer) => answer?.verb)).toEqual(['delete', 'delete', 'allow']);
   });
 
-  it('does not take --confirm or --yes as an answer', async () => {
-    const confirmed = await harness().run(['db', 'update', '--confirm', 'appdb', '--json'], {
-      cwd: project.dir,
-    });
+  it('says to remove --confirm and a stray flag, says --yes does not allow an access change, and applies once the printed flag is given', async () => {
+    mocks.dbUpdate.mockImplementation(
+      askThenApply(() => [
+        accessChangeQuestion(
+          [
+            {
+              operationIndex: 0,
+              label: 'Disable row-level security on "User"',
+              subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'User' },
+              widens: true,
+            },
+          ],
+          contracts,
+        ),
+      ]),
+    );
+    const errorOf = (run: { readonly json: Parameters<typeof envelopeOf>[0] }) =>
+      (envelopeOf(run.json) as { readonly error: unknown }).error;
+
+    const strays = await harness().run(
+      ['db', 'update', '--confirm', 'appdb', '--allow', 'Nope', '--json'],
+      { cwd: project.dir },
+    );
     const yes = await harness().run(['db', 'update', '--yes', '--json'], {
       cwd: project.dir,
       isTty: { stdin: true },
     });
+    const followed = await harness().run(['db', 'update', '--yes', '--allow', 'User', '--json'], {
+      cwd: project.dir,
+      isTty: { stdin: true },
+    });
 
-    expect([envelopeOf(confirmed.json), envelopeOf(yes.json)]).toMatchObject([
-      { error: { code: 'CLI.CONSENT_REQUIRED' } },
-      { error: { code: 'CLI.CONSENT_REQUIRED' } },
+    const refusal = {
+      code: 'CLI.CONSENT_REQUIRED',
+      severity: 'error',
+      summary: 'Access to the data of "User" would widen.',
+      meta: {
+        subject: 'User',
+        verbs: ['allow'],
+        unanswered: [{ subject: 'User', verbs: ['allow'] }],
+      },
+    };
+    const allow = { kind: 'user-choice', label: 'To allow it: --allow User' };
+    expect([errorOf(strays), errorOf(yes), followed.exitCode]).toEqual([
+      {
+        ...refusal,
+        why: 'The operation of the plan that does this: Disable row-level security on "User".',
+        nextActions: [
+          {
+            kind: 'user-choice',
+            label: 'Remove --allow Nope: nothing in this change is called that.',
+          },
+          {
+            kind: 'user-choice',
+            label: 'Remove --confirm appdb: nothing in this change needs it.',
+          },
+          allow,
+        ],
+        meta: {
+          ...refusal.meta,
+          unmatched: [{ verb: 'allow', values: ['Nope'] }],
+          confirm: ['appdb'],
+        },
+      },
+      {
+        ...refusal,
+        why: [
+          'The operation of the plan that does this: Disable row-level security on "User".',
+          '',
+          '--yes does not allow this: it would change who can read and write data.',
+        ].join('\n'),
+        nextActions: [allow],
+      },
+      0,
     ]);
   });
 

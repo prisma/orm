@@ -1,6 +1,6 @@
 import { asNamespaceId } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
-import { refusalText } from '../../../src/control-api/statements/plan-question-text';
+import { questionText, refusalText } from '../../../src/control-api/statements/plan-question-text';
 import { askedAbout, NO_FLAGS, textsOf } from './plan-question-fixtures';
 import { contractOf } from './statement-fixtures';
 
@@ -27,18 +27,18 @@ describe('the texts of a removed model', () => {
       {
         "prompts": [
           "Removing model "Legacy" would delete its data.
-      The plan would run:
+      The operations of the plan that do this:
       - Drop table "legacy"
       - Drop table "legacy_audit"
-      rename keeps its data under the new name; delete lets its data go.",
+      rename works once the contract has the model under its new name; delete lets its data go.",
         ],
         "refusal": {
           "nextActions": [
-            "If the model was renamed, keep its data: --rename 'Legacy:<new name>'",
+            "If the model was renamed, first add it to the contract under its new name; then keep its data: --rename 'Legacy:<new name>'",
             "If its data can go: --delete Legacy",
           ],
           "summary": "Removing model "Legacy" would delete its data.",
-          "why": "The plan would run:
+          "why": "The operations of the plan that do this:
       - Drop table "legacy"
       - Drop table "legacy_audit"",
         },
@@ -64,7 +64,7 @@ describe('the texts of a removed field whose new name the destination gives', ()
       {
         "prompts": [
           "Removing field "Shop.legacy" would delete its values.
-      The plan would run: Drop column "legacy" from "Store Front".
+      The operation of the plan that does this: Drop column "legacy" from "Store Front".
       rename keeps the values under the new name; delete lets them go.",
         ],
         "refusal": {
@@ -73,7 +73,7 @@ describe('the texts of a removed field whose new name the destination gives', ()
             "If the values can go: --delete Shop.legacy",
           ],
           "summary": "Removing field "Shop.legacy" would delete its values.",
-          "why": "The plan would run: Drop column "legacy" from "Store Front".",
+          "why": "The operation of the plan that does this: Drop column "legacy" from "Store Front".",
         },
       }
     `);
@@ -101,16 +101,16 @@ describe('the texts of a removed enum value', () => {
       {
         "prompts": [
           "Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.
-      The plan would run: Remove value "archived" from "Task"."status".
-      rename keeps it in the data under the new name; delete removes it from the data.",
+      The operation of the plan that does this: Remove value "archived" from "Task"."status".
+      rename works once the contract has the enum value under its new name; delete removes it from the data.",
         ],
         "refusal": {
           "nextActions": [
-            "If the enum value was renamed, keep it in the data: --rename 'Status.ARCHIVED:Status.<new name>'",
+            "If the enum value was renamed, first add it to the contract under its new name; then keep it in the data: --rename 'Status.ARCHIVED:Status.<new name>'",
             "If it can go from the data: --delete Status.ARCHIVED",
           ],
           "summary": "Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.",
-          "why": "The plan would run: Remove value "archived" from "Task"."status".",
+          "why": "The operation of the plan that does this: Remove value "archived" from "Task"."status".",
         },
       }
     `);
@@ -147,16 +147,16 @@ describe('the texts of a removed value object field', () => {
       {
         "prompts": [
           "Removing value object field "GeoPoint.note" would delete its values.
-      The plan would run: Remove key "note" from "place"."location".
-      rename keeps the values under the new name; delete lets them go.",
+      The operation of the plan that does this: Remove key "note" from "place"."location".
+      rename works once the contract has the value object field under its new name; delete lets them go.",
         ],
         "refusal": {
           "nextActions": [
-            "If the value object field was renamed, keep its values: --rename 'GeoPoint.note:GeoPoint.<new name>'",
+            "If the value object field was renamed, first add it to the contract under its new name; then keep its values: --rename 'GeoPoint.note:GeoPoint.<new name>'",
             "If the values can go: --delete GeoPoint.note",
           ],
           "summary": "Removing value object field "GeoPoint.note" would delete its values.",
-          "why": "The plan would run: Remove key "note" from "place"."location".",
+          "why": "The operation of the plan that does this: Remove key "note" from "place"."location".",
         },
       }
     `);
@@ -191,29 +191,31 @@ describe('the texts of a model of a removed namespace', () => {
     expect(textsOf(asked)).toMatchInlineSnapshot(`
       {
         "prompts": [
-          "Removing model "billing.Invoice" would delete its data.
-      The plan would run: Drop table "invoice".
-      The destination contract no longer has namespace "billing".
+          "This change would delete the data of model "billing.Invoice".
+      The operation of the plan that does this: Drop table "invoice".
+      The contract no longer has namespace "billing".
       rename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:finance keeps the data of namespace "billing" under namespace "finance".",
-          "Removing model "billing.Receipt" would delete its data.
-      The plan would run: Drop table "receipt".
+          "This change would delete the data of model "billing.Receipt".
+      The operation of the plan that does this: Drop table "receipt".
       rename keeps its data under the new name; delete lets its data go.",
         ],
         "refusal": {
           "nextActions": [
-            "If model "billing.Invoice" was renamed, keep its data: --rename 'billing.Invoice:<new name>'",
-            "If the data of model "billing.Invoice" can go: --delete billing.Invoice",
             "If the data of everything in namespace "billing" can go: --delete billing",
             "If namespace "billing" was renamed to "finance", keep its data: --rename billing:finance",
-            "If model "billing.Receipt" was renamed, keep its data: --rename 'billing.Receipt:<new name>'",
+            "If model "billing.Invoice" was renamed to "finance.Invoice" or "finance.Receipt", put that name in place of <new name> to keep its data: --rename 'billing.Invoice:<new name>'",
+            "If the data of model "billing.Invoice" can go: --delete billing.Invoice",
+            "If model "billing.Receipt" was renamed to "finance.Invoice" or "finance.Receipt", put that name in place of <new name> to keep its data: --rename 'billing.Receipt:<new name>'",
             "If the data of model "billing.Receipt" can go: --delete billing.Receipt",
           ],
-          "summary": "This change needs 2 answers: "billing.Invoice", "billing.Receipt".",
-          "why": "Removing model "billing.Invoice" would delete its data.
-      The plan would run: Drop table "invoice".
-      The destination contract no longer has namespace "billing".
-      Removing model "billing.Receipt" would delete its data.
-      The plan would run: Drop table "receipt".",
+          "summary": "This change would lose data: model "billing.Invoice", model "billing.Receipt".",
+          "why": "The contract no longer has namespace "billing".
+
+      This change would delete the data of model "billing.Invoice".
+      The operation of the plan that does this: Drop table "invoice".
+
+      This change would delete the data of model "billing.Receipt".
+      The operation of the plan that does this: Drop table "receipt".",
         },
       }
     `);
@@ -227,28 +229,28 @@ describe('the texts of storage no model stores', () => {
     subject: { kind: 'storage', name: 'public.user.age' },
   } as const;
 
-  it('says no model of the origin contract stores it', async () => {
+  it('says no model of the contract before this change stores it', async () => {
     const asked = await askedAbout({ origin: users, destination: users, losses: [loss] });
 
     expect(textsOf(asked)).toMatchInlineSnapshot(`
       {
         "prompts": [
-          "This change would delete the data in "public.user.age", which no model of the origin contract stores.
-      The plan would run: Drop column "age" from "user".
+          "This change would delete the data in "public.user.age", which no model of the contract before this change stores.
+      The operation of the plan that does this: Drop column "age" from "user".
       delete lets the data go.",
         ],
         "refusal": {
           "nextActions": [
             "If the data can go: --delete public.user.age",
           ],
-          "summary": "This change would delete the data in "public.user.age", which no model of the origin contract stores.",
-          "why": "The plan would run: Drop column "age" from "user".",
+          "summary": "This change would delete the data in "public.user.age", which no model of the contract before this change stores.",
+          "why": "The operation of the plan that does this: Drop column "age" from "user".",
         },
       }
     `);
   });
 
-  it('says it is named by its storage name, and how to keep it, when the origin contract is unknown', async () => {
+  it('says it is named by its storage name, and how to keep it, when the contract before this change is not known', async () => {
     const asked = await askedAbout({
       origin: users,
       destination: users,
@@ -259,9 +261,9 @@ describe('the texts of storage no model stores', () => {
     expect(textsOf(asked)).toMatchInlineSnapshot(`
       {
         "prompts": [
-          "This change would delete the data in "public.user.age", named by its storage name because the origin contract is unknown.
-      The plan would run: Drop column "age" from "user".
-      If it was renamed, keep its data instead: store the snapshot of the contract the database is at, then run this command again and answer with --rename.
+          "This change would delete the data in "public.user.age", named by its storage name because the contract before this change is not known.
+      The operation of the plan that does this: Drop column "age" from "user".
+      If it was renamed, keep its data: store a snapshot of the contract before this change, which is the contract the database was last updated to, then run this command again, and it gives the --rename to use.
       1. Put the contract source back to the version the database is at, and run \`prisma contract emit\`.
       2. Run \`prisma db update --advance-ref <name> --dry-run\`, with the same \`--db\` as this command if it has one, and check that it plans no operations. Then run it again without \`--dry-run\`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.
       3. Put the new contract source back, run \`prisma contract emit\`, and run this command again with \`--advance-ref <name>\`.
@@ -269,14 +271,14 @@ describe('the texts of storage no model stores', () => {
         ],
         "refusal": {
           "nextActions": [
+            "If it was renamed, keep its data: store a snapshot of the contract before this change, which is the contract the database was last updated to, then run this command again, and it gives the --rename to use.",
+            "1. Put the contract source back to the version the database is at, and run \`prisma contract emit\`.",
+            "2. Run \`prisma db update --advance-ref <name> --dry-run\`, with the same \`--db\` as this command if it has one, and check that it plans no operations. Then run it again without \`--dry-run\`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.",
+            "3. Put the new contract source back, run \`prisma contract emit\`, and run this command again with \`--advance-ref <name>\`.",
             "If the data can go: --delete public.user.age",
           ],
-          "summary": "This change would delete the data in "public.user.age", named by its storage name because the origin contract is unknown.",
-          "why": "The plan would run: Drop column "age" from "user".
-      If it was renamed, keep its data instead: store the snapshot of the contract the database is at, then run this command again and answer with --rename.
-      1. Put the contract source back to the version the database is at, and run \`prisma contract emit\`.
-      2. Run \`prisma db update --advance-ref <name> --dry-run\`, with the same \`--db\` as this command if it has one, and check that it plans no operations. Then run it again without \`--dry-run\`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.
-      3. Put the new contract source back, run \`prisma contract emit\`, and run this command again with \`--advance-ref <name>\`.",
+          "summary": "This change would delete the data in "public.user.age", named by its storage name because the contract before this change is not known.",
+          "why": "The operation of the plan that does this: Drop column "age" from "user".",
         },
       }
     `);
@@ -303,8 +305,8 @@ describe('the texts of a type change', () => {
       {
         "prompts": [
           "Changing the type of field "User.age" can change or lose its values.
-      The plan would run: Alter type of "user"."age" to int4.
-      convert writes a conversion for you to fill in; delete keeps the field and lets the database cast its values, which can change or lose some.",
+      The operation of the plan that does this: Alter type of "user"."age" to int4.
+      convert writes a conversion for you to fill in; delete lets the database cast the values, which can change or lose some.",
         ],
         "refusal": {
           "nextActions": [
@@ -312,7 +314,7 @@ describe('the texts of a type change', () => {
             "To let the database cast the values, which can change or lose some: --delete User.age",
           ],
           "summary": "Changing the type of field "User.age" can change or lose its values.",
-          "why": "The plan would run: Alter type of "user"."age" to int4.",
+          "why": "The operation of the plan that does this: Alter type of "user"."age" to int4.",
         },
       }
     `);
@@ -325,15 +327,15 @@ describe('the texts of a type change', () => {
       {
         "prompts": [
           "Changing the type of field "User.age" can change or lose its values.
-      The plan would run: Alter type of "user"."age" to int4.
-      delete keeps the field and lets the database cast its values, which can change or lose some.",
+      The operation of the plan that does this: Alter type of "user"."age" to int4.
+      delete lets the database cast the values, which can change or lose some.",
         ],
         "refusal": {
           "nextActions": [
             "To let the database cast the values, which can change or lose some: --delete User.age",
           ],
           "summary": "Changing the type of field "User.age" can change or lose its values.",
-          "why": "The plan would run: Alter type of "user"."age" to int4.",
+          "why": "The operation of the plan that does this: Alter type of "user"."age" to int4.",
         },
       }
     `);
@@ -341,7 +343,7 @@ describe('the texts of a type change', () => {
 });
 
 describe('the texts of an access change', () => {
-  it('says whose access it widens or alters', async () => {
+  it('asks once about every access change of a model, and says access would change', async () => {
     const users = contractOf({ app: { models: { User: {} } } });
     const user = { kind: 'model', namespaceId: app, model: 'User' } as const;
     const asked = await askedAbout({
@@ -354,32 +356,26 @@ describe('the texts of an access change', () => {
     });
 
     expect({
-      prompts: asked.map(({ question }) => question),
+      prompts: asked.map((each) => questionText(each)),
       refusals: asked.map((question) => refusalText([question], NO_FLAGS)),
     }).toMatchInlineSnapshot(`
       {
         "prompts": [
-          "This change would widen who can read and write the data of "User".
-      The plan would run: Disable row-level security on "user".
-      allow lets the plan make this change.",
-          "This change would alter who can read and write the data of "User".
-      The plan would run: Drop policy "readers" on "user".
-      allow lets the plan make this change.",
+          "Access to the data of "User" would change.
+      The operations of the plan that do this:
+      - Disable row-level security on "user"
+      - Drop policy "readers" on "user"
+      allow lets the plan make these changes.",
         ],
         "refusals": [
           {
             "nextActions": [
-              "To allow it: --allow User",
+              "To allow both changes: --allow User",
             ],
-            "summary": "This change would widen who can read and write the data of "User".",
-            "why": "The plan would run: Disable row-level security on "user".",
-          },
-          {
-            "nextActions": [
-              "To allow it: --allow User",
-            ],
-            "summary": "This change would alter who can read and write the data of "User".",
-            "why": "The plan would run: Drop policy "readers" on "user".",
+            "summary": "Access to the data of "User" would change.",
+            "why": "The operations of the plan that do this:
+      - Disable row-level security on "user"
+      - Drop policy "readers" on "user"",
           },
         ],
       }
@@ -388,7 +384,7 @@ describe('the texts of an access change', () => {
 });
 
 describe('the texts of a variant whose discriminator value changed', () => {
-  it('offers to convert its stored value', async () => {
+  it('names the old and new discriminator values, and offers to convert its stored value', async () => {
     const task = (variants: Record<string, string>) =>
       contractOf({
         app: {
@@ -412,8 +408,8 @@ describe('the texts of a variant whose discriminator value changed', () => {
     expect(textsOf(asked)).toMatchInlineSnapshot(`
       {
         "prompts": [
-          "This change would delete the data of model "Bug".
-      The plan would run: Rewrite "type" of "task" from "bug".
+          "Changing the discriminator value of model "Bug" from "bug" to "defect" would delete its data.
+      The operation of the plan that does this: Rewrite "type" of "task" from "bug".
       convert rewrites the discriminator value from "bug" to "defect" and keeps the data; delete lets its data go.",
         ],
         "refusal": {
@@ -421,8 +417,8 @@ describe('the texts of a variant whose discriminator value changed', () => {
             "To rewrite its discriminator value from "bug" to "defect" and keep its data: --convert Bug",
             "If its data can go: --delete Bug",
           ],
-          "summary": "This change would delete the data of model "Bug".",
-          "why": "The plan would run: Rewrite "type" of "task" from "bug".",
+          "summary": "Changing the discriminator value of model "Bug" from "bug" to "defect" would delete its data.",
+          "why": "The operation of the plan that does this: Rewrite "type" of "task" from "bug".",
         },
       }
     `);

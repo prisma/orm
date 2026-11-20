@@ -605,17 +605,19 @@ describe('migration plan', () => {
       expect((envelopeOf(run) as { readonly error: unknown }).error).toEqual({
         code: 'CLI.CONSENT_REQUIRED',
         severity: 'error',
-        summary: 'This change needs 2 answers: "Legacy", "audit_log".',
+        summary: 'This change would lose data: model "Legacy", "audit_log".',
         why: [
           'Removing model "Legacy" would delete its data.',
-          'The plan would run: Drop table "legacy".',
-          'This change would delete the data in "audit_log", which no model of the origin contract stores.',
-          'The plan would run: Drop table "audit_log".',
+          'The operation of the plan that does this: Drop table "legacy".',
+          '',
+          'This change would delete the data in "audit_log", which no model of the contract before this change stores.',
+          'The operation of the plan that does this: Drop table "audit_log".',
         ].join('\n'),
         nextActions: [
           {
             kind: 'user-choice',
-            label: `If model "Legacy" was renamed, keep its data: --rename 'Legacy:<new name>'`,
+            label:
+              'If model "Legacy" was renamed to "Archive", keep its data: --rename Legacy:Archive',
           },
           { kind: 'user-choice', label: 'If the data of model "Legacy" can go: --delete Legacy' },
           { kind: 'user-choice', label: 'If the data in "audit_log" can go: --delete audit_log' },
@@ -933,11 +935,11 @@ describe('migration plan', () => {
         code: 'CLI.CONSENT_REQUIRED',
         severity: 'error',
         summary: 'Removing model "Legacy" would delete its data.',
-        why: 'The plan would run: Drop table "legacy".',
+        why: 'The operation of the plan that does this: Drop table "legacy".',
         nextActions: [
           {
             kind: 'user-choice',
-            label: `If the model was renamed, keep its data: --rename 'Legacy:<new name>'`,
+            label: 'If the model was renamed to "Archive", keep its data: --rename Legacy:Archive',
           },
           { kind: 'user-choice', label: 'If its data can go: --delete Legacy' },
         ],

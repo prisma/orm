@@ -1,14 +1,17 @@
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import type { PromptSurface, StatementSurface } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
-import { refusalText } from '../control-api/statements/plan-question-text';
+import { questionText, refusalText } from '../control-api/statements/plan-question-text';
 import {
   type AnsweredWithoutAsking,
   type AnswerPlanQuestions,
   matchConsents,
   type PlanAnswer,
   type PlanQuestion,
+  type PlanQuestionVerb,
 } from '../control-api/statements/plan-questions';
+import { statementFlag } from '../control-api/statements/statement-flag';
 import { errorConsentUnused } from '../utils/cli-errors';
 import { chooseAction } from '../utils/next-actions';
 
@@ -52,24 +55,53 @@ function namespaceDeletes(
   return answered;
 }
 
-function engineQuestion(question: PlanQuestion) {
+/** The flag a question last refused, and why, which a `CLI.PROMPT_INVALID` from the engine is about. */
+interface Refused {
+  readonly question: PlanQuestion;
+  readonly verb: PlanQuestionVerb;
+  readonly text: string;
+  readonly reason: string;
+}
+
+/** What the engine asks: the question's text, with the removed namespace and its verbs when `withNamespace`. */
+function engineQuestion(
+  question: PlanQuestion,
+  refusals: { last: Refused | undefined },
+  withNamespace = false,
+) {
+  const namespace = question.removedNamespaceParts;
+  const shown =
+    namespace === undefined
+      ? question
+      : {
+          ...question,
+          removedNamespaceParts: {
+            ...namespace,
+            answers: namespace.answers.filter(({ flag }) =>
+              question.verbs.some((verb) => verb === flag.verb),
+            ),
+          },
+        };
   return {
-    question: question.question,
+    question: questionText(shown, withNamespace),
     subject: question.subject,
     verbs: question.verbs,
     forms: question.forms,
-    validate: question.validate,
+    validate: (verb: PlanQuestionVerb, text: string) => {
+      const reason = question.validate(verb, text);
+      refusals.last = reason === undefined ? undefined : { question, verb, text, reason };
+      return reason;
+    },
   };
+}
+
+function hasCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }
 
 /** Whether the engine refused because nobody can answer. */
 function isConsentRequired(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === 'CLI.CONSENT_REQUIRED'
-  );
+  return hasCode(error, 'CLI.CONSENT_REQUIRED');
 }
 
 /**
@@ -83,10 +115,12 @@ function isConsentRequired(error: unknown): boolean {
 async function askOneAtATime(
   prompt: PromptSurface,
   asked: readonly { readonly question: PlanQuestion; readonly index: number }[],
+  refusals: { last: Refused | undefined },
 ): Promise<ReadonlyMap<number, PlanAnswer>> {
   const answered = new Map<number, PlanAnswer>();
   const namespaceDeleted = new Map<string, PlanAnswer>();
   const namespaceRenamed = new Set<string>();
+  const namespaceShown = new Set<string>();
   for (const [position, { question, index }] of asked.entries()) {
     const { removedNamespace } = question;
     if (removedNamespace !== undefined && namespaceRenamed.has(removedNamespace)) continue;
@@ -96,12 +130,14 @@ async function askOneAtATime(
       answered.set(index, deleted);
       continue;
     }
+    const withNamespace = removedNamespace !== undefined && !namespaceShown.has(removedNamespace);
+    if (removedNamespace !== undefined) namespaceShown.add(removedNamespace);
     const [typed] = await prompt
-      .statements([engineQuestion(question)])
+      .statements([engineQuestion(question, refusals, withNamespace)])
       .catch(async (error: unknown) => {
         if (!isConsentRequired(error)) throw error;
         await prompt.statements(
-          asked.slice(position).map(({ question: open }) => engineQuestion(open)),
+          asked.slice(position).map(({ question: open }) => engineQuestion(open, refusals)),
           { last: true },
         );
         throw error;
@@ -136,52 +172,93 @@ function strings(value: unknown): readonly string[] {
 }
 
 /**
- * The open questions the engine's refusal lists in `meta.unanswered`, in order. The engine answers
- * questions that share a subject in order, so the unanswered ones of a subject are its last ones.
+ * The open questions the engine's refusal lists in `meta.unanswered`, in order, each known by its
+ * subject and verbs. The engine answers questions that share both in order, so the unanswered ones
+ * are the last ones. A listed entry no question has means the CLI and the engine disagree on what
+ * was asked.
  */
 function openQuestions(
   error: CliStructuredError,
   questions: readonly PlanQuestion[],
 ): readonly PlanQuestion[] {
-  const listed = records(error.meta?.['unanswered']).map(({ subject }) => String(subject));
+  const keyOf = (subject: string, verbs: readonly string[]) => JSON.stringify([subject, verbs]);
+  const listed = records(error.meta?.['unanswered']).map(({ subject, verbs }) =>
+    keyOf(String(subject), strings(verbs)),
+  );
   if (listed.length === 0) return questions;
   const open = new Set<PlanQuestion>();
-  for (const subject of new Set(listed)) {
-    const count = listed.filter((each) => each === subject).length;
-    for (const question of questions.filter((each) => each.subject === subject).slice(-count)) {
-      open.add(question);
+  for (const key of new Set(listed)) {
+    const count = listed.filter((each) => each === key).length;
+    const matching = questions.filter(({ subject, verbs }) => keyOf(subject, verbs) === key);
+    if (matching.length < count) {
+      throw new InternalError(
+        'The engine refused to go on without flags for questions the CLI did not ask.',
+        {
+          cause: {
+            unanswered: error.meta?.['unanswered'],
+            asked: questions.map(({ subject, verbs }) => ({ subject, verbs })),
+          },
+        },
+      );
     }
+    for (const question of matching.slice(-count)) open.add(question);
   }
   return questions.filter((question) => open.has(question));
 }
 
-/**
- * The engine's refusal to answer, rebuilt from the open questions: what the change would do, what
- * the plan would run, the flags that answered nothing, and each answer with what it means. Its code,
- * severity, docs link and meta stay the engine's.
- */
-function refusalFrom(error: unknown, questions: readonly PlanQuestion[]): unknown {
-  if (!isConsentRequired(error) || !CliStructuredError.is(error)) return error;
-  const open = openQuestions(error, questions);
-  if (open.length === 0) return error;
-  const refusal = refusalText(open, {
-    unmatched: records(error.meta?.['unmatched']).map(({ verb, values }) => ({
-      verb: String(verb),
-      values: strings(values),
-    })),
-    confirm: strings(error.meta?.['confirm']),
-    yes: error.message.includes('--yes'),
-  });
-  return new CliStructuredError(error.code, refusal.summary, {
+/** The engine's error with its summary, `why` and next actions replaced, and the rest kept. */
+function rebuilt(
+  error: CliStructuredError,
+  text: {
+    readonly summary: string;
+    readonly why: string | undefined;
+    readonly nextActions: readonly string[];
+  },
+): CliStructuredError {
+  return new CliStructuredError(error.code, text.summary, {
     severity: error.severity,
-    ...ifDefined('why', refusal.why),
-    nextActions: refusal.nextActions.map(chooseAction),
+    ...ifDefined('why', text.why),
+    nextActions: text.nextActions.map(chooseAction),
     diagnostics: error.diagnostics,
     ...ifDefined('where', error.where),
     ...ifDefined('meta', error.meta),
     ...ifDefined('docsUrl', error.docsUrl),
     cause: error,
   });
+}
+
+/**
+ * The engine's errors about the questions, rebuilt from the questions: its refusal to go on
+ * without flags says what the change would do, the operations that do it, the flags that did
+ * nothing, and each flag with what it means; its refusal of a flag or typed answer a question
+ * rejected says what was given, why it does not fit, and what the change would do. Code,
+ * severity, docs link and meta stay the engine's.
+ */
+function rebuiltError(
+  error: unknown,
+  questions: readonly PlanQuestion[],
+  refused: Refused | undefined,
+): unknown {
+  if (!CliStructuredError.is(error)) return error;
+  if (isConsentRequired(error)) {
+    const refusal = refusalText(openQuestions(error, questions), {
+      unmatched: records(error.meta?.['unmatched']).map(({ verb, values }) => ({
+        verb: String(verb),
+        values: strings(values),
+      })),
+      confirm: strings(error.meta?.['confirm']),
+      yes: error.message.includes('--yes'),
+    });
+    return rebuilt(error, refusal);
+  }
+  if (hasCode(error, 'CLI.PROMPT_INVALID') && refused !== undefined) {
+    return rebuilt(error, {
+      summary: `${statementFlag({ verb: refused.verb, text: refused.text })} does not fit this change: ${refused.reason}`,
+      why: refused.question.headline,
+      nextActions: [],
+    });
+  }
+  return error;
 }
 
 /**
@@ -195,11 +272,15 @@ export function promptPlanQuestions(
   prompt: PromptSurface,
   statements: StatementSurface,
 ): AnswerPlanQuestions {
-  const answer = answering(prompt, statements);
   return async (questions, answeredWithoutAsking = []) => {
     takeConsentsAnsweredWithoutAsking(questions, answeredWithoutAsking, statements);
-    return answer(questions).catch((error: unknown) => {
-      throw refusalFrom(error, questions);
+    const refusals: { last: Refused | undefined } = { last: undefined };
+    return answering(
+      prompt,
+      statements,
+      refusals,
+    )(questions).catch((error: unknown) => {
+      throw rebuiltError(error, questions, refusals.last);
     });
   };
 }
@@ -231,7 +312,11 @@ function takeConsentsAnsweredWithoutAsking(
   }
 }
 
-function answering(prompt: PromptSurface, statements: StatementSurface): AnswerPlanQuestions {
+function answering(
+  prompt: PromptSurface,
+  statements: StatementSurface,
+  refusals: { last: Refused | undefined },
+): AnswerPlanQuestions {
   return async (questions): Promise<readonly (PlanAnswer | undefined)[]> => {
     const answered = namespaceDeletes(questions, statements) ?? new Map<number, PlanAnswer>();
     const asked = questions
@@ -239,10 +324,12 @@ function answering(prompt: PromptSurface, statements: StatementSurface): AnswerP
       .filter(({ index }) => !answered.has(index));
     const byIndex = new Map(answered);
     if (asked.some(({ question }) => question.removedNamespace !== undefined)) {
-      for (const [index, answer] of await askOneAtATime(prompt, asked)) byIndex.set(index, answer);
+      for (const [index, answer] of await askOneAtATime(prompt, asked, refusals)) {
+        byIndex.set(index, answer);
+      }
     } else {
       const answers = await prompt.statements(
-        asked.map(({ question }) => engineQuestion(question)),
+        asked.map(({ question }) => engineQuestion(question, refusals)),
         { last: true },
       );
       asked.forEach(({ index }, position) => {

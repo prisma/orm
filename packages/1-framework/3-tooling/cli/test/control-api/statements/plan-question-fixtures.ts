@@ -1,12 +1,14 @@
 import type { ContractWithDomain } from '@internal/contract/types';
 import type {
+  KeepDataEdit,
   MigrationDataLossKind,
   MigrationSubject,
 } from '@internal/framework-components/control';
 import { ok } from '@internal/utils/result';
-import { refusalText } from '../../../src/control-api/statements/plan-question-text';
+import { questionText, refusalText } from '../../../src/control-api/statements/plan-question-text';
 import {
   askPlanQuestions,
+  type KeepDataEditAdvice,
   type PlannedQuestions,
   type PlanQuestion,
 } from '../../../src/control-api/statements/plan-questions';
@@ -21,6 +23,8 @@ export async function askedAbout(input: {
     readonly label: string;
     readonly subject: MigrationSubject;
     readonly loss?: MigrationDataLossKind;
+    readonly keepDataAdvice?: string;
+    readonly keepDataEdit?: KeepDataEdit;
   }[];
   readonly accessChanges?: readonly {
     readonly label: string;
@@ -30,6 +34,8 @@ export async function askedAbout(input: {
   readonly namespaces?: PlannedQuestions['namespaces'];
   readonly canConvert?: boolean;
   readonly originKnown?: boolean;
+  readonly keepDataEditAdvice?: KeepDataEditAdvice;
+  readonly temporaryValues?: readonly { readonly subject: MigrationSubject }[];
 }): Promise<readonly PlanQuestion[]> {
   const asked: PlanQuestion[] = [];
   await askPlanQuestions<PlannedQuestions, never>({
@@ -43,7 +49,7 @@ export async function askedAbout(input: {
         operationIndex,
         ...change,
       })),
-      temporaryValues: [],
+      temporaryValues: input.temporaryValues ?? [],
       ...(input.namespaces === undefined ? {} : { namespaces: input.namespaces }),
     },
     askAccess: true,
@@ -54,6 +60,9 @@ export async function askedAbout(input: {
     origin: input.origin,
     originKnown: input.originKnown ?? true,
     destination: input.destination,
+    ...(input.keepDataEditAdvice === undefined
+      ? {}
+      : { keepDataEditAdvice: input.keepDataEditAdvice }),
     answer: async (batch) => {
       asked.push(...batch);
       return batch.map(({ subject, verbs }) => ({
@@ -69,7 +78,15 @@ export async function askedAbout(input: {
 /** The prompt text of each question, and the refusal when nobody can answer them. */
 export function textsOf(questions: readonly PlanQuestion[]) {
   return {
-    prompts: questions.map(({ question }) => question),
+    prompts: questions.map((question, index) =>
+      questionText(
+        question,
+        question.removedNamespace !== undefined &&
+          questions.findIndex(
+            ({ removedNamespace }) => removedNamespace === question.removedNamespace,
+          ) === index,
+      ),
+    ),
     refusal: refusalText(questions, NO_FLAGS),
   };
 }

@@ -366,7 +366,7 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
           subject: enumValue('ACTIVE'),
           keepDataEdit: undefined,
           keepDataAdvice:
-            'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next question says how to keep the data of both.',
+            'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next run says how to keep the data of both.',
         },
       ],
       twoNewMembers: [
@@ -374,7 +374,7 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
           subject: enumValue('ACTIVE'),
           keepDataEdit: undefined,
           keepDataAdvice:
-            'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now another member, add --rename \'Status.ARCHIVED:Status.<new member>\', and the next question says how to keep the data of both.',
+            'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now another member, add --rename \'Status.ARCHIVED:Status.<new member>\', and the next run says how to keep the data of both.',
         },
       ],
       noNewMember: [
@@ -393,7 +393,7 @@ describe('MongoMigrationPlanner, a removed enum value', () => {
     });
     if (result.kind !== 'success') throw new Error('Expected a plan');
     expect(result.dataLoss.map(({ keepDataAdvice }) => keepDataAdvice)).toEqual([
-      'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next question says how to keep the data of both.',
+      'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next run says how to keep the data of both.',
     ]);
   });
 

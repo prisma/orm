@@ -12,6 +12,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { describe, expect, it, vi } from 'vitest';
 import { executeDbUpdate } from '../../src/control-api/operations/db-update';
+import { questionText } from '../../src/control-api/statements/plan-question-text';
 import {
   ORIGIN_SNAPSHOT_RECOVERY,
   type PlanQuestion,
@@ -730,7 +731,11 @@ describe('executeDbUpdate', () => {
           answerQuestions: async (questions) => {
             expect(execute).not.toHaveBeenCalled();
             asked.push(
-              ...questions.map(({ question, subject, verbs }) => ({ question, subject, verbs })),
+              ...questions.map((each) => ({
+                question: questionText(each),
+                subject: each.subject,
+                verbs: each.verbs,
+              })),
             );
             return questions.map((question) => ({
               verb: question.verbs.includes('allow') ? 'allow' : 'delete',
@@ -742,13 +747,13 @@ describe('executeDbUpdate', () => {
 
       expect(asked).toEqual([
         {
-          question: `This change would delete the data in "user.nickname", named by its storage name because the origin contract is unknown.\nThe plan would run: Drop column nickname from user.\n${ORIGIN_SNAPSHOT_RECOVERY}\ndelete lets the data go.`,
+          question: `This change would delete the data in "user.nickname", named by its storage name because the contract before this change is not known.\nThe operation of the plan that does this: Drop column nickname from user.\n${ORIGIN_SNAPSHOT_RECOVERY.join('\n')}\ndelete lets the data go.`,
           subject: 'user.nickname',
           verbs: ['delete'],
         },
         {
           question:
-            'This change would widen who can read and write the data of "user".\nThe plan would run: Disable row-level security on user.\nallow lets the plan make this change.',
+            'Access to the data of "user" would widen.\nThe operation of the plan that does this: Disable row-level security on user.\nallow lets the plan make this change.',
           subject: 'user',
           verbs: ['allow'],
         },
@@ -881,7 +886,7 @@ describe('executeDbUpdate', () => {
       expect(error).toBeInstanceOf(InternalError);
       expect(error).toMatchObject({
         message:
-          'answerQuestions answered "This change would widen who can read and write the data of "user"." with delete, which it does not accept; it accepts allow.',
+          'answerQuestions answered "Access to the data of "user" would widen." with delete, which it does not accept; it accepts allow.',
         cause: { question: 'user', verbs: ['allow'], answer: { verb: 'delete', text: 'user' } },
       });
       expect(execute).not.toHaveBeenCalled();

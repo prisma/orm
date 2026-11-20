@@ -35,9 +35,12 @@ describe('matchConsents', () => {
     }
   });
 
-  it('answers one operation per --allow, and refuses an --allow left over', () => {
-    expect([...matchConsents('allow', [user, user], ['User']).answered]).toEqual([[0, 'User']]);
-    expect(matchConsents('allow', [user, user], ['User', 'User', 'User']).unused).toEqual([
+  it('answers every operation of a subject with one --allow, and refuses a second', () => {
+    expect([...matchConsents('allow', [user, user], ['User']).answered]).toEqual([
+      [0, 'User'],
+      [1, 'User'],
+    ]);
+    expect(matchConsents('allow', [user, user], ['User', 'User']).unused).toEqual([
       {
         verb: 'allow',
         text: 'User',

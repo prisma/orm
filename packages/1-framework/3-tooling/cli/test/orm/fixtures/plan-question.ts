@@ -7,17 +7,20 @@ import {
 export function question(subject: string, namespace?: string): PlanQuestion {
   return planQuestion({
     headline: `Removing model "${subject}" would delete its data.`,
+    named: `model "${subject}"`,
     operations: [`Drop ${subject}`],
     notes: [],
+    keepDataWays: [],
     answers: [
       {
         flag: { verb: 'delete', text: subject },
-        ifOnly: 'If its data can go',
-        ifNamed: `If the data of model "${subject}" can go`,
-        typed: 'delete lets its data go',
+        meaning: 'If its data can go',
+        meaningNamingSubject: `If the data of model "${subject}" can go`,
+        promptMeaning: 'delete lets its data go',
       },
     ],
-    yesWould: 'delete data',
+    whenDeleted: [],
+    effect: 'deletes data',
     subject,
     ...(namespace === undefined
       ? {}
@@ -30,8 +33,6 @@ export function question(subject: string, namespace?: string): PlanQuestion {
                 ? ('rename' as const)
                 : undefined,
         }),
-    verbs: ['delete'],
-    forms: {},
     validate: () => undefined,
   });
 }

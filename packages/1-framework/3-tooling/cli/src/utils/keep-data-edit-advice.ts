@@ -18,7 +18,7 @@ function quoted(command: string): string {
   return `\`${command}\``;
 }
 
-/** How `migration plan` says to keep the data of a subject: answer with a delete, then make the edits in the file it writes. */
+/** How `migration plan` says to keep the data of a subject: run it with the subject's `--delete`, then make the edits in the file it writes. */
 export function migrationPlanKeepDataEditAdvice(invocation: CliInvocation): KeepDataEditAdvice {
   return ({ text, edits }) => ({
     lead: undefined,
@@ -26,8 +26,9 @@ export function migrationPlanKeepDataEditAdvice(invocation: CliInvocation): Keep
       edits.length === 0
         ? []
         : [
-            `To keep that data, answer with ${statementFlag({ verb: 'delete', text })}, then in the migration.ts this command writes ${editsText(edits)}, ${runWrittenFile(invocation)}.`,
+            `To keep that data, run this command with ${statementFlag({ verb: 'delete', text })}, then in the migration.ts it writes ${editsText(edits)}, ${runWrittenFile(invocation)}.`,
           ],
+    waysGiveDelete: edits.length > 0,
   });
 }
 
@@ -112,7 +113,7 @@ export function dbUpdateKeepDataEditAdvice(
     const runs = twoRuns(invocation, subject, kept);
     const runWays = runs === undefined ? [] : [runs];
     if (databaseStorageHash === undefined || subject.edits.length === 0) {
-      return { lead, ways: runWays };
+      return { lead, ways: runWays, waysGiveDelete: false };
     }
     const edited = kept.filter(({ edits }) => edits.length > 0);
     const deletes = edited.map(({ text }) => statementFlag({ verb: 'delete', text }));
@@ -126,6 +127,7 @@ export function dbUpdateKeepDataEditAdvice(
         `To keep it, plan the change with ${quoted(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation)}.`,
         ...(swaps ? [] : runWays),
       ],
+      waysGiveDelete: false,
     };
   };
 }

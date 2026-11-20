@@ -1,5 +1,6 @@
 import { asNamespaceId } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
+import { questionText } from '../../../src/control-api/statements/plan-question-text';
 import {
   consentDescription,
   dataLossQuestion,
@@ -34,9 +35,9 @@ describe('dataLossQuestion for data no model names', () => {
       },
     );
 
-    expect({ question: question.question, verbs: question.verbs }).toEqual({
+    expect({ question: questionText(question), verbs: question.verbs }).toEqual({
       question:
-        'Changing the type of "users.age", named by its storage name because the origin contract is unknown, can change or lose its values.\nThe plan would run: Cast field age in collection users from string to int.\ndelete lets the database cast its values, which can change or lose some.',
+        'Changing the type of "users.age", named by its storage name because the contract before this change is not known, can change or lose its values.\nThe operation of the plan that does this: Cast field age in collection users from string to int.\ndelete lets the database cast the values, which can change or lose some.',
       verbs: ['delete'],
     });
   });
@@ -51,9 +52,9 @@ describe('dataLossQuestion for data no model names', () => {
       temporaryValues: [],
     });
 
-    expect({ question: question.question, verbs: question.verbs }).toEqual({
+    expect({ question: questionText(question), verbs: question.verbs }).toEqual({
       question:
-        'This change would delete the data in "public.user.age", which no model of the origin contract stores.\nThe plan would run: Drop column age from user.\ndelete lets the data go.',
+        'This change would delete the data in "public.user.age", which no model of the contract before this change stores.\nThe operation of the plan that does this: Drop column age from user.\ndelete lets the data go.',
       verbs: ['delete'],
     });
   });
@@ -68,8 +69,8 @@ describe('dataLossQuestion for data no model names', () => {
       temporaryValues: [],
     });
 
-    expect(question.question).toBe(
-      'This change would delete the data in "public.user.age", named by its storage name because the origin contract is unknown.\nThe plan would run: Drop column age from user.\ndelete lets the data go.',
+    expect(questionText(question)).toBe(
+      'This change would delete the data in "public.user.age", named by its storage name because the contract before this change is not known.\nThe operation of the plan that does this: Drop column age from user.\ndelete lets the data go.',
     );
   });
 });
@@ -199,8 +200,8 @@ describe('dataLossQuestion for a type change', () => {
         temporaryValues: [],
       },
     );
-    expect(rebuild.question).toBe(
-      'Changing the type of field "User.age" can change or lose its values.\nThe plan would run: Recreate table User.\nconvert writes a conversion for you to fill in; delete keeps the field and lets the database cast its values, which can change or lose some.',
+    expect(questionText(rebuild)).toBe(
+      'Changing the type of field "User.age" can change or lose its values.\nThe operation of the plan that does this: Recreate table User.\nconvert writes a conversion for you to fill in; delete lets the database cast the values, which can change or lose some.',
     );
   });
 
@@ -219,8 +220,7 @@ describe('dataLossQuestion for a type change', () => {
       subject: 'User.age',
       forms: { convert: 'User.years' },
       accepted: undefined,
-      rejected:
-        'convert names the field as the destination contract names it: --convert User.years.',
+      rejected: 'convert names the field as the contract names it: --convert User.years.',
     });
   });
 });
@@ -236,7 +236,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
     loss: 'drop',
   } as const;
 
-  it('offers only delete, and says to rename the model first', () => {
+  it('offers only delete, does not say the field was removed, and gives the rename of the model as the way to keep the values', () => {
     const question = dataLossQuestion(loss, {
       origin: profile,
       destination: person,
@@ -245,10 +245,10 @@ describe('dataLossQuestion for a field whose model the destination names differe
       originKnown: true,
       temporaryValues: [],
     });
-    expect({ verbs: question.verbs, question: question.question }).toEqual({
+    expect({ verbs: question.verbs, question: questionText(question) }).toEqual({
       verbs: ['delete'],
       question:
-        'Removing field "Profile.nickname" would delete its values.\nThe plan would run: Remove field nickname from collection profiles.\nThe destination contract has no model "Profile". If it was renamed, keep the values: run the command again with --rename \'Profile:<new model name>\', naming the model that stores them now, and the field can then be renamed too.\ndelete lets them go.',
+        'This change would delete the values of field "Profile.nickname".\nThe operation of the plan that does this: Remove field nickname from collection profiles.\nIf model "Profile" was renamed to "Person", keep the values of field "Profile.nickname": --rename Profile:Person\ndelete lets them go.',
     });
   });
 
@@ -313,9 +313,9 @@ describe('dataLossQuestion with advice from the target', () => {
       },
     );
 
-    expect({ question: question.question, verbs: question.verbs }).toEqual({
+    expect({ question: questionText(question), verbs: question.verbs }).toEqual({
       question:
-        'This change would delete the data of model "User".\nThe plan would run: Drop storage users.\nTo keep its data, move it by hand.\ndelete lets its data go.',
+        'This change would delete the data of model "User".\nThe operation of the plan that does this: Drop storage users.\nTo keep its data, move it by hand.\ndelete lets its data go.',
       verbs: ['delete'],
     });
   });

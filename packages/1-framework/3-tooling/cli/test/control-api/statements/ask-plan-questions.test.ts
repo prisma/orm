@@ -1,6 +1,7 @@
 import { asNamespaceId } from '@internal/contract/types';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { questionText } from '../../../src/control-api/statements/plan-question-text';
 import {
   askPlanQuestions,
   ORIGIN_SNAPSHOT_RECOVERY,
@@ -57,7 +58,7 @@ function run(replanned: PlannedQuestions, typed: readonly (readonly string[])[])
       originKnown: true,
       destination,
       answer: async (questions: readonly PlanQuestion[]) => {
-        asked.push(questions.map(({ question }) => question));
+        asked.push(questions.map((each) => questionText(each)));
         const answers = typed[round] ?? [];
         round += 1;
         return answers.map((answer) => {
@@ -80,10 +81,10 @@ describe('a rename typed at the prompt', () => {
     expect((await result).ok).toBe(true);
     expect(asked).toEqual([
       [
-        'Removing field "T.ratio" would delete its values.\nThe plan would run: Drop column "ratio" from "T".\nrename keeps the values under the new name; delete lets them go.',
+        'Removing field "T.ratio" would delete its values.\nThe operation of the plan that does this: Drop column "ratio" from "T".\nrename keeps the values under the new name; delete lets them go.',
       ],
       [
-        'Changing the type of field "T.ratio" can change or lose its values.\nThe plan would run: Alter type of "T"."ratio2" to int4.\nconvert writes a conversion for you to fill in; delete keeps the field and lets the database cast its values, which can change or lose some.',
+        'Changing the type of field "T.ratio" can change or lose its values.\nThe operation of the plan that does this: Alter type of "T"."ratio2" to int4.\nconvert writes a conversion for you to fill in; delete lets the database cast the values, which can change or lose some.',
       ],
     ]);
   });
@@ -123,25 +124,27 @@ describe('questions about storage when the origin contract is unknown', () => {
       originKnown: false,
       destination,
       answer: async (questions) => {
-        asked.push(...questions.map(({ question }) => question));
+        asked.push(...questions.map((each) => questionText(each)));
         return questions.map(({ subject }) => ({ verb: 'delete', text: subject }));
       },
       replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked).toEqual([
-      `This change would delete the data in "Legacy", named by its storage name because the origin contract is unknown.\nThe plan would run: Drop table Legacy.\n${ORIGIN_SNAPSHOT_RECOVERY}\ndelete lets the data go.`,
-      'This change would delete the data in "Profile", named by its storage name because the origin contract is unknown.\nThe plan would run: Drop table Profile.\ndelete lets the data go.',
+      `This change would delete the data in "Legacy", named by its storage name because the contract before this change is not known.\nThe operation of the plan that does this: Drop table Legacy.\n${ORIGIN_SNAPSHOT_RECOVERY.join('\n')}\ndelete lets the data go.`,
+      'This change would delete the data in "Profile", named by its storage name because the contract before this change is not known.\nThe operation of the plan that does this: Drop table Profile.\ndelete lets the data go.',
     ]);
-    expect(ORIGIN_SNAPSHOT_RECOVERY.split('\n').map((line) => line.slice(0, 2))).toEqual([
+    expect(ORIGIN_SNAPSHOT_RECOVERY.map((line) => line.slice(0, 2))).toEqual([
       'If',
       '1.',
       '2.',
       '3.',
     ]);
-    expect(ORIGIN_SNAPSHOT_RECOVERY).toContain('--dry-run');
-    expect(ORIGIN_SNAPSHOT_RECOVERY).toContain('`prisma db update --advance-ref <name> --dry-run`');
-    expect(ORIGIN_SNAPSHOT_RECOVERY).toContain(
+    expect(ORIGIN_SNAPSHOT_RECOVERY.join('\n')).toContain('--dry-run');
+    expect(ORIGIN_SNAPSHOT_RECOVERY.join('\n')).toContain(
+      '`prisma db update --advance-ref <name> --dry-run`',
+    );
+    expect(ORIGIN_SNAPSHOT_RECOVERY.join('\n')).toContain(
       'with the same `--db` as this command if it has one',
     );
   });
@@ -205,7 +208,7 @@ describe('questions about access', () => {
     expect(subjects).toEqual(['finance.Invoice.number', 'finance.Invoice']);
   });
 
-  it('ask once per operation, and say a policy drop changes access where disabling row-level security widens it', async () => {
+  it('ask once per model, and say access would change when one of its operations can go either way', async () => {
     const user = { kind: 'model', namespaceId: asNamespaceId('app'), model: 'T' } as const;
     const asked: string[] = [];
     const result = await askPlanQuestions({
@@ -236,15 +239,14 @@ describe('questions about access', () => {
       originKnown: true,
       destination,
       answer: async (questions) => {
-        asked.push(...questions.map(({ question }) => question));
+        asked.push(...questions.map((each) => questionText(each)));
         return questions.map(({ subject }) => ({ verb: 'allow', text: subject }));
       },
       replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
     });
 
     expect(asked).toEqual([
-      'This change would alter who can read and write the data of "T".\nThe plan would run: Drop RLS policy "readers" on "T".\nallow lets the plan make this change.',
-      'This change would widen who can read and write the data of "T".\nThe plan would run: Disable row-level security on "T".\nallow lets the plan make this change.',
+      'Access to the data of "T" would change.\nThe operations of the plan that do this:\n- Drop RLS policy "readers" on "T"\n- Disable row-level security on "T"\nallow lets the plan make these changes.',
     ]);
     expect(
       result.ok &&
@@ -283,7 +285,7 @@ describe('allow statements given as pre-answers', () => {
       originKnown: true,
       destination,
       answer: async (questions) => {
-        asked.push(...questions.map(({ question }) => question));
+        asked.push(...questions.map((each) => questionText(each)));
         return questions.map(({ subject }) => ({ verb: 'allow', text: subject }));
       },
       replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
@@ -291,28 +293,15 @@ describe('allow statements given as pre-answers', () => {
     return { asked, result };
   };
 
-  it('answer one operation each, in order, and leave the rest to be asked', async () => {
+  it('answer every access change of their model with one flag', async () => {
     const { asked, result } = ask([{ verb: 'allow', text: 'T' }]);
-
-    expect((await result).ok).toBe(true);
-    expect(asked).toEqual([
-      'This change would widen who can read and write the data of "T".\nThe plan would run: Disable row-level security on "T".\nallow lets the plan make this change.',
-    ]);
-  });
-
-  it('answer every operation when there is one per operation', async () => {
-    const { asked, result } = ask([
-      { verb: 'allow', text: 'T' },
-      { verb: 'allow', text: 'T' },
-    ]);
 
     expect((await result).ok).toBe(true);
     expect(asked).toEqual([]);
   });
 
-  it('refuse an allow left over once each operation has one', async () => {
+  it('refuse a second allow of the same model', async () => {
     const { result } = ask([
-      { verb: 'allow', text: 'T' },
       { verb: 'allow', text: 'T' },
       { verb: 'allow', text: 'T' },
     ]);

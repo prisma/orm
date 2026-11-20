@@ -14,6 +14,7 @@ import { createContract, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it, vi } from 'vitest';
 import { createControlClient } from '../../src/control-api/client';
+import { questionText } from '../../src/control-api/statements/plan-question-text';
 import type { ControlProgressEvent, EmitResult } from '../../src/control-api/types';
 import { createMockComponents, createSourceProvider, emittableContract } from './client-fixtures';
 
@@ -799,7 +800,7 @@ describe('ControlClient progress emission', () => {
           invocation: TEST_INVOCATION,
           ...consent,
           answerQuestions: async (questions) => {
-            asked.push(questions.map(({ question }) => question));
+            asked.push(questions.map((each) => questionText(each)));
             return questions.map(({ verbs, subject }) => ({
               verb: verbs[0] ?? 'delete',
               text: subject,

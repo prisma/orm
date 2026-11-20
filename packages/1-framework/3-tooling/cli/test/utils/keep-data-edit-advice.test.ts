@@ -42,8 +42,9 @@ describe('the advice that keeps the data of a member that keeps its name with a 
     expect(migrationPlanKeepDataEditAdvice(PROJECT)(EDITED, [EDITED])).toEqual({
       lead: undefined,
       ways: [
-        `To keep that data, answer with --delete Status.ARCHIVED, then in the migration.ts this command writes ${EDITS_TEXT}, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`.`,
+        `To keep that data, run this command with --delete Status.ARCHIVED, then in the migration.ts it writes ${EDITS_TEXT}, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`.`,
       ],
+      waysGiveDelete: true,
     });
   });
 
@@ -54,6 +55,7 @@ describe('the advice that keeps the data of a member that keeps its name with a 
         `To keep it, plan the change with \`{bin} migration plan --from sha256:0123 --rename Status.OLD:Status.STALE --delete Status.ARCHIVED\`, in the migration.ts it writes ${EDITS_TEXT}, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`.`,
         "To keep it with db update, change it in two runs. First rename member ARCHIVED of enum Status in the contract source to a name the enum does not have and give it a stored value the enum does not use, run `{bin} contract emit`, and run `{bin} db update --rename Status.OLD:Status.STALE --rename 'Status.ARCHIVED:Status.<temporary member>'`. Then rename that member back to ARCHIVED with its final stored value, run `{bin} contract emit`, and run `{bin} db update --rename 'Status.<temporary member>:Status.ARCHIVED'`.",
       ],
+      waysGiveDelete: false,
     });
   });
 
@@ -63,6 +65,7 @@ describe('the advice that keeps the data of a member that keeps its name with a 
       ways: [
         "To keep it with db update, change it in two runs. First rename member ARCHIVED of enum Status in the contract source to a name the enum does not have and give it a stored value the enum does not use, run `{bin} contract emit`, and run `{bin} db update --rename 'Status.ARCHIVED:Status.<temporary member>'`. Then rename that member back to ARCHIVED with its final stored value, run `{bin} contract emit`, and run `{bin} db update --rename 'Status.<temporary member>:Status.ARCHIVED'`.",
       ],
+      waysGiveDelete: false,
     });
   });
 
@@ -91,8 +94,9 @@ describe('the advice that keeps the data of a member that keeps its name with a 
         ways: [
           `To keep it, plan the change with \`{bin} migration plan --from sha256:0123 --rename Status.OLD:Status.STALE --delete Status.ARCHIVED --delete Status.ACTIVE\`, in the migration.ts it writes ${EDITS_TEXT}, and replace remove active with replace active, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`.`,
         ],
+        waysGiveDelete: false,
       },
-      withoutMigrations: { lead, ways: [runs] },
+      withoutMigrations: { lead, ways: [runs], waysGiveDelete: false },
     });
   });
 
@@ -120,8 +124,8 @@ describe('the advice that keeps the data of a member that keeps its name with a 
       dbUpdate: dbUpdateKeepDataEditAdvice(PROJECT, 'sha256:0123')(ARCHIVED, [ARCHIVED]),
       migrationPlan: migrationPlanKeepDataEditAdvice(PROJECT)(ARCHIVED, [ARCHIVED]),
     }).toEqual({
-      dbUpdate: { lead, ways: [runs] },
-      migrationPlan: { lead: undefined, ways: [] },
+      dbUpdate: { lead, ways: [runs], waysGiveDelete: false },
+      migrationPlan: { lead: undefined, ways: [], waysGiveDelete: false },
     });
   });
 });

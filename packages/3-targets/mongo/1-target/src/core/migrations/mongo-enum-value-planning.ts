@@ -378,7 +378,7 @@ function takenValueAdvice(
   if (only === undefined) return undefined;
   const holderText = enumValueStatementText(enums.fromContract, { ...enumValue, member: holder });
   const lead = `Its new stored value ${JSON.stringify(to)} was the stored value of enum value "${holderText}", which the enum no longer has.`;
-  const ask = 'and the next question says how to keep the data of both.';
+  const ask = 'and the next run says how to keep the data of both.';
   const memberText = (member: string) =>
     enumValueStatementText(enums.contract, { ...enumValue, member });
   const rename = (member: string) => statementFlag('rename', `${holderText}:${memberText(member)}`);
