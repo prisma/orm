@@ -109,6 +109,12 @@ export type PureQueryPlanNode<Rest = never> =
        * query plan purification. Never produced by the query compiler.
        */
       lastInsertId?: string
+      /**
+       * Present when this node holds an already-evaluated runtime result (e.g. from
+       * an evaluated impure query plan node) and does not need to be traversed and copied
+       * by evaluateArg.
+       */
+      isEvaluated?: boolean
     }
   | {
       type: 'seq'
