@@ -6,9 +6,9 @@
 
 ## At a glance
 
-Twelve slices in two stages. Stage 1 (three slices, in order) moves every write method of the collection onto the mutation graph with no new behaviour, and removes the nested-write executor. Stage 2 (nine slices) first unifies the write builders and redesigns read-backs, then adds the project's operations as entries in the graph's translation, and nested creates of a chosen variant. `has-one-unique` does not touch the ORM client and can be built at any time.
+Thirteen slices in two stages. Stage 1 (three slices, in order) moves every write method of the collection onto the mutation graph with no new behaviour, and removes the nested-write executor. Stage 2 (ten slices) first unifies the write builders and redesigns read-backs, then adds the project's operations as entries in the graph's translation, and nested creates of a chosen variant. `has-one-unique` does not touch the ORM client and can be built at any time.
 
-Twelve is more than the one to four slices a project should have. Stage 1 could be a project of its own; it is kept here because the project owner asked for the graph to be worked into this project.
+Thirteen is more than the one to four slices a project should have. Stage 1 could be a project of its own; it is kept here because the project owner asked for the graph to be worked into this project.
 
 PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filtered-many-writes` on the executor, is closed without merging. Its mutator types, integration tests and docs are reused in slice 4. PR [#30642](https://github.com/prisma/orm/pull/30642), its ports, is rebased onto slice 4.
 
@@ -96,6 +96,12 @@ PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filte
    - **Builds on:** Slice `write-builders`' read-backs and rules (`read-back-rule.ts`, `rule-patterns.ts`); slice `single-row-writes`, whose N:1 `delete` and conditional `disconnect` set the flag today.
    - **Hands to:** Project close-out. A later nested write that changes the parent's row after its `UPDATE` gets a correct result without having to set a flag.
    - **Focus:** `updateFirstGraph` always adds the read-back. A new rule replaces a read-back with its source `Find` when the read-back's state edge for the table comes from the same node as the `Find`'s, so no write to the table runs between them (the comparison `readsTableAsFound` already makes). That `Find` selects only identity columns today, so it selects the result shape when the rule applies. Graph tests for both cases (no write between: one `Find`; N:1 unlink between: read-back kept), and integration tests that results are unchanged.
+
+13. **Slice `matched-rows`** — `projects/nested-mutations/slices/matched-rows/` (added 2026-11-20, from the review of `single-row-writes`)
+   - **Outcome:** On every target, an `Update` reports only rows its `UPDATE` changed. Today, on a database without `RETURNING`, it reports one row per key its `Find` passed in, without checking that the `UPDATE` matched them (`statement-graph/update.ts`). If a concurrent transaction changes a found row so that the caller's `where` no longer matches it, the `UPDATE` affects no row, but the caller's result and every nested write after it (1:N, M:N and N:1) still receive that row.
+   - **Builds on:** Slice `write-builders`' `Find` → `Update` pairs (`updateFirstGraph`, `updateAll` with the fold rule); slice `single-row-writes`, whose nested writes take their keys from the parent's `Update`.
+   - **Hands to:** Project close-out.
+   - **Focus:** The slice spec picks one of two designs; a re-read after the `UPDATE` cannot work, because a row the `UPDATE` did not change can come to match the `where` before the re-read. (1) The `Find` that feeds a write locks its rows (`SELECT … FOR UPDATE`), so the `UPDATE` matches exactly the found rows. It also closes the race on Postgres; it needs `FOR UPDATE` in the SQL AST and the adapters, and changes locking for every `update()`, `delete()` and nested write that starts with a `Find`; the spec checks whether SQLite's single writer already prevents the race there. (2) The `Update` compares the affected-row count with the number of keys and fails when it is lower, so the transaction rolls back, as `FindByKeys` does. MySQL counts changed rather than matched rows unless the connection sets `CLIENT_FOUND_ROWS`; the spec checks the driver. Integration tests that make the found row stop matching between the two statements, on SQLite and MySQL.
 
 ## Dependencies (external)
 
