@@ -1,5 +1,14 @@
 import type { Contract } from '@internal/contract/types';
-import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
+import type {
+  ExtensionPackRef,
+  FamilyPackRef,
+  TargetPackRef,
+} from '@internal/framework-components/components';
+import type {
+  EntityHandleLoweringInput,
+  LoweredPackEntity,
+  PackEntityHandle,
+} from '@internal/sql-contract/entity-handle-lowering-hook';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
@@ -134,8 +143,53 @@ describe.each(['constructor', 'toString'])('a namespace named "%s"', (namespaceI
   });
 });
 
+const sqlFamilyPack: FamilyPackRef<'sql'> = {
+  kind: 'family',
+  id: 'sql',
+  familyId: 'sql',
+  version: '0.0.1',
+};
+
+function buildTypeScript(input: Readonly<Record<string, unknown>>): unknown {
+  return defineContract({
+    ...testTypeLookups,
+    family: sqlFamilyPack,
+    target: postgresTargetPack,
+    createNamespace: createTestSqlNamespace,
+    ...input,
+  } as Parameters<typeof defineContract>[0]);
+}
+
+const gadgetAuthoring = {
+  entityTypes: {
+    gadget: {
+      kind: 'entity',
+      discriminator: 'gadget',
+      output: { factory: (input: { readonly name: string }) => ({ ...input }) },
+    },
+  },
+  lowerEntityHandles: (input: EntityHandleLoweringInput): LoweredPackEntity[] =>
+    input.handles.map(() => ({
+      namespaceId: input.defaultNamespaceId,
+      entityKind: 'gadget',
+      key: '__proto__',
+      entity: {},
+    })),
+} as const;
+
+const gadgetPack: ExtensionPackRef<'sql', 'postgres'> = {
+  kind: 'extension',
+  id: 'gadget-demo',
+  familyId: 'sql',
+  targetId: 'postgres',
+  version: '0.0.1',
+  authoring: gadgetAuthoring,
+};
+
+const gadgetHandle: PackEntityHandle = { entityKind: 'gadget' };
+
 describe('inherited names elsewhere', () => {
-  it('keeps a table and a model named "constructor" and a column named "toString"', () => {
+  it('does not refuse a table and a model named "constructor" or a column named "toString"', () => {
     const { added, error } = propertiesAddedBy(() => {
       const contract = build({
         models: [
@@ -164,18 +218,8 @@ describe('inherited names elsewhere', () => {
   });
 
   it('reports a relation to an undeclared model named "constructor" as unknown', () => {
-    const sqlFamilyPack: FamilyPackRef<'sql'> = {
-      kind: 'family',
-      id: 'sql',
-      familyId: 'sql',
-      version: '0.0.1',
-    };
     expect(() =>
-      defineContract({
-        ...testTypeLookups,
-        family: sqlFamilyPack,
-        target: postgresTargetPack,
-        createNamespace: createTestSqlNamespace,
+      buildTypeScript({
         models: {
           Post: model('Post', {
             fields: { id: field.column(int4).id() },
@@ -185,7 +229,30 @@ describe('inherited names elsewhere', () => {
       }),
     ).toThrow(expect.objectContaining({ code: 'CONTRACT.MODEL_UNKNOWN' }));
   });
+
+  it('reports a relation from an undeclared field named "constructor" as unknown', () => {
+    expect(() =>
+      buildTypeScript({
+        models: {
+          User: model('User', { fields: { id: field.column(int4).id() } }),
+          Post: model('Post', {
+            fields: { id: field.column(int4).id() },
+            relations: { author: rel.belongsTo('User', { from: 'constructor', to: 'id' }) },
+          }),
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.FIELD_UNKNOWN' }));
+  });
 });
+
+function expectRefused(run: () => unknown, messageStart: RegExp): void {
+  const { added, error } = propertiesAddedBy(run);
+  expect(added).toEqual([]);
+  expect(error).toMatchObject({
+    code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
+    message: expect.stringMatching(messageStart),
+  });
+}
 
 describe('a name that cannot be a key', () => {
   const valueObjectField = {
@@ -198,34 +265,39 @@ describe('a name that cannot be a key', () => {
 
   const cases: readonly (readonly [string, () => unknown, RegExp])[] = [
     [
-      'namespace',
+      'a namespace holding a model',
       () => build({ namespaces: ['__proto__'], models: [userModel({ namespaceId: '__proto__' })] }),
-      /^The namespace of table "users" /,
+      /^The namespace of table "users" is named "__proto__"/,
     ],
     [
-      'table',
+      'a namespace that is only declared',
+      () => build({ namespaces: ['__proto__'] }),
+      /^A namespace is named "__proto__"/,
+    ],
+    [
+      'a table',
       () => build({ models: [userModel({ tableName: '__proto__' })] }),
-      /^A table in namespace "public" /,
+      /^A table in namespace "public" is named "__proto__"/,
     ],
     [
-      'column',
+      'a column',
       () =>
         build({ models: [userModel({ fields: [column('id'), column('label', '__proto__')] })] }),
-      /^A column of table "users" /,
+      /^A column of table "users" is named "__proto__"/,
     ],
     [
-      'model',
+      'a model',
       () => build({ models: [userModel({ modelName: '__proto__' })] }),
-      /^A model in namespace "public" /,
+      /^A model in namespace "public" is named "__proto__"/,
     ],
     [
-      'field',
+      'a field',
       () =>
         build({ models: [userModel({ fields: [column('id'), column('__proto__', 'label')] })] }),
-      /^A field of model "User" /,
+      /^A field of model "User" is named "__proto__"/,
     ],
     [
-      'relation',
+      'a relation',
       () =>
         build({
           models: [
@@ -247,62 +319,171 @@ describe('a name that cannot be a key', () => {
             }),
           ],
         }),
-      /^A relation of model "User" /,
+      /^A relation of model "User" is named "__proto__"/,
     ],
     [
-      'enum',
+      'an enum',
       () =>
         build({
           enums: Object.fromEntries([['__proto__', enumType('__proto__', text, member('A', 'a'))]]),
         }),
-      /^An enum in namespace "public" /,
+      /^An enum in namespace "public" is named "__proto__"/,
     ],
     [
-      'value object',
+      'a value object',
       () => build({ valueObjects: [{ name: '__proto__', fields: [column('street')] }] }),
-      /^A value object is/,
+      /^A value object is named "__proto__"/,
     ],
     [
-      'value object field',
+      'a value object field',
       () =>
         build({
           valueObjects: [{ name: 'Address', fields: [column('__proto__')] }],
           models: [userModel({ fields: [column('id'), valueObjectField] })],
         }),
-      /^A field of value object "Address" /,
+      /^A field of value object "Address" is named "__proto__"/,
     ],
     [
-      'database type',
+      'a database type',
       () =>
         build({
           databaseTypes: Object.fromEntries([
             ['__proto__', { kind: 'codec-instance', codecId: 'pg/text@1', typeParams: {} }],
           ]),
         }),
-      /^A database type is/,
+      /^A database type is named "__proto__"/,
     ],
     [
-      'attached entity',
+      'an attached entity',
       () =>
         build({
           attachedEntities: { public: { widget: Object.fromEntries([['__proto__', {}]]) } },
         }),
-      /^A "widget" entity in namespace "public" /,
+      /^A "widget" entity in namespace "public" is named "__proto__"/,
     ],
     [
-      'field of a TypeScript model',
+      'an entity collected from a column',
+      () =>
+        build({
+          models: [
+            userModel({
+              fields: [
+                column('id'),
+                {
+                  ...column('mood'),
+                  descriptor: {
+                    ...int4,
+                    entityRef: { entityKind: 'widget', entityName: '__proto__', entity: {} },
+                  },
+                },
+              ],
+            }),
+          ],
+        }),
+      /^A "widget" entity in namespace "public" is named "__proto__"/,
+    ],
+    [
+      'a pack entity handle key',
+      () => buildTypeScript({ extensions: { gadgetDemo: gadgetPack }, entities: [gadgetHandle] }),
+      /^A "gadget" entity in namespace "public" is named "__proto__"/,
+    ],
+    [
+      'a field of a TypeScript model',
       () => model('User', { fields: Object.fromEntries([['__proto__', field.column(int4)]]) }),
-      /^A field of model "User" /,
+      /^A field of model "User" is named "__proto__"/,
+    ],
+    [
+      'a model key in a TypeScript contract',
+      () =>
+        buildTypeScript({
+          models: Object.fromEntries([
+            ['__proto__', model('Foo', { fields: { id: field.column(int4).id() } })],
+          ]),
+        }),
+      /^A model is named "__proto__"/,
+    ],
+    [
+      'a database type key in a TypeScript contract',
+      () =>
+        buildTypeScript({
+          databaseTypes: Object.fromEntries([
+            ['__proto__', { kind: 'codec-instance', codecId: 'pg/text@1', typeParams: {} }],
+          ]),
+        }),
+      /^A database type is named "__proto__"/,
     ],
   ];
 
-  it.each(cases)('refuses a %s named "__proto__"', (_kind, run, kindInMessage) => {
-    const { added, error } = propertiesAddedBy(run);
-    expect(added).toEqual([]);
-    expect(error).toMatchObject({
-      code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
-      message: expect.stringMatching(kindInMessage),
+  it.each(cases)('refuses %s named "__proto__"', (_kind, run, messageStart) => {
+    expectRefused(run, messageStart);
+  });
+});
+
+describe('a "__proto__" key written in an object literal', () => {
+  const literalMessage = 'is written under the key "__proto__" in an object literal';
+  const cases: readonly (readonly [string, () => unknown, RegExp])[] = [
+    [
+      'the fields of a model',
+      () =>
+        model('User', {
+          fields: { id: field.column(int4).id(), __proto__: field.column(text) },
+        }),
+      /^A field of model "User" is written under the key "__proto__"/,
+    ],
+    [
+      'the relations of a model',
+      () =>
+        model('User', {
+          fields: { id: field.column(int4).id() },
+          relations: { __proto__: rel.hasMany('User', { by: 'id' }) },
+        }),
+      /^A relation of model "User" is written under the key "__proto__"/,
+    ],
+    [
+      'relations added to a model',
+      () =>
+        model('User', { fields: { id: field.column(int4).id() } }).relations({
+          __proto__: rel.hasMany('User', { by: 'id' }),
+        }),
+      /^A relation of model "User" is written under the key "__proto__"/,
+    ],
+    [
+      'the models of a contract',
+      () =>
+        buildTypeScript({
+          models: { __proto__: model('Foo', { fields: { id: field.column(int4).id() } }) },
+        }),
+      /^A model is written under the key "__proto__"/,
+    ],
+    [
+      'the enums of a contract',
+      () =>
+        buildTypeScript({
+          enums: { __proto__: enumType('Mood', text, member('A', 'a')) },
+        }),
+      /^An enum is written under the key "__proto__"/,
+    ],
+    [
+      'the database types of a contract',
+      () =>
+        buildTypeScript({
+          databaseTypes: {
+            __proto__: { kind: 'codec-instance', codecId: 'pg/text@1', typeParams: {} },
+          },
+        }),
+      /^A database type is written under the key "__proto__"/,
+    ],
+    [
+      'the extensions of a contract',
+      () => buildTypeScript({ extensions: { __proto__: gadgetPack } }),
+      /^An extension pack is written under the key "__proto__"/,
+    ],
+  ];
+
+  it.each(cases)('is refused in %s', (_where, run, messageStart) => {
+    expectRefused(run, messageStart);
+    expect(propertiesAddedBy(run).error).toMatchObject({
+      message: expect.stringContaining(literalMessage),
     });
-    expect(error).toMatchObject({ message: expect.stringContaining('is named "__proto__"') });
   });
 });

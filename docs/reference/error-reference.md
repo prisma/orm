@@ -563,7 +563,11 @@ Two declarations claim the same name: duplicate namespace entries, model names, 
 
 ### CONTRACT.NAME_UNUSABLE_AS_KEY
 
-A name the SQL contract builder would store as an object key cannot be one. Today that is only `__proto__`, which JavaScript reads as an object's prototype rather than as a key. It applies to every name the builder keys an object by: namespaces, tables, columns, models, fields, relations, enums, value sets, value objects and their fields, database types, and pack entities. Inherited names such as `constructor` and `toString` are allowed. The message says what the name names and where, for example `The namespace of table "users" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.` Payload: `name`, `nameOf`.
+A name the SQL contract builder would store as an object key cannot be one. Today that is only `__proto__`, which JavaScript reads as an object's prototype rather than as a key. It applies to every name the builder keys an object by: namespaces, tables, columns, models, fields, relations, enums, value sets, value objects and their fields, database types, and pack entities. Inherited names such as `constructor` and `toString` are allowed. The message says what the name names and where: `The namespace of table "users" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.` (`reason: 'name-not-a-key'`).
+
+A TypeScript contract that writes `__proto__` as a key of an object literal, such as `fields: { __proto__: field.column(...) }` or `models: { __proto__: model(...) }`, is refused too. JavaScript takes that key as the object's prototype and stores no entry, so `defineContract`, `model()` and `.relations()` refuse a record of fields, relations, models, enums, database types or extensions whose prototype is not the plain object one: `A field of model "User" is written under the key "__proto__" in an object literal. JavaScript takes that key as the prototype of the object and stores no entry under it. Choose another name.` (`reason: 'object-literal-prototype'`).
+
+Payload: `name`, `kind` (`namespace`, `table`, `column`, `model`, `field`, `relation`, `enum`, `valueSet`, `valueObject`, `valueObjectField`, `databaseType`, `extensionPack` or `entity`), `reason`, and the fields that locate the name where the builder has them: `namespaceId`, `tableName`, `modelName`, `valueObjectName`, `entityKind`.
 
 ### CONTRACT.NAMESPACE_INVALID
 

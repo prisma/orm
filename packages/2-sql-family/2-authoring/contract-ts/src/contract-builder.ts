@@ -43,6 +43,7 @@ import { contractError } from './contract-errors';
 import { buildContractDefinition } from './contract-lowering';
 import type { SqlContractResult } from './contract-types';
 import type { EnumTypeHandle } from './enum-type';
+import { assertPlainNamedEntries } from './named-entries';
 import { refuseTypesKey } from './refuse-types-key';
 
 export { buildSqlContractFromDefinition } from './build-contract';
@@ -429,6 +430,27 @@ type WithFamilyTarget<
   T extends TargetPackRef<'sql', string>,
 > = Input & { readonly family: F; readonly target: T };
 
+/** Refuses a record of the contract keyed by name whose prototype a `__proto__` key in its object literal replaced. */
+function assertPlainContractRecords(records: {
+  readonly models?: object | undefined;
+  readonly enums?: object | undefined;
+  readonly databaseTypes?: object | undefined;
+  readonly extensions?: object | undefined;
+}): void {
+  if (records.models !== undefined) {
+    assertPlainNamedEntries(records.models, { kind: 'model', namespaceId: undefined });
+  }
+  if (records.enums !== undefined) {
+    assertPlainNamedEntries(records.enums, { kind: 'enum', namespaceId: undefined });
+  }
+  if (records.databaseTypes !== undefined) {
+    assertPlainNamedEntries(records.databaseTypes, { kind: 'databaseType' });
+  }
+  if (records.extensions !== undefined) {
+    assertPlainNamedEntries(records.extensions, { kind: 'extensionPack' });
+  }
+}
+
 /**
  * Shared builder that assembles a SqlContract with pre-bound family and target.
  * Extension wrappers keep their own public overloads and delegate their impl body here;
@@ -505,6 +527,7 @@ export function buildBoundContract(
     | undefined,
 ) {
   refuseTypesKey(definition, 'defineContract');
+  assertPlainContractRecords(definition);
   const full = { ...definition, family, target };
 
   if (factory !== undefined) {
@@ -517,6 +540,7 @@ export function buildBoundContract(
       }),
     );
     refuseTypesKey(built, 'defineContract');
+    assertPlainContractRecords(built);
     const mergedEnums = { ...(definition.enums ?? {}), ...built.enums };
     const mergedEntities = [...(definition.entities ?? []), ...(built.entities ?? [])];
     return buildContractFromDsl({
