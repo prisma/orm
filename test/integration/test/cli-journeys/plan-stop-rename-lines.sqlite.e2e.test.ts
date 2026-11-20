@@ -1,5 +1,5 @@
 /**
- * The rename lines `migration plan` and `db update` print for a removed variant, also when the same change renames its base, and for a rename to a name another field holds work when a careful reader follows them (SQLite).
+ * The rename lines `migration plan` and `db update` print for a removed variant, also when the same change renames or removes its base, and for a rename to a name another field holds work when a careful reader follows them (SQLite).
  *
  * Each journey reads the line, changes the contract as it says, runs the command with the flags it gives, and checks the data.
  */
@@ -172,6 +172,68 @@ withTempDir(({ createTempDir }) => {
             { id: 2, type: 'epic', severity: null, scope: 'big' },
           ]);
           await expectSettled(journey, 'R3.06');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
+
+  describe.each(COMMANDS)(
+    'Journey R4 (SQLite): a removed variant whose base the same change removes, with %s',
+    (command) => {
+      it(
+        'gives no model to add, and its rows go with those of the base, as the error says',
+        async () => {
+          const journey = sqliteJourney(createTempDir, command);
+          await start(
+            journey,
+            tasks(BUG),
+            `INSERT INTO "task" (id, type, severity, scope) VALUES (1, 'bug', 'high', NULL), (2, 'epic', NULL, 'big'), (3, 'bug', NULL, NULL);`,
+            'R4.01',
+          );
+          await emit(journey, `// use prisma-8\n${ISSUE}`, 'R4.02');
+          const error = await refusal(journey, ['--rename', 'Bug:Nope'], 'R4.03');
+          expect(
+            { summary: error.summary, lines: linesOf(error) },
+            'R4.03: no model to add',
+          ).toEqual({
+            summary: 'The contract has no model "Nope" to rename "Bug" to.',
+            lines: [
+              'Model "Bug" cannot be renamed on its own: it is a variant of model "Task", which this change removes too, and its rows are rows of model "Task", so they are kept or deleted with them. Leave out this rename.',
+            ],
+          });
+
+          const base = await refusal(journey, [], 'R4.04');
+          expect(
+            { summary: base.summary, lines: linesOf(base) },
+            'R4.04: asked about the base',
+          ).toEqual({
+            summary: 'Removing model "Task" would delete its data.',
+            lines: [
+              'If the model was renamed to "Issue", keep its data: --rename Task:Issue',
+              'If its data can go: --delete Task',
+            ],
+          });
+          const renameBase = flagsOf(linesOf(base)[0] ?? '');
+          const deletes = linesOf(await refusal(journey, renameBase, 'R4.05'))
+            .filter((line) => line.includes(': --delete '))
+            .flatMap((line) => flagsOf(line));
+          expect(deletes, 'R4.05: the values the rename of the base leaves out').toEqual([
+            '--delete',
+            'Epic.scope',
+            '--delete',
+            'Issue.type',
+          ]);
+          await planAndApply(journey, [...renameBase, ...deletes], 'R4.06');
+          expect(
+            await rows(journey, 'SELECT id, severity FROM "issue" ORDER BY id'),
+            'R4.06: the rows of the variant are kept with those of the base',
+          ).toEqual([
+            { id: 1, severity: 'high' },
+            { id: 2, severity: null },
+            { id: 3, severity: null },
+          ]);
+          await expectSettled(journey, 'R4.07');
         },
         timeouts.spinUpPpgDev,
       );

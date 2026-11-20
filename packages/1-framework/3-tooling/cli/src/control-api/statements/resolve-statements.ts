@@ -43,7 +43,7 @@ import {
   parseRenameStatement,
   type StatementSide,
 } from './parse-rename';
-import { possibleNewNames, variantBaseText } from './possible-new-names';
+import { possibleNewNames, variantBaseAfterRenames } from './possible-new-names';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
 import { variantValue } from './variants';
@@ -1500,7 +1500,8 @@ function newNameRefusal(
       from.entity === 'model' || parent === '' ? each : `${parent}.${each}`,
     ),
     destinationRef: state.destinationRef,
-    variantOf: from.entity === 'model' ? variantBaseText(names, from.coordinate) : undefined,
+    variantOf:
+      from.entity === 'model' ? variantBaseAfterRenames(names, from.coordinate) : undefined,
   };
   const missing = () =>
     to === undefined ? errorRenameToMissingName(statement, rename) : undefined;

@@ -31,7 +31,9 @@ import {
   EMIT_COMMAND,
   missingNameReason,
   nameHadBeforeReason,
+  renamedOnlyWithBase,
   runAgain,
+  type VariantBase,
 } from './missing-new-name';
 import type { ConsentVerb } from './parse-consent';
 import type {
@@ -53,7 +55,7 @@ import {
   sameModel,
   valueObjectFieldAfterRenames,
   valueObjectFields,
-  variantBaseText,
+  variantBaseAfterRenames,
 } from './possible-new-names';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
@@ -487,7 +489,7 @@ function renameMeaning(
   newNames: readonly string[],
   placeholder: string,
   destinationRef: string | undefined,
-  variantOf: string | undefined,
+  variantOf: VariantBase | undefined,
 ): string {
   const [only] = newNames;
   if (only !== undefined && newNames.length === 1)
@@ -557,13 +559,13 @@ function renameAnswer(
 
 const NEW_NAME = '<new name>';
 
-/** The base of a model subject that is a variant, as the contract names it and a `--rename` writes it; its new name must be a variant of that base too. */
+/** The base of a model subject that is a variant. */
 function variantOfModel(
   subject: MigrationSubject,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): string | undefined {
+): VariantBase | undefined {
   return subject.kind === 'model'
-    ? variantBaseText(contractsAndRenames(contracts), subject)
+    ? variantBaseAfterRenames(contractsAndRenames(contracts), subject)
     : undefined;
 }
 
@@ -643,7 +645,8 @@ function modelRenameWay(
   const to = only !== undefined && newNames.length === 1 ? only : NEW_NAME;
   const flag = statementFlag({ verb: 'rename', text: `${name}:${to}` });
   const renamed = `If model "${name}" was renamed`;
-  const variantOf = variantBaseText(contractsAndRenames(contracts), model);
+  const variantOf = variantBaseAfterRenames(contractsAndRenames(contracts), model);
+  if (variantOf?.kind === 'removed') return removedBaseWay(name, variantOf.base);
   const meaning = renameMeaning(
     `model "${name}"`,
     'say so first',
@@ -661,6 +664,11 @@ function modelRenameWay(
           ? `${renamed} to "${only}", stop this command and run it again with ${flag}.`
           : `${renamed} to ${eitherOf(newNames)}, stop this command and run it again with ${flag}, putting that name in place of ${NEW_NAME}.`,
   };
+}
+
+/** That a variant whose base the change removes has no rename of its own to keep its data. */
+function removedBaseWay(model: string, base: string): KeepDataWay {
+  return { text: renamedOnlyWithBase(model, base) };
 }
 
 /** The plan's backfill statements, resolved; empty when they do not resolve. */
@@ -1131,6 +1139,8 @@ export function dataLossQuestion(
   const required = newRequiredFields(loss.subject, contracts);
   const subjectInList = namedSubject(loss.subject, subject);
   const modelWay = missingModel === undefined ? [] : [modelRenameWay(missingModel, contracts)];
+  const variantOf = variantOfModel(loss.subject, contracts);
+  const baseWay = variantOf?.kind === 'removed' ? [removedBaseWay(subject, variantOf.base)] : [];
   const otherWays = [
     ...(loss.keepDataAdvice === undefined || commandRoutesSharedValues
       ? []
@@ -1145,6 +1155,7 @@ export function dataLossQuestion(
     notes: [...(keepData?.lead === undefined ? [] : [keepData.lead]), ...required.notes],
     keepDataWays: [
       ...modelWay,
+      ...baseWay,
       ...otherWays,
       ...(recovers ? originSnapshotRecovery(recoveryFor) : []),
     ],
@@ -1202,6 +1213,7 @@ export function dataLossQuestion(
   }
   const renamable =
     missingModel === undefined &&
+    baseWay.length === 0 &&
     loss.subject.kind !== 'storage' &&
     !inDestination(loss.subject, contracts) &&
     !renamedByPlan(loss.subject, contracts);

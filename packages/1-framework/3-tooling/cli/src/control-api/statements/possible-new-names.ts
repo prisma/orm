@@ -8,7 +8,8 @@ import {
   type ResolvedMigrationStatement,
   type ValueObjectFieldCoordinate,
 } from '@internal/framework-components/control';
-import { isBaseModel, newVariantsOfBase, variantBase } from './variants';
+import type { VariantBase } from './missing-new-name';
+import { hasModel, isBaseModel, newVariantsOfBase, variantBase } from './variants';
 
 /** The two contracts of a change, and the renames resolved between them so far. */
 export interface ContractsAndRenames {
@@ -48,20 +49,23 @@ export function modelAfterRenames(
 }
 
 /**
- * The base of a variant of the origin, as the destination names it after the renames and a
- * `--rename` writes it; `undefined` when the model is no variant, or the destination has no such
- * base.
+ * The base of a variant of the origin: kept, as the destination names it after the renames and a
+ * `--rename` writes it, or removed by the change, as the origin names it. `undefined` when the
+ * model is no variant, or the destination has the base as a model that is no base.
  */
-export function variantBaseText(
+export function variantBaseAfterRenames(
   { origin, destination, renames }: ContractsAndRenames,
   variant: ModelCoordinate,
-): string | undefined {
+): VariantBase | undefined {
   const base = variantBase(origin, variant);
-  const now =
-    base === undefined ? undefined : (modelAfterRenames(base, renames, destination) ?? base);
-  return now !== undefined && isBaseModel(destination, now)
-    ? modelStatementText(destination, now)
-    : undefined;
+  if (base === undefined) return undefined;
+  const now = modelAfterRenames(base, renames, destination) ?? base;
+  if (isBaseModel(destination, now)) {
+    return { kind: 'kept', base: modelStatementText(destination, now) };
+  }
+  return hasModel(destination, now)
+    ? undefined
+    : { kind: 'removed', base: modelStatementText(origin, base) };
 }
 
 /** The namespace a rename gives `namespaceId`, if any. */

@@ -29,6 +29,11 @@ export function variantBase(
     : { namespaceId: asNamespaceId(base.namespace), model: base.model };
 }
 
+/** Whether the contract has the model. */
+export function hasModel(contract: ContractWithDomain, coordinate: ModelCoordinate): boolean {
+  return modelOf(contract, coordinate) !== undefined;
+}
+
 /** Whether the contract has the model, with a discriminator, so a variant can name it as its base. */
 export function isBaseModel(contract: ContractWithDomain, coordinate: ModelCoordinate): boolean {
   return modelOf(contract, coordinate)?.discriminator !== undefined;
