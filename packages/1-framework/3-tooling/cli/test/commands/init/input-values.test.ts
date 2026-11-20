@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolveTarget } from '../../../src/commands/init/input-values';
+import { resolveTarget, resolveTargetName } from '../../../src/commands/init/input-values';
+import { reportedTargetName } from '../../../src/commands/init/target-packages';
 
 describe('resolveTarget', () => {
   it.each([
@@ -9,7 +10,10 @@ describe('resolveTarget', () => {
     ['prisma-orm-somedb', 'prisma-orm-somedb', 'prisma-orm-somedb'],
     ['@acme/orm-somedb', '@acme/orm-somedb', '@acme/orm-somedb'],
   ])('takes --target %s as %s from %s', (value, name, packageName) => {
-    expect(resolveTarget(value)).toMatchObject({ name, packageName });
+    const target = resolveTarget(value);
+
+    expect(target?.packageName).toBe(packageName);
+    expect(target === undefined ? undefined : reportedTargetName(target)).toBe(name);
   });
 
   it('takes no flag as no target', () => {
@@ -27,11 +31,36 @@ describe('resolveTarget', () => {
       expect.objectContaining({
         code: 'CLI.INIT_INVALID_FLAG_VALUE',
         why: expect.stringContaining(problem),
-        meta: expect.objectContaining({
+        meta: {
           flag: 'target',
           value,
+          allowed: ['postgres', 'mongodb'],
+          acceptsPackageName: true,
           problems: expect.arrayContaining([problem]),
-        }),
+        },
+      }),
+    );
+  });
+
+  it('says a package name is accepted, with one placeholder for it', () => {
+    expect(() => resolveTarget('Not A Package!')).toThrow(
+      expect.objectContaining({
+        message: 'Invalid value for --target',
+        why: expect.stringContaining('is not one of the short names (postgres, mongodb)'),
+        fix: 'Pass a short name (--target postgres, --target mongodb) or the name of a target package (`--target <package>`).',
+      }),
+    );
+  });
+
+  it('words a name typed into the picker as an answer, not a flag', () => {
+    expect(() => resolveTargetName('../outside', 'prompt')).toThrow(
+      expect.objectContaining({
+        code: 'CLI.INIT_INVALID_FLAG_VALUE',
+        message: 'Invalid target package name',
+        why: expect.stringMatching(
+          /^`\.\.\/outside`, typed as the name of the target package, is not a valid package name: /,
+        ),
+        fix: expect.stringContaining('type the target package'),
       }),
     );
   });

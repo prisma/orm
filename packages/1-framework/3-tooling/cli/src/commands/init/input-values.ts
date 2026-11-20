@@ -1,12 +1,16 @@
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import { extname, normalize } from 'pathe';
 import validatePackageName from 'validate-npm-package-name';
-import { errorInitAuthoringSchemaPathMismatch, errorInitInvalidFlagValue } from './errors';
+import {
+  errorInitAuthoringSchemaPathMismatch,
+  errorInitInvalidFlagValue,
+  errorInitInvalidTarget,
+} from './errors';
 import {
   findTargetByName,
-  TARGET_SHORT_NAMES,
+  listedTargetPackage,
   type TargetPackage,
-  targetPackageNamed,
+  unlistedTargetPackage,
 } from './target-packages';
 
 const AUTHORING_VALUES: ReadonlyMap<string, ContractSourceFormat> = new Map([
@@ -15,27 +19,28 @@ const AUTHORING_VALUES: ReadonlyMap<string, ContractSourceFormat> = new Map([
   ['ts', 'typescript'],
 ]);
 
-export const PACKAGE_NAME_PLACEHOLDER = '<package name>';
-
 export function resolveTarget(value: string | undefined): TargetPackage | undefined {
-  return value === undefined ? undefined : resolveTargetName(value);
+  return value === undefined ? undefined : resolveTargetName(value, 'flag');
 }
 
-/** A short name or alias from the list, or the name of a target package that is in no list. */
-export function resolveTargetName(value: string): TargetPackage {
-  if (findTargetByName(value) !== undefined) {
-    return targetPackageNamed(value);
+/**
+ * A short name or alias from the list, or the name of a target package that is in no list.
+ * `answeredIn` says where the value came from, for the wording of a refusal.
+ */
+export function resolveTargetName(value: string, answeredIn: 'flag' | 'prompt'): TargetPackage {
+  const listed = findTargetByName(value);
+  if (listed !== undefined) {
+    return listedTargetPackage(listed);
   }
   const validation = validatePackageName(value);
   if (!validation.validForNewPackages) {
-    throw errorInitInvalidFlagValue({
-      flag: 'target',
+    throw errorInitInvalidTarget({
       value,
-      allowed: [...TARGET_SHORT_NAMES, PACKAGE_NAME_PLACEHOLDER],
       problems: [...(validation.errors ?? []), ...(validation.warnings ?? [])],
+      answeredIn,
     });
   }
-  return targetPackageNamed(value);
+  return unlistedTargetPackage(value);
 }
 
 export function resolveAuthoring(value: string | undefined): ContractSourceFormat | undefined {

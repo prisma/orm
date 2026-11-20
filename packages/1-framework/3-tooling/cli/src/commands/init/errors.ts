@@ -2,7 +2,11 @@ import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
 import { CliStructuredError } from '../../utils/cli-errors';
 import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
-import { KNOWN_TARGET_PACKAGES, TARGET_SHORT_NAMES } from './target-packages';
+import {
+  KNOWN_TARGET_PACKAGES,
+  PACKAGE_NAME_PLACEHOLDER,
+  TARGET_SHORT_NAMES,
+} from './target-packages';
 
 /**
  * Non-interactive mode is missing one or more required inputs. Lists every
@@ -24,7 +28,7 @@ export function errorInitMissingFlags(options: {
     .map((flag) => {
       switch (flag) {
         case 'target':
-          return `--target ${[...TARGET_SHORT_NAMES, '<package>'].join('|')}`;
+          return `--target ${[...TARGET_SHORT_NAMES, PACKAGE_NAME_PLACEHOLDER].join('|')}`;
         case 'authoring':
           return '--authoring psl|typescript';
         case 'schema-path':
@@ -54,28 +58,68 @@ export function errorInitInvalidFlagValue(options: {
   readonly flag: string;
   readonly value: string;
   readonly allowed: readonly string[];
-  /** Why the value is not a valid package name, for a flag that also takes one. */
-  readonly problems?: readonly string[];
 }): CliStructuredError {
-  const problems = options.problems ?? [];
-  const asPackageName =
-    problems.length === 0 ? '' : ` It is not a valid package name: ${problems.join('; ')}.`;
   return new CliStructuredError(
     'CLI.INIT_INVALID_FLAG_VALUE',
     `Invalid value for --${options.flag}`,
     {
-      why: `\`--${options.flag} ${options.value}\` is not one of: ${options.allowed.join(', ')}.${asPackageName}`,
+      why: `\`--${options.flag} ${options.value}\` is not one of: ${options.allowed.join(', ')}.`,
       fix: `Use one of: ${options.allowed.map((v) => `--${options.flag} ${v}`).join(', ')}.`,
       docsUrl: docsUrlFor('CLI.INIT_INVALID_FLAG_VALUE'),
-      meta: {
-        flag: options.flag,
-        value: options.value,
-        allowed: options.allowed,
-        ...(problems.length === 0 ? {} : { problems }),
-      },
+      meta: { flag: options.flag, value: options.value, allowed: options.allowed },
     },
   );
 }
+
+const SHORT_NAME_LIST = TARGET_SHORT_NAMES.join(', ');
+const SHORT_NAME_FLAGS = TARGET_SHORT_NAMES.map((name) => `--target ${name}`).join(', ');
+
+/**
+ * The target is neither a short name nor a valid package name. `answeredIn` says whether it came
+ * from `--target` or from the name typed into the picker, whose wording names the answer instead.
+ */
+export function errorInitInvalidTarget(options: {
+  readonly value: string;
+  /** Why the value is not a valid package name. */
+  readonly problems: readonly string[];
+  readonly answeredIn: 'flag' | 'prompt';
+}): CliStructuredError {
+  const problems = options.problems.join('; ');
+  const wording =
+    options.answeredIn === 'flag'
+      ? {
+          summary: 'Invalid value for --target',
+          why: `\`--target ${options.value}\` is not one of the short names (${SHORT_NAME_LIST}), and it is not a valid package name: ${problems}.`,
+          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the name of a target package (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`).`,
+        }
+      : {
+          summary: 'Invalid target package name',
+          why: `\`${options.value}\`, typed as the name of the target package, is not a valid package name: ${problems}. Nothing was changed.`,
+          fix: `Run \`prisma orm init\` again and type the target package's name as it is published, or pass it as \`--target ${PACKAGE_NAME_PLACEHOLDER}\`.`,
+        };
+  return new CliStructuredError('CLI.INIT_INVALID_FLAG_VALUE', wording.summary, {
+    why: wording.why,
+    fix: wording.fix,
+    docsUrl: docsUrlFor('CLI.INIT_INVALID_FLAG_VALUE'),
+    meta: {
+      flag: 'target',
+      value: options.value,
+      allowed: [...TARGET_SHORT_NAMES],
+      acceptsPackageName: true,
+      problems: options.problems,
+    },
+  });
+}
+
+/**
+ * Said first when a value in no list turns out not to be a usable target package, so the user
+ * sees why init looked for a package of that name.
+ */
+function takenAsPackageName(packageName: string): string {
+  return `\`${packageName}\` is not one of the short names (${SHORT_NAME_LIST}), so init took it as a package name.`;
+}
+
+const LISTED_INSTEAD = `To use a target package from the list instead, pass its short name (${SHORT_NAME_FLAGS}); for any other, pass its full package name.`;
 
 /**
  * `--authoring` and `--schema-path` disagree on file extension (e.g. PSL
@@ -451,26 +495,54 @@ export function errorInitTargetPackageNotInstalled(options: {
   readonly installCommand: string;
   /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
   readonly ranCommand: string | undefined;
+  /** The package is in no list, so the value was taken as a package name. */
+  readonly unlisted: boolean;
 }): CliStructuredError {
   const { packageName, ranCommand } = options;
+  const why =
+    ranCommand !== undefined
+      ? `\`${ranCommand}\` succeeded, but ${packageName} cannot be found from the project, so init cannot read its init contribution. No scaffold file was written.`
+      : `init writes the project from ${packageName}, and \`--skip-install\` forbids installing it. Nothing was changed.`;
+  const fix =
+    ranCommand !== undefined
+      ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`
+      : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`;
   return new CliStructuredError(
     'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
     ranCommand !== undefined
       ? `${packageName} cannot be found from the project`
       : `${packageName} is not installed`,
     {
-      why:
-        ranCommand !== undefined
-          ? `\`${ranCommand}\` succeeded, but ${packageName} cannot be found from the project, so init cannot read its init contribution. No scaffold file was written.`
-          : `init writes the project from ${packageName}, and \`--skip-install\` forbids installing it. Nothing was changed.`,
-      fix:
-        ranCommand !== undefined
-          ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`
-          : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`,
+      ...explainUnlisted(options.unlisted, packageName, { why, fix }),
       docsUrl: docsUrlFor('CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED'),
-      meta: { packageName: options.packageName, installCommand: options.installCommand },
+      meta: {
+        packageName: options.packageName,
+        installCommand: options.installCommand,
+        ...takenAsPackageNameMeta(options.unlisted),
+      },
     },
   );
+}
+
+/**
+ * For a package in no list, says first that the value was taken as a package name, and last how
+ * to name a listed one instead.
+ */
+function explainUnlisted(
+  unlisted: boolean,
+  packageName: string,
+  wording: { readonly why: string; readonly fix: string },
+): { readonly why: string; readonly fix: string } {
+  return unlisted
+    ? {
+        why: `${takenAsPackageName(packageName)} ${wording.why}`,
+        fix: `${wording.fix} ${LISTED_INSTEAD}`,
+      }
+    : wording;
+}
+
+function takenAsPackageNameMeta(unlisted: boolean): { readonly takenAsPackageName?: true } {
+  return unlisted ? { takenAsPackageName: true } : {};
 }
 
 /**
@@ -482,6 +554,8 @@ export function errorInitContributionUnavailable(options: {
   readonly reason: 'no-entrypoint' | 'unloadable' | 'invalid-shape';
   /** What went wrong, for `unloadable` and `invalid-shape`. */
   readonly detail: string | undefined;
+  /** The package is in no list, so the value was taken as a package name. */
+  readonly unlisted: boolean;
 }): CliStructuredError {
   const module = `${options.packageName}/init`;
   const detail = options.detail ?? 'its shape is wrong';
@@ -497,13 +571,20 @@ export function errorInitContributionUnavailable(options: {
       ? `Could not load ${module}`
       : `${options.packageName} does not support init`,
     {
-      why: `${why} ${options.packageName} is installed; no scaffold file was written.`,
-      fix:
-        options.reason === 'unloadable'
-          ? `Reinstall ${options.packageName} with your package manager and run \`prisma orm init\` again, or ${byHand.charAt(0).toLowerCase()}${byHand.slice(1)}`
-          : byHand,
+      ...explainUnlisted(options.unlisted, options.packageName, {
+        why: `${why} ${options.packageName} is installed; no scaffold file was written.`,
+        fix:
+          options.reason === 'unloadable'
+            ? `Reinstall ${options.packageName} with your package manager and run \`prisma orm init\` again, or ${byHand.charAt(0).toLowerCase()}${byHand.slice(1)}`
+            : byHand,
+      }),
       docsUrl: docsUrlFor('CLI.INIT_CONTRIBUTION_UNAVAILABLE'),
-      meta: { packageName: options.packageName, module, reason: options.reason },
+      meta: {
+        packageName: options.packageName,
+        module,
+        reason: options.reason,
+        ...takenAsPackageNameMeta(options.unlisted),
+      },
     },
   );
 }
@@ -576,8 +657,9 @@ export function packagesAddedAction(added: PackagesAdded, reason: InstallReason)
 
 /**
  * The target package init loads to read the Prisma 7 schema cannot be loaded
- * from the project, or it has no Prisma 7 contract source while
- * `--from-prisma7-schema` asked for one.
+ * from the project, it has no Prisma 7 contract source while
+ * `--from-prisma7-schema` asked for one, or it is in no list, and only a
+ * listed package can keep a Prisma 7 schema.
  */
 export function errorInitPrisma7SourceUnavailable(
   options: {
@@ -585,6 +667,7 @@ export function errorInitPrisma7SourceUnavailable(
     readonly packageName: string;
   } & (
     | { readonly reason: 'no-prisma7-source' }
+    | { readonly reason: 'unlisted' }
     | {
         readonly reason: 'not-resolvable';
         /** The config module the contribution names. */
@@ -612,11 +695,17 @@ export function errorInitPrisma7SourceUnavailable(
             why: `${packageName} was installed, but the project cannot find \`${options.module}\`, the config module its init contribution names, so init cannot check that Prisma 8 reads ${schemaPath}.`,
             fix: `Check that ${packageName} is installed and exports ${options.module}, resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`,
           }
-        : {
-            summary: 'No Prisma 7 contract source for this database',
-            why: `${packageName} does not provide a Prisma 7 contract source, so it cannot read ${schemaPath}.`,
-            fix: 'Choose a database whose Prisma 8 package reads Prisma 7 schemas, or run `prisma orm init` without `--from-prisma7-schema`.',
-          };
+        : options.reason === 'unlisted'
+          ? {
+              summary: `${packageName} cannot keep a Prisma 7 schema`,
+              why: `${packageName} is not one of the target packages in Prisma's list (${SHORT_NAME_LIST}), and only a package in that list can keep ${schemaPath} as the contract source. Nothing was changed.`,
+              fix: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${packageName}, or without \`--target\` so the provider ${schemaPath} declares picks the target package.`,
+            }
+          : {
+              summary: 'No Prisma 7 contract source for this database',
+              why: `${packageName} does not provide a Prisma 7 contract source, so it cannot read ${schemaPath}.`,
+              fix: 'Choose a database whose Prisma 8 package reads Prisma 7 schemas, or run `prisma orm init` without `--from-prisma7-schema`.',
+            };
   return new CliStructuredError('CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE', wording.summary, {
     why: wording.why,
     fix: wording.fix,
@@ -625,7 +714,9 @@ export function errorInitPrisma7SourceUnavailable(
       schemaPath: options.schemaPath,
       packageName: options.packageName,
       reason: options.reason,
-      ...(options.reason === 'no-prisma7-source' ? {} : { module: options.module }),
+      ...(options.reason === 'no-prisma7-source' || options.reason === 'unlisted'
+        ? {}
+        : { module: options.module }),
     },
   });
 }

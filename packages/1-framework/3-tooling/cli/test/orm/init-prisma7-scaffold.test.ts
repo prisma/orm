@@ -14,7 +14,7 @@ import { timeouts } from '@repo/test-utils';
 import { basename, dirname, join } from 'pathe';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { InitContribution } from '../../src/commands/init/init-contribution';
-import { targetPackageNamed } from '../../src/commands/init/target-packages';
+import { resolveTargetName } from '../../src/commands/init/input-values';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import type { ResolvedInitInputs } from '../../src/orm/init-inputs';
 import { scaffoldProject } from '../../src/orm/init-scaffold';
@@ -27,7 +27,7 @@ const FROM_PRISMA7 = ['--from-prisma7-schema', 'prisma/schema.prisma'] as const;
 
 let projectDir: string;
 let contribution: InitContribution;
-const target = targetPackageNamed('postgres');
+const target = resolveTargetName('postgres', 'flag');
 
 beforeAll(async () => {
   contribution = await fixtureContribution(target.packageName);

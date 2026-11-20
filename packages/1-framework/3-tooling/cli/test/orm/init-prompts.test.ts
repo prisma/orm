@@ -212,7 +212,7 @@ describe('init prompts', () => {
           ok: false,
           error: {
             code: 'CLI.INIT_INVALID_FLAG_VALUE',
-            meta: { flag: 'target', allowed: ['postgres', 'mongodb', '<package name>'] },
+            meta: { flag: 'target', allowed: ['postgres', 'mongodb'], acceptsPackageName: true },
           },
         });
       },

@@ -68,6 +68,12 @@ export const TARGET_SHORT_NAMES: readonly TargetShortName[] = KNOWN_TARGET_PACKA
   (entry) => entry.shortName,
 );
 
+/** The flag's placeholder word; the usage line puts it in angle brackets itself. */
+export const TARGET_FLAG_PLACEHOLDER = 'package';
+
+/** Stands for a target package's name wherever `init` shows what `--target` takes. */
+export const PACKAGE_NAME_PLACEHOLDER = `<${TARGET_FLAG_PLACEHOLDER}>`;
+
 /**
  * The entry `--target` names by its short name or an alias, in any case, or by its package name
  * exactly.
@@ -89,33 +95,30 @@ export function findTargetByName(value: string): KnownTarget | undefined {
  */
 export interface TargetPackage {
   readonly packageName: string;
-  /** What `--json` reports as `target`: the short name of a listed package, otherwise the package name. */
-  readonly name: string;
-  /**
-   * The drivers installed with the package, before its contribution is loaded. Only the list
-   * knows them before the install, so an unlisted package has none here, and its contribution's
-   * `peerPackages` go into the later install.
-   */
-  readonly peerPackages: readonly string[];
   /** The list entry of a listed package. */
   readonly listed: KnownTarget | undefined;
 }
 
 export function listedTargetPackage(entry: KnownTarget): TargetPackage {
-  return {
-    packageName: entry.packageName,
-    name: entry.shortName,
-    peerPackages: entry.peerPackages,
-    listed: entry,
-  };
+  return { packageName: entry.packageName, listed: entry };
 }
 
-/** The target package `--target <value>` names: a listed one, or an unlisted package by its name. */
-export function targetPackageNamed(value: string): TargetPackage {
-  const listed = findTargetByName(value);
-  return listed === undefined
-    ? { packageName: value, name: value, peerPackages: [], listed: undefined }
-    : listedTargetPackage(listed);
+export function unlistedTargetPackage(packageName: string): TargetPackage {
+  return { packageName, listed: undefined };
+}
+
+/** What `--json` reports as `target`: the short name of a listed package, otherwise the package name. */
+export function reportedTargetName(target: TargetPackage): string {
+  return target.listed?.shortName ?? target.packageName;
+}
+
+/**
+ * The drivers installed with the package, before its contribution is loaded. Only the list knows
+ * them before the install, so an unlisted package has none, and its contribution's `peerPackages`
+ * go into the later install.
+ */
+export function firstInstallDrivers(target: TargetPackage): readonly string[] {
+  return target.listed?.peerPackages ?? [];
 }
 
 /**

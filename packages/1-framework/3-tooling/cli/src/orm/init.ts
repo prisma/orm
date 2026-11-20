@@ -14,7 +14,12 @@ import {
 } from '../commands/init/output';
 import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import { KNOWN_TARGET_PACKAGES, TARGET_SHORT_NAMES } from '../commands/init/target-packages';
+import {
+  KNOWN_TARGET_PACKAGES,
+  reportedTargetName,
+  TARGET_FLAG_PLACEHOLDER,
+  TARGET_SHORT_NAMES,
+} from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
 import { buildInitNextActions, initPresentations } from './init-blocks';
@@ -115,7 +120,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         // every allowed value.
         target: flag.string({
           brief: `Database target: ${TARGET_SHORT_NAMES.join(' or ')}, or the name of a target package`,
-          placeholder: 'db',
+          placeholder: TARGET_FLAG_PLACEHOLDER,
         }),
         authoring: flag.string({
           brief: 'Schema authoring style: psl or typescript',
@@ -181,7 +186,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }
         const document: InitOutput = {
           ok: true,
-          target: error.target.name,
+          target: reportedTargetName(error.target),
           package: error.target.packageName,
           authoring: error.authoring,
           schemaPath: error.schemaPath,
@@ -275,7 +280,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         const installed = packagesInstalled === 'installed';
         const document: InitOutput = {
           ok: true,
-          target: inputs.target.name,
+          target: reportedTargetName(inputs.target),
           package: inputs.target.packageName,
           authoring: adoptsPrisma7 ? 'prisma7' : inputs.authoring,
           schemaPath: inputs.schemaPath,
@@ -297,7 +302,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
               }
             : null,
           nextSteps: buildNextSteps({
-            target: inputs.target.name,
+            target: reportedTargetName(inputs.target),
             packagesInstalled,
             contractEmitted,
             emitCommand: EMIT_COMMAND,

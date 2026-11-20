@@ -1,9 +1,10 @@
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { MountedTree, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
-import { join } from 'pathe';
+import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { configFile } from '../../src/commands/init/templates/code-templates';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
@@ -16,9 +17,13 @@ const UNLISTED = 'prisma-orm-somedb';
 let projectDir: string;
 let installs: (readonly string[])[];
 let loaded: string[];
+let installsFail: boolean;
 
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
+  if (installsFail) {
+    return { exitCode: 1, stderr: 'ERR_PNPM_FETCH_404 Not Found' };
+  }
   declareAddedPackages(request);
   return { exitCode: 0, stderr: '' };
 };
@@ -27,6 +32,7 @@ beforeEach(() => {
   projectDir = createTestProjectDir('orm-init-unlisted-target');
   installs = [];
   loaded = [];
+  installsFail = false;
 });
 
 afterEach(() => {
@@ -69,6 +75,25 @@ function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }
   return terminal !== undefined && terminal.kind === 'result'
     ? Reflect.get(terminal, 'envelope')
     : undefined;
+}
+
+function writeProjectFile(relative: string, content: string): void {
+  mkdirSync(join(projectDir, relative, '..'), { recursive: true });
+  writeFileSync(join(projectDir, relative), content);
+}
+
+function readProjectFile(relative: string): string {
+  return readFileSync(join(projectDir, relative), 'utf-8');
+}
+
+/** A package of that name exists on the registry and installs, but exports no `./init`. */
+function packageWithoutInit(packageName: string): ImportFromProject {
+  return async (cwd, specifier) => {
+    if (specifier.endsWith('/init')) loaded.push(specifier);
+    return specifier === `${packageName}/init`
+      ? { kind: 'not-exported' }
+      : importFromProject(cwd, specifier);
+  };
 }
 
 function projectEntries(): string[] {
@@ -141,7 +166,8 @@ describe('init with a target package that is in no list', () => {
           meta: {
             flag: 'target',
             value: 'Not A Package!',
-            allowed: ['postgres', 'mongodb', '<package name>'],
+            allowed: ['postgres', 'mongodb'],
+            acceptsPackageName: true,
             problems: expect.arrayContaining(['name can only contain URL-friendly characters']),
           },
         },
@@ -164,7 +190,11 @@ describe('init with a target package that is in no list', () => {
 
       expect(envelopeOf(run)).toMatchObject({
         ok: false,
-        error: { code: 'CLI.INIT_INVALID_FLAG_VALUE', meta: { value: '../outside' } },
+        error: {
+          code: 'CLI.INIT_INVALID_FLAG_VALUE',
+          summary: 'Invalid target package name',
+          meta: { value: '../outside' },
+        },
       });
       expect(installs).toEqual([]);
       expect(projectEntries()).toEqual([]);
@@ -173,40 +203,196 @@ describe('init with a target package that is in no list', () => {
   );
 
   it(
-    'refuses to keep a Prisma 7 schema as the contract source of an unlisted package',
+    'reports a failed first install with the package as target and package, and writes nothing',
     async () => {
-      const schema = 'datasource db {\n  provider = "postgresql"\n}\n';
-      const { mkdirSync, writeFileSync } = await import('node:fs');
-      mkdirSync(join(projectDir, 'prisma'));
-      writeFileSync(join(projectDir, 'prisma/schema.prisma'), schema);
+      installsFail = true;
+      const run = await harness(await unlistedPackage()).run(starter(UNLISTED), {
+        cwd: projectDir,
+      });
 
-      const run = await harness(await unlistedPackage()).run(
-        [
-          'orm',
-          'init',
-          '--target',
-          UNLISTED,
-          '--from-prisma7-schema',
-          'prisma/schema.prisma',
-          '--json',
-        ],
+      expect(run.exitCode).toBe(4);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: true,
+        exitCode: 4,
+        diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED', meta: { filesWritten: [] } }],
+      });
+      expect(run.presented?.data).toMatchObject({
+        target: UNLISTED,
+        package: UNLISTED,
+        filesWritten: [],
+        packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
+      });
+      expect(installs).toEqual([['add', UNLISTED, 'dotenv']]);
+      expect(loaded).toEqual([]);
+      expect(projectEntries()).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    're-initialising with another target does not offer to remove the unlisted package',
+    async () => {
+      writeProjectFile(
+        'package.json',
+        `${JSON.stringify({ name: 'app', dependencies: { [UNLISTED]: '^1.0.0' } }, null, 2)}\n`,
+      );
+      writeProjectFile('prisma.config.ts', 'export default {}\n');
+
+      const run = await harness().run(
+        [...starter('postgres'), '--skip-install', '--confirm', basename(projectDir)],
         { cwd: projectDir },
       );
 
+      expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
+      expect(JSON.parse(readProjectFile('package.json'))).toMatchObject({
+        dependencies: { [UNLISTED]: '^1.0.0' },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+});
+
+describe('a value that is not a short name but is a valid package name', () => {
+  it(
+    'installs the package of that name, then says it was taken as a package name',
+    async () => {
+      const run = await harness(packageWithoutInit('sqlite')).run(starter('sqlite'), {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode).toBe(2);
+      expect(installs).toEqual([['add', 'sqlite', 'dotenv']]);
+      expect(loaded).toEqual(['sqlite/init']);
       expect(envelopeOf(run)).toMatchObject({
         ok: false,
         error: {
-          code: 'CLI.INIT_PRISMA7_TARGET_MISMATCH',
-          meta: { provider: 'postgresql', target: UNLISTED },
+          code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+          why: '`sqlite` is not one of the short names (postgres, mongodb), so init took it as a package name. sqlite has no `sqlite/init` entrypoint, so it does not support `prisma orm init`. sqlite is installed; no scaffold file was written.',
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label:
+                'Write prisma.config.ts by hand, with the defineConfig import the README of sqlite shows. To use a target package from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.',
+            }),
+          ]),
+          meta: {
+            packageName: 'sqlite',
+            reason: 'no-entrypoint',
+            takenAsPackageName: true,
+            packagesAdded: ['sqlite', 'dotenv'],
+          },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'says it was taken as a package name when --skip-install finds no such package',
+    async () => {
+      const run = await harness().run([...starter('sqlite'), '--skip-install'], {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode).toBe(2);
+      expect(installs).toEqual([]);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
+          why: expect.stringMatching(
+            /^`sqlite` is not one of the short names \(postgres, mongodb\), so init took it as a package name\. /,
+          ),
+          meta: { packageName: 'sqlite', takenAsPackageName: true },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+});
+
+describe('an unlisted --target in a Prisma 7 project', () => {
+  const PRISMA7_SCHEMA = 'prisma/schema.prisma';
+
+  it.each([
+    ['a string provider', 'datasource db {\n  provider = "sqlite"\n}\n'],
+    ['a provider that is not a string literal', 'datasource db {\n  provider = env("DB")\n}\n'],
+  ])(
+    'refuses --from-prisma7-schema with %s before installing, since only a listed package keeps the schema',
+    async (_, schema) => {
+      writeProjectFile(PRISMA7_SCHEMA, schema);
+
+      const run = await harness(await unlistedPackage()).run(
+        ['orm', 'init', '--target', UNLISTED, '--from-prisma7-schema', PRISMA7_SCHEMA, '--json'],
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE',
+          why: `${UNLISTED} is not one of the target packages in Prisma's list (postgres, mongodb), and only a package in that list can keep ${PRISMA7_SCHEMA} as the contract source. Nothing was changed.`,
+          nextActions: [
+            expect.objectContaining({
+              label: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${UNLISTED}, or without \`--target\` so the provider ${PRISMA7_SCHEMA} declares picks the target package.`,
+            }),
+          ],
+          meta: { schemaPath: PRISMA7_SCHEMA, packageName: UNLISTED, reason: 'unlisted' },
         },
       });
       expect(installs).toEqual([]);
+      expect(loaded).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'without the flag, does not offer the schema and warns that init sets up a fresh project',
+    async () => {
+      writeProjectFile(PRISMA7_SCHEMA, 'datasource db {\n  provider = "postgresql"\n}\n');
+
+      const run = await harness(await unlistedPackage()).run(
+        ['orm', 'init', '--target', UNLISTED, '--json'],
+        {
+          cwd: projectDir,
+          isTty: { stdin: true },
+          answers: ['psl', 'src/prisma/contract.prisma', false],
+        },
+      );
+
+      expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
+      expect(run.presented?.data).toMatchObject({
+        authoring: 'psl',
+        prisma7: null,
+        warnings: expect.arrayContaining([
+          `${UNLISTED} cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves ${PRISMA7_SCHEMA} alone.`,
+        ]),
+      });
+      expect(readProjectFile(PRISMA7_SCHEMA)).toContain('provider = "postgresql"');
     },
     timeouts.coldTransformImport,
   );
 });
 
 describe('init with a listed target package', () => {
+  it(
+    'reports a failed first install with the short name as target and the package name as package',
+    async () => {
+      installsFail = true;
+      const run = await harness().run(starter('postgres'), { cwd: projectDir });
+
+      expect(run.exitCode).toBe(4);
+      expect(run.presented?.data).toMatchObject({
+        target: 'postgres',
+        package: '@prisma/orm-postgres',
+        packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
+      });
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
+      expect(projectEntries()).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
   it(
     'reports the short name as target and the package name as package',
     async () => {
@@ -259,6 +445,35 @@ describe('init with the published target packages that are in no list', () => {
         `from '${moduleBase}/runtime'`,
       );
       expect(existsSync(join(projectDir, 'prisma-8.md'))).toBe(true);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it.each([
+    ['@prisma/orm-sqlite', 'psl', 'src/prisma/contract.prisma'],
+    ['@prisma/orm-sqlite', 'typescript', 'src/prisma/contract.ts'],
+    ['@prisma/orm-mysql', 'psl', 'src/prisma/contract.prisma'],
+    ['@prisma/orm-mysql', 'typescript', 'src/prisma/contract.ts'],
+  ] as const)(
+    'writes exactly the files the contribution of %s gives for %s',
+    async (packageName, authoring, schemaPath) => {
+      const contribution = await fixtureContribution(packageName);
+
+      const run = await harness().run(
+        ['orm', 'init', '--target', packageName, '--authoring', authoring, '--write-env'].concat(
+          '--skip-install',
+          '--json',
+        ),
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
+      expect(readProjectFile(schemaPath)).toBe(contribution.starterContract(authoring));
+      expect(readProjectFile('prisma.config.ts')).toBe(
+        configFile(`./${schemaPath}`, contribution.configModule),
+      );
+      expect(readProjectFile('src/prisma/db.ts')).toBe(contribution.databaseFile());
+      expect(readProjectFile('.env')).toBe(contribution.envExample());
     },
     timeouts.coldTransformImport,
   );

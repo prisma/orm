@@ -19,6 +19,7 @@ import {
   packagesAddedAction,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
+import { firstInstallDrivers, type TargetPackage } from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
 import { normalizeError } from './normalize-error';
@@ -97,11 +98,8 @@ export interface PreparedTargetPackage {
   readonly warnings: readonly string[];
 }
 
-/** Installs `packageName` with `dotenv` and `peerPackages`, then loads its init contribution. */
-export type PrepareTargetPackage = (
-  packageName: string,
-  peerPackages: readonly string[],
-) => Promise<PreparedTargetPackage>;
+/** Installs the target package with `dotenv` and the drivers the list names, then loads its init contribution. */
+export type PrepareTargetPackage = (target: TargetPackage) => Promise<PreparedTargetPackage>;
 
 /**
  * The target package was installed, then could not be used. The caller adds the instruction to
@@ -127,7 +125,7 @@ export class TargetPackageInstallFailed extends Error {
 
 /**
  * Installs the target package with `dotenv`, the package every init installs, and the driver
- * packages the caller names, leaving out those the project already declares, then loads the
+ * packages its list entry names, leaving out those the project already declares, then loads the
  * package's init contribution from the project. Under `--skip-install` the package must already be
  * installed. Each refusal happens before any file is written.
  */
@@ -138,7 +136,9 @@ export function createTargetPackagePreparation(ctx: {
   readonly install: boolean;
   readonly importFromProject: ImportFromProject;
 }): PrepareTargetPackage {
-  return async (packageName, peerPackages) => {
+  return async (target) => {
+    const { packageName } = target;
+    const drivers = firstInstallDrivers(target);
     rejectUnparseableManifest(ctx.cwd);
     const warnings: string[] = [];
     let installed: readonly string[] = [];
@@ -154,7 +154,7 @@ export function createTargetPackagePreparation(ctx: {
         declaredBefore.has(packageName) && isInstalledInProject(ctx.cwd, packageName);
       const deps = [
         ...(targetInPlace ? [] : [packageName]),
-        ...['dotenv', ...peerPackages].filter((dep) => !declaredBefore.has(dep)),
+        ...['dotenv', ...drivers].filter((dep) => !declaredBefore.has(dep)),
       ];
       const installFailure = await installProjectDependencies({
         packages: ctx.packages,
@@ -176,7 +176,7 @@ export function createTargetPackagePreparation(ctx: {
     }
 
     try {
-      const contribution = await loadContribution(ctx, packageName, peerPackages, ranCommand);
+      const contribution = await loadContribution(ctx, target, ranCommand);
       return { contribution, installed, added, warnings };
     } catch (error) {
       throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
@@ -191,30 +191,37 @@ async function loadContribution(
     readonly install: boolean;
     readonly importFromProject: ImportFromProject;
   },
-  packageName: string,
-  peerPackages: readonly string[],
+  target: TargetPackage,
   /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
   ranCommand: string | undefined,
 ): Promise<InitContribution> {
+  const { packageName } = target;
+  const unlisted = target.listed === undefined;
   const entrypoint = await ctx.importFromProject(ctx.cwd, `${packageName}/init`);
   switch (entrypoint.kind) {
     case 'not-installed':
       throw errorInitTargetPackageNotInstalled({
         packageName,
-        installCommand: installCommand(ctx.packageManager, [packageName, ...peerPackages]),
+        installCommand: installCommand(ctx.packageManager, [
+          packageName,
+          ...firstInstallDrivers(target),
+        ]),
         ranCommand,
+        unlisted,
       });
     case 'not-exported':
       throw errorInitContributionUnavailable({
         packageName,
         reason: 'no-entrypoint',
         detail: undefined,
+        unlisted,
       });
     case 'unloadable':
       throw errorInitContributionUnavailable({
         packageName,
         reason: 'unloadable',
         detail: causeMessage(entrypoint.cause),
+        unlisted,
       });
     case 'loaded':
       break;
@@ -225,6 +232,7 @@ async function loadContribution(
       packageName,
       reason: 'invalid-shape',
       detail: contributionProblems(contribution),
+      unlisted,
     });
   }
   return contribution;

@@ -3,7 +3,10 @@ import {
   findPrisma6OnlyTarget,
   findTargetByName,
   findTargetByProvider,
-  targetPackageNamed,
+  firstInstallDrivers,
+  listedTargetPackage,
+  reportedTargetName,
+  unlistedTargetPackage,
 } from '../../../src/commands/init/target-packages';
 
 describe('the list of known target packages', () => {
@@ -43,21 +46,21 @@ describe('the list of known target packages', () => {
     expect(findTargetByName('mongodb')?.packageName).toBe('@prisma/orm-mongo');
   });
 
-  it('takes a value in no entry as the name of a package with no drivers known before its install', () => {
-    expect(targetPackageNamed('prisma-orm-somedb')).toEqual({
-      packageName: 'prisma-orm-somedb',
-      name: 'prisma-orm-somedb',
-      peerPackages: [],
-      listed: undefined,
-    });
+  it('reports an unlisted package by its name, with no drivers known before its install', () => {
+    const target = unlistedTargetPackage('prisma-orm-somedb');
+
+    expect(target).toEqual({ packageName: 'prisma-orm-somedb', listed: undefined });
+    expect(reportedTargetName(target)).toBe('prisma-orm-somedb');
+    expect(firstInstallDrivers(target)).toEqual([]);
   });
 
-  it('takes a listed value as its entry, with the drivers the entry names', () => {
-    expect(targetPackageNamed('mongo')).toMatchObject({
-      packageName: '@prisma/orm-mongo',
-      name: 'mongodb',
-      peerPackages: ['mongodb'],
-      listed: { shortName: 'mongodb' },
-    });
+  it('reports a listed package by its short name, with the drivers its entry names', () => {
+    const entry = findTargetByName('mongo');
+    if (entry === undefined) throw new Error('mongo is not in the list');
+    const target = listedTargetPackage(entry);
+
+    expect(target).toEqual({ packageName: '@prisma/orm-mongo', listed: entry });
+    expect(reportedTargetName(target)).toBe('mongodb');
+    expect(firstInstallDrivers(target)).toEqual(['mongodb']);
   });
 });

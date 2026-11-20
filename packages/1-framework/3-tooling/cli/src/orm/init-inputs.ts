@@ -22,7 +22,6 @@ import {
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
 import {
-  PACKAGE_NAME_PLACEHOLDER,
   rejectSchemaPathNoModeTakes,
   resolveAuthoring,
   resolveTarget,
@@ -43,6 +42,7 @@ import {
   KNOWN_TARGET_PACKAGES,
   type KnownTarget,
   listedTargetPackage,
+  PACKAGE_NAME_PLACEHOLDER,
   type TargetPackage,
 } from '../commands/init/target-packages';
 import { defaultSchemaPath } from '../commands/init/templates/code-templates';
@@ -157,7 +157,7 @@ async function prepareTarget(
   installReason: InstallReason,
 ): Promise<PreparedTargetPackage> {
   try {
-    return await prepareTargetPackage(target.packageName, target.peerPackages);
+    return await prepareTargetPackage(target);
   } catch (error) {
     if (error instanceof TargetPackageRefusedAfterInstall) {
       throw withPackagesAddedAction(error.cause, error.added, installReason);
@@ -225,7 +225,7 @@ async function askTarget(prompt: PromptSurface): Promise<TargetPackage> {
     const packageName = await prompt.text('Which target package?', {
       placeholder: PACKAGE_NAME_PLACEHOLDER,
     });
-    return resolveTargetName(packageName.trim());
+    return resolveTargetName(packageName.trim(), 'prompt');
   }
   const chosen = KNOWN_TARGET_PACKAGES.find((entry) => entry.shortName === answer);
   if (chosen === undefined) {
@@ -376,18 +376,24 @@ function prisma7Question(detection: Prisma7Detection): string {
  * The Prisma 7 path is entered by the flag or by an explicit yes. The question
  * declares no default on purpose: a session that cannot ask (`--yes`, no
  * terminal) must run init as today rather than have the engine answer for the
- * user, so the engine's "cannot ask" is read as a no.
+ * user, so the engine's "cannot ask" is read as a no. An unlisted package
+ * cannot keep the schema, so it is not asked about, and the user is told why.
  */
 async function choosePrisma7Path(ctx: {
   readonly flags: InitFlagValues;
   readonly prompt: PromptSurface;
   readonly detection: Prisma7Detection;
   readonly flagTarget: TargetPackage | undefined;
+  readonly warn: (text: string) => void;
 }): Promise<boolean> {
   if (ctx.flags.fromPrisma7Schema !== undefined) {
     return true;
   }
   if (!looksLikePrisma7(ctx.detection)) {
+    return false;
+  }
+  if (ctx.flagTarget !== undefined && ctx.flagTarget.listed === undefined) {
+    ctx.warn(freshInitWarning(ctx.flagTarget.packageName, ctx.detection));
     return false;
   }
   const { schema } = ctx.detection;
@@ -417,13 +423,11 @@ function prisma7Target(
   const flagTarget = flagTargetPackage?.listed;
   if (flagTargetPackage !== undefined && flagTarget === undefined) {
     return notOk(
-      schema.provider === undefined
-        ? errorInitPrisma7ProviderUnsupported({ schemaPath: schema.path, provider: undefined })
-        : errorInitPrisma7TargetMismatch({
-            schemaPath: schema.path,
-            provider: schema.provider,
-            target: flagTargetPackage.packageName,
-          }),
+      errorInitPrisma7SourceUnavailable({
+        schemaPath: schema.path,
+        packageName: flagTargetPackage.packageName,
+        reason: 'unlisted',
+      }),
     );
   }
   const providerTarget =
@@ -933,7 +937,7 @@ export async function resolveInitInputs(ctx: {
     if (prisma6 !== undefined) {
       throw prisma6SchemaFound(detection, prisma6, ctx.packageManager);
     }
-    if (await choosePrisma7Path({ flags, prompt, detection, flagTarget })) {
+    if (await choosePrisma7Path({ flags, prompt, detection, flagTarget, warn: ctx.warn })) {
       return resolvePrisma7Inputs({
         cwd,
         flags,
