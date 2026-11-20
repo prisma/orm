@@ -19,7 +19,7 @@ export interface ColumnRenameRequest {
   readonly to: string;
 }
 
-/** A column rename on a table in a known namespace. */
+/** A column rename against the working schema, computed from a `ColumnChange` or a statement. */
 export interface ColumnRename {
   readonly namespaceId: string;
   readonly table: string;

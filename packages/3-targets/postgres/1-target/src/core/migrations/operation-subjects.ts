@@ -170,13 +170,7 @@ export function postgresCallSubjects(
       label: call.label,
       dataLoss:
         lossTarget !== undefined
-          ? [
-              {
-                ...lossTarget,
-                loss,
-                ...ifDefined('keepDataEdit', locator.storedValues?.get(call)?.keepDataEdit),
-              },
-            ]
+          ? [{ ...lossTarget, loss }]
           : unknownName !== undefined
             ? [{ storageName: unknownName, table: undefined, loss }]
             : [],

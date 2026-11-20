@@ -165,7 +165,7 @@ const LISTED_LIMIT = 20;
 const CHECK_NAMES_FIX =
   'The old name must exist in the origin contract and not in the destination contract, and the new name the other way round. Names match exactly, including case.';
 const STORED_NAME_ONLY =
-  'If only the stored name changed (@map or @@map), a statement cannot state that in this release, and a plan without it drops and creates what the model or field is stored in, with its data. With migration plan, edit the planned migration.ts to rename the stored name instead of dropping and creating it. With db update, rename it in the database yourself first, then run db update.';
+  'A model or field that keeps its name needs no statement when only its stored name changes (@map or @@map).';
 const REPEATED_NAME_FIX =
   'Give each model, field or enum value at most one statement, and each new name to one model, field or enum value only.';
 
@@ -808,7 +808,7 @@ function resolveModelRename(
       errorStatementInvalid(
         statement,
         `The statement renames model "${qualifiedModel(from)}" to itself.`,
-        `Leave out --${statement.verb} ${statement.text}. ${STORED_NAME_ONLY}`,
+        `Leave out --${statement.verb} ${statement.text} and plan again. ${STORED_NAME_ONLY}`,
       ),
     );
   }
@@ -954,7 +954,7 @@ function resolveFieldRename(
       errorStatementInvalid(
         statement,
         `The statement renames field "${toModel}.${to.coordinate.field}" to itself.`,
-        `Leave out --${statement.verb} ${statement.text}. ${STORED_NAME_ONLY}`,
+        `Leave out --${statement.verb} ${statement.text} and plan again. ${STORED_NAME_ONLY}`,
       ),
     );
   }
@@ -1209,7 +1209,7 @@ function swapRefusal(
       : `${statement.to.slice(0, -1).join('.')}.<temporary name>`;
   const keptNames =
     entity === 'enumValue'
-      ? ' If the members keep their names and only their stored values trade places, leave out the statement: the plan asks about each value and names the edits that keep its data.'
+      ? ' If the members keep their names and only their stored values trade places, leave out the statement: a member that keeps its name needs no statement. Stored values that trade places take two plans, through a stored value no member stores.'
       : '';
   return errorStatementInvalid(
     statement,

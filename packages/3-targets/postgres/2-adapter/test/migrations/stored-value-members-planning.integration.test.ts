@@ -252,6 +252,35 @@ describe('Postgres planner, enum values inside value objects', { concurrent: fal
     expect(await operationKinds(await plan(to, to))).toEqual([]);
   });
 
+  it('replaces the value of a member that keeps its name in single objects, lists and nested objects, and asks nothing', {
+    timeout: testTimeout,
+  }, async () => {
+    const from = ticketContract(OPEN_DONE);
+    const to = ticketContract({ OPEN: 'open', DONE: 'closed' });
+    await start(from);
+
+    const result = await plan(from, to);
+
+    expect(await operationKinds(result)).toEqual([
+      'dropCheckConstraint',
+      'dropCheckConstraint',
+      ...Array<string>(6).fill('replaceStoredValue'),
+      'checkConstraint',
+      'checkConstraint',
+    ]);
+    expect(result.kind === 'success' && result.dataLoss).toEqual([]);
+    await apply(result, to);
+    expect(await tickets()).toEqual([
+      {
+        id: '1',
+        meta: { status: 'open', previous: 'closed', tags: ['closed', 'open', 'closed'] },
+        visits: [{ meta: { status: 'open', previous: null, tags: ['closed'] } }],
+      },
+      { id: '2', meta: null, visits: [] },
+    ]);
+    expect(await operationKinds(await plan(to, to))).toEqual([]);
+  });
+
   it('removes a value from list members and sets an optional member to JSON null, then the new check accepts every row', {
     timeout: testTimeout,
   }, async () => {

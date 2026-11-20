@@ -12,6 +12,7 @@ import type {
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
+import { exactName } from '../src/core/migrations/model-storage';
 import type { SchemaTables } from '../src/core/migrations/schema-tables';
 import { planVariantRowRewrites } from '../src/core/migrations/variant-planning';
 
@@ -117,6 +118,7 @@ function tasks(
 }
 
 const allTables: SchemaTables = {
+  sameName: exactName,
   hasTable: () => true,
   hasColumn: () => true,
   tablesNamed: () => [],

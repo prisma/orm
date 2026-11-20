@@ -4,14 +4,12 @@ import type {
   OpFactoryCall,
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
-import { ifDefined } from '@internal/utils/defined';
 import type { StoredValueReplacement, StoredValueRewrite } from './enum-value-planning';
 import type { RowsHoldingValueMark } from './rows-holding-value';
 
 /** What a planned stored value call is about, for its data-loss question. */
 export interface StoredValueSubject {
   readonly enumValue: EnumValueCoordinate;
-  readonly keepDataEdit?: KeepDataEdit;
 }
 
 /** How the stored value code tells a target's removal calls apart and builds its replacement calls. */
@@ -21,45 +19,16 @@ export interface StoredValueCallClasses<TRemoval extends OpFactoryCall> {
   replacementOf(removal: TRemoval, replacement: StoredValueReplacement): OpFactoryCall;
 }
 
-/** The edit that keeps the data a removal loses: the removal, replaced by the replacements, in order. */
-function keepDataEdit<TRemoval extends OpFactoryCall>(
-  removal: TRemoval,
-  replacements: readonly StoredValueReplacement[],
-  classes: StoredValueCallClasses<TRemoval>,
-): KeepDataEdit {
-  return {
-    remove: removal.renderTypeScript(),
-    replaceWith: replacements
-      .map((replacement) => classes.replacementOf(removal, replacement).renderTypeScript())
-      .join(', '),
-  };
-}
-
-/**
- * The enum value each removal is about, with the edit that keeps its data when the member keeps
- * its name and only its stored value changes.
- */
+/** The enum value each removal is about. */
 export function storedValueSubjects<TRemoval extends OpFactoryCall>(
   calls: ReadonlyMap<OpFactoryCall, StoredValueRewrite>,
   classes: StoredValueCallClasses<TRemoval>,
 ): ReadonlyMap<OpFactoryCall, StoredValueSubject> {
-  const subjects = new Map<OpFactoryCall, StoredValueSubject>();
-  for (const [call, rewrite] of calls) {
-    if (!classes.isRemoval(call)) continue;
-    subjects.set(call, {
-      enumValue: rewrite.enumValue,
-      ...ifDefined(
-        'keepDataEdit',
-        rewrite.keepData === undefined
-          ? undefined
-          : {
-              ...keepDataEdit(call, rewrite.keepData, classes),
-              ...(rewrite.swapsValues ? { swapsValues: true } : {}),
-            },
-      ),
-    });
-  }
-  return subjects;
+  return new Map(
+    [...calls]
+      .filter(([call]) => classes.isRemoval(call))
+      .map(([call, rewrite]) => [call, { enumValue: rewrite.enumValue }]),
+  );
 }
 
 /**
@@ -72,7 +41,12 @@ export function keepRowsEdit<TRemoval extends OpFactoryCall>(
   mark: RowsHoldingValueMark,
   classes: StoredValueCallClasses<TRemoval>,
 ): KeepDataEdit {
-  return keepDataEdit(removal, [{ from: mark.value, to: '<stored value>' }], classes);
+  return {
+    remove: removal.renderTypeScript(),
+    replaceWith: classes
+      .replacementOf(removal, { from: mark.value, to: '<stored value>' })
+      .renderTypeScript(),
+  };
 }
 
 function operationCount(call: OpFactoryCall): number {
