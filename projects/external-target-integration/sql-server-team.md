@@ -188,7 +188,7 @@ The order of steps is: resolve the package, install it, load your contribution, 
 
 Rules:
 
-- **Your package is named by its package name.** `--target mssql` would need an entry in a list of short names Prisma holds for packages it vouches for. The list holds names only and changes no behaviour: a listed package runs the same code as an unlisted one. We can add yours once it is published and we have used it.
+- **Your package is named by its package name.** `--target mssql` would need an entry in a list of short names Prisma holds for packages it vouches for. The list changes one thing: `init` does not check a listed package's keyword before installing it (see the package rules below). After that check, a listed package runs the same code as an unlisted one. We can add yours once it is published and we have used it.
 - **`init` runs code from your package.** It loads `/init` from the application's `node_modules` right after installing it. There is no static metadata step.
 - **`/init` must not import any framework runtime module.** Types are fine. The CLI that loads it may be a different installed copy of the framework from the one your package depends on, and two copies in one process do not recognise each other's values.
 - **Both authoring modes are open to you.** Your proposal limited the first version to TypeScript; nothing here requires that.
@@ -199,7 +199,7 @@ Rules:
 - The familiar `prisma orm init` workflow, with no new command and no plugin loader.
 - Your package owns its identity and its target-specific starter.
 - Existing Postgres and MongoDB behaviour is unchanged for their users.
-- Nothing is discovered: no scan of installed packages, no registry lookup, no network guess. The user names one package.
+- Nothing is discovered: no scan of installed packages and no search of the registry. The user names one package. Before installing it, `init` makes one request to the registry for that package's keywords.
 
 **Two requirements from your proposal this does not satisfy, on purpose**
 
@@ -230,7 +230,7 @@ The Postgres package is the reference for all of these: [`packages/3-targets/pos
 Package rules:
 
 - Depend on `@prisma/orm-framework` and `@prisma/orm-family-sql`, pinned to one exact version while Prisma 8 is in release candidates.
-- Name the package `prisma-orm-<name>` under your scope, and add the keyword `prisma-orm-extension`. This is the convention for packages Prisma does not publish.
+- Name the package `prisma-orm-<name>` under your scope, and add the keyword `prisma-orm-extension` to its `package.json`. The name is the convention for packages Prisma does not publish. The keyword is required: `prisma orm init --target` reads it before installing your package, from the registry's `latest` version or from disk when the package is already installed, and refuses a package without it.
 - Do not import or name any module beginning `@internal/`. Those are our private workspace names.
 
 ## Until the changes are released

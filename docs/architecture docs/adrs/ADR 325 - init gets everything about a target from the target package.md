@@ -82,6 +82,7 @@ The files come from the target package, so it has to be present before `init` ca
 ```text
 check the flags
   → resolve the target package
+  → for a package that is not in the list, check that it lists the Prisma 8 keyword
   → install it, with dotenv and the drivers it requires
   → load its contribution
   → ask: authoring mode, contract path, and consent to replace files if the project is already set up
@@ -112,7 +113,7 @@ prisma orm init --target postgres                 # a short name
 prisma orm init --target prisma-orm-cockroachdb   # a package name
 ```
 
-`--target` is looked up in the CLI's list of known target packages, by short name, alias or package name. A value that is not in the list is taken as a package name, and a name npm does not accept for a new package is refused. Before `init` installs an unlisted package it reads the package's keywords, and refuses unless they include `prisma-orm-extension`, the keyword [ADR 308](ADR%20308%20-%20Community%20packages%20are%20named%20prisma-orm-name.md) gives every Prisma 8 package. `--target sqlite` names an unrelated package on the public registry; that package does not carry the keyword, so `init` refuses it and installs nothing. A package already installed in the project is read from its `package.json` on disk. Any other package is read from the registry's `latest` manifest, at the registry `npm_config_registry` names or the public one. When that read fails, `init` refuses and says to install the package first. Naming a listed package by its package name is the same as naming it by its short name: `--target @prisma/orm-postgres` is `--target postgres`.
+`--target` is looked up in the CLI's list of known target packages, by short name, alias or package name. A value that is not in the list is taken as a package name, and a name npm does not accept for a new package is refused. Before `init` installs an unlisted package it reads the package's keywords, and refuses unless they include `prisma-orm-extension`, the keyword [ADR 308](ADR%20308%20-%20Community%20packages%20are%20named%20prisma-orm-name.md) asks a Prisma 8 package to list. `--target sqlite` names an unrelated package on the public registry; that package does not carry the keyword, so `init` refuses it and installs nothing. `init` checks the copy it is about to load. When it will install the package, it reads the registry's `latest` manifest, at the registry `npm_config_registry` names or the public one. When it will not, because the project already declares the package and has it on disk, or because of `--skip-install`, it reads the installed `package.json` and makes no request. When the registry cannot be read or has no such package, `init` refuses and says to install the package first. Naming a listed package by its package name is the same as naming it by its short name: `--target @prisma/orm-postgres` is `--target postgres`.
 
 | Short name | Aliases | Package | Name in this repository | Label | Provider in an earlier Prisma schema | Drivers it requires |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -121,7 +122,7 @@ prisma orm init --target prisma-orm-cockroachdb   # a package name
 
 - **A target package is listed because Prisma vouches for it.** Who wrote it does not matter, and a community package can be listed.
 - **The list holds names and the facts `init` needs before anything is installed.** The picker shows the label before the package is installed. The drivers go into the package's own install, and a Prisma 6 project gets printed setup instructions and no install at all, so both take the drivers from the list.
-- **A listed package runs the same code as an unlisted one.** Listing gives a short name, a line in the interactive picker, the drivers for the first install, the mapping from an earlier Prisma's provider, and, when a later run of `init` switches to another target, the offer to remove the package. `init` finds a previously installed target package by looking for the listed names in `package.json`, so it does not offer to remove an unlisted one.
+- **After the keyword check, a listed package runs the same code as an unlisted one.** A listed package is not checked, because Prisma chose it. Listing also gives a short name, a line in the interactive picker, the drivers for the first install, the mapping from an earlier Prisma's provider, and, when a later run of `init` switches to another target, the offer to remove the package. `init` finds a previously installed target package by looking for the listed names in `package.json`, so it does not offer to remove an unlisted one.
 - **The list must agree with the contributions.** A test loads each listed package's published contribution and checks that its label, driver packages and config module match the list entry.
 
 ## Projects coming from Prisma 6 and Prisma 7
@@ -150,7 +151,7 @@ The `--json` result reports `package`, the name of the target package, and `targ
 - `init` runs code from the package the user names. It is the same package the config loads a moment later.
 - A target package that does not list the `prisma-orm-extension` keyword cannot be set up with `init`. It still works with a `prisma.config.ts` written by hand. `init` keeps no list of database names to refuse, because that would put target names into the CLI; the keyword refuses `--target sqlite` without one, and it places no rule on a package's name.
 - The keyword guards against a mistake, not an attack: any package can list it. It stops `init` installing a package that was never meant for Prisma 8.
-- `init` makes one request to the registry for an unlisted package that is not installed. It reads the registry itself and does not read the package manager's configuration, so a package on a registry that needs credentials, or one that only a scope's registry setting reaches, is installed by the user first and then read from disk.
+- `init` makes one request to the registry for an unlisted package it is about to install. It reads the registry itself, with no credentials, and reads none of the package manager's configuration beyond `npm_config_registry`. So it can ask a different registry from the one the package manager installs from: a package on a registry that needs credentials, one that only a scope's registry setting reaches, and any package behind a proxy that Node's `fetch` does not use, cannot be read. The user installs such a package first, and `init` reads it from disk. The name of a private package typed to `init` is sent to the public registry when `npm_config_registry` is not set.
 - `init` does not know an unlisted package's drivers before installing it, and it does not work them out from the registry: resolving peers is the package manager's work. Its first install is the package and `dotenv`, and the package manager handles the package's required peers its own way; the contribution's `peerPackages` are declared in the later install. Where the package manager's configuration refuses a package without its peers, the install fails and `init` reports it.
 - The minimum server version has one source, the target package's code. The CLI keeps no copy of it.
 
@@ -180,7 +181,15 @@ Each target package would carry its own copy of the config the CLI already write
 
 ### A prompt before installing a package that is not in the list
 
-A question, or a typed consent, before `init` installs and runs an unlisted package. Rejected because it interrupts the run to confirm a name the user has just typed, and it would make an unlisted package behave differently from a listed one.
+A question, or a typed consent, before `init` installs and runs an unlisted package. Rejected because it interrupts the run to confirm a name the user has just typed, and a user who typed `sqlite` would confirm it. The keyword check answers the question the prompt would ask, without asking the user.
+
+### A rule on the package's name
+
+An unscoped value is taken as a package name only when it begins `prisma-orm-`, and a scoped one always. It needs no request to the registry. Rejected because it reads meaning into a name: it refuses a target package that chose another name, and it lets through any scoped package, whether or not it is for Prisma 8. The keyword says what the package is.
+
+### Ask the package manager for the keywords
+
+`npm view`, `pnpm view` and their equivalents apply the user's registry settings and credentials. Rejected for now. The CLI engine gives a command two package operations, install and run, and neither returns output; each package manager has its own command and its own output for this, and one has none. The cost is the consequence above: a package `init` cannot read is installed first.
 
 ### The list lives outside the framework's CLI
 
