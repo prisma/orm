@@ -930,6 +930,30 @@ function describeRuntimeDriver(server: DriverServer): void {
       );
     });
 
+    it('reads and writes every statement as utf8mb4 with the utf8mb4_unicode_ci collation', async (test) => {
+      await withMysqlDatabase(
+        test,
+        ({ url }) =>
+          withDriver(url, async (driver) => {
+            expect(
+              await collect(
+                driver.query<Record<string, string>>({
+                  sql: 'SELECT @@SESSION.character_set_client AS client, @@SESSION.character_set_connection AS connection, @@SESSION.character_set_results AS results, @@SESSION.collation_connection AS collation',
+                }),
+              ),
+            ).toEqual([
+              {
+                client: 'utf8mb4',
+                connection: 'utf8mb4',
+                results: 'utf8mb4',
+                collation: 'utf8mb4_unicode_ci',
+              },
+            ]);
+          }),
+        server.urlVariable,
+      );
+    });
+
     it('sets up every connection: no backslash escapes mode, and the session settings it is created with, an integer setting among them', async (test) => {
       await withMysqlDatabase(
         test,
