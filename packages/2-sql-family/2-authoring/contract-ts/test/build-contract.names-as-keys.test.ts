@@ -160,31 +160,35 @@ function buildTypeScript(input: Readonly<Record<string, unknown>>): unknown {
   } as Parameters<typeof defineContract>[0]);
 }
 
-const gadgetAuthoring = {
-  entityTypes: {
-    gadget: {
-      kind: 'entity',
-      discriminator: 'gadget',
-      output: { factory: (input: { readonly name: string }) => ({ ...input }) },
+function gadgetPackLowering(lowered: { readonly namespaceId?: string; readonly key: string }) {
+  const authoring = {
+    entityTypes: {
+      gadget: {
+        kind: 'entity',
+        discriminator: 'gadget',
+        output: { factory: (input: { readonly name: string }) => ({ ...input }) },
+      },
     },
-  },
-  lowerEntityHandles: (input: EntityHandleLoweringInput): LoweredPackEntity[] =>
-    input.handles.map(() => ({
-      namespaceId: input.defaultNamespaceId,
-      entityKind: 'gadget',
-      key: '__proto__',
-      entity: {},
-    })),
-} as const;
+    lowerEntityHandles: (input: EntityHandleLoweringInput): LoweredPackEntity[] =>
+      input.handles.map(() => ({
+        namespaceId: lowered.namespaceId ?? input.defaultNamespaceId,
+        entityKind: 'gadget',
+        key: lowered.key,
+        entity: {},
+      })),
+  } as const;
+  const pack: ExtensionPackRef<'sql', 'postgres'> = {
+    kind: 'extension',
+    id: 'gadget-demo',
+    familyId: 'sql',
+    targetId: 'postgres',
+    version: '0.0.1',
+    authoring,
+  };
+  return pack;
+}
 
-const gadgetPack: ExtensionPackRef<'sql', 'postgres'> = {
-  kind: 'extension',
-  id: 'gadget-demo',
-  familyId: 'sql',
-  targetId: 'postgres',
-  version: '0.0.1',
-  authoring: gadgetAuthoring,
-};
+const gadgetPack = gadgetPackLowering({ key: '__proto__' });
 
 const gadgetHandle: PackEntityHandle = { entityKind: 'gadget' };
 
@@ -245,12 +249,17 @@ describe('inherited names elsewhere', () => {
   });
 });
 
-function expectRefused(run: () => unknown, messageStart: RegExp): void {
+function expectRefused(
+  run: () => unknown,
+  messageStart: RegExp,
+  reason: 'name-not-a-key' | 'prototype-replaced' = 'name-not-a-key',
+): void {
   const { added, error } = propertiesAddedBy(run);
   expect(added).toEqual([]);
   expect(error).toMatchObject({
     code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
     message: expect.stringMatching(messageStart),
+    meta: expect.objectContaining({ reason }),
   });
 }
 
@@ -388,6 +397,39 @@ describe('a name that cannot be a key', () => {
       /^A "gadget" entity in namespace "public" is named "__proto__"/,
     ],
     [
+      'the namespace of a pack entity handle',
+      () =>
+        buildTypeScript({
+          extensions: { gadgetDemo: gadgetPackLowering({ namespaceId: '__proto__', key: 'g1' }) },
+          entities: [gadgetHandle],
+        }),
+      /^The namespace of "gadget" entity "g1" is named "__proto__"/,
+    ],
+    [
+      'the namespace of a table whose column collects an entity, at the table',
+      () =>
+        build({
+          namespaces: ['__proto__'],
+          tables: [
+            {
+              namespaceId: '__proto__',
+              tableName: 'moods',
+              columns: [
+                {
+                  columnName: 'mood',
+                  descriptor: {
+                    ...int4,
+                    entityRef: { entityKind: 'widget', entityName: 'm1', entity: {} },
+                  },
+                  nullable: false,
+                },
+              ],
+            },
+          ],
+        }),
+      /^The namespace of table "moods" is named "__proto__"/,
+    ],
+    [
       'a field of a TypeScript model',
       () => model('User', { fields: Object.fromEntries([['__proto__', field.column(int4)]]) }),
       /^A field of model "User" is named "__proto__"/,
@@ -420,7 +462,6 @@ describe('a name that cannot be a key', () => {
 });
 
 describe('a "__proto__" key written in an object literal', () => {
-  const literalMessage = 'is written under the key "__proto__" in an object literal';
   const cases: readonly (readonly [string, () => unknown, RegExp])[] = [
     [
       'the fields of a model',
@@ -428,7 +469,7 @@ describe('a "__proto__" key written in an object literal', () => {
         model('User', {
           fields: { id: field.column(int4).id(), __proto__: field.column(text) },
         }),
-      /^A field of model "User" is written under the key "__proto__"/,
+      /^The fields of model "User" are not a plain object/,
     ],
     [
       'the relations of a model',
@@ -437,7 +478,7 @@ describe('a "__proto__" key written in an object literal', () => {
           fields: { id: field.column(int4).id() },
           relations: { __proto__: rel.hasMany('User', { by: 'id' }) },
         }),
-      /^A relation of model "User" is written under the key "__proto__"/,
+      /^The relations of model "User" are not a plain object/,
     ],
     [
       'relations added to a model',
@@ -445,7 +486,7 @@ describe('a "__proto__" key written in an object literal', () => {
         model('User', { fields: { id: field.column(int4).id() } }).relations({
           __proto__: rel.hasMany('User', { by: 'id' }),
         }),
-      /^A relation of model "User" is written under the key "__proto__"/,
+      /^The relations of model "User" are not a plain object/,
     ],
     [
       'the models of a contract',
@@ -453,7 +494,32 @@ describe('a "__proto__" key written in an object literal', () => {
         buildTypeScript({
           models: { __proto__: model('Foo', { fields: { id: field.column(int4).id() } }) },
         }),
-      /^A model is written under the key "__proto__"/,
+      /^The models of the contract are not a plain object/,
+    ],
+    [
+      'the models a contract factory returns',
+      () =>
+        defineContract(
+          {
+            ...testTypeLookups,
+            family: sqlFamilyPack,
+            target: postgresTargetPack,
+            createNamespace: createTestSqlNamespace,
+          },
+          () => ({
+            models: { __proto__: model('Foo', { fields: { id: field.column(int4).id() } }) },
+          }),
+        ),
+      /^The models of the contract are not a plain object/,
+    ],
+    [
+      'the relations of an unnamed model',
+      () =>
+        model({
+          fields: { id: field.column(int4).id() },
+          relations: { __proto__: rel.hasMany('User', { by: 'id' }) },
+        }),
+      /^The relations of a model are not a plain object/,
     ],
     [
       'the enums of a contract',
@@ -461,7 +527,7 @@ describe('a "__proto__" key written in an object literal', () => {
         buildTypeScript({
           enums: { __proto__: enumType('Mood', text, member('A', 'a')) },
         }),
-      /^An enum is written under the key "__proto__"/,
+      /^The enums of the contract are not a plain object/,
     ],
     [
       'the database types of a contract',
@@ -471,19 +537,16 @@ describe('a "__proto__" key written in an object literal', () => {
             __proto__: { kind: 'codec-instance', codecId: 'pg/text@1', typeParams: {} },
           },
         }),
-      /^A database type is written under the key "__proto__"/,
+      /^The database types of the contract are not a plain object/,
     ],
     [
       'the extensions of a contract',
       () => buildTypeScript({ extensions: { __proto__: gadgetPack } }),
-      /^An extension pack is written under the key "__proto__"/,
+      /^The extensions of the contract are not a plain object/,
     ],
   ];
 
   it.each(cases)('is refused in %s', (_where, run, messageStart) => {
-    expectRefused(run, messageStart);
-    expect(propertiesAddedBy(run).error).toMatchObject({
-      message: expect.stringContaining(literalMessage),
-    });
+    expectRefused(run, messageStart, 'prototype-replaced');
   });
 });
