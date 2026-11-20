@@ -1,6 +1,6 @@
 # Prisma 8 Demo (MariaDB)
 
-A minimal demo showing how to use `@prisma/orm-mariadb`, the one package a MariaDB application installs. It has the same PSL contract as the MySQL example, with three models, a relation, an enum and the convenience date and time types, and a committed migration written by `prisma migration plan` against MariaDB 10.11.
+A minimal demo showing how to use `@prisma/orm-mariadb`, the one package a MariaDB application installs. It has the same PSL contract as the MySQL example, with four models, a relation, an enum, the convenience date and time types and the scalar convenience types, and two committed migrations written by `prisma migration plan` against MariaDB 10.11.
 
 MariaDB support is early, and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MariaDB database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. The reads and writes are the MySQL example's, run with `mariadb()`.
 
@@ -21,6 +21,26 @@ const db = mariadb({ contract: contractFromJson<Contract>(contractJson), url });
 
 - An include is read with a query of its own after the parent rows, since MariaDB cannot read a related row from inside the subquery MySQL's one-query include uses.
 - An upsert writes no row alias, and reads the proposed row's column as `VALUES(column)`, since MariaDB has no `INSERT … AS new`.
+
+## Scalar types
+
+`Product` uses the scalar convenience types:
+
+```prisma
+model Product {
+  id        Int                              @id @default(autoincrement())
+  name      String                           // varchar(191)
+  price     Decimal(precision: 10, scale: 2) // decimal(10,2), read as decimal text such as "19.90"
+  rating    Float                            // double
+  sold      BigInt(as: number)               @default(0) // bigint, read as a number
+  inStock   Boolean                          @default(true) // tinyint(1), 0 or 1
+  thumbnail Bytes                            // longblob, read as a Uint8Array
+  details   Json                             // json: longtext with a json_valid check
+  notes     String(storage: text)?           // text
+}
+```
+
+`src/orm-client/products.ts` creates products, updates their stock and reads the products in stock at a price. A `Decimal` reads as the server prints it, padded to the column's scale, so `"19.9"` is read back as `"19.90"`, and a filter on `"19.9"` finds it. See [Scalar types](../../docs/reference/scalar-types.md#mysql-and-mariadb) for what each type reads, filters and refuses.
 
 ## Setup
 
@@ -51,9 +71,9 @@ pnpm db:sign                                # records the contract the database 
 | `db:sign` | `prisma db sign` | Signs a database whose schema satisfies the contract |
 | `test` | `vitest run` | The whole flow against a fresh database at `MARIADB_URL` |
 
-`pnpm test` uses only the server part of `MARIADB_URL`. It creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI; `test/reads.test.ts`, `test/writes.test.ts` and `test/events.test.ts` migrate a database and read and write it through `mariadb()`. Without `MARIADB_URL` the tests are skipped, except in CI, where they fail.
+`pnpm test` uses only the server part of `MARIADB_URL`. It creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI; `test/reads.test.ts`, `test/writes.test.ts`, `test/events.test.ts` and `test/products.test.ts` migrate a database and read and write it through `mariadb()`. Without `MARIADB_URL` the tests are skipped, except in CI, where they fail.
 
-## What the migration creates
+## What the migrations create
 
 ```sql
 CREATE TABLE `Event` (
@@ -80,16 +100,16 @@ CREATE TABLE `User` (
 );
 ```
 
-plus an index on `Post.authorId` and the foreign key to `User`. The SQL is MySQL's; MariaDB runs it unchanged. MariaDB reports the columns back as `int(11)` and `current_timestamp(3)`, and `db verify` reads them as the `int` and `CURRENT_TIMESTAMP(3)` the contract asks for.
+plus an index on `Post.authorId` and the foreign key to `User`. The second migration creates `Product`, with the same SQL as the MySQL example's; MariaDB makes its `json` column `longtext` with a `json_valid` check, which `db verify` reads as `json`. The SQL is MySQL's; MariaDB runs it unchanged. MariaDB reports the columns back as `int(11)` and `current_timestamp(3)`, and `db verify` reads them as the `int` and `CURRENT_TIMESTAMP(3)` the contract asks for.
 
 ## Key files
 
-- `prisma/contract.prisma` — the contract (User, Post, Event, Role)
+- `prisma/contract.prisma` — the contract (User, Post, Event, Product, Role)
 - `prisma.config.ts` — CLI config; reads the connection from `MARIADB_URL`
-- `migrations/` — the committed migration and its contract snapshot
+- `migrations/` — the committed migrations and their contract snapshots
 - `src/prisma/db.ts` — the `mariadb()` client
 - `src/orm-client/`, `src/queries/`, `src/raw/`, `src/seed.ts` — the reads and writes
 - `test/migrations.test.ts` — the migration flow
-- `test/reads.test.ts`, `test/writes.test.ts`, `test/events.test.ts` — the reads and writes against a migrated database
+- `test/reads.test.ts`, `test/writes.test.ts`, `test/events.test.ts`, `test/products.test.ts` — the reads and writes against a migrated database
 - `test/cli.ts` — runs the `prisma` CLI on a copy of the example
 - `test/database.ts` — creates and drops a database for the test file, and reads `MARIADB_URL`
