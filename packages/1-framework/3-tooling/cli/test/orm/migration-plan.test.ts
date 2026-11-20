@@ -1006,12 +1006,17 @@ describe('migration plan', () => {
         ['migration', 'plan', '--rename', 'Profile:User', '--json'],
         { cwd: project.dir },
       );
-      const actions = JSON.stringify(
+      expect(
         (envelopeOf(refused) as { readonly error: { readonly nextActions: unknown } }).error
           .nextActions,
-      );
-      expect(actions).toContain('--delete User.nickname');
-      expect(actions).toContain('--rename User.nickname:User.handle');
+      ).toEqual([
+        {
+          kind: 'user-choice',
+          label:
+            'If the field was renamed to "handle", keep its values: --rename User.nickname:User.handle',
+        },
+        { kind: 'user-choice', label: 'If the values can go: --delete User.nickname' },
+      ]);
 
       const deleted = await harness(project, { script }).run(
         ['migration', 'plan', '--rename', 'Profile:User', '--delete', 'User.nickname', '--json'],

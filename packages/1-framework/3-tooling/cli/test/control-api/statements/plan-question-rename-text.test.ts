@@ -136,3 +136,38 @@ describe('the texts of an enum value whose member keeps its name with a new stor
     `);
   });
 });
+
+describe('the texts of a loss the target says how to keep', () => {
+  it('gives the advice as a way to keep the data, before the flags', async () => {
+    const asked = await askedAbout({
+      origin: contractOf({ app: { models: { Task: {} } } }),
+      destination: contractOf({ app: { models: { Task: {} } } }),
+      losses: [
+        {
+          label: 'Drop table "task"',
+          subject: { kind: 'model', namespaceId: app, model: 'Task' },
+          keepDataAdvice: 'To keep its data, move the table by hand.',
+        },
+      ],
+    });
+
+    expect(textsOf(asked)).toMatchInlineSnapshot(`
+      {
+        "prompts": [
+          "This change would delete the data of model "Task".
+      The operation of the plan that does this: Drop table "task".
+      To keep its data, move the table by hand.
+      delete lets its data go.",
+        ],
+        "refusal": {
+          "nextActions": [
+            "To keep its data, move the table by hand.",
+            "If its data can go: --delete Task",
+          ],
+          "summary": "This change would delete the data of model "Task".",
+          "why": "The operation of the plan that does this: Drop table "task".",
+        },
+      }
+    `);
+  });
+});

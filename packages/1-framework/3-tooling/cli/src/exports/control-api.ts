@@ -142,6 +142,13 @@ export type {
   RenderContractDtsResult,
   RenderContractDtsSuccess,
 } from '../control-api/render-contract-dts';
+export {
+  type ChangeEffect,
+  type QuestionAnswer,
+  type QuestionParts,
+  questionText,
+  type RemovedNamespaceParts,
+} from '../control-api/statements/plan-question-text';
 export type {
   AnswerPlanQuestions,
   PlanAnswer,

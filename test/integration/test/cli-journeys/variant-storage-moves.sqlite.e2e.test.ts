@@ -113,7 +113,7 @@ withTempDir(({ createTempDir }) => {
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
             summary: 'This change would delete the values of field "Bug.severity".',
-            why: 'The plan would run: Drop column "severity" from "task".',
+            why: 'The operation of the plan that does this: Drop column "severity" from "task".',
             nextActions: [
               {
                 kind: 'user-choice',
@@ -160,7 +160,7 @@ withTempDir(({ createTempDir }) => {
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
             summary: 'This change would delete the data of model "Bug".',
-            why: 'The plan would run: Drop table "bug".',
+            why: 'The operation of the plan that does this: Drop table "bug".',
             nextActions: [
               {
                 kind: 'user-choice',
@@ -225,8 +225,13 @@ withTempDir(({ createTempDir }) => {
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
             summary: 'Removing model "Bug" would delete its data.',
-            why: 'The plan would run:\n- Drop column "severity" from "task"\n- Delete the rows of "task" that hold value "bug" in column "type"\nSQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of "defect" that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.',
+            why: 'The operations of the plan that do this:\n- Drop column "severity" from "task"\n- Delete the rows of "task" that hold value "bug" in column "type"',
             nextActions: [
+              {
+                kind: 'user-choice',
+                label:
+                  'SQLite migrations run with foreign keys off, so deleting these rows does not delete the rows of "defect" that reference them: the apply then fails at PRAGMA foreign_key_check. Delete or change those rows first.',
+              },
               {
                 kind: 'user-choice',
                 label: 'If the model was renamed to "Defect", keep its data: --rename Bug:Defect',

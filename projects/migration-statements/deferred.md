@@ -56,11 +56,11 @@ Adding a required field to a populated collection, or making an optional field r
 
 `db update` making a column NOT NULL on a table with a NULL fails at the precheck (`ensure no NULL values in "note"`) with nothing lost, but the next action says to reconcile schema drift, and the `why` says only "Migration runner failed". The advice should say how many rows hold NULL and how to fix them, or keep the field optional.
 
-## The refusal's next actions are one line per flag, not grouped by subject
+## The refusal's next actions give flags, not a full command
 
-**Found:** slice 2 manual QA (2026-10-08), F11. Engine side.
+**Found:** slice 2 manual QA (2026-10-08), F11. Engine side. Narrowed by the plan-stop output work (2026-11-20), which groups the next actions by subject, says what each flag means, and no longer says "statement".
 
-`CLI.CONSENT_REQUIRED` lists one `user-choice` next action per flag form ("Run the command again with --delete Legacy", another for the rename form), not grouped by subject and not a complete runnable command, and its summary says "N subjects need a statement", which is project vocabulary. Grouping the forms per subject and printing a full command would need the engine to know the invocation; raise it on prisma/prisma-cli once the statement prompt has shipped.
+`CLI.CONSENT_REQUIRED` gives each next action as a meaning and the flags to add (`If the values can go: --delete Shop.legacy`), not a complete command to run. A full command needs the invocation, which only the engine has; and a script that wants the flags of each next action has no field for them, only the label, whose wording is not a contract. Raise both on prisma/prisma-cli: a next-action kind for "flags to add", with the flags as data.
 
 ## SQL variants stored in their own tables
 
@@ -146,11 +146,11 @@ Slice 3b plans each row rewrite as one plain operation: an `UPDATE` for an enum 
 
 The planner adds each derived check, value object shape checks included, with a plain `ALTER TABLE … ADD CONSTRAINT … CHECK (…)`. Postgres holds a lock on the table while it reads every row. The check's name holds a hash of its expression, so any change to a value object drops the check and adds it again, and the rows are read again. Adding the check `NOT VALID` and then running `VALIDATE CONSTRAINT` takes a weaker lock while the rows are read. It changes how every derived check is planned, enum checks included, so it belongs with the row rewrite cost above.
 
-## `--delete billing` is not offered as a next action, and the CLI copies the engine's unused-flag error
+## The CLI copies the engine's unused-flag error for `--delete <namespace>`
 
-**Found:** slice 3b PR 1 system-design review (2026-10-21), S04.
+**Found:** slice 3b PR 1 system-design review (2026-10-21), S04. Narrowed by the plan-stop output work (2026-11-20): the `CLI.CONSENT_REQUIRED` refusal now gives `--delete billing` and `--rename billing:finance` as next actions, once, before the models of the namespace.
 
-When a removed namespace has questions, the `CLI.CONSENT_REQUIRED` refusal's `nextActions` list one `--delete` per model; `--delete billing` appears only in the question text. And because the CLI engine answers a question only with a flag equal to its subject, `db update` and `migration plan` take the `--delete` values from the engine themselves and raise `CLI.CONSENT_UNUSED` through their own `errorConsentUnused` in `packages/1-framework/3-tooling/cli/src/utils/cli-errors.ts`, a copy of the engine's error. Resolve it in the CLI engine (prisma/prisma-cli): let a question name extra flag values that answer it, such as its namespace, so the engine matches `--delete billing`, lists it in `nextActions`, and raises its own error for an unused flag. Then delete the copy and the command-side matching.
+Because the CLI engine answers a question only with a flag equal to its subject, `db update` and `migration plan` take the `--delete` values from the engine themselves when one names a removed namespace, and raise `CLI.CONSENT_UNUSED` through their own `errorConsentUnused` in `packages/1-framework/3-tooling/cli/src/utils/cli-errors.ts`, a copy of the engine's error. Resolve it in the CLI engine (prisma/prisma-cli): let a question name extra flag values that answer it, such as its namespace, so the engine matches `--delete billing` and raises its own error for an unused flag. Then delete the copy and the command-side matching.
 
 Everything the prompt adapter (`packages/1-framework/3-tooling/cli/src/orm/plan-question-prompt.ts`) does to work around the engine goes with it (slice 3b PR 1 second system-design review, 2026-10-22, S06):
 
@@ -171,11 +171,9 @@ Everything the prompt adapter (`packages/1-framework/3-tooling/cli/src/orm/plan-
 
 `--rename billing.Invoice:finance.Invoice` moves the table with `ALTER TABLE … SET SCHEMA`. Postgres keeps a foreign key from another contract space's table pointing at it, and the app's plan is right, but the other space's contract still names the old schema, so that space's next plan sees drift. A table rename has the same gap on main. It needs a cross-space design: either refuse a move or rename of a table another space references, or tell the other space's plan about it.
 
-## One model with two access questions needs `--allow` twice
+## ~~One model with two access questions needs `--allow` twice~~
 
-**Found:** slice 3b PR 1 manual QA (2026-10-21), F5. Older than this PR: on main an `--allow` answers one operation.
-
-Reproduction: remove `@@rls` and the policy from a model `Invoice`, then run `db update --no-interactive`. It refuses with two questions about `"Invoice"`, one for dropping the policy and one for disabling row-level security, each answered by `--allow Invoice`. `db update --allow Invoice` still refuses, with "Run the command again with --allow Invoice"; only `--allow Invoice --allow Invoice` applies. To resolve it, either let one `--allow <model>` answer every access question about the model (the control API's `givenFor` and the dry run's `answeredByFlags` match all of them, and the CLI engine needs to accept one flag for several questions with the same subject, as `--delete <namespace>` works around today), or give each access question its own subject, such as the policy name.
+**Found:** slice 3b PR 1 manual QA (2026-10-21), F5. **Resolved** by the plan-stop output work (2026-11-20): `db update` asks once per model about every operation that changes its access, and one `--allow <Model>` allows them all, on the refusal, the prompt, the dry run and the control API. Each operation is still recorded as allowed at its own position.
 
 ## A planner warning about the unbound namespace on every multi-namespace run
 
@@ -509,3 +507,41 @@ It needs a decision: reject a column that fields of different enums share when t
 The origin stores `User` in `users` with primary key `users_pkey`; the destination stores it in `app_users`. The database also has a table the contract lacks, `stale`, with an index named `app_users_pkey`. The plan is: rename table `users` to `app_users`, rename `users_pkey` to `app_users_pkey`, drop table `stale`. The apply fails with `relation "app_users_pkey" already exists`, because the drop that frees the name runs last. Nothing is lost: the migration is rolled back. A `--rename` statement gave the same plan before this slice.
 
 The constraint rename is a companion inside the `renameTable` call, and running `migration.ts` again rebuilds the companions inside `this.renameTable(...)`, so it cannot simply move later in the plan. Two fixes: run a drop of a table no rename touches before the renames, or write that companion as its own call after the drop. This is a second case of the limit recorded under "A SQLite column rename followed by a table rebuild builds the replacement index twice": operations carry no dependency information. Until then the user drops the stale table first.
+
+## The engine's prompt and errors need fields the CLI cannot give today
+
+**Found:** the plan-stop output work (2026-11-20), its system-design and code reviews and its hands-on test. Engine side (prisma/prisma-cli).
+
+- **A description beside each choice in the prompt.** The engine prints `<question text> (rename Shop.legacy:Shop.rating or delete)`; the CLI says what each verb means in one sentence at the end of the text (`questionText` in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-question-text.ts`). A description per verb would put each meaning beside its choice.
+- **Why nobody could answer.** The engine's refusal has no `meta` field saying whether the run was not interactive or ran with `--yes`. The CLI reads `--yes` from the engine's summary text (`error.message.includes('--yes')` in `rebuiltError`, `packages/1-framework/3-tooling/cli/src/orm/plan-question-prompt.ts`), the one read of engine text left. A field would remove it.
+- **Which questions are open.** `meta.unanswered` gives each open question's subject and verbs, not its position, so `openQuestions` in the same file matches by both and takes the last of each. A position or id per entry would remove the guess.
+- **A title and a body for a question.** The engine uses the question text both as the prompt and inside its error summaries. `CLI.PROMPT_INVALID` for a flag or typed answer a question's `validate` rejected is rebuilt by the CLI from the rejection it recorded; but a typed answer that starts with no verb the question takes (`Start the answer with rename or delete.`, outside a terminal prompt) is rejected by the engine before `validate`, so its `CLI.PROMPT_INVALID` still quotes the whole multi-line text. `CLI.PROMPT_CANCELLED` (Ctrl-C at the prompt) quotes it too: `The prompt "Removing field "Shop.legacy" would delete its values.\nThe operation of the plan that does this: …" was cancelled before it was answered.`
+- **The engine's own `CLI.CONSENT_UNUSED`** says `--delete Nope was given but nothing in this run asked about Nope.` and `the question about Bug was already answered by another flag`, in the words this work removed from `CLI.CONSENT_REQUIRED`.
+
+## "Statement" and "question" in texts outside the plan-stop output
+
+**Found:** the plan-stop output work (2026-11-20). Out of its scope, which is the text a user reads when `migration plan` or `db update` stops.
+
+- The `MIGRATION.STATEMENT_*` errors (`resolve-statements.ts` and `utils/cli-errors.ts` in `packages/1-framework/3-tooling/cli/src`), for example `Cannot resolve statement "--rename Shop.legacy:Shop.<new name>"`. A `--rename` typed at the prompt that does not resolve reaches the user through `CLI.PROMPT_INVALID` with this text.
+- The `Statements applied` heading of the success output of both commands, and its entries (`delete field "Shop.legacy" (1 operation)`, `accept lossy type change of field "Shop.age"`).
+- Target advice that reaches the refusal: MongoDB's `a statement cannot rename the collection of a model that keeps its name` (`packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`). Planner conflicts that are not the refusal still say "question" and "answer": SQL `statement-planning.ts` (`A question about … Answer it with --delete`), SQL `enum-value-planning.ts` (`If you answer it with --delete`), MongoDB `mongo-rewrite-overlaps.ts` (`If every answer is --delete`).
+- The docs, which call these flags statements and the stops questions.
+
+## The dry run lists what an apply would stop for in its own words
+
+**Found:** the plan-stop output work's system-design review (2026-11-20).
+
+`db update --dry-run` lists what an apply would stop for under `An apply asks about`, from `questionBlocks` in `packages/1-framework/3-tooling/cli/src/orm/db/migration-blocks.ts`: each line is the operation labels and one flag, `Drop table "bug": --delete Bug`, and a removed namespace is `every question about namespace "billing": --delete billing`. It does not use the parts the refusal is built from, so it says nothing of what the change would do, offers no rename or convert, and says "question". It should list the same headlines and flags from `QuestionParts`.
+
+## An operation label names a policy by its stored name
+
+**Found:** the plan-stop output work's hands-on test (2026-11-20).
+
+On Postgres, `The operations of the plan that do this:` lists `Drop RLS policy "tenant_read_f8d5e783" on "user"`: the policy's stored name, with the hash suffix the planner adds, and the table, not the contract's `tenant_read` and `User`. The label is the target's (`packages/3-targets/postgres/1-target`); the refusal quotes it as given.
+
+## The delete line of an enum value does not say what the rows then hold
+
+**Found:** the plan-stop output work's hands-on test (2026-11-20).
+
+`If it can go from the data: --delete Status.ARCHIVED` does not say that an optional field that held the value is then empty (`NULL`, or unset on MongoDB), that a list loses the element, and that a required field stops the apply. The CLI does not know which fields hold the enum; the target's operation labels do. Built in `deleteAnswer`, `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`.
+

@@ -227,7 +227,7 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
         }),
       )[0]?.why,
     ).toBe(
-      'A statement cannot rename the collection of a model that keeps its name. Rename the collection in a step of its own first: change only @@map and emit the contract. With db update, rename the collection in the database yourself, for example db.getCollection("profiles").renameCollection("users") in mongosh, then run db update. With migration plan, plan it, passing --delete Profile to answer its question; in its migration.ts make renameCollection("profiles", "users") the first operation, imported with the other operations, delete the drop of "profiles", and delete the create of "users" if there is one; run node on that migration.ts so it writes ops.json again; then apply it with prisma db migrate. Then change the field and run this statement again.',
+      'A statement cannot rename the collection of a model that keeps its name. Rename the collection in a step of its own first: change only @@map and emit the contract. With db update, rename the collection in the database yourself, for example db.getCollection("profiles").renameCollection("users") in mongosh, then run db update. With migration plan, plan it with --delete Profile; in its migration.ts make renameCollection("profiles", "users") the first operation, imported with the other operations, delete the drop of "profiles", and delete the create of "users" if there is one; run node on that migration.ts so it writes ops.json again; then apply it with prisma db migrate. Then change the field and run this statement again.',
     );
   });
 });

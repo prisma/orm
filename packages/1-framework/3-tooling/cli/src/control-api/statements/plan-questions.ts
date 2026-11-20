@@ -1144,9 +1144,9 @@ function quotedList(items: readonly string[]): string {
  * resolved against the two contracts after the plan's other renames, and its old name must be the
  * subject. Anything else, and data no model stores, can only be deleted. A field whose model the
  * contract names differently can be renamed only after a rename of the model, so the question gives
- * that rename as a way to keep the values. The question carries the target's advice on keeping the
- * data, when it gives any, except for enum members that share stored values when the command gives
- * its own route for them. `recovery` gives the steps that store the contract before this change,
+ * that rename as a way to keep the values. The target's advice on keeping the data is a way to keep
+ * it too, when it gives any, except for enum members that share stored values when the command
+ * gives its own route for them. `recovery` gives the steps that store the contract before this change,
  * for the first storage subject when that contract is not known.
  */
 export function dataLossQuestion(
@@ -1177,15 +1177,12 @@ export function dataLossQuestion(
     headline: lossHeadline(loss, kind, subject, contracts),
     named: namedSubject(loss.subject, subject),
     operations: [...new Set(labels)],
-    notes: [
+    notes: [...(keepData?.lead === undefined ? [] : [keepData.lead]), ...required.notes],
+    keepDataWays: [
+      ...(missingModel === undefined ? [] : [modelRenameWay(missingModel, subject, contracts)]),
       ...(loss.keepDataAdvice === undefined || commandRoutesSharedValues
         ? []
         : [loss.keepDataAdvice]),
-      ...(keepData?.lead === undefined ? [] : [keepData.lead]),
-      ...required.notes,
-    ],
-    keepDataWays: [
-      ...(missingModel === undefined ? [] : [modelRenameWay(missingModel, subject, contracts)]),
       ...(keepData?.ways ?? []),
       ...(recovery ? ORIGIN_SNAPSHOT_RECOVERY : []),
     ],

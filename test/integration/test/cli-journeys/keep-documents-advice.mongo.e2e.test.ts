@@ -1,7 +1,7 @@
 /**
  * The advice to keep the documents of a collection whose model keeps its name, followed as printed when the plan creates the new collection only with its index (MongoDB).
  *
- * `Event` moves from `events` to `occasions` and has a unique index on `name`, so the plan has no `createCollection("occasions")`: `createIndex` creates it. The journey plans with `--delete Event`, edits `migration.ts` as the question says, runs node on it, and applies it with `db migrate`.
+ * `Event` moves from `events` to `occasions` and has a unique index on `name`, so the plan has no `createCollection("occasions")`: `createIndex` creates it. The journey plans with `--delete Event`, edits `migration.ts` as the printed way to keep the documents says, runs node on it, and applies it with `db migrate`.
  */
 
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -92,8 +92,8 @@ describe('Journey (MongoDB): keeping the documents of a collection created only 
     await emitFixture(project, 'contract-indexed-events-remapped.ts', 'K.04');
     const asked = await runMigrationPlan(project, ['--from', origin, '--json']);
     expect(asked.exitCode, 'K.05: the drop of events needs a statement').toBe(2);
-    const question = String(engineError(asked)?.why);
-    expect(question, 'K.05: the question says where the rename goes').toContain(
+    const ways = (engineError(asked)?.nextActions ?? []).map(({ label }) => label).join('\n');
+    expect(ways, 'K.05: the way to keep the documents says where the rename goes').toContain(
       'make renameCollection("events", "occasions") the first operation, imported with the other operations, delete the drop of "events", and delete the create of "occasions" if there is one',
     );
 
@@ -113,7 +113,7 @@ describe('Journey (MongoDB): keeping the documents of a collection created only 
       /createCollection\('occasions', \{\s*validator: \{/,
     );
     writeFileSync(migrationTs, followRenameCollectionAdvice(planned, 'events', 'occasions'));
-    const emitted = runPrintedSelfEmit(question, dirname(migrationTs));
+    const emitted = runPrintedSelfEmit(ways, dirname(migrationTs));
     expect(emitted.exitCode, `K.08: node on migration.ts, as printed: ${emitted.stderr}`).toBe(0);
 
     const applied = await runMigrate(project);

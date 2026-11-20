@@ -196,7 +196,7 @@ withTempDir(({ createTempDir }) => {
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
             summary: 'Removing model "Bug" would delete its data.',
-            why: 'The plan would run:\n- Drop table "bug"\n- Delete the rows of "task" that hold value "bug" in column "type"',
+            why: 'The operations of the plan that do this:\n- Drop table "bug"\n- Delete the rows of "task" that hold value "bug" in column "type"',
             nextActions: [
               {
                 kind: 'user-choice',
@@ -246,9 +246,10 @@ withTempDir(({ createTempDir }) => {
           expect(await refusal(journey, [], 'G2.03'), 'G2.03: the questions').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: 'This change needs 2 answers: "Bug", "Task".',
-            why: `This change would delete the data of model "Bug".\nThe plan would run: Drop table "bug".\n${MERGE_ADVICE}\nThis change would delete the data of model "Task".\nThe plan would run: Drop table "task".\n${MERGE_ADVICE}`,
+            summary: 'This change would lose data: model "Bug", model "Task".',
+            why: 'This change would delete the data of model "Bug".\nThe operation of the plan that does this: Drop table "bug".\n\nThis change would delete the data of model "Task".\nThe operation of the plan that does this: Drop table "task".',
             nextActions: [
+              { kind: 'user-choice', label: MERGE_ADVICE },
               { kind: 'user-choice', label: 'If the data of model "Bug" can go: --delete Bug' },
               { kind: 'user-choice', label: 'If the data of model "Task" can go: --delete Task' },
             ],

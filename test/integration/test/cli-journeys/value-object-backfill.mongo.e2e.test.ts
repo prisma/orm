@@ -376,7 +376,7 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
     }).toEqual({
       code: 'CLI.CONSENT_REQUIRED',
       why: [
-        'The plan would run:',
+        'The operations of the plan that do this:',
         '- Remove key "zip" at path "$" in field home of collection users',
         '- Remove key "zip" at path "$[*]" in field addresses of collection users',
         'If the values go, the existing objects get a temporary value in the new required field "Address.country".',
@@ -433,10 +433,9 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
       severity: 'error',
       summary: 'Removing value object field "Address.country" would delete its values.',
       why: [
-        'The plan would run:',
+        'The operations of the plan that do this:',
         '- Remove key "country" at path "$" in field home of collection users',
         '- Remove key "country" at path "$[*]" in field addresses of collection users',
-        'If the values go, the new required field "Address.seen" still needs a value: add --backfill Address.seen to write it in migration.ts.',
       ].join('\n'),
       nextActions: [
         {
@@ -445,6 +444,11 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
             'If the value object field was renamed to "seen", keep its values: --rename Address.country:Address.seen',
         },
         { kind: 'user-choice', label: 'If the values can go: --delete Address.country' },
+        {
+          kind: 'user-choice',
+          label:
+            'If the values go, the new required field "Address.seen" still needs a value: add --backfill Address.seen to write it in migration.ts.',
+        },
       ],
       meta: {
         subject: 'Address.country',

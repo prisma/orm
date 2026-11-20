@@ -2,13 +2,28 @@
 changes:
   - id: consent-required-output-reworded
     summary: |
-      When `migration plan` or `db update` stops because a plan would lose data or change access and nobody can answer, the `CLI.CONSENT_REQUIRED` error is worded differently. Its summary says what the change would do, its `why` says what the plan would run, and each next action gives what a flag means followed by the flag. The code, the exit code and `meta` (`subject`, `verbs`, `unanswered`, `unmatched`, `confirm`) do not change. The detection matches sources and scripts that match the old summary or next-action text.
+      When `migration plan` or `db update` stops because a plan would lose data or change access and nobody can answer, the `CLI.CONSENT_REQUIRED` error is worded differently. Its summary says what the change would do, its `why` says which operations of the plan do it, and each next action gives what a flag means followed by the flag. A flag that named nothing gets a next action that says to remove it. The code, the exit code and the fields of `meta` (`subject`, `verbs`, `unanswered`, `unmatched`, `confirm`) do not change. The detection matches sources and scripts that match the old summary or next-action text.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,sh,bash,yml,yaml}"
       matches:
         - 'needs a statement'
         - 'need a statement'
         - 'Run the command again with --(delete|rename|allow|convert)'
+  - id: one-allow-per-model
+    summary: |
+      `db update` asks once per model about the operations that change who can read or write its data, so one `--allow User` allows them all, such as disabling row-level security and dropping a policy on Postgres. A second `--allow User` in the same run fails with `CLI.CONSENT_UNUSED`, and `meta.unanswered` lists one entry per model. In the control API, one `allow` statement in `statements` answers every access change of its model, and a second fails with `MIGRATION.STATEMENT_ANSWERS_NO_QUESTION`. The detection matches a flag or statement given twice for one model.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,sh,bash,yml,yaml}"
+      matches:
+        - "--allow[ =](\\S+)\\s+--allow[ =]\\1(\\s|$)"
+        - "'--allow',\\s*'([^']+)',\\s*'--allow',\\s*'\\1'"
+  - id: plan-question-parts
+    summary: |
+      A `PlanQuestion` that the control API hands to `answerQuestions` no longer has `question`, its prompt text. It carries the parts the text is built from (`headline`, `operations`, `notes`, `keepDataWays`, `answers`, `whenDeleted`, `effect`), and `questionText(question)` from `@prisma/orm-toolchain/cli/control-api` builds the text. `verbs`, `forms`, `subject` and `validate` are unchanged.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?=[\s\S]*\banswerQuestions\b)[\s\S]*\.question\b'
 ---
 
 # The `CLI.CONSENT_REQUIRED` output when a plan stops to ask
@@ -26,11 +41,35 @@ After:
 
 ```text
 ✘ [CLI.CONSENT_REQUIRED] Removing field "Shop.legacy" would delete its values.
-  why: The plan would run: Drop column "legacy" from "Store Front".
+  why: The operation of the plan that does this: Drop column "legacy" from "Store Front".
 → If the field was renamed to "rating", keep its values: --rename Shop.legacy:Shop.rating
 → If the values can go: --delete Shop.legacy
 ```
 
-In every file the detection matches, stop reading the summary or the next-action labels to find out what was asked. Read `meta.unanswered` instead, which is unchanged: one entry per open question, each with the `subject` a flag names and the `verbs` that answer it, so `--<verb> <subject>` answers it, and `--rename` takes `<subject>:<new name>`. To find the flag in a next action, take the text after the last `: ` of its label; the label no longer starts with `Run the command again with`.
+In every file the detection matches, stop reading the summary or the next-action labels to find out what was asked. Read `meta.unanswered` instead: one entry per open subject, each with the `subject` a flag names and the `verbs` that answer it, so `--<verb> <subject>` answers it, and `--rename` takes `<subject>:<new name>`.
 
-Two access changes on one model now give one next action with the flag once per change, `--allow User --allow User`, because each `--allow` answers one change.
+# One `--allow` per model
+
+Before, `db update` asked about each operation that changes access on its own, so disabling row-level security and dropping a policy on `User` took `--allow User --allow User`. Now it asks once about `User`, and `--allow User` once allows both. Give the flag once:
+
+```bash
+# Before
+prisma db update --allow User --allow User
+# After
+prisma db update --allow User
+```
+
+In the control API, pass one `{ verb: 'allow', text: 'User' }` in `statements`, not one per operation.
+
+# The prompt text of a `PlanQuestion`
+
+An `answerQuestions` callback that read `question.question` builds the text with `questionText`:
+
+```ts
+import { questionText } from '@prisma/orm-toolchain/cli/control-api';
+
+answerQuestions: async (questions) => {
+  for (const question of questions) console.log(questionText(question));
+  return questions.map(({ subject, verbs }) => ({ verb: verbs[0] ?? 'delete', text: subject }));
+},
+```

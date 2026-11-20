@@ -182,6 +182,42 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
+      'db update asks once about disabling row-level security and dropping a policy of one model, and the one printed --allow applies both',
+      async () => {
+        await withProject(async (project) => {
+          await migratedTo(project, WITH_POLICY, undefined);
+          await emit(project, NO_RLS);
+
+          const unanswered = await runDbUpdate(project.ctx, ['--no-interactive', '--json']);
+          const refusal = errorOf(unanswered) as {
+            readonly nextActions?: readonly { readonly label: string }[];
+          };
+          const line = refusal.nextActions?.[0]?.label ?? '';
+          const allowed = await runDbUpdate(project.ctx, [
+            '--no-interactive',
+            ...line.slice(line.lastIndexOf(': --') + 2).split(' '),
+            '--json',
+          ]);
+
+          expect(refusal).toMatchObject({
+            code: 'CLI.CONSENT_REQUIRED',
+            summary: 'Access to the data of "User" would change.',
+            why: expect.stringMatching(
+              /^The operations of the plan that do this:\n- Disable row-level security on "user"\n- Drop RLS policy "tenant_read_[0-9a-f]{8}" on "user"$/,
+            ),
+            nextActions: [{ kind: 'user-choice', label: 'To allow both changes: --allow User' }],
+            meta: { subject: 'User', unanswered: [{ subject: 'User', verbs: ['allow'] }] },
+          });
+          expect(allowed.exitCode, `db update --allow: ${allowed.stdout}\n${allowed.stderr}`).toBe(
+            0,
+          );
+          expect(await policiesOnUser(project)).toBe(0);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
       'db update under access-widening-permitted lists nothing an apply asks about, and accepts an --allow given anyway',
       async () => {
         await withProject(async (project) => {

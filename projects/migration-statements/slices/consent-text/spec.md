@@ -17,12 +17,12 @@ Will, 2026-11-19: "This is terrible user-facing output." What is wrong: "stateme
 
 ```text
 ✘ [CLI.CONSENT_REQUIRED] Removing field "Shop.legacy" would delete its values.
-  why: The plan would run: Drop column "legacy" from "Store Front".
+  why: The operation of the plan that does this: Drop column "legacy" from "Store Front".
 → If the field was renamed to "rating", keep its values: --rename Shop.legacy:Shop.rating
 → If the values can go: --delete Shop.legacy
 ```
 
-Every message a user sees when `migration plan` or `db update` stops to ask follows the same order: what the change would do, in the words of the user's contract; what the plan would run; each answer with what it means.
+Every message a user sees when `migration plan` or `db update` stops to ask follows the same order: what the change would do, in the words of the user's contract; which operations of the plan do it; each answer with what it means. Every printed line works when a careful reader follows it.
 
 ## Terms
 
@@ -39,38 +39,46 @@ The framework rule holds: the change is family-blind text and CLI-internal types
 
 ## Design
 
-1. **A question carries its parts, not one sentence.** `PlanQuestion` gains the parts the texts below are built from: what the change would do (the headline), the operation labels, a meaning for each answer, and the extra notes. One function builds the prompt text from the parts and one builds the refusal, so no sentence is written twice.
-2. **The CLI builds the refusal.** From the open questions and the engine error's `meta` (`unanswered`, `unmatched`, `confirm`), it builds summary, `why` and next actions. It no longer edits engine text by string replacement. `code`, `severity`, `docsUrl`, exit code, and the `meta` fields `subject`, `verbs`, `unanswered`, `unmatched`, `confirm` are unchanged: scripts and agents read them.
-3. **Headline.** In contract terms. `Removing <kind> "<name>" would delete its <data|values>.` only where the CLI knows the destination contract lacks the subject; otherwise `This change would delete the <data|values> of <kind> "<name>".` It must be true in every case that reaches it: check each loss kind and subject kind against the code before choosing the words.
+1. **A question carries its parts, not one sentence.** `PlanQuestion` extends `QuestionParts` (`plan-question-text.ts`): the headline, how a list of several names the subject (`named`), the operation labels, the notes (facts only), the ways to keep the data that take more than one flag (`keepDataWays`), the answers (each a flag with `meaning`, `meaningNamingSubject` and `promptMeaning`), what else to give when the data goes (`whenDeleted`), the effect on the data (`effect`: `deletes data`, `may change data`, `changes access`), and the removed namespace of its model, if any (`removedNamespaceParts`). `planQuestion` is the only constructor; it derives `verbs` and `forms` from the answers. `questionText` builds the prompt text where the question goes to the engine, and `refusalText` builds the refusal, so no sentence is written twice and no stored copy can drift. The types and `questionText` are exported beside `PlanQuestion`.
+2. **The CLI builds the refusal.** From the open questions and the engine error's `meta` (`unanswered`, `unmatched`, `confirm`), it builds summary, `why` and next actions. It finds the open questions from `meta.unanswered` by subject and verbs together, and throws `InternalError` when the engine lists one the CLI did not ask. `code`, `severity`, `docsUrl`, exit code, and the `meta` fields `subject`, `verbs`, `unanswered`, `unmatched`, `confirm` are the engine's: scripts and agents read them. The engine's `CLI.PROMPT_INVALID` for a flag or typed answer a question's `validate` rejected is rebuilt the same way: `<flag> does not fit this change: <the CLI's reason>`, with the question's headline as `why`.
+3. **Kind of loss, decided once.** `lossKind` returns `removed`, `deleted` or `retyped`, and throws `InternalError` for a type change of a subject kind the CLI has no words for (only fields and storage have them). "Removing" is said only when the contract still has the model, enum, value object or namespace the subject was in and not the subject; when only that place is missing, the subject may have moved with it, and the headline says `This change would delete …`.
+   - removed: `Removing model "Bug" would delete its data.`, `Removing field "Shop.legacy" would delete its values.`, `Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.`, `Removing value object field "GeoPoint.note" would delete its values.`
+   - not known to be removed: `This change would delete the data of model "billing.Invoice".`, `This change would delete the values of field "Profile.nickname".`
+   - a change the CLI can name: `Changing the discriminator value of model "Bug" from "bug" to "defect" would delete its data.`, `Changing the stored value of enum value "Status.ACTIVE" from "active" to "on" would remove "active" from the data that holds it.`
    - type change: `Changing the type of field "User.age" can change or lose its values.`
-   - enum value: `Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.`
-   - storage no model stores: `This change would delete the data in "public.user.age", which no model of the origin contract stores.` With no origin contract: `…, named by its storage name because the origin contract is unknown.`
-   - access change: `This change would widen who can read and write the data of "User".` (or `change`).
-   - several questions open: `This change needs <N> answers: "Bug", "Task".` and each question's headline opens its paragraph in `why`.
-4. **What the plan would run.** One operation: `The plan would run: <label>.` Several: `The plan would run:` and one `- <label>` line each.
-5. **Answers.** One next action per answer, meaning first, flag last. With one question open:
-   - rename, new name known: `If the field was renamed to "rating", keep its values: --rename Shop.legacy:Shop.rating`
-   - rename, new name unknown: `If the field was renamed, keep its values: --rename 'Shop.legacy:Shop.<new name>'`
-   - delete: `If the values can go: --delete Shop.legacy` (a model: `If its data can go`)
+   - storage no model stores: `This change would delete the data in "public.user.age", which no model of the contract before this change stores.` With that contract unknown: `…, named by its storage name because the contract before this change is not known.`
+   - access, one question per model for all its access changes: `Access to the data of "User" would widen.` when every change widens it, else `Access to the data of "User" would change.`
+4. **Several open.** The summary says what would happen: `This change would lose data: model "Bug", model "Task".`, `This change would change who can read and write data: "User".`, or `This change would lose data and change access: model "Bug", "User".` Each open question is a paragraph of `why`, opened by its headline; a blank line separates the paragraphs. A removed namespace comes first, once: `The contract no longer has namespace "billing".`
+5. **The operations.** The line lists only the operations that cause this loss: `The operation of the plan that does this: <label>.`, or `The operations of the plan that do this:` with one `- <label>` line each.
+6. **Next actions, in order.** First the lines that remove flags that did nothing; then the ways to keep the data that take more than one flag (the target's advice, the rename of a field's missing model, the steps that store the contract before this change); then the removed namespace's flags; then one line per answer, meaning first, flag last; then what else to give when the data goes (a `--backfill` for a new required field).
+   - rename, one new name possible: `If the field was renamed to "rating", keep its values: --rename Shop.legacy:Shop.rating`
+   - rename, several possible: `If the field was renamed to "rating" or "score", put that name in place of <new name> to keep its values: --rename 'Shop.legacy:Shop.<new name>'`
+   - rename, none possible: `If the field was renamed, first add it to the contract under its new name; then keep its values: --rename 'Shop.legacy:Shop.<new name>'`. The new names are the contract's new fields, members or value object fields, a variant's new sibling variants, or a model's new models in its own namespace (all namespaces when there are none there).
+   - delete: `If the values can go: --delete Shop.legacy` (a model: `If its data can go`; an enum value: `If it can go from the data`); when `migration plan`'s way to keep the data runs the same `--delete` and then edits migration.ts, it adds `, or to keep the data by editing migration.ts as above`.
    - delete on a type change: `To let the database cast the values, which can change or lose some: --delete User.age`
    - convert: `To write the conversion yourself: --convert User.age`
-   - allow: `To allow it: --allow User`
-   With several questions open, each line names its subject (`If the data of model "Bug" can go: --delete Bug`). The ways to keep the data that a target supplies (`keepDataWays`) stay first, as today.
-6. **Flags that answered nothing**, from `meta.unmatched` and `meta.confirm`, as lines in `why`: `--delete nope names nothing this change asks about.` and `--confirm postgres does not answer this.`
-7. **`--yes`.** The engine exposes no field for it; its summary says `which --yes cannot give`. When the engine's summary contains `--yes`, `why` gains `--yes does not answer this: it would delete data.` (for an access change: `…: it would change access.`). A journey asserts it against the real engine, so an engine wording change fails a test.
-8. **The prompt.** The engine prints `<question text> (<verb form> or <verb>)`. The question text is the headline, what the plan would run, the notes, and one short sentence on what each verb means (for example `rename keeps the values under the new name; delete lets them go.`).
-9. **The words "statement" and "question"** do not appear in any text this slice builds. Name the flag. Other errors (`MIGRATION.STATEMENT_*`) and the docs' use of "statement" as the name of these flags are out of scope.
-10. **Existing notes** (namespace delete and rename, origin snapshot recovery, the new-required-field notes, `db update` enum advice) keep their facts and are reworded only to drop "statement", "question" and "answers this question", and to fit the order above.
+   - allow: `To allow it: --allow User`, or `To allow both changes: --allow User` for two access changes of one model.
+   - a field whose model the contract names differently: `If model "Profile" was renamed to "Person", keep the values of field "Profile.nickname": --rename Profile:Person`, with the same three forms as a rename.
+   - a removed namespace: `If the data of everything in namespace "billing" can go: --delete billing`, and `If namespace "billing" was renamed to "finance", keep its data: --rename billing:finance` when the contract adds a namespace.
+   With several questions open, each line names its subject (`If the data of model "Bug" can go: --delete Bug`).
+7. **Flags that did nothing**, from `meta.unmatched` and `meta.confirm`: `Remove --delete Nope: nothing in this change is called that.` and `Remove --confirm postgres: nothing in this change needs it.`
+8. **`--yes`.** The engine exposes no field for it; its summary says `which --yes cannot give`. When it does, `why` ends with `--yes does not allow this: it would delete data.`, `…: it can change or lose data.` for a type change, or `…: it would change who can read and write data.` for an access change. A test runs the real engine, so an engine wording change fails it.
+9. **The prompt.** The engine prints `<question text> (<verb form> or <verb>)`. The question text is the headline, the operations, the notes, on the first question of a removed namespace its fact, the ways to keep the data, what else to give, and one sentence on what each verb means, for example `rename keeps the values under the new name; delete lets them go.`, `convert writes a conversion for you to fill in; delete lets the database cast the values, which can change or lose some.`, or, when the contract has no new name, `rename works once the contract has the field under its new name`.
+10. **Words.** No text this slice builds, or a note or advice string the commands add to it, says "statement", "question", "answer", "asks about" or "needs N answers"; a test builds every kind of text and checks. The contract the user is planning to is "the contract"; the other is "the contract before this change", and the snapshot recovery steps say once that, for `db update`, it is the contract the database was last updated to. Target advice that reached the refusal with such a word is reworded in the target. The `MIGRATION.STATEMENT_*` texts, the `Statements applied` heading, "statement" in target advice, and the docs are out of scope.
+11. **One `--allow` per model.** `db update` asks one question per model about every operation that changes its access, and one `--allow` answers it, on the refusal, the prompt, the dry run and the control API. `matchConsents` lets a flag naming a subject answer every question about it, for `--allow` as for `--delete`, so a second `--allow User` is refused as unused. Each operation is still recorded as allowed at its own position.
 
 ## Out of scope, recorded in `deferred.md`
 
-- Engine changes: a per-answer description in the prompt; a `meta` field saying why nobody could answer (`--yes` or not interactive); the wording of `CLI.PROMPT_INVALID`, `CLI.PROMPT_CANCELLED` and the engine's own `CLI.CONSENT_UNUSED`.
-- "Statement" in `MIGRATION.STATEMENT_*` texts, `resolve-statements.ts`, the SQL family and MongoDB advice strings, and the docs.
+- Engine changes: a description beside each choice in the prompt; a `meta` field saying why nobody could answer, which would remove the read of `--yes` from the engine's summary; question positions in `meta.unanswered`; a title and body for a question, so `CLI.PROMPT_INVALID` for an answer with no verb and `CLI.PROMPT_CANCELLED` stop quoting the whole prompt; the engine's own `CLI.CONSENT_UNUSED` text.
+- "Statement" in `MIGRATION.STATEMENT_*` texts, the `Statements applied` heading, target advice strings and planner conflicts, and the docs.
+- The dry run's list of what an apply would stop for, which renders the same subjects another way.
+- An operation label that shows a policy's stored name; the enum delete line not saying what the rows then hold.
 
 ## Done when
 
 1. Every refusal and prompt text for: a removed model (one and several operations), field, enum value, value object field, namespace, storage no model stores (origin known and unknown), a type change on `migration plan` and on `db update`, an access change, several open questions, a stray flag, `--confirm`, and `--yes`, on PostgreSQL, SQLite and MongoDB where each applies, is asserted in full by a unit test or journey.
-2. No user-visible string built by `plan-questions.ts`, `plan-question-prompt.ts` or the refusal contains "statement" or "question"; a test checks the built texts.
+2. No user-visible string built by `plan-questions.ts`, `plan-question-text.ts`, `plan-question-prompt.ts`, `keep-data-edit-advice.ts` or the refusal contains "statement", "question", "answer", "asks about" or "needs N answers"; a test checks the built texts of every builder.
 3. Every journey and unit test that asserted the old texts asserts the new ones in full.
-4. `docs/reference/error-reference.md` (`CLI.CONSENT_REQUIRED`), the CLI README and `skills/prisma-8/references/{migrations,debug}.md` show the new output; an upgrade note under `upgrade-instructions/pending/` tells scripts that match the summary or next-action text what changed and that `meta.unanswered` is unchanged.
+4. `docs/reference/error-reference.md` (`CLI.CONSENT_REQUIRED`), the CLI README and `skills/prisma-8/references/{migrations,debug}.md` show the new output; an upgrade note under `upgrade-instructions/pending/` tells scripts that match the summary or next-action text what changed and to read `meta.unanswered`, that one `--allow` now allows every access change of a model, and that `PlanQuestion` lost its `question` text.
+6. For each refusal of the hands-on test, a test follows each printed line as a careful reader would and checks the data it said it would keep or let go.
 5. `pnpm build`, `pnpm typecheck`, `pnpm fixtures:check`, `pnpm lint:deps`, `pnpm lint:ratchets`, `pnpm lint:docs`, `pnpm check:error-reference`, `pnpm check:upgrade-coverage` pass; lint and `pnpm test --coverage` pass in each touched package; each touched journey passes run by name.

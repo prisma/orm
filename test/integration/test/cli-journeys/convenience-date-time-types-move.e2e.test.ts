@@ -136,7 +136,7 @@ withTempDir(({ createTempDir }) => {
               '▸ Planning migration',
               '✔ Planning migration',
               '✘ [CLI.CONSENT_REQUIRED] Changing the type of field "Event.at" can change or lose its values.',
-              '  why: The plan would run: Alter type of "event"."at" to timestamptz(3).',
+              '  why: The operation of the plan that does this: Alter type of "event"."at" to timestamptz(3).',
               '→ To let the database cast the values, which can change or lose some: --delete Event.at',
               '  docs: https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
               '',

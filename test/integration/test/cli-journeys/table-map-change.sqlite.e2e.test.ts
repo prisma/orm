@@ -93,7 +93,7 @@ withTempDir(({ createTempDir }) => {
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
             summary: 'Changing the type of field "User.score" can change or lose its values.',
-            why: 'The plan would run: Recreate table people.',
+            why: 'The operation of the plan that does this: Recreate table people.',
             nextActions: [
               ...(command === 'migration plan'
                 ? [
@@ -175,12 +175,12 @@ withTempDir(({ createTempDir }) => {
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
             summary: 'Removing field "User.nick" would delete its values.',
-            why: 'The plan would run: Drop column "nick" from "people".',
+            why: 'The operation of the plan that does this: Drop column "nick" from "people".',
             nextActions: [
               {
                 kind: 'user-choice',
                 label:
-                  "If the field was renamed, keep its values: --rename 'User.nick:User.<new name>'",
+                  "If the field was renamed, first add it to the contract under its new name; then keep its values: --rename 'User.nick:User.<new name>'",
               },
               { kind: 'user-choice', label: 'If the values can go: --delete User.nick' },
             ],

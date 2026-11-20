@@ -648,7 +648,7 @@ The concept: the planner cannot tell whether a dropped model or field was meant 
   - Fields of value objects and embedded models: `--rename Address.street:Address.line1` writes `renameStoredKey({ collection, field, path: '$[*].street', to: 'line1' })` at every place the documents hold the type, through nesting, lists and embedded models; `--delete Address.street` writes `removeStoredKey(...)`. Renames that trade names or form a chain, a new required field under a name a rename moves away, and a rename onto a name the origin also stores, are refused: make the change as two changes to the contract, each applied before the next. A required field new inside one gets a temporary value (`fillStoredKey`), or `--backfill Address.zip` writes `fillStoredKey` with `value: placeholder('Address.zip:value')`, an aggregation expression (`{ $literal: '$5' }` stores the text `$5`).
   - Enum values: `--rename Status.A:Status.B` writes `replaceStoredValue(...)` in every field and key the enum types; `--delete Status.A` writes `removeStoredValue(...)`, which unsets it in an optional field and takes it out of lists. Where a required field holds it, the apply stops with `MIGRATION.PRECHECK_FAILED`, counts the documents and gives the edit that keeps them. Renames that trade values or form a chain are refused: make them as two changes to the contract, each applied before the next, first to values the enum does not use, then to the final ones. A boolean enum has no third value, so swap its values yourself in one update instead. MongoDB applies operations one at a time, and a re-run after a later operation stops would replace the values twice.
   - Variants: `--convert Bug`, or `--rename Bug:Defect` with a new value, writes `replaceStoredValue(...)` on the discriminator field; `--delete Bug` writes `deleteDocuments({ collection, filter: { type: 'bug' } })`. A plan where one variant takes a value another frees is refused for the same reason; make the change as two changes to the contract, each applied before the next.
-- `--allow <Model>` (`db update` only) lets an operation that changes who can read or write the model's data run: one flag per operation, so on Postgres a policy drop and disabling row-level security on one model take `--allow User --allow User`.
+- `--allow <Model>` (`db update` only) lets the operations that change who can read or write the model's data run: one flag allows them all, so on Postgres a policy drop and disabling row-level security on one model take one `--allow User`.
 
 ```bash
 pnpm prisma migration plan --name drop_legacy --delete Legacy
@@ -661,12 +661,12 @@ In a terminal the command asks each question in turn; type `delete`, `allow`, or
 
 ```text
 ✘ [CLI.CONSENT_REQUIRED] Removing field "Shop.legacy" would delete its values.
-  why: The plan would run: Drop column "legacy" from "Store Front".
+  why: The operation of the plan that does this: Drop column "legacy" from "Store Front".
 → If the field was renamed to "rating", keep its values: --rename Shop.legacy:Shop.rating
 → If the values can go: --delete Shop.legacy
 ```
 
-Read `meta.unanswered[]` or the `nextActions`, decide what each subject means, and re-run with those flags. `--confirm` and `--yes` answer none of these questions. Don't reach for `--delete` by reflex: if the model or field was renamed, `--rename` keeps its rows.
+Read `meta.unanswered[]` or the `nextActions`, decide what each subject means, and re-run with those flags. A line with `<new name>` either lists the names the contract can give the subject (put the chosen one in its place) or says the contract must first have the subject under its new name (add it, emit, then run the line). A line that starts with `Remove` names a flag to leave out. `--confirm` and `--yes` allow none of these changes. Don't reach for `--delete` by reflex: if the model or field was renamed, `--rename` keeps its rows.
 
 `db migrate` does *not* ask: whatever the package contains runs, so review the plan or call `migration show` before `db migrate`.
 

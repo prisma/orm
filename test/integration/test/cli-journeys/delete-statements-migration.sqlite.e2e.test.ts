@@ -328,7 +328,7 @@ withTempDir(({ createTempDir }) => {
           unanswered: [{ subject: 'Legacy', verbs: ['delete'] }],
         });
         expect(JSON.stringify(refusal), 'S4.04: the question says why').toContain(
-          'named by its storage name because the origin contract is unknown',
+          'named by its storage name because the contract before this change is not known',
         );
 
         const deleted = await runDbUpdate(ctx, ['--delete', 'Legacy', '--json']);

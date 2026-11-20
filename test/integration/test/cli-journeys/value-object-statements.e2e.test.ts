@@ -220,7 +220,7 @@ withTempDir(({ createTempDir }) => {
             severity: 'error',
             summary: 'Removing value object field "GeoPoint.lat" would delete its values.',
             why: [
-              'The plan would run:',
+              'The operations of the plan that do this:',
               '- Remove key "lat" at path "$" in column "location" of "site"',
               '- Remove key "lat" at path "$[*]" in column "history" of "site"',
               '- Remove key "lat" at path "$.point" in column "place" of "site"',
@@ -283,9 +283,28 @@ withTempDir(({ createTempDir }) => {
         const ctx = journey(db, createTempDir);
         const before = await seededThen(ctx, via, db.connectionString, LNG_REMOVED, 'O2');
 
-        expect(await refusal(ctx, via, 'O2.04'), 'O2.04: the delete offered').toContain(
-          '--delete GeoPoint.lng',
-        );
+        expect(JSON.parse(await refusal(ctx, via, 'O2.04')), 'O2.04: the refusal').toEqual({
+          code: 'CLI.CONSENT_REQUIRED',
+          severity: 'error',
+          summary: 'Removing value object field "GeoPoint.lng" would delete its values.',
+          why: [
+            'The operations of the plan that do this:',
+            '- Remove key "lng" at path "$" in column "location" of "site"',
+            '- Remove key "lng" at path "$[*]" in column "history" of "site"',
+            '- Remove key "lng" at path "$.point" in column "place" of "site"',
+          ].join('\n'),
+          nextActions: [
+            "If the value object field was renamed, first add it to the contract under its new name; then keep its values: --rename 'GeoPoint.lng:GeoPoint.<new name>'",
+            'If the values can go: --delete GeoPoint.lng',
+          ].map((label) => ({ kind: 'user-choice', label })),
+          meta: {
+            subject: 'GeoPoint.lng',
+            verbs: ['rename', 'delete'],
+            unanswered: [{ subject: 'GeoPoint.lng', verbs: ['rename', 'delete'] }],
+          },
+          docsUrl:
+            'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+        });
         await apply(ctx, via, ['--delete', 'GeoPoint.lng'], 'O2.05');
 
         expect(await sites(db.connectionString), 'O2.05: the key is removed everywhere').toEqual([
@@ -316,11 +335,34 @@ withTempDir(({ createTempDir }) => {
         const ctx = journey(db, createTempDir);
         const before = await seededThen(ctx, via, db.connectionString, STATUS_CHANGED, 'O3');
 
-        const offered = await refusal(ctx, via, 'O3.04');
-        expect(offered, 'O3.04: the rename offered').toContain(
-          '--rename Status.ARCHIVED:Status.RETIRED',
-        );
-        expect(offered, 'O3.04: the delete offered').toContain('--delete Status.DRAFT');
+        const removed = (member: string, value: string) => [
+          `Removing enum value "Status.${member}" would remove it from the data that holds it.`,
+          'The operations of the plan that do this:',
+          `- Remove value "${value}" at path "$[*].status" in column "history" of "site"`,
+          `- Remove value "${value}" at path "$.status" in column "location" of "site"`,
+          `- Remove value "${value}" at path "$.point.status" in column "place" of "site"`,
+        ];
+        expect(JSON.parse(await refusal(ctx, via, 'O3.04')), 'O3.04: the refusal').toEqual({
+          code: 'CLI.CONSENT_REQUIRED',
+          severity: 'error',
+          summary:
+            'This change would lose data: enum value "Status.ARCHIVED", enum value "Status.DRAFT".',
+          why: [...removed('ARCHIVED', 'archived'), '', ...removed('DRAFT', 'draft')].join('\n'),
+          nextActions: [
+            'If enum value "Status.ARCHIVED" was renamed to "RETIRED", keep it in the data: --rename Status.ARCHIVED:Status.RETIRED',
+            'If enum value "Status.ARCHIVED" can go from the data: --delete Status.ARCHIVED',
+            'If enum value "Status.DRAFT" was renamed to "RETIRED", keep it in the data: --rename Status.DRAFT:Status.RETIRED',
+            'If enum value "Status.DRAFT" can go from the data: --delete Status.DRAFT',
+          ].map((label) => ({ kind: 'user-choice', label })),
+          meta: {
+            unanswered: [
+              { subject: 'Status.ARCHIVED', verbs: ['rename', 'delete'] },
+              { subject: 'Status.DRAFT', verbs: ['rename', 'delete'] },
+            ],
+          },
+          docsUrl:
+            'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+        });
         await apply(
           ctx,
           via,

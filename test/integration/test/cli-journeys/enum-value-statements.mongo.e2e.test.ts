@@ -472,29 +472,36 @@ describe('Journeys (MongoDB): enum value statements', {
     await emit(ctx, SWAPPED, 'E6.03');
 
     const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-    const nextActions = (engineError(refused)?.nextActions ?? []).map(({ label }) => label);
-    const lost = (member: string, value: string) =>
+    const lost = (member: string, from: string, to: string) =>
       [
-        `This change would remove the stored value of enum value "Status.${member}" from the data that holds it.`,
-        'The plan would run:',
-        `- Remove value "${value}" from field status of collection users`,
-        `- Remove value "${value}" from field tags of collection users`,
-        `- Remove value "${value}" at path "$.kind" in field home of collection users`,
+        `Changing the stored value of enum value "Status.${member}" from "${from}" to "${to}" would remove "${from}" from the data that holds it.`,
+        'The operations of the plan that do this:',
+        `- Remove value "${from}" from field status of collection users`,
+        `- Remove value "${from}" from field tags of collection users`,
+        `- Remove value "${from}" at path "$.kind" in field home of collection users`,
         `db update cannot keep that data in one run, and --delete Status.${member} removes it.`,
       ].join('\n');
-    expect({
-      code: engineError(refused)?.code,
-      why: engineError(refused)?.why,
-      twoRuns: nextActions.filter((label) => label.startsWith('To keep it with db update')),
-      documents: await documents(dbName),
-    }).toEqual({
-      code: 'CLI.CONSENT_REQUIRED',
-      why: `${lost('ACTIVE', 'active')}\n${lost('ARCHIVED', 'archived')}`,
-      twoRuns: [
-        expect.stringMatching(
-          /^To keep it with db update, change them in two runs\. First rename members ACTIVE and ARCHIVED of enum Status .*db update --rename 'Status\.ACTIVE:Status\.<temporary member for ACTIVE>' --rename 'Status\.ARCHIVED:Status\.<temporary member for ARCHIVED>'`\. Then rename those members back to ACTIVE and ARCHIVED .*db update --rename 'Status\.<temporary member for ACTIVE>:Status\.ACTIVE' --rename 'Status\.<temporary member for ARCHIVED>:Status\.ARCHIVED'`\.$/,
-        ),
-      ],
+    expect({ error: engineError(refused), documents: await documents(dbName) }).toEqual({
+      error: {
+        code: 'CLI.CONSENT_REQUIRED',
+        severity: 'error',
+        summary:
+          'This change would lose data: enum value "Status.ACTIVE", enum value "Status.ARCHIVED".',
+        why: `${lost('ACTIVE', 'active', 'archived')}\n\n${lost('ARCHIVED', 'archived', 'active')}`,
+        nextActions: [
+          "To keep it with db update, change them in two runs. First rename members ACTIVE and ARCHIVED of enum Status in the contract source to names the enum does not have and give each a stored value the enum does not use, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.ACTIVE:Status.<temporary member for ACTIVE>' --rename 'Status.ARCHIVED:Status.<temporary member for ARCHIVED>'`. Then rename those members back to ACTIVE and ARCHIVED with their final stored values, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.<temporary member for ACTIVE>:Status.ACTIVE' --rename 'Status.<temporary member for ARCHIVED>:Status.ARCHIVED'`.",
+          'If enum value "Status.ACTIVE" can go from the data: --delete Status.ACTIVE',
+          'If enum value "Status.ARCHIVED" can go from the data: --delete Status.ARCHIVED',
+        ].map((label) => ({ kind: 'user-choice', label })),
+        meta: {
+          unanswered: [
+            { subject: 'Status.ACTIVE', verbs: ['delete'] },
+            { subject: 'Status.ARCHIVED', verbs: ['delete'] },
+          ],
+        },
+        docsUrl:
+          'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+      },
       documents: DOCUMENTS,
     });
 
@@ -549,9 +556,30 @@ describe('Journeys (MongoDB): enum value statements', {
     await emit(ctx, chained, 'E7.03');
 
     const asked = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-    expect(engineError(asked)?.why).toContain(
-      'If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next question says how to keep the data of both.',
-    );
+    expect(engineError(asked), 'E7.04: name the member first').toEqual({
+      code: 'CLI.CONSENT_REQUIRED',
+      severity: 'error',
+      summary:
+        'Changing the stored value of enum value "Status.ACTIVE" from "active" to "archived" would remove "active" from the data that holds it.',
+      why: [
+        'The operations of the plan that do this:',
+        '- Remove value "active" from field status of collection users',
+        '- Remove value "active" from field tags of collection users',
+        '- Remove value "active" at path "$.kind" in field home of collection users',
+        'db update cannot keep that data in one run, and --delete Status.ACTIVE removes it.',
+      ].join('\n'),
+      nextActions: [
+        'Its new stored value "archived" was the stored value of enum value "Status.ARCHIVED", which the enum no longer has. If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next run says how to keep the data of both.',
+        "To keep it with db update, change it in two runs. First rename member ACTIVE of enum Status in the contract source to a name the enum does not have and give it a stored value the enum does not use, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.ACTIVE:Status.<temporary member>'`. Then rename that member back to ACTIVE with its final stored value, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.<temporary member>:Status.ACTIVE'`.",
+        'If it can go from the data: --delete Status.ACTIVE',
+      ].map((label) => ({ kind: 'user-choice', label })),
+      meta: {
+        subject: 'Status.ACTIVE',
+        verbs: ['delete'],
+        unanswered: [{ subject: 'Status.ACTIVE', verbs: ['delete'] }],
+      },
+      docsUrl: 'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+    });
     const renamed = await runDbUpdate(ctx, [
       '--rename',
       'Status.ARCHIVED:Status.RETIRED',
@@ -565,7 +593,7 @@ describe('Journeys (MongoDB): enum value statements', {
         .filter((label) => label.startsWith('To keep it with db update')),
     }).toEqual({
       why: [
-        'The plan would run:',
+        'The operations of the plan that do this:',
         '- Remove value "active" from field status of collection users',
         '- Remove value "active" from field tags of collection users',
         '- Remove value "active" at path "$.kind" in field home of collection users',

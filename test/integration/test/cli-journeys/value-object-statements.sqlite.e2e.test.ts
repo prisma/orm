@@ -208,7 +208,7 @@ withTempDir(({ createTempDir }) => {
             severity: 'error',
             summary: 'Removing value object field "GeoPoint.lat" would delete its values.',
             why: [
-              'The plan would run:',
+              'The operations of the plan that do this:',
               '- Remove key "lat" at path "$" in column "location" of "site"',
               '- Remove key "lat" at path "$[*]" in column "history" of "site"',
               '- Remove key "lat" at path "$.point" in column "place" of "site"',

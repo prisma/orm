@@ -324,17 +324,15 @@ describe('Journeys (MongoDB): --rename and --delete', {
       code: 'CLI.CONSENT_REQUIRED',
       severity: 'error',
       summary:
-        'This change would delete the data in "profiles.nickname", named by its storage name because the origin contract is unknown.',
-      why: [
-        'The plan would run: Remove field nickname from collection profiles.',
-        'If it was renamed, keep its data instead: store the snapshot of the contract the database is at, then run this command again and answer with --rename.',
+        'This change would delete the data in "profiles.nickname", named by its storage name because the contract before this change is not known.',
+      why: 'The operation of the plan that does this: Remove field nickname from collection profiles.',
+      nextActions: [
+        'If it was renamed, keep its data: store a snapshot of the contract before this change, which is the contract the database was last updated to, then run this command again, and it gives the --rename to use.',
         '1. Put the contract source back to the version the database is at, and run `prisma contract emit`.',
         '2. Run `prisma db update --advance-ref <name> --dry-run`, with the same `--db` as this command if it has one, and check that it plans no operations. Then run it again without `--dry-run`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.',
         '3. Put the new contract source back, run `prisma contract emit`, and run this command again with `--advance-ref <name>`.',
-      ].join('\n'),
-      nextActions: [
-        { kind: 'user-choice', label: 'If the data can go: --delete profiles.nickname' },
-      ],
+        'If the data can go: --delete profiles.nickname',
+      ].map((label) => ({ kind: 'user-choice', label })),
       meta: {
         subject: 'profiles.nickname',
         verbs: ['delete'],
@@ -368,15 +366,17 @@ describe('Journeys (MongoDB): --rename and --delete', {
 
     const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
     expect(refused.exitCode, 'R4.04: the removed field needs a statement').toBe(2);
-    expect(engineError(refused), 'R4.04: says to rename the model first').toEqual({
+    expect(engineError(refused), 'R4.04: gives the rename of the model first').toEqual({
       code: 'CLI.CONSENT_REQUIRED',
       severity: 'error',
-      summary: 'Removing field "Profile.nickname" would delete its values.',
-      why: [
-        'The plan would run: Remove field nickname from collection profiles.',
-        `The destination contract has no model "Profile". If it was renamed, keep the values: run the command again with --rename 'Profile:<new model name>', naming the model that stores them now, and the field can then be renamed too.`,
-      ].join('\n'),
+      summary: 'This change would delete the values of field "Profile.nickname".',
+      why: 'The operation of the plan that does this: Remove field nickname from collection profiles.',
       nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'If model "Profile" was renamed to "Person", keep the values of field "Profile.nickname": --rename Profile:Person',
+        },
         { kind: 'user-choice', label: 'If the values can go: --delete Profile.nickname' },
       ],
       meta: {
