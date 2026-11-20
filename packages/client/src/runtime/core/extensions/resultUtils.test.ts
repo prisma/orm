@@ -154,11 +154,11 @@ describe('getAllComputedFields', () => {
   })
 
   test('composes computed fields from two extensions targeting the same field and forwards the active model name to both computes', () => {
-    const previousCompute = jest.fn((model: any, modelName: string) => {
+    const previousCompute = vi.fn((model: any, modelName: string) => {
       expect(modelName).toBe('User')
       return `${model.firstName} ${model.lastName}`
     })
-    const nextCompute = jest.fn((model: any, modelName: string) => {
+    const nextCompute = vi.fn((model: any, modelName: string) => {
       expect(modelName).toBe('User')
       return model.fullName.toUpperCase()
     })

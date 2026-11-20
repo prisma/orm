@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest'
+
 import { isJSONConvertible } from './jsonConvertible'
 
 describe('isJSONConvertible', () => {

@@ -1,4 +1,5 @@
 import type { RuntimeDataModel } from '@prisma/client-common'
+import { describe, expect, test } from 'vitest'
 
 import { modelNameForTable } from './modelNameForTable'
 
