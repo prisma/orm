@@ -46,6 +46,18 @@ describe('the advice for a dropped table and the planner agree whether its stora
     ]);
   });
 
+  it('names only the models with rows in the origin when a new model also joins the new table', () => {
+    const merged = contractOf({
+      User: { table: 'people', fields: { id: 'id' } },
+      Member: { table: 'people', fields: { id: 'id' } },
+      Guest: { table: 'people', fields: { id: 'id' } },
+    });
+
+    expect(adviceOnDroppingUsers(merged, renamesBetween(two, merged, []))).toEqual([
+      'The destination stores models "app.Member" and "app.User" in table "people", and the origin stores them in different tables, so their storage is being merged. Keeping their rows is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of models "app.Member" and "app.User" into table "people" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+    ]);
+  });
+
   it('when the new table names differ only in case on a database that ignores case', () => {
     const merged = contractOf({
       User: { table: 'people', fields: { id: 'id' } },

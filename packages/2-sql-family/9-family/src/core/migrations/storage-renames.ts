@@ -296,6 +296,12 @@ export class StorageRenames {
     return rename === undefined ? undefined : modelTable(this.#contract, rename.to);
   }
 
+  /** The origin table of a destination model, through the renames: `undefined` for a new model. */
+  originTableOf(model: ModelCoordinate): ModelTable | undefined {
+    const rename = this.#renameTo(model);
+    return rename === undefined ? undefined : modelTable(this.#fromContract, rename.from);
+  }
+
   /**
    * Why the rows of table `origin` cannot move whole to table `destination`: an origin model stored
    * in it that the destination keeps in another table, or a destination model stored in the new

@@ -197,7 +197,9 @@ function sharedStorageAdvice(
   const models = [
     ...(split
       ? storageRenames.originModelsIn(tables.origin)
-      : storageRenames.destinationModelsIn(tables.destination)),
+      : storageRenames
+          .destinationModelsIn(tables.destination)
+          .filter((model) => storageRenames.originTableOf(model) !== undefined)),
   ].sort(byName);
   const into = new Map<string, ModelCoordinate[]>();
   for (const model of models) {
