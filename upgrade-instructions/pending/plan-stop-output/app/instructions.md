@@ -93,7 +93,7 @@ answerQuestions: async (questions) => {
 },
 ```
 
-`askUser` stands for the callback's own way of getting an answer. It returns one of the question's `verbs` with its text: the question's `subject` for `delete` or `allow`, `question.forms.convert` for `convert`, and `<subject>:<new name>` for `rename`. `withNamespace: true` adds, for a question about a model or field of a namespace the change removes, the fact that the namespace is gone and what a `delete` or `rename` of the namespace does; it changes nothing for other questions.
+`askUser` stands for the callback's own way of getting an answer. It returns one of the question's `verbs` with its text: the question's `subject` for `delete` or `allow`, `question.forms.convert` for `convert`, and `<subject>:<new name>` for `rename`. For a question about a model or field of a namespace the change removes, a `delete` or `rename` may name the namespace instead: `billing`, or `billing:finance`. For a variant that cannot be renamed on its own, that is the only `rename` the question takes. `withNamespace: true` adds, for a question about a model or field of a namespace the change removes, the fact that the namespace is gone and what a `delete` or `rename` of the namespace does; it changes nothing for other questions.
 
 # A `--rename` to a name the contract does not have
 
