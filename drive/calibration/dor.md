@@ -27,6 +27,7 @@ In addition to the canonical slice DoR:
 
 - [ ] Slice plan references the relevant entries from [`failure-modes.md`](./failure-modes.md) that apply to this slice's shape (so dispatch briefs can thread them in).
 - [ ] Slice plan references the relevant entries from [`grep-library.md`](./grep-library.md) that apply to this slice's shape.
+- [ ] If the slice's design comes from a handover or an earlier session, it is checked before building against the code and against each earlier ruling of the operator's on the topic, read in the original conversations and not only in the handover. Example: a ruling that packages may read any part of a model never reached a handover, and a design limited to one index was built and then rejected.
 
 ## Dispatch-DoR overlay
 

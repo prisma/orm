@@ -82,6 +82,10 @@
       "types": "./dist/exports/config-types.d.mts",
       "import": "./dist/exports/config-types.mjs"
     },
+    "./init-contribution": {
+      "types": "./dist/exports/init-contribution.d.mts",
+      "import": "./dist/exports/init-contribution.mjs"
+    },
     "./init-output": {
       "types": "./dist/exports/init-output.d.mts",
       "import": "./dist/exports/init-output.mjs"

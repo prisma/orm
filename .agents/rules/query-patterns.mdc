@@ -13,14 +13,12 @@ This rulecard is intentionally short. For full examples, see `docs/reference/que
 - Prefer a small `db.ts` that wires one `postgres(...)` call and keep query modules consuming `db` directly.
 - Keep complex examples and walkthroughs in docs.
 
-## Prefer `tables` + `table.columns.*`
+## Address tables by namespace
 
-- Access columns via `db.schema.tables.user.columns.email` (avoids conflicts with table properties).
-- If a file uses `tables` frequently, extract locals:
-  - `const user = db.schema.tables.user`
-  - `const cols = user.columns`
+- SQL builder: `db.sql.<namespace>.<table>` (`db.sql.public.user.select('id', 'email').where((f, fns) => fns.eq(f.email, email)).build()`).
+- ORM: `db.orm.<namespace>.<Model>`. A table outside any `namespace { }` block is in `public`.
+- There is no `db.sql.from(...)` and no `db.schema.tables`.
 
 ## Related rules
 
 - `.cursor/rules/sql-types-imports.mdc`
-- `.cursor/rules/validate-contract-usage.mdc`

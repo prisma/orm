@@ -328,7 +328,7 @@ The optional `configure` callback may still be passed in second position when th
 
 ### In a nested create
 
-A nested `create` on a one-to-many relation takes the same option in `create()` and `update()`:
+A nested `create` takes `onConflict` in `create()` and `update()`: `'skip'` on a one-to-many relation, `'connect'` on every relation.
 
 ```ts
 await db.User.where({ id: 1 }).update({
@@ -336,7 +336,13 @@ await db.User.where({ id: 1 }).update({
 });
 ```
 
-A row that collides is left unchanged and is not linked to the parent, and the one-to-many and many-to-many writes inside it are not made. Rows without relation callbacks are inserted in one statement; a row with relation callbacks is inserted on its own, and without `returning` such a row is refused. The capability checks are those of `createAll`. A to-one or many-to-many relation refuses the option with `ORM.OPERATION_UNSUPPORTED`. On a polymorphic target, `variant(value).create(rows, options)` takes the option; a variant stored in its own table, reached through `variant()` or as the target of the relation, refuses it with `ORM.OPERATION_UNSUPPORTED`. In nested and top-level calls, a row that gives no non-null value for every column of at least one conflict key (the `conflictOn` fields, or every primary key, unique constraint and unique index of the table) is refused before any statement runs. A value the row gives, a create default the ORM fills in, or, in a nested create, the parent's key in the child's foreign key and a foreign key that a `connect` or `create` on a to-one relation inside the row fills counts; a column the database fills in does not.
+With `'skip'`, a row that collides is left unchanged and is not linked to the parent, and the one-to-many and many-to-many writes inside it are not made. Rows without relation callbacks are inserted in one statement; a row with relation callbacks is inserted on its own, and without `returning` such a row is refused. The capability checks are those of `createAll`. A to-one or many-to-many relation refuses `'skip'` with `ORM.OPERATION_UNSUPPORTED`.
+
+`onConflict: 'connect'` creates the row or links the existing one on every relation, with its other fields unchanged; the conflict columns are the `conflictOn` fields, or the primary key. Each row is inserted on its own and read back by its conflict columns, and the relation callbacks inside it run under the row it gives, created or existing. On a one-to-many or child-held one-to-one relation, the insert sets the foreign key of an existing row, so a row of another parent moves to this one, as with `connect`. On a parent-held or many-to-many relation, the insert assigns the first conflict column the value the existing row already holds, which is an update: update triggers fire, the row is locked until the transaction ends, the caller needs UPDATE privilege on the table, and the call fails if that column is generated. The parent's foreign key or a junction row then links it. When the junction table has a key over exactly its link columns, a target already linked gets no second junction row; otherwise the junction insert is a plain insert, so a target already linked gets a second junction row, or the call fails with the database's unique violation when another unique constraint of the junction covers it. Without `insertOnConflictTarget`, a row that can also collide on another key is refused, as for `upsert`.
+
+A row with either option refuses a callback on a relation whose foreign key is on the row (a many-to-one relation, or the side of a one-to-one relation that holds the foreign key) with `ORM.OPERATION_UNSUPPORTED`, because the callback would write before the database decides whether the row conflicts. Callbacks on relations whose foreign key is on the other row or in a junction table are accepted.
+
+On a polymorphic target, `variant(value).create(rows, options)` takes either option; a variant stored in its own table, reached through `variant()` or as the target of the relation, refuses both with `ORM.OPERATION_UNSUPPORTED`. With `'connect'` through `variant()`, a colliding row of another variant fails the call with `ORM.RELATION_ROW_MISSING` before it is linked or moved, as `connect` through `variant()` does. In nested and top-level calls, a row that gives no non-null value for every column of at least one conflict key (the `conflictOn` fields, or every primary key, unique constraint and unique index of the table) is refused before any statement runs. A value the row gives, a create default the ORM fills in, or, in a nested create, the parent's key in the child's foreign key counts; a column the database fills in does not.
 
 ## Writes without `RETURNING`
 
@@ -379,6 +385,8 @@ An operation used where the table does not list it is refused with `ORM.OPERATIO
 
 `r.disconnect()` sets the foreign key of the relation to null: on a relation the record holds the key for, the record's key; on a relation the related rows hold the key for, theirs. When that key is required, `disconnect` is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'required-foreign-key'`, with the model and fields of the key in `model` and `fields`) before any statement runs, and is a type error, also when it would have changed no row. When `model` is the model being updated, the record holds the key (a many-to-one relation, such as `Post.author`): link it to another row with `connect`, or delete the record. Otherwise the related rows hold the key (one-to-many, or one-to-one from the side without the key): connect them to another record, or delete them. Or make the key optional.
 
+On a relation the record holds the key for, `r.disconnect(criteria)` unlinks the record only when the row it is linked to matches one of the criteria; otherwise it changes nothing and raises no error. `r.disconnect()` without criteria unlinks it whatever row it is linked to.
+
 On a many-to-many relation, `r.disconnect()` without criteria is refused with `ORM.ARGUMENT_INVALID` and is a type error; pass the criteria of the rows to unlink. `r.create` and `r.connect` are refused with `ORM.OPERATION_UNSUPPORTED`, and are type errors, when the junction table has a column other than its link columns that is not nullable and has no default; `r.disconnect(criteria)` stays available.
 
 On a runtime that provides transactions, a write that takes more than one statement, such as a parent write with nested operations, runs in one transaction, so either all of it is applied or none of it is.
@@ -401,7 +409,7 @@ A to-one relation takes at most one operation: an array of two or more is refuse
 
 ### Nested writes on a polymorphic model
 
-On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r` except `disconnect` on a relation the record holds the key for, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
+On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r`, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
 
 #### Creating rows
 
@@ -420,15 +428,13 @@ await db.Project.where({ id: 1 }).update({
 
 #### Connecting and disconnecting rows
 
-`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error.
+`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error. On a relation the record holds the key for, `disconnect` unlinks the record only when the row it is linked to is of the variant, and matches one of the criteria when they are given; otherwise it changes nothing, with no error.
 
 ```ts
 await db.Project.where({ id: 1 }).update({
   tasks: (tasks) => [tasks.variant('bug').connect({ id: 7 }), tasks.variant('feature').disconnect()],
 });
 ```
-
-On a relation the record holds the key for, `disconnect` is not available on a variant: it is a type error and is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'variant-parent-owned'`). Use `r.disconnect()`.
 
 #### Updating and deleting rows of a variant
 

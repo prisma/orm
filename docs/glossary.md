@@ -77,6 +77,14 @@ The library that handles the actual network connection to your database. A drive
 
 Which specific database you're using — Postgres, MySQL, MongoDB, etc. Each target belongs to a family (e.g., Postgres is a SQL target; MongoDB is a Mongo target) and supports a specific set of capabilities.
 
+### Target package
+
+The package an application installs to use a target, such as `@prisma/orm-postgres`. Its `defineConfig` assembles the family, target, adapter and driver, and it exports everything the application imports. ADR 242 and some older code call it a *facade*.
+
+### Init contribution
+
+What a target package tells `prisma orm init`: the default export of its `init` entrypoint, typed `InitContribution`. It holds the starter contract, the `db.ts` and `.env.example` text, the driver packages, the quick reference and an optional server probe. Unlike a descriptor's contributions, no stack aggregates it; `init` loads it from the one target package the user chose. See [ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md).
+
 ### Family
 
 A category of databases that share fundamental characteristics. SQL is a family — Postgres, MySQL, and SQLite are all SQL targets that share concepts like tables, columns, and joins. MongoDB is its own family (not a target under a generic "document" family). Prisma 8 defines shared behavior at the family level so individual targets only need to handle what's specific to them.

@@ -83,11 +83,11 @@ Line counts are estimates, measured against the existing code. For example:
 4. **Slice `postgres-nested-transactions`** (~540: ~180 production, ~330 tests, ~30 docs): `projects/nested-transactions/slices/postgres-nested-transactions/`
    - **Outcome:** Postgres users can call `tx.transaction(cb)`, with every behaviour in the spec.
    - **Builds on:** slice 3's `transaction()` on a `RuntimeTransaction` and guard, and slice 3b's `withTransaction` with a parent activity.
-   - **Hands to:** `withSavepoint(txCtx, fn, buildMembers)` exported from the SQL runtime, with the Postgres facade using it.
+   - **Hands to:** `transaction(fn)` on the SQL runtime's `TransactionContext`, with the Postgres facade wrapping it.
    - **Focus:**
-     - `withSavepoint`, sharing the guarded queryable and settle code with `withTransaction`.
+     - The context's `transaction(fn)`, sharing the guarded queryable and settle code with `withTransaction`.
      - `postgres-members.ts` and `PostgresTransactionContext`.
-     - `withSavepoint` unit tests.
+     - Unit tests for the context's `transaction(fn)`.
      - PGlite integration tests: the spec's At a glance example, aborted-state recovery, and every guard and error path from the project DoD.
      - The subsystem doc's `withTransaction` section.
 
@@ -95,12 +95,12 @@ Line counts are estimates, measured against the existing code. For example:
 
 - **Slice `other-facades`** (~400: ~100 production, ~300 tests): `projects/nested-transactions/slices/other-facades/`
   - **Outcome:** `tx.transaction(cb)` works on the MySQL, SQLite and Supabase facades the same way it does on Postgres.
-  - **Builds on:** slice 4's `withSavepoint`.
+  - **Builds on:** slice 4's `transaction(fn)` on the runtime context.
   - **Hands to:** every SQL facade exposing `tx.transaction(cb)`.
   - **Focus:**
     - Wiring and transaction context types in `mysql.ts`, `sqlite.ts` and `supabase.ts`.
     - The At a glance example as a test on live MySQL, on SQLite, and on Supabase over PGlite.
-    - The review of the `withSavepoint` shape required by spec decision 10. Any change to the helper lands here.
+    - Each facade's own `transaction` member replaces the runtime's member that its `tx` has had since slice 4, and Supabase's `Omit` is removed.
 
 - **Slice `orm-writes-in-savepoints`** (~300: ~30 production, ~250 tests, ~15 docs): `projects/nested-transactions/slices/orm-writes-in-savepoints/`
   - **Outcome:** a multi-statement ORM write inside a transaction runs in its own savepoint.
@@ -123,5 +123,5 @@ Line counts are estimates, measured against the existing code. For example:
 - **Six slices, more than the usual four.** This follows from the size limit, not from two projects bundled into one. There is one purpose, and every slice serves it.
 - **Slices 1 and 2 run in parallel.** Drivers and the framework activity share no code.
 - **Slice 3b follows slice 3 directly.** It came out of slice 3's review: the owned transaction kept a second copy of `withTransaction`'s connection rules, and its `Object.create` wrapper constrained the transaction classes. It changes the handle's `transaction()` and the ORM's implicit transaction, so it lands before slices 4 and 6 build on either.
-- **Slice 6 starts as soon as slice 3b merges, in parallel with slice 4.** It needs only the runtime's `transaction()` opening a savepoint and the handle's callback `transaction()`, not `withSavepoint` or a facade.
-- **Slice 5 waits for slice 4.** It reuses `withSavepoint`, and it is where the helper's shape is reviewed.
+- **Slice 6 starts as soon as slice 3b merges, in parallel with slice 4.** It needs only the runtime's `transaction()` opening a savepoint and the handle's callback `transaction()`, not the context's `transaction(fn)` or a facade.
+- **Slice 5 waits for slice 4.** It wraps the runtime context's `transaction(fn)`, as the Postgres facade does.

@@ -1,0 +1,19 @@
+// use prisma-8
+
+model ModelA {
+  id Int      @id
+  bs ModelB[]
+
+  @@map("ModelA")
+}
+
+model ModelB {
+  id   Int     @id
+  str1 String
+  str2 String?
+  str3 String? @default("SOME_DEFAULT")
+  a_id Int?
+  a    ModelA? @relation(fields: [a_id], references: [id])
+
+  @@map("ModelB")
+}

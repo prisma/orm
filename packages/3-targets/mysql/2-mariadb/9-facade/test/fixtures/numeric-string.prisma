@@ -1,0 +1,9 @@
+// use prisma-8
+
+model Price {
+  id      Int                              @id
+  bare    NumericString                    @default("12.0")
+  ten     NumericString(10)                @default("12.0")
+  tenZero NumericString(10, 0)             @default("12.0")
+  decimal Decimal(precision: 10, scale: 0) @default("12.0")
+}

@@ -70,10 +70,12 @@ abstract class TransactionBase
     RuntimeTransaction,
     ActivitySourceTarget,
     PreparedStatementQueryTarget,
-    PreparedStatementExecuteTarget
+    PreparedStatementExecuteTarget,
+    SettledTransactionTarget
 {
   abstract readonly signal: AbortSignal;
   readonly [activitySource]: ActivitySource;
+  readonly [transactionSettlement]: TransactionSettlementState;
   protected readonly runtime: TransactionRuntime;
   protected readonly driverTx: SqlTransaction;
   protected readonly activity: TransactionRun;
@@ -104,6 +106,23 @@ abstract class TransactionBase
     this[activitySource] = {
       startActivity: (clientActivity) => runtime.startActivity(this.route, clientActivity),
       planContentHash: (plan) => runtime.planContentHash(plan, activity),
+    };
+    const isClosed = () => this.isClosed;
+    this[transactionSettlement] = {
+      get closed() {
+        return isClosed();
+      },
+      get committed() {
+        return entry.state === 'committed';
+      },
+      get rolledBack() {
+        return entry.state === 'rolled-back';
+      },
+      logDroppedError: (error) => this.logDroppedError(error),
+      abandon: async () => {
+        stack.invalidate();
+        await this.rollback().catch(() => undefined);
+      },
     };
   }
 
@@ -190,11 +209,18 @@ abstract class TransactionBase
       this.rootTransaction,
     );
   }
+
+  protected logDroppedError(error: unknown): void {
+    try {
+      this.activity.ctx.log.error({ event: 'middleware.activityEnded.error', error });
+    } catch {
+      // A failing logger must not replace the error the caller receives.
+    }
+  }
 }
 
-export class OuterTransaction extends TransactionBase implements SettledTransactionTarget {
+export class OuterTransaction extends TransactionBase {
   readonly signal: AbortSignal;
-  readonly [transactionSettlement]: TransactionSettlementState;
   private readonly controller = new AbortController();
   private readonly connection: SqlConnection;
   private readonly endTransactionWork: () => void;
@@ -221,15 +247,6 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     this.deadline = performance.now() + (timeout ?? Number.POSITIVE_INFINITY);
     this.connection = connection;
     runtime.register(connection, this.openTransaction);
-    this[transactionSettlement] = {
-      get committed() {
-        return entry.state === 'committed';
-      },
-      get rolledBack() {
-        return entry.state === 'rolled-back';
-      },
-      logDroppedError: (error) => this.logDroppedError(error),
-    };
     if (timeout !== undefined) {
       this.timer = setTimeout(() => this.expire(), timeout);
       runtime.onConnectionReleased(connection, () => this.releaseConnection());
@@ -365,14 +382,6 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
   private stopAcceptingChildren(): void {
     this.activity.stopAcceptingChildren();
     this.runtime.unregister(this.connection, this.openTransaction);
-  }
-
-  private logDroppedError(error: unknown): void {
-    try {
-      this.activity.ctx.log.error({ event: 'middleware.activityEnded.error', error });
-    } catch {
-      // A failing logger must not replace the error the caller receives.
-    }
   }
 }
 

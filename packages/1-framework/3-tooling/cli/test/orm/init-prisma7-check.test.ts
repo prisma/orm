@@ -14,11 +14,14 @@ import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
-import { type ImportFromProject, importFromProject } from '../../src/orm/init-prisma7-check';
+import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
+import { declareAddedPackages, withoutFakeAdditions } from '../utils/fake-package-manager';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
-const TARGET_CONFIG = '@prisma/orm-postgres/config';
+// The config module the installed target package names. The fixture app installs the workspace
+// build, which names its workspace package; the published build names @prisma/orm-postgres.
+const TARGET_CONFIG = '@internal/postgres/config';
 const VIEW_DIAGNOSTIC = {
   code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
   message: 'View "UserInfo" is not supported; Prisma 8 has no views.',
@@ -33,10 +36,13 @@ let projectDir: string;
 let installs: (readonly string[])[];
 let script: { readonly exitCode: number; readonly stderr: string }[];
 let loadTargetConfig: ImportFromProject;
+let loadInit: ImportFromProject;
 
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
-  return script.shift() ?? { exitCode: 0, stderr: '' };
+  const result = script.shift() ?? { exitCode: 0, stderr: '' };
+  if (result.exitCode === 0) declareAddedPackages(request);
+  return result;
 };
 
 beforeEach(() => {
@@ -44,6 +50,7 @@ beforeEach(() => {
   installs = [];
   script = [];
   loadTargetConfig = importFromProject;
+  loadInit = importFromProject;
 });
 
 afterEach(() => {
@@ -55,7 +62,8 @@ function harness(packageManager?: PackageManagerId) {
     ...BIN_COMMANDS,
     'orm init': createInitCommand({
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
-      importFromProject: (cwd, specifier) => loadTargetConfig(cwd, specifier),
+      importFromProject: (cwd, specifier) =>
+        specifier.endsWith('/init') ? loadInit(cwd, specifier) : loadTargetConfig(cwd, specifier),
     }),
   };
   return createTestCli({
@@ -93,9 +101,10 @@ async function targetConfigWith(
   prisma7Schema: ((schemaPath: string) => unknown) | undefined,
 ): Promise<ImportFromProject> {
   const real = await importFromProject(projectDir, TARGET_CONFIG);
+  const defineConfig = real.kind === 'loaded' ? real.module['defineConfig'] : undefined;
   return async () => ({
-    defineConfig: real?.['defineConfig'],
-    ...(prisma7Schema === undefined ? {} : { prisma7Schema }),
+    kind: 'loaded',
+    module: { defineConfig, ...(prisma7Schema === undefined ? {} : { prisma7Schema }) },
   });
 }
 
@@ -137,10 +146,12 @@ function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }
 function expectProjectUnchangedApartFromTheCheckInstall(): void {
   expect(projectFile('prisma.config.ts')).toBe(fixtureFile('prisma.config.ts'));
   expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(false);
-  expect(projectFile('package.json')).toBe(fixtureFile('package.json.fixture'));
+  expect(withoutFakeAdditions(projectFile('package.json'))).toEqual(
+    JSON.parse(fixtureFile('package.json.fixture')),
+  );
   expect(existsSync(join(projectDir, 'src/prisma'))).toBe(false);
   expect(existsSync(join(projectDir, 'prisma-8.md'))).toBe(false);
-  expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
+  expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
 }
 
 describe('the Prisma 7 check before init changes the project', () => {
@@ -164,7 +175,7 @@ describe('the Prisma 7 check before init changes the project', () => {
             }),
             expect.objectContaining({
               label: expect.stringMatching(
-                /^init added @prisma\/orm-postgres and dotenv to package\.json before checking; remove them with `\w+ (remove|uninstall) @prisma\/orm-postgres dotenv`\.$/,
+                /^init added @prisma\/orm-postgres, dotenv and pg to package\.json before checking; remove them with `\w+ (remove|uninstall) @prisma\/orm-postgres dotenv pg`\.$/,
               ),
             }),
           ],
@@ -172,7 +183,7 @@ describe('the Prisma 7 check before init changes the project', () => {
             schemaPath: 'prisma/schema.prisma',
             summary: 'Prisma 7 schema interpretation failed',
             diagnostics: [VIEW_DIAGNOSTIC],
-            packagesAdded: ['@prisma/orm-postgres', 'dotenv'],
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
           },
         },
       });
@@ -199,13 +210,14 @@ describe('the Prisma 7 check before init changes the project', () => {
             expect.anything(),
             expect.objectContaining({
               label: expect.stringMatching(
-                /^init added @prisma\/orm-postgres to package\.json before checking; remove it with `\w+ (remove|uninstall) @prisma\/orm-postgres`\.$/,
+                /^init added @prisma\/orm-postgres and pg to package\.json before checking; remove them with `\w+ (remove|uninstall) @prisma\/orm-postgres pg`\.$/,
               ),
             }),
           ],
-          meta: { packagesAdded: ['@prisma/orm-postgres'] },
+          meta: { packagesAdded: ['@prisma/orm-postgres', 'pg'] },
         },
       });
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'pg']]);
     },
     timeouts.coldTransformImport,
   );
@@ -227,7 +239,7 @@ describe('the Prisma 7 check before init changes the project', () => {
           meta: {
             schemaPath: 'prisma/schema.prisma',
             packageName: '@prisma/orm-postgres',
-            packagesAdded: ['@prisma/orm-postgres', 'dotenv'],
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
           },
         },
       });
@@ -260,7 +272,7 @@ describe('the Prisma 7 check before init changes the project', () => {
         '@prisma/orm-postgres cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves prisma/schema.prisma alone. It asks before replacing the Prisma 7 prisma.config.ts, and it installs prisma@latest, which replaces the Prisma 7 CLI.',
       ]);
       expect(projectFile('prisma.config.ts')).toContain('definePrismaConfig');
-      expect(installs[0]).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
+      expect(installs[0]).toEqual(['add', '@prisma/orm-postgres', 'dotenv', 'pg']);
       expect(installs.filter((args) => args.includes('dotenv'))).toHaveLength(1);
     },
     timeouts.coldTransformImport,
@@ -283,11 +295,45 @@ describe('the Prisma 7 check before init changes the project', () => {
           nextActions: expect.arrayContaining([
             expect.objectContaining({
               label: expect.stringMatching(
-                /^init added @prisma\/orm-postgres and dotenv to package\.json before checking; remove them with `\w+ (remove|uninstall) @prisma\/orm-postgres dotenv`\.$/,
+                /^init added @prisma\/orm-postgres, dotenv and pg to package\.json before checking; remove them with `\w+ (remove|uninstall) @prisma\/orm-postgres dotenv pg`\.$/,
               ),
             }),
           ]),
-          meta: expect.objectContaining({ packagesAdded: ['@prisma/orm-postgres', 'dotenv'] }),
+          meta: expect.objectContaining({
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
+          }),
+        },
+      });
+      expectProjectUnchangedApartFromTheCheckInstall();
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'names the config module and the cause, and the packages it installed, when the config module throws while loading',
+    async () => {
+      copyFixture();
+      loadTargetConfig = async () => ({ kind: 'unloadable', cause: new Error('module exploded') });
+
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE',
+          summary: 'Could not load @internal/postgres/config',
+          why: expect.stringContaining('module exploded'),
+          meta: {
+            reason: 'unloadable',
+            module: '@internal/postgres/config',
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
+          },
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: expect.stringContaining(
+                'init added @prisma/orm-postgres, dotenv and pg to package.json before checking; remove them with',
+              ),
+            }),
+          ]),
         },
       });
       expectProjectUnchangedApartFromTheCheckInstall();
@@ -296,13 +342,6 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it.each([
-    [
-      'loading the target package throws',
-      'CLI.UNEXPECTED',
-      async (): Promise<ImportFromProject> => async () => {
-        throw new Error('module exploded');
-      },
-    ],
     [
       'the source throws',
       'CONTRACT.SOURCE_LOAD_FAILED',
@@ -331,11 +370,13 @@ describe('the Prisma 7 check before init changes the project', () => {
           nextActions: expect.arrayContaining([
             expect.objectContaining({
               label: expect.stringMatching(
-                /^init added @prisma\/orm-postgres and dotenv to package\.json before checking; remove them with/,
+                /^init added @prisma\/orm-postgres, dotenv and pg to package\.json before checking; remove them with/,
               ),
             }),
           ]),
-          meta: expect.objectContaining({ packagesAdded: ['@prisma/orm-postgres', 'dotenv'] }),
+          meta: expect.objectContaining({
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
+          }),
         },
       });
       expectProjectUnchangedApartFromTheCheckInstall();
@@ -356,7 +397,7 @@ describe('the Prisma 7 check before init changes the project', () => {
         diagnostics: [{ code: 'CLI.INIT_INSTALL_FAILED' }],
       });
       expect(run.presented?.data).toMatchObject({ filesWritten: [] });
-      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv', 'pg']]);
     },
     timeouts.coldTransformImport,
   );
@@ -375,7 +416,7 @@ describe('the Prisma 7 check before init changes the project', () => {
           code: 'CLI.INIT_PRISMA7_SCHEMA_REFUSED',
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: expect.stringContaining('`pnpm remove @prisma/orm-postgres dotenv`'),
+              label: expect.stringContaining('`pnpm remove @prisma/orm-postgres dotenv pg`'),
             }),
           ]),
         },
@@ -388,18 +429,20 @@ describe('the Prisma 7 check before init changes the project', () => {
     'says the target package could not be loaded when it was installed but does not resolve',
     async () => {
       copyFixture();
-      loadTargetConfig = async () => undefined;
+      loadTargetConfig = async () => ({ kind: 'not-installed' });
 
       const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
       expect(envelopeOf(run)).toMatchObject({
         error: {
           code: 'CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE',
-          summary: 'Could not load @prisma/orm-postgres from the project',
-          meta: { reason: 'not-resolvable' },
+          summary: 'Could not load @internal/postgres/config from the project',
+          meta: { reason: 'not-resolvable', module: '@internal/postgres/config' },
           nextActions: expect.arrayContaining([
             expect.objectContaining({
-              label: expect.stringMatching(/^Check that @prisma\/orm-postgres is installed/),
+              label: expect.stringMatching(
+                /^Check that @prisma\/orm-postgres is installed and exports @internal\/postgres\/config/,
+              ),
             }),
           ]),
         },
@@ -410,19 +453,117 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
-    'warns and continues under --skip-install when the target package is not installed',
+    'refuses --skip-install with nothing changed when the target package is not installed',
     async () => {
       copyFixture();
-      loadTargetConfig = async () => undefined;
+      loadInit = async () => ({ kind: 'not-installed' });
+
+      const run = await harness().run([...prisma7Argv('--skip-install'), '--json'], {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
+          meta: { packageName: '@prisma/orm-postgres' },
+        },
+      });
+      expect(installs).toEqual([]);
+      expect(projectFile('prisma.config.ts')).toBe(fixtureFile('prisma.config.ts'));
+      expect(projectFile('package.json')).toBe(fixtureFile('package.json.fixture'));
+      expect(existsSync(join(projectDir, 'src/prisma'))).toBe(false);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses a package whose config takes a Prisma 7 schema but whose contribution has no Prisma 7 quick reference',
+    async () => {
+      copyFixture();
+      const real = await importFromProject(projectDir, '@prisma/orm-postgres/init');
+      const contribution = real.kind === 'loaded' ? real.module['default'] : undefined;
+      const { prisma7QuickReference: _dropped, ...withoutQuickReference } = Object(contribution);
+      loadInit = async () => ({ kind: 'loaded', module: { default: withoutQuickReference } });
+
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+          why: expect.stringContaining(
+            '@internal/postgres/config exports prisma7Schema, but the contribution has no prisma7QuickReference',
+          ),
+          meta: { packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'] },
+        },
+      });
+      expectProjectUnchangedApartFromTheCheckInstall();
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'reports a config module that exports prisma7Schema but no defineConfig as broken, not as having no Prisma 7 source',
+    async () => {
+      copyFixture();
+      loadTargetConfig = async () => ({
+        kind: 'loaded',
+        module: { prisma7Schema: () => ({}) },
+      });
+
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
+          meta: { reason: 'invalid-shape' },
+          why: expect.stringContaining(
+            '@internal/postgres/config exports prisma7Schema, but not a defineConfig function',
+          ),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'names the packages it installed when the check itself rejects',
+    async () => {
+      copyFixture();
+      loadTargetConfig = async () => {
+        throw new Error('could not read the config module manifest');
+      };
+
+      const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          meta: expect.objectContaining({
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv', 'pg'],
+          }),
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: expect.stringMatching(/^init added @prisma\/orm-postgres, dotenv and pg/),
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'checks the installed target package under --skip-install without installing anything',
+    async () => {
+      copyFixture();
 
       const run = await harness().run(prisma7Argv('--skip-install'), { cwd: projectDir });
 
       expect(run.exitCode).toBe(0);
-      expect(run.presented?.data).toMatchObject({
-        warnings: expect.arrayContaining([
-          'Could not check that Prisma 8 can read prisma/schema.prisma: @prisma/orm-postgres is not installed. Install the dependencies and run `prisma contract emit` to check it.',
-        ]),
-      });
       expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(true);
       expect(installs).toEqual([]);
     },
@@ -452,7 +593,7 @@ describe('the Prisma 7 check before init changes the project', () => {
           deps: ['@prisma/orm-postgres', 'dotenv', 'pg'],
         },
       });
-      expect(installs[0]).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
+      expect(installs[0]).toEqual(['add', '@prisma/orm-postgres', 'dotenv', 'pg']);
       expect(installs.filter((args) => args.includes('dotenv'))).toHaveLength(1);
     },
     timeouts.coldTransformImport,

@@ -1,10 +1,7 @@
 import { timeouts } from '@repo/test-utils';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import {
-  prisma7ConfigFile,
-  workspaceTargetPackageName,
-} from '../../../src/commands/init/templates/code-templates';
+import { prisma7ConfigFile } from '../../../src/commands/init/templates/code-templates';
 
 function syntaxErrors(source: string): readonly string[] {
   const { diagnostics = [] } = ts.transpileModule(source, { reportDiagnostics: true });
@@ -57,14 +54,35 @@ describe('prisma7ConfigFile', { timeout: timeouts.typeScriptCompilation }, () =>
   ])(
     'writes paths with %s as string literals equal to the paths',
     (_case, schemaPath, outputDir) => {
-      const source = prisma7ConfigFile(
-        schemaPath,
-        outputDir,
-        workspaceTargetPackageName('postgres'),
-      );
+      const source = prisma7ConfigFile(schemaPath, outputDir, 'example-db/config');
 
       expect(syntaxErrors(source)).toEqual([]);
       expect(configLiterals(source)).toEqual({ schema: schemaPath, output: outputDir });
     },
   );
+});
+
+describe('the Prisma 7 config text', () => {
+  it('is the config init has always written, around the module the target package names', () => {
+    expect(
+      prisma7ConfigFile('prisma/schema.prisma', 'src/prisma', '@prisma/orm-postgres/config'),
+    ).toBe(
+      [
+        "import 'dotenv/config';",
+        "import { definePrismaConfig } from '@prisma/cli-engine';",
+        "import { defineConfig as ormConfig, prisma7Schema } from '@prisma/orm-postgres/config';",
+        '',
+        'export default definePrismaConfig({',
+        '  orm: ormConfig({',
+        '    contract: prisma7Schema("prisma/schema.prisma"),',
+        '    output: "src/prisma",',
+        '    db: {',
+        "      connection: process.env['DATABASE_URL']!,",
+        '    },',
+        '  }),',
+        '});',
+        '',
+      ].join('\n'),
+    );
+  });
 });

@@ -1,0 +1,16 @@
+// use prisma-8
+
+model Parent {
+  id    Int    @id
+  child Child?
+
+  @@map("Parent")
+}
+
+model Child {
+  id       Int     @id
+  parentId Int?    @unique
+  parent   Parent? @relation(fields: [parentId], references: [id])
+
+  @@map("Child")
+}

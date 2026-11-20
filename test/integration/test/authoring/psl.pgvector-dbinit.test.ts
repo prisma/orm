@@ -131,16 +131,16 @@ describe(
       }
     }
 
-    it(
-      'dbInit succeeds for a PSL-emitted pgvector named type schema',
-      async () => {
+    it.each(['1536', ''])(
+      'dbInit succeeds for a PSL-emitted pgvector named type schema with dimension %s',
+      async (dimension) => {
         const emittedContract = await emitPgvectorContract(`types {
-  Embedding1536 = pgvector.Vector(1536)
+  Embedding = pgvector.Vector(${dimension})
 }
 
 model Document {
   id Int @id @default(autoincrement())
-  embedding Embedding1536
+  embedding Embedding
 }
 `);
 
@@ -164,7 +164,9 @@ model Document {
                 .filter((s) => s.language === 'sql')
                 .map((s) => s.text)
                 .join(';\n\n') ?? '';
-            expect(ddl).toContain('vector(1536)');
+            expect(ddl).toMatch(
+              dimension ? `"embedding" vector(${dimension})` : /"embedding" vector(?!\()/,
+            );
             expect(ddl).not.toContain('"vector(1536)"');
 
             const apply = await client.dbInit({
@@ -179,6 +181,17 @@ model Document {
               );
             }
           });
+          if (dimension === '') {
+            await withClient(connectionString, async (client) => {
+              await client.query(
+                `INSERT INTO "Document" ("embedding") VALUES ('[1]'), ('[1,2,3]')`,
+              );
+              const result = await client.query<{ dimensions: number }>(
+                `SELECT vector_dims("embedding") AS dimensions FROM "Document" ORDER BY "id"`,
+              );
+              expect(result.rows).toEqual([{ dimensions: 1 }, { dimensions: 3 }]);
+            });
+          }
         });
       },
       timeouts.spinUpPpgDev,
@@ -261,6 +274,55 @@ model Document {
                 AND column_name = 'embedding'
             `);
             expect(defaultCheck.rows[0]?.column_default ?? null).toBeNull();
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'dbUpdate plans a type change between vector and vector(3)',
+      async () => {
+        const before = await emitPgvectorContract(`model Document {
+  id Int @id @default(autoincrement())
+  grows pgvector.Vector
+  shrinks pgvector.Vector(3)
+}
+`);
+        const after = await emitPgvectorContract(`model Document {
+  id Int @id @default(autoincrement())
+  grows pgvector.Vector(3)
+  shrinks pgvector.Vector
+}
+`);
+        const migrationsDir = await materialisePgvectorPinnedArtifacts(testDir);
+
+        await withDevDatabase(async ({ connectionString }) => {
+          await withPgvectorControlClient(connectionString, async (client) => {
+            const init = await client.dbInit({
+              invocation: TEST_INVOCATION,
+              contract: before,
+              mode: 'apply',
+              migrationsDir,
+            });
+            if (!init.ok) throw new Error(`dbInit apply failed: ${init.failure.message}`);
+
+            const update = await client.dbUpdate({
+              invocation: TEST_INVOCATION,
+              answerQuestions: async (questions) =>
+                questions.map((question) => ({
+                  verb: question.verbs.includes('allow') ? ('allow' as const) : ('delete' as const),
+                  text: question.subject,
+                })),
+              contract: after,
+              mode: 'plan',
+              migrationsDir,
+            });
+            if (!update.ok) throw new Error(`dbUpdate plan failed: ${update.failure.message}`);
+            expect(update.value.plan.preview?.statements.map((s) => s.text)).toEqual([
+              'ALTER TABLE "public"."Document" ALTER COLUMN "grows" TYPE vector(3) USING "grows"::vector(3)',
+              'ALTER TABLE "public"."Document" ALTER COLUMN "shrinks" TYPE vector USING "shrinks"::vector',
+            ]);
           });
         });
       },

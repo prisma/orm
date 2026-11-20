@@ -1,9 +1,6 @@
 # Prisma 8 Demo (MySQL)
 
-A minimal demo showing how to use `@prisma/orm-mysql`, the one package a MySQL
-application installs. It has a PSL contract with three models, a relation, an
-enum and the convenience date and time types, and two committed migrations
-written by `prisma migration plan`.
+A minimal demo showing how to use `@prisma/orm-mysql`, the one package a MySQL application installs. It has a PSL contract with four models, a relation, an enum, the convenience date and time types and the scalar convenience types, and three committed migrations written by `prisma migration plan`.
 
 MySQL support is early, and this example grows with it. Today it shows the control plane, reads and writes: the contract emits, the committed migration applies to an empty MySQL database, `db verify` and `db sign` pass, planning again from the unchanged contract writes nothing, the ORM writes the seed rows, and the ORM and the SQL builder read them, includes among them. MariaDB has an example of its own, [`prisma-8-demo-mariadb`](../prisma-8-demo-mariadb/README.md), because the target id is part of the contract and every migration.
 
@@ -72,6 +69,26 @@ encodes it: the `Date` is written in UTC, and a date or time MySQL does not
 hold is refused before it reaches the database. `src/orm-client/get-events-on.ts`
 reads the events on a day through the ORM.
 
+## Scalar types
+
+`Product` uses the scalar convenience types:
+
+```prisma
+model Product {
+  id        Int                              @id @default(autoincrement())
+  name      String                           // varchar(191)
+  price     Decimal(precision: 10, scale: 2) // decimal(10,2), read as decimal text such as "19.90"
+  rating    Float                            // double
+  sold      BigInt(as: number)               @default(0) // bigint, read as a number
+  inStock   Boolean                          @default(true) // tinyint(1), 0 or 1
+  thumbnail Bytes                            // longblob, read as a Uint8Array
+  details   Json                             // json
+  notes     String(storage: text)?           // text
+}
+```
+
+`src/orm-client/products.ts` creates products, updates their stock and reads the products in stock at a price. A `Decimal` reads as the server prints it, padded to the column's scale, so `"19.9"` is read back as `"19.90"`, and a filter on `"19.9"` finds it. See [Scalar types](../../docs/reference/scalar-types.md#mysql-and-mariadb) for what each type reads, filters and refuses.
+
 ## Setup
 
 You need a MySQL 8 server and an empty application database for the example.
@@ -114,12 +131,7 @@ which contract the database is at.
 | `db:sign` | `prisma db sign` | Signs a database whose schema satisfies the contract |
 | `test` | `vitest run` | The whole flow against fresh databases at `MYSQL_URL` |
 
-`pnpm test` uses only the server part of `MYSQL_URL`. For each test file it
-creates a uniquely named database on that server and drops it afterwards.
-`test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and
-`migration plan` through the `prisma` CLI. `test/reads.test.ts` migrates with
-`db migrate`, seeds the rows and checks the whole result of each read.
-`test/events.test.ts` writes events and reads back their dates and times. Without `MYSQL_URL` the tests are skipped.
+`pnpm test` uses only the server part of `MYSQL_URL`. For each test file it creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI. `test/reads.test.ts` migrates with `db migrate`, seeds the rows and checks the whole result of each read. `test/events.test.ts` writes events and reads back their dates and times, and `test/products.test.ts` does the same for products. Without `MYSQL_URL` the tests are skipped.
 
 ## What the migrations create
 
@@ -139,8 +151,7 @@ CREATE TABLE `User` (
 );
 ```
 
-plus an index on `Post.authorId` and the foreign key to `User`. The second
-migration creates the events table:
+plus an index on `Post.authorId` and the foreign key to `User`. The second migration creates the events table, and the third the products table:
 
 ```sql
 CREATE TABLE `Event` (
@@ -152,6 +163,18 @@ CREATE TABLE `Event` (
   `title` varchar(191) NOT NULL,
   PRIMARY KEY (`id`)
 );
+CREATE TABLE `Product` (
+  `details` json NOT NULL,
+  `id` int NOT NULL AUTO_INCREMENT,
+  `inStock` tinyint(1) NOT NULL DEFAULT 1,
+  `name` varchar(191) NOT NULL,
+  `notes` text,
+  `price` decimal(10,2) NOT NULL,
+  `rating` double NOT NULL,
+  `sold` bigint NOT NULL DEFAULT 0,
+  `thumbnail` longblob NOT NULL,
+  PRIMARY KEY (`id`)
+);
 ```
 
 The PSL enum `Role` becomes a native MySQL `enum` column, so the database enforces its
@@ -160,7 +183,7 @@ index on a `text` column without a key length.
 
 ## Key files
 
-- `prisma/contract.prisma` — the contract (User, Post, Event, Role)
+- `prisma/contract.prisma` — the contract (User, Post, Event, Product, Role)
 - `prisma.config.ts` — CLI config; reads the connection from `MYSQL_URL`
 - `migrations/` — the committed migrations and their contract snapshots
 - `src/prisma/db.ts` — the client
@@ -171,5 +194,6 @@ index on a `text` column without a key length.
 - `test/migrations.test.ts` — the migration flow
 - `test/reads.test.ts` — the reads against a migrated, seeded database
 - `test/events.test.ts` — events written and read back with their dates and times
+- `src/orm-client/products.ts`, `test/products.test.ts` — products written and read back with their scalar types
 - `test/cli.ts` — runs the `prisma` CLI on a copy of the example
 - `test/database.ts` — creates and drops a database for each test file

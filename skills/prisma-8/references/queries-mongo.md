@@ -1,12 +1,12 @@
 # Prisma 8 — Queries (Mongo)
 
-> Load this guide when `db.ts` imports from `@internal/mongo/runtime`.
+> Load this guide when `db.ts` imports from `@prisma/orm-mongo/runtime`.
 
 Shared concepts (result consumption, script teardown, cross-target pitfalls, capability gaps) live in [`queries.md`](./queries.md).
 
 ## Key Concepts
 
-**Mongo** (`mongo({ contract, ... })` from `@internal/mongo/runtime`):
+**Mongo** (`mongo({ contract, ... })` from `@prisma/orm-mongo/runtime`):
 
 - **`db.orm.<root>`** — ORM, lowercased plural contract root (`db.orm.users`, `db.orm.posts`). Same fluent chaining; `.where({ field: value })` object equality is the idiomatic filter form.
 - **`db.query`** — typed aggregation-pipeline builder. Start with `db.query.from('<root>')`, chain `.match(...)` / `.project(...)` / `.group(...)` / `.lookup(...)`, terminal with `.build()`. Run via `(await db.runtime()).query(plan)` for anything that returns documents; `execute(plan)` is only for a write you want an affected count from, and it throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED` on a find or aggregate.
@@ -78,7 +78,7 @@ const posts = await db.orm.posts
 // → Array<{ title, authorId, createdAt, author: { name, email, ... } }>
 ```
 
-Relation names match the contract's `@relation` field names. Nested includes follow the same chaining rules as the parent collection.
+Relation names match the contract's `@relation` field names. `.include(...)` takes only the relation name: there is no refinement callback, so the included documents cannot be filtered, ordered or limited, and their own relations are not loaded. Only a reference relation on a single field can be included; an embedded relation is already part of the document, and naming one in `.include(...)` is a type error.
 
 ## Workflow — ORM writes
 

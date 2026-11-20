@@ -1,4 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
+import { findNonJsonValue } from '@internal/type-implementations/json';
 import { blindCast } from '@internal/utils/casts';
 import {
   bsonClassTag,
@@ -6,7 +7,6 @@ import {
   child,
   constructorName,
   dbRefEntries,
-  isPlainArray,
   isPlainObject,
   where,
 } from './bson-walk';
@@ -70,41 +70,12 @@ function encodeRefused(received: string, path: string): never {
   );
 }
 
-function describeNonJson(value: unknown): string | undefined {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return undefined;
-  if (typeof value === 'number') return Number.isFinite(value) ? undefined : String(value);
-  if (typeof value !== 'object') return typeof value;
-  const tag = bsonTypeTag(value);
-  if (tag !== undefined) return tag;
-  if (value instanceof Date) return 'Date';
-  if (isPlainArray(value)) return undefined;
-  return isPlainObject(value) ? undefined : constructorName(value);
-}
-
-function assertJsonValue(value: unknown, path: string, ancestors: Set<object>): void {
-  const received = describeNonJson(value);
-  if (received !== undefined) encodeRefused(received, path);
-  if (typeof value !== 'object' || value === null) return;
-  if (ancestors.has(value)) encodeRefused('circular reference', path);
-  ancestors.add(value);
-  if (Array.isArray(value)) {
-    for (let index = 0; index < value.length; index++) {
-      if (!(index in value)) encodeRefused('sparse array hole', child(path, index));
-      assertJsonValue(value[index], child(path, index), ancestors);
-    }
-  } else {
-    for (const [key, entry] of Object.entries(value)) {
-      assertJsonValue(entry, child(path, key), ancestors);
-    }
-  }
-  ancestors.delete(value);
-}
-
 /**
  * Returns `value` unchanged when it is a plain JSON value at every depth, and throws `RUNTIME.ENCODE_FAILED` naming the first value that is not, with its path.
  */
 export function encodeJsonValue(value: JsonValue): JsonValue {
-  assertJsonValue(value, '', new Set());
+  const found = findNonJsonValue(value, { tagOf: bsonTypeTag });
+  if (found !== undefined) encodeRefused(found.received, found.path);
   return value;
 }
 

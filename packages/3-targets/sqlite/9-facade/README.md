@@ -141,7 +141,7 @@ Import `{ IsolationLevel }` from `@prisma/orm-sqlite/runtime`. `SqliteTransactio
 
 Callback options also accept `timeout` defaults and overrides independently of isolation. Local `undefined` inherits; `null` disables an inherited deadline. Synchronous SQLite calls can delay deadline observation. See [callback timeouts](../../../../docs/reference/transaction-options.md#timeout).
 
-`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes and `fragment`), `raw`, `prepare`, `query`, `execute`, `toSql` and `enums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]`, `transaction` or `runtime()`. The type is `SqliteTransactionContext<Contract>`.
+`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes and `fragment`), `raw`, `prepare`, `query`, `execute`, `toSql` and `enums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]` or `runtime()`. `tx.transaction(async (inner) => ...)` runs the callback in a savepoint, and `inner` has the same type and members as `tx`, to any depth. When the callback throws, the work since the savepoint is rolled back, the call rejects with the same error and `tx` can be used again. The type is `SqliteTransactionContext<Contract>`.
 
 ```ts
 await db.transaction(async (tx) => {

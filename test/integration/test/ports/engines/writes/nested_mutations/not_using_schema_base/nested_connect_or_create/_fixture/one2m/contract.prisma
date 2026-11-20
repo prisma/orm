@@ -1,0 +1,17 @@
+// use prisma-8
+
+model ModelA {
+  id   String  @id @onCreate(cuid(2))
+  b_u  String?
+  oneB ModelB? @relation(fields: [b_u], references: [b_u])
+
+  @@map("ModelA")
+}
+
+model ModelB {
+  id    String   @id @onCreate(cuid(2))
+  b_u   String   @unique
+  manyA ModelA[]
+
+  @@map("ModelB")
+}

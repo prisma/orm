@@ -14,11 +14,15 @@ import { timeouts } from '@repo/test-utils';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import { describe, expect, it } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
+import { emitFixture } from '../emit';
 import { exampleTablesDdl, frameworkComponents, loadExampleContract } from '../example-contract';
 import {
   contractRepointedToAdmin,
+  contractWithEdgeDefaults,
+  contractWithKeyOn,
   contractWithNickname,
   contractWithoutForeignKey,
+  contractWithScalarTypes,
   contractWithUnindexedForeignKey,
 } from './contracts';
 import { controlStack, createAdapter, EVERY_CLASS, operationSql } from './planner-harness';
@@ -77,7 +81,7 @@ async function planResult(
 ) {
   return mysql.migrations.createPlanner(createAdapter()).plan({
     contract,
-    schema: await family.introspect({ driver }),
+    schema: await family.introspect({ driver, contract }),
     policy: EVERY_CLASS,
     fromContract: null,
     origin: null,
@@ -205,6 +209,161 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
       }),
     );
   });
+
+  it('applies a column of each scalar convenience type with its default, which then verifies strictly and plans nothing more', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver, family) => {
+        const contract = contractWithScalarTypes();
+        const plan = await planAgainst(driver, family, 'app', contract);
+        const applied = await apply(family, driver, [['app', plan, contract]]);
+        const { rows } = await driver.query<{ COLUMN_NAME: string; COLUMN_TYPE: string }>(
+          "SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Measure' ORDER BY ORDINAL_POSITION",
+        );
+        const verified = family.verifySchema({
+          contract,
+          schema: await family.introspect({ driver, contract }),
+          strict: true,
+          frameworkComponents,
+        });
+        const again = await planAgainst(driver, family, 'app', contract);
+        expect({
+          applied: applied.ok,
+          columns: rows.map((row) => `${row.COLUMN_NAME} ${row.COLUMN_TYPE}`),
+          verified: verified.ok ? true : verified,
+          planAgain: again.operations.length,
+        }).toEqual({
+          applied: true,
+          columns: [
+            'id int',
+            'count bigint',
+            'ratio double',
+            'amount decimal(65,30)',
+            'price decimal(10,2)',
+            'label text',
+            'name varchar(40)',
+            'on tinyint(1)',
+            'data longblob',
+            'doc json',
+            'extra json',
+          ],
+          verified: true,
+          planAgain: 0,
+        });
+      }),
+    );
+  });
+
+  it('applies the empty and edge defaults of bytes, text and JSON and a whole number on a decimal without a precision, which then verify strictly, plan nothing more and fill a row', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver, family) => {
+        const contract = contractWithEdgeDefaults();
+        const applied = await apply(family, driver, [
+          ['app', await planAgainst(driver, family, 'app', contract), contract],
+        ]);
+        const verified = family.verifySchema({
+          contract,
+          schema: await family.introspect({ driver, contract }),
+          strict: true,
+          frameworkComponents,
+        });
+        const again = await planAgainst(driver, family, 'app', contract);
+        await driver.query('INSERT INTO `Edge` (`id`) VALUES (1)');
+        const { rows } = await driver.query<Record<string, unknown>>(
+          'SELECT HEX(`noBytes`) AS noBytes, HEX(`bytes`) AS bytes, `blank`, `accented`, CAST(`jsonNull` AS CHAR) AS jsonNull, CAST(`jsonString` AS CHAR) AS jsonString, CAST(`jsonArray` AS CHAR) AS jsonArray, CAST(`jsonObject` AS CHAR) AS jsonObject, CAST(`jsonAccented` AS CHAR) AS jsonAccented, CAST(`whole` AS CHAR) AS whole, CAST(`wholeText` AS CHAR) AS wholeText, CAST(`zeroText` AS CHAR) AS zeroText FROM `Edge`',
+        );
+        expect({
+          applied: applied.ok ? true : applied.failure,
+          verified: verified.ok ? true : verified,
+          planAgain: again.operations.length,
+          row: rows[0],
+        }).toEqual({
+          applied: true,
+          verified: true,
+          planAgain: 0,
+          row: {
+            noBytes: '',
+            bytes: 'C3A900FF',
+            blank: '',
+            accented: 'é€😀',
+            jsonNull: 'null',
+            jsonString: '""',
+            jsonArray: '[]',
+            jsonObject: '{}',
+            jsonAccented: '{"k": "é€😀"}',
+            whole: '-12',
+            wholeText: '12',
+            zeroText: '0',
+          },
+        });
+      }),
+    );
+  });
+
+  it('applies whole-number defaults written with a zero fraction on a decimal without a precision, which then verify strictly, plan nothing more and fill a row', async (test) => {
+    const contract = await emitFixture('decimal-defaults');
+    await withMysqlDatabase(test, ({ url }) =>
+      withDriver(url, async (driver, family) => {
+        const applied = await apply(family, driver, [
+          ['app', await planAgainst(driver, family, 'app', contract), contract],
+        ]);
+        const verified = family.verifySchema({
+          contract,
+          schema: await family.introspect({ driver, contract }),
+          strict: true,
+          frameworkComponents,
+        });
+        const again = await planAgainst(driver, family, 'app', contract);
+        await driver.query('INSERT INTO `Price` (`id`) VALUES (1)');
+        const { rows } = await driver.query<Record<string, unknown>>(
+          'SELECT CAST(`text` AS CHAR) AS text, CAST(`number` AS CHAR) AS number, CAST(`zero` AS CHAR) AS zero, CAST(`ten` AS CHAR) AS ten, CAST(`cents` AS CHAR) AS cents FROM `Price`',
+        );
+        expect({
+          applied: applied.ok ? true : applied.failure,
+          verified: verified.ok ? true : verified,
+          planAgain: again.operations.length,
+          row: rows[0],
+        }).toEqual({
+          applied: true,
+          verified: true,
+          planAgain: 0,
+          row: { text: '12', number: '12', zero: '0', ten: '-12', cents: '1.50' },
+        });
+      }),
+    );
+  });
+
+  it.for([
+    ['bytes', 'id', "BLOB/TEXT column 'key' used in key specification without a key length"],
+    ['bytes', 'unique', "BLOB/TEXT column 'key' used in key specification without a key length"],
+    ['text', 'id', "BLOB/TEXT column 'key' used in key specification without a key length"],
+    ['text', 'unique', "BLOB/TEXT column 'key' used in key specification without a key length"],
+    [
+      'json',
+      'id',
+      "JSON column 'key' supports indexing only via generated columns on a specified JSON path",
+    ],
+    [
+      'json',
+      'unique',
+      "JSON column 'key' supports indexing only via generated columns on a specified JSON path",
+    ],
+  ] as const)(
+    'fails to apply a key on a %s field, @%s, when the migration runs, as the scalar type reference says',
+    async ([key, kind, message], test) => {
+      await withMysqlDatabase(test, ({ url }) =>
+        withDriver(url, async (driver, family) => {
+          const contract = contractWithKeyOn(key, kind);
+          const applied = await apply(family, driver, [
+            ['app', await planAgainst(driver, family, 'app', contract), contract],
+          ]);
+          expect(applied.ok ? undefined : applied.failure).toMatchObject({
+            code: 'MIGRATION.EXECUTION_FAILED',
+            why: expect.stringContaining(message),
+          });
+        }),
+      );
+    },
+  );
 
   it('signs a database made by hand, creating the marker table first', async (test) => {
     await withMysqlDatabase(test, ({ url }) =>
