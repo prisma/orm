@@ -114,7 +114,7 @@ const localSettings: OutputSettings = {
   dateStyle: 'German, DMY',
   intervalStyle: 'iso_8601',
   byteaOutput: 'escape',
-  lcMonetary: 'POSIX',
+  lcMonetary: '',
 };
 
 async function setLocalSettings(driver: PostgresControlDriver): Promise<void> {
@@ -123,6 +123,13 @@ async function setLocalSettings(driver: PostgresControlDriver): Promise<void> {
   await driver.query(`SET LOCAL IntervalStyle = '${localSettings.intervalStyle}'`);
   await driver.query(`SET LOCAL bytea_output = '${localSettings.byteaOutput}'`);
   await driver.query(`SET LOCAL lc_monetary = '${localSettings.lcMonetary}'`);
+}
+
+async function transactionStart(driver: PostgresControlDriver): Promise<string | undefined> {
+  const { rows } = await driver.query<{ transactionStart: string }>(
+    'SELECT extract(epoch FROM now())::text AS "transactionStart"',
+  );
+  return rows[0]?.transactionStart;
 }
 
 /** A driver that reads the output settings and the transaction start time before each introspection query. */
@@ -136,7 +143,7 @@ function observing(
     query: async (sql: string, params?: readonly unknown[]) => {
       if (sql.includes('information_schema') || sql.includes('pg_catalog')) {
         const { rows } = await inner.query<{ transactionStart: string }>(
-          'SELECT now()::text AS "transactionStart"',
+          'SELECT extract(epoch FROM now())::text AS "transactionStart"',
         );
         observed.push({
           settings: await outputSettings(inner),
@@ -267,20 +274,26 @@ describe('introspection in a session with its own output settings', { concurrent
     );
   });
 
-  it('reads with lc_monetary pinned inside the caller transaction', {
+  it('reads in the caller transaction, with lc_monetary pinned, and leaves that transaction open', {
     timeout: testTimeout,
   }, async () => {
     const observed: { settings: OutputSettings | undefined; transactionStart: string }[] = [];
     await driver!.query('BEGIN');
     await setLocalSettings(driver!);
+    const before = await transactionStart(driver!);
 
     await familyInstance.introspect({
       driver: observing(driver!, observed),
       contract: stampsContract(),
     });
 
+    const after = await transactionStart(driver!);
     await driver!.query('ROLLBACK');
-    expect(observed.map(({ settings }) => settings?.lcMonetary)).toEqual(observed.map(() => 'C'));
+    expect({
+      lcMonetary: [...new Set(observed.map(({ settings }) => settings?.lcMonetary))],
+      transactionStarts: [...new Set(observed.map(({ transactionStart }) => transactionStart))],
+      after,
+    }).toEqual({ lcMonetary: ['C'], transactionStarts: [before], after: before });
   });
 
   it('leaves the settings the caller set on the session', {

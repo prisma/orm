@@ -49,7 +49,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok, okVoid } from '@internal/utils/result';
 import { postgresError } from '../errors';
-import { quoteIdentifier } from '../sql-utils';
+import { CONTROL_PLANE_LC_MONETARY, quoteIdentifier } from '../sql-utils';
 import {
   DEPENDENT_OBJECTS_STILL_EXIST,
   dependentsOf,
@@ -144,8 +144,8 @@ function failedTypeChangeOf(
   return reason === undefined ? undefined : { field, by: 'cast', reason, operationIndex };
 }
 
-/** PostgreSQL reads a `money` literal in DDL, such as `DEFAULT '12.34'::money`, with the session's monetary locale, which stores it in another locale's units; C reads it in cents. Set for the migration's transaction only. */
-const MONEY_LOCALE_SQL = "SELECT set_config('lc_monetary', 'C', true)";
+/** Sets `lc_monetary` for the rest of the current transaction only; {@link CONTROL_PLANE_LC_MONETARY} says why the runner sets it. */
+const SET_LOCAL_LC_MONETARY_SQL = "SELECT set_config('lc_monetary', $1, true)";
 
 export function createPostgresMigrationRunner(
   family: SqlControlFamilyInstance,
@@ -191,6 +191,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     const policyCheck = this.enforcePolicyCompatibility(options.policy, planOps);
     if (!policyCheck.ok) return policyCheck;
 
+    await this.readMoneyLiteralsInCents(driver);
     await this.acquireLock(driver);
     const ensureResult = await this.ensureControlTables(driver, options.destinationContract);
     if (!ensureResult.ok) return ensureResult;
@@ -938,11 +939,17 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     await driver.query(MARKER_LOCK_SQL, [MARKER_LOCK_KEY]);
   }
 
+  /** The migration's DDL can hold money literals, such as `DEFAULT '12.34'::money`, which PostgreSQL reads by the session's monetary locale. */
+  private async readMoneyLiteralsInCents(
+    driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
+  ): Promise<void> {
+    await driver.query(SET_LOCAL_LC_MONETARY_SQL, [CONTROL_PLANE_LC_MONETARY]);
+  }
+
   private async beginTransaction(
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
   ): Promise<void> {
     await driver.query('BEGIN');
-    await driver.query(MONEY_LOCALE_SQL);
   }
 
   private async commitTransaction(
