@@ -611,3 +611,21 @@ Scenario, on SQLite and PostgreSQL with `db update`: the hierarchy above, with `
 **Found:** the hands-on verification of the plan-stop output work's last fixes (2026-11-21). Wording only; no data is at risk.
 
 Scenario: `Bug` is a variant of `Task`; the contract renames `Task` to `Work`, removes `Bug`, and already has `Defect` as a variant of `Work`. With `--rename Task:Work`, the refusal and the prompt still say to add the new name `as a variant of model "Work"`, and the prompt says `rename works only once the contract has the model under its new name …: stop this command`. They do not offer `--rename Bug:Defect`, which the contract already allows: typing `rename Bug:Defect` at the prompt works. Transcript: `wip/consent-text/qa6/transcripts/base-renamed-present-sqlite-update.txt`. The cause: the names offered (`newVariantsOfBase` in `packages/1-framework/3-tooling/cli/src/control-api/statements/variants.ts`, through `newModels` in `possible-new-names.ts`) read the base from the contract before the change, while the base the texts name follows the run's renames (`variantBaseAfterRenames`). A fix maps the base through the renames in `newVariantsOfBase` too.
+
+## `migration plan` writes extension-space files before it stops to ask
+
+**Found:** the automated review of the plan-stop output pull request (2026-11-21). `main` behaves the same.
+
+`docs/reference/error-reference.md` says of `CLI.CONSENT_REQUIRED` that nothing is written or applied, and `7. Migration System.md` says the questions are asked before anything is written. But `executeMigrationPlanCommand` (`packages/1-framework/3-tooling/cli/src/control-api/operations/migration-plan.ts`) runs the contract-space seed phase (`runContractSpaceSeedPhase`) before it plans and asks: when an extension pack declares a contract space whose pinned migration, snapshot or head ref is not yet on disk, those files are written, and then the run stops for an unanswered data-loss question. The application's migration is not written. Either say in the docs that the refusal writes no migration of the application but may have written the extension spaces' files, or ask before seeding.
+
+## An `--allow` consent keeps its old position after a re-plan removes its operation
+
+**Found:** the automated review of the plan-stop output pull request (2026-11-21). `main` behaves the same: its re-plan loop in `askPlanQuestions` is the same code.
+
+In `db update`, at a prompt or through the control API, a round can answer an access change with `allow User` and another question with a typed `rename`. The rename makes the plan again. `askPlanQuestions` (`packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`) updates the position of an allowed operation only when the new plan still has it, and returns the others as they were. If the new plan no longer has that access change, `appliedStatements` reports `allow User` with a position that names no operation of the applied plan, or another operation at that index. Whether a planner drops an access change because of a rename is not checked; the code path is. A fix drops, after each re-plan, every `allow` consent whose operation the new plan no longer has.
+
+## A lone `--allow` of a subject that only loses data is refused after the prompt
+
+**Found:** the automated review of the plan-stop output pull request (2026-11-21). `main` behaves the same.
+
+Scenario: the plan drops model `Bug`, and the user runs `prisma db update --allow Bug` in a terminal. The command asks about `Bug` first, and after the answer refuses `--allow Bug` as unused. Without a terminal, the refusal already says `Remove --allow Bug: this change does not change access to model "Bug".`. `refuseMisdirectedConsents` (`packages/1-framework/3-tooling/cli/src/orm/plan-question-prompt.ts`) refuses such a flag before anything is asked only beside a flag that settles the subject, as the plan-stop output spec chose. Refusing it before the prompt in every case would save the user an answer that is then thrown away.
