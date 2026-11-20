@@ -62,7 +62,7 @@ After:
 → If the values can go: --delete Shop.legacy
 ```
 
-In every file the detection matches, stop reading the summary or the next-action labels to find out what was asked. Read `meta.unanswered` instead: one entry per open subject, each with the `subject` a flag names and the `verbs` that answer it, so `--<verb> <subject>` answers it, and `--rename` takes `<subject>:<new name>`. One entry changes: for a model that is a variant whose base the change removes too, `verbs` is now `['delete']`, where it was `['rename', 'delete']`, because such a variant cannot be renamed on its own.
+In every file the detection matches, stop reading the summary or the next-action labels to find out what was asked. Read `meta.unanswered` instead: one entry per open subject, each with the `subject` a flag names and the `verbs` that answer it, so `--<verb> <subject>` answers it, and `--rename` takes `<subject>:<new name>`. One entry changes: for a model that is a variant stored in its base's table whose base the change removes too, `verbs` is now `['delete']`, where it was `['rename', 'delete']`, because such a variant cannot be renamed on its own.
 
 # One `--allow` per model
 
