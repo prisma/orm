@@ -28,7 +28,7 @@ export function validateMysqlUrl(
   try {
     parsed = new URL(trimmed);
   } catch {
-    const withHost = trimmed.replace(/^([^:/?#]+:\/\/[^/?#]*@)(\/|$|\?|#)/, '$1localhost$2');
+    const withHost = trimmed.replace('@/', '@localhost/');
     try {
       parsed = new URL(withHost);
     } catch {

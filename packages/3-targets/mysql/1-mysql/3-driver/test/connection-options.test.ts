@@ -34,6 +34,18 @@ describe('mysqlConnectionOptions', () => {
     expect(options).toMatchObject({ user: 'user', password: 'password', database: 'db' });
   });
 
+  it.each([
+    ['no host and no path', 'mysql://u@'],
+    ['no host and only a query', 'mysql://u@?host=localhost'],
+  ])('refuses a URL with a user but %s, as the Postgres facade does', (_, url) => {
+    expect(() => mysqlConnectionOptions(url, { displayName: 'MySQL' })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'MySQL connection URL: the URL cannot be parsed',
+      }),
+    );
+  });
+
   it('leaves both unset when the URL names neither', () => {
     const options = mysqlConnectionOptions('mysql:///db', { displayName: 'MySQL' });
     expect(options).not.toHaveProperty('user');

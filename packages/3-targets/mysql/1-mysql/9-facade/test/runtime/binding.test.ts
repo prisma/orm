@@ -27,6 +27,18 @@ describe('validateMysqlUrl', () => {
       }),
     );
   });
+
+  it.each([
+    ['no host and no path', 'mysql://u@'],
+    ['no host and only a query', 'mysql://u@?host=localhost'],
+  ])('refuses a URL with a user but %s, as the Postgres facade does', (_, url) => {
+    expect(() => validateMysqlUrl(url, TARGET, URL_SCHEMES)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.BINDING_INVALID',
+        message: 'MySQL URL must be a valid URL',
+      }),
+    );
+  });
 });
 
 describe('resolveMysqlBinding', () => {

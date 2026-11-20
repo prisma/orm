@@ -82,7 +82,7 @@ function parseUrl(
     const parsed = new URL(url);
     return { parsed, hostGiven: parsed.hostname !== '' };
   } catch {
-    const withHost = url.replace(/^([^:/?#]+:\/\/[^/?#]*@)(\/|$|\?|#)/, '$1localhost$2');
+    const withHost = url.replace('@/', '@localhost/');
     try {
       return { parsed: new URL(withHost), hostGiven: false };
     } catch {
