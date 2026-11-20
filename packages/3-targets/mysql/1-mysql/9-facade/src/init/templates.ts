@@ -12,6 +12,11 @@ export function contractSample(mode: ContractSourceFormat): string {
   return mode === 'typescript' ? contractSampleTs() : contractSamplePsl();
 }
 
+/** The type a query result gives `id` in the starter contract: an integer in PSL, UUID text in TypeScript. */
+export function starterIdType(mode: ContractSourceFormat): string {
+  return mode === 'typescript' ? 'string' : 'number';
+}
+
 function contractSamplePsl(): string {
   return `\`\`\`prisma
 model User {

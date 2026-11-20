@@ -64,4 +64,20 @@ describe('the MySQL init contribution', () => {
     expect(text).toContain('db.orm.User');
     expect(text).toContain(contribution.contractSample(mode));
   });
+  it.each([
+    ['psl', 'number'],
+    ['typescript', 'string'],
+  ] as const)(
+    'names the id type the %s starter contract gives in the quick reference',
+    (mode, idType) => {
+      const text = contribution.quickReference({
+        mode,
+        schemaPath: 'src/prisma/contract.prisma',
+        cliCommand: 'pnpm prisma',
+        requirements: '',
+      });
+
+      expect(text).toContain(`// { id: ${idType}; email: string;`);
+    },
+  );
 });

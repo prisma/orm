@@ -9,6 +9,7 @@ import {
   databaseFile,
   envExample,
   starterContract,
+  starterIdType,
 } from './templates';
 
 function quickReference(input: QuickReferenceInput): string {
@@ -21,6 +22,7 @@ function quickReference(input: QuickReferenceInput): string {
     pkg: moduleBase,
     configEntrypoint: configModule,
     schemaSample: contractSample(input.mode),
+    idType: starterIdType(input.mode),
     requirements: input.requirements,
     databasePath: DATABASE_PATH,
   });
