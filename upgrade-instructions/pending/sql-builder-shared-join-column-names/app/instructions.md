@@ -6,7 +6,7 @@ changes:
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
-        - '\.(?:innerJoin|outerLeftJoin|outerRightJoin|outerFullJoin)\('
+        - '\.(?:innerJoin|outerLeftJoin|outerRightJoin|outerFullJoin|lateralJoin|outerLateralJoin)\('
 ---
 
 # A column name that several joined tables share needs its table
@@ -28,4 +28,4 @@ Before, it type-checked, and the database refused the query because `id` was amb
   .select((f) => ({ id: f.profiles.id }));
 ```
 
-The same applies to `select('id')`, `where`, `orderBy` and the other callbacks. Names that only one joined table has stay available at top level.
+The same applies to `select('id')`, `where`, `orderBy` and the other callbacks, and inside the subquery of `lateralJoin` or `outerLateralJoin`: there, a name that the subquery's table shares with two or more parent tables used to reach the database unqualified, where it read the subquery's own table. Write that table's name, such as `f.profiles.id`. Names that only one joined table has stay available at top level.

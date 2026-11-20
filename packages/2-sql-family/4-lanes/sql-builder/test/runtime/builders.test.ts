@@ -562,6 +562,23 @@ describe('lateral joins', () => {
     expect((ast.joins![0]!.source as DerivedTableSource).alias).toBe('recent_posts');
   });
 
+  it('inside a lateral subquery, a name the parent tables also have needs its table', () => {
+    const d = db();
+    const topLevelNames: string[][] = [];
+    d.public.users
+      .innerJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+      .lateralJoin('profile', (lateral) =>
+        lateral
+          .from(d.public.profiles)
+          .select('bio')
+          .where((f, fns) => {
+            topLevelNames.push(['id', 'bio'].filter((name) => Reflect.get(f, name) !== undefined));
+            return fns.eq(f.profiles.user_id, f.users.id);
+          }),
+      );
+    expect(topLevelNames).toEqual([['bio']]);
+  });
+
   it('lateralJoin throws without capability', () => {
     const d = dbNoCapabilities();
     const users = d.public.users as unknown as { lateralJoin(alias: string, fn: unknown): void };
