@@ -5,24 +5,14 @@ import { deferred } from './closed-runtime-stub';
 import {
   createSetup,
   finalized,
-  type HookEvent,
   rawPlan,
   rejectsWith,
+  trace,
   transactionIds,
 } from './transaction-activity-fixtures';
 
 const statementB = rawPlan('insert b');
 const statementC = rawPlan('insert c');
-
-const trace = (events: readonly HookEvent[]) =>
-  events
-    .map((event) => (event.name === 'beforeEncode' ? event.sql : event.name))
-    .filter(
-      (name): name is string =>
-        name !== undefined &&
-        /^(SAVEPOINT|RELEASE|ROLLBACK|begin|commit|rollback|release|destroy|insert)/.test(name),
-    )
-    .join(', ');
 
 const savepointMiddleware = (hooks: Omit<SqlMiddleware, 'name' | 'familyId'>): SqlMiddleware => ({
   name: 'savepoint-hooks',

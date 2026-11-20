@@ -1472,6 +1472,10 @@ A whole-query raw statement returned a result that omits a column its row spec d
 
 A raw-SQL tagged template interpolated a JS value whose type cannot be auto-inferred to a codec (anything other than number, bigint, string, boolean, or Uint8Array). Wrap the value in `param(...)` with an explicit codec.
 
+### RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED
+
+`transaction(fn, options)` was called with options on an activity handle opened inside a transaction: on a transaction or savepoint, through a `withTransaction` context, nested in such a handle, or on a held connection whose transaction was open when the handle started. Such a handle runs `fn` in a savepoint, which has the isolation level and timeout of the transaction it is in. No savepoint is opened, nothing is sent, and `fn` is not called. Call `transaction(fn)` without options. Payload: `options`, the options that were passed.
+
 ### RUNTIME.SQL_MODE_UNSUPPORTED
 
 The MySQL drivers refused a statement with values because MySQL reports `NO_BACKSLASH_ESCAPES` in the connection's `sql_mode`, which the MySQL target does not support. In that mode MySQL ends a string at a backslash and a quote, while the `mariadb` package, which writes the values into the statement, finds its placeholders as if the backslash escaped the quote, so a value could land outside its literal and run as SQL. The drivers remove the mode on every connection they open, so a statement the application sent made MySQL report it. A raw `SET sql_mode` that sets it leaves the mode on until a statement clears it or the connection closes, and a pooled connection goes back to the pool with it. A stored procedure that sets it inside itself leaves only the report: MySQL restores the connection's mode when the procedure returns, but keeps reporting the procedure's until a statement sets `sql_mode` again, so the drivers refuse values while the mode itself may be off. Do not set `NO_BACKSLASH_ESCAPES` (or `ANSI_QUOTES`, which MySQL does not report) on a connection Prisma uses. A raw `SET` run outside a transaction lands on whichever pooled connection ran it; restart the client to close that connection. A statement that needs the mode must run in a transaction or on a connection you hold, and set the mode back before the connection is released, with the statement the error's `fix` gives. A statement without values still runs. Payload: `sqlMode` (`NO_BACKSLASH_ESCAPES`), `params` (the number of values).
@@ -1497,7 +1501,7 @@ The SQL runtime callback helper received a timeout outside integer milliseconds 
 
 ### RUNTIME.TRANSACTION_ALREADY_OPEN
 
-`transaction()` was called on an activity handle opened on a connection while a transaction it began on that connection is still starting or open. A connection runs one transaction at a time, and transactions do not nest. Commit or roll back the open transaction first, or send the work on it. Payload: `kind`, `id`, `transactionId`; `transactionId` is `undefined` while the open transaction's `activityStarted` hooks run.
+`transaction()` was called on an activity handle opened on a connection before a transaction was open there, while a transaction is starting or open on that connection, whether the handle or another caller began it. The handle is not inside that transaction, so it cannot open a savepoint of it, and a connection runs one transaction at a time. Commit or roll back the open transaction first, or start the activity on that transaction. Payload: `kind`, `id`, `transactionId`; `transactionId` is `undefined` while the open transaction's `activityStarted` hooks run.
 
 ### RUNTIME.TRANSACTION_CLOSED
 

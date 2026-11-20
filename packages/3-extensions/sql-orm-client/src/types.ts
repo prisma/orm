@@ -202,6 +202,7 @@ export interface CollectionQueryable extends RuntimeQueryable {
     fn: (tx: RuntimeScope) => PromiseLike<R>,
     options?: SqlTransactionOptions,
   ): Promise<R>;
+  inTransaction?(): boolean;
 }
 
 export interface CollectionContext<TContract extends Contract<SqlStorage>> {
