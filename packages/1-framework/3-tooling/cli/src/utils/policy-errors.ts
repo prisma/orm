@@ -142,7 +142,7 @@ function refusingPolicy(source: PolicySource, forbids: string): string {
 }
 
 const KEEP_APPLIED_MIGRATION =
-  'If another database has already applied this migration, keep it as it is: this database cannot run it until its data protection policy changes.';
+  'If another database has already applied a migration listed here, keep it as it is.';
 
 function doItAnyway(source: PolicySource): string {
   return source.kind === 'ref'
@@ -150,43 +150,86 @@ function doItAnyway(source: PolicySource): string {
     : 'To do it anyway, whoever owns the database must first change its data protection policy.';
 }
 
-/** What a user can do instead of a refused change, for the command that refused it. */
+function quotedList(names: readonly string[]): string {
+  const quoted = names.map((name) => `"${name}"`);
+  return quoted.length === 1
+    ? quoted.join('')
+    : `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
+}
+
+/** The extensions' contract spaces own their migrations: only the extensions' authors can change them. */
+function extensionsOwnMigrations(spaceIds: readonly string[]): string {
+  return spaceIds.length === 1
+    ? `Contract space ${quotedList(spaceIds)} belongs to an extension, so do not edit or delete its migrations; ask the extension's author for a version without the operation.`
+    : `Contract spaces ${quotedList(spaceIds)} belong to extensions, so do not edit or delete their migrations; ask the extensions' authors for versions without the operations.`;
+}
+
+/** What a user can do about refused operations in the application's contract space, for the command that refused them. */
+function keepAppProtected(
+  setting: DataProtectionSetting,
+  command: DataProtectionCheckedCommand,
+  operations: readonly DataProtectionRefusedOperation[],
+  alongsideExtensions: boolean,
+  invocation: CliInvocation | undefined,
+): readonly string[] {
+  if (command === 'db migrate') {
+    const unapplied = alongsideExtensions
+      ? 'For an application migration no database has applied'
+      : 'For a migration no database has applied';
+    return [
+      KEEP_APPLIED_MIGRATION,
+      setting === 'accessWidening'
+        ? `${unapplied}, delete the migration and any later ones no database has applied, put the contract's access rules back as they were, and plan again.`
+        : `${unapplied}, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes.`,
+    ];
+  }
+  if (setting === 'accessWidening') {
+    return [
+      alongsideExtensions
+        ? "For the application's operations, keep the contract's access rules as they are."
+        : "Keep the contract's access rules as they are.",
+    ];
+  }
+  const changesType = operations.some(({ loss }) => loss === 'typeChange');
+  return [
+    alongsideExtensions
+      ? "For the application's operations: if a model or field was only renamed, state the rename with --rename <old>:<new>."
+      : 'If a model or field was only renamed, state the rename with --rename <old>:<new>.',
+    ...(changesType
+      ? [
+          `For a type change, write the conversion with ${cliCommand(
+            invocation === undefined ? undefined : { ...invocation, dbGiven: false },
+            'migration plan',
+            ['--convert', '<field>'],
+          )}.`,
+        ]
+      : []),
+    'Otherwise keep it in the contract.',
+  ];
+}
+
+/** What a user can do instead of a refused change, for the command that refused it and the contract spaces that hold it. */
 function keepProtected(
   refusal: DataProtectionRefusal,
   command: DataProtectionCheckedCommand,
+  appSpaceId: string,
   invocation: CliInvocation | undefined,
 ): string {
-  const migrated = command === 'db migrate';
-  if (refusal.setting === 'accessWidening') {
-    return [
-      refusingPolicy(refusal.source, FORBIDDEN_CHANGE.accessWidening),
-      ...(migrated
-        ? [KEEP_APPLIED_MIGRATION, 'If none has, remove the operation from the migration.']
-        : ["Keep the contract's access rules as they are."]),
-      doItAnyway(refusal.source),
-    ].join(' ');
-  }
-  const changesType = refusal.operations.some(({ loss }) => loss === 'typeChange');
+  const inApp = refusal.operations.filter(({ spaceId }) => spaceId === appSpaceId);
+  const extensionSpaces = [
+    ...new Set(
+      refusal.operations.flatMap(({ spaceId }) => (spaceId === appSpaceId ? [] : [spaceId])),
+    ),
+  ];
   return [
-    refusingPolicy(refusal.source, 'losing data'),
-    ...(migrated
-      ? [
-          KEEP_APPLIED_MIGRATION,
-          'If none has, and a model or field was only renamed or its type changed, delete it and plan it again with --rename or --convert; otherwise remove the operation from the migration.',
-        ]
-      : [
-          'If a model or field was only renamed, state the rename with --rename <old>:<new>.',
-          ...(changesType
-            ? [
-                `For a type change, write the conversion with ${cliCommand(
-                  invocation === undefined ? undefined : { ...invocation, dbGiven: false },
-                  'migration plan',
-                  ['--convert', '<field>'],
-                )}.`,
-              ]
-            : []),
-          'Otherwise keep it in the contract.',
-        ]),
+    refusingPolicy(
+      refusal.source,
+      refusal.setting === 'accessWidening' ? FORBIDDEN_CHANGE.accessWidening : 'losing data',
+    ),
+    ...(inApp.length === 0
+      ? []
+      : keepAppProtected(refusal.setting, command, inApp, extensionSpaces.length > 0, invocation)),
+    ...(extensionSpaces.length === 0 ? [] : [extensionsOwnMigrations(extensionSpaces)]),
     doItAnyway(refusal.source),
   ].join(' ');
 }
@@ -201,6 +244,7 @@ function refusedOperationText(operation: DataProtectionRefusedOperation): string
 
 /** `MIGRATION.DATA_PROTECTION_FORBIDS`: a run would lose data, or change who can read or write data, where a setting forbids it. */
 export function errorDataProtectionForbids(args: {
+  /** The application's contract space; refused operations in any other space are in an extension's. */
   readonly spaceId: string;
   readonly command: DataProtectionCheckedCommand;
   readonly refusals: readonly DataProtectionRefusal[];
@@ -223,7 +267,9 @@ export function errorDataProtectionForbids(args: {
       ...operations.map(refusedOperationText),
     ])
     .join(' ');
-  const recoveries = refusals.map((refusal) => keepProtected(refusal, command, args.invocation));
+  const recoveries = refusals.map((refusal) =>
+    keepProtected(refusal, command, spaceId, args.invocation),
+  );
   return new ActionableCliError(
     'MIGRATION.DATA_PROTECTION_FORBIDS',
     `${policyHolder} forbids ${forbidden}`,

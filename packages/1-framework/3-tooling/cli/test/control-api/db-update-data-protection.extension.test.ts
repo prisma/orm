@@ -194,22 +194,23 @@ describe("executeDbUpdate, an extension space's recorded migration", () => {
       setting: 'dataLoss',
       operation: DROP_AUDIT,
       subject: `stored ${DROP_AUDIT.id}`,
+      forbids: 'losing data',
     },
     {
       policies: { dataProtection: { accessWidening: 'access-widening-forbidden' } },
       setting: 'accessWidening',
       operation: DISABLE_RLS,
       subject: 'audit_log',
+      forbids: 'changing who can read or write data',
     },
   ] as const)(
-    'refuses its $setting under the forbidden level, naming the space, without asking',
-    async ({ policies, setting, operation, subject }) => {
+    'refuses its $setting under the forbidden level, naming the space and advising the extension, without asking',
+    async ({ policies, setting, operation, subject, forbids }) => {
       const { result, asked } = await update(policies);
+      const envelope = result.ok ? undefined : result.failure.toEnvelope();
 
-      expect({
-        operations: result.ok ? undefined : result.failure.toEnvelope().meta?.['operations'],
-        asked,
-      }).toEqual({
+      expect({ fix: envelope?.fix, operations: envelope?.meta?.['operations'], asked }).toEqual({
+        fix: `This database's data protection policy forbids ${forbids}, so these operations cannot run on it. Contract space "${AUDIT_SPACE}" belongs to an extension, so do not edit or delete its migrations; ask the extension's author for a version without the operation. To do it anyway, whoever owns the database must first change its data protection policy.`,
         operations: [
           {
             setting,
