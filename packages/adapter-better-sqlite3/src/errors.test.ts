@@ -50,6 +50,7 @@ describe('convertDriverError', () => {
     expect(convertDriverError({ code, message })).toEqual({
       kind: 'UniqueConstraintViolation',
       constraint: { fields: ['email'] },
+      table: 'User',
       originalCode: code,
       originalMessage: message,
     })
