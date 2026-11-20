@@ -31,6 +31,7 @@ import {
   planSpaces,
   refuseForbiddenMigrations,
   type SpacePathOutcome,
+  toArgumentFor,
   unreachableSpaceFailure,
 } from './migrate';
 import {
@@ -331,7 +332,7 @@ export async function executeMigrateShowPlan(
           },
           {
             appSpaceId: aggregate.app.spaceId,
-            target: requestedTarget,
+            toArgument: toArgumentFor(requestedTarget, appGraph),
             invocation: options.invocation,
           },
         ),

@@ -10,6 +10,7 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import { reconstructGraph } from '@internal/migration-tools/migration-graph';
 import type { NamedRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
@@ -19,6 +20,7 @@ import {
   buildPathNotFoundFailure,
   executeMigrate,
   neverPlannedSpaceFailure,
+  toArgumentFor,
   unreachableSpaceFailure,
 } from '../../src/control-api/operations/migrate';
 import type { CliInvocation } from '../../src/utils/printed-command';
@@ -227,7 +229,7 @@ describe('executeMigrate with no path to the target', () => {
     });
   });
 
-  it('reports PATH_UNREACHABLE when the marker is in the graph and the target is not reachable', async () => {
+  it('advises planning without --to when the target is a hash no migration names', async () => {
     const projectDir = await projectWithOneAppEdge();
 
     const result = await migrate({
@@ -241,7 +243,7 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         APP_HEAD,
         ELSEWHERE,
-        ELSEWHERE,
+        undefined,
         invocationIn(projectDir),
       ).toEnvelope(),
     );
@@ -293,7 +295,7 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         EMPTY_CONTRACT_HASH,
         ELSEWHERE,
-        ELSEWHERE,
+        undefined,
         invocationIn(projectDir),
       ).toEnvelope(),
     );
@@ -304,7 +306,7 @@ describe('executeMigrate with no path to the target', () => {
       { spaceId: 'pgvector', fromHash: DELETED, targetHash: ELSEWHERE },
       {
         appSpaceId: 'app',
-        target: { kind: 'ref', ref: { name: 'production', hash: APP_HEAD, invariants: [] } },
+        toArgument: 'production',
         invocation: {
           ...invocationIn('/project'),
           rerunArgs: ['--to', 'production', '--advance-ref', 'production'],
@@ -381,5 +383,26 @@ describe('executeMigrate with no path to the target', () => {
       ]),
       meta: { kind: 'neverPlanned', spaceId: 'app', targetHash: ELSEWHERE },
     });
+  });
+
+  it('names a hash target by its hash only when a migration names that contract', () => {
+    const graph = reconstructGraph([
+      {
+        dirName: '20260101T0000_initial',
+        dirPath: '/project/migrations/app/20260101T0000_initial',
+        metadata: {
+          migrationHash: 'sha256:initial',
+          from: EMPTY_CONTRACT_HASH,
+          to: APP_HEAD,
+          providedInvariants: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+        ops: [CREATE_TABLE],
+      },
+    ]);
+
+    expect(toArgumentFor({ kind: 'hash', hash: APP_HEAD }, graph)).toBe(APP_HEAD);
+    expect(toArgumentFor({ kind: 'hash', hash: ELSEWHERE }, graph)).toBeUndefined();
+    expect(toArgumentFor(undefined, graph)).toBeUndefined();
   });
 });

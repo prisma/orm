@@ -31,6 +31,7 @@ import {
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import type { MigrationGraph } from '@internal/migration-tools/graph';
 import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
@@ -276,7 +277,11 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
             fromHash: contractHashAtMarker(outcome.liveMarker),
             targetHash: outcome.targetHash,
           },
-          { appSpaceId: aggregate.app.spaceId, target, invocation: options.invocation },
+          {
+            appSpaceId: aggregate.app.spaceId,
+            toArgument: toArgumentFor(target, aggregate.app.graph()),
+            invocation: options.invocation,
+          },
         ),
       );
     }
@@ -1007,7 +1012,7 @@ export function unreachableSpaceFailure(
   space: { readonly spaceId: string; readonly fromHash: string; readonly targetHash: string },
   run: {
     readonly appSpaceId: string;
-    readonly target: MigrateTarget | undefined;
+    readonly toArgument: string | undefined;
     readonly invocation: CliInvocation;
   },
 ): CliStructuredError {
@@ -1016,7 +1021,7 @@ export function unreachableSpaceFailure(
       space.spaceId,
       space.fromHash,
       space.targetHash,
-      toArgumentFor(run.target),
+      run.toArgument,
       run.invocation,
     );
   }
@@ -1029,10 +1034,18 @@ export function unreachableSpaceFailure(
   });
 }
 
-/** What `--to` takes to name the application space's target: a ref's name or a hash, and `undefined` for the emitted contract. */
-export function toArgumentFor(target: MigrateTarget | undefined): string | undefined {
+/**
+ * What `--to` takes to name the application space's target: a ref's name, or the hash of a contract
+ * a migration names. `undefined` for the emitted contract, and for a hash no migration names, which
+ * `--to` cannot resolve and which only the emitted contract can be.
+ */
+export function toArgumentFor(
+  target: MigrateTarget | undefined,
+  appGraph: MigrationGraph,
+): string | undefined {
   if (target === undefined) return undefined;
-  return target.kind === 'ref' ? target.ref.name : target.hash;
+  if (target.kind === 'ref') return target.ref.name;
+  return isGraphNode(target.hash, appGraph) ? target.hash : undefined;
 }
 
 /**
