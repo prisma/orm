@@ -290,6 +290,75 @@ test('runs chunked statements directly when already inside an interactive transa
   expect(adapter.executeRawMock).toHaveBeenCalledTimes(2)
 })
 
+test('unique returns a batch of to-one rows instead of throwing', async () => {
+  const rows = {
+    columnNames: ['id', 'parentId'],
+    columnTypes: [ColumnTypeEnum.Text, ColumnTypeEnum.Text],
+    rows: [
+      ['c1', 'p1'],
+      ['c2', 'p2'],
+    ],
+  }
+  const expected = [
+    { id: 'c1', parentId: 'p1' },
+    { id: 'c2', parentId: 'p2' },
+  ]
+  const queryable = {
+    provider: 'postgres' as const,
+    adapterName: 'mock',
+    queryRaw: vi.fn().mockResolvedValue(rows),
+    executeRaw: vi.fn(),
+  }
+
+  const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+  const options: QueryRuntimeOptions = {
+    queryable,
+    transactionManager: { enabled: false },
+    scope: {},
+  }
+  const read: QueryPlanNode = {
+    type: 'unique',
+    args: queryNode('SELECT "id", "parentId" FROM "Child" WHERE "parentId" IN ($1, $2)'),
+  }
+
+  await expect(interpreter.run(read, options)).resolves.toEqual(expected)
+  await expect(interpreter.run({ type: 'transaction', args: read }, options)).resolves.toEqual(expected)
+})
+
+test('unique still unwraps zero or one row', async () => {
+  const queryable = {
+    provider: 'postgres' as const,
+    adapterName: 'mock',
+    queryRaw: vi
+      .fn()
+      .mockResolvedValueOnce({
+        columnNames: ['id'],
+        columnTypes: [ColumnTypeEnum.Text],
+        rows: [],
+      })
+      .mockResolvedValueOnce({
+        columnNames: ['id'],
+        columnTypes: [ColumnTypeEnum.Text],
+        rows: [['c1']],
+      }),
+    executeRaw: vi.fn(),
+  }
+
+  const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+  const plan: QueryPlanNode = {
+    type: 'unique',
+    args: queryNode('SELECT "id" FROM "Child" WHERE "id" = $1'),
+  }
+  const options: QueryRuntimeOptions = {
+    queryable,
+    transactionManager: { enabled: false },
+    scope: {},
+  }
+
+  await expect(interpreter.run(plan, options)).resolves.toBeNull()
+  await expect(interpreter.run(plan, options)).resolves.toEqual({ id: 'c1' })
+})
+
 test('run() leaves a shared query plan intact between runs', async () => {
   const plan: QueryPlanNode = {
     type: 'unique',

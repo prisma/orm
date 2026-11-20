@@ -226,13 +226,7 @@ export class QueryInterpreter {
 
       case 'unique': {
         const { value, lastInsertId } = await this.interpretNode(node.args, context)
-        if (!Array.isArray(value)) {
-          return { value, lastInsertId }
-        }
-        if (value.length > 1) {
-          throw new Error(`Expected zero or one element, got ${value.length}`)
-        }
-        return { value: value[0] ?? null, lastInsertId }
+        return { value: unwrapUniqueRows(value), lastInsertId }
       }
 
       case 'required': {
@@ -403,13 +397,7 @@ export class QueryInterpreter {
 
       case 'unique': {
         const { value, lastInsertId } = this.#interpretPureNode(node.args, scope, generators)
-        if (!Array.isArray(value)) {
-          return { value, lastInsertId }
-        }
-        if (value.length > 1) {
-          throw new Error(`Expected zero or one element, got ${value.length}`)
-        }
-        return { value: value[0] ?? null, lastInsertId }
+        return { value: unwrapUniqueRows(value), lastInsertId }
       }
 
       case 'required': {
@@ -636,6 +624,18 @@ function asRecord(value: Value): PrismaObject {
     return value as PrismaObject
   }
   throw new Error(`Expected object, got ${typeof value}`)
+}
+
+// The query compiler wraps a to-one related-records read in `unique` even when that
+// read is a batch: relationMode emulation loads every parent's child with one
+// `IN` query. More than one row is then one child per parent, and the delete/update
+// that consumes it is list-shaped. Zero or one row still unwraps, which is what
+// findUnique and findFirst rely on. https://github.com/prisma/orm/issues/30912
+function unwrapUniqueRows(value: Value): Value {
+  if (!Array.isArray(value) || value.length > 1) {
+    return value
+  }
+  return value[0] ?? null
 }
 
 function mapField(value: Value, field: string): Value {
