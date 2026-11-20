@@ -16,10 +16,10 @@ import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildPathNotFoundFailure } from '../../src/control-api/operations/migrate';
 import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
-import { errorPathUnreachable } from '../../src/utils/cli-errors';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import { stdoutErrorMeta } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
@@ -120,7 +120,10 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
       familyId: FAMILY,
       version: '1.0.0',
       emission: {},
-      create: () => ({ deserializeContract: (json: unknown) => json }),
+      create: () => ({
+        deserializeContract: (json: unknown) => json,
+        accessChangesOf: () => [],
+      }),
     },
     target: {
       kind: 'target',
@@ -429,15 +432,10 @@ describe('migrate', () => {
     const cwd = await buildProject();
     mocks.migrate.mockResolvedValue(
       notOk(
-        errorPathUnreachable({
-          summary: 'no path',
-          why: 'no recorded path',
-          meta: {
-            spaceId: 'app',
-            fromHash: EMPTY_CONTRACT_HASH,
-            targetHash: C2,
-            kind: 'pathUnreachable',
-          },
+        buildPathNotFoundFailure('app', EMPTY_CONTRACT_HASH, C2, C2, {
+          cwd,
+          configPath: undefined,
+          dbGiven: false,
         }),
       ),
     );

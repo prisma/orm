@@ -273,8 +273,8 @@ describe('resolveStatements, enum value statements typed wrong', () => {
     });
     expect(
       expectFailure(resolve(['Status.OPEN:Status.ARCHIVED'], swapped, swapped), INVALID).fix,
-    ).toContain(
-      'If the members keep their names and only their stored values trade places, leave out the statement: the plan asks about each value and names the edits that keep its data.',
+    ).toBe(
+      'Make the swap in three plans. First change the contract so that "Status.OPEN" has a temporary name, and plan it with --rename Status.OPEN:Status.<temporary name>. Then give "Status.ARCHIVED" the name "Status.OPEN", and plan it with --rename Status.ARCHIVED:Status.OPEN. Then give the temporary name the name "Status.ARCHIVED", and plan it with --rename Status.<temporary name>:Status.ARCHIVED. If the members keep their names and only their stored values trade places, leave out the statement: a member that keeps its name needs no statement. Stored values that trade places take two plans, through a stored value no member stores.',
     );
   });
 });

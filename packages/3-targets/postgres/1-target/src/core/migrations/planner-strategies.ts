@@ -138,8 +138,9 @@ export type ForeignKeyDropAuthority = 'allowed' | 'controlPolicy' | 'otherSpace'
  * Strategies read the source (`fromContract`), target (`toContract`), current
  * database state (`schema`), operation policy (`policy`), and component list
  * (`frameworkComponents`) to make planning decisions. `fromContract` is null
- * when no prior contract is available (e.g. `db update`, where the current
- * DB state is approximated via `schema`).
+ * when no prior contract is available (`db init`, or `db update` on a
+ * database whose marker names no readable contract), where the current DB
+ * state is approximated via `schema`.
  */
 export interface StrategyContext {
   readonly toContract: Contract<SqlStorage>;

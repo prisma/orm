@@ -53,7 +53,6 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles,
-    include: ['test/**/*.test.ts'],
     exclude: [...configDefaults.exclude, ...initJourneyExclude],
     typecheck: {
       enabled: true,

@@ -979,29 +979,37 @@ export interface PathUnreachable {
   readonly meta: PathUnreachableMeta;
 }
 
-/** The advice for a `PATH_UNREACHABLE` the caller knows better than a plan-then-apply of the app space. */
+/** What a `PATH_UNREACHABLE` advises: {@link planThenApply} for the app space, or the caller's own. */
 export interface PathUnreachableAdvice {
   readonly fix: string;
   readonly nextActions: readonly NextAction[];
 }
 
-function planThenApply(meta: PathUnreachableMeta): PathUnreachableAdvice {
-  // Never-planned spaces have an EMPTY migration graph, and contract-ref
-  // resolution only resolves full hashes against graph nodes — a
-  // `--to <hash>` remediation would reject its own input. `migration plan`
-  // without `--to` targets the working contract (the same contract the app
-  // space's synthesized head ref carries), so the bare form is the one that
-  // runs verbatim. With no marker, the live origin `migration plan` uses
-  // without `--from` is the empty contract, so the printed command leaves
-  // `--from` out.
-  const planCommand =
-    meta.kind === 'neverPlanned'
-      ? '{bin} migration plan --name <slug>'
-      : meta.fromHash === EMPTY_CONTRACT_HASH
-        ? `{bin} migration plan --to ${meta.targetHash} --name <slug>`
-        : `{bin} migration plan --from ${meta.fromHash} --to ${meta.targetHash} --name <slug>`;
+/**
+ * The advice to plan the missing migration in the app space and apply it. `toArgument` is what
+ * `--to` takes to name the target, or `undefined` for the emitted contract: `migration plan` and
+ * `db migrate` target it without `--to`, and `migration plan --to` resolves only a contract that a
+ * migration or a ref names. A space with no migrations has no such contract, so neither of its
+ * commands carries `--to`. Otherwise the apply step is the `db migrate` the user ran, when its flags
+ * are known.
+ */
+export function planThenApply(
+  meta: PathUnreachableMeta,
+  toArgument: string | undefined,
+  invocation: CliInvocation,
+): PathUnreachableAdvice {
+  const from =
+    meta.kind === 'neverPlanned' || meta.fromHash === EMPTY_CONTRACT_HASH
+      ? undefined
+      : meta.fromHash;
+  const to = meta.kind === 'neverPlanned' || toArgument === undefined ? [] : ['--to', toArgument];
+  const planCommand = printedPlanCommand(invocation, from, [...to, '--name', '<slug>']);
   const applyCommand =
-    meta.kind === 'neverPlanned' ? '{bin} db migrate' : `{bin} db migrate --to ${meta.targetHash}`;
+    meta.kind === 'neverPlanned'
+      ? cliCommand(invocation, 'db migrate')
+      : cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? to);
+  const listCommand = cliCommand(invocation, 'migration list');
+  const showCommand = cliCommand(invocation, 'migration show', ['<bundle>']);
   return {
     fix: [
       'Plan the missing edge, then apply it:',
@@ -1009,18 +1017,15 @@ function planThenApply(meta: PathUnreachableMeta): PathUnreachableAdvice {
       `  2. ${applyCommand}`,
       `${ROLLBACK_IS_DESTRUCTIVE}.`,
       `${RENAMES_AND_DATA_NEED_MORE}.`,
-      'Inspect the on-disk graph with `{bin} migration list`, or `{bin} migration show <bundle>` for any bundle in the path you expected.',
+      `Inspect the on-disk graph with \`${listCommand}\`, or \`${showCommand}\` for any bundle in the path you expected.`,
     ].join('\n'),
     nextActions: [
       runCommandAction('Plan the missing edge', planCommand),
       runCommandAction('Apply it', applyCommand),
       chooseAction(ROLLBACK_IS_DESTRUCTIVE),
       chooseAction(RENAMES_AND_DATA_NEED_MORE),
-      runCommandAction('Inspect the on-disk graph', '{bin} migration list'),
-      runCommandAction(
-        'Inspect a bundle in the path you expected',
-        '{bin} migration show <bundle>',
-      ),
+      runCommandAction('Inspect the on-disk graph', listCommand),
+      runCommandAction('Inspect a bundle in the path you expected', showCommand),
     ],
   };
 }
@@ -1050,10 +1055,10 @@ export function errorMigrationHasUnfilledPlaceholders(
   );
 }
 
-/** `MIGRATION.PATH_UNREACHABLE`, advising to plan the missing edge and apply it unless `advice` says otherwise. */
+/** `MIGRATION.PATH_UNREACHABLE` with the caller's advice; {@link planThenApply} builds the app space's. */
 export function errorPathUnreachable(
   failure: PathUnreachable,
-  advice: PathUnreachableAdvice = planThenApply(failure.meta),
+  advice: PathUnreachableAdvice,
 ): ActionableCliError {
   return new ActionableCliError('MIGRATION.PATH_UNREACHABLE', failure.summary, {
     why: failure.why,

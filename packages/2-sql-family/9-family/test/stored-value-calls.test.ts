@@ -70,56 +70,23 @@ function rewrite(overrides: Partial<StoredValueRewrite>): StoredValueRewrite {
     from: 'archived',
     to: undefined,
     statement: undefined,
-    keepData: undefined,
-    swapsValues: false,
     ...overrides,
   };
 }
 
 describe('storedValueSubjects', () => {
-  it('names the enum value of each removal, with the edit that keeps its data, and leaves out replacements', () => {
+  it('names the enum value of each removal, and leaves out replacements', () => {
     const removal = new FakeRemoval('status', 'archived');
-    const swapped = new FakeRemoval('rank', 1);
     const replacement = new FakeCall('replace');
     const subjects = storedValueSubjects(
       new Map<OpFactoryCall, StoredValueRewrite>([
-        [removal, rewrite({ keepData: [{ from: 'archived', to: 'retired' }] })],
-        [swapped, rewrite({ keepData: [{ from: 1, to: 9 }], swapsValues: true })],
+        [removal, rewrite({})],
         [replacement, rewrite({ to: 'retired', statement })],
       ]),
       classes,
     );
 
-    expect([...subjects.entries()]).toEqual([
-      [
-        removal,
-        {
-          enumValue,
-          keepDataEdit: {
-            remove: 'remove(status, archived)',
-            replaceWith: 'replace(status, archived, retired)',
-          },
-        },
-      ],
-      [
-        swapped,
-        {
-          enumValue,
-          keepDataEdit: {
-            remove: 'remove(rank, 1)',
-            replaceWith: 'replace(rank, 1, 9)',
-            swapsValues: true,
-          },
-        },
-      ],
-    ]);
-  });
-
-  it('gives a removal that would merge data no edit', () => {
-    const removal = new FakeRemoval('status', 'archived');
-    expect(storedValueSubjects(new Map([[removal, rewrite({})]]), classes).get(removal)).toEqual({
-      enumValue,
-    });
+    expect([...subjects.entries()]).toEqual([[removal, { enumValue }]]);
   });
 });
 

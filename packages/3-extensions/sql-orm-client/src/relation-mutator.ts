@@ -1,8 +1,10 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
+import { isRecord } from '@internal/utils/guards';
 import type {
   CollectionState,
+  ConflictRowCreateInput,
   FilteredRelationMutator,
   MutationCreateInput,
   NestedCreateOptions,
@@ -42,6 +44,12 @@ function createFilteredRelationMutator<
     deleteAll() {
       return { kind: 'deleteAll', state: related.state };
     },
+    update(data: RelationMutationUpdateAllData<TContract, ModelName>) {
+      return { kind: 'update', state: related.state, data: { ...data } };
+    },
+    delete() {
+      return { kind: 'delete', state: related.state };
+    },
   };
 }
 
@@ -54,7 +62,11 @@ export function createRelationMutator<
     create(
       data:
         | MutationCreateInput<TContract, ModelName>
-        | readonly MutationCreateInput<TContract, ModelName>[],
+        | ConflictRowCreateInput<TContract, ModelName>
+        | readonly (
+            | MutationCreateInput<TContract, ModelName>
+            | ConflictRowCreateInput<TContract, ModelName>
+          )[],
       options?: NestedCreateOptions<TContract, ModelName>,
     ) {
       const rows = Array.isArray(data) ? [...data] : [data];
@@ -73,7 +85,11 @@ export function createRelationMutator<
         create: (
           data:
             | MutationCreateInput<TContract, ModelName>
-            | readonly MutationCreateInput<TContract, ModelName>[],
+            | ConflictRowCreateInput<TContract, ModelName>
+            | readonly (
+                | MutationCreateInput<TContract, ModelName>
+                | ConflictRowCreateInput<TContract, ModelName>
+              )[],
           options?: NestedCreateOptions<TContract, ModelName>,
         ): RelationMutationCreate<TContract, ModelName> => ({
           ...mutator.create(data, options),
@@ -123,7 +139,13 @@ export function isRelationMutationDescriptor(
     return false;
   }
 
-  const candidate = value as { kind?: unknown };
+  const candidate = value as { kind?: unknown; state?: unknown; data?: unknown };
+  if (candidate.kind === 'update') {
+    return hasFilters(candidate.state) && isRecord(candidate.data);
+  }
+  if (candidate.kind === 'delete') {
+    return hasFilters(candidate.state);
+  }
   return (
     candidate.kind === 'create' ||
     candidate.kind === 'connect' ||
@@ -131,6 +153,10 @@ export function isRelationMutationDescriptor(
     candidate.kind === 'updateAll' ||
     candidate.kind === 'deleteAll'
   );
+}
+
+function hasFilters(state: unknown): boolean {
+  return isRecord(state) && Array.isArray(state['filters']);
 }
 
 export function isRelationMutationCallback(

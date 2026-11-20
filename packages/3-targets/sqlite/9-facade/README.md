@@ -91,6 +91,10 @@ await control.dbUpdate({
 });
 ```
 
+### `@internal/sqlite/init`
+
+The init contribution `prisma orm init` loads after installing the package, which it takes by its package name, `--target @prisma/orm-sqlite`: its default export is an `InitContribution` (from `@internal/cli/init-contribution`) holding the PSL and TypeScript starter contracts, `db.ts`, the `.env.example` body and the quick reference (`src/init/init-quick-reference.md`, copied into `dist/`). `DATABASE_URL` holds the path of the database file, `./dev.db` in `.env.example`, relative to the folder commands and the app run from: `prisma.config.ts` passes it as `db.connection` and `db.ts` as `path`. It installs no driver, since the driver is Node's `node:sqlite`, and states no server requirement and has no `--probe-db` probe. It imports no framework code that runs. Published as `@prisma/orm-sqlite/init`.
+
 ### `@internal/sqlite/migration`
 
 Re-exports all migration operation helpers from `@internal/target-sqlite/migration` (`Migration`, `MigrationCLI`, `col`, `lit`, `fn`, `primaryKey`, `foreignKey`, `unique`, `addColumn`, `dropTable`, `createIndex`, `dropIndex`, `dropColumn`, `recreateTable`, `dataTransform`, `placeholder`, `rawSql`). `createTable` is no longer a free export — it is a protected method on `Migration`; call it as `this.createTable({...})` inside `get operations()`.
@@ -141,7 +145,7 @@ Import `{ IsolationLevel }` from `@prisma/orm-sqlite/runtime`. `SqliteTransactio
 
 Callback options also accept `timeout` defaults and overrides independently of isolation. Local `undefined` inherits; `null` disables an inherited deadline. Synchronous SQLite calls can delay deadline observation. See [callback timeouts](../../../../docs/reference/transaction-options.md#timeout).
 
-`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes and `fragment`), `raw`, `prepare`, `query`, `execute`, `toSql` and `enums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]`, `transaction` or `runtime()`. The type is `SqliteTransactionContext<Contract>`.
+`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes and `fragment`), `raw`, `prepare`, `query`, `execute`, `toSql` and `enums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]` or `runtime()`. `tx.transaction(async (inner) => ...)` runs the callback in a savepoint, and `inner` has the same type and members as `tx`, to any depth. When the callback throws, the work since the savepoint is rolled back, the call rejects with the same error and `tx` can be used again. The type is `SqliteTransactionContext<Contract>`.
 
 ```ts
 await db.transaction(async (tx) => {

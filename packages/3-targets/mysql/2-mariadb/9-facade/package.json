@@ -6,6 +6,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "MariaDB configuration, control client, migration classes and query client for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "scripts": {
     "build": "tsdown",
     "emit": "node ../../../../1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/fixtures/prisma.config.ts",
@@ -43,13 +46,13 @@
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

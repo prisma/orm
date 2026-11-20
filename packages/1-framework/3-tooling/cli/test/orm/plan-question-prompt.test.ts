@@ -406,3 +406,27 @@ describe('a refusal to answer a question that names ways to keep the data', () =
     });
   });
 });
+
+describe('a --delete for a subject answered without asking', () => {
+  it('is taken, so the run does not report it as unused', async () => {
+    const { statements, prompt } = surfaces(['app.User']);
+
+    const answers = await promptPlanQuestions(prompt, statements)(
+      [],
+      [{ verb: 'delete', subject: 'app.User' }],
+    );
+
+    expect({ answers, left: statements.values() }).toEqual({ answers: [], left: [] });
+  });
+
+  it('is reported as unused when it names no subject the run answered', async () => {
+    const { statements, prompt } = surfaces(['app.Other']);
+
+    await expect(
+      promptPlanQuestions(prompt, statements)([], [{ verb: 'delete', subject: 'app.User' }]),
+    ).rejects.toMatchObject({
+      code: 'CLI.CONSENT_UNUSED',
+      message: '--delete app.Other was given but nothing in this run asked about app.Other.',
+    });
+  });
+});

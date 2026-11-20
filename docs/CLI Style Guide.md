@@ -248,21 +248,20 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 
 ## Init Flow
 - `prisma orm init` is the greenfield-app entry point (distinct from `prisma db init`, which adopts an existing database).
-- Prompts: target (Postgres or Mongo, default Postgres) and schema location (default `prisma/contract.prisma`). The contract output path is derived from the schema path (replace extension with `.json`); no separate prompt.
-- Detects the package manager from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`/`bun.lockb`, `package.json#packageManager`, falls back to npm), installs the target facade package as a dependency and `@prisma/cli` (from the `next` dist-tag) plus `@prisma/cli-engine` as dev dependencies, then runs `prisma contract emit` programmatically to produce `contract.json` and `contract.d.ts`.
-- Scaffolds (all colocated; no `src/prisma/` split):
-  - `prisma.config.ts` at the project root — the engine envelope: `definePrismaConfig` from `@prisma/cli-engine` wrapping the target facade's `defineConfig` (e.g. `@prisma/orm-postgres/config`) under an `orm` key.
-  - `prisma/contract.prisma` (PSL) — starter schema with two related models so the user has something to query immediately.
-  - `prisma/db.ts` — runtime client typed against the emitted contract (e.g. `contractFromJson<Contract>(contractJson)` passed to `postgres({ contract, url })`).
-  - `prisma/contract.json` and `prisma/contract.d.ts` — emitted by the post-install `contract emit` step.
-  - `prisma-8.md` — short human-facing quick reference (file locations, common commands, minimal query example).
-  - `.agents/skills/prisma-8/SKILL.md` — agent skill so AI tooling in the project knows the layout and conventions.
-  - `.env.example` with `DATABASE_URL=`; CLI still does not read `.env`.
-  - After-init output: small celebratory header + a numbered "Next steps" list (edit the schema, run `pnpm prisma contract emit`, import `db` from `./prisma/db`).
-- Re-init detection: if `prisma.config.ts` already exists, init prompts once — *"This project is already initialized. Re-initialize? This will overwrite all generated files."* — and then either overwrites everything or exits. No per-file overwrite prompts.
-- `--no-install` skips dependency installation and contract emission, scaffolds the source files only, and prints the manual install + emit commands.
+- The target: `--target` takes a short name from the list of target packages Prisma vouches for (`postgres`, `mongodb`, with their aliases) or the name of a package that lists the `prisma-orm-extension` keyword. Without `--target`, the picker lists the known packages and an entry for typing another package name. Everything about the target comes from the package's init contribution ([ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)).
+- Order: init installs the target package first, then asks the remaining questions: the authoring mode (only the modes the package offers; none when it offers one), the schema location (default `src/prisma/contract.prisma`), and, on a re-init, the consent token. Nothing is asked between naming the target and installing it.
+- Detects the package manager from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`/`bun.lockb`) and `package.json#packageManager`, falling back to npm. It installs the target package with `dotenv` (and, for a listed package, its drivers), later the drivers the contribution names, and `prisma` plus `@prisma/cli-engine` and `@types/node` as development dependencies. Then it runs `prisma contract emit` programmatically to produce `contract.json` and `contract.d.ts`.
+- Scaffolds:
+  - `prisma.config.ts` at the project root: `definePrismaConfig` from `@prisma/cli-engine` wrapping the target package's `defineConfig` under an `orm` key.
+  - The starter contract (PSL or TypeScript) and `db.ts` beside it, under `src/prisma/` by default.
+  - `contract.json` and `contract.d.ts`, from the emit step.
+  - `prisma-8.md`, a short quick reference, and `.env.example` with `DATABASE_URL`.
+  - `tsconfig.json`, and idempotent updates to `.gitignore`, `.gitattributes` and the `package.json` scripts.
+- After-init output: a short header and a numbered "Next steps" list.
+- Re-init: when the project already has any file init would replace (`prisma.config.ts`, the starter contract, `db.ts` or the quick reference), init asks the user to type the directory's basename (or `--confirm <name>`) before it overwrites the generated files.
+- `--skip-install` installs nothing: the target package must already be installed. Init writes the files and prints the install and emit commands.
+- Refusals before any file is written: a `--target` that is neither a short name nor a valid package name, a package that does not list the `prisma-orm-extension` keyword (checked before the install), a package with no `init` entrypoint, an authoring mode the package does not offer. A refusal after the install says what the install added to `package.json` and how to remove it.
 - Artifacts: commit `contract.json` and `contract.d.ts` to VCS by default.
-- Adopter-visible dependency envelope after init: the target facade as a dependency plus `@prisma/cli` and `@prisma/cli-engine` as dev dependencies; every other `@internal/*` package is pulled in transitively via the facade so emitted `contract.d.ts` imports resolve without `skipLibCheck` hiding broken types. The emitter additionally runs a post-emit dependency check and warns (non-blocking) when a `contract.d.ts` import is not resolvable.
 
 ## Flag Conventions
 - Kebab‑case long flags; negation via `--no-<flag>` for booleans.
