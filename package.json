@@ -11,7 +11,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "watch": "turbo watch build",
+    "watch": "turbo watch dev",
     "publish-all-dryrun": "tsx scripts/ci/publish.ts --publish --dry-run",
     "publish-all": "tsx scripts/ci/publish.ts --publish",
     "bump-engines": "tsx scripts/bump-engines.ts",
