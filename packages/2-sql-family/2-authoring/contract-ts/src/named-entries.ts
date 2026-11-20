@@ -128,15 +128,18 @@ export function writeNamedEntry<Entry>(
   entry: Entry,
   site: NameSite,
 ): void {
-  const reason = nameUnusableAsKeyReason(name);
-  if (reason !== undefined) {
-    throw contractError(
-      'CONTRACT.NAME_UNUSABLE_AS_KEY',
-      `${nameSiteSubject(site)} is named "${name}", which ${reason}. Choose another name.`,
-      { meta: { name, ...nameSiteMeta(site), reason: 'name-not-a-key' } },
-    );
-  }
+  refuseNameUnusableAsKey(name, site);
   entries[name] = entry;
+}
+
+function refuseNameUnusableAsKey(name: string, site: NameSite): void {
+  const reason = nameUnusableAsKeyReason(name);
+  if (reason === undefined) return;
+  throw contractError(
+    'CONTRACT.NAME_UNUSABLE_AS_KEY',
+    `${nameSiteSubject(site)} is named "${name}", which ${reason}. Choose another name.`,
+    { meta: { name, ...nameSiteMeta(site), reason: 'name-not-a-key' } },
+  );
 }
 
 /**
@@ -147,10 +150,11 @@ export function ensureNamedEntries<Entry>(
   name: string,
   site: NameSite,
 ): Record<string, Entry> {
+  refuseNameUnusableAsKey(name, site);
   const existing = readNamedEntry(entries, name);
   if (existing !== undefined) return existing;
   const created: Record<string, Entry> = {};
-  writeNamedEntry(entries, name, created, site);
+  entries[name] = created;
   return created;
 }
 

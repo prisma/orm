@@ -168,6 +168,13 @@ describe('ensureNamedEntries', () => {
       expect.objectContaining({ code: 'CONTRACT.NAME_UNUSABLE_AS_KEY' }),
     );
   });
+
+  it('refuses __proto__ when the object already owns an entry under it', () => {
+    const entries: Record<string, Record<string, number>> = JSON.parse('{"__proto__":{"User":1}}');
+    expect(() => ensureNamedEntries(entries, '__proto__', namespaceNameSite)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.NAME_UNUSABLE_AS_KEY' }),
+    );
+  });
 });
 
 describe('namedEntriesFrom', () => {
