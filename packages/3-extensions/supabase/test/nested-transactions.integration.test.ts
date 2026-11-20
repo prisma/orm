@@ -56,7 +56,7 @@ describe('tx.transaction on a role-bound Supabase client', () => {
     'passes the facade context to the nested callback, commits the work around the nested transaction that threw, and runs every statement under the bound role',
     async () => {
       const pool = new pg.Pool({ connectionString: database.connectionString, max: 1 });
-      const db = await supabase({ contract, pg: pool, jwtSecret: fixtureJwt, verifyMarker: false });
+      const db = await supabase({ contract, pg: pool, jwtSecret: fixtureJwt });
       try {
         const jwt = await new SignJWT({ sub: crypto.randomUUID(), role: 'authenticated' })
           .setProtectedHeader({ alg: 'HS256' })

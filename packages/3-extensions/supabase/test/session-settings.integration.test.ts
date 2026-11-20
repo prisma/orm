@@ -44,7 +44,7 @@ describe('the session settings of a Supabase client on a pool the application su
     'hold again for the next role scope after the RESET ALL that ends one, whatever the session went back to',
     async () => {
       const pool = new pg.Pool({ connectionString: database.connectionString, max: 1 });
-      const db = await supabase({ contract, pg: pool, jwtSecret: fixtureJwt, verifyMarker: false });
+      const db = await supabase({ contract, pg: pool, jwtSecret: fixtureJwt });
       const service = db.asServiceRole();
       const dateStyle = async () => {
         const rows = await service.query(

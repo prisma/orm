@@ -62,7 +62,6 @@ describe('a Supabase client with cursor set, against a real Postgres', () => {
       contract,
       url: database.connectionString,
       jwtSecret: fixtureJwt,
-      verifyMarker: false,
       cursor: { batchSize: 4 },
     });
   }, timeouts.spinUpPpgDev);
@@ -151,7 +150,6 @@ describe('a Supabase client with cursor set, against a real Postgres', () => {
         contract,
         pg: pool,
         jwtSecret: fixtureJwt,
-        verifyMarker: false,
         cursor: { batchSize: 4 },
       });
       try {
