@@ -540,7 +540,10 @@ export function buildSqlContractFromDefinition(
     ? Object.values(definition.extensions).map((pack) => pack.id)
     : undefined;
 
-  const extensions: Record<string, unknown> = { ...(definition.extensions || {}) };
+  const extensions: Record<string, unknown> = namedEntriesFrom(
+    Object.entries(definition.extensions ?? {}),
+    { kind: 'extensionAlias' },
+  );
   if (extensionNamespaces) {
     for (const namespace of extensionNamespaces) {
       if (!Object.hasOwn(extensions, namespace)) {

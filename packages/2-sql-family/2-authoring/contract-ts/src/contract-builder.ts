@@ -430,7 +430,7 @@ type WithFamilyTarget<
   T extends TargetPackRef<'sql', string>,
 > = Input & { readonly family: F; readonly target: T };
 
-/** Refuses a record of the contract keyed by name whose prototype a `__proto__` key in its object literal replaced. */
+/** Refuses a record of the contract keyed by name that is not a plain object. */
 function assertPlainContractRecords(records: {
   readonly models?: object | undefined;
   readonly enums?: object | undefined;

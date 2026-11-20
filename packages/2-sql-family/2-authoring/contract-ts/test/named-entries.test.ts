@@ -121,7 +121,6 @@ describe('writeNamedEntry', () => {
       'A relation of model "User"',
       { kind: 'relation', modelName: 'User' },
     ],
-    [{ kind: 'relation', modelName: undefined }, 'A relation of a model', { kind: 'relation' }],
     [
       { kind: 'enum', namespaceId: 'public' },
       'An enum in namespace "public"',
@@ -139,6 +138,7 @@ describe('writeNamedEntry', () => {
       { kind: 'valueObjectField', valueObjectName: 'Address' },
     ],
     [{ kind: 'databaseType' }, 'A database type', { kind: 'databaseType' }],
+    [{ kind: 'extensionAlias' }, 'An extension alias', { kind: 'extensionAlias' }],
     [
       { kind: 'entity', entityKind: 'gadget', namespaceId: 'public' },
       'A "gadget" entity in namespace "public"',

@@ -406,28 +406,9 @@ describe('a name that cannot be a key', () => {
       /^The namespace of "gadget" entity "g1" is named "__proto__"/,
     ],
     [
-      'the namespace of a table whose column collects an entity, at the table',
-      () =>
-        build({
-          namespaces: ['__proto__'],
-          tables: [
-            {
-              namespaceId: '__proto__',
-              tableName: 'moods',
-              columns: [
-                {
-                  columnName: 'mood',
-                  descriptor: {
-                    ...int4,
-                    entityRef: { entityKind: 'widget', entityName: 'm1', entity: {} },
-                  },
-                  nullable: false,
-                },
-              ],
-            },
-          ],
-        }),
-      /^The namespace of table "moods" is named "__proto__"/,
+      'an extension alias',
+      () => build({ extensions: Object.fromEntries([['__proto__', gadgetPack]]) }),
+      /^An extension alias is named "__proto__"/,
     ],
     [
       'a field of a TypeScript model',

@@ -13,12 +13,13 @@ export type NameSite =
   | { readonly kind: 'column'; readonly tableName: string }
   | { readonly kind: 'model'; readonly namespaceId: string | undefined }
   | { readonly kind: 'field'; readonly modelName: string | undefined }
-  | { readonly kind: 'relation'; readonly modelName: string | undefined }
+  | { readonly kind: 'relation'; readonly modelName: string }
   | { readonly kind: 'enum'; readonly namespaceId: string }
   | { readonly kind: 'valueSet'; readonly namespaceId: string }
   | { readonly kind: 'valueObject' }
   | { readonly kind: 'valueObjectField'; readonly valueObjectName: string }
   | { readonly kind: 'databaseType' }
+  | { readonly kind: 'extensionAlias' }
   | { readonly kind: 'entity'; readonly entityKind: string; readonly namespaceId: string };
 
 /** An author's object of named entries: what its entries are, and the model that holds them. */
@@ -49,9 +50,7 @@ function nameSiteSubject(site: NameSite): string {
         ? 'A field of a model'
         : `A field of model "${site.modelName}"`;
     case 'relation':
-      return site.modelName === undefined
-        ? 'A relation of a model'
-        : `A relation of model "${site.modelName}"`;
+      return `A relation of model "${site.modelName}"`;
     case 'enum':
       return `An enum in namespace "${site.namespaceId}"`;
     case 'valueSet':
@@ -62,6 +61,8 @@ function nameSiteSubject(site: NameSite): string {
       return `A field of value object "${site.valueObjectName}"`;
     case 'databaseType':
       return 'A database type';
+    case 'extensionAlias':
+      return 'An extension alias';
     case 'entity':
       return `A "${site.entityKind}" entity in namespace "${site.namespaceId}"`;
   }
