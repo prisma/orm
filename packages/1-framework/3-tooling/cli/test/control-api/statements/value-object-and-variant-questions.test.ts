@@ -355,7 +355,7 @@ describe('a question about a removed variant', () => {
       {
         subject: 'Bug',
         question:
-          'Removing model "Bug" would delete its data.\nThe operations of the plan that do this:\n- Drop column "severity" of "tasks"\n- Delete the rows of "tasks" that hold value "bug" in column "type"\nrename works only once the contract has the model under its new name: stop this command, add it to the contract, run `prisma contract emit`, and run this command again; delete lets its data go.',
+          'Removing model "Bug" would delete its data.\nThe operations of the plan that do this:\n- Drop column "severity" of "tasks"\n- Delete the rows of "tasks" that hold value "bug" in column "type"\nrename works only once the contract has the model under its new name as a variant of model "Task": stop this command, add it to the contract, run `prisma contract emit`, and run this command again; delete lets its data go.',
         verbs: ['rename', 'delete'],
       },
     ]);
