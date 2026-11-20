@@ -21,6 +21,7 @@ import { ifDefined } from '@internal/utils/defined';
 import type { CheckNode, IndexNode } from './contract-definition';
 import { contractError } from './contract-errors';
 import { type ColumnLoweringContext, lowerColumn } from './lower-column';
+import { writeNamedEntry } from './named-entries';
 import type { TableDescription } from './storage-description';
 
 /**
@@ -65,7 +66,7 @@ export function lowerTable(
   const checks: CheckConstraint[] = [];
   for (const description of table.columns) {
     const lowered = lowerColumn(description, placement, context);
-    columns[description.columnName] = lowered.column;
+    writeNamedEntry(columns, description.columnName, lowered.column, { kind: 'column', tableName });
     checks.push(...lowered.derivedChecks);
   }
 
