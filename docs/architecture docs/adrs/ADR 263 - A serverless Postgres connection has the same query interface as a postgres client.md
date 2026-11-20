@@ -195,7 +195,7 @@ A client has a pool. A connection has one database connection. Three rules follo
 
 The calls that hang are the ones that ask for a database connection of their own. The transaction holds the only one, so they wait for it, and the transaction waits for them. `update(...)` and `delete()` of one row are among them: they reserve a database connection to find the row and then change it.
 
-On a client, the same calls take another database connection from the pool and run outside the transaction. A client whose pool is limited to one connection (`poolOptions: { max: 1 }`) has none to give: the calls wait for the transaction's connection and fail when the pool's connection timeout ends. That is also a mistake, because their writes are not rolled back with the transaction. Sending every query through `tx` is correct on both:
+On a client, the same calls take another database connection from the pool and run outside the transaction. That is also a mistake, because their writes are not rolled back with the transaction. A client whose pool is limited to one connection (`poolOptions: { max: 1 }`) has no other connection to give: there the calls wait for the transaction's connection and fail when the pool's connection timeout ends. Sending every query through `tx` is correct on both:
 
 ```ts
 export async function publish(url: string, email: string, title: string) {
