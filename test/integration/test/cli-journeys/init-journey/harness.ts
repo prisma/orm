@@ -71,7 +71,7 @@ const JOURNEY_CACHE_ROOT = join(homedir(), '.cache', 'pn-journey');
 const TARBALL_CACHE_DIR = join(JOURNEY_CACHE_ROOT, 'tarballs');
 const PNPM_STORE_DIR = join(JOURNEY_CACHE_ROOT, 'pnpm-store');
 
-export type Target = 'postgres' | 'mongo';
+export type Target = 'postgres' | 'mongo' | 'sqlite';
 export type Authoring = 'psl' | 'typescript';
 
 export interface CellId {
@@ -79,16 +79,36 @@ export interface CellId {
   readonly authoring: Authoring;
 }
 
-/**
- * Every (target × authoring) cell. Mirrors the existing
- * `cli.init-facade-imports.e2e.test.ts` cell set.
- */
+/** Every (target × authoring) cell. SQLite is in no list, so init takes it by its package name. */
 export const ALL_CELLS: readonly CellId[] = [
   { target: 'postgres', authoring: 'typescript' },
   { target: 'postgres', authoring: 'psl' },
   { target: 'mongo', authoring: 'typescript' },
   { target: 'mongo', authoring: 'psl' },
+  { target: 'sqlite', authoring: 'typescript' },
+  { target: 'sqlite', authoring: 'psl' },
 ];
+
+/** The one target package a project scaffolded for the target depends on. */
+export const FACADE_FOR_TARGET: Readonly<Record<Target, string>> = {
+  postgres: '@prisma/orm-postgres',
+  mongo: '@prisma/orm-mongo',
+  sqlite: '@prisma/orm-sqlite',
+};
+
+/** What the journey passes as `--target`: a short name from the list, or a package name. */
+const TARGET_FLAG: Readonly<Record<Target, string>> = {
+  postgres: 'postgres',
+  mongo: 'mongodb',
+  sqlite: '@prisma/orm-sqlite',
+};
+
+/** The target package a generated `migration.ts` imports. */
+const MIGRATION_TARGET_PACKAGE: Readonly<Record<Target, string>> = {
+  postgres: '@prisma/orm-target-postgres',
+  mongo: '@prisma/orm-target-mongo',
+  sqlite: '@prisma/orm-target-sqlite',
+};
 
 export function cellLabel(cell: CellId): string {
   return `${cell.target} × ${cell.authoring}`;
@@ -153,14 +173,13 @@ export async function createJourneyProject(cell: CellId): Promise<JourneyProject
     const installResult = await runPnpm(['install', '--no-frozen-lockfile'], dir);
     writeFileSync(join(dir, PROJECT_CLI_FILE), PROJECT_CLI_SOURCE, 'utf-8');
 
-    const target = cell.target === 'mongo' ? 'mongodb' : 'postgres';
     const initResult = await runNode(
       [
         WORKSPACE_CLI_BIN,
         'orm',
         'init',
         '--target',
-        target,
+        TARGET_FLAG[cell.target],
         '--authoring',
         cell.authoring,
         '--yes',
@@ -457,7 +476,7 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
     pnpm?: { overrides?: Record<string, string> };
   };
 
-  const facade = cell.target === 'mongo' ? '@prisma/orm-mongo' : '@prisma/orm-postgres';
+  const facade = FACADE_FOR_TARGET[cell.target];
   const facadeTarball = requireTarball(tarballs, facade);
 
   // The framework-emitted `migration.ts` imports the target package
@@ -469,8 +488,7 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
   // isolated linking would hit `ERR_MODULE_NOT_FOUND` — a real scaffold
   // seam worth filing separately. Add it here so the journey can complete
   // end-to-end; the scaffold gap is a follow-up.
-  const migrationDeps =
-    cell.target === 'mongo' ? ['@prisma/orm-target-mongo'] : ['@prisma/orm-target-postgres'];
+  const migrationDeps = [MIGRATION_TARGET_PACKAGE[cell.target]];
   const migrationDepEntries = Object.fromEntries(
     migrationDeps.map((name) => [name, `file:${requireTarball(tarballs, name)}`]),
   );

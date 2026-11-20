@@ -68,12 +68,59 @@ export const TARGET_SHORT_NAMES: readonly TargetShortName[] = KNOWN_TARGET_PACKA
   (entry) => entry.shortName,
 );
 
-/** The entry `--target` names by its short name or an alias, in any case. */
+/** The flag's placeholder word; the usage line puts it in angle brackets itself. */
+export const TARGET_FLAG_PLACEHOLDER = 'package';
+
+/** Stands for a target package's name wherever `init` shows what `--target` takes. */
+export const PACKAGE_NAME_PLACEHOLDER = `<${TARGET_FLAG_PLACEHOLDER}>`;
+
+/** What init requires in the `keywords` of a target package's `package.json` before it installs or uses one. */
+export const PRISMA_ORM_PACKAGE_KEYWORD = 'prisma-orm-extension';
+
+/**
+ * The entry `--target` names by its short name or an alias, in any case, or by its package name
+ * exactly.
+ */
 export function findTargetByName(value: string): KnownTarget | undefined {
   const name = value.toLowerCase();
   return KNOWN_TARGET_PACKAGES.find(
-    (entry) => entry.shortName === name || entry.aliases.some((alias) => alias === name),
+    (entry) =>
+      entry.shortName === name ||
+      entry.aliases.some((alias) => alias === name) ||
+      entry.packageName === value,
   );
+}
+
+/**
+ * The target package `init` installs, listed or not. Both run the same code, except that `init`
+ * checks the keyword of an unlisted package first.
+ */
+export interface TargetPackage {
+  readonly packageName: string;
+  /** The list entry of a listed package. */
+  readonly listed: KnownTarget | undefined;
+}
+
+export function listedTargetPackage(entry: KnownTarget): TargetPackage {
+  return { packageName: entry.packageName, listed: entry };
+}
+
+export function unlistedTargetPackage(packageName: string): TargetPackage {
+  return { packageName, listed: undefined };
+}
+
+/** What `--json` reports as `target`: the short name of a listed package, otherwise the package name. */
+export function reportedTargetName(target: TargetPackage): string {
+  return target.listed?.shortName ?? target.packageName;
+}
+
+/**
+ * The drivers installed with the package, before its contribution is loaded. Only the list knows
+ * them before the install, so an unlisted package has none, and its contribution's `peerPackages`
+ * go into the later install.
+ */
+export function firstInstallDrivers(target: TargetPackage): readonly string[] {
+  return target.listed?.peerPackages ?? [];
 }
 
 /**
