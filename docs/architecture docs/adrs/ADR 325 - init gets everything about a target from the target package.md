@@ -126,7 +126,7 @@ prisma orm init --target prisma-orm-cockroachdb   # a package name
 
 ## Projects coming from Prisma 6 and Prisma 7
 
-`init` reads the `provider` from an existing Prisma schema and finds the target package through the list. Only listed packages take part. A provider with no entry is refused, with advice to start a fresh project with `--target`. `--from-prisma7-schema` with `--target` naming an unlisted package is refused before anything is installed. Without `--from-prisma7-schema`, `--target` naming an unlisted package sets up a fresh project and leaves the Prisma 7 schema alone, with a warning that says so.
+`init` reads the `provider` from an existing Prisma schema and finds the target package through the list. Only listed packages take part. A provider with no entry is refused, with advice to start a fresh project with `--target`. `--from-prisma7-schema` with `--target` naming an unlisted package is refused before anything is installed. Without `--from-prisma7-schema`, `--target` naming an unlisted package sets up a fresh project and leaves the Prisma 7 schema alone.
 
 - **A provider only Prisma 6 wrote**, such as `mongodb`, marks a Prisma 6 project. `init` changes nothing and prints how to set Prisma 8 up beside it.
 - **A Prisma 7 schema** can be kept as the contract source. A target package can take one when its `configModule` exports `prisma7Schema`. The CLI then writes the config around it, and the contribution must give `prisma7QuickReference`. A package without `prisma7Schema` cannot take a Prisma 7 schema. In an interactive run, `init` then sets up a fresh project instead; with `--from-prisma7-schema` it stops with `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE` and writes nothing.

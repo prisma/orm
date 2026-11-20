@@ -90,8 +90,7 @@ export function findTargetByName(value: string): KnownTarget | undefined {
 
 /**
  * The target package `init` installs, listed or not. A listed package and an unlisted one run the
- * same code; listing only names the drivers for the first install and the short name `--json`
- * reports.
+ * same code.
  */
 export interface TargetPackage {
   readonly packageName: string;

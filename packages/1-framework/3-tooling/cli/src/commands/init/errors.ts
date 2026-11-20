@@ -699,7 +699,7 @@ export function errorInitPrisma7SourceUnavailable(
           ? {
               summary: `${packageName} cannot keep a Prisma 7 schema`,
               why: `${packageName} is not one of the target packages in Prisma's list (${SHORT_NAME_LIST}), and only a package in that list can keep ${schemaPath} as the contract source. Nothing was changed.`,
-              fix: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${packageName}, or without \`--target\` so the provider ${schemaPath} declares picks the target package.`,
+              fix: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${packageName}. To keep ${schemaPath}, name a target package from the list instead.`,
             }
           : {
               summary: 'No Prisma 7 contract source for this database',

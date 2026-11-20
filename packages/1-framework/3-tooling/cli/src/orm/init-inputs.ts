@@ -393,7 +393,12 @@ async function choosePrisma7Path(ctx: {
     return false;
   }
   if (ctx.flagTarget !== undefined && ctx.flagTarget.listed === undefined) {
-    ctx.warn(freshInitWarning(ctx.flagTarget.packageName, ctx.detection));
+    ctx.warn(
+      freshInitWarning(
+        `${ctx.flagTarget.packageName} is not in the list of target packages that can keep a Prisma 7 schema`,
+        ctx.detection,
+      ),
+    );
     return false;
   }
   const { schema } = ctx.detection;
@@ -460,7 +465,7 @@ function prisma7Target(
  * What a fresh init does to a Prisma 7 project, said before its questions: the user answered yes
  * to adopting the schema and is about to be asked something else.
  */
-function freshInitWarning(packageName: string, detection: Prisma7Detection): string {
+function freshInitWarning(cause: string, detection: Prisma7Detection): string {
   const { config, schema, cli } = detection;
   const effects = [
     ...(config.kind === 'prisma7' && config.path === CONFIG_FILE
@@ -469,7 +474,7 @@ function freshInitWarning(packageName: string, detection: Prisma7Detection): str
     ...(cli.kind === 'earlier' ? ['installs prisma@latest, which replaces the Prisma 7 CLI'] : []),
   ];
   const consequences = effects.length === 0 ? '' : ` It ${effects.join(', and it ')}.`;
-  return `${packageName} cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves ${schema.path} alone.${consequences}`;
+  return `${cause}, so init sets up a fresh Prisma 8 project instead and leaves ${schema.path} alone.${consequences}`;
 }
 
 function sideBySidePlan(detection: Prisma7Detection): Prisma7SideBySidePlan | null {
@@ -584,7 +589,7 @@ async function resolvePrisma7Inputs(ctx: {
       });
     }
     if (check.outcome === 'no-source') {
-      ctx.warn(freshInitWarning(target.packageName, detection));
+      ctx.warn(freshInitWarning(`${target.packageName} cannot read Prisma 7 schemas`, detection));
       return await resolveStarterInputs({
         cwd,
         flags,

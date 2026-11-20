@@ -334,7 +334,7 @@ describe('an unlisted --target in a Prisma 7 project', () => {
           why: `${UNLISTED} is not one of the target packages in Prisma's list (postgres, mongodb), and only a package in that list can keep ${PRISMA7_SCHEMA} as the contract source. Nothing was changed.`,
           nextActions: [
             expect.objectContaining({
-              label: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${UNLISTED}, or without \`--target\` so the provider ${PRISMA7_SCHEMA} declares picks the target package.`,
+              label: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${UNLISTED}. To keep ${PRISMA7_SCHEMA}, name a target package from the list instead.`,
             }),
           ],
           meta: { schemaPath: PRISMA7_SCHEMA, packageName: UNLISTED, reason: 'unlisted' },
@@ -365,7 +365,7 @@ describe('an unlisted --target in a Prisma 7 project', () => {
         authoring: 'psl',
         prisma7: null,
         warnings: expect.arrayContaining([
-          `${UNLISTED} cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves ${PRISMA7_SCHEMA} alone.`,
+          `${UNLISTED} is not in the list of target packages that can keep a Prisma 7 schema, so init sets up a fresh Prisma 8 project instead and leaves ${PRISMA7_SCHEMA} alone.`,
         ]),
       });
       expect(readProjectFile(PRISMA7_SCHEMA)).toContain('provider = "postgresql"');
