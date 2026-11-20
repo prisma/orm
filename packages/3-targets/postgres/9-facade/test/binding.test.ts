@@ -164,6 +164,11 @@ describe('resolvePostgresBinding', () => {
       url: 'postgres://u:p@localhost/db?sslkey=/definitely/not/a/client.key',
     });
   });
+
+  it('accepts a URL whose TLS settings pg refuses, leaving that error to the driver', () => {
+    const url = 'postgres://u:p@localhost/db?uselibpqcompat=true&sslmode=verify-ca';
+    expect(resolvePostgresBinding({ url })).toEqual({ kind: 'url', url });
+  });
 });
 
 describe('resolveOptionalPostgresBinding with a narrowed list of kinds', () => {

@@ -46,24 +46,11 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
-// pg-connection-string reads sslcert, sslkey and sslrootcert files while parsing,
-// so a file-system error from parse() is a missing or unreadable certificate file,
-// not a malformed URL. The driver reads the same files when it creates the client
-// and reports the real error there.
-const FILE_READ_ERROR_CODES = new Set([
-  'EACCES',
-  'EISDIR',
-  'ELOOP',
-  'ENAMETOOLONG',
-  'ENOENT',
-  'ENOTDIR',
-  'EPERM',
-]);
-
-function isFileReadError(error: unknown): boolean {
-  if (!(error instanceof Error) || !('code' in error)) return false;
-  const code = error.code;
-  return typeof code === 'string' && FILE_READ_ERROR_CODES.has(code);
+function isUrlSyntaxError(error: unknown): boolean {
+  return (
+    error instanceof URIError ||
+    (error instanceof TypeError && 'code' in error && error.code === 'ERR_INVALID_URL')
+  );
 }
 
 export function validatePostgresUrl(url: string, extension = 'postgres'): string {
@@ -106,7 +93,7 @@ export function validatePostgresUrl(url: string, extension = 'postgres'): string
   try {
     parse(trimmed);
   } catch (error) {
-    if (isFileReadError(error)) return trimmed;
+    if (!isUrlSyntaxError(error)) return trimmed;
     throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
       meta: { extension, reason: 'unparseable url' },
     });
