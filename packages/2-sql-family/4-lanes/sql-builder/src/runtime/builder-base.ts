@@ -30,6 +30,7 @@ import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import { createFunctions } from '@internal/sql-relational-core/functions';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import type {
@@ -290,16 +291,27 @@ export function tableToScope(
 
 export function mergeScopes<A extends Scope, B extends Scope>(a: A, b: B): MergeScopes<A, B> {
   const topLevel: ScopeTable = {};
+  const aNames = scopeColumnNames(a);
+  const bNames = scopeColumnNames(b);
   for (const [k, v] of Object.entries(a.topLevel)) {
-    if (!(k in b.topLevel)) topLevel[k] = v;
+    if (!bNames.has(k)) topLevel[k] = v;
   }
   for (const [k, v] of Object.entries(b.topLevel)) {
-    if (!(k in a.topLevel)) topLevel[k] = v;
+    if (!aNames.has(k)) topLevel[k] = v;
   }
-  return {
-    topLevel,
-    namespaces: { ...a.namespaces, ...b.namespaces },
-  } as MergeScopes<A, B>;
+  return blindCast<MergeScopes<A, B>, 'the loops above compute the topLevel MergeScopes describes'>(
+    {
+      topLevel,
+      namespaces: { ...a.namespaces, ...b.namespaces },
+    },
+  );
+}
+
+function scopeColumnNames(scope: Scope): ReadonlySet<string> {
+  return new Set([
+    ...Object.keys(scope.topLevel),
+    ...Object.values(scope.namespaces).flatMap((fields) => Object.keys(fields)),
+  ]);
 }
 
 export function nullableScope<S extends Scope>(scope: S): NullableScope<S> {
