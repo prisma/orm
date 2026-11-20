@@ -74,7 +74,7 @@ export const TARGET_FLAG_PLACEHOLDER = 'package';
 /** Stands for a target package's name wherever `init` shows what `--target` takes. */
 export const PACKAGE_NAME_PLACEHOLDER = `<${TARGET_FLAG_PLACEHOLDER}>`;
 
-/** Every Prisma 8 package lists it in the `keywords` of its `package.json`; init checks for it. */
+/** What init requires in the `keywords` of a target package's `package.json` before it installs or uses one. */
 export const PRISMA_ORM_PACKAGE_KEYWORD = 'prisma-orm-extension';
 
 /**

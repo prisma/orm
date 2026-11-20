@@ -3,7 +3,7 @@ import { ifDefined } from '@internal/utils/defined';
 import type { PackageOperations } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { type } from 'arktype';
-import { join } from 'pathe';
+import { join, relative } from 'pathe';
 import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
 import {
   formatAddArgs,
@@ -28,8 +28,9 @@ import {
 import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
 import { normalizeError } from './normalize-error';
+import { keywordsOf } from './package-manifest';
 import { type ImportFromProject, installedManifest, isInstalledInProject } from './project-modules';
-import { keywordsOf, type LookUpRegistryKeywords } from './registry-keywords';
+import type { LookUpRegistryKeywords, RegistryLookup } from './registry-keywords';
 
 const InitContributionSchema = type({
   label: 'string',
@@ -144,13 +145,14 @@ export function createTargetPackagePreparation(ctx: {
   readonly install: boolean;
   readonly importFromProject: ImportFromProject;
   readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
+  readonly signal: AbortSignal;
 }): PrepareTargetPackage {
   return async (target) => {
     const { packageName } = target;
     const drivers = firstInstallDrivers(target);
     rejectUnparseableManifest(ctx.cwd);
     if (target.listed === undefined) {
-      await rejectPackageWithoutKeyword(ctx, packageName);
+      await checkTargetPackageKeyword(ctx, packageName);
     }
     const warnings: string[] = [];
     let installed: readonly string[] = [];
@@ -197,42 +199,43 @@ export function createTargetPackagePreparation(ctx: {
 }
 
 /**
- * Installing a package runs its install scripts, so a name that is not a Prisma 8 package, such as
- * a mistyped short name, is refused before anything is installed. An installed package is read
- * from disk; any other from the registry.
+ * Installing a package runs its install scripts, so a name that is not meant for Prisma 8, such as
+ * a mistyped short name, is refused before anything is installed. The copy checked is the one init
+ * will use: the installed one when init will not install the package, otherwise the registry's.
+ * Under `--skip-install` a package that is not installed is left to the "not installed" refusal.
  */
-async function rejectPackageWithoutKeyword(
+async function checkTargetPackageKeyword(
   ctx: {
     readonly cwd: string;
     readonly env: Readonly<Record<string, string | undefined>>;
     readonly packageManager: PackageManager;
+    readonly install: boolean;
     readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
+    readonly signal: AbortSignal;
   },
   packageName: string,
 ): Promise<void> {
+  const manifestPath = installedManifest(ctx.cwd, packageName);
+  if (!ctx.install && manifestPath === undefined) {
+    return;
+  }
+  const inPlace = manifestPath !== undefined && declaredPackages(ctx.cwd).has(packageName);
+  const lookup: KeywordLookup =
+    manifestPath === undefined || (ctx.install && !inPlace)
+      ? await ctx.lookUpRegistryKeywords(packageName, { env: ctx.env, signal: ctx.signal })
+      : installedKeywords(ctx.cwd, manifestPath);
   const refusal = {
     packageName,
     installCommand: installCommand(ctx.packageManager, [packageName]),
+    updateCommand: installCommand(ctx.packageManager, [`${packageName}@latest`]),
   };
-  const manifestPath = installedManifest(ctx.cwd, packageName);
-  if (manifestPath !== undefined) {
-    if (!keywordsOf(readManifest(manifestPath)).includes(PRISMA_ORM_PACKAGE_KEYWORD)) {
-      throw errorInitTargetPackageNotVerified({
-        ...refusal,
-        reason: 'keyword-missing',
-        registry: undefined,
-      });
-    }
-    return;
-  }
-  const answer = await ctx.lookUpRegistryKeywords(packageName, ctx.env);
-  switch (answer.kind) {
+  switch (lookup.kind) {
     case 'read':
-      if (!answer.keywords.includes(PRISMA_ORM_PACKAGE_KEYWORD)) {
+      if (!lookup.keywords.includes(PRISMA_ORM_PACKAGE_KEYWORD)) {
         throw errorInitTargetPackageNotVerified({
           ...refusal,
           reason: 'keyword-missing',
-          registry: answer.registry,
+          registry: lookup.registry,
         });
       }
       return;
@@ -240,23 +243,38 @@ async function rejectPackageWithoutKeyword(
       throw errorInitTargetPackageNotVerified({
         ...refusal,
         reason: 'not-found',
-        registry: answer.registry,
+        registry: lookup.registry,
       });
-    case 'failed':
+    case 'lookup-failed':
       throw errorInitTargetPackageNotVerified({
         ...refusal,
         reason: 'lookup-failed',
-        registry: answer.registry,
-        cause: answer.cause,
+        registry: lookup.registry,
+        cause: lookup.cause,
       });
   }
 }
 
-function readManifest(path: string): unknown {
+/** A registry lookup, or the read of the installed copy, which has no registry. */
+type KeywordLookup =
+  | RegistryLookup
+  | { readonly kind: 'read'; readonly registry: undefined; readonly keywords: readonly string[] }
+  | { readonly kind: 'lookup-failed'; readonly registry: undefined; readonly cause: string };
+
+function installedKeywords(cwd: string, manifestPath: string): KeywordLookup {
   try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
-  } catch {
-    return undefined;
+    return {
+      kind: 'read',
+      registry: undefined,
+      keywords: keywordsOf(JSON.parse(readFileSync(manifestPath, 'utf-8'))),
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      kind: 'lookup-failed',
+      registry: undefined,
+      cause: `${relative(cwd, manifestPath)} cannot be read as JSON: ${reason}`,
+    };
   }
 }
 

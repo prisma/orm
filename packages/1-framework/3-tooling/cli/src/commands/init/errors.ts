@@ -507,7 +507,9 @@ export function errorInitTargetPackageNotInstalled(options: {
   const fix =
     ranCommand !== undefined
       ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`
-      : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`;
+      : options.unlisted
+        ? `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${packageName} lists the keyword \`${PRISMA_ORM_PACKAGE_KEYWORD}\` before installing it.`
+        : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`;
   return new CliStructuredError(
     'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
     ranCommand !== undefined
@@ -547,47 +549,64 @@ function takenAsPackageNameMeta(unlisted: boolean): { readonly takenAsPackageNam
 }
 
 /**
- * A package in no list does not list the Prisma 8 keyword, or init could not read its keywords.
- * Init checks before installing anything, so nothing was changed. `registry` is set when the
- * keywords were to come from the registry rather than the installed package.
+ * A package in no list does not list the keyword init requires of a target package, or init could
+ * not read its keywords. Init checks before installing or loading it, so nothing was changed.
+ * `registry` is set when the keywords were to come from the registry rather than the installed
+ * package.
  */
 export function errorInitTargetPackageNotVerified(
   options: {
     readonly packageName: string;
     readonly installCommand: string;
+    /** The command that updates the package to its latest version. */
+    readonly updateCommand: string;
   } & (
     | { readonly reason: 'keyword-missing'; readonly registry: string | undefined }
     | { readonly reason: 'not-found'; readonly registry: string }
-    | { readonly reason: 'lookup-failed'; readonly registry: string; readonly cause: string }
+    | {
+        readonly reason: 'lookup-failed';
+        /** `undefined` when the installed `package.json` could not be read. */
+        readonly registry: string | undefined;
+        readonly cause: string;
+      }
   ),
 ): CliStructuredError {
-  const { packageName } = options;
+  const { packageName, installCommand } = options;
   const keyword = `\`${PRISMA_ORM_PACKAGE_KEYWORD}\``;
+  const required = 'init requires that keyword of a target package before it installs or uses one';
+  const runAgain = 'run `prisma orm init` again';
+  const maintainer = `If you maintain ${packageName}, add ${keyword} to the keywords in its package.json and publish a new version.`;
   const wording = (() => {
     switch (options.reason) {
-      case 'keyword-missing': {
-        const installed = options.registry === undefined;
-        const read = installed
-          ? `The installed ${packageName}`
-          : `The latest version of ${packageName} on ${options.registry}`;
-        return {
-          summary: `${packageName} is not a Prisma 8 package`,
-          why: `${read} does not list the keyword ${keyword} in its package.json, which every Prisma 8 package does, so init does not ${installed ? 'use' : 'install'} it. Nothing was changed.`,
-          fix: `Check the package name. If you maintain ${packageName}, add ${keyword} to the keywords in its package.json and publish a new version.`,
-        };
-      }
+      case 'keyword-missing':
+        return options.registry === undefined
+          ? {
+              summary: `${packageName} is not a Prisma 8 package`,
+              why: `The installed ${packageName} does not list the keyword ${keyword} in its package.json. ${required}, so it did not use ${packageName}. Nothing was changed.`,
+              fix: `Check the package name. If a newer version of ${packageName} lists the keyword, update it with \`${options.updateCommand}\` and ${runAgain}. ${maintainer}`,
+            }
+          : {
+              summary: `${packageName} is not a Prisma 8 package`,
+              why: `The latest version of ${packageName} on ${options.registry} does not list the keyword ${keyword} in its package.json. ${required}, so it did not install ${packageName}. Nothing was changed.`,
+              fix: `Check the package name. ${maintainer}`,
+            };
       case 'not-found':
         return {
           summary: `${packageName} was not found`,
           why: `No package named ${packageName} was found on ${options.registry}. Nothing was changed.`,
-          fix: `Check the package name, and that ${options.registry} is the registry that publishes it.`,
+          fix: `Check the package name. init asks only ${options.registry} and sends no credentials, so a package on another registry, or one that needs credentials, is not found there: install it yourself with \`${installCommand}\` and ${runAgain}, and init reads it from disk.`,
         };
-      case 'lookup-failed':
+      case 'lookup-failed': {
+        const from = options.registry === undefined ? '' : ` from ${options.registry}`;
         return {
           summary: `Could not read the keywords of ${packageName}`,
-          why: `Before installing a package, init checks that its package.json lists the keyword ${keyword}, and it could not read ${packageName} from ${options.registry}: ${options.cause}. Nothing was changed.`,
-          fix: `Install ${packageName} yourself with \`${options.installCommand}\`, then run \`prisma orm init\` again: init reads the keywords of an installed package from disk.`,
+          why: `init requires the keyword ${keyword} of a target package before it installs or uses one, and it could not read the keywords of ${packageName}${from}: ${options.cause}. Nothing was changed.`,
+          fix:
+            options.registry === undefined
+              ? `Check the package name. If it is right, reinstall ${packageName} with \`${installCommand}\` and ${runAgain}.`
+              : `Check the package name. If it is right and ${packageName} lists ${keyword}, install it yourself with \`${installCommand}\` and ${runAgain}: init reads the keywords of an installed package from disk.`,
         };
+      }
     }
   })();
   return new CliStructuredError('CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED', wording.summary, {
@@ -595,9 +614,10 @@ export function errorInitTargetPackageNotVerified(
     docsUrl: docsUrlFor('CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED'),
     meta: {
       reason: options.reason,
-      package: packageName,
+      packageName,
       keyword: PRISMA_ORM_PACKAGE_KEYWORD,
       ...(options.registry === undefined ? {} : { registry: options.registry }),
+      ...takenAsPackageNameMeta(true),
     },
   });
 }

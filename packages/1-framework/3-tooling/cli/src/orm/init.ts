@@ -176,6 +176,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             install: !args.flags.skipInstall,
             importFromProject: injected.importFromProject,
             lookUpRegistryKeywords: injected.lookUpRegistryKeywords,
+            signal: ctx.signal,
           }),
           checkPrisma7Source: createPrisma7SourceCheck({
             cwd: ctx.cwd,

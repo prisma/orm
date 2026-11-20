@@ -8,7 +8,11 @@ import { configFile } from '../../src/commands/init/templates/code-templates';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
-import type { LookUpRegistryKeywords, RegistryKeywords } from '../../src/orm/registry-keywords';
+import {
+  type LookUpRegistryKeywords,
+  type RegistryLookup,
+  lookUpRegistryKeywords as realRegistryLookup,
+} from '../../src/orm/registry-keywords';
 import { declareAddedPackages } from '../utils/fake-package-manager';
 import { fixtureContribution } from '../utils/fixture-contribution';
 import { createTestProjectDir } from '../utils/test-project-dir';
@@ -21,12 +25,12 @@ let installs: (readonly string[])[];
 let loaded: string[];
 let installsFail: boolean;
 let lookups: string[];
-let registryAnswer: RegistryKeywords;
+let registryAnswer: RegistryLookup;
 
 const REGISTRY = 'https://registry.example.test';
 const KEYWORD = 'prisma-orm-extension';
 
-const lookUpRegistryKeywords: LookUpRegistryKeywords = async (packageName) => {
+const fakeRegistryLookup: LookUpRegistryKeywords = async (packageName) => {
   lookups.push(packageName);
   return registryAnswer;
 };
@@ -50,6 +54,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   rmSync(projectDir, { recursive: true, force: true });
 });
 
@@ -68,7 +73,10 @@ async function unlistedPackage(packageName = UNLISTED): Promise<ImportFromProjec
   };
 }
 
-function harness(loadModule: ImportFromProject = importFromProject) {
+function harness(
+  loadModule: ImportFromProject = importFromProject,
+  lookUpRegistryKeywords: LookUpRegistryKeywords = fakeRegistryLookup,
+) {
   const commands: MountedTree = {
     ...BIN_COMMANDS,
     'orm init': createInitCommand({
@@ -302,7 +310,7 @@ describe('an unlisted package that cannot be used', () => {
   );
 
   it(
-    'says it was taken as a package name when --skip-install finds no such package',
+    'says it was taken as a package name when --skip-install finds no such package, without a lookup',
     async () => {
       const run = await harness().run([...starter(NO_INIT), '--skip-install'], {
         cwd: projectDir,
@@ -310,6 +318,7 @@ describe('an unlisted package that cannot be used', () => {
 
       expect(run.exitCode).toBe(2);
       expect(installs).toEqual([]);
+      expect(lookups).toEqual([]);
       expect(envelopeOf(run)).toMatchObject({
         ok: false,
         error: {
@@ -317,6 +326,11 @@ describe('an unlisted package that cannot be used', () => {
           why: expect.stringMatching(
             /^`prisma-orm-noinit` is not one of the short names \(postgres, mongodb\), so init took it as a package name\. /,
           ),
+          nextActions: [
+            expect.objectContaining({
+              label: `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${NO_INIT} lists the keyword \`prisma-orm-extension\` before installing it. To use a target package from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.`,
+            }),
+          ],
           meta: { packageName: NO_INIT, takenAsPackageName: true },
         },
       });
@@ -328,10 +342,20 @@ describe('an unlisted package that cannot be used', () => {
 const LISTED_INSTEAD =
   'To use a target package from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.';
 
+const TAKEN = (name: string) =>
+  `\`${name}\` is not one of the short names (postgres, mongodb), so init took it as a package name.`;
+
 function installPackage(name: string, keywords: readonly string[] | undefined): void {
   writeProjectFile(
     `node_modules/${name}/package.json`,
     JSON.stringify({ name, version: '1.0.0', ...(keywords === undefined ? {} : { keywords }) }),
+  );
+}
+
+function declarePackage(name: string): void {
+  writeProjectFile(
+    'package.json',
+    `${JSON.stringify({ name: 'app', dependencies: { [name]: '^1.0.0' } }, null, 2)}\n`,
   );
 }
 
@@ -353,13 +377,19 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
           summary: `${value} is not a Prisma 8 package`,
-          why: `\`${value}\` is not one of the short names (postgres, mongodb), so init took it as a package name. The latest version of ${value} on ${REGISTRY} does not list the keyword \`${KEYWORD}\` in its package.json, which every Prisma 8 package does, so init does not install it. Nothing was changed.`,
+          why: `${TAKEN(value)} The latest version of ${value} on ${REGISTRY} does not list the keyword \`${KEYWORD}\` in its package.json. init requires that keyword of a target package before it installs or uses one, so it did not install ${value}. Nothing was changed.`,
           nextActions: [
             expect.objectContaining({
               label: `Check the package name. If you maintain ${value}, add \`${KEYWORD}\` to the keywords in its package.json and publish a new version. ${LISTED_INSTEAD}`,
             }),
           ],
-          meta: { reason: 'keyword-missing', package: value, keyword: KEYWORD, registry: REGISTRY },
+          meta: {
+            reason: 'keyword-missing',
+            packageName: value,
+            keyword: KEYWORD,
+            registry: REGISTRY,
+            takenAsPackageName: true,
+          },
         },
       });
     },
@@ -383,7 +413,7 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
         ok: false,
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
-          meta: { reason: 'keyword-missing', package: 'sqlite' },
+          meta: { reason: 'keyword-missing', packageName: 'sqlite' },
         },
       });
     },
@@ -406,7 +436,7 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
   );
 
   it(
-    'refuses a package the registry does not have, without installing anything',
+    'refuses a package the registry does not have, without installing or writing anything',
     async () => {
       registryAnswer = { kind: 'not-found', registry: REGISTRY };
 
@@ -414,18 +444,25 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
 
       expect(run.exitCode).toBe(2);
       expect(installs).toEqual([]);
+      expect(projectEntries()).toEqual([]);
       expect(envelopeOf(run)).toMatchObject({
         ok: false,
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
           summary: 'acmedb was not found',
-          why: `\`acmedb\` is not one of the short names (postgres, mongodb), so init took it as a package name. No package named acmedb was found on ${REGISTRY}. Nothing was changed.`,
+          why: `${TAKEN('acmedb')} No package named acmedb was found on ${REGISTRY}. Nothing was changed.`,
           nextActions: [
             expect.objectContaining({
-              label: `Check the package name, and that ${REGISTRY} is the registry that publishes it. ${LISTED_INSTEAD}`,
+              label: `Check the package name. init asks only ${REGISTRY} and sends no credentials, so a package on another registry, or one that needs credentials, is not found there: install it yourself with \`pnpm add acmedb\` and run \`prisma orm init\` again, and init reads it from disk. ${LISTED_INSTEAD}`,
             }),
           ],
-          meta: { reason: 'not-found', package: 'acmedb', keyword: KEYWORD, registry: REGISTRY },
+          meta: {
+            reason: 'not-found',
+            packageName: 'acmedb',
+            keyword: KEYWORD,
+            registry: REGISTRY,
+            takenAsPackageName: true,
+          },
         },
       });
     },
@@ -433,10 +470,10 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
   );
 
   it(
-    'refuses when the registry cannot be read, and says installing the package first works',
+    'refuses when the registry cannot be read, without installing or writing anything',
     async () => {
       registryAnswer = {
-        kind: 'failed',
+        kind: 'lookup-failed',
         registry: REGISTRY,
         cause: 'the registry answered with status 403',
       };
@@ -445,25 +482,71 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
 
       expect(run.exitCode).toBe(2);
       expect(installs).toEqual([]);
+      expect(projectEntries()).toEqual([]);
       expect(envelopeOf(run)).toMatchObject({
         ok: false,
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
           summary: 'Could not read the keywords of acmedb',
-          why: `\`acmedb\` is not one of the short names (postgres, mongodb), so init took it as a package name. Before installing a package, init checks that its package.json lists the keyword \`${KEYWORD}\`, and it could not read acmedb from ${REGISTRY}: the registry answered with status 403. Nothing was changed.`,
+          why: `${TAKEN('acmedb')} init requires the keyword \`${KEYWORD}\` of a target package before it installs or uses one, and it could not read the keywords of acmedb from ${REGISTRY}: the registry answered with status 403. Nothing was changed.`,
           nextActions: [
             expect.objectContaining({
-              label: `Install acmedb yourself with \`pnpm add acmedb\`, then run \`prisma orm init\` again: init reads the keywords of an installed package from disk. ${LISTED_INSTEAD}`,
+              label: `Check the package name. If it is right and acmedb lists \`${KEYWORD}\`, install it yourself with \`pnpm add acmedb\` and run \`prisma orm init\` again: init reads the keywords of an installed package from disk. ${LISTED_INSTEAD}`,
             }),
           ],
           meta: {
             reason: 'lookup-failed',
-            package: 'acmedb',
+            packageName: 'acmedb',
             keyword: KEYWORD,
             registry: REGISTRY,
+            takenAsPackageName: true,
           },
         },
       });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'settles a run cancelled during the lookup as cancelled, not as a refusal',
+    async () => {
+      const cancel = new AbortController();
+      const lookUp: LookUpRegistryKeywords = (packageName, { signal }) => {
+        lookups.push(packageName);
+        setTimeout(() => cancel.abort(), 0);
+        return new Promise((_, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+      };
+
+      const run = await harness(importFromProject, lookUp).run(starter('acmedb'), {
+        cwd: projectDir,
+        abort: cancel.signal,
+      });
+
+      expect(lookups).toEqual(['acmedb']);
+      expect(installs).toEqual([]);
+      expect(envelopeOf(run)).toMatchObject({ ok: false, error: { code: 'CLI.ABORTED' } });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'never shows the credentials of the registry URL',
+    async () => {
+      vi.stubGlobal('fetch', async () => new Response('{}', { status: 403 }));
+
+      const run = await harness(importFromProject, realRegistryLookup).run(starter('acmedb'), {
+        cwd: projectDir,
+        env: { npm_config_registry: 'https://user:token@registry.example/' },
+      });
+
+      const output = JSON.stringify(run.json);
+      expect(envelopeOf(run)).toMatchObject({
+        error: { code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED', meta: { reason: 'lookup-failed' } },
+      });
+      expect(output).not.toContain('token');
+      expect(output).not.toContain('user:');
     },
     timeouts.coldTransformImport,
   );
@@ -480,10 +563,13 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
     },
     timeouts.coldTransformImport,
   );
+});
 
+describe('which copy of an unlisted package init checks', () => {
   it(
-    'reads an installed package from disk and proceeds when it lists the keyword',
+    'reads a package that is declared and on disk from disk, since init will not install it',
     async () => {
+      declarePackage('acmedb');
       installPackage('acmedb', [KEYWORD]);
       registryAnswer = { kind: 'not-found', registry: REGISTRY };
 
@@ -493,17 +579,59 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
 
       expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
       expect(lookups).toEqual([]);
+      expect(installs[0]).toEqual(['add', 'dotenv']);
       expect(loaded).toEqual(['acmedb/init']);
     },
     timeouts.coldTransformImport,
   );
 
+  it(
+    'reads a package on disk from disk under --skip-install',
+    async () => {
+      installPackage('acmedb', [KEYWORD]);
+      registryAnswer = { kind: 'not-found', registry: REGISTRY };
+
+      const run = await harness(await unlistedPackage('acmedb')).run(
+        [...starter('acmedb'), '--skip-install'],
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
+      expect(lookups).toEqual([]);
+      expect(installs).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'asks the registry for a package on disk but not declared, since init installs that one',
+    async () => {
+      installPackage('acmedb', [KEYWORD]);
+      registryAnswer = { kind: 'read', registry: REGISTRY, keywords: ['database'] };
+
+      const run = await harness(await unlistedPackage('acmedb')).run(starter('acmedb'), {
+        cwd: projectDir,
+      });
+
+      expect(lookups).toEqual(['acmedb']);
+      expect(installs).toEqual([]);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
+          meta: { reason: 'keyword-missing', registry: REGISTRY },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
   it.each([
-    ['', []],
-    [' under --skip-install', ['--skip-install']],
+    ['declared and on disk', [], true],
+    ['on disk under --skip-install', ['--skip-install'], false],
   ])(
-    'refuses an installed package that does not list the keyword%s, reading it from disk',
-    async (_, extra) => {
+    'refuses a package %s that does not list the keyword, reading it from disk',
+    async (_, extra, declared) => {
+      if (declared) declarePackage('acmedb');
       installPackage('acmedb', ['database']);
 
       const run = await harness(await unlistedPackage('acmedb')).run(
@@ -519,8 +647,13 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
         ok: false,
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
-          why: `\`acmedb\` is not one of the short names (postgres, mongodb), so init took it as a package name. The installed acmedb does not list the keyword \`${KEYWORD}\` in its package.json, which every Prisma 8 package does, so init does not use it. Nothing was changed.`,
-          meta: { reason: 'keyword-missing', package: 'acmedb', keyword: KEYWORD },
+          why: `${TAKEN('acmedb')} The installed acmedb does not list the keyword \`${KEYWORD}\` in its package.json. init requires that keyword of a target package before it installs or uses one, so it did not use acmedb. Nothing was changed.`,
+          nextActions: [
+            expect.objectContaining({
+              label: `Check the package name. If a newer version of acmedb lists the keyword, update it with \`pnpm add acmedb@latest\` and run \`prisma orm init\` again. If you maintain acmedb, add \`${KEYWORD}\` to the keywords in its package.json and publish a new version. ${LISTED_INSTEAD}`,
+            }),
+          ],
+          meta: { reason: 'keyword-missing', packageName: 'acmedb', keyword: KEYWORD },
         },
       });
       expect(Reflect.get(envelopeOf(run).error.meta, 'registry')).toBeUndefined();
@@ -546,6 +679,35 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
           meta: { reason: 'keyword-missing' },
         },
       });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'reports an installed package.json that cannot be parsed as a failed read, naming the file',
+    async () => {
+      writeProjectFile('node_modules/acmedb/package.json', '{ "name": ');
+
+      const run = await harness().run([...starter('acmedb'), '--skip-install'], {
+        cwd: projectDir,
+      });
+
+      expect(lookups).toEqual([]);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
+          why: expect.stringContaining(
+            'could not read the keywords of acmedb: node_modules/acmedb/package.json cannot be read as JSON: ',
+          ),
+          nextActions: [
+            expect.objectContaining({
+              label: `Check the package name. If it is right, reinstall acmedb with \`pnpm add acmedb\` and run \`prisma orm init\` again. ${LISTED_INSTEAD}`,
+            }),
+          ],
+          meta: { reason: 'lookup-failed', packageName: 'acmedb' },
+        },
+      });
+      expect(Reflect.get(envelopeOf(run).error.meta, 'registry')).toBeUndefined();
     },
     timeouts.coldTransformImport,
   );
