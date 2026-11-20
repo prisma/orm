@@ -62,7 +62,7 @@ After:
 → If the values can go: --delete Shop.legacy
 ```
 
-In every file the detection matches, stop reading the summary or the next-action labels to find out what was asked. Read `meta.unanswered` instead: one entry per open subject, each with the `subject` a flag names and the `verbs` that answer it, so `--<verb> <subject>` answers it, and `--rename` takes `<subject>:<new name>`. One entry changes: for a model that is a variant stored in its base's table whose base the change removes too, `verbs` is now `['delete']`, where it was `['rename', 'delete']`, because such a variant cannot be renamed on its own. When the change removes the variant's namespace too and the contract adds a namespace it can be renamed to, `verbs` stays `['rename', 'delete']`: that `rename` is the namespace's, as `--rename billing:finance`.
+In every file the detection matches, stop reading the summary or the next-action labels to find out what was asked. Read `meta.unanswered` instead: one entry per open subject, each with the `subject` a flag names and the `verbs` that answer it, so `--<verb> <subject>` answers it, and `--rename` takes `<subject>:<new name>`. One verb names something else: `--convert` takes the field as the contract names it now, which differs from `subject` when the same run renames the field. The next action for `convert` gives the flag in full. One entry changes: for a model that is a variant stored in its base's table whose base the change removes too, `verbs` is now `['delete']`, where it was `['rename', 'delete']`, because such a variant cannot be renamed on its own. When the change removes the variant's namespace too and the contract adds a namespace it can be renamed to, `verbs` stays `['rename', 'delete']`: that `rename` is the namespace's, as `--rename billing:finance`.
 
 # One `--allow` per model
 
@@ -87,13 +87,13 @@ import { type PlanAnswer, questionText } from '@prisma/orm-toolchain/cli/control
 answerQuestions: async (questions) => {
   const answers: PlanAnswer[] = [];
   for (const question of questions) {
-    answers.push(await askUser(questionText(question, { bin: 'prisma' }), question.verbs));
+    answers.push(await askUser(questionText(question, { bin: 'prisma', withNamespace: true }), question.verbs));
   }
   return answers;
 },
 ```
 
-`askUser` stands for the callback's own way of getting an answer. It returns one of the question's `verbs` with its text: the question's `subject` for `delete`, `allow` or `convert`, and `<subject>:<new name>` for `rename`.
+`askUser` stands for the callback's own way of getting an answer. It returns one of the question's `verbs` with its text: the question's `subject` for `delete` or `allow`, `question.forms.convert` for `convert`, and `<subject>:<new name>` for `rename`. `withNamespace: true` adds, for a question about a model or field of a namespace the change removes, the fact that the namespace is gone and what a `delete` or `rename` of the namespace does; it changes nothing for other questions.
 
 # A `--rename` to a name the contract does not have
 
