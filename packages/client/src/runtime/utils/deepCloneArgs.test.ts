@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest'
+
 import { isSkip, skip } from '../core/types'
 import { deepCloneArgs } from './deepCloneArgs'
 

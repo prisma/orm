@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { field, model, runtimeDataModel } from '../../../testUtils/dataModelBuilder'
 import { applyAllResultExtensions } from './applyAllResultExtensions'
 import { MergedExtensionsList } from './MergedExtensionsList'

@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest'
+
 import { deepGet } from '../runtime/utils/deep-set'
 
 describe('deepGet', () => {

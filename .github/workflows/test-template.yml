@@ -136,7 +136,7 @@ jobs:
           skip-tsc: false
 
       # And run all non functional, non e2e tests (except the types tests)
-      - run: pnpm run test-notypes ${{ env.FUNCTIONAL_TEST_OPTIONS }} --silent --shard ${{ matrix.shard }}
+      - run: pnpm run test-notypes --silent --shard ${{ matrix.shard }}
         if: |
           contains(inputs.jobsToRun, '-all-') ||
           contains(inputs.jobsToRun, '-client-')

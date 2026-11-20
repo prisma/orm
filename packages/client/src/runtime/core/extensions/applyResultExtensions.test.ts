@@ -1,3 +1,5 @@
+import { expect, test, vi } from 'vitest'
+
 import { applyResultExtensions } from './applyResultExtensions'
 import { MergedExtensionsList } from './MergedExtensionsList'
 
@@ -6,7 +8,7 @@ test('does not add fields if some dependencies are not met', () => {
     firstName: 'John',
   }
 
-  const fullName = jest.fn()
+  const fullName = vi.fn()
   const extension = {
     result: {
       user: {
@@ -138,8 +140,8 @@ test('masks dependencies if they are not present in select', () => {
     extensions: MergedExtensionsList.single(extension),
   })
   expect(extended).toHaveProperty('fullName', 'John Smith')
-  expect(extended).not.toHaveProperty('firstName')
-  expect(extended).not.toHaveProperty('lastName')
+  expect('firstName' in extended).toBe(false)
+  expect('lastName' in extended).toBe(false)
 })
 
 test('counts falsy values as met dependencies', () => {
@@ -354,7 +356,7 @@ test('caches the result', () => {
     firstName: 'John',
   }
 
-  const compute = jest.fn()
+  const compute = vi.fn()
 
   const extension = {
     result: {
@@ -522,7 +524,7 @@ test('allows to omit dependency of a computed team', () => {
     omit: { firstName: true },
     extensions: MergedExtensionsList.single(extension),
   })
-  expect(extended).not.toHaveProperty('firstName')
+  expect('firstName' in extended).toBe(false)
   expect(extended).toHaveProperty('loudName', 'JOHN')
 })
 
@@ -557,7 +559,7 @@ test('allows to omit transitive dependency of a computed team', () => {
     omit: { firstName: true },
     extensions: MergedExtensionsList.single(extension),
   })
-  expect(extended).not.toHaveProperty('firstName')
+  expect('firstName' in extended).toBe(false)
   expect(extended).toHaveProperty('screamingName', 'JOHN!!!')
 })
 

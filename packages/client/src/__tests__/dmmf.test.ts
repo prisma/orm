@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from 'node:util'
 
 import { getDMMF } from '@prisma/internals'
+import { describe, expect, test } from 'vitest'
 
 describe('dmmf', () => {
   test('dmmf enum filter mysql', async () => {
@@ -22,6 +23,7 @@ describe('dmmf', () => {
       }`
 
     const dmmf = await getDMMF({ datamodel })
+    // @ts-expect-error
     expect(dmmf.schema.inputObjectTypes.prisma.find((i) => i.name === 'NestedEnumPostKindFilter'))
       .toMatchInlineSnapshot(`
       {
@@ -102,6 +104,7 @@ describe('dmmf', () => {
         "name": "NestedEnumPostKindFilter",
       }
     `)
+    // @ts-expect-error
     expect(dmmf.schema.inputObjectTypes.prisma.find((i) => i.name === 'EnumPostKindFilter')).toMatchInlineSnapshot(`
       {
         "constraints": {
@@ -202,6 +205,7 @@ describe('dmmf', () => {
       }`
 
     const dmmf = await getDMMF({ datamodel })
+    // @ts-expect-error
     expect(dmmf.schema.inputObjectTypes.prisma.find((i) => i.name === 'NestedEnumPostKindFilter'))
       .toMatchInlineSnapshot(`
       {
@@ -294,6 +298,7 @@ describe('dmmf', () => {
         "name": "NestedEnumPostKindFilter",
       }
     `)
+    // @ts-expect-error
     expect(dmmf.schema.inputObjectTypes.prisma.find((i) => i.name === 'EnumPostKindFilter')).toMatchInlineSnapshot(`
       {
         "constraints": {

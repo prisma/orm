@@ -1,3 +1,5 @@
+import { expect, test, vi } from 'vitest'
+
 import { field, model, runtimeDataModel } from '../../../testUtils/dataModelBuilder'
 import { visitQueryResult } from './visitQueryResult'
 
@@ -26,7 +28,7 @@ const datamodel = runtimeDataModel({
 })
 
 test('visits root node', () => {
-  const visitor = jest.fn()
+  const visitor = vi.fn()
   const result = { name: 'Boaty McBoatface' }
 
   visitQueryResult({
@@ -49,7 +51,7 @@ test('returns unchanged result if visitor return undefined', () => {
     args: {},
     modelName: 'User',
     runtimeDataModel: datamodel,
-    visitor: jest.fn(),
+    visitor: vi.fn(),
   })
 
   expect(visitResult).toBe(result)
@@ -64,7 +66,7 @@ test('returns new result if visitor returns the value', () => {
     args: {},
     modelName: 'User',
     runtimeDataModel: datamodel,
-    visitor: jest.fn().mockReturnValue(replaceResult),
+    visitor: vi.fn().mockReturnValue(replaceResult),
   })
 
   expect(visitResult).toBe(replaceResult)
@@ -76,7 +78,7 @@ test('in case of array, visits each item individually', () => {
     { id: '2', name: 'Secondy McSecondFace' },
   ]
 
-  const visitor = jest.fn()
+  const visitor = vi.fn()
 
   visitQueryResult({
     result,
@@ -123,7 +125,7 @@ test('visits nested relations when using include', () => {
     name: 'Boaty McBoatface',
     group: { id: '123' },
   }
-  const visitor = jest.fn()
+  const visitor = vi.fn()
 
   visitQueryResult({
     result,
@@ -147,7 +149,7 @@ test('visits nested relations when using select', () => {
     name: 'Boaty McBoatface',
     group: { id: '123' },
   }
-  const visitor = jest.fn()
+  const visitor = vi.fn()
 
   visitQueryResult({
     result,
@@ -171,7 +173,7 @@ test('does not visit nested relations when include = false', () => {
     name: 'Boaty McBoatface',
     group: { id: '123' },
   }
-  const visitor = jest.fn()
+  const visitor = vi.fn()
 
   visitQueryResult({
     result,
@@ -194,7 +196,7 @@ test('does not visit nested relations when corresponding field is null', () => {
     name: 'Boaty McBoatface',
     group: null,
   }
-  const visitor = jest.fn()
+  const visitor = vi.fn()
 
   visitQueryResult({
     result,
@@ -221,7 +223,7 @@ test('visits deeply nested relations using include', () => {
       group: { id: '456' },
     },
   }
-  const visitor = jest.fn()
+  const visitor = vi.fn()
   visitQueryResult({
     result,
     args: {
@@ -253,7 +255,7 @@ test('visits deeply nested relations using select', () => {
       group: { id: '456' },
     },
   }
-  const visitor = jest.fn()
+  const visitor = vi.fn()
   visitQueryResult({
     result,
     args: {
@@ -285,7 +287,7 @@ test('visits deeply nested relations with mixed include and select', () => {
       group: { id: '456' },
     },
   }
-  const visitor = jest.fn()
+  const visitor = vi.fn()
   visitQueryResult({
     result,
     args: {

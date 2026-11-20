@@ -2,12 +2,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { getDMMF } from '@prisma/client-generator-js'
+import { expect, test, vi } from 'vitest'
 
 import { compileFile } from '../../../../utils/compileFile'
 
 const isMacOrWindowsCI = Boolean(process.env.CI) && ['darwin', 'win32'].includes(process.platform)
 if (isMacOrWindowsCI) {
-  jest.setTimeout(80_000)
+  vi.setConfig({ testTimeout: 80_000 })
 }
 
 /**

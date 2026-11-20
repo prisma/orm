@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { getLogLevel } from '../runtime/getLogLevel'
 
 test('info and warn', () => {
