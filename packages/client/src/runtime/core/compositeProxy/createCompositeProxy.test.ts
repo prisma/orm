@@ -124,7 +124,7 @@ test('allows to hide properties via layers', () => {
   ])
 
   expect(Object.keys(proxy)).toEqual(['prop'])
-  expect(proxy).not.toHaveProperty('secret')
+  expect('secret' in proxy).toBe(false)
   expect(proxy['secret']).toBeUndefined()
 })
 

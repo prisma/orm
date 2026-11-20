@@ -17,7 +17,8 @@ test('basic serialization', () => {
   expect(
     stripVTControlCharacters(message)
       .replace(/v\d{1,2}\.\d{1,2}\.\d{1,2}/, 'NODE_VERSION')
-      .replace(/[\+-]/g, ''),
+      .replace(/[\+-]/g, '')
+      .replace(/https:\/\/github.com\/prisma\/prisma\/issues\/new\S+/, 'TEST_GITHUB_LINK'),
   ).toMatchInlineSnapshot(`
     "This is a title
 

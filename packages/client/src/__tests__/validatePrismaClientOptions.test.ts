@@ -278,8 +278,8 @@ describe('queryPlanCacheMaxSize option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value -1 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Cache size needs to be greater or equal to 0.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value -1 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Cache size needs to be greater or equal to 0.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 
@@ -293,8 +293,8 @@ describe('queryPlanCacheMaxSize option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value 1.5 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected an integer.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value 1.5 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected an integer.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 
@@ -308,8 +308,8 @@ describe('queryPlanCacheMaxSize option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value "100" for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected a number.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value "100" for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected a number.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 })
