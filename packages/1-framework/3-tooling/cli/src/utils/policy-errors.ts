@@ -150,66 +150,89 @@ function doItAnyway(source: PolicySource): string {
     : 'To do it anyway, whoever owns the database must first change its data protection policy.';
 }
 
-const EXTENSION_OWNS_MIGRATION =
-  "A migration in an extension's contract space belongs to that extension, so do not edit or delete it; ask the extension's author for a version without the operation.";
+const REMOVE_AND_REEMIT = 'remove the operation from its migration.ts and run that file with node.';
 
-/** Advice for the refused migrations `db migrate` would apply: the application's may be changed, an extension's may not. */
-function keepMigrationsProtected(
-  refusal: DataProtectionRefusal,
-  appSpaceId: string,
-  appMigrationAdvice: string,
+function quotedList(names: readonly string[]): string {
+  const quoted = names.map((name) => `"${name}"`);
+  return quoted.length === 1
+    ? quoted.join('')
+    : `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
+}
+
+/** The extensions' contract spaces own their migrations: the user cannot change them, only which version of each extension is installed. */
+function extensionsOwnMigrations(
+  spaceIds: readonly string[],
+  invocation: CliInvocation | undefined,
+): string {
+  const emit = cliCommand(
+    invocation === undefined ? undefined : { ...invocation, dbGiven: false },
+    'contract emit',
+  );
+  return spaceIds.length === 1
+    ? `Contract space ${quotedList(spaceIds)} belongs to an extension, so do not edit or delete its migrations. Use a version of the extension without the operation, such as the one this database already runs, and run ${emit}; or ask the extension's author for one.`
+    : `Contract spaces ${quotedList(spaceIds)} belong to extensions, so do not edit or delete their migrations. Use versions of the extensions without the operations, such as the ones this database already runs, and run ${emit}; or ask the extensions' authors for them.`;
+}
+
+/** What a user can do about refused operations in the application's contract space, for the command that refused them. */
+function keepAppProtected(
+  setting: DataProtectionSetting,
+  command: DataProtectionCheckedCommand,
+  operations: readonly DataProtectionRefusedOperation[],
+  alongsideExtensions: boolean,
+  invocation: CliInvocation | undefined,
 ): readonly string[] {
-  const inApp = refusal.operations.some(({ spaceId }) => spaceId === appSpaceId);
-  const inExtension = refusal.operations.some(({ spaceId }) => spaceId !== appSpaceId);
+  const unapplied = alongsideExtensions
+    ? 'For an application migration no database has applied'
+    : 'For a migration no database has applied';
+  if (setting === 'accessWidening') {
+    return command === 'db migrate'
+      ? [KEEP_APPLIED_MIGRATION, `${unapplied}, ${REMOVE_AND_REEMIT}`]
+      : ["Keep the contract's access rules as they are."];
+  }
+  if (command === 'db migrate') {
+    return [
+      KEEP_APPLIED_MIGRATION,
+      `${unapplied}: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise ${REMOVE_AND_REEMIT}`,
+    ];
+  }
+  const changesType = operations.some(({ loss }) => loss === 'typeChange');
   return [
-    ...(inApp ? [KEEP_APPLIED_MIGRATION, appMigrationAdvice] : []),
-    ...(inExtension ? [EXTENSION_OWNS_MIGRATION] : []),
+    'If a model or field was only renamed, state the rename with --rename <old>:<new>.',
+    ...(changesType
+      ? [
+          `For a type change, write the conversion with ${cliCommand(
+            invocation === undefined ? undefined : { ...invocation, dbGiven: false },
+            'migration plan',
+            ['--convert', '<field>'],
+          )}.`,
+        ]
+      : []),
+    'Otherwise keep it in the contract.',
   ];
 }
 
-/** What a user can do instead of a refused change, for the command that refused it. */
+/** What a user can do instead of a refused change, for the command that refused it and the contract spaces that hold it. */
 function keepProtected(
   refusal: DataProtectionRefusal,
   command: DataProtectionCheckedCommand,
   appSpaceId: string,
   invocation: CliInvocation | undefined,
 ): string {
-  const migrated = command === 'db migrate';
-  if (refusal.setting === 'accessWidening') {
-    return [
-      refusingPolicy(refusal.source, FORBIDDEN_CHANGE.accessWidening),
-      ...(migrated
-        ? keepMigrationsProtected(
-            refusal,
-            appSpaceId,
-            'For a migration no database has applied, remove the operation from the migration.',
-          )
-        : ["Keep the contract's access rules as they are."]),
-      doItAnyway(refusal.source),
-    ].join(' ');
-  }
-  const changesType = refusal.operations.some(({ loss }) => loss === 'typeChange');
+  const inApp = refusal.operations.filter(({ spaceId }) => spaceId === appSpaceId);
+  const extensionSpaces = [
+    ...new Set(
+      refusal.operations.flatMap(({ spaceId }) => (spaceId === appSpaceId ? [] : [spaceId])),
+    ),
+  ];
   return [
-    refusingPolicy(refusal.source, 'losing data'),
-    ...(migrated
-      ? keepMigrationsProtected(
-          refusal,
-          appSpaceId,
-          'For a migration no database has applied: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise remove the operation from the migration.',
-        )
-      : [
-          'If a model or field was only renamed, state the rename with --rename <old>:<new>.',
-          ...(changesType
-            ? [
-                `For a type change, write the conversion with ${cliCommand(
-                  invocation === undefined ? undefined : { ...invocation, dbGiven: false },
-                  'migration plan',
-                  ['--convert', '<field>'],
-                )}.`,
-              ]
-            : []),
-          'Otherwise keep it in the contract.',
-        ]),
+    refusingPolicy(
+      refusal.source,
+      refusal.setting === 'accessWidening' ? FORBIDDEN_CHANGE.accessWidening : 'losing data',
+    ),
+    ...(inApp.length === 0
+      ? []
+      : keepAppProtected(refusal.setting, command, inApp, extensionSpaces.length > 0, invocation)),
+    ...(extensionSpaces.length === 0 ? [] : [extensionsOwnMigrations(extensionSpaces, invocation)]),
     doItAnyway(refusal.source),
   ].join(' ');
 }

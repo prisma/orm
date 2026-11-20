@@ -64,7 +64,9 @@ const DROP_AUDIT: MigrationPlanOperation = {
 };
 
 const KEEP_DATA =
-  "This database's data protection policy forbids losing data, so these operations cannot run on it. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise remove the operation from the migration. To do it anyway, whoever owns the database must first change its data protection policy.";
+  "This database's data protection policy forbids losing data, so these operations cannot run on it. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise remove the operation from its migration.ts and run that file with node. To do it anyway, whoever owns the database must first change its data protection policy.";
+
+const KEEP_EXTENSION_DATA = `This database's data protection policy forbids losing data, so these operations cannot run on it. Contract space "${AUDIT_SPACE}" belongs to an extension, so do not edit or delete its migrations. Use a version of the extension without the operation, such as the one this database already runs, and run {bin} contract emit; or ask the extension's author for one. To do it anyway, whoever owns the database must first change its data protection policy.`;
 
 const projectDirs: string[] = [];
 
@@ -121,6 +123,47 @@ async function addAuditSpace(migrationsDir: string): Promise<void> {
   });
   await writeContractSnapshot(migrationsDir, AUDIT_HEAD, {
     contractJson: AUDIT_CONTRACT,
+    contractDts: 'export type Contract = never;\n',
+  });
+}
+
+const AUDIT_EARLIER_MIGRATION = '20251201T0000_audit_initial';
+const AUDIT_EARLIER_CONTRACT: Contract = createSqlContract({
+  storage: {
+    namespaces: {
+      [UNBOUND_NAMESPACE_ID]: {
+        id: UNBOUND_NAMESPACE_ID,
+        entries: {
+          table: { audit_old: { columns: { id: { nativeType: 'int4', nullable: false } } } },
+        },
+      },
+    },
+  },
+});
+const AUDIT_EARLIER_HEAD = AUDIT_EARLIER_CONTRACT.storage.storageHash;
+
+/**
+ * The audit space as `contract emit` leaves it after going back to the extension's earlier version:
+ * the later version's lossy migration stays on disk, and the head names the earlier contract.
+ */
+async function addAuditSpaceAtEarlierVersion(migrationsDir: string): Promise<void> {
+  await writePackage(migrationsDir, AUDIT_SPACE, AUDIT_EARLIER_MIGRATION, AUDIT_EARLIER_HEAD, [
+    CREATE_TABLE,
+  ]);
+  await writePackage(
+    migrationsDir,
+    AUDIT_SPACE,
+    AUDIT_MIGRATION,
+    AUDIT_HEAD,
+    [DROP_AUDIT],
+    AUDIT_EARLIER_HEAD,
+  );
+  await writeRef(join(migrationsDir, AUDIT_SPACE, 'refs'), 'head', {
+    hash: AUDIT_EARLIER_HEAD,
+    invariants: [],
+  });
+  await writeContractSnapshot(migrationsDir, AUDIT_EARLIER_HEAD, {
+    contractJson: AUDIT_EARLIER_CONTRACT,
     contractDts: 'export type Contract = never;\n',
   });
 }
@@ -227,12 +270,13 @@ async function migrate(args: {
   readonly markers: ReadonlyMap<string, ContractMarkerRecord>;
   readonly ref?: NamedRef;
   readonly permitPolicyChange?: boolean;
-  readonly withAuditSpace?: boolean;
+  readonly withAuditSpace?: boolean | 'earlierVersion';
   /** Operations of an earlier pending migration, before the one holding `appOps`. */
   readonly earlierOps?: readonly MigrationPlanOperation[];
 }) {
   const migrationsDir = await migrationsDirWith(args.appOps, args.earlierOps);
   if (args.withAuditSpace === true) await addAuditSpace(migrationsDir);
+  if (args.withAuditSpace === 'earlierVersion') await addAuditSpaceAtEarlierVersion(migrationsDir);
   const { runnerCalls, migrations } = recordingMigrations();
   const result = await executeMigrate({
     driver: blindCast<
@@ -245,7 +289,7 @@ async function migrate(args: {
     migrations,
     frameworkComponents: [],
     migrationsDir,
-    extensions: args.withAuditSpace === true ? [auditExtension] : [],
+    extensions: args.withAuditSpace === undefined ? [] : [auditExtension],
     targetId: 'postgres',
     ...(args.ref === undefined ? {} : { target: { kind: 'ref', ref: args.ref } }),
     ...(args.permitPolicyChange === undefined
@@ -401,17 +445,46 @@ describe('executeMigrate, data protection', () => {
       withAuditSpace: true,
     });
 
-    expect(result.ok ? undefined : result.failure.toEnvelope().meta).toMatchObject({
-      operations: [
-        {
-          setting: 'dataLoss',
-          spaceId: AUDIT_SPACE,
-          migration: AUDIT_MIGRATION,
-          operationId: DROP_AUDIT.id,
-        },
-      ],
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
+      fix: KEEP_EXTENSION_DATA,
+      meta: {
+        operations: [
+          {
+            setting: 'dataLoss',
+            spaceId: AUDIT_SPACE,
+            migration: AUDIT_MIGRATION,
+            operationId: DROP_AUDIT.id,
+          },
+        ],
+      },
     });
     expect(runnerCalls).toEqual([]);
+  });
+
+  it("runs nothing in an extension's space once the extension is back at the version the database runs", async () => {
+    const { result, runnerCalls } = await migrate({
+      appOps: [CREATE_TABLE],
+      markers: new Map([
+        ['app', markerAt(EMPTY_CONTRACT_HASH, DATA_LOSS_FORBIDDEN)],
+        [AUDIT_SPACE, markerAt(AUDIT_EARLIER_HEAD)],
+      ]),
+      withAuditSpace: 'earlierVersion',
+    });
+
+    expect({
+      ok: result.ok,
+      operations: runnerCalls.map((call) =>
+        call.map((o) => ({ space: o.space, operations: o.plan.operations.map(({ id }) => id) })),
+      ),
+    }).toEqual({
+      ok: true,
+      operations: [
+        [
+          { space: AUDIT_SPACE, operations: [] },
+          { space: 'app', operations: [CREATE_TABLE.id] },
+        ],
+      ],
+    });
   });
 
   it('records the policies of a run with nothing pending, since it has no operation to refuse', async () => {
