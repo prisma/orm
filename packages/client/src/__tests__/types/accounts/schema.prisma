@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgres"
-  url      = env("SOME_URL")
 }
 
 model UserTest {

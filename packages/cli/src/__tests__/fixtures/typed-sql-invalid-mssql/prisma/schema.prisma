@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "sqlserver"
-  url      = env("TEST_MSSQL_JDBC_URI")
 }
 
 model User {

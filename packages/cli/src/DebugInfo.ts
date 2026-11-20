@@ -2,6 +2,7 @@ import type { PrismaConfigInternal } from '@prisma/config'
 import type { Command } from '@prisma/internals'
 import {
   arg,
+  createSchemaPathInput,
   format,
   getSchemaWithPath,
   HelpError,
@@ -9,35 +10,31 @@ import {
   isError,
   isInteractive,
   link,
-  loadEnvFile,
 } from '@prisma/internals'
 import { bold, dim, red, underline } from 'kleur/colors'
 
 import { getRootCacheDir } from '../../fetch-engine/src/utils'
+import type { CliDistributionIdentity } from './utils/cli-distribution-identity'
 
 /**
  * $ prisma debug
  */
 export class DebugInfo implements Command {
-  static new(): DebugInfo {
-    return new DebugInfo()
+  static new(identity: CliDistributionIdentity): DebugInfo {
+    return new DebugInfo(identity)
   }
 
-  private static help = format(`
-  Print information helpful for debugging and bug reports
+  constructor(private readonly identity: CliDistributionIdentity) {}
 
-  ${bold('Usage')}
+  public help(error?: string): string | HelpError {
+    if (error) {
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
+    }
 
-    ${dim('$')} prisma debug [options]
+    return createHelp(this.identity)
+  }
 
-  ${bold('Options')}
-
-    -h, --help     Display this help message
-    --config       Custom path to your Prisma config file
-    --schema       Custom path to your Prisma schema
-`)
-
-  async parse(argv: string[], config: PrismaConfigInternal): Promise<string | Error> {
+  async parse(argv: string[], config: PrismaConfigInternal, baseDir: string = process.cwd()): Promise<string | Error> {
     const args = arg(argv, {
       '--help': Boolean,
       '-h': '--help',
@@ -54,8 +51,6 @@ export class DebugInfo implements Command {
       return this.help()
     }
 
-    await loadEnvFile({ schemaPath: args['--schema'], printMessage: true, config })
-
     const formatEnvValue = (name: string, text?: string) => {
       const value = process.env[name]
       const line = `- ${name}${text ? ` ${text}` : ''}`
@@ -68,7 +63,14 @@ export class DebugInfo implements Command {
 
     let schemaPath
     try {
-      schemaPath = link((await getSchemaWithPath(args['--schema'], config.schema))?.schemaPath)
+      const schemaResult = await getSchemaWithPath({
+        schemaPath: createSchemaPathInput({
+          schemaPathFromArgs: args['--schema'],
+          schemaPathFromConfig: config.schema,
+          baseDir,
+        }),
+      })
+      schemaPath = link(schemaResult.schemaPath)
     } catch (e) {
       schemaPath = e.message
     }
@@ -100,7 +102,7 @@ ${formatEnvValue('https_proxy')}
 ${formatEnvValue('HTTPS_PROXY')}
 
 For more information about Prisma environment variables:
-See ${link('https://www.prisma.io/docs/reference/api-reference/environment-variables-reference')}
+See ${link('https://pris.ly/d/env-vars')}
 
 For hiding messages
 ${formatEnvValue('PRISMA_DISABLE_WARNINGS')}
@@ -113,33 +115,15 @@ ${formatEnvValue('PRISMA_BINARIES_MIRROR', '(deprecated)')}
 ${formatEnvValue('PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING')}
 ${formatEnvValue('BINARY_DOWNLOAD_VERSION')}
 
-For configuring the Query Engine Type
-${formatEnvValue('PRISMA_CLI_QUERY_ENGINE_TYPE')}
-${formatEnvValue('PRISMA_CLIENT_ENGINE_TYPE')}
-
 For custom engines
-${formatEnvValue('PRISMA_QUERY_ENGINE_BINARY')}
-${formatEnvValue('PRISMA_QUERY_ENGINE_LIBRARY')}
 ${formatEnvValue('PRISMA_SCHEMA_ENGINE_BINARY')}
 ${formatEnvValue('PRISMA_MIGRATION_ENGINE_BINARY')}
 
-For the "postinstall" npm hook
-${formatEnvValue('PRISMA_GENERATE_SKIP_AUTOINSTALL')}
-${formatEnvValue('PRISMA_SKIP_POSTINSTALL_GENERATE')}
-${formatEnvValue('PRISMA_GENERATE_IN_POSTINSTALL')}
-
-For "prisma generate"
-${formatEnvValue('PRISMA_GENERATE_DATAPROXY')}
-${formatEnvValue('PRISMA_GENERATE_NO_ENGINE')}
-
 For Prisma Client
 ${formatEnvValue('PRISMA_SHOW_ALL_TRACES')}
-${formatEnvValue('PRISMA_CLIENT_NO_RETRY', '(Binary engine only)')}
 
 For Prisma Migrate
 ${formatEnvValue('PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK')}
-${formatEnvValue('PRISMA_MIGRATE_SKIP_GENERATE')}
-${formatEnvValue('PRISMA_MIGRATE_SKIP_SEED')}
 
 For Prisma Studio
 ${formatEnvValue('BROWSER')}
@@ -151,12 +135,20 @@ ${underline('-- CI detected? --')}
 ${isCi()}
 `
   }
+}
 
-  public help(error?: string): string | HelpError {
-    if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${DebugInfo.help}`)
-    }
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
+  Print information helpful for debugging and bug reports
 
-    return DebugInfo.help
-  }
+  ${bold('Usage')}
+
+    ${dim('$')} ${identity} debug [options]
+
+  ${bold('Options')}
+
+    -h, --help     Display this help message
+    --config       Custom path to your Prisma config file
+    --schema       Custom path to your Prisma schema
+`)
 }

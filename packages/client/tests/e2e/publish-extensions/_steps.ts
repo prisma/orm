@@ -13,7 +13,7 @@ void executeSteps({
     cd('..')
     await $`pnpm install`
     await $`pnpm prisma generate`
-    await $`pnpm exec prisma db push --force-reset --skip-generate`
+    await $`pnpm exec prisma db push --force-reset`
   },
   test: async () => {
     await $`pnpm exec tsc --noEmit`

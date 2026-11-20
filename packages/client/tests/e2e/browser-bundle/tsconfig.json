@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "exclude": ["_steps.ts"],
+  "compilerOptions": {
+    "lib": ["es2022", "dom"],
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "files": ["tests/main.test.ts"]
+}

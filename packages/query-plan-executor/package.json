@@ -1,0 +1,38 @@
+{
+  "name": "@prisma/query-plan-executor",
+  "version": "0.0.0",
+  "description": "This package is intended for Prisma's internal use",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/query-plan-executor"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@hono/node-server": "^1.19.14",
+    "@hono/zod-validator": "0.7.2",
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/context-async-hooks": "2.1.0",
+    "@opentelemetry/sdk-trace-base": "2.1.0",
+    "@prisma/adapter-pg": "workspace:*",
+    "@prisma/adapter-mariadb": "workspace:*",
+    "@prisma/adapter-mssql": "workspace:*",
+    "@prisma/client-engine-runtime": "workspace:*",
+    "@prisma/driver-adapter-utils": "workspace:*",
+    "hono": "^4.12.23",
+    "temporal-polyfill": "0.3.0",
+    "zod": "4.1.3"
+  },
+  "scripts": {
+    "dev": "DEV=true tsx helpers/build.ts",
+    "build": "tsx helpers/build.ts",
+    "prepublishOnly": "pnpm run build",
+    "test": "vitest run"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false
+}

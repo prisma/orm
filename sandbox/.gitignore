@@ -8,14 +8,16 @@
 
 !basic-sqlite
 !basic-sqlite/**
+!basic-postgres
+!basic-postgres/**
 !tracing
 !tracing/**
 !driver-adapters
 !driver-adapters/**
 !d1
 !d1/**
-!query-compiler
-!query-compiler/**
+!studio
+!studio/**
 
 # Ignore node_modules
 **/node_modules

@@ -1,7 +1,8 @@
+import { PrismaClientValidationError } from '@prisma/client-runtime-utils'
+
 import { ErrorFormat } from '../../getPrismaClient'
 import { CallSite } from '../../utils/CallSite'
 import { createErrorMessageWithContext } from '../../utils/createErrorMessageWithContext'
-import { PrismaClientValidationError } from '../errors/PrismaClientValidationError'
 import { GlobalOmitOptions } from '../jsonProtocol/serializeJsonQuery'
 import { JsArgs } from '../types/exported/JsApi'
 import { ValidationError } from '../types/ValidationError'

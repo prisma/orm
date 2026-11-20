@@ -13,12 +13,12 @@ declare const prisma: PrismaClient
 // `newPrismaClient` by itself is not smart enough for that and I don't think
 // we can make it smarter in a generic way, without having `PrismaClient` on hands.
 function clientWithOmit<
-  Options extends Prisma.PrismaClientOptions,
+  Options extends Partial<Prisma.PrismaClientOptions>,
   OmitOpts extends Partial<Prisma.PrismaClientOptions['omit']> = Options extends { omit?: infer U }
     ? U
     : Prisma.PrismaClientOptions['omit'],
 >(options: Options): PrismaClient<never, OmitOpts> {
-  return newPrismaClient(options) as unknown as PrismaClient<never, OmitOpts>
+  return newPrismaClient(options as any) as unknown as PrismaClient<never, OmitOpts>
 }
 
 testMatrix.setupTestSuite(

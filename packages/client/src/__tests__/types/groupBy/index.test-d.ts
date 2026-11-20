@@ -2,13 +2,7 @@ import { expectError } from 'tsd'
 
 import { PrismaClient } from '.'
 
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: 'file:dev.db',
-    },
-  },
-})
+const prisma = new PrismaClient()
 
 ;(async () => {
   // by missing

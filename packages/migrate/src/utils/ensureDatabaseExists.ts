@@ -1,14 +1,9 @@
+import path from 'node:path'
+
 import { DataSource } from '@prisma/generator'
-import type { DatabaseCredentials } from '@prisma/internals'
-import {
-  canConnectToDatabase,
-  createDatabase,
-  getEffectiveUrl,
-  PRISMA_POSTGRES_PROVIDER,
-  uriToCredentials,
-} from '@prisma/internals'
+import type { DatabaseCredentials, PrismaConfigWithDatasource } from '@prisma/internals'
+import { canConnectToDatabase, createDatabase, PRISMA_POSTGRES_PROVIDER, uriToCredentials } from '@prisma/internals'
 import { bold } from 'kleur/colors'
-import path from 'path'
 
 import { ConnectorType } from './printDatasources'
 import { getSocketFromDatabaseCredentials } from './unixSocket'
@@ -33,37 +28,38 @@ export type DatasourceInfo = {
   dbName?: string // database name
   schema?: string // database schema (!= multiSchema, can be found in the connection string like `?schema=myschema`)
   schemas?: string[] // database schemas from the datasource (multiSchema feature)
-  configDir?: string
 }
 
-export function parseDatasourceInfo(datasource: DataSource | undefined): DatasourceInfo {
+export function parseDatasourceInfo(
+  datasource: DataSource | undefined,
+  config: PrismaConfigWithDatasource,
+): DatasourceInfo {
+  const url = config.datasource.url
+
   if (!datasource) {
     return {
       name: undefined,
       prettyProvider: undefined,
       dbName: undefined,
       dbLocation: undefined,
-      url: undefined,
+      url,
       schema: undefined,
       schemas: undefined,
-      configDir: undefined,
     }
   }
 
   const prettyProvider = prettifyProvider(datasource.provider)
-  const url = getEffectiveUrl(datasource).value
 
   // url parsing for sql server is not implemented
-  if (!url || datasource.provider === 'sqlserver') {
+  if (datasource.provider === 'sqlserver') {
     return {
       name: datasource.name,
       prettyProvider,
       dbName: undefined,
       dbLocation: undefined,
-      url: url || undefined,
+      url,
       schema: undefined,
       schemas: datasource.schemas,
-      configDir: path.dirname(datasource.sourceFilePath),
     }
   }
 
@@ -107,42 +103,39 @@ export function parseDatasourceInfo(datasource: DataSource | undefined): Datasou
       url,
       schema: undefined,
       schemas: datasource.schemas,
-      configDir: path.dirname(datasource.sourceFilePath),
     }
   }
 }
 
-// check if we can connect to the database
-// if true: return true
-// if false: throw error
-export async function ensureCanConnectToDatabase(datasource: DataSource | undefined): Promise<Boolean | Error> {
-  if (!datasource) {
-    throw new Error(`A datasource block is missing in the Prisma schema file.`)
-  }
+/**
+ * Check if we can connect to the database and throw an error otherwise.
+ */
+export async function ensureCanConnectToDatabase(
+  pathResolutionRoot: string,
+  config: PrismaConfigWithDatasource,
+): Promise<void> {
+  const url = config.datasource.url
 
-  const schemaDir = path.dirname(datasource.sourceFilePath)
-  const url = getConnectionUrl(datasource)
-
-  // url exists because `ignoreEnvVarErrors: false` would have thrown an error if not
-  const canConnect = await canConnectToDatabase(url, schemaDir)
+  const canConnect = await canConnectToDatabase(url, pathResolutionRoot)
 
   if (canConnect === true) {
-    return true
+    return
   } else {
     const { code, message } = canConnect
     throw new Error(`${code}: ${message}`)
   }
 }
 
-export async function ensureDatabaseExists(datasource: DataSource | undefined) {
-  if (!datasource) {
-    throw new Error(`A datasource block is missing in the Prisma schema file.`)
-  }
+type SuccessMessage = string
 
-  const schemaDir = path.dirname(datasource.sourceFilePath)
-  const url = getConnectionUrl(datasource)
+export async function ensureDatabaseExists(
+  pathResolutionRoot: string,
+  provider: ConnectorType,
+  config: PrismaConfigWithDatasource,
+): Promise<SuccessMessage | undefined> {
+  const url = config.datasource.url
 
-  const canConnect = await canConnectToDatabase(url, schemaDir)
+  const canConnect = await canConnectToDatabase(url, pathResolutionRoot)
   if (canConnect === true) {
     return
   }
@@ -153,15 +146,15 @@ export async function ensureDatabaseExists(datasource: DataSource | undefined) {
     throw new Error(`${code}: ${message}`)
   }
 
-  if (await createDatabase(url, schemaDir)) {
+  if (await createDatabase(url, pathResolutionRoot)) {
     // URI parsing is not implemented for SQL server yet
-    if (datasource.provider === 'sqlserver') {
+    if (provider === 'sqlserver') {
       return `SQL Server database created.\n`
     }
 
     // parse the url
     const credentials = uriToCredentials(url)
-    const prettyProvider = prettifyProvider(datasource.provider)
+    const prettyProvider = prettifyProvider(provider)
 
     let message = `${prettyProvider} database${credentials.database ? ` ${credentials.database} ` : ' '}created`
     const dbLocation = getDbLocation(credentials)
@@ -217,16 +210,4 @@ export function prettifyProvider(provider: ConnectorType): PrettyProvider {
     case 'mongodb':
       return `MongoDB`
   }
-}
-
-function getConnectionUrl(datasource: DataSource): string {
-  const url = getEffectiveUrl(datasource)
-  if (!url.value) {
-    if (url.fromEnvVar) {
-      throw new Error(`Environment variable '${url.fromEnvVar}' with database connection URL was not found.`)
-    } else {
-      throw new Error(`Datasource is missing a database connection URL.`)
-    }
-  }
-  return url.value
 }

@@ -11,7 +11,6 @@ export default testMatrix.setupSchema(({ provider, fieldType, wrongFieldType }) 
   
   datasource db {
     provider = "${provider}"
-    url      = env("DATABASE_URI_${provider}")
   }
 
   model Store {

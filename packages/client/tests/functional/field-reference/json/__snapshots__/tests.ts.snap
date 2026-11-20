@@ -7,7 +7,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -19,7 +19,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -31,7 +31,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -43,7 +43,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -55,7 +55,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -67,7 +67,19 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
+→ XX   const products = prisma.product.findMany(
+Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
+`;
+
+exports[`field-reference.json (provider=mysql, qpe=remote) wrong field type 1`] = `
+"
+Invalid \`prisma.product.findMany()\` invocation in
+/client/tests/functional/field-reference/json/tests.ts:0:0
+
+  XX 
+  XX // TODO: Edge: skipped because of the error snapshot
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -79,7 +91,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -91,7 +103,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -103,7 +115,19 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
+→ XX   const products = prisma.product.findMany(
+Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
+`;
+
+exports[`field-reference.json (provider=postgresql, qpe=remote) wrong field type 1`] = `
+"
+Invalid \`prisma.product.findMany()\` invocation in
+/client/tests/functional/field-reference/json/tests.ts:0:0
+
+  XX 
+  XX // TODO: Edge: skipped because of the error snapshot
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -115,7 +139,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -127,7 +151,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -139,7 +163,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;
@@ -151,7 +175,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong field type', async () => {
+  XX test('wrong field type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Json but found Product.title of type String."
 `;

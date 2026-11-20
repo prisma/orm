@@ -6,7 +6,7 @@ export type ColumnType = (typeof ColumnTypeEnum)[keyof typeof ColumnTypeEnum]
 /**
  * Represents a value that can be returned for a column from `queryRaw`.
  */
-export type ResultValue = number | string | boolean | null | ResultValue[]
+export type ResultValue = number | string | boolean | null | ResultValue[] | Uint8Array
 
 export interface SqlResultSet {
   /**
@@ -85,6 +85,7 @@ export type MappedError =
   | {
       kind: 'UniqueConstraintViolation'
       constraint?: { fields: string[] } | { index: string } | { foreignKey: {} }
+      table?: string
     }
   | {
       kind: 'NullConstraintViolation'
@@ -92,6 +93,10 @@ export type MappedError =
     }
   | {
       kind: 'ForeignKeyConstraintViolation'
+      constraint?: { fields: string[] } | { index: string } | { foreignKey: {} }
+    }
+  | {
+      kind: 'RestrictViolation'
       constraint?: { fields: string[] } | { index: string } | { foreignKey: {} }
     }
   | {
@@ -142,6 +147,10 @@ export type MappedError =
       cause: string
     }
   | {
+      kind: 'InvalidInputValue'
+      message: string
+    }
+  | {
       kind: 'MissingFullTextSearchIndex'
     }
   | {
@@ -169,6 +178,7 @@ export type MappedError =
       code: number
       message: string
       state: string
+      cause?: string
     }
   | {
       kind: 'sqlite'
@@ -271,6 +281,12 @@ export type TransactionOptions = {
   usePhantomQuery: boolean
 }
 
+/**
+ * A transaction on one connection. The caller calls either `commit()` or `rollback()`, once,
+ * and sends nothing on the transaction afterwards. `commit()` is called only when no statement is
+ * running. `rollback()`, `rollbackToSavepoint()`, `releaseSavepoint()` and a `ROLLBACK` sent through
+ * `executeRaw` may be called while one is.
+ */
 export interface Transaction extends AdapterInfo, SqlQueryable {
   /**
    * Transaction options.
@@ -284,6 +300,18 @@ export interface Transaction extends AdapterInfo, SqlQueryable {
    * Roll back the transaction.
    */
   rollback(): Promise<void>
+  /**
+   * Creates a savepoint within the currently running transaction.
+   */
+  createSavepoint?(name: string): Promise<void>
+  /**
+   * Rolls back transaction state to a previously created savepoint.
+   */
+  rollbackToSavepoint?(name: string): Promise<void>
+  /**
+   * Releases a previously created savepoint. Optional because not every connector supports this operation.
+   */
+  releaseSavepoint?(name: string): Promise<void>
 }
 
 /**

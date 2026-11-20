@@ -1,0 +1,22 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Quote {
+  id      Int       @id @default(autoincrement())
+  type    QuoteKind
+  content String
+}
+
+enum QuoteKind {
+  Fact
+  Opinion
+}

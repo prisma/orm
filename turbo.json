@@ -4,7 +4,18 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "generator-build/**", "runtime/**"]
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/helpers/**/*.ts"],
+      "outputs": ["dist/**", "generator-build/**", "runtime/**"],
+      "env": ["DEV", "MINIFY"]
+    },
+    "dev": {
+      "dependsOn": ["^dev"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/helpers/**/*.ts"],
+      "outputs": ["dist/**", "generator-build/**", "runtime/**"],
+      "env": ["DEV", "MINIFY"]
+    },
+    "@prisma/type-benchmark-tests#dev": {
+      "outputs": ["**/generated"]
     }
   }
 }

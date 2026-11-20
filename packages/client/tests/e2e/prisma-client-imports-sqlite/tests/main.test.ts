@@ -94,7 +94,7 @@ function typeCheck(fileName: string, options: any) {
 
 function assertNoErrors(errors: readonly ts.Diagnostic[]) {
   if (errors.length > 0) {
-    errors.map(console.error)
+    errors.forEach((error) => console.error(error))
 
     throw new Error(`Test exited with ${errors.length} errors. See above for details.`)
   }

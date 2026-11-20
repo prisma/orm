@@ -5,7 +5,6 @@ import sortKeys from 'sort-keys'
 
 const blog = `datasource db {
   provider = "postgres"
-  url      = env("MY_POSTGRES_DB")
 }
 
 model Post {

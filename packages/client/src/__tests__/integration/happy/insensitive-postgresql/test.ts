@@ -13,11 +13,7 @@ test('insensitive-postgresql', async () => {
 
   await setupPostgres(SetupParams).catch((e) => console.error(e))
 
-  const prisma = new PrismaClient({
-    datasources: {
-      db: { url: connectionString },
-    },
-  })
+  const prisma = new PrismaClient()
 
   const defaultResult = await prisma.user.findMany({
     where: {

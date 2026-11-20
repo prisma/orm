@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.build.bundle.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "paths": {},
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

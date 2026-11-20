@@ -10,6 +10,8 @@ export type PrismaPromiseBatchTransaction = {
   kind: 'batch'
   id: number
   isolationLevel?: IsolationLevel
+  maxWait?: number
+  timeout?: number
   index: number
   lock: PromiseLike<void>
 }

@@ -1,7 +1,8 @@
-import execa from 'execa'
-import { readdirSync, statSync } from 'fs'
-import { dirname, join } from 'path'
-import { fileURLToPath } from 'url'
+import { readdirSync, statSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { execa } from 'execa'
 
 // @ts-ignore
 const parentDir = dirname(fileURLToPath(import.meta.url))
@@ -98,7 +99,7 @@ function getTestFilter() {
 function getTestDirectories() {
   return readdirSync(parentDir).filter((item) => {
     const fullPath = join(parentDir, item)
-    return statSync(fullPath).isDirectory() && !directoryBlockList.includes(item)
+    return statSync(fullPath).isDirectory() && !item.startsWith('.') && !directoryBlockList.includes(item)
   })
 }
 
@@ -110,7 +111,10 @@ function getBenchmarkFiles(dir: string) {
 
 async function runGenerate(dir: string, cwd: string) {
   console.log(`Running generate command in ${dir}...`)
-  await execa('tsx', ['../../cli/src/bin.ts', 'generate'], { cwd, stdio: 'inherit' })
+  // tsx sometimes crashes with stack overflow with the default stack size when
+  // using `pnpm dev` instead of `pnpm build` in the workspace, which skips type
+  // bundling and re-exports the types in `.d.ts` files from the raw TypeScript sources.
+  await execa('tsx', ['--stack-size=2048', '../../cli/src/bin.ts', 'generate', '--no-hints'], { cwd, stdio: 'inherit' })
 }
 
 async function runBenchmark({

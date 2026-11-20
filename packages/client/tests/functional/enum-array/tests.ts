@@ -49,7 +49,7 @@ testMatrix.setupTestSuite(
         const { Plan } = loaded
 
         const prisma = newPrismaClient({
-          // @ts-test-if: driverAdapter !== undefined
+          // @ts-test-if: provider !== Providers.MONGODB
           adapter: new PrismaPg(
             {
               connectionString: info.databaseUrl,

@@ -42,6 +42,8 @@ async function main() {
       jobsToRun.push('-migrate-')
       jobsToRun.push('-cli-')
       jobsToRun.push('-client-e2e-')
+    } else if (filesChanged.every((fileChanged) => fileChanged.startsWith('packages/query-plan-executor/'))) {
+      jobsToRun.push('-query-plan-executor-')
     } else {
       jobsToRun.push('-all-')
     }

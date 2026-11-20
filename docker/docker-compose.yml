@@ -1,10 +1,13 @@
 name: prisma-prisma
 
 # For connection urls to the following instances, see
-# https://github.com/prisma/prisma/blob/main/TESTING.md#environment-variables
+# https://github.com/prisma/prisma/blob/v7/TESTING.md#environment-variables
 services:
   postgres:
-    image: postgres:10
+    build:
+      context: ./postgres_ext
+      args:
+        POSTGRES_VERSION: 12
     restart: unless-stopped
     # Uncomment the following line to enable query logging
     # Then restart the container.
@@ -24,7 +27,10 @@ services:
       retries: 20
 
   postgres-16:
-    image: postgres:16
+    build:
+      context: ./postgres_ext
+      args:
+        POSTGRES_VERSION: 16
     restart: unless-stopped
     # Uncomment the following line to enable query logging
     # Then restart the container.

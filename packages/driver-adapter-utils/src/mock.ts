@@ -20,6 +20,7 @@ export function mockAdapter(provider: 'mysql' | 'sqlite' | 'postgres'): SqlDrive
     startTransaction: () => Promise.reject(mockAdapterErrors.startTransaction),
     executeScript: () => Promise.reject(mockAdapterErrors.executeScript),
     dispose: () => Promise.reject(mockAdapterErrors.dispose),
+    [Symbol.for('adapter.mockAdapter')]: true,
   }
 }
 
@@ -31,6 +32,7 @@ export function mockAdapterFactory(provider: 'mysql' | 'sqlite' | 'postgres'): S
     provider,
     adapterName: '@prisma/adapter-mock',
     connect: () => Promise.resolve(mockAdapter(provider)),
+    [Symbol.for('adapter.mockAdapterFactory')]: true,
   }
 }
 
@@ -45,5 +47,6 @@ export function mockMigrationAwareAdapterFactory(
     adapterName: '@prisma/adapter-mock',
     connect: () => Promise.resolve(mockAdapter(provider)),
     connectToShadowDb: () => Promise.resolve(mockAdapter(provider)),
+    [Symbol.for('adapter.mockMigrationAwareAdapterFactory')]: true,
   }
 }

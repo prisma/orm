@@ -17,7 +17,7 @@ generatorHandler({
       defaultOutput: 'default-output',
       denylists: { models: ['SomeForbiddenModel'] },
       prettyName: 'This is a pretty name',
-      requiresEngines: ['schema-engine', 'query-engine'],
+      requiresEngines: ['schema-engine'],
       requiresGenerators: ['prisma-client-js'],
     }
   },

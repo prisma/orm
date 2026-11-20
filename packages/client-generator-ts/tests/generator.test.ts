@@ -3,13 +3,7 @@ import path from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 
 import { omit } from '@prisma/client-common'
-import {
-  ClientEngineType,
-  GeneratorRegistry,
-  getClientEngineType,
-  getGenerator,
-  parseEnvValue,
-} from '@prisma/internals'
+import { GeneratorRegistry, getGenerator, parseEnvValue } from '@prisma/internals'
 import { describe, expect, test } from 'vitest'
 
 import { PrismaClientTsGenerator } from '../src/generator'
@@ -98,6 +92,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -107,29 +102,14 @@ describe('generator', () => {
     }
     manifest.requiresEngineVersion = 'ENGINE_VERSION_TEST'
 
-    if (getClientEngineType() === ClientEngineType.Library) {
-      expect(manifest).toMatchInlineSnapshot(`
-        {
-          "defaultOutput": "./generated",
-          "prettyName": "Prisma Client",
-          "requiresEngineVersion": "ENGINE_VERSION_TEST",
-          "requiresEngines": [
-            "libqueryEngine",
-          ],
-        }
-      `)
-    } else {
-      expect(manifest).toMatchInlineSnapshot(`
-        {
-          "defaultOutput": "/project/node_modules/@prisma/client",
-          "prettyName": "Prisma Client",
-          "requiresEngineVersion": "ENGINE_VERSION_TEST",
-          "requiresEngines": [
-            "queryEngine",
-          ],
-        }
-      `)
-    }
+    expect(manifest).toMatchInlineSnapshot(`
+      {
+        "defaultOutput": "./generated",
+        "prettyName": "Prisma Client",
+        "requiresEngineVersion": "ENGINE_VERSION_TEST",
+        "requiresEngines": [],
+      }
+    `)
 
     expect(omit(generator.options!.generator, ['output'])).toMatchInlineSnapshot(`
       {
@@ -171,25 +151,26 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
     }).rejects.toThrowErrorMatchingInlineSnapshot(`
       [GetDmmfError: Prisma schema validation - (get-dmmf wasm)
       Error code: P1012
       error: Error validating model "public": The model name \`public\` is invalid. It is a reserved name. Please change it. Read more at https://pris.ly/d/naming-models
-        -->  tests/denylist.prisma:11
+        -->  tests/denylist.prisma:10
          | 
-      10 | 
-      11 | model public {
-      12 |   id Int @id
-      13 | }
+       9 | 
+      10 | model public {
+      11 |   id Int @id
+      12 | }
          | 
       error: Error validating model "return": The model name \`return\` is invalid. It is a reserved name. Please change it. Read more at https://pris.ly/d/naming-models
-        -->  tests/denylist.prisma:15
+        -->  tests/denylist.prisma:14
          | 
-      14 | 
-      15 | model return {
-      16 |   id Int @id
-      17 | }
+      13 | 
+      14 | model return {
+      15 |   id Int @id
+      16 | }
          | 
 
       Validation Error Count: 2
@@ -206,6 +187,7 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
     }).rejects.toThrowErrorMatchingInlineSnapshot(
       `[Error: Could not load \`--schema\` from provided path \`tests/doesnotexist.prisma\`: file or directory not found]`,
@@ -219,6 +201,7 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
 
       await generator.generate()
@@ -241,6 +224,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -250,29 +234,14 @@ describe('generator', () => {
     }
     manifest.requiresEngineVersion = 'ENGINE_VERSION_TEST'
 
-    if (getClientEngineType(generator.config) === ClientEngineType.Library) {
-      expect(manifest).toMatchInlineSnapshot(`
-        {
-          "defaultOutput": "./generated",
-          "prettyName": "Prisma Client",
-          "requiresEngineVersion": "ENGINE_VERSION_TEST",
-          "requiresEngines": [
-            "libqueryEngine",
-          ],
-        }
-      `)
-    } else {
-      expect(manifest).toMatchInlineSnapshot(`
-        {
-          "defaultOutput": "./generated",
-          "prettyName": "Prisma Client",
-          "requiresEngineVersion": "ENGINE_VERSION_TEST",
-          "requiresEngines": [
-            "queryEngine",
-          ],
-        }
-      `)
-    }
+    expect(manifest).toMatchInlineSnapshot(`
+      {
+        "defaultOutput": "./generated",
+        "prettyName": "Prisma Client",
+        "requiresEngineVersion": "ENGINE_VERSION_TEST",
+        "requiresEngines": [],
+      }
+    `)
 
     expect(omit(generator.options!.generator, ['output'])).toMatchInlineSnapshot(`
       {
@@ -304,5 +273,86 @@ describe('generator', () => {
     expect(fs.existsSync(clientDir)).toBe(true)
     expect(fs.existsSync(path.join(clientDir, 'client.ts'))).toBe(true)
     generator.stop()
+  })
+
+  test('workerd - issue prisma#28073', async () => {
+    const generator = await getGenerator({
+      schemaPath: path.join(__dirname, 'workerd.prisma'),
+      printDownloadProgress: false,
+      skipDownload: true,
+      registry,
+      cliCommand: 'prisma',
+    })
+
+    const manifest = omit(generator.manifest!, ['version'])
+
+    if (manifest.requiresEngineVersion?.length !== 40) {
+      throw new Error(`Generator manifest should have "requiresEngineVersion" with length 40`)
+    }
+    manifest.requiresEngineVersion = 'ENGINE_VERSION_TEST'
+
+    expect(manifest).toMatchInlineSnapshot(`
+      {
+        "defaultOutput": "./generated",
+        "prettyName": "Prisma Client",
+        "requiresEngineVersion": "ENGINE_VERSION_TEST",
+        "requiresEngines": [],
+      }
+    `)
+
+    expect(omit(generator.options!.generator, ['output'])).toMatchInlineSnapshot(`
+      {
+        "binaryTargets": [
+          {
+            "fromEnvVar": null,
+            "native": true,
+            "value": "NATIVE_BINARY_TARGET",
+          },
+        ],
+        "config": {
+          "engineType": "client",
+          "runtime": "workerd",
+        },
+        "isCustomOutput": true,
+        "name": "client",
+        "previewFeatures": [],
+        "provider": {
+          "fromEnvVar": null,
+          "value": "prisma-client-ts",
+        },
+        "sourceFilePath": "/project/workerd.prisma",
+      }
+    `)
+
+    expect(path.relative(__dirname, parseEnvValue(generator.options!.generator.output!))).toMatchInlineSnapshot(
+      `"generated"`,
+    )
+
+    await generator.generate()
+    const clientDir = path.join(__dirname, 'generated')
+    expect(fs.existsSync(clientDir)).toBe(true)
+    expect(fs.existsSync(path.join(clientDir, 'client.ts'))).toBe(true)
+    generator.stop()
+
+    function allFiles(dir: string): string[] {
+      let results: string[] = []
+      for (const file of fs.readdirSync(dir)) {
+        const fullPath = path.join(dir, file)
+        if (fs.statSync(fullPath)?.isDirectory()) {
+          results = results.concat(allFiles(fullPath))
+        } else {
+          results.push(fullPath)
+        }
+      }
+      return results
+    }
+
+    // Check if the adapter property has been generated.
+    // The adapter property is now part of a union type, so it can be either required or optional (never)
+    expect(
+      allFiles(clientDir)
+        .filter((f) => f.endsWith('.ts'))
+        .some((f) => /adapter.*runtime\.SqlDriverAdapterFactory/g.test(fs.readFileSync(f, 'utf8'))),
+    ).toBe(true)
   })
 })

@@ -1,0 +1,22 @@
+import { idForProvider } from '../../../_utils/idForProvider'
+import testMatrix from '../_matrix'
+
+export default testMatrix.setupSchema(({ provider }) => {
+  return /* Prisma */ `
+      generator client {
+        provider = "prisma-client-js"
+        output   = "../generated/prisma/client"
+      }
+      
+      datasource db {
+        provider = "${provider}"
+      }
+      
+      model User {
+        id ${idForProvider(provider)}
+        char_bin_collation String @db.Char(191)
+        varchar_bin_collation String @db.VarChar(191)
+        text_bin_collation String @db.Text
+      }
+      `
+})

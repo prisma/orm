@@ -51,10 +51,10 @@ testMatrix.setupTestSuite(
       const schemaString = getTestSuiteSchema({
         cliMeta: {
           dataProxy: false,
-          engineType: 'library',
-          runtime: 'node',
+          runtime: 'client',
           previewFeatures: [],
           generatorType: 'prisma-client-js',
+          clientEngineExecutor: 'local',
         },
         suiteMeta,
         matrixOptions: suiteConfig,

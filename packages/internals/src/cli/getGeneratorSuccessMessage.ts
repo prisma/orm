@@ -1,7 +1,7 @@
 import { bold, dim } from 'kleur/colors'
 import path from 'path'
 
-import { ClientEngineType, getClientEngineType } from '../client/getClientEngineType'
+import { BuiltInProvider } from '../built-in-provider'
 import type { Generator } from '../Generator'
 import { formatms } from '../utils/formatms'
 import { parseEnvValue } from '../utils/parseEnvValue'
@@ -21,20 +21,9 @@ export function getGeneratorSuccessMessage(generator: Generator, time: number): 
 function formatVersion(generator: Generator): string | undefined {
   const version = generator.manifest?.version
 
-  if (generator.getProvider() === 'prisma-client-js') {
-    const engineType = getClientEngineType(generator.config)
-
-    let engineHint = ''
-    if (generator.options?.noEngine) {
-      engineHint = ', engine=none'
-    } else if (engineType === ClientEngineType.Binary) {
-      engineHint = ', engine=binary'
-    } else if (engineType === ClientEngineType.Library) {
-      engineHint = ''
-    }
-
+  if (generator.getProvider() === BuiltInProvider.PrismaClientJs) {
     // version is always defined for prisma-client-js
-    return `v${version ?? '?.?.?'}${engineHint}`
+    return `v${version ?? '?.?.?'}`
   }
 
   return version

@@ -1,18 +1,14 @@
-import { Debug } from '@prisma/debug'
 import { enginesVersion } from '@prisma/engines-version'
-import { EngineType, Generator, GeneratorConfig, GeneratorManifest, GeneratorOptions } from '@prisma/generator'
-import { ClientEngineType, getClientEngineType, parseEnvValue } from '@prisma/internals'
+import { Generator, GeneratorConfig, GeneratorManifest, GeneratorOptions } from '@prisma/generator'
+import { parseEnvValue } from '@prisma/internals'
 import { getTsconfig } from 'get-tsconfig'
 import { bold, dim, green } from 'kleur/colors'
-import { match } from 'ts-pattern'
 
 import { version as clientVersion } from '../package.json'
 import { inferImportFileExtension, parseGeneratedFileExtension, parseImportFileExtension } from './file-extensions'
 import { generateClient } from './generateClient'
 import { inferModuleFormat, parseModuleFormatFromUnknown } from './module-format'
-import { parseRuntimeTargetFromUnknown } from './runtime-targets'
-
-const debug = Debug('prisma:client:generator')
+import { parseRuntimeTargetFromUnknown, RuntimeTargetInternal } from './runtime-targets'
 
 const missingOutputErrorMessage = `An output path is required for the \`prisma-client\` generator. Please provide an output path in your schema file:
 
@@ -35,19 +31,11 @@ export class PrismaClientTsGenerator implements Generator {
   readonly name = 'prisma-client-ts'
 
   getManifest(config: GeneratorConfig): Promise<GeneratorManifest> {
-    const requiresEngines = match<ClientEngineType, EngineType[]>(getClientEngineType(config))
-      .with(ClientEngineType.Library, () => ['libqueryEngine'])
-      .with(ClientEngineType.Binary, () => ['queryEngine'])
-      .with(ClientEngineType.Client, () => [])
-      .exhaustive()
-
-    debug('requiresEngines', requiresEngines)
-
     return Promise.resolve({
       defaultOutput: getOutputPath(config),
       prettyName: 'Prisma Client',
       version: clientVersion,
-      requiresEngines,
+      requiresEngines: [],
       requiresEngineVersion: enginesVersion,
     })
   }
@@ -78,6 +66,7 @@ export class PrismaClientTsGenerator implements Generator {
             tsconfig,
             generatedFileExtension,
             importFileExtension,
+            outputDir,
           })
 
     await generateClient({
@@ -85,7 +74,6 @@ export class PrismaClientTsGenerator implements Generator {
       schemaPath: options.schemaPath,
       binaryPaths: options.binaryPaths!,
       datasources: options.datasources,
-      envPaths: options.envPaths,
       outputDir,
       runtimeBase: '@prisma/client/runtime',
       dmmf: options.dmmf,
@@ -93,14 +81,24 @@ export class PrismaClientTsGenerator implements Generator {
       engineVersion: options.version,
       clientVersion,
       activeProvider: options.datasources[0]?.activeProvider,
-      postinstall: options.postinstall,
-      copyEngine: !options.noEngine,
       typedSql: options.typedSql,
       target,
       generatedFileExtension,
       importFileExtension,
       moduleFormat,
       tsNoCheckPreamble: true, // Set to false only during internal tests
+      compilerBuild: parseCompilerBuildFromUnknown(options.generator.config.compilerBuild, target),
     })
   }
+}
+
+function parseCompilerBuildFromUnknown(value: unknown, target: RuntimeTargetInternal): 'fast' | 'small' {
+  if (value === undefined) {
+    // using the 'small' build for 'vercel-edge' target to fit within their free tier limits
+    return target === 'vercel-edge' ? 'small' : 'fast'
+  }
+  if (value === 'small' || value === 'fast') {
+    return value
+  }
+  throw new Error(`Invalid compiler build: ${JSON.stringify(value)}, expected one of: "fast", "small"`)
 }

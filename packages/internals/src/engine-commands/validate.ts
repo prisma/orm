@@ -1,11 +1,11 @@
 import Debug from '@prisma/debug'
+import type { MultipleSchemas } from '@prisma/get-dmmf'
 import * as E from 'fp-ts/Either'
 import { pipe } from 'fp-ts/lib/function'
 import { bold, red } from 'kleur/colors'
 import { match } from 'ts-pattern'
 
 import { ErrorArea, getWasmError, isWasmPanic, RustPanic, WasmPanic } from '../panic'
-import { type MultipleSchemas } from '../utils/schemaFileInput'
 import { prismaSchemaWasm } from '../wasm'
 import { addVersionDetailsToErrorMessage } from './errorHelpers'
 import { createDebugErrorType, parseQueryEngineError, QueryEngineErrorInit } from './queryEngineCommons'
@@ -53,9 +53,9 @@ export function validate(options: ValidateOptions): void {
         /**
          * Note: `validate` was introduced as a substitute of `getDMMF` to validate schemas the
          * same way `getDMMF` did, but without the expensive DMMF document computation, so we
-         * keep using `FORCE_PANIC_QUERY_ENGINE_GET_DMMF` to avoid breaking changes in env vars.
+         * keep using `FORCE_PANIC_GET_DMMF` to avoid breaking changes in env vars.
          */
-        if (process.env.FORCE_PANIC_QUERY_ENGINE_GET_DMMF) {
+        if (process.env.FORCE_PANIC_GET_DMMF) {
           debug('Triggering a Rust panic...')
           prismaSchemaWasm.debug_panic()
         }

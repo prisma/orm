@@ -3,10 +3,16 @@ import { PrismaClientTsGenerator } from '@prisma/client-generator-ts'
 
 import { GeneratorRegistry } from './registry'
 
-export const defaultRegistry = new GeneratorRegistry()
+export function createDefaultRegistry(cliCommand: string): GeneratorRegistry {
+  const registry = new GeneratorRegistry()
 
-defaultRegistry.add(new PrismaClientJsGenerator())
+  registry.add(new PrismaClientJsGenerator({ cliCommand }))
 
-const tsGenerator = new PrismaClientTsGenerator()
-defaultRegistry.add(tsGenerator)
-defaultRegistry.addAliased('prisma-client', tsGenerator)
+  const tsGenerator = new PrismaClientTsGenerator()
+  registry.add(tsGenerator)
+  registry.addAliased('prisma-client', tsGenerator)
+
+  return registry
+}
+
+export const defaultRegistry = createDefaultRegistry('prisma')

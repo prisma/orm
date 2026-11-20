@@ -18,7 +18,7 @@ export class DocComment implements BasicBuilder {
   write(writer: Writer) {
     writer.writeLine('/**')
     for (const line of this.lines) {
-      writer.writeLine(` * ${line}`)
+      writer.writeLine(` * ${line.replace(/\*\//g, '*\\/')}`)
     }
     writer.writeLine(' */')
     return writer

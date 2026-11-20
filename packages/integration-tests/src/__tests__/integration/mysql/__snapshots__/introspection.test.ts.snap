@@ -8,7 +8,6 @@ exports[`introspection: create bigint data: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model migrate {
@@ -27,7 +26,6 @@ exports[`introspection: create with data: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -47,7 +45,6 @@ exports[`introspection: create with empty data and SQL default: datamodel 1`] = 
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -67,7 +64,6 @@ exports[`introspection: delete where composite PK: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model variables {
@@ -91,7 +87,6 @@ exports[`introspection: delete where composite unique: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model users {
@@ -114,7 +109,6 @@ exports[`introspection: deleteMany where enum - check count: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -140,7 +134,6 @@ exports[`introspection: deleteMany where enum - check findMany: datamodel 1`] = 
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -166,7 +159,6 @@ exports[`introspection: findMany - default enum: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -192,7 +184,6 @@ exports[`introspection: findMany - email text: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model users {
@@ -212,7 +203,6 @@ exports[`introspection: findMany - email varchar(50) not null unique: datamodel 
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model users {
@@ -232,7 +222,6 @@ exports[`introspection: findMany orderBy asc: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -253,7 +242,6 @@ exports[`introspection: findMany orderBy desc: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -274,7 +262,6 @@ exports[`introspection: findMany where - case insensitive field: datamodel 1`] =
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model users {
@@ -294,7 +281,6 @@ exports[`introspection: findMany where OR[contains, contains] : datamodel 1`] = 
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -315,7 +301,6 @@ exports[`introspection: findMany where contains and boolean: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -336,7 +321,6 @@ exports[`introspection: findMany where contains: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model crons {
@@ -357,7 +341,6 @@ exports[`introspection: findMany where datetime exact: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model events {
@@ -377,7 +360,6 @@ exports[`introspection: findMany where datetime gt: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model events {
@@ -397,7 +379,6 @@ exports[`introspection: findMany where datetime gte: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model events {
@@ -417,7 +398,6 @@ exports[`introspection: findMany where datetime lt: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model events {
@@ -437,7 +417,6 @@ exports[`introspection: findMany where datetime lte - check instanceof Date: dat
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -458,7 +437,6 @@ exports[`introspection: findMany where datetime lte: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model events {
@@ -478,7 +456,6 @@ exports[`introspection: findMany where datetime not: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model events {
@@ -498,7 +475,6 @@ exports[`introspection: findMany where decimal: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model exercises {
@@ -518,7 +494,6 @@ exports[`introspection: findMany where empty in[]: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -539,7 +514,6 @@ exports[`introspection: findMany where empty notIn[]: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -560,7 +534,6 @@ exports[`introspection: findMany where endsWith: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model crons {
@@ -581,7 +554,6 @@ exports[`introspection: findMany where id empty in[] and token in[]: datamodel 1
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -602,7 +574,6 @@ exports[`introspection: findMany where in[integer]: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -623,7 +594,6 @@ exports[`introspection: findMany where in[string]: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model crons {
@@ -644,7 +614,6 @@ exports[`introspection: findMany where notIn[]: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -665,7 +634,6 @@ exports[`introspection: findMany where null: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model events {
@@ -685,7 +653,6 @@ exports[`introspection: findMany where startsWith: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model crons {
@@ -706,7 +673,6 @@ exports[`introspection: findMany where timestamp gt than now: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -727,7 +693,6 @@ exports[`introspection: findMany where timestamp gte than now: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -748,7 +713,6 @@ exports[`introspection: findMany where timestamp lt than now: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -769,7 +733,6 @@ exports[`introspection: findMany where unique: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model users {
@@ -789,7 +752,6 @@ exports[`introspection: findUnique where PK with include: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -819,7 +781,6 @@ exports[`introspection: findUnique where PK with select: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -840,7 +801,6 @@ exports[`introspection: findUnique where PK: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -860,7 +820,6 @@ exports[`introspection: findUnique where composite PK with foreign key: datamode
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model a {
@@ -892,7 +851,6 @@ exports[`introspection: findUnique where composite PK: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model variables {
@@ -916,7 +874,6 @@ exports[`introspection: findUnique where composite unique: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model users {
@@ -939,7 +896,6 @@ exports[`introspection: findUnique where decimal: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model exercises {
@@ -959,7 +915,6 @@ exports[`introspection: findUnique where unique composite (PK is a composite): d
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model variables {
@@ -984,7 +939,6 @@ exports[`introspection: findUnique where unique composite: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model variables {
@@ -1009,7 +963,6 @@ exports[`introspection: findUnique where unique with foreign key and unpack: dat
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -1039,7 +992,6 @@ exports[`introspection: findUnique where unique: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model users {
@@ -1051,6 +1003,25 @@ model users {
 
 exports[`introspection: findUnique where unique: warnings 1`] = `null`;
 
+exports[`introspection: queryRaw - Json column is returned as an object: datamodel 1`] = `
+"generator client {
+  provider = "prisma-client-js"
+  output = "***"
+}
+
+datasource mysql {
+  provider = "mysql"
+}
+
+model posts {
+  id   Int  @id
+  data Json
+}
+"
+`;
+
+exports[`introspection: queryRaw - Json column is returned as an object: warnings 1`] = `null`;
+
 exports[`introspection: update where composite PK: datamodel 1`] = `
 "generator client {
   provider = "prisma-client-js"
@@ -1059,7 +1030,6 @@ exports[`introspection: update where composite PK: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model variables {
@@ -1083,7 +1053,6 @@ exports[`introspection: update where composite unique: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model users {
@@ -1106,7 +1075,6 @@ exports[`introspection: update where integer data: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -1126,7 +1094,6 @@ exports[`introspection: update where with boolean data and select: datamodel 1`]
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -1147,7 +1114,6 @@ exports[`introspection: update where with boolean data: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -1168,7 +1134,6 @@ exports[`introspection: update where with numeric data: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -1188,7 +1153,6 @@ exports[`introspection: update where with string data: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -1208,7 +1172,6 @@ exports[`introspection: update with data - not null enum - check findMany: datam
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -1234,7 +1197,6 @@ exports[`introspection: update with data - not null enum: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -1260,7 +1222,6 @@ exports[`introspection: updateMany where null - check findMany: datamodel 1`] = 
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -1280,7 +1241,6 @@ exports[`introspection: updateMany where with string data - check findMany: data
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -1300,7 +1260,6 @@ exports[`introspection: updateMany where with string data - check returned count
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model teams {
@@ -1320,7 +1279,6 @@ exports[`introspection: updateMany with data - not null enum - check count: data
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -1346,7 +1304,6 @@ exports[`introspection: upsert (create): datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -1367,7 +1324,6 @@ exports[`introspection: upsert (update): datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model posts {
@@ -1388,7 +1344,6 @@ exports[`introspection: upsert where composite PK - create: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model variables {
@@ -1412,7 +1367,6 @@ exports[`introspection: upsert where composite PK - update: datamodel 1`] = `
 
 datasource mysql {
   provider = "mysql"
-  url = "***"
 }
 
 model variables {

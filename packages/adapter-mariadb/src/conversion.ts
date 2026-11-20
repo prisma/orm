@@ -2,7 +2,8 @@ import { ArgType, ColumnType, ColumnTypeEnum, ResultValue } from '@prisma/driver
 import * as mariadb from 'mariadb'
 
 const UNSIGNED_FLAG = 1 << 5
-const BINARY_FLAG = 1 << 7
+// https://github.com/mariadb-corporation/mariadb-connector-nodejs/blob/be72ebf9fee6e0bd153b6ff6e0bb252f794dbf0e/lib/const/collations.js#L150
+const BINARY_COLLATION_INDEX = 63
 
 const enum MariaDbColumnType {
   DECIMAL = 'DECIMAL',
@@ -78,7 +79,15 @@ export function mapColumnType(field: mariadb.FieldInfo): ColumnType {
     case MariaDbColumnType.BLOB:
     case MariaDbColumnType.TINY_BLOB:
     case MariaDbColumnType.MEDIUM_BLOB:
-      if (field.flags.valueOf() & BINARY_FLAG) {
+    case MariaDbColumnType.LONG_BLOB:
+      // Special handling for MariaDB, the database returns JSON columns as BLOB
+      // https://github.com/mariadb-corporation/mariadb-connector-nodejs/blob/1bbbb41e92d2123948c2322a4dbb5021026f2d05/lib/cmd/column-definition.js#L27
+      if (field.isDataTypeFormatJson()) {
+        return ColumnTypeEnum.Json
+      }
+      // The Binary flag of column definition applies to both text and binary data. To distinguish them, check if collation == 'binary' instead of checking the flag.
+      // https://github.com/mariadb-corporation/mariadb-connector-nodejs/blob/be72ebf9fee6e0bd153b6ff6e0bb252f794dbf0e/lib/cmd/decoder/text-decoder.js#L44
+      else if (field.collation.index === BINARY_COLLATION_INDEX) {
         return ColumnTypeEnum.Bytes
       } else {
         return ColumnTypeEnum.Text
@@ -98,7 +107,7 @@ export function mapColumnType(field: mariadb.FieldInfo): ColumnType {
   }
 }
 
-export function mapArg<A>(arg: A | Date, argType: ArgType): null | BigInt | string | Uint8Array | A {
+export function mapArg<A>(arg: A | Date, argType: ArgType): null | BigInt | string | Buffer | A {
   if (arg === null) {
     return null
   }
@@ -128,10 +137,6 @@ export function mapArg<A>(arg: A | Date, argType: ArgType): null | BigInt | stri
     return Buffer.from(arg, 'base64')
   }
 
-  if (Array.isArray(arg) && argType.scalarType === 'bytes') {
-    return Buffer.from(arg)
-  }
-
   if (ArrayBuffer.isView(arg)) {
     return Buffer.from(arg.buffer, arg.byteOffset, arg.byteLength)
   }
@@ -139,9 +144,11 @@ export function mapArg<A>(arg: A | Date, argType: ArgType): null | BigInt | stri
   return arg
 }
 
-export function mapRow<A>(row: A[], fields?: mariadb.FieldInfo[]): (A | ResultValue)[] {
-  return row.map((value, i) => {
-    const type = fields?.[i].type as unknown as MariaDbColumnType
+export function mapRow<A>(row: A[] | Record<string, A>, fields?: mariadb.FieldInfo[]): (A | ResultValue)[] {
+  const values = Array.isArray(row) ? row : Object.values(row)
+
+  return values.map((value, i) => {
+    const type = fields?.[i]?.type as unknown as MariaDbColumnType
 
     if (value === null) {
       return null
@@ -153,10 +160,6 @@ export function mapRow<A>(row: A[], fields?: mariadb.FieldInfo[]): (A | ResultVa
       case MariaDbColumnType.DATETIME:
       case MariaDbColumnType.DATETIME2:
         return new Date(`${value}Z`).toISOString().replace(/(\.000)?Z$/, '+00:00')
-    }
-
-    if (Buffer.isBuffer(value)) {
-      return Array.from(value)
     }
 
     if (typeof value === 'bigint') {
@@ -178,7 +181,7 @@ function formatDateTime(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
   const ms = date.getUTCMilliseconds()
   return (
-    date.getUTCFullYear() +
+    pad(date.getUTCFullYear(), 4) +
     '-' +
     pad(date.getUTCMonth() + 1) +
     '-' +
@@ -195,7 +198,7 @@ function formatDateTime(date: Date): string {
 
 function formatDate(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
-  return date.getUTCFullYear() + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate())
+  return pad(date.getUTCFullYear(), 4) + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate())
 }
 
 function formatTime(date: Date): string {

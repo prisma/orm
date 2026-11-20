@@ -10,7 +10,7 @@ type TypeMappingConfig = {
 }
 
 const decimal = ts.namedType('$runtime.Decimal')
-const uint8Array = ts.namedType('Uint8Array')
+const uint8Array = ts.namedType('$runtime.Bytes')
 const date = ts.namedType('Date')
 const inputJsonValue = ts.namedType('$runtime.InputJsonObject')
 const jsonValue = ts.namedType('$runtime.JsonValue')

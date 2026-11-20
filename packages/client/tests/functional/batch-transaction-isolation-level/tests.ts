@@ -9,9 +9,10 @@ declare const newPrismaClient: NewPrismaClient<PrismaClient, typeof PrismaClient
 declare let Prisma: typeof PrismaNamespace
 
 testMatrix.setupTestSuite(
-  ({ provider, driverAdapter }, _suiteMeta, _clientMeta) => {
+  ({ provider, driverAdapter, clientEngineExecutor }, _suiteMeta, _clientMeta) => {
     const isSqlServer = provider === Providers.SQLSERVER
     const isCockroachDb = provider === Providers.COCKROACHDB
+    const usesJsDrivers = driverAdapter !== undefined || clientEngineExecutor === 'remote'
 
     const queries: string[] = []
     let prisma: PrismaClient
@@ -45,7 +46,7 @@ testMatrix.setupTestSuite(
       }: { level: () => PrismaNamespace.TransactionIsolationLevel; onlyIf?: () => boolean; expectSql: string },
     ) => {
       // Driver adapters do not issue SET TRANSACTION ISOLATION LEVEL through the query engine.
-      testIf(driverAdapter === undefined && (onlyIf ? onlyIf() : true))(name, async () => {
+      testIf(!usesJsDrivers && (onlyIf ? onlyIf() : true))(name, async () => {
         await prisma.$transaction([prisma.user.findFirst({}), prisma.user.findFirst({})], {
           isolationLevel: level(),
         })
@@ -84,7 +85,7 @@ testMatrix.setupTestSuite(
       await prisma.$transaction([prisma.user.findFirst({}), prisma.user.findFirst({})])
 
       const match = queries.find((q) => q.includes('SET TRANSACTION ISOLATION LEVEL'))
-      if (isSqlServer && driverAdapter === undefined) {
+      if (isSqlServer && !usesJsDrivers) {
         expect(match).toBeDefined()
       } else {
         expect(match).toBeUndefined()

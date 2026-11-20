@@ -1,5 +1,6 @@
 services:
   test-e2e:
+    image: prisma-client-test-e2e
     build:
       context: .
       dockerfile: ./standard.dockerfile

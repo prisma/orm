@@ -1,3 +1,5 @@
+// TODO(aqrln): check if this stub is still necessary now that we have removed dotenv
+
 export function existsSync() {
   return false
 }
@@ -79,9 +81,6 @@ export function stat(path: string, callback: (err: Error | null, stats?: any) =>
 
 export const promises = {}
 
-/**
- * A stub for fs for tryLoadEnv not to attempt loading .env
- */
 const fs = {
   existsSync,
   lstatSync,

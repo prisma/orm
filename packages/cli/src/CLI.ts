@@ -1,18 +1,14 @@
 import type { PrismaConfigInternal } from '@prisma/config'
-import { Debug } from '@prisma/debug'
 import { ensureNeededBinariesExist } from '@prisma/engines'
 import type { BinaryPaths, DownloadOptions } from '@prisma/fetch-engine'
 import type { Command, Commands } from '@prisma/internals'
-import { arg, drawBox, format, HelpError, isError, link, logger, unknownCommand } from '@prisma/internals'
-import { bold, dim, green, red, underline } from 'kleur/colors'
-import { match } from 'ts-pattern'
+import { arg, drawBox, format, HelpError, isError, link, unknownCommand } from '@prisma/internals'
+import { bold, dim, green, red } from 'kleur/colors'
 
 import { runCheckpointClientCheck } from './utils/checkpoint'
-import { getClientGeneratorInfo } from './utils/client'
+import type { CliDistributionIdentity } from './utils/cli-distribution-identity'
 import { printUpdateMessage } from './utils/printUpdateMessage'
 import { Version } from './Version'
-
-const debug = Debug('prisma:cli')
 
 /**
  * CLI command
@@ -22,17 +18,19 @@ export class CLI implements Command {
     cmds: Commands,
     ensureBinaries: string[],
     download: (options: DownloadOptions) => Promise<BinaryPaths>,
+    identity: CliDistributionIdentity,
   ): CLI {
-    return new CLI(cmds, ensureBinaries, download)
+    return new CLI(cmds, ensureBinaries, download, identity)
   }
 
   private constructor(
     private readonly cmds: Commands,
     private readonly ensureBinaries: string[],
     private readonly download: (options: DownloadOptions) => Promise<BinaryPaths>,
+    private readonly identity: CliDistributionIdentity,
   ) {}
 
-  async parse(argv: string[], config: PrismaConfigInternal): Promise<string | Error> {
+  async parse(argv: string[], config: PrismaConfigInternal, baseDir: string = process.cwd()): Promise<string | Error> {
     const args = arg(argv, {
       '--help': Boolean,
       '-h': '--help',
@@ -55,77 +53,33 @@ export class CLI implements Command {
       return this.help()
     }
 
-    const hasMigrateAdapterInConfig = config.adapter !== undefined
-
-    // We pre-parse the optional custom schema path from `prisma [cmd] --schema ...`,
-    // which we use to inspect the client generator to determine whether we should
-    // download the Prisma binaries or not.
-    // Note: a probably cleaner way of doing this would be to:
-    // - change the `Command` interface so that `parse` merely parses the CLI arguments,
-    //   returning a `RunnableCommand` instance, which can then be executed via `.run()`.
-    // - call `this.cmds[cmdName].parse(...)` and access the parse `--schema` argument.
-    const cmdArgs = arg(args._.slice(1), {
-      '--schema': String,
-    })
-    const schemaPathFromArg = isError(cmdArgs) ? undefined : cmdArgs['--schema']
-
-    // Extract client generator info once, use it for either `prisma --version`, or
-    // for any other supported command. If no client generator is successfully found,
-    // use sensible default values.
-    const { engineType } = await getClientGeneratorInfo({
-      schemaPathFromConfig: config.schema,
-      schemaPathFromArg,
-    }).catch((e) => {
-      debug('Failed to read schema information. Using default values: %o', e)
-
-      const id = <const T>(x: T): T => x
-      const engineType = match(process.env.PRISMA_CLI_QUERY_ENGINE_TYPE ?? process.env.PRISMA_QUERY_ENGINE_TYPE)
-        .with('binary', id)
-        .with('library', id)
-        .otherwise(() => 'library' as const)
-
-      return { engineType }
-    })
-
     if (args['--version']) {
       await ensureNeededBinariesExist({
-        clientEngineType: engineType,
         download: this.download,
-        hasMigrateAdapterInConfig,
       })
-      return Version.new().parse(argv, config)
+      return Version.new(this.identity).parse(argv, config, baseDir)
     }
 
     // check if we have that subcommand
     const cmdName = args._[0]
     // Throw if "lift"
     if (cmdName === 'lift') {
-      throw new Error(`${red('prisma lift')} has been renamed to ${green('prisma migrate')}`)
-    }
-    // warn if "introspect"
-    else if (cmdName === 'introspect') {
-      logger.warn('')
-      logger.warn(
-        `${bold(
-          `The ${underline('prisma introspect')} command is deprecated. Please use ${green('prisma db pull')} instead.`,
-        )}`,
-      )
-      logger.warn('')
+      throw new Error(`${red(`${this.identity} lift`)} has been renamed to ${green(`${this.identity} migrate`)}`)
     }
 
     const cmd = this.cmds[cmdName]
     if (cmd) {
-      // Only track if the command actually exists
-      const checkResultPromise = runCheckpointClientCheck({ schemaPathFromConfig: config.schema }).catch(() => {
-        /* noop */
-      })
+      const checkResultPromise =
+        this.identity === 'prisma'
+          ? runCheckpointClientCheck({ schemaPathFromConfig: config.schema, baseDir }).catch(() => {
+              /* noop */
+            })
+          : undefined
 
       // if we have that subcommand, let's ensure that the binary is there in case the command needs it
       if (this.ensureBinaries.includes(cmdName)) {
         await ensureNeededBinariesExist({
-          clientEngineType: engineType,
           download: this.download,
-          hasMigrateAdapterInConfig,
         })
       }
 
@@ -140,9 +94,11 @@ export class CLI implements Command {
         argsForCmd = args._.slice(1)
       }
 
-      const result = await cmd.parse(argsForCmd, config)
+      const result = await cmd.parse(argsForCmd, config, baseDir)
 
-      printUpdateMessage(await checkResultPromise)
+      if (checkResultPromise) {
+        printUpdateMessage(await checkResultPromise)
+      }
 
       return result
     }
@@ -152,34 +108,36 @@ export class CLI implements Command {
 
   public help(error?: string) {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${CLI.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
     }
-    return CLI.help
+    return createHelp(this.identity)
   }
 
-  private static tryPdpMessage = `Optimize performance through connection pooling and caching with Prisma Accelerate
-and capture real-time events from your database with Prisma Pulse.
+  private static tryPdpMessage = `Optimize performance through connection pooling and caching with Prisma Accelerate.
 Learn more at ${link('https://pris.ly/cli/pdp')}`
 
-  private static boxedTryPdpMessage = drawBox({
+  static readonly boxedTryPdpMessage = drawBox({
     height: this.tryPdpMessage.split('\n').length,
     width: 0, // calculated automatically
     str: this.tryPdpMessage,
     horizontalPadding: 2,
   })
+}
 
-  private static help = format(`
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
     ${
       process.platform === 'win32' ? '' : bold(green('◭  '))
     }Prisma is a modern DB toolkit to query, migrate and model your database (${link('https://prisma.io')})
 
     ${bold('Usage')}
 
-      ${dim('$')} prisma [command]
+      ${dim('$')} ${identity} [command]
 
     ${bold('Commands')}
 
                 init   Set up Prisma for your app
+           bootstrap   Bootstrap a Prisma Postgres project
                  dev   Start a local Prisma Postgres server for development
             generate   Generate artifacts (e.g. Prisma Client)
                   db   Manage your database schema and lifecycle
@@ -189,48 +147,51 @@ Learn more at ${link('https://pris.ly/cli/pdp')}`
               format   Format your Prisma schema
              version   Displays Prisma version info
                debug   Displays Prisma debug info
+            platform   Prisma Data Platform commands
+            postgres   Manage Prisma Postgres databases
                  mcp   Starts an MCP server to use with AI development tools
+            complete   Generate shell completion scripts
 
     ${bold('Flags')}
 
          --preview-feature   Run Preview Prisma commands
          --help, -h          Show additional information about a command
 
-${this.boxedTryPdpMessage}
+${CLI.boxedTryPdpMessage}
 
     ${bold('Examples')}
 
-      Set up a new local Prisma Postgres \`prisma dev\`-ready project
-      ${dim('$')} prisma init
+      Set up a new local Prisma Postgres \`${identity} dev\`-ready project
+      ${dim('$')} ${identity} init
 
       Start a local Prisma Postgres server for development
-      ${dim('$')} prisma dev
+      ${dim('$')} ${identity} dev
 
       Generate artifacts (e.g. Prisma Client)
-      ${dim('$')} prisma generate
+      ${dim('$')} ${identity} generate
 
       Browse your data
-      ${dim('$')} prisma studio
+      ${dim('$')} ${identity} studio
 
       Create migrations from your Prisma schema, apply them to the database, generate artifacts (e.g. Prisma Client)
-      ${dim('$')} prisma migrate dev
+      ${dim('$')} ${identity} migrate dev
 
       Pull the schema from an existing database, updating the Prisma schema
-      ${dim('$')} prisma db pull
+      ${dim('$')} ${identity} db pull
 
       Push the Prisma schema state to the database
-      ${dim('$')} prisma db push
+      ${dim('$')} ${identity} db push
 
       Validate your Prisma schema
-      ${dim('$')} prisma validate
+      ${dim('$')} ${identity} validate
 
       Format your Prisma schema
-      ${dim('$')} prisma format
+      ${dim('$')} ${identity} format
 
       Display Prisma version info
-      ${dim('$')} prisma version
+      ${dim('$')} ${identity} version
 
       Display Prisma debug info
-      ${dim('$')} prisma debug
+      ${dim('$')} ${identity} debug
   `)
 }

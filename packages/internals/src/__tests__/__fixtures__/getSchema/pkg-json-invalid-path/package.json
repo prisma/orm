@@ -1,6 +1,0 @@
-{
-  "name": "pkg-json-invalid-path",
-  "prisma": {
-    "schema": "./wrong-path"
-  }
-}

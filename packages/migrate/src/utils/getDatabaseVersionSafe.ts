@@ -1,3 +1,4 @@
+import { PrismaConfigInternal } from '@prisma/config'
 import Debug from '@prisma/debug'
 import { MigrateTypes } from '@prisma/internals'
 
@@ -11,11 +12,13 @@ const debug = Debug('prisma:cli')
  */
 export async function getDatabaseVersionSafe(
   args: MigrateTypes.GetDatabaseVersionParams | undefined,
+  config: PrismaConfigInternal,
+  baseDir: string,
 ): Promise<string | undefined> {
   let migrate: Migrate | undefined
   let dbVersion: string | undefined
   try {
-    migrate = await Migrate.setup({})
+    migrate = await Migrate.setup({ schemaEngineConfig: config, baseDir })
     dbVersion = await migrate.engine.getDatabaseVersion(args)
   } catch (e) {
     debug(e)

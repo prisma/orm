@@ -1,4 +1,5 @@
 import type {
+  ConnectionInfo,
   IsolationLevel,
   SqlDriverAdapter,
   SqlMigrationAwareDriverAdapterFactory,
@@ -45,7 +46,7 @@ class BetterSQLite3Queryable<ClientT extends StdClient> implements SqlQueryable 
 
   constructor(
     protected readonly client: ClientT,
-    protected readonly adapterOptions?: PrismaBetterSQLite3Options,
+    protected readonly adapterOptions?: PrismaBetterSqlite3Options,
   ) {}
 
   /**
@@ -142,7 +143,7 @@ class BetterSQLite3Transaction extends BetterSQLite3Queryable<StdClient> impleme
   constructor(
     client: StdClient,
     readonly options: TransactionOptions,
-    adapterOptions: PrismaBetterSQLite3Options | undefined,
+    adapterOptions: PrismaBetterSqlite3Options | undefined,
     unlockParent: () => void,
   ) {
     super(client, adapterOptions)
@@ -160,13 +161,34 @@ class BetterSQLite3Transaction extends BetterSQLite3Queryable<StdClient> impleme
     this.#unlockParent()
     return Promise.resolve()
   }
+
+  async createSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
+
+  async rollbackToSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `ROLLBACK TO ${name}`, args: [], argTypes: [] })
+  }
+
+  async releaseSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `RELEASE SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
 }
 
-export class PrismaBetterSQLite3Adapter extends BetterSQLite3Queryable<StdClient> implements SqlDriverAdapter {
+export class PrismaBetterSqlite3Adapter extends BetterSQLite3Queryable<StdClient> implements SqlDriverAdapter {
   #mutex = new Mutex()
+  readonly #maxBindValues: number | undefined
 
-  constructor(client: StdClient, adapterOptions?: PrismaBetterSQLite3Options) {
+  constructor(client: StdClient, adapterOptions?: PrismaBetterSqlite3Options) {
     super(client, adapterOptions)
+    this.#maxBindValues = readMaxBindValues(client)
+  }
+
+  getConnectionInfo(): ConnectionInfo {
+    return {
+      maxBindValues: this.#maxBindValues,
+      supportsRelationJoins: false,
+    }
   }
 
   executeScript(script: string): Promise<void> {
@@ -214,33 +236,45 @@ type BetterSQLite3InputParams = BetterSQLite3Options & {
   url: ':memory:' | (string & {})
 }
 
-export type PrismaBetterSQLite3Options = {
+export type PrismaBetterSqlite3Options = {
   shadowDatabaseUrl?: string
   timestampFormat?: 'iso8601' | 'unixepoch-ms'
 }
 
-export class PrismaBetterSQLite3AdapterFactory implements SqlMigrationAwareDriverAdapterFactory {
+export class PrismaBetterSqlite3AdapterFactory implements SqlMigrationAwareDriverAdapterFactory {
   readonly provider = 'sqlite'
   readonly adapterName = packageName
 
   readonly #config: BetterSQLite3InputParams
-  readonly #options?: PrismaBetterSQLite3Options
+  readonly #options?: PrismaBetterSqlite3Options
 
-  constructor(config: BetterSQLite3InputParams, options?: PrismaBetterSQLite3Options) {
+  constructor(config: BetterSQLite3InputParams, options?: PrismaBetterSqlite3Options) {
     this.#config = config
     this.#options = options
   }
 
   connect(): Promise<SqlDriverAdapter> {
-    return Promise.resolve(new PrismaBetterSQLite3Adapter(createBetterSQLite3Client(this.#config), this.#options))
+    return Promise.resolve(new PrismaBetterSqlite3Adapter(createBetterSQLite3Client(this.#config), this.#options))
   }
 
   connectToShadowDb(): Promise<SqlDriverAdapter> {
     const url = this.#options?.shadowDatabaseUrl ?? ':memory:'
     return Promise.resolve(
-      new PrismaBetterSQLite3Adapter(createBetterSQLite3Client({ ...this.#config, url }), this.#options),
+      new PrismaBetterSqlite3Adapter(createBetterSQLite3Client({ ...this.#config, url }), this.#options),
     )
   }
+}
+
+/**
+ * SQLite's bind parameter limit is set at compile time: 999 before SQLite 3.32.0, 32766 since.
+ * Read it from the loaded build so the query interpreter doesn't fall back to the old 999 default.
+ * Returns `undefined` (keeping that default) when the build doesn't report it.
+ */
+function readMaxBindValues(client: StdClient): number | undefined {
+  const options = client.pragma('compile_options') as Array<{ compile_options: string }>
+  const option = options.find(({ compile_options }) => compile_options.startsWith('MAX_VARIABLE_NUMBER='))
+  const value = Number(option?.compile_options.slice('MAX_VARIABLE_NUMBER='.length))
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined
 }
 
 function createBetterSQLite3Client(input: BetterSQLite3InputParams): StdClient {

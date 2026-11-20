@@ -90,7 +90,15 @@ export function mapIsolationLevel(level: IsolationLevel): sql.IIsolationLevel {
   }
 }
 
-export function mapArg<A>(arg: A | BigInt | Date, argType: ArgType): null | number | BigInt | string | Uint8Array | A {
+/**
+ * Whether a number must be bound as FLOAT explicitly. mssql infers BIGINT for integer-valued numbers
+ * outside the INT range, which rejects floats such as 1e20.
+ */
+export function isFloatArg(arg: unknown, argType: ArgType): arg is number {
+  return typeof arg === 'number' && (argType.dbType === 'FLOAT' || argType.dbType === 'REAL')
+}
+
+export function mapArg<A>(arg: A | BigInt | Date, argType: ArgType): null | number | BigInt | string | Buffer | A {
   if (arg === null) {
     return null
   }
@@ -123,10 +131,6 @@ export function mapArg<A>(arg: A | BigInt | Date, argType: ArgType): null | numb
 
   if (typeof arg === 'string' && argType.scalarType === 'bytes') {
     return Buffer.from(arg, 'base64')
-  }
-
-  if (Array.isArray(arg) && argType.scalarType === 'bytes') {
-    return Buffer.from(arg)
   }
 
   if (ArrayBuffer.isView(arg)) {
@@ -162,10 +166,6 @@ export function mapRow<A>(row: A[], columns?: sql.IColumn[]): (A | ResultValue)[
       return value
     }
 
-    if (Buffer.isBuffer(value)) {
-      return Array.from(value)
-    }
-
     // Using lower case to make it consistent with the driver in prisma-engines.
     if (typeof value === 'string' && type === sql.UniqueIdentifier) {
       return value.toLowerCase()
@@ -183,7 +183,7 @@ function formatDateTime(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
   const ms = date.getUTCMilliseconds()
   return (
-    date.getUTCFullYear() +
+    pad(date.getUTCFullYear(), 4) +
     '-' +
     pad(date.getUTCMonth() + 1) +
     '-' +
@@ -200,7 +200,7 @@ function formatDateTime(date: Date): string {
 
 function formatDate(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
-  return date.getUTCFullYear() + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate())
+  return pad(date.getUTCFullYear(), 4) + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate())
 }
 
 function formatTime(date: Date): string {

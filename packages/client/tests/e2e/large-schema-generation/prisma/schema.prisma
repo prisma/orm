@@ -1,0 +1,11 @@
+// Placeholder schema file - will be overwritten by the test's schema generator
+// This file is just to ensure the prisma directory structure is correct
+
+generator client {
+  provider = "prisma-client"
+  output = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}

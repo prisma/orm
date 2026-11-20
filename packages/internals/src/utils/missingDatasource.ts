@@ -9,7 +9,6 @@ You can define a datasource like this:
 ${bold(
   highlightDatamodel(`datasource db {
   provider = "postgresql"
-  url      = env("DB_URL")
 }`),
 )}
 

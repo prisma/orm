@@ -1,4 +1,4 @@
-import fs from 'fs'
+import fs from 'node:fs'
 
 export function chmodPlusX(file: string): void {
   // Note: skip for windows as chmod does on exist there

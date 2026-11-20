@@ -12,7 +12,7 @@ export function createModelFile(context: GenerateContext, modelName: string): st
 `
 
   const imports = [
-    ts.moduleImport(context.runtimeImport).asNamespace('runtime'),
+    ts.moduleImport(context.runtimeImport).asNamespace('runtime').typeOnly(),
     ts.moduleImport(context.importFileName(`../enums`)).asNamespace('$Enums').typeOnly(),
     ts.moduleImport(context.importFileName(`../internal/prismaNamespace`)).asNamespace('Prisma').typeOnly(),
   ]

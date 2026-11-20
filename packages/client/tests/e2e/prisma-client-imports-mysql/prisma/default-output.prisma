@@ -3,12 +3,10 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
   provider = "mysql"
-  url      = "mysql://prisma:prisma@localhost:3306/prisma"
 }
 
 model User {

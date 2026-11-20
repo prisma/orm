@@ -53,7 +53,7 @@ export class SourceFileSlice {
    * @returns
    */
   mapLineAt(lineNumber: number, mapFn: (line: string) => string): SourceFileSlice {
-    if (lineNumber < this.firstLineNumber || lineNumber > this.lines.length + this.firstLineNumber) {
+    if (lineNumber < this.firstLineNumber || lineNumber > this.lastLineNumber) {
       return this
     }
     const idx = lineNumber - this.firstLineNumber
@@ -116,8 +116,17 @@ export class SourceFileSlice {
    * @returns
    */
   slice(fromLine: number, toLine: number): SourceFileSlice {
-    const slicedLines = this.lines.slice(fromLine - 1, toLine).join('\n')
-    return new SourceFileSlice(fromLine, dedent(slicedLines).split('\n'))
+    const clampedFrom = Math.max(fromLine, this.firstLineNumber)
+    const clampedTo = Math.min(toLine, this.lastLineNumber)
+
+    if (clampedFrom > clampedTo) {
+      return new SourceFileSlice(fromLine, [])
+    }
+
+    const slicedLines = this.lines
+      .slice(clampedFrom - this.firstLineNumber, clampedTo - this.firstLineNumber + 1)
+      .join('\n')
+    return new SourceFileSlice(clampedFrom, dedent(slicedLines).split('\n'))
   }
 
   /**

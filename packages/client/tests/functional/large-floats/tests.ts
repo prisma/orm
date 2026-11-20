@@ -1,3 +1,4 @@
+import { Providers } from '../_utils/providers'
 import testMatrix from './_matrix'
 // @ts-ignore
 import type { PrismaClient } from './generated/prisma/client'
@@ -41,6 +42,15 @@ testMatrix.setupTestSuite(
       only postgres < 12 is affected. If not fixed by then, should be ok to unskip after Postgres 11 goes
       out of support.
     `,
+    },
+    skip(when, { clientEngineExecutor, provider }) {
+      when(
+        clientEngineExecutor === 'remote' && provider === Providers.POSTGRESQL,
+        `
+        Query plan executor server uses pg driver internally, so it is affected
+        by the issue above too.
+        `,
+      )
     },
   },
 )

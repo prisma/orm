@@ -1,11 +1,9 @@
 datasource db {
   provider = "sqlite"
-  url      = "file:dev.db"
 }
 
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "binary"
+  provider = "prisma-client-js"
 }
 
 model Events {

@@ -1,13 +1,31 @@
+import { afterAll, beforeEach, describe, expect, test } from 'vitest'
+
 import { isInteractive } from '../isInteractive'
 
 const originalEnv = { ...process.env }
 
+function restoreEnv() {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in originalEnv)) {
+      delete process.env[key]
+    }
+  }
+
+  for (const [key, value] of Object.entries(originalEnv)) {
+    if (value === undefined) {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  }
+}
+
 describe('isInteractive', () => {
   beforeEach(() => {
-    process.env = { ...originalEnv }
+    restoreEnv()
   })
   afterAll(() => {
-    process.env = { ...originalEnv }
+    restoreEnv()
   })
 
   describe('in non TTY environment', () => {

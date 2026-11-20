@@ -33,6 +33,12 @@ class ErrorRegistryInternal implements ErrorRegistry {
   }
 }
 
+function copySymbolsFromSource<S extends object, T extends object>(source: S, target: T) {
+  const symbols = Object.getOwnPropertySymbols(source)
+  const symbolObject = Object.fromEntries(symbols.map((symbol) => [symbol, true]))
+  Object.assign(target, symbolObject)
+}
+
 export const bindMigrationAwareSqlAdapterFactory = (
   adapterFactory: SqlMigrationAwareDriverAdapterFactory,
 ): ErrorCapturingSqlMigrationAwareDriverAdapterFactory => {
@@ -52,6 +58,8 @@ export const bindMigrationAwareSqlAdapterFactory = (
     },
   }
 
+  copySymbolsFromSource(adapterFactory, boundFactory)
+
   return boundFactory
 }
 
@@ -69,6 +77,8 @@ export const bindSqlAdapterFactory = (
       return ctx.map((ctx) => bindAdapter(ctx, errorRegistry))
     },
   }
+
+  copySymbolsFromSource(adapterFactory, boundFactory)
 
   return boundFactory
 }
@@ -103,7 +113,7 @@ export const bindAdapter = (
 // *.bind(transaction) is required to preserve the `this` context of functions whose
 // execution is delegated to napi.rs.
 const bindTransaction = (errorRegistry: ErrorRegistryInternal, transaction: Transaction): ErrorCapturingTransaction => {
-  return {
+  const boundTransaction: ErrorCapturingTransaction = {
     adapterName: transaction.adapterName,
     provider: transaction.provider,
     options: transaction.options,
@@ -112,6 +122,20 @@ const bindTransaction = (errorRegistry: ErrorRegistryInternal, transaction: Tran
     commit: wrapAsync(errorRegistry, transaction.commit.bind(transaction)),
     rollback: wrapAsync(errorRegistry, transaction.rollback.bind(transaction)),
   }
+
+  if (transaction.createSavepoint) {
+    boundTransaction.createSavepoint = wrapAsync(errorRegistry, transaction.createSavepoint.bind(transaction))
+  }
+
+  if (transaction.rollbackToSavepoint) {
+    boundTransaction.rollbackToSavepoint = wrapAsync(errorRegistry, transaction.rollbackToSavepoint.bind(transaction))
+  }
+
+  if (transaction.releaseSavepoint) {
+    boundTransaction.releaseSavepoint = wrapAsync(errorRegistry, transaction.releaseSavepoint.bind(transaction))
+  }
+
+  return boundTransaction
 }
 
 function wrapAsync<A extends unknown[], R>(

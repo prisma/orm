@@ -5,6 +5,5 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("TEST_POSTGRES_URI_MIGRATE")
   schemas  = ["public", "work"]
 }

@@ -1,8 +1,8 @@
-import type { ExecaChildProcess } from 'execa'
-import execa from 'execa'
+import path from 'node:path'
+
+import { type ExecaChildProcess, execaNode } from 'execa'
 import fs from 'fs-jetpack'
 import type { FSJetpack, InspectTreeResult } from 'fs-jetpack/types'
-import path from 'path'
 import tempy from 'tempy'
 import { afterEach, beforeEach, type MockInstance, vi } from 'vitest'
 
@@ -91,10 +91,11 @@ ${[...generateDirectoryTree(children, indent)].join('\n')}
         })
         // symlink to local client version in tmp dir
         c.fs.symlink(path.join(originalCwd, '..', 'client'), path.join(c.fs.cwd(), 'node_modules', '@prisma', 'client'))
+        c.fs.symlink(path.join(originalCwd, '..', 'config'), path.join(c.fs.cwd(), 'node_modules', '@prisma', 'config'))
       }
 
       c.cli = (...input) => {
-        return execa.node(path.join(originalCwd, '../cli/build/index.js'), input, {
+        return execaNode(path.join(originalCwd, '../cli/build/index.js'), input, {
           cwd: c.fs.cwd(),
           stdio: 'pipe',
           all: true,
@@ -253,7 +254,7 @@ export const vitestProcessExitContext =
       ctx.mocked['process.exit'] = vi.spyOn(process, 'exit').mockImplementation((number) => {
         throw new Error('process.exit: ' + number)
       })
-      ctx.recordedExitCode = () => ctx.mocked['process.exit'].mock.calls[0]?.[0] ?? 0
+      ctx.recordedExitCode = () => Number(ctx.mocked['process.exit'].mock.calls[0]?.[0] ?? 0)
     })
 
     afterEach(() => {

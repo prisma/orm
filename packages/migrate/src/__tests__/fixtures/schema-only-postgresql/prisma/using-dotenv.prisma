@@ -1,9 +1,0 @@
-datasource my_db {
-  provider = "postgresql"
-  url      = env("FROM_DOTENV_FILE_POSTGRES")
-}
-
-model Blog {
-  id          Int @id
-  viewCount20 Int
-}

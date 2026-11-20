@@ -1,6 +1,6 @@
 import { getEnginesPath } from '@prisma/engines'
 import { BinaryType, engineEnvVarMap, getBinaryEnvVarPath } from '@prisma/fetch-engine'
-import { getBinaryTargetForCurrentPlatform, getNodeAPIName } from '@prisma/get-platform'
+import { getBinaryTargetForCurrentPlatform } from '@prisma/get-platform'
 import * as TE from 'fp-ts/TaskEither'
 import fs from 'fs'
 import { ensureDir } from 'fs-extra'
@@ -15,10 +15,6 @@ export { BinaryType, engineEnvVarMap }
 async function getBinaryName(name: BinaryType): Promise<string> {
   const binaryTarget = await getBinaryTargetForCurrentPlatform()
   const extension = binaryTarget === 'windows' ? '.exe' : ''
-
-  if (name === BinaryType.QueryEngineLibrary) {
-    return getNodeAPIName(binaryTarget, 'fs')
-  }
   return `${name}-${binaryTarget}${extension}`
 }
 
@@ -54,7 +50,7 @@ export async function resolveBinary(name: BinaryType, proposedPath?: string): Pr
     return maybeCopyToTmp(prismaPath3)
   }
 
-  // TODO for ?? / needed to come from @prisma/client/generator-build to @prisma/client/runtime
+  // fallback for an engine placed in a sibling `runtime` directory next to the bundle
   const prismaPath4 = path.join(__dirname, '../runtime', binaryName)
   if (fs.existsSync(prismaPath4)) {
     return maybeCopyToTmp(prismaPath4)

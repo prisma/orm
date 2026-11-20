@@ -22,11 +22,11 @@ import { TSClientOptions } from '../TSClient/TSClient'
  * @param datamodel
  * @returns
  */
-export function buildRuntimeDataModel(datamodel: DMMF.Datamodel, runtimeNameJs: TSClientOptions['runtimeNameJs']) {
+export function buildRuntimeDataModel(datamodel: DMMF.Datamodel, runtimeName: TSClientOptions['runtimeName']) {
   const runtimeDataModel = dmmfToRuntimeDataModel(datamodel)
 
   let prunedDataModel: PrunedRuntimeDataModel | RuntimeDataModel
-  if (runtimeNameJs === 'wasm-engine-edge' || runtimeNameJs === 'wasm-compiler-edge' || runtimeNameJs === 'client') {
+  if (runtimeName === 'wasm-compiler-edge' || runtimeName === 'client') {
     prunedDataModel = pruneRuntimeDataModel(runtimeDataModel)
   } else {
     prunedDataModel = runtimeDataModel

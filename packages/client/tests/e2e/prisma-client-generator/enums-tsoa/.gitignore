@@ -1,0 +1,4 @@
+/src/generated
+/prisma/db
+/dist
+/build

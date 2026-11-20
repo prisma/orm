@@ -2,22 +2,21 @@
 /* eslint-disable jest/no-identical-title */
 import { stripVTControlCharacters } from 'node:util'
 
-import { defaultTestConfig } from '@prisma/config'
 import { jestContext } from '@prisma/get-platform'
-import { serializeQueryEngineName } from '@prisma/internals'
 import { DbExecute, DbPull, DbPush, MigrateDev, MigrateReset } from '@prisma/migrate'
 import fs from 'fs'
 
 import { Format } from '../Format'
 import { Validate } from '../Validate'
+import { configContextContributor } from './_utils/config-context'
 
-const ctx = jestContext.new().assemble()
+const ctx = jestContext.new().add(configContextContributor()).assemble()
 
 /**
  * Commands:
  * - wasm engine
  *   - format
- * - library/binary engine
+ * - library engine
  *   - validate
  *   - db push
  *   - db pull
@@ -34,27 +33,13 @@ DROP TABLE 'test-dbexecute';`
 describe('[wasm] incomplete-schemas', () => {
   describe('datasource-block-url-env-set-invalid', () => {
     beforeEach(() => {
-      ctx.fixture('incomplete-schemas/datasource-block-url-env-set-invalid/prisma')
-    })
-
-    it('format', async () => {
-      const result = await Format.new().parse([], defaultTestConfig())
-      expect(result).toMatch(/^Formatted (.*) in \d+(\.\d+)?m?s 🚀$/)
-    })
-
-    it('validate', async () => {
-      expect.assertions(1)
-      try {
-        await Validate.new().parse([], defaultTestConfig())
-      } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchSnapshot()
-      }
+      ctx.fixture('incomplete-schemas/datasource-block-url-env-set-invalid')
     })
 
     it('db push', async () => {
       expect.assertions(1)
       try {
-        await DbPush.new().parse([], defaultTestConfig())
+        await DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
         expect(stripVTControlCharacters(e.message)).toMatchSnapshot()
       }
@@ -63,22 +48,13 @@ describe('[wasm] incomplete-schemas', () => {
     it('db pull', async () => {
       expect.assertions(1)
       try {
-        await DbPull.new().parse([], defaultTestConfig())
+        await DbPull.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
         expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Error validating datasource \`db\`: the URL must start with the protocol \`postgresql://\` or \`postgres://\`.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_DEFINED_INVALID_URL")
-             | 
+          "P1013
 
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
+          The provided database string is invalid. \`datasource.url\` in \`prisma.config.ts\` is invalid: must start with the protocol \`postgresql://\` or \`postgres://\`.
+          "
         `)
       }
     })
@@ -88,22 +64,13 @@ describe('[wasm] incomplete-schemas', () => {
       expect.assertions(1)
 
       try {
-        await DbExecute.new().parse(['--file=./script.sql', '--schema=./schema.prisma'], defaultTestConfig())
+        await DbExecute.new('prisma').parse(['--file=./script.sql'], await ctx.config(), ctx.configDir())
       } catch (e) {
         expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Error validating datasource \`db\`: the URL must start with the protocol \`postgresql://\` or \`postgres://\`.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_DEFINED_INVALID_URL")
-             | 
+          "P1013
 
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
+          The provided database string is invalid. The scheme is not recognized in database URL. Please refer to the documentation in https://pris.ly/d/config-url for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters.
+          "
         `)
       }
     })
@@ -111,121 +78,61 @@ describe('[wasm] incomplete-schemas', () => {
     it('migrate reset', async () => {
       expect.assertions(1)
       try {
-        await MigrateReset.new().parse([], defaultTestConfig())
+        await MigrateReset.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Error validating datasource \`db\`: the URL must start with the protocol \`postgresql://\` or \`postgres://\`.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_DEFINED_INVALID_URL")
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"P1013: The provided database string is invalid. The scheme is not recognized in database URL. Please refer to the documentation in https://pris.ly/d/config-url for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters."`,
+        )
       }
     })
 
     it('migrate dev', async () => {
       expect.assertions(1)
       try {
-        await MigrateDev.new().parse([], defaultTestConfig())
+        await MigrateDev.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Error validating datasource \`db\`: the URL must start with the protocol \`postgresql://\` or \`postgres://\`.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_DEFINED_INVALID_URL")
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"P1013: The provided database string is invalid. The scheme is not recognized in database URL. Please refer to the documentation in https://pris.ly/d/config-url for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters."`,
+        )
       }
     })
   })
 
   describe('datasource-block-url-env-unset', () => {
     beforeEach(() => {
-      ctx.fixture('incomplete-schemas/datasource-block-url-env-unset/prisma')
+      ctx.fixture('incomplete-schemas/datasource-block-url-env-unset')
     })
 
     it('validate', async () => {
       expect.assertions(1)
       try {
-        await Validate.new().parse([], defaultTestConfig())
+        await Validate.new('prisma').parse([], await ctx.config())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Environment variable not found: SOME_UNDEFINED_DB.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_UNDEFINED_DB")
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"Failed to load config file "/tmp/dir" as a TypeScript/JavaScript module. Error: PrismaConfigEnvError: Cannot resolve environment variable: SOME_UNDEFINED_DB."`,
+        )
       }
     })
 
     it('db push', async () => {
       expect.assertions(1)
       try {
-        await DbPush.new().parse([], defaultTestConfig())
+        await DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Environment variable not found: SOME_UNDEFINED_DB.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_UNDEFINED_DB")
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"Failed to load config file "/tmp/dir" as a TypeScript/JavaScript module. Error: PrismaConfigEnvError: Cannot resolve environment variable: SOME_UNDEFINED_DB."`,
+        )
       }
     })
 
     it('db pull', async () => {
       expect.assertions(1)
       try {
-        await DbPull.new().parse([], defaultTestConfig())
+        await DbPull.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Environment variable not found: SOME_UNDEFINED_DB.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_UNDEFINED_DB")
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"Failed to load config file "/tmp/dir" as a TypeScript/JavaScript module. Error: PrismaConfigEnvError: Cannot resolve environment variable: SOME_UNDEFINED_DB."`,
+        )
       }
     })
 
@@ -234,111 +141,45 @@ describe('[wasm] incomplete-schemas', () => {
       expect.assertions(1)
 
       try {
-        await DbExecute.new().parse(['--file=./script.sql', '--schema=./schema.prisma'], defaultTestConfig())
+        const config = await ctx.config()
+        await DbExecute.new('prisma').parse(['--file=./script.sql'], config, ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Environment variable not found: SOME_UNDEFINED_DB.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_UNDEFINED_DB")
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"Failed to load config file "/tmp/dir" as a TypeScript/JavaScript module. Error: PrismaConfigEnvError: Cannot resolve environment variable: SOME_UNDEFINED_DB."`,
+        )
       }
     })
 
     it('migrate reset', async () => {
       expect.assertions(1)
       try {
-        await MigrateReset.new().parse([], defaultTestConfig())
+        await MigrateReset.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Environment variable not found: SOME_UNDEFINED_DB.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_UNDEFINED_DB")
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"Failed to load config file "/tmp/dir" as a TypeScript/JavaScript module. Error: PrismaConfigEnvError: Cannot resolve environment variable: SOME_UNDEFINED_DB."`,
+        )
       }
     })
 
     it('migrate dev', async () => {
       expect.assertions(1)
       try {
-        await MigrateDev.new().parse([], defaultTestConfig())
+        await MigrateDev.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Environment variable not found: SOME_UNDEFINED_DB.
-            -->  schema.prisma:5
-             | 
-           4 |   provider = "postgresql"
-           5 |   url      = env("SOME_UNDEFINED_DB")
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"Failed to load config file "/tmp/dir" as a TypeScript/JavaScript module. Error: PrismaConfigEnvError: Cannot resolve environment variable: SOME_UNDEFINED_DB."`,
+        )
       }
-    })
-  })
-
-  describe('datasource-block-url-env-unset', () => {
-    beforeEach(() => {
-      ctx.fixture('incomplete-schemas/datasource-block-url-env-unset/prisma')
-    })
-
-    it('format', async () => {
-      const result = await Format.new().parse([], defaultTestConfig())
-      expect(result).toMatch(/^Formatted (.*) in \d+(\.\d+)?m?s 🚀$/)
-    })
-  })
-
-  describe('datasource-block-no-url', () => {
-    beforeEach(() => {
-      ctx.fixture('incomplete-schemas/datasource-block-no-url/prisma')
     })
 
     it('validate', async () => {
       expect.assertions(1)
       try {
-        await Validate.new().parse([], defaultTestConfig())
+        await Validate.new('prisma').parse([], await ctx.config())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (validate wasm)
-          Error code: P1012
-          error: Argument "url" is missing in data source block "db".
-            -->  schema.prisma:3
-             | 
-           2 | 
-           3 | datasource db {
-           4 |   provider = "postgresql"
-           5 | }
-             | 
-
-          Validation Error Count: 1
-          [Context: validate]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"Failed to load config file "/tmp/dir" as a TypeScript/JavaScript module. Error: PrismaConfigEnvError: Cannot resolve environment variable: SOME_UNDEFINED_DB."`,
+        )
       }
     })
 
@@ -346,97 +187,53 @@ describe('[wasm] incomplete-schemas', () => {
       expect.assertions(1)
 
       try {
-        await Format.new().parse([], defaultTestConfig())
+        await Format.new('prisma').parse([], await ctx.config())
       } catch (e) {
-        expect(serializeQueryEngineName(stripVTControlCharacters(e.message))).toMatchInlineSnapshot(`
-          "Prisma schema validation - (validate wasm)
-          Error code: P1012
-          error: Argument "url" is missing in data source block "db".
-            -->  schema.prisma:3
-             | 
-           2 | 
-           3 | datasource db {
-           4 |   provider = "postgresql"
-           5 | }
-             | 
-
-          Validation Error Count: 1
-          [Context: validate]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"Failed to load config file "/tmp/dir" as a TypeScript/JavaScript module. Error: PrismaConfigEnvError: Cannot resolve environment variable: SOME_UNDEFINED_DB."`,
+        )
       }
     })
   })
 
   describe('empty-schema', () => {
     beforeEach(() => {
-      ctx.fixture('incomplete-schemas/empty-schema/prisma')
-    })
-
-    it('format', async () => {
-      const result = await Format.new().parse([], defaultTestConfig())
-      expect(result).toMatch(/^Formatted (.*) in \d+(\.\d+)?m?s 🚀$/)
+      ctx.fixture('incomplete-schemas/empty-schema')
     })
 
     it('validate', async () => {
-      const result = await Validate.new().parse([], defaultTestConfig())
-      expect(result).toMatch(/^The schema at (.*) is valid 🚀$/)
+      await expect(Validate.new('prisma').parse([], await ctx.config())).resolves.not.toThrow()
+    })
+
+    it('format', async () => {
+      await expect(Format.new('prisma').parse([], await ctx.config())).resolves.not.toThrow()
     })
   })
 
   describe('datasource-block-no-url', () => {
     beforeEach(() => {
-      ctx.fixture('incomplete-schemas/datasource-block-no-url/prisma')
+      ctx.fixture('incomplete-schemas/datasource-block-no-url')
     })
 
     it('db push', async () => {
       expect.assertions(1)
       try {
-        await DbPush.new().parse([], defaultTestConfig())
+        await DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Argument "url" is missing in data source block "db".
-            -->  schema.prisma:3
-             | 
-           2 | 
-           3 | datasource db {
-           4 |   provider = "postgresql"
-           5 | }
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"The datasource.url property is required in your Prisma config file when using prisma db push."`,
+        )
       }
     })
 
     it('db pull', async () => {
       expect.assertions(1)
       try {
-        await DbPull.new().parse([], defaultTestConfig())
+        await DbPull.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Argument "url" is missing in data source block "db".
-            -->  schema.prisma:3
-             | 
-           2 | 
-           3 | datasource db {
-           4 |   provider = "postgresql"
-           5 | }
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"The datasource.url property is required in your Prisma config file when using prisma db pull."`,
+        )
       }
     })
 
@@ -445,75 +242,33 @@ describe('[wasm] incomplete-schemas', () => {
       expect.assertions(1)
 
       try {
-        await DbExecute.new().parse(['--file=./script.sql', '--schema=./schema.prisma'], defaultTestConfig())
+        await DbExecute.new('prisma').parse(['--file=./script.sql'], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Argument "url" is missing in data source block "db".
-            -->  schema.prisma:3
-             | 
-           2 | 
-           3 | datasource db {
-           4 |   provider = "postgresql"
-           5 | }
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"The datasource.url property is required in your Prisma config file when using prisma db execute."`,
+        )
       }
     })
 
     it('migrate reset', async () => {
       expect.assertions(1)
       try {
-        await MigrateReset.new().parse([], defaultTestConfig())
+        await MigrateReset.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Argument "url" is missing in data source block "db".
-            -->  schema.prisma:3
-             | 
-           2 | 
-           3 | datasource db {
-           4 |   provider = "postgresql"
-           5 | }
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"The datasource.url property is required in your Prisma config file when using prisma migrate reset."`,
+        )
       }
     })
 
     it('migrate dev', async () => {
       expect.assertions(1)
       try {
-        await MigrateDev.new().parse([], defaultTestConfig())
+        await MigrateDev.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
-          "Prisma schema validation - (get-config wasm)
-          Error code: P1012
-          error: Argument "url" is missing in data source block "db".
-            -->  schema.prisma:3
-             | 
-           2 | 
-           3 | datasource db {
-           4 |   provider = "postgresql"
-           5 | }
-             | 
-
-          Validation Error Count: 1
-          [Context: getConfig]
-
-          Prisma CLI Version : 0.0.0"
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(
+          `"The datasource.url property is required in your Prisma config file when using prisma migrate dev."`,
+        )
       }
     })
   })
@@ -522,67 +277,42 @@ describe('[wasm] incomplete-schemas', () => {
 describe('[normalized library/binary] incomplete-schemas', () => {
   describe('empty-schema', () => {
     beforeEach(() => {
-      ctx.fixture('incomplete-schemas/empty-schema/prisma')
+      ctx.fixture('incomplete-schemas/empty-schema')
     })
 
     it('db push', async () => {
       expect.assertions(1)
       try {
-        await DbPush.new().parse([], defaultTestConfig())
+        await DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(serializeQueryEngineName(stripVTControlCharacters(e.message))).toMatchInlineSnapshot(
-          `"A datasource block is missing in the Prisma schema file."`,
-        )
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`"Schema must contain a datasource block"`)
       }
     })
 
     it('db pull', async () => {
       expect.assertions(1)
       try {
-        await DbPull.new().parse([], defaultTestConfig())
+        await DbPull.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(serializeQueryEngineName(stripVTControlCharacters(e.message))).toMatchInlineSnapshot(`
-          "There is no datasource in the schema.
-
-          "
-        `)
-      }
-    })
-
-    it('db execute', async () => {
-      fs.writeFileSync('script.sql', dbExecuteSQLScript)
-      expect.assertions(1)
-
-      try {
-        await DbExecute.new().parse(['--file=./script.sql', '--schema=./schema.prisma'], defaultTestConfig())
-      } catch (e) {
-        expect(serializeQueryEngineName(stripVTControlCharacters(e.message))).toMatchInlineSnapshot(`
-          "There is no datasource in the schema.
-
-          "
-        `)
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`"Schema must contain a datasource block"`)
       }
     })
 
     it('migrate reset', async () => {
       expect.assertions(1)
       try {
-        await MigrateReset.new().parse([], defaultTestConfig())
+        await MigrateReset.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(serializeQueryEngineName(stripVTControlCharacters(e.message))).toMatchInlineSnapshot(
-          `"A datasource block is missing in the Prisma schema file."`,
-        )
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`"Schema must contain a datasource block"`)
       }
     })
 
     it('migrate dev', async () => {
       expect.assertions(1)
       try {
-        await MigrateDev.new().parse([], defaultTestConfig())
+        await MigrateDev.new('prisma').parse([], await ctx.config(), ctx.configDir())
       } catch (e) {
-        expect(serializeQueryEngineName(stripVTControlCharacters(e.message))).toMatchInlineSnapshot(
-          `"A datasource block is missing in the Prisma schema file."`,
-        )
+        expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`"Schema must contain a datasource block"`)
       }
     })
   })

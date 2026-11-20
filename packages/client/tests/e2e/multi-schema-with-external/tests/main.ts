@@ -1,13 +1,18 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
+import { PrismaPg } from '@prisma/adapter-pg'
 import { InvoiceStatus, PrismaClient } from '@prisma/client'
 
 describe('Prisma External Tables and Enums', () => {
+  let adapter: PrismaPg
   let prisma: PrismaClient
 
   beforeAll(() => {
-    prisma = new PrismaClient()
+    adapter = new PrismaPg({
+      connectionString: process.env['TEST_E2E_POSTGRES_URI']!,
+    })
+    prisma = new PrismaClient({ adapter })
   })
 
   afterAll(async () => {

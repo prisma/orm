@@ -1,8 +1,8 @@
 import Debug from '@prisma/debug'
+import type { MultipleSchemas } from '@prisma/get-dmmf'
 
 import { logger } from '..'
 import { ErrorArea, getWasmError, RustPanic, WasmPanic } from '../panic'
-import { type MultipleSchemas } from '../utils/schemaFileInput'
 import { prismaSchemaWasm } from '../wasm'
 import { getLintWarningsAsText, lintSchema } from './lintSchema'
 

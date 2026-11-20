@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "version": "0.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "prisma": "file:/tmp/prisma-0.0.0.tgz",
+    "typescript": "5.9.3",
+    "bun-types": "latest"
+  }
+}

@@ -1,5 +1,7 @@
 import { stripVTControlCharacters } from 'node:util'
 
+import { describe, expect, test } from 'vitest'
+
 import { removeISODate, sanitizeTestLogs } from '../util'
 
 describe('debug', () => {

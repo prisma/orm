@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["./**/*"],
+  "include": ["./**/*", "../migrate/src/utils/validateConfig.ts"],
   "exclude": ["./**/__fixtures__/**/*"]
 }

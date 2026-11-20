@@ -5,6 +5,10 @@ generated/
 /packages/cli/build
 /packages/cli/config.d.ts
 /packages/cli/config.js
+/packages/prisma7/index.d.ts
+/packages/prisma7/index.js
+/packages/prisma7/config.d.ts
+/packages/prisma7/config.js
 /packages/cli/prisma-client
 /packages/cli/preinstall
 /packages/client/runtime
@@ -14,5 +18,10 @@ generated/
 /packages/config/src/__tests__/fixtures/loadConfigFromFile/invalid/syntax-error/prisma.config.ts
 /sandbox
 /target
+.cache/
 .idea/
 .vscode/
+
+# Issued Drive dispatch briefs are byte-hash-pinned in projects/*/trace.jsonl (brief-issued events); formatting must not rewrite them.
+projects/*/briefs/
+projects/*/slices/*/briefs/

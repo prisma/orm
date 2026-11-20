@@ -8,7 +8,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/generator-helper"
   },
   "author": "Tim Suchanek <suchanek@prisma.io>",
@@ -28,10 +28,10 @@
   "devDependencies": {
     "@swc-node/register": "1.10.9",
     "@types/cross-spawn": "6.0.6",
-    "@types/node": "18.19.76",
-    "typescript": "5.4.5",
+    "@types/node": "~20.19.24",
     "cross-spawn": "7.0.6",
-    "kleur": "4.1.5"
+    "kleur": "4.1.5",
+    "typescript": "5.4.5"
   },
   "files": [
     "README.md",

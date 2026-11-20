@@ -1,6 +1,4 @@
-import { Debug } from '@prisma/debug'
 import type * as DMMF from '@prisma/dmmf'
-import { overwriteFile } from '@prisma/fetch-engine'
 import type {
   ActiveConnectorType,
   BinaryPaths,
@@ -9,17 +7,9 @@ import type {
   GeneratorConfig,
   SqlQueryOutput,
 } from '@prisma/generator'
-import {
-  assertNever,
-  ClientEngineType,
-  EnvPaths,
-  getClientEngineType,
-  pathToPosix,
-  setClassName,
-} from '@prisma/internals'
+import { pathToPosix, setClassName } from '@prisma/internals'
 import { createHash } from 'crypto'
 import paths from 'env-paths'
-import { existsSync } from 'fs'
 import fs from 'fs/promises'
 import { ensureDir } from 'fs-extra'
 import { bold, dim, green, red } from 'kleur/colors'
@@ -33,8 +23,6 @@ import { BrowserJS, JS, TS, TSClient } from './TSClient'
 import { TSClientOptions } from './TSClient/TSClient'
 import { buildTypedSql } from './typedSql/typedSql'
 import { addPreamble, addPreambleToJSFiles } from './utils/addPreamble'
-
-const debug = Debug('prisma:client:generateClient')
 
 type OutputDeclaration = {
   content: string
@@ -67,12 +55,8 @@ export interface GenerateClientOptions {
   engineVersion: string
   clientVersion: string
   activeProvider: ActiveConnectorType
-  envPaths?: EnvPaths
-  /** When --postinstall is passed via CLI */
-  postinstall?: boolean
-  /** When --no-engine is passed via CLI */
-  copyEngine?: boolean
   typedSql?: SqlQueryOutput[]
+  compilerBuild: 'fast' | 'small'
 }
 
 export interface FileMap {
@@ -98,16 +82,11 @@ export async function buildClient({
   engineVersion,
   clientVersion,
   activeProvider,
-  postinstall,
-  copyEngine,
-  envPaths,
   typedSql,
+  compilerBuild,
 }: O.Required<GenerateClientOptions, 'runtimeBase'>): Promise<BuildClientResult> {
-  // we define the basic options for the client generation
-  const clientEngineType = getClientEngineType(generator)
-  const baseClientOptions: Omit<TSClientOptions, `runtimeName${'Js' | 'Ts'}`> = {
+  const baseClientOptions: Omit<TSClientOptions, 'runtimeName'> = {
     dmmf: getPrismaClientDMMF(dmmf),
-    envPaths: envPaths ?? { rootEnvPath: null, schemaEnvPath: undefined },
     datasources,
     generator,
     binaryPaths,
@@ -118,9 +97,8 @@ export async function buildClient({
     clientVersion,
     engineVersion,
     activeProvider,
-    postinstall,
-    copyEngine,
     datamodel,
+    compilerBuild,
     browser: false,
     edge: false,
     wasm: false,
@@ -128,8 +106,7 @@ export async function buildClient({
 
   const nodeClientOptions = {
     ...baseClientOptions,
-    runtimeNameJs: getNodeRuntimeName(clientEngineType),
-    runtimeNameTs: `${getNodeRuntimeName(clientEngineType)}.js`,
+    runtimeName: 'client',
   }
 
   // we create a regular client that is fit for Node.js
@@ -139,23 +116,6 @@ export async function buildClient({
     ...nodeClientOptions,
     reusedTs: 'index',
     reusedJs: '.',
-  })
-
-  // we create a client that is fit for edge runtimes
-  const edgeClient = new TSClient({
-    ...baseClientOptions,
-    runtimeNameJs: 'edge',
-    runtimeNameTs: 'library.js',
-    reusedTs: 'default',
-    edge: true,
-  })
-
-  // we create a client that is fit for react native runtimes
-  const rnTsClient = new TSClient({
-    ...baseClientOptions,
-    runtimeNameJs: 'react-native',
-    runtimeNameTs: 'react-native',
-    edge: true,
   })
 
   const trampolineTsClient = new TSClient({
@@ -169,9 +129,9 @@ export async function buildClient({
   // to go from more specific to more generic.
   const exportsMapBase = {
     node: './index.js',
-    'edge-light': './wasm.js',
-    workerd: './wasm.js',
-    worker: './wasm.js',
+    'edge-light': './edge.js',
+    workerd: './edge.js',
+    worker: './edge.js',
     browser: './index-browser.js',
     default: './index.js',
   }
@@ -198,6 +158,9 @@ export async function buildClient({
     },
     version: clientVersion,
     sideEffects: false,
+    dependencies: {
+      '@prisma/client-runtime-utils': clientVersion,
+    },
   }
 
   // we store the generated contents here
@@ -207,92 +170,73 @@ export async function buildClient({
   fileMap['default.js'] = JS(defaultClient)
   fileMap['default.d.ts'] = TS(defaultClient)
   fileMap['index-browser.js'] = BrowserJS(nodeClient)
-  fileMap['edge.js'] = JS(edgeClient)
-  fileMap['edge.d.ts'] = TS(edgeClient)
   fileMap['client.js'] = JS(defaultClient)
   fileMap['client.d.ts'] = TS(defaultClient)
 
-  if (generator.previewFeatures.includes('reactNative')) {
-    fileMap['react-native.js'] = JS(rnTsClient)
-    fileMap['react-native.d.ts'] = TS(rnTsClient)
+  // The trampoline client points to #main-entry-point (see below).  We use
+  // imports similar to an exports map to ensure correct imports.❗ Before
+  // going GA, please notify @millsp as some things can be cleaned up:
+  // - defaultClient can be deleted since trampolineTsClient will replace it.
+  //   - Special handling of . paths in TSClient.ts can also be removed.
+  // - The main @prisma/client exports map can be simplified:
+  //   - Everything can point to `default.js`, including browser fields.
+  //   - Exports map's `.` entry can be made like the others (e.g. `./edge`).
+  // - exportsMapDefault can be deleted as it's only needed for defaultClient:
+  //   - #main-entry-point can handle all the heavy lifting on its own.
+  //   - Always using #main-entry-point is kept for GA (small breaking change).
+  //   - exportsMapDefault can be inlined down below and MUST be removed elsewhere.
+  // In short: A lot can be simplified, but can only happen in GA & P6.
+  fileMap['default.js'] = JS(trampolineTsClient)
+  fileMap['default.d.ts'] = TS(trampolineTsClient)
+
+  const qcArtifactName = `query_compiler_${compilerBuild}_bg`
+  fileMap['wasm-worker-loader.mjs'] = `export default import('./${qcArtifactName}.wasm')`
+  fileMap['wasm-edge-light-loader.mjs'] = `export default import('./${qcArtifactName}.wasm?module')`
+
+  pkgJson['browser'] = 'default.js' // also point to the trampoline client otherwise it is picked up by cfw
+  pkgJson['imports'] = {
+    // when `import('#wasm-compiler-loader')` is called, it will be resolved to the correct file
+    '#wasm-compiler-loader': {
+      // Keys reference: https://runtime-keys.proposal.wintercg.org/#keys
+
+      /**
+       * Vercel Edge Functions / Next.js Middlewares
+       */
+      'edge-light': './wasm-edge-light-loader.mjs',
+
+      /**
+       * Cloudflare Workers, Cloudflare Pages
+       */
+      workerd: './wasm-worker-loader.mjs',
+
+      /**
+       * (Old) Cloudflare Workers
+       * @millsp It's a fallback, in case both other keys didn't work because we could be on a different edge platform. It's a hypothetical case rather than anything actually tested.
+       */
+      worker: './wasm-worker-loader.mjs',
+
+      /**
+       * Fallback for every other JavaScript runtime
+       */
+      default: './wasm-worker-loader.mjs',
+    },
+    // when `require('#main-entry-point')` is called, it will be resolved to the correct file
+    '#main-entry-point': exportsMapDefault,
   }
 
-  const usesWasmRuntime = generator.previewFeatures.includes('driverAdapters')
-  const usesClientEngine = clientEngineType === ClientEngineType.Client
+  const wasmClient = new TSClient({
+    ...baseClientOptions,
+    runtimeName: 'wasm-compiler-edge',
+    reusedTs: 'default',
+    edge: true,
+    wasm: true,
+  })
 
-  if (usesWasmRuntime) {
-    // The trampoline client points to #main-entry-point (see below).  We use
-    // imports similar to an exports map to ensure correct imports.❗ Before
-    // going GA, please notify @millsp as some things can be cleaned up:
-    // - defaultClient can be deleted since trampolineTsClient will replace it.
-    //   - Special handling of . paths in TSClient.ts can also be removed.
-    // - The main @prisma/client exports map can be simplified:
-    //   - Everything can point to `default.js`, including browser fields.
-    //   - Exports map's `.` entry can be made like the others (e.g. `./edge`).
-    // - exportsMapDefault can be deleted as it's only needed for defaultClient:
-    //   - #main-entry-point can handle all the heavy lifting on its own.
-    //   - Always using #main-entry-point is kept for GA (small breaking change).
-    //   - exportsMapDefault can be inlined down below and MUST be removed elsewhere.
-    // In short: A lot can be simplified, but can only happen in GA & P6.
-    fileMap['default.js'] = JS(trampolineTsClient)
-    fileMap['default.d.ts'] = TS(trampolineTsClient)
-    if (usesClientEngine) {
-      fileMap['wasm-worker-loader.mjs'] = `export default import('./query_compiler_bg.wasm')`
-      fileMap['wasm-edge-light-loader.mjs'] = `export default import('./query_compiler_bg.wasm?module')`
-    } else {
-      fileMap['wasm-worker-loader.mjs'] = `export default import('./query_engine_bg.wasm')`
-      fileMap['wasm-edge-light-loader.mjs'] = `export default import('./query_engine_bg.wasm?module')`
-    }
-
-    pkgJson['browser'] = 'default.js' // also point to the trampoline client otherwise it is picked up by cfw
-    pkgJson['imports'] = {
-      // when `import('#wasm-engine-loader')` or `import('#wasm-compiler-loader')` is called, it will be resolved to the correct file
-      [usesClientEngine ? '#wasm-compiler-loader' : '#wasm-engine-loader']: {
-        // Keys reference: https://runtime-keys.proposal.wintercg.org/#keys
-
-        /**
-         * Vercel Edge Functions / Next.js Middlewares
-         */
-        'edge-light': './wasm-edge-light-loader.mjs',
-
-        /**
-         * Cloudflare Workers, Cloudflare Pages
-         */
-        workerd: './wasm-worker-loader.mjs',
-
-        /**
-         * (Old) Cloudflare Workers
-         * @millsp It's a fallback, in case both other keys didn't work because we could be on a different edge platform. It's a hypothetical case rather than anything actually tested.
-         */
-        worker: './wasm-worker-loader.mjs',
-
-        /**
-         * Fallback for every other JavaScript runtime
-         */
-        default: './wasm-worker-loader.mjs',
-      },
-      // when `require('#main-entry-point')` is called, it will be resolved to the correct file
-      '#main-entry-point': exportsMapDefault,
-    }
-
-    const wasmClient = new TSClient({
-      ...baseClientOptions,
-      runtimeNameJs: usesClientEngine ? 'wasm-compiler-edge' : 'wasm-engine-edge',
-      runtimeNameTs: 'library.js',
-      reusedTs: 'default',
-      edge: true,
-      wasm: true,
-    })
-
-    fileMap['wasm.js'] = JS(wasmClient)
-    fileMap['wasm.d.ts'] = TS(wasmClient)
-  } else {
-    fileMap['wasm.js'] = fileMap['index-browser.js']
-    fileMap['wasm.d.ts'] = fileMap['default.d.ts']
-  }
+  fileMap['edge.js'] = JS(wasmClient)
+  fileMap['edge.d.ts'] = TS(wasmClient)
 
   if (typedSql && typedSql.length > 0) {
-    const edgeRuntimeName = usesWasmRuntime ? (usesClientEngine ? 'wasm-compiler-edge' : 'wasm-engine-edge') : 'edge'
+    const edgeRuntimeName = 'wasm-compiler-edge'
     const cjsEdgeIndex = `./sql/index.${edgeRuntimeName}.js`
     const esmEdgeIndex = `./sql/index.${edgeRuntimeName}.mjs`
     pkgJson.exports['./sql'] = {
@@ -317,7 +261,7 @@ export async function buildClient({
     fileMap['sql'] = buildTypedSql({
       dmmf,
       runtimeBase: getTypedSqlRuntimeBase(runtimeBase),
-      mainRuntimeName: getNodeRuntimeName(clientEngineType),
+      mainRuntimeName: 'client',
       queries: typedSql,
       edgeRuntimeName,
     })
@@ -348,26 +292,9 @@ function getTypedSqlRuntimeBase(runtimeBase: string) {
   return `../${runtimeBase}`
 }
 
-// TODO: explore why we have a special case for excluding pnpm
-async function getDefaultOutdir(outputDir: string): Promise<string> {
+function getDefaultOutdir(outputDir: string): string {
   if (outputDir.endsWith(path.normalize('node_modules/@prisma/client'))) {
     return path.join(outputDir, '../../.prisma/client')
-  }
-  if (
-    process.env.INIT_CWD &&
-    process.env.npm_lifecycle_event === 'postinstall' &&
-    !process.env.PWD?.includes('.pnpm')
-  ) {
-    // INIT_CWD is the dir, in which "npm install" has been invoked. That can e.g. be in ./src
-    // If we're in ./ - there'll also be a package.json, so we can directly go for it
-    // otherwise, we'll go up in the filesystem and look for the first package.json
-    if (existsSync(path.join(process.env.INIT_CWD, 'package.json'))) {
-      return path.join(process.env.INIT_CWD, 'node_modules/.prisma/client')
-    }
-    const packagePath = await packageUp({ cwd: process.env.INIT_CWD })
-    if (packagePath) {
-      return path.join(path.dirname(packagePath), 'node_modules/.prisma/client')
-    }
   }
 
   return path.join(outputDir, '../../.prisma/client')
@@ -388,17 +315,9 @@ export async function generateClient(options: GenerateClientOptions): Promise<vo
     clientVersion,
     engineVersion,
     activeProvider,
-    postinstall,
-    envPaths,
-    copyEngine = true,
     typedSql,
+    compilerBuild,
   } = options
-
-  const clientEngineType = getClientEngineType(generator)
-
-  if (clientEngineType === ClientEngineType.Client && !generator.previewFeatures.includes('queryCompiler')) {
-    throw new Error('`engineType = "client"` requires enabling the `queryCompiler` preview feature')
-  }
 
   const { runtimeBase, outputDir } = await getGenerationDirs(options)
 
@@ -415,11 +334,9 @@ export async function generateClient(options: GenerateClientOptions): Promise<vo
     clientVersion,
     engineVersion,
     activeProvider,
-    postinstall,
-    copyEngine,
     testMode,
-    envPaths,
     typedSql,
+    compilerBuild,
   })
 
   const provider = datasources[0].provider
@@ -440,10 +357,6 @@ export async function generateClient(options: GenerateClientOptions): Promise<vo
     throw new DenylistError(message)
   }
 
-  if (!copyEngine) {
-    await deleteOutputDir(outputDir)
-  }
-
   await ensureDir(outputDir)
 
   await writeFileMap(outputDir, fileMap)
@@ -457,60 +370,29 @@ export async function generateClient(options: GenerateClientOptions): Promise<vo
       from: runtimeSourcePath,
       to: copiedRuntimeDir,
       sourceMaps: copyRuntimeSourceMaps,
-      runtimeName: getNodeRuntimeName(clientEngineType),
+      runtimeName: 'client',
     })
-  }
-
-  const enginePath =
-    clientEngineType === ClientEngineType.Library ? binaryPaths.libqueryEngine : binaryPaths.queryEngine
-
-  if (copyEngine && enginePath) {
-    if (process.env.NETLIFY) {
-      await ensureDir('/tmp/prisma-engines')
-    }
-
-    for (const [binaryTarget, filePath] of Object.entries(enginePath)) {
-      const fileName = path.basename(filePath)
-      let target: string
-
-      // Introduced in https://github.com/prisma/prisma/pull/6527
-      // The engines that are not needed for the runtime deployment on AWS Lambda
-      // are moved to `/tmp/prisma-engines`
-      // They will be ignored and not included in the final build, reducing its size
-      if (process.env.NETLIFY && !['rhel-openssl-1.0.x', 'rhel-openssl-3.0.x'].includes(binaryTarget)) {
-        target = path.join('/tmp/prisma-engines', fileName)
-      } else {
-        target = path.join(outputDir, fileName)
-      }
-
-      await overwriteFile(filePath, target)
-    }
   }
 
   const schemaTargetPath = path.join(outputDir, 'schema.prisma')
   await fs.writeFile(schemaTargetPath, datamodel, { encoding: 'utf-8' })
 
   // copy the necessary engine files needed for the wasm/driver-adapter engine
-  if (
-    generator.previewFeatures.includes('driverAdapters') &&
-    isWasmEngineSupported(provider) &&
-    copyEngine &&
-    !testMode
-  ) {
+  if (isWasmEngineSupported(provider)) {
     const suffix = provider === 'postgres' ? 'postgresql' : provider
-    const filename = clientEngineType === ClientEngineType.Client ? 'query_compiler_bg' : 'query_engine_bg'
+    const filename = `query_compiler_${compilerBuild}_bg`
 
     // Despite the `!testMode` condition above, we can't assume we are
-    // necessarily inside the bundled Prisma CLI because the `prisma-client-js`
-    // generator has a legacy entrypoint inside `@prisma/client/generator-build`
-    // which is still used by Studio, some e2e tests and possibly more. This means
-    // we can only rely on what's shipped in the `@prisma/client` package here,
-    // and we have to decode the WebAssembly binaries from base64.
+    // necessarily inside the bundled Prisma CLI (`prisma generate` can also run
+    // from a standalone or programmatic invocation). This means we can only rely
+    // on what's shipped in the `@prisma/client` package here, and we have to
+    // decode the WebAssembly binaries from base64.
     const wasmJsBundlePath = path.join(runtimeSourcePath, `${filename}.${suffix}.wasm-base64.js`)
     const wasmBase64: string = require(wasmJsBundlePath).wasm
 
     await fs.writeFile(path.join(outputDir, `${filename}.wasm`), Buffer.from(wasmBase64, 'base64'))
     await fs.copyFile(path.join(runtimeSourcePath, `${filename}.${suffix}.js`), path.join(outputDir, `${filename}.js`))
+    await fs.copyFile(wasmJsBundlePath, path.join(outputDir, `${filename}.wasm-base64.js`))
   }
 
   try {
@@ -545,6 +427,7 @@ function isWasmEngineSupported(provider: ConnectorType) {
   return (
     provider === 'postgresql' ||
     provider === 'postgres' ||
+    provider === 'cockroachdb' ||
     provider === 'mysql' ||
     provider === 'sqlite' ||
     provider === 'sqlserver'
@@ -649,7 +532,7 @@ async function getGenerationDirs({
   const isCustomOutput = generator.isCustomOutput === true
   const normalizedOutputDir = path.normalize(outputDir)
   let userRuntimeImport = isCustomOutput ? './runtime' : '@prisma/client/runtime'
-  let userOutputDir = isCustomOutput ? normalizedOutputDir : await getDefaultOutdir(normalizedOutputDir)
+  let userOutputDir = isCustomOutput ? normalizedOutputDir : getDefaultOutdir(normalizedOutputDir)
 
   if (testMode && runtimeBase) {
     userOutputDir = outputDir
@@ -724,22 +607,6 @@ function findOutputPathDeclaration(datamodel: string): OutputDeclaration | null 
   return null
 }
 
-function getNodeRuntimeName(engineType: ClientEngineType) {
-  if (engineType === ClientEngineType.Binary) {
-    return 'binary'
-  }
-
-  if (engineType === ClientEngineType.Library) {
-    return 'library'
-  }
-
-  if (engineType === ClientEngineType.Client) {
-    return 'client'
-  }
-
-  assertNever(engineType, 'Unknown engine type')
-}
-
 type CopyRuntimeOptions = {
   from: string
   to: string
@@ -748,24 +615,10 @@ type CopyRuntimeOptions = {
 }
 
 async function copyRuntimeFiles({ from, to, runtimeName, sourceMaps }: CopyRuntimeOptions) {
-  const files = [
-    // library.d.ts is always included, as it contains the actual runtime type
-    // definitions. Rest of the `runtime.d.ts` files just re-export everything
-    // from `library.d.ts`
-    'library.d.ts',
-    'index-browser.js',
-    'index-browser.d.ts',
-    'edge.js',
-    'edge-esm.js',
-    'react-native.js',
-    'wasm-engine-edge.js',
-    'wasm-compiler-edge.js',
-  ]
+  const files = ['index-browser.js', 'index-browser.d.ts', 'wasm-compiler-edge.js']
 
   files.push(`${runtimeName}.js`)
-  if (runtimeName !== 'library') {
-    files.push(`${runtimeName}.d.ts`)
-  }
+  files.push(`${runtimeName}.d.ts`)
 
   if (sourceMaps) {
     files.push(...files.filter((file) => file.endsWith('.js')).map((file) => `${file}.map`))
@@ -784,24 +637,6 @@ async function copyRuntimeFiles({ from, to, runtimeName, sourceMaps }: CopyRunti
       }
     }),
   )
-}
-
-/**
- * Attempts to delete the output directory.
- * @param outputDir
- */
-async function deleteOutputDir(outputDir: string) {
-  try {
-    debug(`attempting to delete ${outputDir} recursively`)
-    // we want to make sure that if we delete, we delete the right directory
-    if (require(`${outputDir}/package.json`).name?.startsWith(GENERATED_PACKAGE_NAME_PREFIX)) {
-      await fs.rmdir(outputDir, { recursive: true }).catch(() => {
-        debug(`failed to delete ${outputDir} recursively`)
-      })
-    }
-  } catch {
-    debug(`failed to delete ${outputDir} recursively, not found`)
-  }
 }
 
 /**

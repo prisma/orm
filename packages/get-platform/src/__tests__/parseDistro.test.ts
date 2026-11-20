@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest'
+
 import { parseDistro } from '../getPlatform'
 
 describe('parseDistro', () => {
@@ -220,6 +222,23 @@ ID_LIKE="opensuse suse"
         targetDistro: 'rhel',
         familyDistro: 'rhel',
         originalDistro: 'opensuse-tumbleweed',
+      },
+    },
+    {
+      name: 'nixos',
+      content: `
+NAME=NixOS
+VERSION="26.05 (Yarara)"
+ID=nixos
+ID_LIKE=""
+PRETTY_NAME="NixOS 26.05 (Yarara)"
+VERSION_ID="26.05"
+VERSION_CODENAME=yarara
+      `,
+      expect: {
+        targetDistro: 'debian',
+        familyDistro: 'nixos',
+        originalDistro: 'nixos',
       },
     },
     {

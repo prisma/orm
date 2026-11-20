@@ -1,5 +1,3 @@
-import { getRuntimeEdgeEnvVar } from './buildInjectableEdgeEnv'
-
 /**
  * Builds the code to initialize the `debug` package.
  *
@@ -16,7 +14,10 @@ export function buildDebugInitialization(edge: boolean) {
     return ''
   }
 
-  const debugVar = getRuntimeEdgeEnvVar('DEBUG')
+  const debugVar =
+    `typeof globalThis !== 'undefined' && globalThis['DEBUG']` +
+    ` || (typeof process !== 'undefined' && process.env && process.env.DEBUG)` +
+    ` || undefined`
 
   return `\
 if (${debugVar}) {

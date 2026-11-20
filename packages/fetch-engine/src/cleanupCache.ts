@@ -1,8 +1,8 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 import Debug from '@prisma/debug'
-import fs from 'fs'
 import pMap from 'p-map'
-import path from 'path'
-import { rimraf } from 'rimraf'
 
 import { getRootCacheDir } from './utils'
 
@@ -31,7 +31,7 @@ export async function cleanupCache(n = 5): Promise<void> {
     )
     dirsWithMeta.sort((a, b) => (a.created < b.created ? 1 : -1))
     const dirsToRemove = dirsWithMeta.slice(n)
-    await pMap(dirsToRemove, (dir) => rimraf(dir.dir), { concurrency: 20 })
+    await pMap(dirsToRemove, (dir) => fs.promises.rm(dir.dir, { force: true, recursive: true }), { concurrency: 20 })
   } catch (e) {
     // fail silently
   }

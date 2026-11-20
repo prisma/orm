@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 
-import * as runtime from '@prisma/client/runtime/library'
+import * as runtime from '@prisma/client/runtime/client'
 
 /**
  * ##  Prisma Client ʲˢ

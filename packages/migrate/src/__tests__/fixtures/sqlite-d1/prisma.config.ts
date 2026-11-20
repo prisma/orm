@@ -19,6 +19,7 @@ export default defineConfig({
     adapter: true,
   },
   schema: path.join('schema.prisma'),
+  engine: 'js',
   async adapter() {
     return new PrismaD1({
       CLOUDFLARE_D1_TOKEN: env.CLOUDFLARE_D1_TOKEN,

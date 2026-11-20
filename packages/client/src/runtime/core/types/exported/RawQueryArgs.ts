@@ -1,4 +1,4 @@
-import { RawValue, Sql } from 'sql-template-tag'
+import { RawValue, Sql } from '@prisma/client-runtime-utils'
 
 import { UnknownTypedSql } from './TypedSql'
 

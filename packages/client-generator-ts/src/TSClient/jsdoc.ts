@@ -236,6 +236,7 @@ ${onlySelect}
       skip: JSDocFields.skip,
       cursor: (singular, plural) => addLinkToDocs(`Sets the position for listing ${plural}.`, 'cursor'),
       take: JSDocFields.take,
+      distinct: JSDocFields.distinct,
     },
   },
   update: {

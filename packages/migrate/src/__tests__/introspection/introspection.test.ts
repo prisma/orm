@@ -3,12 +3,13 @@ import fs from 'fs'
 import path from 'path'
 
 import { Migrate } from '../../Migrate'
+import config from './prisma.config'
 
 test('introspection basic', async () => {
   const schemaPath = path.join(__dirname, 'schema.prisma')
-  const schemaContext = await loadSchemaContext({ schemaPathFromArg: schemaPath })
+  const schemaContext = await loadSchemaContext({ schemaPath: { cliProvidedPath: schemaPath } })
   const { viewsDirPath } = inferDirectoryConfig(schemaContext)
-  const { engine } = await Migrate.setup({ schemaContext })
+  const { engine } = await Migrate.setup({ schemaContext, schemaEngineConfig: config, baseDir: __dirname })
 
   const schemaContent = await fs.promises.readFile(schemaPath, { encoding: 'utf-8' })
 
@@ -34,7 +35,6 @@ test('introspection basic', async () => {
           {
             "content": "datasource db {
       provider = "sqlite"
-      url      = "file:./blog.db"
     }
 
     model Post {

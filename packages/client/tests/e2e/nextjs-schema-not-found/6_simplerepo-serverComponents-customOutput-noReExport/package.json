@@ -12,12 +12,13 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/node": "18.19.76",
+    "@types/node": "~20.19.0",
     "@types/react": "18.3.3",
     "prisma": "/tmp/prisma-0.0.0.tgz"
   },
   "dependencies": {
     "@prisma/client": "/tmp/prisma-client-0.0.0.tgz",
+    "@prisma/client-runtime-utils": "/tmp/prisma-client-runtime-utils-0.0.0.tgz",
     "next": "14.2.8",
     "react": "18.3.1",
     "react-dom": "18.3.1",

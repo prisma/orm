@@ -1,14 +1,10 @@
+import { nullTypes } from './NullTypes'
 import type { TSClientOptions } from './TSClient'
 
 export const commonCodeTS = ({ clientVersion, engineVersion, generator }: TSClientOptions) => {
   return `export type DMMF = typeof runtime.DMMF
 
 export type PrismaPromise<T> = runtime.Types.Public.PrismaPromise<T>
-
-/**
- * Validator
- */
-export const validator = runtime.Public.validator
 
 /**
  * Prisma Errors
@@ -50,14 +46,6 @@ export type Decimal = runtime.Decimal
 export type DecimalJsLike = runtime.DecimalJsLike
 
 /**
- * Metrics
- */
-export type Metrics = runtime.Metrics
-export type Metric<T> = runtime.Metric<T>
-export type MetricHistogram = runtime.MetricHistogram
-export type MetricHistogramBucket = runtime.MetricHistogramBucket
-
-/**
 * Extensions
 */
 export type Extension = runtime.Types.Extensions.UserArgs
@@ -85,6 +73,7 @@ export const prismaVersion: PrismaVersion = {
  * Utility Types
  */
 
+export type Bytes = runtime.Bytes
 export type JsonObject = runtime.JsonObject
 export type JsonArray = runtime.JsonArray
 export type JsonValue = runtime.JsonValue
@@ -92,32 +81,7 @@ export type InputJsonObject = runtime.InputJsonObject
 export type InputJsonArray = runtime.InputJsonArray
 export type InputJsonValue = runtime.InputJsonValue
 
-export const NullTypes = {
-  DbNull: runtime.objectEnumValues.classes.DbNull as (new (secret: never) => typeof runtime.objectEnumValues.instances.DbNull),
-  JsonNull: runtime.objectEnumValues.classes.JsonNull as (new (secret: never) => typeof runtime.objectEnumValues.instances.JsonNull),
-  AnyNull: runtime.objectEnumValues.classes.AnyNull as (new (secret: never) => typeof runtime.objectEnumValues.instances.AnyNull),
-}
-
-/**
- * Helper for filtering JSON entries that have \`null\` on the database (empty on the db)
- *
- * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
- */
-export const DbNull = runtime.objectEnumValues.instances.DbNull
-
-/**
- * Helper for filtering JSON entries that have JSON \`null\` values (not empty on the db)
- *
- * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
- */
-export const JsonNull = runtime.objectEnumValues.instances.JsonNull
-
-/**
- * Helper for filtering JSON entries that are \`Prisma.DbNull\` or \`Prisma.JsonNull\`
- *
- * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
- */
-export const AnyNull = runtime.objectEnumValues.instances.AnyNull
+${nullTypes}
 
 type SelectAndInclude = {
   select: any
@@ -145,6 +109,19 @@ export type Enumerable<T> = T | Array<T>;
 export type Subset<T, U> = {
   [key in keyof T]: key extends keyof U ? T[key] : never;
 };
+
+/**
+ * Resolved type of the argument passed to the \`PrismaClient\` constructor.
+ *
+ * When called without a narrower options type (the common case), this resolves
+ * to \`PrismaClientOptions\` directly, which produces a clear TypeScript error
+ * message (\`not assignable to parameter of type 'PrismaClientOptions'\`) when
+ * the argument is missing or incomplete. When the user supplies a narrower
+ * options type (e.g. via a literal), it falls back to \`Subset\` to keep
+ * filtering out unknown properties.
+ */
+export type PrismaClientConstructorArgs<Options extends PrismaClientOptions> =
+  [PrismaClientOptions] extends [Options] ? PrismaClientOptions : Subset<Options, PrismaClientOptions>;
 
 /**
  * SelectSubset
@@ -178,7 +155,7 @@ type Without<T, U> = { [P in Exclude<keyof T, keyof U>]?: never };
 export type XOR<T, U> =
   T extends object ?
   U extends object ?
-    (Without<T, U> & U) | (Without<U, T> & T)
+    ((Without<T, U> & U) | (Without<U, T> & T)) & object
   : U : T
 
 

@@ -4,15 +4,16 @@ import {
   canPrompt,
   checkUnsupportedDataProxy,
   Command,
+  createSchemaPathInput,
   dropDatabase,
   format,
   HelpError,
   isError,
   link,
-  loadEnvFile,
   loadSchemaContext,
+  validatePrismaConfigWithDatasource,
 } from '@prisma/internals'
-import { bold, dim, red, yellow } from 'kleur/colors'
+import { bold, dim, italic, red, yellow } from 'kleur/colors'
 import prompt from 'prompts'
 
 import { aiAgentConfirmationCheckpoint } from '../utils/ai-safety'
@@ -21,12 +22,8 @@ import { DbDropNeedsForceError } from '../utils/errors'
 import { PreviewFlagError } from '../utils/flagErrors'
 import { printDatasource } from '../utils/printDatasource'
 
-export class DbDrop implements Command {
-  public static new(): DbDrop {
-    return new DbDrop()
-  }
-
-  private static help = format(`
+function renderHelp(cliCommand: string): string {
+  return format(`
 ${process.platform === 'win32' ? '' : '💣  '}Drop the database
 
 ${bold(yellow('WARNING'))} ${bold(
@@ -37,7 +34,9 @@ ${dim('When using any of the subcommands below you need to explicitly opt-in via
 
 ${bold('Usage')}
 
-  ${dim('$')} prisma db drop [options] --preview-feature
+  ${dim('$')} ${cliCommand} db drop [options] --preview-feature
+
+  The datasource URL configuration is read from the Prisma config file (e.g., ${italic('prisma7.config.ts')}).
 
 ${bold('Options')}
 
@@ -49,16 +48,24 @@ ${bold('Options')}
 ${bold('Examples')}
 
   Drop the database
-  ${dim('$')} prisma db drop --preview-feature
+  ${dim('$')} ${cliCommand} db drop --preview-feature
 
   Specify a schema
-  ${dim('$')} prisma db drop --preview-feature --schema=./schema.prisma
+  ${dim('$')} ${cliCommand} db drop --preview-feature --schema=./schema.prisma
 
   Use --force to skip the confirmation prompt
-  ${dim('$')} prisma db drop --preview-feature --force
+  ${dim('$')} ${cliCommand} db drop --preview-feature --force
 `)
+}
 
-  public async parse(argv: string[], config: PrismaConfigInternal): Promise<string | Error> {
+export class DbDrop implements Command {
+  public static new(cliCommand: string): DbDrop {
+    return new DbDrop(cliCommand)
+  }
+
+  private constructor(private readonly cliCommand: string) {}
+
+  public async parse(argv: string[], config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(argv, {
       '--help': Boolean,
       '-h': '--help',
@@ -82,23 +89,27 @@ ${bold('Examples')}
       throw new PreviewFlagError()
     }
 
-    await loadEnvFile({ schemaPath: args['--schema'], printMessage: true, config })
-
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: args['--schema'],
-      schemaPathFromConfig: config.schema,
+      schemaPath: createSchemaPathInput({
+        schemaPathFromArgs: args['--schema'],
+        schemaPathFromConfig: config.schema,
+        baseDir,
+      }),
     })
 
-    checkUnsupportedDataProxy({ cmd: 'db drop', schemaContext })
+    const cmd = `${this.cliCommand} db drop`
+    const validatedConfig = validatePrismaConfigWithDatasource({ config, command: cmd })
 
-    const datasourceInfo = parseDatasourceInfo(schemaContext.primaryDatasource)
+    checkUnsupportedDataProxy({ command: cmd, validatedConfig })
+
+    const datasourceInfo = parseDatasourceInfo(schemaContext.primaryDatasource, validatedConfig)
     printDatasource({ datasourceInfo })
 
     process.stdout.write('\n') // empty line
 
     if (!args['--force']) {
       if (!canPrompt()) {
-        throw new DbDropNeedsForceError('drop')
+        throw new DbDropNeedsForceError('drop', this.cliCommand)
       }
 
       const confirmation = await prompt({
@@ -121,8 +132,11 @@ ${bold('Examples')}
 
     aiAgentConfirmationCheckpoint()
 
-    // Url exists because we set `ignoreEnvVarErrors: false` when calling `loadSchemaContext`
-    if (await dropDatabase(datasourceInfo.url!, datasourceInfo.configDir!)) {
+    if (datasourceInfo.url === undefined) {
+      throw new Error('Datasource URL is undefined')
+    }
+
+    if (await dropDatabase(datasourceInfo.url, baseDir)) {
       return `${process.platform === 'win32' ? '' : '🚀  '}The ${datasourceInfo.prettyProvider} database "${
         datasourceInfo.dbName
       }" from "${datasourceInfo.dbLocation}" was successfully dropped.\n`
@@ -132,9 +146,11 @@ ${bold('Examples')}
   }
 
   public help(error?: string): string | HelpError {
+    const help = renderHelp(this.cliCommand)
+
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${DbDrop.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${help}`)
     }
-    return DbDrop.help
+    return help
   }
 }

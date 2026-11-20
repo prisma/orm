@@ -1,5 +1,5 @@
 import { BinaryType } from '@prisma/fetch-engine'
-import execa from 'execa'
+import { execa, type ExecaError } from 'execa'
 
 import { resolveBinary } from './resolveBinary'
 
@@ -71,9 +71,7 @@ export async function canConnectToDatabase(
   schemaEnginePath?: string,
 ): Promise<ConnectionResult> {
   if (!connectionString) {
-    throw new Error(
-      'Connection url is empty. See https://www.prisma.io/docs/reference/database-reference/connection-urls',
-    )
+    throw new Error('Connection url is empty. See https://pris.ly/d/config-url')
   }
 
   try {
@@ -84,7 +82,7 @@ export async function canConnectToDatabase(
       engineCommandName: 'can-connect-to-database',
     })
   } catch (_e) {
-    const e = _e as execa.ExecaError
+    const e = _e as ExecaError
 
     if (e.stderr) {
       const logs = parseJsonFromStderr(e.stderr)
@@ -125,7 +123,7 @@ export async function createDatabase(connectionString: string, cwd = process.cwd
 
     return true
   } catch (_e) {
-    const e = _e as execa.ExecaError
+    const e = _e as ExecaError
 
     if (e.stderr) {
       const logs = parseJsonFromStderr(e.stderr)
@@ -181,15 +179,19 @@ export async function execaCommand({
   schemaEnginePath = schemaEnginePath || (await resolveBinary(BinaryType.SchemaEngineBinary))
 
   try {
-    return await execa(schemaEnginePath, ['cli', '--datasource', connectionString, engineCommandName], {
-      cwd,
-      env: {
-        RUST_BACKTRACE: process.env.RUST_BACKTRACE ?? '1',
-        RUST_LOG: process.env.RUST_LOG ?? 'info',
+    return await execa(
+      schemaEnginePath,
+      ['--datasource', JSON.stringify({ url: connectionString }), 'cli', engineCommandName],
+      {
+        cwd,
+        env: {
+          RUST_BACKTRACE: process.env.RUST_BACKTRACE ?? '1',
+          RUST_LOG: process.env.RUST_LOG ?? 'info',
+        },
       },
-    })
+    )
   } catch (_e) {
-    const e = _e as execa.ExecaError
+    const e = _e as ExecaError
 
     if (e.message) {
       e.message = e.message.replace(connectionString, '<REDACTED>')

@@ -18,7 +18,7 @@ import { Debug, DriverAdapterError } from '@prisma/driver-adapter-utils'
 import { Mutex } from 'async-mutex'
 
 import { name as packageName } from '../package.json'
-import { cast, fieldToColumnType, mapArg, type PlanetScaleColumnType } from './conversion'
+import { cast, fieldToColumnType, mapArg } from './conversion'
 import { createDeferred, Deferred } from './deferred'
 import { convertDriverError } from './errors'
 
@@ -54,7 +54,7 @@ class PlanetScaleQueryable<ClientT extends planetScale.Client | planetScale.Tran
     const columns = fields.map((field) => field.name)
     return {
       columnNames: columns,
-      columnTypes: fields.map((field) => fieldToColumnType(field.type as PlanetScaleColumnType)),
+      columnTypes: fields.map((field) => fieldToColumnType(field)),
       rows: rows as SqlResultSet['rows'],
       lastInsertId,
     }
@@ -177,6 +177,18 @@ class PlanetScaleTransaction extends PlanetScaleQueryable<planetScale.Transactio
     this.txDeferred.reject(new RollbackError())
     return await this.txResultPromise
   }
+
+  async createSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
+
+  async rollbackToSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `ROLLBACK TO ${name}`, args: [], argTypes: [] })
+  }
+
+  async releaseSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `RELEASE SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
 }
 
 export class PrismaPlanetScaleAdapter extends PlanetScaleQueryable<planetScale.Client> implements SqlDriverAdapter {
@@ -213,7 +225,7 @@ export class PrismaPlanetScaleAdapter extends PlanetScaleQueryable<planetScale.C
   }
 
   async startTransactionInner(conn: planetScale.Connection, options: TransactionOptions): Promise<Transaction> {
-    return new Promise<Transaction>((resolve, reject) => {
+    return new Promise<Transaction>((resolve, _reject) => {
       const txResultPromise = conn
         .transaction(async (tx) => {
           const [txDeferred, deferredPromise] = createDeferred<void>()
@@ -226,7 +238,7 @@ export class PrismaPlanetScaleAdapter extends PlanetScaleQueryable<planetScale.C
           // Rollback error is ignored (so that tx.rollback() won't crash)
           // any other error is legit and is re-thrown
           if (!(error instanceof RollbackError)) {
-            return reject(error)
+            throw error
           }
 
           return undefined

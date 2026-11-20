@@ -1,6 +1,5 @@
 datasource my_db {
   provider = "postgres"
-  url      = env("POSTGRES_URL")
 }
 
 model User {

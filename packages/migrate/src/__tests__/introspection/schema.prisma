@@ -1,4 +1,3 @@
 datasource db {
   provider = "sqlite"
-  url      = "file:./blog.db"
 }

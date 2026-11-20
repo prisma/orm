@@ -1,7 +1,5 @@
 datasource my_db {
   provider          = "postgresql"
-  url               = env("TEST_POSTGRES_URI_MIGRATE")
-  shadowDatabaseUrl = env("TEST_POSTGRES_SHADOWDB_URI_MIGRATE")
 }
 
 model Blog {

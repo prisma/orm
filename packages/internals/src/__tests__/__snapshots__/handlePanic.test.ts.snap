@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`handlePanic when sendPanic fails, the user should be alerted by a reportFailedMessage 1`] = `
+exports[`handlePanic > when sendPanic fails, the user should be alerted by a reportFailedMessage 1`] = `
 "Oops, an unexpected error occurred!
 
 

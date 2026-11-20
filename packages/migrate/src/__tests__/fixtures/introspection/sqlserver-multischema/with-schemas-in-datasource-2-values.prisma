@@ -1,6 +1,5 @@
 datasource db {
   provider = "sqlserver"
-  url      = env("TEST_MSSQL_JDBC_URI_MIGRATE")
   schemas  = ["base", "transactional"]
 }
 

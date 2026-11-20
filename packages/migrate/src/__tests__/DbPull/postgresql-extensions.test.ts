@@ -35,8 +35,8 @@ describeMatrix(postgresOnly, 'postgresql-extensions', () => {
     await setupPostgres(setupParams).catch((e) => {
       console.error(e)
     })
-    // Update env var because it's the one that is used in the schemas tested
-    process.env.TEST_POSTGRES_URI_MIGRATE = connectionString
+
+    ctx.setDatasource({ url: connectionString })
   })
 
   afterEach(async () => {
@@ -47,8 +47,8 @@ describeMatrix(postgresOnly, 'postgresql-extensions', () => {
 
   test('introspection should succeed and add extensions property to the schema.prisma file', async () => {
     ctx.fixture('introspection/postgresql-extensions')
-    const introspect = new DbPull()
-    const result = introspect.parse(['--print', '--schema', 'schema.prisma'], await ctx.config())
+    const introspect = DbPull.new('prisma')
+    const result = introspect.parse(['--print', '--schema', 'schema.prisma'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     const introspectedSchema = ctx.normalizedCapturedStdout()
     expect(introspectedSchema).toMatchInlineSnapshot(`
@@ -59,7 +59,6 @@ describeMatrix(postgresOnly, 'postgresql-extensions', () => {
 
       datasource db {
         provider   = "postgresql"
-        url        = env("TEST_POSTGRES_URI_MIGRATE")
         extensions = [citext(schema: "public")]
       }
 
@@ -97,8 +96,12 @@ describeMatrix(postgresOnly, 'postgresql-extensions', () => {
 
   test('re-introspection should succeed and keep defined extension in schema.prisma file', async () => {
     ctx.fixture('introspection/postgresql-extensions')
-    const introspect = new DbPull()
-    const result = introspect.parse(['--print', '--schema', 'schema-extensions-citext.prisma'], await ctx.config())
+    const introspect = DbPull.new('prisma')
+    const result = introspect.parse(
+      ['--print', '--schema', 'schema-extensions-citext.prisma'],
+      await ctx.config(),
+      ctx.configDir(),
+    )
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     const introspectedSchema = ctx.normalizedCapturedStdout()
     expect(introspectedSchema).toMatchInlineSnapshot(`
@@ -109,7 +112,6 @@ describeMatrix(postgresOnly, 'postgresql-extensions', () => {
 
       datasource db {
         provider   = "postgresql"
-        url        = env("TEST_POSTGRES_URI_MIGRATE")
         extensions = [citext(schema: "public")]
       }
 

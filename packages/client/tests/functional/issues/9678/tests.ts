@@ -20,10 +20,10 @@ jest.retryTimes(3)
  * Reproduction for issue #9678
  */
 testMatrix.setupTestSuite(
-  ({ provider, driverAdapter, engineType }) => {
+  ({ provider, driverAdapter }) => {
     // TODO: crashes the database when used with js_planetscale driver adapter
     // TODO: can also randomly hang for mssql
-    testIf(!(engineType === 'client' && (driverAdapter === 'js_planetscale' || driverAdapter === 'js_mssql')))(
+    testIf(driverAdapter !== 'js_planetscale' && driverAdapter !== 'js_mssql')(
       'concurrent deleteMany/createMany',
       async () => {
         const MAX_RETRIES = 5

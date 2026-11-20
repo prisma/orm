@@ -3,7 +3,6 @@ module.exports = {
   modulePathIgnorePatterns: [
     '<rootDir>/dist/',
     '<rootDir>/fixtures/',
-    '<rootDir>/generator-build/',
     '<rootDir>/runtime/',
     '<rootDir>/runtime-dist/',
     '<rootDir>/scripts/',
@@ -31,4 +30,5 @@ module.exports = {
   testTimeout: 90_000,
   setupFiles: ['./helpers/jestSetup.js'],
   openHandlesTimeout: 10_000,
+  prettierPath: '../../node_modules/prettier2',
 }

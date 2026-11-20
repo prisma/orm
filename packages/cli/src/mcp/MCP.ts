@@ -6,7 +6,8 @@ import execa from 'execa'
 import { z } from 'zod'
 
 import { version } from '../../package.json'
-import { createHelp } from '../platform/_lib/help'
+import type { CliDistributionIdentity } from '../utils/cli-distribution-identity'
+import { createHelp } from '../utils/help'
 
 // Only apply console redirection when running in MCP mode
 // This prevents stdout pollution that breaks MCP's JSON-RPC protocol
@@ -31,20 +32,23 @@ async function runCommand({
 }
 
 export class Mcp implements Command {
-  public static new(): Mcp {
-    return new Mcp()
+  public static new(identity: CliDistributionIdentity): Mcp {
+    return new Mcp(identity)
   }
 
-  private constructor() {}
+  private constructor(private readonly identity: CliDistributionIdentity) {}
 
-  public help = createHelp({
-    options: [['--early-access', '', 'Enable early access features']],
-    examples: ['prisma mcp --early-access'],
-    additionalContent: [
-      'Starts an MCP server to use with AI development tools such as Cursor, Windsurf and Claude Desktop',
-      `For additional help visit ${link('https://pris.ly/cli/mcp')}`,
-    ],
-  })
+  public help(error?: string) {
+    return createHelp({
+      usageLine: `${this.identity} mcp [options]`,
+      options: [['--early-access', '', 'Enable early access features']],
+      examples: [`${this.identity} mcp --early-access`],
+      additionalContent: [
+        'Starts an MCP server to use with AI development tools such as Cursor, Windsurf and Claude Desktop',
+        `For additional help visit ${link('https://pris.ly/cli/mcp')}`,
+      ],
+    })(error)
+  }
 
   public async parse(_argv: string[], _config: PrismaConfigInternal): Promise<string | Error> {
     const server = new McpServer({
@@ -54,7 +58,7 @@ export class Mcp implements Command {
 
     server.tool(
       'migrate-status',
-      `The prisma migrate status command looks up the migrations in ./prisma/migrations/* folder and the entries in the _prisma_migrations table and compiles information about the state of the migrations in your database.
+      `The ${this.identity} migrate status command looks up the migrations in ./prisma/migrations/* folder and the entries in the _prisma_migrations table and compiles information about the state of the migrations in your database.
             Example output:
 
             Status
@@ -89,22 +93,6 @@ export class Mcp implements Command {
       { name: z.string(), projectCWD: z.string() },
       async ({ name, projectCWD }) => {
         return await runCommand({ cwd: projectCWD, args: ['migrate', 'dev', '--name', name] })
-      },
-    )
-
-    server.tool(
-      'migrate-reset',
-      `Prisma Migrate Reset --force is used to reset the database and migration history if drift is detected. Only run this command on a development database - never on production databases! If in doubt, ask the user to confirm.
-
-                The migrate reset command performs these steps:
-
-                1. Drops the database/schema if possible, or performs a soft reset if the environment does not allow deleting databases/schemas
-                2. Creates a new database/schema with the same name if the database/schema was dropped
-                3. Applies all migrations
-                4. Runs seed scripts`,
-      { projectCWD: z.string() },
-      async ({ projectCWD }) => {
-        return await runCommand({ cwd: projectCWD, args: ['migrate', 'reset', '--force'] })
       },
     )
 

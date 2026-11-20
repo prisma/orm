@@ -1,4 +1,5 @@
-import { DirectoryConfig, isValidJsIdentifier, SchemaContext } from '@prisma/internals'
+import { inferDirectoryConfig, isValidJsIdentifier, type SchemaContext } from '@prisma/internals'
+import { PrismaConfigWithDatasource } from '@prisma/internals'
 import { introspectSql as migrateIntrospectSql, IntrospectSqlError, IntrospectSqlInput } from '@prisma/migrate'
 import fs from 'fs/promises'
 import { bold } from 'kleur/colors'
@@ -6,9 +7,10 @@ import path from 'path'
 
 const SQL_DIR = 'sql'
 
-export async function introspectSql(directoryConfig: DirectoryConfig, schemaContext: SchemaContext) {
+export async function introspectSql(config: PrismaConfigWithDatasource, baseDir: string, schemaContext: SchemaContext) {
+  const directoryConfig = inferDirectoryConfig(schemaContext, config)
   const sqlFiles = await readTypedSqlFiles(directoryConfig.typedSqlDirPath)
-  const introspectionResult = await migrateIntrospectSql(schemaContext, sqlFiles)
+  const introspectionResult = await migrateIntrospectSql(schemaContext, config, baseDir, sqlFiles)
   if (introspectionResult.ok) {
     return introspectionResult.queries
   }

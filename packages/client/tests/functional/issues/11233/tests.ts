@@ -8,7 +8,11 @@ declare let Prisma: typeof PrismaNamespace
 
 // https://github.com/prisma/prisma/issues/11233
 testMatrix.setupTestSuite(
-  ({ provider, driverAdapter }) => {
+  ({ provider, driverAdapter, clientEngineExecutor }) => {
+    const usesMariadbDriver =
+      driverAdapter === AdapterProviders.JS_MARIADB ||
+      (clientEngineExecutor === 'remote' && provider === Providers.MYSQL)
+
     test('should not throw when using Prisma.empty inside $executeRaw', async () => {
       expect.assertions(1)
 
@@ -40,7 +44,7 @@ testMatrix.setupTestSuite(
           break
 
         case Providers.MYSQL:
-          if (driverAdapter === AdapterProviders.JS_MARIADB) {
+          if (usesMariadbDriver) {
             expect((result as Error).message).toContain('sql parameter is mandatory')
           } else {
             expect((result as Error).message).toContain('Query was empty')
@@ -83,7 +87,7 @@ testMatrix.setupTestSuite(
           break
 
         case Providers.MYSQL:
-          if (driverAdapter === AdapterProviders.JS_MARIADB) {
+          if (usesMariadbDriver) {
             expect((result as Error).message).toContain('sql parameter is mandatory')
           } else {
             expect((result as Error).message).toContain('Query was empty')

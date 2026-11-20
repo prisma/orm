@@ -1,9 +1,0 @@
-datasource my_db {
-  provider = "cockroachdb"
-  url      = env("FROM_DOTENV_FILE_COCKROACH")
-}
-
-model Blog {
-  id          Int @id
-  viewCount20 Int
-}

@@ -29,7 +29,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/adapter-libsql"
   },
   "scripts": {
@@ -46,7 +46,7 @@
   "license": "Apache-2.0",
   "sideEffects": false,
   "dependencies": {
-    "@libsql/client": "^0.3.5 || ^0.4.0 || ^0.5.0 || ^0.6.0 || ^0.7.0 || ^0.8.0",
+    "@libsql/client": "^0.17.0",
     "@prisma/driver-adapter-utils": "workspace:*",
     "async-mutex": "0.5.0"
   }

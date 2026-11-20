@@ -1,8 +1,7 @@
 import { klona } from 'klona'
 
-import { getTestSuiteFullName, NamedTestSuiteConfig } from './getTestSuiteInfo'
+import { getTestSuiteFullName, NamedTestSuiteConfig, TestSuiteMeta } from './getTestSuiteInfo'
 import { AdapterProviders, adaptersForProvider, Providers, relationModesForAdapter } from './providers'
-import { TestSuiteMeta } from './setupTestSuiteMatrix'
 import { CliMeta, MatrixOptions } from './types'
 
 export type TestPlanEntry = {
@@ -33,15 +32,15 @@ export function getTestSuitePlan(
 ): TestPlanEntry[] {
   const context = buildPlanContext()
 
-  const expandedSuiteConfigs = suiteConfigs.flatMap((config) => {
-    return getExpandedTestSuitePlanWithProviderFlavors(config)
-  })
+  const expandedSuiteConfigs = suiteConfigs
+    .flatMap(getExpandedTestSuitePlanWithProviderFlavors)
+    .flatMap(getExpandedTestSuitePlanWithRemoteQpe)
 
   expandedSuiteConfigs.forEach((config) => {
-    config.matrixOptions.engineType ??= testCliMeta.engineType
     config.matrixOptions.clientRuntime ??= testCliMeta.runtime
     config.matrixOptions.previewFeatures ??= testCliMeta.previewFeatures
     config.matrixOptions.generatorType ??= testCliMeta.generatorType
+    config.matrixOptions.clientEngineExecutor ??= testCliMeta.clientEngineExecutor
   })
 
   return expandedSuiteConfigs.map((namedConfig, configIndex) => ({
@@ -81,6 +80,38 @@ function getExpandedTestSuitePlanWithProviderFlavors(suiteConfig: NamedTestSuite
   return [suiteConfig, ...suiteConfigExpansions]
 }
 
+/**
+ * Expands each suiteConfig entry to ensure we have separate entries for
+ * client engine's remote executor which doesn't use driver adapters locally
+ * and needs to have matrix entries on its own to ensure the names of generated
+ * tests don't collide with those using QE without driver adapters. We need
+ * this to have different snapshots for, e.g., errors.
+ */
+function getExpandedTestSuitePlanWithRemoteQpe(suiteConfig: NamedTestSuiteConfig) {
+  if (suiteConfig.matrixOptions.driverAdapter) {
+    suiteConfig.matrixOptions.clientEngineExecutor = 'local'
+    return [suiteConfig]
+  } else {
+    // For each suite config that doesn't use driver adapters, we need
+    // to clone it and create two separate configs:
+    //  - one which doesn't require `ClientEngine` specifically and can
+    //    be run with any engine type, but requires specifically a local
+    //    executor in the event it is executed using `ClientEngine`;
+    //  - another one which is only ever used with remote executor of
+    //    `ClientEngine` and never runs with either a local exeuctor
+    //    of the client engine nor any other engine type.
+    // This is required to separate the snapshots between them.
+
+    suiteConfig.matrixOptions.clientEngineExecutor = 'local'
+
+    const remoteExecutorSuiteConfig = klona(suiteConfig)
+    remoteExecutorSuiteConfig.matrixOptions.clientRuntime = 'client'
+    remoteExecutorSuiteConfig.matrixOptions.clientEngineExecutor = 'remote'
+
+    return [suiteConfig, remoteExecutorSuiteConfig]
+  }
+}
+
 function shouldSkipSuiteConfig(
   {
     updateSnapshots,
@@ -94,10 +125,7 @@ function shouldSkipSuiteConfig(
   cliMeta: CliMeta,
   options?: MatrixOptions,
 ): boolean {
-  const provider = config.matrixOptions.provider
-  const driverAdapter = config.matrixOptions.driverAdapter
-  const relationMode = config.matrixOptions.relationMode
-  const engineType = config.matrixOptions.engineType
+  const { provider, driverAdapter, relationMode, clientRuntime, clientEngineExecutor } = config.matrixOptions
 
   if (updateSnapshots === 'inline' && configIndex > 0) {
     // when updating inline snapshots, we have to run a  single suite only -
@@ -121,16 +149,6 @@ function shouldSkipSuiteConfig(
     return true
   }
 
-  // if the test doesn't support the engine type, skip
-  if (options?.skipEngine?.from.includes(engineType!)) {
-    return true
-  }
-
-  // if the test needs to skip the dataproxy test, skip
-  if (cliMeta.dataProxy && options?.skipDataProxy?.runtimes.includes(cliMeta.runtime)) {
-    return true
-  }
-
   // if the client doesn't support the provider, skip
   if (cliMeta.dataProxy && provider === Providers.SQLITE) {
     return true
@@ -148,6 +166,12 @@ function shouldSkipSuiteConfig(
 
   // if there is a Driver Adapter to run and it's not included, skip
   if (driverAdapter !== undefined && !includedProviderAdapters?.includes(driverAdapter)) {
+    return true
+  }
+
+  // if this test can't use a driver adapter, and we run the tests for a specific
+  // driver adapter, skip it
+  if (driverAdapter === undefined && includedProviderAdapters !== undefined) {
     return true
   }
 
@@ -173,6 +197,27 @@ function shouldSkipSuiteConfig(
 
   // if Driver Adapters are enabled and the test has no Driver Adapter, skip
   if (includedProviderAdapters !== undefined && driverAdapter === undefined) {
+    return true
+  }
+
+  // if there's no adapter, skip
+  if (driverAdapter === undefined && cliMeta.clientEngineExecutor === 'local') {
+    return true
+  }
+
+  // if this test requires a specific client runtime which doesn't match the one we're testing for, skip
+  if (clientRuntime !== undefined && clientRuntime !== cliMeta.runtime) {
+    return true
+  }
+
+  // if this test requires a specific client engine executor in case a client engine is used,
+  // and it doesn't match the one we're testing for, skip
+  if (clientEngineExecutor !== undefined && clientEngineExecutor !== cliMeta.clientEngineExecutor) {
+    return true
+  }
+
+  // if this test requires client engine's remote executor and we're not testing QC, skip
+  if (clientEngineExecutor === 'remote' && clientRuntime !== 'client') {
     return true
   }
 

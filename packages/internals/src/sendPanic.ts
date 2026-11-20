@@ -10,7 +10,6 @@ import { createErrorReport, type CreateErrorReportInput, ErrorKind, makeErrorRep
 import type { MigrateTypes } from './migrateTypes'
 import type { RustPanic } from './panic'
 import { ErrorArea } from './panic'
-import { mapScalarValues, maskSchema } from './utils/maskSchema'
 
 // cleanup the temporary files even when an uncaught exception occurs
 tmp.setGracefulCleanup()
@@ -31,7 +30,7 @@ export async function sendPanic({
 }: SendPanic): Promise<number> {
   let dbVersion: string | undefined
   if (error.area === ErrorArea.LIFT_CLI) {
-    // For a SQLite datasource like `url = "file:dev.db"` only schema will be defined
+    // For a SQLite datasource configured as `file:dev.db` only schema will be defined
     const getDatabaseVersionParams: MigrateTypes.GetDatabaseVersionParams | undefined = match({
       introspectionUrl: error.introspectionUrl,
     })
@@ -48,16 +47,7 @@ export async function sendPanic({
     dbVersion = await getDatabaseVersionSafe(getDatabaseVersionParams)
   }
 
-  const migrateRequest = error.request
-    ? JSON.stringify(
-        mapScalarValues(error.request, (value) => {
-          if (typeof value === 'string') {
-            return maskSchema(value)
-          }
-          return value
-        }),
-      )
-    : undefined
+  const migrateRequest = error.request ? JSON.stringify(error.request) : undefined
 
   const params: CreateErrorReportInput = {
     area: error.area,
@@ -86,9 +76,7 @@ export async function sendPanic({
 
 function getCommand(): string {
   // don't send url
-  if (process.argv[2] === 'introspect') {
-    return 'introspect'
-  } else if (process.argv[2] === 'db' && process.argv[3] === 'pull') {
+  if (process.argv[2] === 'db' && process.argv[3] === 'pull') {
     return 'db pull'
   }
   return process.argv.slice(2).join(' ')

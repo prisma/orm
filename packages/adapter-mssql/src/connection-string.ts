@@ -27,21 +27,77 @@ function mapIsolationLevelFromString(level: string): number {
 const debug = Debug('prisma:driver-adapter:mssql:connection-string')
 
 /**
- * Extracts the schema parameter from a connection string.
- * @param connectionString The connection string.
- * @returns The schema value or undefined if not found.
+ * Splits a connection string by semicolons while respecting curly brace escaping.
+ * Values wrapped in curly braces like {value} are treated as literals where
+ * semicolons and equals signs are not treated as delimiters.
+ *
+ * Important: Curly braces are only treated as quote characters when { is the
+ * FIRST character of a value (after the = sign). This matches tedious behavior.
+ *
+ * @param str The string to split
+ * @returns Array of parts split by semicolon (outside of curly braces)
  */
-export function extractSchemaFromConnectionString(connectionString: string): string | undefined {
-  const withoutProtocol = connectionString.replace(/^sqlserver:\/\//, '')
-  const parts = withoutProtocol.split(';')
+function splitRespectingBraces(str: string): string[] {
+  const parts: string[] = []
+  let current = ''
+  let braceDepth = 0
+  let valueStartIndex = -1
 
-  for (const part of parts) {
-    const [key, value] = part.split('=', 2)
-    if (key?.trim() === 'schema') {
-      return value?.trim()
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i]
+
+    if (char === '=') {
+      current += char
+      if (braceDepth === 0) {
+        valueStartIndex = i + 1
+      }
+    } else if (char === '{') {
+      // Only treat { as opening brace if it's the first character of a value
+      const isFirstCharOfValue = i === valueStartIndex
+      if (isFirstCharOfValue) {
+        braceDepth++
+      } else if (braceDepth > 0) {
+        throw new Error(`Malformed connection string: nested '{' braces are not supported`)
+      }
+      current += char
+    } else if (char === '}') {
+      if (braceDepth > 0) {
+        braceDepth--
+      }
+      current += char
+    } else if (char === ';' && braceDepth === 0) {
+      parts.push(current)
+      current = ''
+      valueStartIndex = -1
+    } else {
+      current += char
     }
   }
-  return undefined
+
+  if (current) {
+    parts.push(current)
+  }
+
+  if (braceDepth !== 0) {
+    throw new Error(`Malformed connection string: unclosed '{' brace (braceDepth=${braceDepth})`)
+  }
+
+  return parts
+}
+
+/**
+ * Extracts the value from a parameter, removing curly braces if present.
+ * If the value is wrapped in curly braces like {value}, returns value.
+ * Otherwise returns the value as-is.
+ * @param value The value to process
+ * @returns The unescaped value
+ */
+function unescapeValue(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed.startsWith('{') && trimmed.endsWith('}') && trimmed.length >= 2) {
+    return trimmed.slice(1, -1)
+  }
+  return trimmed
 }
 
 /**
@@ -50,11 +106,11 @@ export function extractSchemaFromConnectionString(connectionString: string): str
  * @param connectionString The connection string.
  * @returns A sql.config object
  */
-export function parseConnectionString(connectionString: string): sql.config {
+export function parseConnectionString(connectionString: string): { config: sql.config; schema?: string } {
   const withoutProtocol = connectionString.replace(/^sqlserver:\/\//, '')
 
-  // Split by semicolon to get key-value pairs
-  const [hostPart, ...paramParts] = withoutProtocol.split(';')
+  const parts = splitRespectingBraces(withoutProtocol)
+  const [hostPart, ...paramParts] = parts
 
   const config: sql.config = {
     server: '',
@@ -63,6 +119,10 @@ export function parseConnectionString(connectionString: string): sql.config {
   }
 
   // Parse the first part which contains host and port
+  if (!hostPart || hostPart.trim() === '') {
+    throw new Error('Server host is required in connection string')
+  }
+
   const [host, portStr] = hostPart.split(':')
   config.server = host.trim()
 
@@ -74,100 +134,243 @@ export function parseConnectionString(connectionString: string): sql.config {
     config.port = port
   }
 
-  // Parse the remaining parameters
+  // parse all parameters into an object, checking for duplicates
+  const parameters: Record<string, string> = {}
+
   for (const part of paramParts) {
-    const [key, value] = part.split('=', 2)
+    const [key, ...valueParts] = part.split('=')
     if (!key) continue
 
     const trimmedKey = key.trim()
-    const trimmedValue = value.trim()
-
-    switch (trimmedKey) {
-      case 'database':
-      case 'initial catalog':
-        config.database = trimmedValue
-        break
-      case 'user':
-      case 'username':
-      case 'uid':
-      case 'userid':
-        config.user = trimmedValue
-        break
-      case 'password':
-      case 'pwd':
-        config.password = trimmedValue
-        break
-      case 'encrypt':
-        config.options = config.options || {}
-        config.options.encrypt = trimmedValue.toLowerCase() === 'true'
-        break
-      case 'trustServerCertificate':
-        config.options = config.options || {}
-        config.options.trustServerCertificate = trimmedValue.toLowerCase() === 'true'
-        break
-      case 'connectionLimit': {
-        config.pool = config.pool || {}
-        const limit = parseInt(trimmedValue, 10)
-        if (isNaN(limit)) {
-          throw new Error(`Invalid connection limit: ${trimmedValue}`)
-        }
-        config.pool.max = limit
-        break
-      }
-      case 'connectTimeout':
-      case 'connectionTimeout': {
-        const connectTimeout = parseInt(trimmedValue, 10)
-        if (isNaN(connectTimeout)) {
-          throw new Error(`Invalid connection timeout: ${trimmedValue}`)
-        }
-        config.connectionTimeout = connectTimeout
-        break
-      }
-      case 'loginTimeout': {
-        const loginTimeout = parseInt(trimmedValue, 10)
-        if (isNaN(loginTimeout)) {
-          throw new Error(`Invalid login timeout: ${trimmedValue}`)
-        }
-        config.connectionTimeout = loginTimeout
-        break
-      }
-      case 'socketTimeout': {
-        const socketTimeout = parseInt(trimmedValue, 10)
-        if (isNaN(socketTimeout)) {
-          throw new Error(`Invalid socket timeout: ${trimmedValue}`)
-        }
-        config.requestTimeout = socketTimeout
-        break
-      }
-      case 'poolTimeout': {
-        const poolTimeout = parseInt(trimmedValue, 10)
-        if (isNaN(poolTimeout)) {
-          throw new Error(`Invalid pool timeout: ${trimmedValue}`)
-        }
-        config.pool = config.pool || {}
-        config.pool.acquireTimeoutMillis = poolTimeout * 1000
-        break
-      }
-      case 'applicationName':
-      case 'application name':
-        config.options = config.options || {}
-        config.options.appName = trimmedValue
-        break
-      case 'isolationLevel':
-        config.options = config.options || {}
-        config.options.isolationLevel = mapIsolationLevelFromString(trimmedValue)
-        break
-      case 'schema':
-        // This is handled separately in PrismaMssqlOptions
-        break
-      default:
-        debug(`Unknown connection string parameter: ${trimmedKey}`)
+    if (trimmedKey in parameters) {
+      throw new Error(`Duplication configuration parameter: ${trimmedKey}`)
     }
+    const value = valueParts.join('=')
+    parameters[trimmedKey] = unescapeValue(value)
+    if (!handledParameters.includes(trimmedKey)) {
+      debug(`Unknown connection string parameter: ${trimmedKey}`)
+    }
+  }
+
+  const database = firstKey(parameters, 'database', 'initial catalog')
+  if (database !== null) {
+    config.database = database
+  }
+
+  const user = firstKey(parameters, 'user', 'username', 'uid', 'userid')
+  if (user !== null) {
+    config.user = user
+  }
+
+  const password = firstKey(parameters, 'password', 'pwd')
+  if (password !== null) {
+    config.password = password
+  }
+
+  const encrypt = firstKey(parameters, 'encrypt')
+  if (encrypt !== null) {
+    config.options = config.options || {}
+    config.options.encrypt = encrypt.toLowerCase() === 'true'
+  }
+
+  const trustServerCertificate = firstKey(parameters, 'trustServerCertificate')
+  if (trustServerCertificate !== null) {
+    config.options = config.options || {}
+    config.options.trustServerCertificate = trustServerCertificate.toLowerCase() === 'true'
+  }
+
+  const multiSubnetFailover = firstKey(parameters, 'multiSubnetFailover')
+  if (multiSubnetFailover !== null) {
+    config.options = config.options || {}
+    config.options.multiSubnetFailover = multiSubnetFailover.toLowerCase() === 'true'
+  }
+
+  const connectionLimit = firstKey(parameters, 'connectionLimit')
+  if (connectionLimit !== null) {
+    config.pool = config.pool || {}
+    const limit = parseInt(connectionLimit, 10)
+    if (isNaN(limit)) {
+      throw new Error(`Invalid connection limit: ${connectionLimit}`)
+    }
+    config.pool.max = limit
+  }
+
+  const connectionTimeout = firstKey(parameters, 'connectionTimeout', 'connectTimeout')
+  if (connectionTimeout !== null) {
+    const timeout = parseInt(connectionTimeout, 10)
+    if (isNaN(timeout)) {
+      throw new Error(`Invalid connection timeout: ${connectionTimeout}`)
+    }
+    config.connectionTimeout = timeout
+  }
+
+  const loginTimeout = firstKey(parameters, 'loginTimeout')
+  if (loginTimeout !== null) {
+    const timeout = parseInt(loginTimeout, 10)
+    if (isNaN(timeout)) {
+      throw new Error(`Invalid login timeout: ${loginTimeout}`)
+    }
+    config.connectionTimeout = timeout
+  }
+
+  const socketTimeout = firstKey(parameters, 'socketTimeout')
+  if (socketTimeout !== null) {
+    const timeout = parseInt(socketTimeout, 10)
+    if (isNaN(timeout)) {
+      throw new Error(`Invalid socket timeout: ${socketTimeout}`)
+    }
+    config.requestTimeout = timeout
+  }
+
+  const poolTimeout = firstKey(parameters, 'poolTimeout')
+  if (poolTimeout !== null) {
+    const timeout = parseInt(poolTimeout, 10)
+    if (isNaN(timeout)) {
+      throw new Error(`Invalid pool timeout: ${poolTimeout}`)
+    }
+    config.pool = config.pool || {}
+    config.pool.acquireTimeoutMillis = timeout * 1000
+  }
+
+  const appName = firstKey(parameters, 'applicationName', 'application name')
+  if (appName !== null) {
+    config.options = config.options || {}
+    config.options.appName = appName
+  }
+
+  const isolationLevel = firstKey(parameters, 'isolationLevel')
+  if (isolationLevel !== null) {
+    config.options = config.options || {}
+    config.options.isolationLevel = mapIsolationLevelFromString(isolationLevel)
+  }
+
+  const authentication = firstKey(parameters, 'authentication')
+  if (authentication !== null) {
+    config.authentication = parseAuthenticationOptions(parameters, authentication)
   }
 
   if (!config.server || config.server.trim() === '') {
     throw new Error('Server host is required in connection string')
   }
 
-  return config
+  const schema = firstKey(parameters, 'schema') ?? undefined
+
+  return { config, schema }
 }
+
+/**
+ * Parse all the authentication options, ensuring a valid configuration is provided
+ * @param parameters configuration parameters
+ * @param authenticationValue authentication string value
+ */
+function parseAuthenticationOptions(
+  parameters: Record<string, string>,
+  authenticationValue: string,
+): sql.config['authentication'] | undefined {
+  switch (authenticationValue) {
+    /**
+     * 'DefaultAzureCredential' is not listed in the JDBC driver spec
+     * https://learn.microsoft.com/en-us/sql/connect/jdbc/setting-the-connection-properties?view=sql-server-ver15#properties
+     * but is supported by tedious so included here
+     */
+    case 'DefaultAzureCredential':
+    case 'ActiveDirectoryIntegrated':
+    case 'ActiveDirectoryInteractive':
+      // uses https://learn.microsoft.com/en-gb/azure/developer/javascript/sdk/authentication/credential-chains#use-defaultazurecredential-for-flexibility
+      return { type: 'azure-active-directory-default', options: {} }
+    case 'ActiveDirectoryPassword': {
+      const userName = firstKey(parameters, 'userName')
+      const password = firstKey(parameters, 'password')
+      const clientId = firstKey(parameters, 'clientId')
+      const tenantId = firstKey(parameters, 'tenantId')
+      if (!userName || !password || !clientId) {
+        throw new Error(`Invalid authentication, ActiveDirectoryPassword requires userName, password, clientId`)
+      }
+      return {
+        type: 'azure-active-directory-password',
+        options: {
+          userName,
+          password,
+          clientId,
+          tenantId: tenantId || '',
+        },
+      }
+    }
+    case 'ActiveDirectoryManagedIdentity':
+    case 'ActiveDirectoryMSI': {
+      const clientId = firstKey(parameters, 'clientId')
+      const msiEndpoint = firstKey(parameters, 'msiEndpoint')
+      const msiSecret = firstKey(parameters, 'msiSecret')
+      if (!msiEndpoint || !msiSecret) {
+        throw new Error(`Invalid authentication, ActiveDirectoryManagedIdentity requires msiEndpoint, msiSecret`)
+      }
+      return {
+        type: 'azure-active-directory-msi-app-service',
+        options: {
+          clientId: clientId || undefined,
+          // @ts-expect-error TODO: tedious typings don't define msiEndpoint and msiSecret -- needs to be fixed upstream
+          msiEndpoint,
+          msiSecret,
+        },
+      }
+    }
+    case 'ActiveDirectoryServicePrincipal': {
+      const clientId = firstKey(parameters, 'userName')
+      const clientSecret = firstKey(parameters, 'password')
+      const tenantId = firstKey(parameters, 'tenantId')
+      if (clientId && clientSecret) {
+        return {
+          type: 'azure-active-directory-service-principal-secret',
+          options: {
+            clientId,
+            clientSecret,
+            tenantId: tenantId || '',
+          },
+        }
+      } else {
+        throw new Error(
+          `Invalid authentication, ActiveDirectoryServicePrincipal requires userName (clientId), password (clientSecret)`,
+        )
+      }
+    }
+  }
+  return undefined
+}
+
+/**
+ * Return the value of the first key found in the parameters object
+ * @param parameters
+ * @param keys
+ */
+function firstKey(parameters: Record<string, string>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    if (key in parameters) {
+      return parameters[key]
+    }
+  }
+  return null
+}
+
+const handledParameters = [
+  'application name',
+  'applicationName',
+  'connectTimeout',
+  'connectionLimit',
+  'connectionTimeout',
+  'database',
+  'encrypt',
+  'initial catalog',
+  'isolationLevel',
+  'loginTimeout',
+  'multiSubnetFailover',
+  'password',
+  'poolTimeout',
+  'pwd',
+  'schema',
+  'socketTimeout',
+  'trustServerCertificate',
+  'uid',
+  'user',
+  'userid',
+  'username',
+]

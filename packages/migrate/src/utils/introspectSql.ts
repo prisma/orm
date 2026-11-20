@@ -1,5 +1,5 @@
 import { GeneratorConfig, SqlQueryOutput } from '@prisma/generator'
-import { getEffectiveUrl, SchemaContext } from '@prisma/internals'
+import type { PrismaConfigWithDatasource, SchemaContext } from '@prisma/internals'
 
 import { Migrate } from '../Migrate'
 import { SchemaEngine } from '../SchemaEngine'
@@ -38,6 +38,8 @@ export type IntrospectSqlResult =
 
 export async function introspectSql(
   schemaContext: SchemaContext,
+  config: PrismaConfigWithDatasource,
+  baseDir: string,
   queries: IntrospectSqlInput[],
 ): Promise<IntrospectSqlResult> {
   if (!isTypedSqlEnabled(schemaContext.generators)) {
@@ -51,20 +53,14 @@ export async function introspectSql(
   if (!supportedProviders.includes(firstDatasource.activeProvider)) {
     throw new Error(`Typed SQL is supported only for ${supportedProviders.join(', ')} providers`)
   }
-  const url = getEffectiveUrl(firstDatasource).value
-  if (!url) {
-    throw new Error(
-      `Could not get url from datasource ${firstDatasource.name} in ${schemaContext.loadedFromPathForLogMessages}`,
-    )
-  }
 
-  const migrate = await Migrate.setup({ schemaContext })
+  const migrate = await Migrate.setup({ schemaContext, schemaEngineConfig: config, baseDir })
   const schemaEngine = migrate.engine
   const results: SqlQueryOutput[] = []
   const errors: IntrospectSqlError[] = []
   try {
     for (const query of queries) {
-      const queryResult = await introspectSingleQuery(schemaEngine, url, query)
+      const queryResult = await introspectSingleQuery(schemaEngine, config.datasource.url, query)
       if (queryResult.ok) {
         results.push(queryResult.result)
       } else {

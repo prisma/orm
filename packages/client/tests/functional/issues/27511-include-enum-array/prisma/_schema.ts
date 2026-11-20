@@ -4,12 +4,10 @@ export default testMatrix.setupSchema(({ provider }) => {
   return /* Prisma */ `
       generator client {
         provider = "prisma-client-js"
-        previewFeatures = ["driverAdapters"]
       }
 
       datasource db {
         provider = "${provider}"
-        url      = env("DATABASE_URI_${provider}")
       }
 
       enum workspace_permission {

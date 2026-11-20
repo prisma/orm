@@ -1,14 +1,13 @@
 generator client {
-  provider        = "prisma-client"
-  output          = "../generated/client"
-  previewFeatures = ["driverAdapters", "queryCompiler"]
+  provider = "prisma-client"
+  output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
 }
 
 model User {
-  id String @id @default(uuid())
+  id    String @id @default(uuid())
+  email String
 }

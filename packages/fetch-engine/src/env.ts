@@ -1,15 +1,14 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 import Debug from '@prisma/debug'
-import fs from 'fs'
 import { bold, underline, yellow } from 'kleur/colors'
-import path from 'path'
 
 import { BinaryType } from './BinaryType'
 
 const debug = Debug('prisma:fetch-engine:env')
 
 export const engineEnvVarMap = {
-  [BinaryType.QueryEngineBinary]: 'PRISMA_QUERY_ENGINE_BINARY',
-  [BinaryType.QueryEngineLibrary]: 'PRISMA_QUERY_ENGINE_LIBRARY',
   [BinaryType.SchemaEngineBinary]: 'PRISMA_SCHEMA_ENGINE_BINARY',
 }
 

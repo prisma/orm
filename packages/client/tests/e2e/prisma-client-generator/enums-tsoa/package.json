@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {},
+  "dependencies": {
+    "tsoa": "^6.6.0",
+    "@prisma/adapter-libsql": "/tmp/prisma-adapter-libsql-0.0.0.tgz",
+    "@prisma/client": "/tmp/prisma-client-0.0.0.tgz",
+    "@prisma/client-runtime-utils": "/tmp/prisma-client-runtime-utils-0.0.0.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "~20.19.0",
+    "prisma": "/tmp/prisma-0.0.0.tgz",
+    "tsup": "8.4.0"
+  }
+}

@@ -1,11 +1,14 @@
-import Debug from '@prisma/debug'
+import { Debug } from '@prisma/debug'
 import {
   arg,
+  BuiltInProvider,
+  createSchemaPathInput,
   getCLIPathHash,
   getProjectHash,
   isCurrentBinInstalledGlobally,
   loadSchemaContext,
   parseEnvValue,
+  type SchemaPathInput,
 } from '@prisma/internals'
 import type { Check } from 'checkpoint-client'
 import * as checkpoint from 'checkpoint-client'
@@ -21,12 +24,14 @@ const debug = Debug('prisma:cli:checkpoint')
  * returns if the current CLI version is outdated.
  *
  * For more info about the data collected by the Checkpoint Server and how to disable it see:
- * https://www.prisma.io/docs/concepts/more/telemetry
+ * https://pris.ly/d/telemetry
  */
 export async function runCheckpointClientCheck({
   schemaPathFromConfig,
+  baseDir,
 }: {
   schemaPathFromConfig?: string
+  baseDir: string
 }): Promise<Check.Result | 0> {
   // If the user has disabled telemetry, we can stop here already.
   if (process.env['CHECKPOINT_DISABLE']) {
@@ -46,16 +51,17 @@ export async function runCheckpointClientCheck({
     true,
   )
 
-  const schemaPath = typeof args['--schema'] === 'string' ? args['--schema'] : undefined
+  const schemaPathFromArgs = typeof args['--schema'] === 'string' ? args['--schema'] : undefined
 
   try {
     const startGetInfo = performance.now()
+    const schemaPath = createSchemaPathInput({ schemaPathFromArgs, schemaPathFromConfig, baseDir })
     // Get some info about the project
     const [projectPathHash, { schemaProvider, schemaPreviewFeatures, schemaGeneratorsProviders }] = await Promise.all([
       // SHA256 identifier for the project based on the Prisma schema path
-      getProjectHash(schemaPath, schemaPathFromConfig),
+      getProjectHash(schemaPath),
       // Read schema and extract some data
-      tryToReadDataFromSchema(schemaPath, schemaPathFromConfig),
+      tryToReadDataFromSchema(schemaPath),
     ])
     // SHA256 of the cli path
     const cliPathHash = getCLIPathHash()
@@ -111,18 +117,13 @@ export async function runCheckpointClientCheck({
  * Tries to read some data from the Prisma Schema
  * if an error occurs it will silently fail and return undefined values
  */
-export async function tryToReadDataFromSchema(schemaPath?: string, schemaPathFromConfig?: string) {
+export async function tryToReadDataFromSchema(schemaPath: SchemaPathInput) {
   let schemaProvider: string | undefined
   let schemaPreviewFeatures: string[] | undefined
   let schemaGeneratorsProviders: string[] | undefined
 
   try {
-    const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: schemaPath,
-      schemaPathFromConfig,
-      ignoreEnvVarErrors: true,
-      printLoadMessage: false,
-    })
+    const schemaContext = await loadSchemaContext({ schemaPath, printLoadMessage: false })
 
     if (schemaContext.datasources.length > 0) {
       schemaProvider = schemaContext.datasources[0].provider
@@ -134,13 +135,16 @@ export async function tryToReadDataFromSchema(schemaPath?: string, schemaPathFro
       .filter((generator) => generator && generator.provider)
       .map((generator) => parseEnvValue(generator.provider))
 
-    // restrict the search to previewFeatures of `provider = 'prisma-client-js'`
-    // (this was not scoped to `prisma-client-js` before Prisma 3.0)
-    const prismaClientJSGenerator = schemaContext.generators.find(
-      (generator) => parseEnvValue(generator.provider) === 'prisma-client-js',
-    )
-    if (prismaClientJSGenerator && prismaClientJSGenerator.previewFeatures.length > 0) {
-      schemaPreviewFeatures = prismaClientJSGenerator.previewFeatures
+    const clientGeneratorProviders: string[] = [BuiltInProvider.PrismaClientTs, BuiltInProvider.PrismaClientJs]
+    const previewFeatures = schemaContext.generators
+      .filter((generator) => {
+        const provider = generator?.provider ? parseEnvValue(generator.provider) : undefined
+        return provider !== undefined && clientGeneratorProviders.includes(provider)
+      })
+      .flatMap((generator) => generator.previewFeatures ?? [])
+
+    if (previewFeatures.length > 0) {
+      schemaPreviewFeatures = Array.from(new Set(previewFeatures))
     }
   } catch (e) {
     debug(
@@ -163,17 +167,14 @@ export async function tryToReadDataFromSchema(schemaPath?: string, schemaPathFro
 export const SENSITIVE_CLI_OPTIONS = [
   // 1. Connection strings
   '--url',
-  '--shadow-database-url',
-  '--from-url',
-  '--to-url',
-  // 2. Paths
+  // 1. Paths
   '--schema',
   '--config',
   '--file',
-  '--from-schema-datamodel',
-  '--to-schema-datamodel',
-  '--from-schema-datasource',
-  '--to-schema-datasource',
+  '--from-schema',
+  '--to-schema',
+  '--from-config-datasource',
+  '--to-config-datasource',
   '--from-migrations',
   '--to-migrations',
   '--hostname',
@@ -183,6 +184,7 @@ export const SENSITIVE_CLI_OPTIONS = [
   '--rolled-back',
   // 4. Platform CLI
   '--token',
+  '--api-key',
 ]
 /*
  * removes potentially sensitive information from the command array (argv strings)

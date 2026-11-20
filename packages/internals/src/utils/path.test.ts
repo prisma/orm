@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest'
+
 import { longestCommonPathPrefix, pathToPosix } from './path'
 
 const testIf = (condition: boolean) => (condition ? test : test.skip)
@@ -37,7 +39,6 @@ describe('longestCommonPathPrefix', () => {
   })
 
   describeIf(process.platform === 'win32')('windows', () => {
-    // eslint-disable-next-line jest/no-identical-title
     test('common ancestor directory', () => {
       expect(longestCommonPathPrefix('C:\\Common\\A\\Prisma', 'C:\\Common\\B\\Prisma')).toBe('C:\\Common')
     })
@@ -46,7 +47,6 @@ describe('longestCommonPathPrefix', () => {
       expect(longestCommonPathPrefix('C:\\A\\Prisma', 'C:\\B\\Prisma')).toBe('C:\\')
     })
 
-    // eslint-disable-next-line jest/no-identical-title
     test('substring is not treated as a path component', () => {
       expect(longestCommonPathPrefix('C:\\Prisma', 'C:\\Pri')).toBe('C:\\')
     })

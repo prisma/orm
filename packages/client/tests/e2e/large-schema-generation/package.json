@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "version": "0.0.0",
+  "main": "index.js",
+  "scripts": {},
+  "dependencies": {
+    "@prisma/client": "/tmp/prisma-client-0.0.0.tgz"
+  },
+  "devDependencies": {
+    "@types/jest": "29.5.12",
+    "@types/node": "~20.19.0",
+    "prisma": "/tmp/prisma-0.0.0.tgz",
+    "tsx": "^4.19.1"
+  }
+}

@@ -6,10 +6,10 @@ import {
 } from '@prisma/driver-adapter-utils'
 import { afterEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
 
-import { PrismaD1HTTP } from '.'
 import { PrismaD1 } from './d1'
-import { PrismaD1HTTPAdapterFactory } from './d1-http'
+import { PrismaD1HttpAdapterFactory } from './d1-http'
 import { PrismaD1WorkerAdapterFactory } from './d1-worker'
+import { PrismaD1Http } from './index-node'
 
 describe('D1 adapter instance creation', () => {
   afterEach(() => {
@@ -18,9 +18,9 @@ describe('D1 adapter instance creation', () => {
 
   test('create a migration-aware adapter with cloudflare env variables', async () => {
     const adapter = mockAdapter('sqlite')
-    const connect = vi.spyOn(PrismaD1HTTPAdapterFactory.prototype, 'connect').mockResolvedValue(adapter)
+    const connect = vi.spyOn(PrismaD1HttpAdapterFactory.prototype, 'connect').mockResolvedValue(adapter)
     const connectToShadowDb = vi
-      .spyOn(PrismaD1HTTPAdapterFactory.prototype, 'connectToShadowDb')
+      .spyOn(PrismaD1HttpAdapterFactory.prototype, 'connectToShadowDb')
       .mockResolvedValue(adapter)
 
     const factory = new PrismaD1({
@@ -36,14 +36,14 @@ describe('D1 adapter instance creation', () => {
     expect(connectToShadowDb).toHaveBeenCalled()
   })
 
-  test('create a migration-aware adapter using PrismaD1HTTP with cloudflare env variables', async () => {
+  test('create a migration-aware adapter using PrismaD1Http with cloudflare env variables', async () => {
     const adapter = mockAdapter('sqlite')
-    const connect = vi.spyOn(PrismaD1HTTPAdapterFactory.prototype, 'connect').mockResolvedValue(adapter)
+    const connect = vi.spyOn(PrismaD1HttpAdapterFactory.prototype, 'connect').mockResolvedValue(adapter)
     const connectToShadowDb = vi
-      .spyOn(PrismaD1HTTPAdapterFactory.prototype, 'connectToShadowDb')
+      .spyOn(PrismaD1HttpAdapterFactory.prototype, 'connectToShadowDb')
       .mockResolvedValue(adapter)
 
-    const factory = new PrismaD1HTTP({
+    const factory = new PrismaD1Http({
       CLOUDFLARE_ACCOUNT_ID: 'test',
       CLOUDFLARE_D1_TOKEN: 'test',
       CLOUDFLARE_DATABASE_ID: 'test',

@@ -1,9 +1,8 @@
-import { getClientEngineType, getPackedPackage } from '@prisma/internals'
-import fs from 'fs'
-import path from 'path'
-import { rimraf } from 'rimraf'
+import fs from 'node:fs'
+import path from 'node:path'
+
+import { getPackedPackage } from '@prisma/internals'
 import tsd, { formatter } from 'tsd'
-import { promisify } from 'util'
 
 import { compileFile } from '../../utils/compileFile'
 import { generateInFolder } from '../../utils/generateInFolder'
@@ -22,7 +21,7 @@ describe('valid types', () => {
 
     const nodeModules = path.join(dir, 'node_modules')
     if (fs.existsSync(nodeModules)) {
-      await rimraf(nodeModules)
+      await fs.promises.rm(nodeModules, { force: true, recursive: true })
     }
     await generateInFolder({
       projectDir: dir,
@@ -31,7 +30,10 @@ describe('valid types', () => {
 
     const indexPath = path.join(dir, 'test.ts')
     const tsdTestPath = path.join(dir, 'index.test-d.ts')
-    const engineSpecificTestPath = path.join(dir, `test.${getClientEngineType()}.ts`)
+
+    // Originally, this would test `test.library.ts` and `test.binary.ts` files.
+    // TODO: port them to `test.client.ts`.
+    const engineSpecificTestPath = path.join(dir, `test.client.ts`)
 
     if (fs.existsSync(tsdTestPath)) {
       await runTsd(dir)

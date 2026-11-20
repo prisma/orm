@@ -8,23 +8,22 @@ import {
   type GenerateClientOptions as GenerateClientESMOptions,
 } from '@prisma/client-generator-ts'
 import { SqlQueryOutput } from '@prisma/generator'
-import { getDMMF, inferDirectoryConfig, parseEnvValue, processSchemaResult } from '@prisma/internals'
+import { getDMMF, parseEnvValue, processSchemaResult, validatePrismaConfigWithDatasource } from '@prisma/internals'
 import path from 'path'
 import { fetch, WebSocket } from 'undici'
 
 import { introspectSql } from '../../../../cli/src/generate/introspectSql'
 import { PrismaClientOptions } from '../../../src/runtime/getPrismaClient'
-import type { NamedTestSuiteConfig } from './getTestSuiteInfo'
+import { buildPrismaConfig } from './config-builder'
+import type { NamedTestSuiteConfig, TestSuiteMeta } from './getTestSuiteInfo'
 import {
   getTestSuiteFolderPath,
-  getTestSuitePreviewFeatures,
   getTestSuiteSchema,
   getTestSuiteSchemaPath,
   testSuiteHasTypedSql,
 } from './getTestSuiteInfo'
 import { AdapterProviders, GeneratorTypes } from './providers'
 import { DatasourceInfo, setupTestSuiteDatabase, setupTestSuiteFiles, setupTestSuiteSchema } from './setupTestSuiteEnv'
-import type { TestSuiteMeta } from './setupTestSuiteMatrix'
 import { AlterStatementCallback, ClientMeta, ClientRuntime, CliMeta } from './types'
 
 const runtimeBase = path.join(__dirname, '..', '..', '..', 'runtime')
@@ -59,19 +58,13 @@ export async function setupTestSuiteClient({
   const suiteFolderPath = getTestSuiteFolderPath({ suiteMeta, suiteConfig })
   const schemaPath = getTestSuiteSchemaPath({ suiteMeta, suiteConfig })
   const schema = getTestSuiteSchema({ cliMeta, suiteMeta, matrixOptions: suiteConfig.matrixOptions })
-  const previewFeatures = getTestSuitePreviewFeatures(schema)
-  const dmmf = await getDMMF({ datamodel: [[schemaPath, schema]], previewFeatures })
+  const dmmf = await getDMMF({ datamodel: [[schemaPath, schema]] })
   const schemaContext = await processSchemaResult({
     schemaResult: { schemas: [[schemaPath, schema]], schemaPath, schemaRootDir: path.dirname(schemaPath) },
-    // Only TypedSQL tests strictly require env vars in the schema to resolveSome tests. (see below)
-    // We also have some tests that verify error messages when env vars in the schema are not resolvable.
-    // => We do not resolve env vars in the schema here and hence ignore potential errors at this point.
-    ignoreEnvVarErrors: true,
   })
   const generator = schemaContext.generators.find((g) =>
-    ['prisma-client-js', 'prisma-client-ts'].includes(parseEnvValue(g.provider)),
+    ['prisma-client-js', 'prisma-client-ts', 'prisma-client'].includes(parseEnvValue(g.provider)),
   )!
-  const directoryConfig = inferDirectoryConfig(schemaContext)
   const hasTypedSql = await testSuiteHasTypedSql(suiteMeta)
 
   await setupTestSuiteFiles({ suiteMeta, suiteConfig })
@@ -81,21 +74,30 @@ export async function setupTestSuiteClient({
   process.env[datasourceInfo.envVarName] = datasourceInfo.databaseUrl
 
   if (skipDb !== true) {
-    await setupTestSuiteDatabase({ suiteMeta, suiteConfig, alterStatementCallback, cfWorkerBindings })
+    await setupTestSuiteDatabase({
+      suiteMeta,
+      suiteConfig,
+      alterStatementCallback,
+      cfWorkerBindings,
+      datasourceInfo,
+    })
   }
 
   let typedSql: SqlQueryOutput[] | undefined
   if (hasTypedSql) {
+    const config = buildPrismaConfig({ suiteMeta, suiteConfig, datasourceInfo })
+    const validatedConfig = validatePrismaConfigWithDatasource({
+      config,
+      command: 'prisma <test-suite> generate --sql',
+    })
     const schemaContextIntrospect = await processSchemaResult({
       schemaResult: { schemas: [[schemaPath, schema]], schemaPath, schemaRootDir: path.dirname(schemaPath) },
-      // TypedSQL requires a connection to the database => ENV vars in the schema must be resolved for the test to work.
-      ignoreEnvVarErrors: false,
     })
-    typedSql = await introspectSql(directoryConfig, schemaContextIntrospect)
+    typedSql = await introspectSql(validatedConfig, path.dirname(schemaPath), schemaContextIntrospect)
   }
 
-  if (clientMeta.dataProxy === true) {
-    process.env[datasourceInfo.envVarName] = datasourceInfo.dataProxyUrl
+  if (datasourceInfo.accelerateUrl !== undefined) {
+    process.env[datasourceInfo.envVarName] = datasourceInfo.accelerateUrl
   } else {
     process.env[datasourceInfo.envVarName] = datasourceInfo.databaseUrl
   }
@@ -104,7 +106,7 @@ export async function setupTestSuiteClient({
   const clientGenOptions: GenerateClientLegacyOptions & GenerateClientESMOptions = {
     datamodel: schema,
     schemaPath,
-    binaryPaths: { libqueryEngine: {}, queryEngine: {} },
+    binaryPaths: {},
     datasources: schemaContext.datasources,
     outputDir: path.join(suiteFolderPath, outputPath),
     copyRuntime: false,
@@ -116,13 +118,13 @@ export async function setupTestSuiteClient({
     activeProvider: suiteConfig.matrixOptions.provider,
     runtimeBase,
     runtimeSourcePath: path.join(__dirname, '../../../runtime'),
-    copyEngine: !clientMeta.dataProxy,
     typedSql,
     target: 'nodejs',
     generatedFileExtension: 'ts',
     importFileExtension: '',
     moduleFormat: 'cjs',
     tsNoCheckPreamble: false,
+    compilerBuild: 'fast',
   }
 
   if (generatorType === 'prisma-client-ts') {
@@ -132,21 +134,12 @@ export async function setupTestSuiteClient({
   }
 
   const clientPathForRuntime: Record<ClientRuntime, { client: string; sql: string }> = {
-    node: {
-      client: 'generated/prisma/client',
-      sql: path.join(outputPath, 'sql'),
-    },
-    edge: {
-      client: generatorType === 'prisma-client-ts' ? 'generated/prisma/client' : 'generated/prisma/client/edge',
-      sql: path.join(outputPath, 'sql', 'index.edge.js'),
-    },
-    'wasm-engine-edge': {
-      client: generatorType === 'prisma-client-ts' ? 'generated/prisma/client' : 'generated/prisma/client/wasm',
-      sql: path.join(outputPath, 'sql', 'index.wasm-engine-edge.js'),
-    },
     'wasm-compiler-edge': {
-      client: generatorType === 'prisma-client-ts' ? 'generated/prisma/client' : 'generated/prisma/client/wasm',
-      sql: path.join(outputPath, 'sql', 'index.wasm-compiler-edge.js'),
+      client: generatorType === 'prisma-client-ts' ? 'generated/prisma/client' : 'generated/prisma/client/edge',
+      sql:
+        generatorType === 'prisma-client-ts'
+          ? path.join(outputPath, 'sql.ts')
+          : path.join(outputPath, 'sql', 'index.wasm-compiler-edge.js'),
     },
     client: {
       client: 'generated/prisma/client',
@@ -178,39 +171,11 @@ export function setupTestSuiteClientDriverAdapter({
   cfWorkerBindings?: Record<string, unknown>
 }) {
   const driverAdapter = suiteConfig.matrixOptions.driverAdapter
-  const provider = suiteConfig.matrixOptions.provider
-  const __internal: PrismaClientOptions['__internal'] = {}
 
   if (clientMeta.driverAdapter !== true) return {}
 
   if (driverAdapter === undefined) {
     throw new Error(`Missing Driver Adapter`)
-  }
-
-  if (clientMeta.runtime === 'wasm-engine-edge') {
-    __internal.configOverride = (config) => {
-      config.engineWasm = {
-        getRuntime: () => Promise.resolve(require(path.join(runtimeBase, `query_engine_bg.${provider}.js`))),
-        getQueryEngineWasmModule: () => {
-          const queryEngineWasmFilePath = path.join(runtimeBase, `query_engine_bg.${provider}.wasm-base64.js`)
-          const wasmBase64: string = require(queryEngineWasmFilePath).wasm
-          return Promise.resolve(new WebAssembly.Module(Buffer.from(wasmBase64, 'base64')))
-        },
-      }
-      return config
-    }
-  } else if (clientMeta.runtime === 'client' || clientMeta.runtime === 'wasm-compiler-edge') {
-    __internal.configOverride = (config) => {
-      config.compilerWasm = {
-        getRuntime: () => Promise.resolve(require(path.join(runtimeBase, `query_compiler_bg.${provider}.js`))),
-        getQueryCompilerWasmModule: () => {
-          const queryCompilerWasmFilePath = path.join(runtimeBase, `query_compiler_bg.${provider}.wasm-base64.js`)
-          const wasmBase64: string = require(queryCompilerWasmFilePath).wasm
-          return Promise.resolve(new WebAssembly.Module(Buffer.from(wasmBase64, 'base64')))
-        },
-      }
-      return config
-    }
   }
 
   if (driverAdapter === AdapterProviders.JS_PG || driverAdapter === AdapterProviders.JS_PG_COCKROACHDB) {
@@ -220,7 +185,6 @@ export function setupTestSuiteClientDriverAdapter({
       adapter: new PrismaPg({
         connectionString: datasourceInfo.databaseUrl,
       }),
-      __internal,
     }
   }
 
@@ -237,7 +201,6 @@ export function setupTestSuiteClientDriverAdapter({
       adapter: new PrismaNeon({
         connectionString: datasourceInfo.databaseUrl,
       }),
-      __internal,
     }
   }
 
@@ -252,19 +215,17 @@ export function setupTestSuiteClientDriverAdapter({
         url: url.toString(),
         fetch, // TODO remove when Node 16 is deprecated
       }),
-      __internal,
     }
   }
 
   if (driverAdapter === AdapterProviders.JS_LIBSQL) {
-    const { PrismaLibSQL } = require('@prisma/adapter-libsql') as typeof import('@prisma/adapter-libsql')
+    const { PrismaLibSql } = require('@prisma/adapter-libsql') as typeof import('@prisma/adapter-libsql')
 
     return {
-      adapter: new PrismaLibSQL({
+      adapter: new PrismaLibSql({
         url: datasourceInfo.databaseUrl,
         intMode: 'bigint',
       }),
-      __internal,
     }
   }
 
@@ -272,22 +233,21 @@ export function setupTestSuiteClientDriverAdapter({
     const { PrismaD1 } = require('@prisma/adapter-d1') as typeof import('@prisma/adapter-d1')
 
     const d1Client = cfWorkerBindings!.MY_DATABASE as D1Database
-    return { adapter: new PrismaD1(d1Client), __internal }
+    return { adapter: new PrismaD1(d1Client) }
   }
 
   if (driverAdapter === AdapterProviders.JS_BETTER_SQLITE3) {
-    const { PrismaBetterSQLite3 } =
+    const { PrismaBetterSqlite3 } =
       require('@prisma/adapter-better-sqlite3') as typeof import('@prisma/adapter-better-sqlite3')
 
     return {
-      adapter: new PrismaBetterSQLite3({
+      adapter: new PrismaBetterSqlite3({
         // Workaround to avoid the Prisma validation error:
         // ```
         // Error validating datasource `db`: the URL must start with the protocol `file:`
         // ```
         url: datasourceInfo.databaseUrl.replace('file:', ''),
       }),
-      __internal,
     }
   }
 
@@ -310,7 +270,6 @@ export function setupTestSuiteClientDriverAdapter({
           trustServerCertificate: true,
         },
       }),
-      __internal,
     }
   }
 
@@ -330,9 +289,40 @@ export function setupTestSuiteClientDriverAdapter({
         port: Number(port),
         connectionLimit: 4, // avoid running out of connections, some tests create multiple clients
       }),
-      __internal,
     }
   }
 
   throw new Error(`No Driver Adapter support for ${driverAdapter}`)
+}
+
+/**
+ * Constructs the `__internal` argument of `PrismaClient` that contains configuration overrides
+ * specific to the test environment.
+ */
+export function getPrismaClientInternalArgs({
+  suiteConfig,
+  clientMeta,
+}: {
+  suiteConfig: NamedTestSuiteConfig
+  clientMeta: ClientMeta
+}) {
+  const provider = suiteConfig.matrixOptions.provider
+  const __internal: PrismaClientOptions['__internal'] = {}
+
+  if (clientMeta.runtime === 'client' || clientMeta.runtime === 'wasm-compiler-edge') {
+    __internal.configOverride = (config) => {
+      config.compilerWasm = {
+        getRuntime: () => Promise.resolve(require(path.join(runtimeBase, `query_compiler_fast_bg.${provider}.js`))),
+        getQueryCompilerWasmModule: () => {
+          const queryCompilerWasmFilePath = path.join(runtimeBase, `query_compiler_fast_bg.${provider}.wasm-base64.js`)
+          const wasmBase64: string = require(queryCompilerWasmFilePath).wasm
+          return Promise.resolve(new WebAssembly.Module(Buffer.from(wasmBase64, 'base64')))
+        },
+        importName: './query_compiler_fast_bg.js',
+      }
+      return config
+    }
+  }
+
+  return { __internal }
 }

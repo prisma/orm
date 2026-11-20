@@ -21,11 +21,6 @@ describe('int-errors', () => {
     await setupMysql(SetupParams).catch((e) => console.error(e))
 
     prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: connectionString,
-        },
-      },
       errorFormat: 'minimal',
     })
   })

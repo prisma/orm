@@ -1,0 +1,14 @@
+name: PR Code Security
+
+on:
+  pull_request:
+    branches: [v7]
+
+jobs:
+  secret-detection:
+    name: Secret Detection
+    uses: prisma/.github/.github/workflows/secret_detection.yml@7e808313ce87dfbd166654e9819606097a68d8c8 # main
+    secrets: inherit
+  code-scanning:
+    name: Code Scanning
+    uses: prisma/.github/.github/workflows/code_scanning.yml@7e808313ce87dfbd166654e9819606097a68d8c8 # main

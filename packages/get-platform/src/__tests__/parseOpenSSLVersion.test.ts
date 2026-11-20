@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest'
+
 import { parseLibSSLVersion, parseOpenSSLVersion } from '../getPlatform'
 
 describe('parseOpenSSLVersion', () => {

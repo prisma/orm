@@ -1,4 +1,3 @@
 datasource my_db {
   provider = "mysql"
-  url      = env("TEST_MYSQL_URI_MIGRATE")
 }

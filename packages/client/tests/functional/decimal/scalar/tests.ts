@@ -1,4 +1,4 @@
-import { Decimal } from 'decimal.js'
+import { Decimal } from '@prisma/client-runtime-utils'
 
 import { Providers } from '../../_utils/providers'
 import testMatrix from './_matrix'

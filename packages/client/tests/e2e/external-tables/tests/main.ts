@@ -1,13 +1,18 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
+import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
+
+const adapter = new PrismaPg({
+  connectionString: process.env['TEST_E2E_POSTGRES_URI']!,
+})
 
 describe('Prisma External Tables and Enums', () => {
   let prisma: PrismaClient
 
   beforeAll(() => {
-    prisma = new PrismaClient()
+    prisma = new PrismaClient({ adapter })
   })
 
   afterAll(async () => {
@@ -48,10 +53,10 @@ describe('Prisma External Tables and Enums', () => {
     )
     expect(createRelationshipMigration).toMatchInlineSnapshot(`
 "-- AlterTable
-ALTER TABLE "public"."posts" ADD COLUMN     "author_id" INTEGER;
+ALTER TABLE "posts" ADD COLUMN     "author_id" INTEGER;
 
 -- AddForeignKey
-ALTER TABLE "public"."posts" ADD CONSTRAINT "posts_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "public"."users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "posts" ADD CONSTRAINT "posts_author_id_fkey" FOREIGN KEY ("author_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 "
 `)
   })

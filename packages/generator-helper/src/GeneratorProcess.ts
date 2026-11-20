@@ -1,4 +1,5 @@
 import { type ChildProcessByStdio, fork } from 'node:child_process'
+import readline from 'node:readline'
 
 import { Debug } from '@prisma/debug'
 import type { GeneratorConfig, GeneratorManifest, GeneratorOptions } from '@prisma/generator'
@@ -6,7 +7,6 @@ import { spawn } from 'cross-spawn'
 import { bold } from 'kleur/colors'
 import { Readable, Writable } from 'stream'
 
-import byline from './byline'
 import * as JsonRpc from './json-rpc'
 
 const debug = Debug('prisma:GeneratorProcess')
@@ -121,14 +121,18 @@ export class GeneratorProcess {
         this.rejectAllHandlers(error)
       })
 
-      byline(this.child.stderr).on('data', (line: Buffer) => {
-        const response = String(line)
+      const stderrInterface = readline.createInterface({
+        input: this.child.stderr,
+        crlfDelay: Infinity,
+      })
+
+      stderrInterface.on('line', (line: string) => {
         let data: JsonRpc.Response | undefined
         try {
-          data = JSON.parse(response)
+          data = JSON.parse(line)
         } catch (e) {
-          this.errorLogs += response + '\n'
-          debug(response)
+          this.errorLogs += line + '\n'
+          debug(line)
         }
         if (data) {
           this.handleResponse(data)

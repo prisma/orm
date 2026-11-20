@@ -1,100 +1,40 @@
-import { ClientEngineType } from '@prisma/internals'
 import fs from 'fs/promises'
 import path from 'path'
 
 import testMatrix from './_matrix'
 
-const libraryRuntime = 'runtime/library'
-const binaryRuntime = 'runtime/binary'
-const edgeRuntime = 'runtime/edge'
-const wasmRuntime = 'runtime/wasm-engine-edge'
-const nftAnnotation = '// file annotations for bundling tools'
-const wasmFileUsage = '#wasm-engine-loader'
+const nodeRuntime = 'runtime/client'
+const edgeRuntime = 'runtime/wasm-compiler-edge'
 
 testMatrix.setupTestSuite(
-  ({ engineType, clientRuntime, generatorType }, suiteMeta, clientMeta) => {
-    const clientEntrypoint = `generated/prisma/client/${clientRuntime === 'node' ? 'index' : clientRuntime}.js`
+  ({ generatorType }, suiteMeta, clientMeta) => {
+    const clientEntrypoint = `generated/prisma/client/index.js`
     const clientEntrypointPath = path.join(suiteMeta.generatedFolder, clientEntrypoint)
 
     describeIf(generatorType === 'prisma-client-js')('runtime bundles in JS client', () => {
       test('imports correct runtime', async () => {
         const generatedClientContents = await fs.readFile(clientEntrypointPath, 'utf-8')
 
-        if (clientMeta.dataProxy && clientRuntime === 'edge') {
-          expect(generatedClientContents).toContain(edgeRuntime)
-          expect(generatedClientContents).not.toContain(libraryRuntime)
-          expect(generatedClientContents).not.toContain(binaryRuntime)
-          expect(generatedClientContents).not.toContain(wasmRuntime)
-        } else if (clientMeta.dataProxy && engineType === ClientEngineType.Library) {
-          expect(generatedClientContents).toContain(libraryRuntime)
-          expect(generatedClientContents).not.toContain(edgeRuntime)
-          expect(generatedClientContents).not.toContain(binaryRuntime)
-          expect(generatedClientContents).not.toContain(wasmRuntime)
-        } else if (clientMeta.dataProxy && engineType === ClientEngineType.Binary) {
-          expect(generatedClientContents).toContain(binaryRuntime)
-          expect(generatedClientContents).not.toContain(edgeRuntime)
-          expect(generatedClientContents).not.toContain(libraryRuntime)
-          expect(generatedClientContents).not.toContain(wasmRuntime)
-        } else if (engineType === ClientEngineType.Library && clientRuntime === 'node') {
-          expect(generatedClientContents).toContain(libraryRuntime)
-          expect(generatedClientContents).not.toContain(edgeRuntime)
-          expect(generatedClientContents).not.toContain(binaryRuntime)
-          expect(generatedClientContents).not.toContain(wasmRuntime)
-        } else if (engineType === ClientEngineType.Binary && clientRuntime === 'node') {
-          expect(generatedClientContents).toContain(binaryRuntime)
-          expect(generatedClientContents).not.toContain(edgeRuntime)
-          expect(generatedClientContents).not.toContain(libraryRuntime)
-          expect(generatedClientContents).not.toContain(wasmRuntime)
-        } else if (clientMeta.driverAdapter && clientRuntime === 'node') {
-          expect(generatedClientContents).toContain(libraryRuntime)
-          expect(generatedClientContents).not.toContain(edgeRuntime)
-          expect(generatedClientContents).not.toContain(binaryRuntime)
-          expect(generatedClientContents).not.toContain(wasmRuntime)
-        } else if (clientMeta.driverAdapter && clientRuntime === 'edge') {
-          expect(generatedClientContents).toContain(edgeRuntime)
-          expect(generatedClientContents).not.toContain(libraryRuntime)
-          expect(generatedClientContents).not.toContain(binaryRuntime)
-          expect(generatedClientContents).not.toContain(wasmRuntime)
-        } else if (clientMeta.driverAdapter && clientRuntime === 'wasm-engine-edge') {
-          expect(generatedClientContents).toContain(wasmRuntime)
-          expect(generatedClientContents).not.toContain(libraryRuntime)
-          expect(generatedClientContents).not.toContain(binaryRuntime)
-          expect(generatedClientContents).not.toContain(edgeRuntime)
-        } else {
-          throw new Error('Unhandled case')
+        switch (clientMeta.runtime) {
+          case 'client':
+            expect(generatedClientContents).toContain(nodeRuntime)
+            expect(generatedClientContents).not.toContain(edgeRuntime)
+            break
+          case 'wasm-compiler-edge':
+            expect(generatedClientContents).not.toContain(nodeRuntime)
+            expect(generatedClientContents).toContain(edgeRuntime)
+            break
+          default:
+            clientMeta.runtime satisfies never
         }
       })
 
       test('imported files have the expected annotations', async () => {
         const generatedClientContents = await fs.readFile(clientEntrypointPath, 'utf-8')
 
-        if (clientMeta.dataProxy && clientRuntime === 'edge') {
-          expect(generatedClientContents).not.toContain(nftAnnotation)
-          expect(generatedClientContents).not.toContain(wasmFileUsage)
-        } else if (clientMeta.dataProxy && engineType === ClientEngineType.Library) {
-          expect(generatedClientContents).not.toContain(nftAnnotation)
-          expect(generatedClientContents).not.toContain(wasmFileUsage)
-        } else if (clientMeta.dataProxy && engineType === ClientEngineType.Binary) {
-          expect(generatedClientContents).not.toContain(nftAnnotation)
-          expect(generatedClientContents).not.toContain(wasmFileUsage)
-        } else if (engineType === ClientEngineType.Library && clientRuntime === 'node') {
-          expect(generatedClientContents).toContain(nftAnnotation)
-          expect(generatedClientContents).not.toContain(wasmFileUsage)
-        } else if (engineType === ClientEngineType.Binary && clientRuntime === 'node') {
-          expect(generatedClientContents).toContain(nftAnnotation)
-          expect(generatedClientContents).not.toContain(wasmFileUsage)
-        } else if (clientMeta.driverAdapter && clientRuntime === 'node') {
-          expect(generatedClientContents).toContain(nftAnnotation)
-          expect(generatedClientContents).not.toContain(wasmFileUsage)
-        } else if (clientMeta.driverAdapter && clientRuntime === 'edge') {
-          expect(generatedClientContents).not.toContain(nftAnnotation)
-          expect(generatedClientContents).not.toContain(wasmFileUsage)
-        } else if (clientMeta.driverAdapter && clientRuntime === 'wasm-engine-edge') {
-          expect(generatedClientContents).not.toContain(nftAnnotation)
-          expect(generatedClientContents).toContain(wasmFileUsage)
-        } else {
-          throw new Error('Unhandled case')
-        }
+        expect(generatedClientContents).toContain('/* !!! This is code generated by Prisma. Do not edit directly. !!!')
+        expect(generatedClientContents).toContain('/* eslint-disable */')
+        expect(generatedClientContents).toContain('// biome-ignore-all lint: generated file')
       })
     })
   },

@@ -31,6 +31,8 @@ const ArrayColumnType = {
   OID_ARRAY: 1028,
   TEXT_ARRAY: 1009,
   TIMESTAMP_ARRAY: 1115,
+  TIMESTAMPTZ_ARRAY: 1185,
+  TIMETZ_ARRAY: 1270,
   TIME_ARRAY: 1183,
   UUID_ARRAY: 2951,
   VARBIT_ARRAY: 1563,
@@ -237,6 +239,7 @@ export function fieldToColumnType(fieldTypeId: number): ColumnType {
     case ArrayColumnType.DATE_ARRAY:
       return ColumnTypeEnum.DateArray
     case ArrayColumnType.TIME_ARRAY:
+    case ArrayColumnType.TIMETZ_ARRAY:
       return ColumnTypeEnum.TimeArray
     case ArrayColumnType.TIMESTAMP_ARRAY:
       return ColumnTypeEnum.DateTimeArray
@@ -292,11 +295,11 @@ function normalize_date(date: string): string {
  */
 
 function normalize_timestamp(time: string): string {
-  return new Date(`${time}Z`).toISOString().replace(/(\.000)?Z$/, '+00:00')
+  return `${time.replace(' ', 'T')}+00:00`
 }
 
-function normalize_timestampz(time: string): string {
-  return new Date(time.replace(/[+-]\d{2}(:\d{2})?$/, 'Z')).toISOString().replace(/(\.000)?Z$/, '+00:00')
+function normalize_timestamptz(time: string): string {
+  return time.replace(' ', 'T').replace(/[+-]\d{2}(:\d{2})?$/, '+00:00')
 }
 
 /*
@@ -308,9 +311,16 @@ function normalize_time(time: string): string {
 }
 
 function normalize_timez(time: string): string {
-  // Although it might be controversial, UTC is assumed in consistency with the behavior of rust postgres driver
-  // in quaint. See quaint/src/connector/postgres/conversion.rs
-  return time.replace(/[+-]\d{2}(:\d{2})?$/, '')
+  // Postgres sends TIMETZ as HH:MM:SS[.ffffff]±HH[:MM[:SS]]. Prisma surfaces it as a UTC time of day,
+  // so the offset has to be applied, not just dropped.
+  const match = time.match(/^(\d{2}):(\d{2}):(\d{2})(\.\d+)?([+-])(\d{2})(?::(\d{2}))?(?::(\d{2}))?$/)
+  if (!match) return time
+  const [, h, m, s, fraction = '', sign, oh, om = '0', os = '0'] = match
+  const offset = (sign === '+' ? 1 : -1) * (Number(oh) * 3600 + Number(om) * 60 + Number(os))
+  if (offset === 0) return `${h}:${m}:${s}${fraction}`
+  const seconds = (((Number(h) * 3600 + Number(m) * 60 + Number(s) - offset) % 86400) + 86400) % 86400
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}${fraction}`
 }
 
 /******************/
@@ -318,7 +328,13 @@ function normalize_timez(time: string): string {
 /******************/
 
 function normalize_money(money: string): string {
-  return money.slice(1)
+  // Postgres formats money using `lc_monetary`. Only the default format, e.g. `$1,234.50` or `-$120.00`, is supported.
+  if (!/^-?\$\d{1,3}(,\d{3})*\.\d{2}$/.test(money)) {
+    throw new Error(
+      `Unsupported money format "${money}": only the default lc_monetary format, such as -$1,234.50, is supported`,
+    )
+  }
+  return money.replace(/[^\d.-]/g, '')
 }
 
 /******************/
@@ -345,17 +361,6 @@ function toJson(json: string): string {
 /* Binary data handling */
 /************************/
 
-/**
- * TODO:
- * 1. Check if using base64 would be more efficient than this encoding.
- * 2. Consider the possibility of eliminating re-encoding altogether
- *    and passing bytea hex format to the engine if that can be aligned
- *    with other adapters of the same database provider.
- */
-function encodeBuffer(buffer: Buffer) {
-  return Array.from(new Uint8Array(buffer))
-}
-
 /*
  * BYTEA - arbitrary raw binary strings
  */
@@ -366,21 +371,10 @@ const parsePgBytes = getTypeParser(ScalarColumnType.BYTEA) as (_: string) => Buf
  * BYTEA_ARRAY - arrays of arbitrary raw binary strings
  */
 
-const parseBytesArray = getTypeParser(ArrayColumnType.BYTEA_ARRAY) as (_: string) => Buffer[]
+const normalizeByteaArray = getTypeParser(ArrayColumnType.BYTEA_ARRAY) as (_: string) => Buffer[]
 
-function normalizeByteaArray(serializedBytesArray) {
-  const buffers = parseBytesArray(serializedBytesArray)
-  return buffers.map((buf) => (buf ? encodeBuffer(buf) : null))
-}
-
-/**
- * Convert bytes to a JSON-encodable representation since we can't
- * currently send a parsed Buffer or ArrayBuffer across JS to Rust
- * boundary.
- */
-function convertBytes(serializedBytes: string): number[] {
-  const buffer = parsePgBytes(serializedBytes)
-  return encodeBuffer(buffer)
+function convertBytes(serializedBytes: string): Buffer {
+  return parsePgBytes(serializedBytes)
 }
 
 /* BIT_ARRAY, VARBIT_ARRAY */
@@ -395,11 +389,13 @@ export const customParsers = {
   [ScalarColumnType.TIME]: normalize_time,
   [ArrayColumnType.TIME_ARRAY]: normalize_array(normalize_time),
   [ScalarColumnType.TIMETZ]: normalize_timez,
+  [ArrayColumnType.TIMETZ_ARRAY]: normalize_array(normalize_timez),
   [ScalarColumnType.DATE]: normalize_date,
   [ArrayColumnType.DATE_ARRAY]: normalize_array(normalize_date),
   [ScalarColumnType.TIMESTAMP]: normalize_timestamp,
   [ArrayColumnType.TIMESTAMP_ARRAY]: normalize_array(normalize_timestamp),
-  [ScalarColumnType.TIMESTAMPTZ]: normalize_timestampz,
+  [ScalarColumnType.TIMESTAMPTZ]: normalize_timestamptz,
+  [ArrayColumnType.TIMESTAMPTZ_ARRAY]: normalize_array(normalize_timestamptz),
   [ScalarColumnType.MONEY]: normalize_money,
   [ArrayColumnType.MONEY_ARRAY]: normalize_array(normalize_money),
   [ScalarColumnType.JSON]: toJson,
@@ -429,8 +425,10 @@ export function mapArg<A>(arg: A | Date, argType: ArgType): null | unknown[] | s
   if (arg instanceof Date) {
     switch (argType.dbType) {
       case 'TIME':
-      case 'TIMETZ':
         return formatTime(arg)
+      case 'TIMETZ':
+        // Without an explicit offset Postgres would interpret the UTC time in the session time zone.
+        return formatTime(arg) + '+00'
       case 'DATE':
         return formatDate(arg)
       default:
@@ -442,13 +440,9 @@ export function mapArg<A>(arg: A | Date, argType: ArgType): null | unknown[] | s
     return Buffer.from(arg, 'base64')
   }
 
-  if (Array.isArray(arg) && argType.scalarType === 'bytes') {
-    return Buffer.from(arg)
-  }
-
   // https://github.com/brianc/node-postgres/pull/2930
   if (ArrayBuffer.isView(arg)) {
-    return Buffer.from(arg.buffer, arg.byteOffset, arg.byteLength)
+    return new Uint8Array(arg.buffer, arg.byteOffset, arg.byteLength)
   }
 
   return arg
@@ -458,7 +452,7 @@ function formatDateTime(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
   const ms = date.getUTCMilliseconds()
   return (
-    date.getUTCFullYear() +
+    pad(date.getUTCFullYear(), 4) +
     '-' +
     pad(date.getUTCMonth() + 1) +
     '-' +
@@ -475,7 +469,7 @@ function formatDateTime(date: Date): string {
 
 function formatDate(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
-  return date.getUTCFullYear() + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate())
+  return pad(date.getUTCFullYear(), 4) + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate())
 }
 
 function formatTime(date: Date): string {

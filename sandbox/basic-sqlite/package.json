@@ -4,7 +4,7 @@
   "description": "Prisma development playground",
   "main": "index.ts",
   "scripts": {
-    "dbpush": "prisma db push --skip-generate",
+    "dbpush": "prisma db push",
     "generate": "PRISMA_COPY_RUNTIME_SOURCEMAPS=1 prisma generate",
     "start": "npm run generate && npm run test",
     "test": "ts-node index.ts",
@@ -15,12 +15,13 @@
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "../../packages/client",
-    "@prisma/config": "../../packages/config"
+    "@prisma/adapter-better-sqlite3": "../../packages/adapter-better-sqlite3"
   },
   "devDependencies": {
-    "@types/node": "18.19.76",
+    "@types/node": "~20.19.0",
+    "@prisma/config": "../../packages/config",
     "prisma": "../../packages/cli",
     "ts-node": "10.9.2",
-    "typescript": "5.2.2"
+    "typescript": "5.4.5"
   }
 }

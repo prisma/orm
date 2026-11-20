@@ -1,6 +1,5 @@
 datasource db {
     provider = "mysql"
-    url      = env("TEST_MYSQL_ISOLATED_URI")
 }
 
 generator client {

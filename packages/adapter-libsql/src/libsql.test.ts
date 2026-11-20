@@ -2,15 +2,15 @@ import type { Client } from '@libsql/client'
 import { ColumnTypeEnum, IsolationLevel, SqlMigrationAwareDriverAdapterFactory } from '@prisma/driver-adapter-utils'
 import { describe, expect, test, vi } from 'vitest'
 
-import { PrismaLibSQLAdapterFactoryBase } from './libsql'
-import { PrismaLibSQLAdapterFactory } from './libsql-node'
+import { PrismaLibSqlAdapterFactoryBase } from './libsql'
+import { PrismaLibSqlAdapterFactory } from './libsql-node'
 
 describe.each([
   (factory: SqlMigrationAwareDriverAdapterFactory) => factory.connect(),
   (factory: SqlMigrationAwareDriverAdapterFactory) => factory.connectToShadowDb(),
 ])('behavior of the adapter with "%s"', (connect) => {
   test('executes and parses simple queries', async () => {
-    const factory = new PrismaLibSQLAdapterFactory({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactory({ url: ':memory:' })
     const conn = await connect(factory)
 
     await expect(
@@ -30,7 +30,7 @@ describe.each([
   })
 
   test('executes and parses simple statements', async () => {
-    const factory = new PrismaLibSQLAdapterFactory({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactory({ url: ':memory:' })
     const conn = await connect(factory)
 
     await expect(
@@ -62,7 +62,7 @@ describe.each([
   })
 
   test('executes simple scripts', async () => {
-    const factory = new PrismaLibSQLAdapterFactory({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactory({ url: ':memory:' })
     const conn = await connect(factory)
 
     await expect(
@@ -81,7 +81,7 @@ describe.each([
   })
 
   test('query errors get converted to DriverAdapterError', async () => {
-    const factory = new PrismaLibSQLAdapterFactory({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactory({ url: ':memory:' })
     const conn = await connect(factory)
 
     await expect(
@@ -97,7 +97,7 @@ describe.each([
   })
 
   test('execute errors get converted to DriverAdapterError', async () => {
-    const factory = new PrismaLibSQLAdapterFactory({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactory({ url: ':memory:' })
     const conn = await connect(factory)
 
     await expect(
@@ -113,7 +113,7 @@ describe.each([
   })
 
   test('script errors get converted to DriverAdapterError', async () => {
-    const factory = new PrismaLibSQLAdapterFactory({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactory({ url: ':memory:' })
     const conn = await connect(factory)
 
     await expect(
@@ -125,7 +125,7 @@ describe.each([
   })
 
   test('executes a SERIALIZABLE transaction', async () => {
-    const factory = new PrismaLibSQLAdapterFactory({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactory({ url: ':memory:' })
     const conn = await connect(factory)
 
     await conn.executeScript(`CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)`)
@@ -144,7 +144,7 @@ describe.each([
   })
 
   test('rolls back a SERIALIZABLE transaction', async () => {
-    const factory = new PrismaLibSQLAdapterFactory({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactory({ url: ':memory:' })
     const conn = await connect(factory)
 
     await conn.executeScript(`CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)`)
@@ -163,7 +163,7 @@ describe.each([
   })
 
   test('rejects any other isolation level', async () => {
-    const factory = new PrismaLibSQLAdapterFactory({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactory({ url: ':memory:' })
     const conn = await connect(factory)
 
     for (const level of [
@@ -185,14 +185,14 @@ describe.each([
   (factory: SqlMigrationAwareDriverAdapterFactory) => factory.connectToShadowDb(),
 ])('usage of the underlying connection with "%s"', (connect) => {
   test('dispose closes the underlying connection', async () => {
-    const factory = new PrismaLibSQLAdapterFactoryMock({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactoryMock({ url: ':memory:' })
     const conn = await connect(factory)
     await expect(conn.dispose()).resolves.toBeUndefined()
     expect(factory.connection.close).toHaveBeenCalledTimes(1)
   })
 
   test('commit commits the underlying transaction', async () => {
-    const factory = new PrismaLibSQLAdapterFactoryMock({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactoryMock({ url: ':memory:' })
     const conn = await connect(factory)
     const tx = await conn.startTransaction('SERIALIZABLE')
     expect(tx.options.usePhantomQuery).toBe(true)
@@ -201,7 +201,7 @@ describe.each([
   })
 
   test('rollback rolls back the underlying transaction', async () => {
-    const factory = new PrismaLibSQLAdapterFactoryMock({ url: ':memory:' })
+    const factory = new PrismaLibSqlAdapterFactoryMock({ url: ':memory:' })
     const conn = await connect(factory)
     const tx = await conn.startTransaction('SERIALIZABLE')
     expect(tx.options.usePhantomQuery).toBe(true)
@@ -210,7 +210,7 @@ describe.each([
   })
 })
 
-class PrismaLibSQLAdapterFactoryMock extends PrismaLibSQLAdapterFactoryBase {
+class PrismaLibSqlAdapterFactoryMock extends PrismaLibSqlAdapterFactoryBase {
   connection = {
     execute: vi.fn(),
     batch: vi.fn(),
@@ -231,6 +231,8 @@ class PrismaLibSQLAdapterFactoryMock extends PrismaLibSQLAdapterFactoryBase {
     return {
       ...this.connection,
       transaction: () => Promise.resolve(this.transaction),
+      migrate: vi.fn().mockResolvedValue([]),
+      reconnect: vi.fn(),
     }
   }
 }

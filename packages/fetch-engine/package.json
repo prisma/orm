@@ -9,32 +9,27 @@
   "homepage": "https://www.prisma.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/fetch-engine"
   },
   "bugs": "https://github.com/prisma/prisma/issues",
   "enginesOverride": {},
   "devDependencies": {
-    "@swc/core": "1.11.5",
-    "@swc/jest": "0.2.37",
-    "@types/jest": "29.5.14",
-    "@types/node": "18.19.76",
+    "@types/node": "~20.19.24",
     "@types/progress": "2.0.7",
     "del": "6.1.1",
-    "execa": "5.1.1",
+    "execa": "8.0.1",
     "find-cache-dir": "5.0.0",
     "fs-extra": "11.3.0",
     "hasha": "5.2.2",
     "http-proxy-agent": "7.0.2",
     "https-proxy-agent": "7.0.6",
-    "jest": "29.7.0",
     "kleur": "4.1.5",
     "node-fetch": "3.3.2",
     "p-filter": "4.1.0",
     "p-map": "4.0.0",
     "p-retry": "4.6.2",
     "progress": "2.0.3",
-    "rimraf": "6.0.1",
     "temp-dir": "2.0.0",
     "tempy": "1.0.1",
     "timeout-signal": "2.0.0",
@@ -42,13 +37,13 @@
   },
   "dependencies": {
     "@prisma/debug": "workspace:*",
-    "@prisma/engines-version": "6.16.0-5.66f07015fb4a0f9195e6e97dca56186a2f4cad17",
+    "@prisma/engines-version": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@prisma/get-platform": "workspace:*"
   },
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
     "build": "tsx helpers/build.ts",
-    "test": "jest",
+    "test": "vitest run",
     "prepublishOnly": "pnpm run build"
   },
   "files": [

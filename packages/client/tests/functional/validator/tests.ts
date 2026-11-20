@@ -8,8 +8,8 @@ declare let prisma: PrismaClient
 declare let Prisma: typeof PrismaNamespace
 
 testMatrix.setupTestSuite(
-  () => {
-    test('validation via non-extended client', () => {
+  ({ generatorType }) => {
+    testIf(generatorType === 'prisma-client-js')('validation via non-extended client', () => {
       const data1 = Prisma.validator<PrismaNamespace.UserSelect>()({
         id: true,
       })
@@ -83,7 +83,7 @@ testMatrix.setupTestSuite(
       })
     })
 
-    test('validation via extended client', () => {
+    testIf(generatorType === 'prisma-client-js')('validation via extended client', () => {
       const xprisma = prisma.$extends({
         result: {
           user: {

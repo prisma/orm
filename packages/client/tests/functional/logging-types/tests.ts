@@ -13,7 +13,7 @@ type LogPrismaClient = PrismaClient<{ log: [{ emit: 'event'; level: 'query' | 'i
 declare const newPrismaClient: NewPrismaClient<LogPrismaClient, typeof PrismaClient>
 
 testMatrix.setupTestSuite(
-  ({ provider }, _suiteMeta, clientMeta) => {
+  ({ provider, clientEngineExecutor }, _suiteMeta, clientMeta) => {
     test('check that query and info logs match their declared types', async () => {
       const prisma: LogPrismaClient = newPrismaClient({
         log: [
@@ -41,9 +41,13 @@ testMatrix.setupTestSuite(
         expect(queryLogs.length).toBeGreaterThan(0)
 
         // We always have at least one quaint log item with native Rust SQL connectors,
-        // and the API calls related logs with Data Proxy, but with driver adapters and
-        // with MongoDB there might not necessarily be any info logs in this test.
-        if (!clientMeta.driverAdapter && !(provider === Providers.MONGODB && !clientMeta.dataProxy)) {
+        // and the API calls related logs with Data Proxy, but with driver adapters,
+        // MongoDB and QPE there might not necessarily be any info logs in this test.
+        if (
+          !clientMeta.driverAdapter &&
+          !(provider === Providers.MONGODB && !clientMeta.dataProxy) &&
+          clientEngineExecutor !== 'remote'
+        ) {
           expect(infoLogs.length).toBeGreaterThan(0)
         }
       })

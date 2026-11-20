@@ -4,12 +4,13 @@
   "triggerEmptyDevReleaseByIncrementingThisNumber": 0,
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=18.18",
-    "pnpm": ">=10.15 <11"
+    "node": "^20.19 || ^22.12 || >=24.0",
+    "pnpm": ">=11 <12"
   },
-  "packageManager": "pnpm@10.15.1",
+  "packageManager": "pnpm@11.13.1",
   "scripts": {
     "build": "turbo build",
+    "dev": "turbo dev",
     "watch": "turbo watch build",
     "publish-all-dryrun": "tsx scripts/ci/publish.ts --publish --dry-run",
     "publish-all": "tsx scripts/ci/publish.ts --publish",
@@ -35,7 +36,7 @@
     "@eslint-community/eslint-plugin-eslint-comments": "4.4.1",
     "@eslint/eslintrc": "3.3.0",
     "@eslint/js": "9.30.0",
-    "@microsoft/api-extractor": "7.52.1",
+    "@microsoft/api-extractor": "7.52.11",
     "@octokit/graphql": "8.2.1",
     "@octokit/rest": "21.1.1",
     "@prisma/engines": "workspace:*",
@@ -46,12 +47,12 @@
     "@types/fs-extra": "11.0.4",
     "@types/graphviz": "0.0.39",
     "@types/jest": "29.5.14",
-    "@types/node": "18.19.76",
+    "@types/node": "~20.19.37",
     "@types/resolve": "1.20.6",
     "@typescript-eslint/eslint-plugin": "7.15.0",
     "@typescript-eslint/parser": "7.15.0",
     "@typescript-eslint/utils": "7.15.0",
-    "@vitest/coverage-v8": "3.2.4",
+    "@vitest/coverage-v8": "4.0.18",
     "arg": "5.0.2",
     "batching-toposort": "1.2.0",
     "buffer": "6.0.3",
@@ -66,25 +67,26 @@
     "eslint-plugin-local-rules": "3.0.2",
     "eslint-plugin-prettier": "5.5.4",
     "eslint-plugin-simple-import-sort": "12.1.1",
-    "execa": "5.1.1",
+    "execa": "8.0.1",
     "format-util": "1.0.5",
     "fs-extra": "11.3.0",
-    "globals": "16.0.0",
+    "globals": "17.7.0",
     "globby": "11.1.0",
     "graphviz-mit": "0.0.9",
     "husky": "9.1.7",
     "is-ci": "4.1.0",
-    "jest-junit": "16.0.0",
+    "jest-junit": "17.0.0",
     "kleur": "4.1.5",
     "lint-staged": "15.4.3",
     "p-map": "4.0.0",
     "p-reduce": "3.0.0",
     "p-retry": "4.6.2",
     "prettier": "3.6.2",
+    "prettier2": "npm:prettier@2.8.8",
     "regenerator-runtime": "0.14.1",
     "resolve": "1.22.10",
     "safe-buffer": "5.2.1",
-    "semver": "7.7.0",
+    "semver": "7.8.5",
     "size-limit": "11.2.0",
     "spdx-exceptions": "2.5.0",
     "spdx-license-ids": "3.0.21",
@@ -92,9 +94,10 @@
     "ts-node": "10.9.2",
     "ts-toolbelt": "9.6.0",
     "tsx": "4.19.3",
-    "turbo": "2.5.6",
+    "turbo": "2.10.5",
     "typescript": "5.4.5",
-    "vitest": "3.2.4",
+    "vitest": "4.0.18",
+    "wrangler": "3.114.15",
     "zx": "8.4.1"
   },
   "lint-staged": {
@@ -104,41 +107,6 @@
     ]
   },
   "size-limit": [
-    {
-      "path": "packages/client/runtime/library.js",
-      "gzip": false,
-      "brotli": false
-    },
-    {
-      "path": "packages/client/runtime/library.d.ts",
-      "gzip": false,
-      "brotli": false
-    },
-    {
-      "path": "packages/client/runtime/binary.js",
-      "gzip": false,
-      "brotli": false
-    },
-    {
-      "path": "packages/client/runtime/binary.d.ts",
-      "gzip": false,
-      "brotli": false
-    },
-    {
-      "path": "packages/client/runtime/edge.js",
-      "gzip": false,
-      "brotli": false
-    },
-    {
-      "path": "packages/client/runtime/edge-esm.js",
-      "gzip": false,
-      "brotli": false
-    },
-    {
-      "path": "packages/client/runtime/wasm-engine-edge.js",
-      "gzip": false,
-      "brotli": false
-    },
     {
       "path": "packages/client/runtime/index-browser.js",
       "gzip": false,

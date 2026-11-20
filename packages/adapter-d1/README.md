@@ -9,22 +9,7 @@ Refer to the [announcement blog post](https://prisma.io/cloudflare-d1) and our [
 
 ## Getting started
 
-To get started, enable the `driverAdapters` Preview feature flag in your Prisma schema:
-
-```prisma
-// schema.prisma
-generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
-}
-
-datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
-}
-```
-
-Install Prisma CLI, Prisma Client, the Prisma adapter for Cloudflare D1, the TypeScript types for Cloudflare Workers, and Wrangler CLI packages:
+To get started, install Prisma CLI, Prisma Client, the Prisma adapter for Cloudflare D1, the TypeScript types for Cloudflare Workers, and Wrangler CLI packages:
 
 ```sh
 npm install @prisma/client

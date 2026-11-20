@@ -1,6 +1,5 @@
 datasource postgres {
     provider = "postgresql"
-    url      = "postgresql://root:prisma@localhost:5432/p2_254_divy?schema=public"
 }
 
 generator client {

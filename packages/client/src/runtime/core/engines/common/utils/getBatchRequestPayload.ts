@@ -1,11 +1,8 @@
-import { TransactionOptions } from '../Engine'
-import { JsonQuery } from '../types/JsonProtocol'
-import { QueryEngineBatchRequest } from '../types/QueryEngine'
+import type { JsonBatchQuery, JsonQuery } from '@prisma/json-protocol'
 
-export function getBatchRequestPayload(
-  batch: JsonQuery[],
-  transaction?: TransactionOptions<unknown>,
-): QueryEngineBatchRequest {
+import { TransactionOptions } from '../Engine'
+
+export function getBatchRequestPayload(batch: JsonQuery[], transaction?: TransactionOptions<unknown>): JsonBatchQuery {
   return {
     batch,
     transaction: transaction?.kind === 'batch' ? { isolationLevel: transaction.options.isolationLevel } : undefined,

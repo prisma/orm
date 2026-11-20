@@ -3,7 +3,7 @@
 <div align="center">
   <h1>Prisma Migrate</h1>
   <p><h3 align="center">Declarative data modeling & schema migrations</h3></p>
-  <a href="https://www.prisma.io/docs/getting-started/quickstart">Quickstart</a>
+  <a href="https://www.prisma.io/docs/getting-started/prisma-orm/quickstart/prisma-postgres">Quickstart</a>
   <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
   <a href="https://www.prisma.io/">Website</a>
   <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>

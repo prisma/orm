@@ -109,6 +109,57 @@ testMatrix.setupTestSuite(() => {
     expectTypeOf(result).toHaveProperty('email')
   })
 
+  test('skips fields in create', async () => {
+    const { id: authorId } = await prisma.user.findUniqueOrThrow({
+      where: {
+        email: 'boat@example.com',
+      },
+    })
+
+    const result = await prisma.post.create({
+      data: {
+        authorId,
+        title: 'Concise post',
+        content: Prisma.skip,
+      },
+    })
+
+    expect(result.content).toBe(null)
+  })
+
+  test('skips fields in nested create', async () => {
+    const result = await prisma.user.update({
+      where: {
+        email: 'boat@example.com',
+      },
+      data: {
+        posts: {
+          create: {
+            title: 'Nested post',
+            content: Prisma.skip,
+          },
+        },
+      },
+      include: {
+        posts: true,
+      },
+    })
+
+    expect(result.posts.length).toBeGreaterThan(0)
+    expect(result.posts[0].content).toBe(null)
+  })
+
+  test('skips fields in create with non-nullable field with default', async () => {
+    const result = await prisma.user.create({
+      data: {
+        email: 'testuser@example.com',
+        name: Prisma.skip,
+      },
+    })
+
+    expect(result.name).toBe('Test User')
+  })
+
   describe('after extension', () => {
     test('skips relations in include', async () => {
       const result = await prisma.$extends({}).user.findFirstOrThrow({
@@ -142,6 +193,69 @@ testMatrix.setupTestSuite(() => {
 
       expect(result).toHaveProperty('email')
       expectTypeOf(result).toHaveProperty('email')
+    })
+  })
+
+  describe('after query extension', () => {
+    const getExtendedClient = () =>
+      prisma.$extends({
+        query: {
+          $allModels: {
+            $allOperations: (params) => params.query(params.args),
+          },
+        },
+      })
+
+    test('skips fields in create with query extension', async () => {
+      const result = await getExtendedClient().user.create({
+        data: {
+          email: 'query-ext-test@example.com',
+          name: Prisma.skip,
+        },
+      })
+
+      expect(result.name).toBe('Test User')
+    })
+
+    test('skips input fields in findMany with query extension', async () => {
+      const result = await getExtendedClient().user.findMany({
+        where: {
+          name: Prisma.skip,
+        },
+        orderBy: { name: 'asc' },
+      })
+
+      expect(result.length).toBeGreaterThanOrEqual(2)
+    })
+
+    test('skips arguments in findMany with query extension', async () => {
+      const result = await getExtendedClient().user.findMany({
+        where: Prisma.skip,
+        orderBy: { name: 'asc' },
+      })
+
+      expect(result.length).toBeGreaterThanOrEqual(2)
+    })
+
+    test('skips relations in include with query extension', async () => {
+      const result = await getExtendedClient().user.findFirstOrThrow({
+        include: {
+          posts: Prisma.skip,
+        },
+      })
+
+      expect(result).not.toHaveProperty('posts')
+    })
+
+    test('skips relations in select with query extension', async () => {
+      const result = await getExtendedClient().user.findFirstOrThrow({
+        select: {
+          id: true,
+          posts: Prisma.skip,
+        },
+      })
+
+      expect(result).not.toHaveProperty('posts')
     })
   })
 })

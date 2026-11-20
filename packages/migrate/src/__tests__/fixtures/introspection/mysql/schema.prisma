@@ -1,4 +1,3 @@
 datasource db {
   provider = "mysql"
-  url      = env("TEST_MYSQL_URI")
 }

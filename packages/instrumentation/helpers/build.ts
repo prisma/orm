@@ -5,7 +5,7 @@ const buildOptions = {
   bundle: true,
   outfile: 'dist/index',
   entryPoints: ['src/index.ts'],
-  external: ['@opentelemetry/instrumentation'],
+  external: ['@opentelemetry/api', '@opentelemetry/instrumentation'],
 } satisfies BuildOptions
 
 void build([

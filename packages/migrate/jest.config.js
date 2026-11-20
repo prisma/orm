@@ -13,4 +13,5 @@ module.exports = {
   modulePathIgnorePatterns: ['<rootDir>/src/__tests__/fixtures/'],
   // to allow large-ish tests in `postgresql-views`
   testTimeout: 10_000,
+  prettierPath: '../../node_modules/prettier2',
 }

@@ -3,6 +3,7 @@ import type * as DMMF from '@prisma/dmmf'
 export const needNamespace = {
   Json: 'JsonValue',
   Decimal: 'Decimal',
+  Bytes: 'Bytes',
 }
 
 export function needsNamespace(field: DMMF.Field): boolean {
@@ -11,7 +12,7 @@ export function needsNamespace(field: DMMF.Field): boolean {
   }
 
   if (field.kind === 'scalar') {
-    return field.type === 'Json' || field.type === 'Decimal'
+    return field.type === 'Json' || field.type === 'Decimal' || field.type === 'Bytes'
   }
   return false
 }
@@ -26,7 +27,7 @@ export const GraphQLScalarToJSTypeTable = {
   ID: 'string',
   UUID: 'string',
   Json: 'JsonValue',
-  Bytes: 'Uint8Array',
+  Bytes: 'Bytes',
   Decimal: ['Decimal', 'DecimalJsLike', 'number', 'string'],
   BigInt: ['bigint', 'number'],
 }

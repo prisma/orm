@@ -1,4 +1,4 @@
-import { hasBatchIndex } from '../core/errors/ErrorWithBatchIndex'
+import { hasBatchIndex } from '@prisma/client-runtime-utils'
 
 /**
  * Waits for result of batch $transaction and picks the best possible error to report if any

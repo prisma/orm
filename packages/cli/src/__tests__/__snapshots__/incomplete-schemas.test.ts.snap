@@ -1,33 +1,3 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`[wasm] incomplete-schemas datasource-block-url-env-set-invalid db push 1`] = `
-"Prisma schema validation - (get-config wasm)
-Error code: P1012
-error: Error validating datasource \`db\`: the URL must start with the protocol \`postgresql://\` or \`postgres://\`.
-  -->  schema.prisma:5
-   | 
- 4 |   provider = "postgresql"
- 5 |   url      = env("SOME_DEFINED_INVALID_URL")
-   | 
-
-Validation Error Count: 1
-[Context: getConfig]
-
-Prisma CLI Version : 0.0.0"
-`;
-
-exports[`[wasm] incomplete-schemas datasource-block-url-env-set-invalid validate 1`] = `
-"Prisma schema validation - (get-config wasm)
-Error code: P1012
-error: Error validating datasource \`db\`: the URL must start with the protocol \`postgresql://\` or \`postgres://\`.
-  -->  schema.prisma:5
-   | 
- 4 |   provider = "postgresql"
- 5 |   url      = env("SOME_DEFINED_INVALID_URL")
-   | 
-
-Validation Error Count: 1
-[Context: getConfig]
-
-Prisma CLI Version : 0.0.0"
-`;
+exports[`[wasm] incomplete-schemas datasource-block-url-env-set-invalid db push 1`] = `"P1013: The provided database string is invalid. The scheme is not recognized in database URL. Please refer to the documentation in https://pris.ly/d/config-url for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters."`;

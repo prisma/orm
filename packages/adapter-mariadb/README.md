@@ -6,40 +6,17 @@ This package contains the driver adapter for Prisma ORM that enables usage of th
 
 ## Usage
 
-This section explains how you can use it with Prisma ORM and the `@prisma/adapter-mariadb` driver adapter. Be sure that the `DATABASE_URL` environment variable is set to your MariaDB/MySQL connection string (e.g. in a `.env` file).
+This section explains how you can use it with Prisma ORM and the `@prisma/adapter-mariadb` driver adapter. Be sure that the `DATABASE_URL` environment variable is set to your MariaDB/MySQL connection string (e.g. loaded using `dotenv` from a `.env` file).
 
-### 1. Enable the `driverAdapters` Preview feature flag
+### 1. Install the dependencies
 
-Since driver adapters are currently in Preview, you need to enable its feature flag on the `datasource` block in your Prisma schema:
-
-```prisma
-// schema.prisma
-generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
-}
-
-datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
-}
-```
-
-Once you have added the feature flag to your schema, re-generate Prisma Client:
-
-```
-npx prisma generate
-```
-
-### 2. Install the dependencies
-
-Next, install the MariaDB Prisma ORM driver adapter:
+Install the MariaDB Prisma ORM driver adapter:
 
 ```
 npm install @prisma/adapter-mariadb
 ```
 
-### 3. Instantiate Prisma Client using the driver adapter
+### 2. Instantiate Prisma Client using the driver adapter
 
 ```ts
 import { PrismaMariaDb } from '@prisma/adapter-mariadb'

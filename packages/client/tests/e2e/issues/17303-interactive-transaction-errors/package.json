@@ -1,0 +1,20 @@
+{
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "start": "pnpm exec jest"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "/tmp/prisma-adapter-pg-0.0.0.tgz",
+    "@prisma/client": "/tmp/prisma-client-0.0.0.tgz",
+    "@prisma/client-runtime-utils": "/tmp/prisma-client-runtime-utils-0.0.0.tgz"
+  },
+  "devDependencies": {
+    "@types/jest": "29.5.12",
+    "@types/node": "~20.19.0",
+    "@types/pg": "8.11.0",
+    "expect-type": "0.19.0",
+    "prisma": "/tmp/prisma-0.0.0.tgz",
+    "typescript": "5.4.5"
+  }
+}

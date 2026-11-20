@@ -1,6 +1,5 @@
 datasource db {
   provider = "postgresql"
-  url      = "postgres://prisma:prisma@localhost:5444/tests)"
 }
 
 generator client {

@@ -1,0 +1,47 @@
+{
+  "name": "@prisma/get-dmmf",
+  "version": "0.0.0",
+  "description": "Get DMMF for Prisma",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://www.prisma.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/get-dmmf"
+  },
+  "bugs": "https://github.com/prisma/prisma/issues",
+  "scripts": {
+    "dev": "DEV=true tsx helpers/build.ts",
+    "build": "tsx helpers/build.ts",
+    "prepublishOnly": "pnpm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@prisma/debug": "workspace:*",
+    "@prisma/dmmf": "workspace:*",
+    "@prisma/prisma-schema-wasm": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
+    "@streamparser/json": "0.0.22",
+    "pluralize": "8.0.0"
+  },
+  "devDependencies": {
+    "@types/pluralize": "0.0.33"
+  },
+  "sideEffects": false
+}

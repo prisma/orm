@@ -42,6 +42,15 @@ test('multiple addText calls', () => {
   `)
 })
 
+test('escapes comment terminator', () => {
+  expect(stringify(docComment('before */ after'))).toMatchInlineSnapshot(`
+    "/**
+     * before *\\/ after
+     */
+    "
+  `)
+})
+
 test('tagged template - empty', () => {
   expect(stringify(docComment``)).toMatchInlineSnapshot(`
     "/**

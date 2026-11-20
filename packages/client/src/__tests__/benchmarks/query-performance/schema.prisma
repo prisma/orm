@@ -1,0 +1,247 @@
+// Comprehensive benchmark schema with typical web application models
+// Used for query performance benchmarking with SQLite/better-sqlite3
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// User model with various field types
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String?
+  username  String   @unique
+  bio       String?
+  avatar    String?
+  isActive  Boolean  @default(true)
+  role      String   @default("user")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  posts            Post[]
+  comments         Comment[]
+  profile          Profile?
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  followers        Follow[]  @relation("Following")
+  following        Follow[]  @relation("Followers")
+  likes            Like[]
+  orders           Order[]
+
+  @@index([createdAt])
+  @@index([role])
+}
+
+// One-to-one relation
+model Profile {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @unique
+  firstName   String?
+  lastName    String?
+  dateOfBirth DateTime?
+  phone       String?
+  address     String?
+  city        String?
+  country     String?
+  zipCode     String?
+  website     String?
+  company     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Blog posts with various relations
+model Post {
+  id          Int       @id @default(autoincrement())
+  title       String
+  slug        String    @unique
+  content     String
+  excerpt     String?
+  published   Boolean   @default(false)
+  featured    Boolean   @default(false)
+  viewCount   Int       @default(0)
+  authorId    Int
+  categoryId  Int?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  // Relations
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id])
+  comments Comment[]
+  tags     PostTag[]
+  likes    Like[]
+
+  @@index([authorId])
+  @@index([categoryId])
+  @@index([published])
+  @@index([createdAt])
+  @@index([viewCount])
+}
+
+// Categories for posts
+model Category {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  slug        String  @unique
+  description String?
+  parentId    Int?
+  sortOrder   Int     @default(0)
+
+  // Self-relation for nested categories
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  posts    Post[]
+
+  @@index([parentId])
+}
+
+// Tags for posts (many-to-many via junction table)
+model Tag {
+  id    Int       @id @default(autoincrement())
+  name  String    @unique
+  slug  String    @unique
+  posts PostTag[]
+}
+
+// Junction table for Post-Tag many-to-many
+model PostTag {
+  postId    Int
+  tagId     Int
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@index([tagId])
+}
+
+// Comments with nested replies
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  authorId  Int
+  postId    Int
+  parentId  Int?
+  isEdited  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author  User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentId])
+  @@index([createdAt])
+}
+
+// Messages between users
+model Message {
+  id         Int      @id @default(autoincrement())
+  content    String
+  senderId   Int
+  receiverId Int
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+  @@index([isRead])
+}
+
+// Follow relationship (self-referential many-to-many)
+model Follow {
+  followerId  Int
+  followingId Int
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Following", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Followers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId])
+}
+
+// Likes (polymorphic-like pattern for posts)
+model Like {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  postId    Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
+
+// E-commerce models for more complex queries
+model Product {
+  id           Int      @id @default(autoincrement())
+  name         String
+  slug         String   @unique
+  description  String?
+  price        Float
+  comparePrice Float?
+  sku          String   @unique
+  stock        Int      @default(0)
+  isActive     Boolean  @default(true)
+  weight       Float?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([price])
+  @@index([isActive])
+  @@index([stock])
+}
+
+model Order {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  status    String   @default("pending")
+  total     Float
+  subtotal  Float
+  tax       Float    @default(0)
+  shipping  Float    @default(0)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items OrderItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        Int   @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  price     Float
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}

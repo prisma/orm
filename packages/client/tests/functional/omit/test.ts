@@ -7,6 +7,10 @@ import type { PrismaClient } from './generated/prisma/client'
 
 declare let prisma: PrismaClient
 
+// Note: test snapshots fail if one runs this test with `--generator-type prisma-client-js` vs `--generator-type prisma-client-ts`.
+// For now, I worked around the problem by adjusting the snapshots conditionally to the generator type.
+// TODO: figure out why this problem exists, and fix it.
+// Alternatively, stop testing this on `prisma-client-js` altogether.
 testMatrix.setupTestSuite(({ provider }) => {
   test('non-existing true field in omit throw validation error', async () => {
     const result = prisma.user.findFirstOrThrow({
@@ -15,12 +19,13 @@ testMatrix.setupTestSuite(({ provider }) => {
         notThere: true,
       },
     })
+
     await expect(result).rejects.toMatchPrismaErrorInlineSnapshot(`
       "
       Invalid \`prisma.user.findFirstOrThrow()\` invocation in
       /client/tests/functional/omit/test.ts:0:0
 
-         XX 
+        XX // Alternatively, stop testing this on \`prisma-client-js\` altogether.
         XX testMatrix.setupTestSuite(({ provider }) => {
         XX   test('non-existing true field in omit throw validation error', async () => {
       → XX     const result = prisma.user.findFirstOrThrow({
@@ -46,6 +51,7 @@ testMatrix.setupTestSuite(({ provider }) => {
         notThere: false,
       },
     })
+
     await expect(result).rejects.toMatchPrismaErrorInlineSnapshot(`
       "
       Invalid \`prisma.user.findFirstOrThrow()\` invocation in

@@ -1,0 +1,15 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-ts"
+  engineType = "client"
+  runtime = "workerd"
+  output = "./generated"
+}
+
+model User {
+  id   Int    @id
+  name String
+}

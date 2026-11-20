@@ -1,7 +1,7 @@
-import events from 'events'
-import type { ExecaChildProcess } from 'execa'
-import execa from 'execa'
-import path from 'path'
+import events from 'node:events'
+import path from 'node:path'
+
+import { execa, type ExecaChildProcess } from 'execa'
 
 import { generateTestClient } from '../../../../utils/getTestClient'
 import { EXIT_MESSAGE, READY_MESSAGE } from './__helpers__/constants'

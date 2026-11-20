@@ -23,12 +23,12 @@ import { convertDriverError } from './errors'
 
 const debug = Debug('prisma:driver-adapter:d1-http')
 
-type D1HTTPResponseInfo = {
+type D1HttpResponseInfo = {
   code: number // >= 1000
   message: string
 }
 
-type D1HTTPRawResult = {
+type D1HttpRawResult = {
   meta?: Partial<{
     changes: number
   }>
@@ -39,13 +39,13 @@ type D1HTTPRawResult = {
   success?: boolean
 }
 
-function onUnsuccessfulD1HTTPResponse({ errors }: { errors: D1HTTPResponseInfo[] }): never {
+function onUnsuccessfulD1HttpResponse({ errors }: { errors: D1HttpResponseInfo[] }): never {
   debug('D1 HTTP Errors: %O', errors)
   const error = errors.at(0) ?? { message: 'Unknown error', code: GENERIC_SQLITE_ERROR }
   throw new DriverAdapterError(convertDriverError(error))
 }
 
-function onGenericD1HTTPError(error: Error): never {
+function onGenericD1HttpError(error: Error): never {
   debug('HTTP Error: %O', error)
   throw new DriverAdapterError(convertDriverError(error))
 }
@@ -58,9 +58,9 @@ function onError(error: Error): never {
 async function performRawQuery(client: KyInstance, options: KyOptions) {
   try {
     const response = (await client.post('raw', options).json()) as {
-      errors: D1HTTPResponseInfo[]
-      messages: D1HTTPResponseInfo[]
-      result: D1HTTPRawResult[]
+      errors: D1HttpResponseInfo[]
+      messages: D1HttpResponseInfo[]
+      result: D1HttpRawResult[]
       success?: true
     }
 
@@ -73,23 +73,23 @@ async function performRawQuery(client: KyInstance, options: KyOptions) {
     })
 
     if (!response.success) {
-      onUnsuccessfulD1HTTPResponse(response)
+      onUnsuccessfulD1HttpResponse(response)
     }
 
     return response.result
   } catch (e) {
-    onGenericD1HTTPError(e as Error)
+    onGenericD1HttpError(e as Error)
   }
 }
 
-export type D1HTTPParams = {
+export type D1HttpParams = {
   CLOUDFLARE_D1_TOKEN: string
   CLOUDFLARE_ACCOUNT_ID: string
   CLOUDFLARE_DATABASE_ID: string
   CLOUDFLARE_SHADOW_DATABASE_ID?: string
 }
 
-export function isD1HTTPParams(params: unknown): params is D1HTTPParams {
+export function isD1HttpParams(params: unknown): params is D1HttpParams {
   return (
     typeof params === 'object' &&
     params !== null &&
@@ -102,7 +102,7 @@ export function isD1HTTPParams(params: unknown): params is D1HTTPParams {
 /**
  * HTTP-based Cloudflare D1 adapter.
  */
-class D1HTTPQueryable implements SqlQueryable {
+class D1HttpQueryable implements SqlQueryable {
   readonly provider = 'sqlite'
   readonly adapterName = `${packageName}-http`
 
@@ -184,7 +184,7 @@ class D1HTTPQueryable implements SqlQueryable {
   }
 }
 
-class D1HTTPTransaction extends D1HTTPQueryable implements Transaction {
+class D1HttpTransaction extends D1HttpQueryable implements Transaction {
   constructor(
     client: KyInstance,
     readonly options: TransactionOptions,
@@ -199,9 +199,21 @@ class D1HTTPTransaction extends D1HTTPQueryable implements Transaction {
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
   }
+
+  async createSavepoint(name: string): Promise<void> {
+    debug(`[js::createSavepoint] %s`, name)
+  }
+
+  async rollbackToSavepoint(name: string): Promise<void> {
+    debug(`[js::rollbackToSavepoint] %s`, name)
+  }
+
+  async releaseSavepoint(name: string): Promise<void> {
+    debug(`[js::releaseSavepoint] %s`, name)
+  }
 }
 
-export class PrismaD1HTTPAdapter extends D1HTTPQueryable implements SqlDriverAdapter {
+export class PrismaD1HttpAdapter extends D1HttpQueryable implements SqlDriverAdapter {
   readonly tags = {
     error: red('prisma:error'),
     warn: yellow('prisma:warn'),
@@ -212,7 +224,7 @@ export class PrismaD1HTTPAdapter extends D1HTTPQueryable implements SqlDriverAda
   alreadyWarned = new Set()
 
   constructor(
-    params: D1HTTPParams,
+    params: D1HttpParams,
     private readonly release?: () => Promise<void>,
   ) {
     const D1_API_BASE_URL = `https://api.cloudflare.com/client/v4/accounts/${params.CLOUDFLARE_ACCOUNT_ID}/d1/database/${params.CLOUDFLARE_DATABASE_ID}`
@@ -290,7 +302,7 @@ export class PrismaD1HTTPAdapter extends D1HTTPQueryable implements SqlDriverAda
     const tag = '[js::startTransaction]'
     debug('%s options: %O', tag, options)
 
-    return new D1HTTPTransaction(this.client, options)
+    return new D1HttpTransaction(this.client, options)
   }
 
   async dispose(): Promise<void> {
@@ -299,14 +311,14 @@ export class PrismaD1HTTPAdapter extends D1HTTPQueryable implements SqlDriverAda
 }
 
 /** @deprecated Use PrismaD1 instead */
-export class PrismaD1HTTPAdapterFactory implements SqlMigrationAwareDriverAdapterFactory {
+export class PrismaD1HttpAdapterFactory implements SqlMigrationAwareDriverAdapterFactory {
   readonly provider = 'sqlite'
   readonly adapterName = `${packageName}-http`
 
-  constructor(private params: D1HTTPParams) {}
+  constructor(private params: D1HttpParams) {}
 
   async connect(): Promise<SqlDriverAdapter> {
-    return new PrismaD1HTTPAdapter(this.params, async () => {})
+    return new PrismaD1HttpAdapter(this.params, async () => {})
   }
 
   async connectToShadowDb(): Promise<SqlDriverAdapter> {
@@ -334,8 +346,8 @@ export class PrismaD1HTTPAdapterFactory implements SqlMigrationAwareDriverAdapte
             },
           })
           .json()) as {
-          errors: D1HTTPResponseInfo[]
-          messages: D1HTTPResponseInfo[]
+          errors: D1HttpResponseInfo[]
+          messages: D1HttpResponseInfo[]
           result: { name: string; uuid: string }
           success?: true
         }
@@ -343,7 +355,7 @@ export class PrismaD1HTTPAdapterFactory implements SqlMigrationAwareDriverAdapte
         debug(`${tag} %O`, response)
 
         if (!response.success) {
-          onUnsuccessfulD1HTTPResponse(response)
+          onUnsuccessfulD1HttpResponse(response)
         }
 
         const { uuid: CLOUDFLARE_SHADOW_DATABASE_ID } = response.result
@@ -351,7 +363,7 @@ export class PrismaD1HTTPAdapterFactory implements SqlMigrationAwareDriverAdapte
 
         return CLOUDFLARE_SHADOW_DATABASE_ID
       } catch (e) {
-        onGenericD1HTTPError(e as Error)
+        onGenericD1HttpError(e as Error)
       }
     }
 
@@ -364,21 +376,21 @@ export class PrismaD1HTTPAdapterFactory implements SqlMigrationAwareDriverAdapte
         debug(`${tag} deleting database %s`, CLOUDFLARE_SHADOW_DATABASE_ID)
 
         const response = (await client.delete(`${D1_API_BASE_URL}/${CLOUDFLARE_SHADOW_DATABASE_ID}`).json()) as {
-          errors: D1HTTPResponseInfo[]
-          messages: D1HTTPResponseInfo[]
+          errors: D1HttpResponseInfo[]
+          messages: D1HttpResponseInfo[]
           success?: true
         }
 
         debug(`${tag} %O`, response)
 
         if (!response.success) {
-          onUnsuccessfulD1HTTPResponse(response)
+          onUnsuccessfulD1HttpResponse(response)
         }
       } catch (e) {
-        onGenericD1HTTPError(e as Error)
+        onGenericD1HttpError(e as Error)
       }
     }
 
-    return new PrismaD1HTTPAdapter(this.params, dispose)
+    return new PrismaD1HttpAdapter(this.params, dispose)
   }
 }

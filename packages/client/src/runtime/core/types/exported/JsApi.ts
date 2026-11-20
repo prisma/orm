@@ -1,8 +1,8 @@
+import { ObjectEnumValue } from '@prisma/client-runtime-utils'
 import type * as DMMF from '@prisma/dmmf'
 
 import { DecimalJsLike } from './DecimalJsLike'
 import { FieldRef } from './FieldRef'
-import { ObjectEnumValue } from './ObjectEnums'
 import { Skip } from './Skip'
 
 export type { JsOutputValue } from '@prisma/client-engine-runtime'

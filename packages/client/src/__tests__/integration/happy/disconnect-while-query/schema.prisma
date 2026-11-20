@@ -1,11 +1,9 @@
 datasource db {
   provider = "sqlite"
-  url      = "file:dev.db"
 }
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native"]
+  provider = "prisma-client-js"
 }
 
 model User {
@@ -53,5 +51,6 @@ model Like {
   post   Post   @relation(fields: [postId], references: [id])
 
   House House[]
+
   @@unique([userId, postId])
 }

@@ -6,11 +6,14 @@ import path from 'path'
 import hash from 'string-hash'
 import VError, { MultiError } from 'verror'
 
+import { PrismaLibSql } from '../../../../adapter-libsql/src/index-node'
+import { PrismaMariaDb } from '../../../../adapter-mariadb/src'
+import { PrismaMssql } from '../../../../adapter-mssql/src'
+import { PrismaPg } from '../../../../adapter-pg/src'
 import { getTestClient } from '../../../../client/src/utils/getTestClient'
+import { SqlDriverAdapterFactory } from '../../../../driver-adapter-utils/src/types'
 
 process.setMaxListeners(200)
-
-process.env.PRISMA_SKIP_POSTINSTALL_GENERATE = 'true'
 
 /**
  * A potentially async value
@@ -98,25 +101,18 @@ type Database<Client> = {
   /**
    * Give the connection URL for the Prisma schema datasource block or provide your own custom implementation.
    */
-  datasource:
-    | {
-        /**
-         * Construct the whole datasource block for the Prisma schema
-         */
-        raw: (ctx: Context) => string
-      }
-    | {
-        /**
-         * Supply the connection URL used in the datasource block.
-         */
-        url: string | ((ctx: Context) => string)
-        /**
-         * Supply the provider name used in the datasource block.
-         *
-         * @dynamicDefault The value passed to database.name
-         */
-        provider?: string
-      }
+  datasource: {
+    /**
+     * Supply the connection URL used in the datasource block.
+     */
+    url: string | ((ctx: Context) => string)
+    /**
+     * Supply the provider name used in the datasource block.
+     *
+     * @dynamicDefault The value passed to database.name
+     */
+    provider?: string
+  }
 }
 
 /**
@@ -234,7 +230,31 @@ export function runtimeIntegrationTest<Client>(input: Input<Client>) {
 
       const PrismaClient = await getTestClient(ctx.fs.cwd())
 
-      state.prisma = new PrismaClient()
+      let adapter: SqlDriverAdapterFactory
+      const connectionString =
+        typeof input.database.datasource.url === 'function'
+          ? input.database.datasource.url(ctx)
+          : input.database.datasource.url
+
+      switch (input.database.name) {
+        case 'postgresql':
+          adapter = new PrismaPg({ connectionString }, { schema: ctx.id })
+          break
+        case 'mysql':
+        case 'mariadb':
+          adapter = new PrismaMariaDb(connectionString)
+          break
+        case 'sqlserver':
+          adapter = new PrismaMssql(connectionString)
+          break
+        case 'sqlite':
+          adapter = new PrismaLibSql({ url: connectionString })
+          break
+        default:
+          throw new Error(`Unsupported database: ${input.database.name}`)
+      }
+
+      state.prisma = new PrismaClient({ adapter })
       await state.prisma.$connect()
 
       const result = await scenario.do(state.prisma)
@@ -282,15 +302,7 @@ async function setupScenario(kind: string, input: Input, scenario: Scenario) {
   state.db = await input.database.connect(ctx)
   await input.database.beforeEach(state.db, scenario.up, ctx)
 
-  const datasourceBlock =
-    'raw' in input.database.datasource
-      ? input.database.datasource.raw(ctx)
-      : makeDatasourceBlock(
-          input.database.datasource.provider ?? input.database.name,
-          typeof input.database.datasource.url === 'function'
-            ? input.database.datasource.url(ctx)
-            : input.database.datasource.url,
-        )
+  const datasourceBlock = makeDatasourceBlock(input.database.datasource.provider ?? input.database.name)
 
   const schemaBase = `
     generator client {
@@ -302,7 +314,17 @@ async function setupScenario(kind: string, input: Input, scenario: Scenario) {
     ${datasourceBlock}
   `
 
-  const migrate = await Migrate.setup({})
+  const migrate = await Migrate.setup({
+    schemaEngineConfig: {
+      datasource: {
+        url:
+          typeof input.database.datasource.url === 'function'
+            ? input.database.datasource.url(ctx)
+            : input.database.datasource.url,
+      },
+    },
+    baseDir: ctx.fs.cwd(),
+  })
   const engine = migrate.engine
   const introspectionResult = await engine.introspect({
     schema: {
@@ -370,11 +392,10 @@ function getScenariosDir(databaseName: string, testKind: string) {
 /**
  * Create a Prisma schema datasource block.
  */
-function makeDatasourceBlock(providerName: string, url: string) {
+function makeDatasourceBlock(providerName: string) {
   return `
     datasource ${providerName} {
       provider = "${providerName}"
-      url      = "${url}"
     }
   `
 }

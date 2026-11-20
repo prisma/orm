@@ -1,18 +1,23 @@
 datasource my_db {
-    provider = "sqlite"
-    url      = env("SQLITE_URL")
+  provider = "sqlite"
 }
 
 generator client {
-    provider        = "prisma-client-js"
-    previewFeatures = ["extendedIndexes"]
+  provider        = "prisma-client"
+  previewFeatures = ["extendedIndexes"]
+}
+
+generator classicClient {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+  output          = "./generated/prisma"
 }
 
 generator something {
-    provider = "something"
+  provider = "something"
 }
 
 model Blog {
-    id        Int @id
-    viewCount Int
+  id        Int @id
+  viewCount Int
 }

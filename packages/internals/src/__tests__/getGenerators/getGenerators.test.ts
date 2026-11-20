@@ -1,25 +1,20 @@
+import path from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 
-import { getCliQueryEngineBinaryType } from '@prisma/engines'
-import { BinaryType } from '@prisma/fetch-engine'
-import { getBinaryTargetForCurrentPlatform, jestConsoleContext, jestContext } from '@prisma/get-platform'
-import path from 'path'
+import { getBinaryTargetForCurrentPlatform } from '@prisma/get-platform'
+import { vitestConsoleContext, vitestContext } from '@prisma/get-platform/src/test-utils/vitestContext'
+import { afterEach, describe, expect, it, test, vi } from 'vitest'
 
 import { loadSchemaContext } from '../../cli/schemaContext'
 import { GeneratorRegistry, getGenerators } from '../../get-generators/getGenerators'
-import { resolveBinary } from '../../resolveBinary'
 import { omit } from '../../utils/omit'
 import { pick } from '../../utils/pick'
 
-const ctx = jestContext.new().add(jestConsoleContext()).assemble()
-const testIf = (condition: boolean) => (condition ? test : test.skip)
+const ctx = vitestContext.new().add(vitestConsoleContext()).assemble()
 
-if (process.env.CI) {
-  // 20s is often not enough on CI, especially on macOS.
-  jest.setTimeout(60_000)
-} else {
-  jest.setTimeout(20_000)
-}
+vi.setConfig({
+  testTimeout: process.env.CI ? 60_000 : 20_000,
+})
 
 let generatorPath = path.join(__dirname, 'generator')
 
@@ -59,11 +54,12 @@ describe('getGenerators', () => {
 
   test('basic', async () => {
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'valid-minimal-schema.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'valid-minimal-schema.prisma') },
     })
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -75,7 +71,6 @@ describe('getGenerators', () => {
           ],
           "prettyName": "This is a pretty name",
           "requiresEngines": [
-            "queryEngine",
             "schemaEngine",
           ],
         },
@@ -86,7 +81,6 @@ describe('getGenerators', () => {
       {
         "datamodel": "datasource db {
         provider = "sqlite"
-        url      = "file:./dev.db"
       }
 
       generator gen {
@@ -106,10 +100,6 @@ describe('getGenerators', () => {
             "provider": "sqlite",
             "schemas": [],
             "sourceFilePath": "valid-minimal-schema.prisma",
-            "url": {
-              "fromEnvVar": null,
-              "value": "file:./dev.db",
-            },
           },
         ],
         "otherGenerators": [],
@@ -140,11 +130,12 @@ describe('getGenerators', () => {
 
   it('basic - binaryTargets - native string', async () => {
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'valid-minimal-schema-binaryTargets.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'valid-minimal-schema-binaryTargets.prisma') },
     })
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -156,7 +147,6 @@ describe('getGenerators', () => {
           ],
           "prettyName": "This is a pretty name",
           "requiresEngines": [
-            "queryEngine",
             "schemaEngine",
           ],
         },
@@ -167,7 +157,6 @@ describe('getGenerators', () => {
       {
         "datamodel": "datasource db {
         provider = "sqlite"
-        url      = "file:./dev.db"
       }
 
       generator gen_env {
@@ -187,10 +176,6 @@ describe('getGenerators', () => {
             "provider": "sqlite",
             "schemas": [],
             "sourceFilePath": "valid-minimal-schema-binaryTargets.prisma",
-            "url": {
-              "fromEnvVar": null,
-              "value": "file:./dev.db",
-            },
           },
         ],
         "otherGenerators": [],
@@ -229,11 +214,12 @@ describe('getGenerators', () => {
     process.env.BINARY_TARGETS_ENV_VAR_TEST = '"native"'
 
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'valid-minimal-schema-binaryTargets-env-var.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'valid-minimal-schema-binaryTargets-env-var.prisma') },
     })
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -245,7 +231,6 @@ describe('getGenerators', () => {
           ],
           "prettyName": "This is a pretty name",
           "requiresEngines": [
-            "queryEngine",
             "schemaEngine",
           ],
         },
@@ -256,7 +241,6 @@ describe('getGenerators', () => {
       {
         "datamodel": "datasource db {
         provider = "sqlite"
-        url      = "file:./dev.db"
       }
 
       generator gen_env {
@@ -276,10 +260,6 @@ describe('getGenerators', () => {
             "provider": "sqlite",
             "schemas": [],
             "sourceFilePath": "valid-minimal-schema-binaryTargets-env-var.prisma",
-            "url": {
-              "fromEnvVar": null,
-              "value": "file:./dev.db",
-            },
           },
         ],
         "otherGenerators": [],
@@ -318,11 +298,12 @@ describe('getGenerators', () => {
     process.env.BINARY_TARGETS_ENV_VAR_TEST = '["native"]'
 
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'valid-minimal-schema-binaryTargets-env-var.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'valid-minimal-schema-binaryTargets-env-var.prisma') },
     })
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -334,7 +315,6 @@ describe('getGenerators', () => {
           ],
           "prettyName": "This is a pretty name",
           "requiresEngines": [
-            "queryEngine",
             "schemaEngine",
           ],
         },
@@ -345,7 +325,6 @@ describe('getGenerators', () => {
       {
         "datamodel": "datasource db {
         provider = "sqlite"
-        url      = "file:./dev.db"
       }
 
       generator gen_env {
@@ -365,10 +344,6 @@ describe('getGenerators', () => {
             "provider": "sqlite",
             "schemas": [],
             "sourceFilePath": "valid-minimal-schema-binaryTargets-env-var.prisma",
-            "url": {
-              "fromEnvVar": null,
-              "value": "file:./dev.db",
-            },
           },
         ],
         "otherGenerators": [],
@@ -408,11 +383,12 @@ describe('getGenerators', () => {
       '["darwin", "darwin-arm64", "windows", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]'
 
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'valid-minimal-schema-binaryTargets-env-var.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'valid-minimal-schema-binaryTargets-env-var.prisma') },
     })
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -424,7 +400,6 @@ describe('getGenerators', () => {
           ],
           "prettyName": "This is a pretty name",
           "requiresEngines": [
-            "queryEngine",
             "schemaEngine",
           ],
         },
@@ -435,7 +410,6 @@ describe('getGenerators', () => {
       {
         "datamodel": "datasource db {
         provider = "sqlite"
-        url      = "file:./dev.db"
       }
 
       generator gen_env {
@@ -455,10 +429,6 @@ describe('getGenerators', () => {
             "provider": "sqlite",
             "schemas": [],
             "sourceFilePath": "valid-minimal-schema-binaryTargets-env-var.prisma",
-            "url": {
-              "fromEnvVar": null,
-              "value": "file:./dev.db",
-            },
           },
         ],
         "otherGenerators": [],
@@ -512,11 +482,12 @@ describe('getGenerators', () => {
     process.env.BINARY_TARGETS_ENV_VAR_TEST = '["linux-musl"]'
 
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'valid-minimal-schema-binaryTargets-env-var.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'valid-minimal-schema-binaryTargets-env-var.prisma') },
     })
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -528,7 +499,6 @@ describe('getGenerators', () => {
           ],
           "prettyName": "This is a pretty name",
           "requiresEngines": [
-            "queryEngine",
             "schemaEngine",
           ],
         },
@@ -539,7 +509,6 @@ describe('getGenerators', () => {
       {
         "datamodel": "datasource db {
         provider = "sqlite"
-        url      = "file:./dev.db"
       }
 
       generator gen_env {
@@ -559,10 +528,6 @@ describe('getGenerators', () => {
             "provider": "sqlite",
             "schemas": [],
             "sourceFilePath": "valid-minimal-schema-binaryTargets-env-var.prisma",
-            "url": {
-              "fromEnvVar": null,
-              "value": "file:./dev.db",
-            },
           },
         ],
         "otherGenerators": [],
@@ -598,35 +563,6 @@ describe('getGenerators', () => {
     generators.forEach((g) => g.stop())
   })
 
-  testIf(!process.env.PRISMA_SCHEMA_ENGINE_BINARY)('inject engines', async () => {
-    const schemaEngine = await resolveBinary(BinaryType.SchemaEngineBinary)
-
-    const queryEngineBinaryType = getCliQueryEngineBinaryType()
-    const queryEnginePath = await resolveBinary(queryEngineBinaryType)
-
-    const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'valid-minimal-schema.prisma'),
-    })
-    const generators = await getGenerators({
-      schemaContext,
-      registry,
-      binaryPathsOverride: {
-        queryEngine: queryEnginePath,
-      },
-    })
-
-    const options = generators.map((g) => g.options?.binaryPaths)
-
-    const binaryTarget = await getBinaryTargetForCurrentPlatform()
-
-    // we override queryEngine, so its paths should be equal to the one of the generator
-    expect(options[0]?.queryEngine?.[binaryTarget]).toBe(queryEnginePath)
-    // we did not override the schemaEngine, so their paths should not be equal
-    expect(options[0]?.schemaEngine?.[binaryTarget]).not.toBe(schemaEngine)
-
-    generators.forEach((g) => g.stop())
-  })
-
   test('filter generator names', async () => {
     const registry = {
       'predefined-generator-1': {
@@ -644,11 +580,12 @@ describe('getGenerators', () => {
     } satisfies GeneratorRegistry
 
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'multiple-generators-schema.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'multiple-generators-schema.prisma') },
     })
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
       generatorNames: ['client_1', 'client_3'],
     })
 
@@ -661,28 +598,16 @@ describe('getGenerators', () => {
     generators.forEach((g) => g.stop())
   })
 
-  test('fail on platforms', async () => {
-    const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'invalid-platforms-schema.prisma'),
-    })
-
-    await expect(
-      getGenerators({
-        schemaContext,
-        registry,
-      }),
-    ).rejects.toThrow('deprecated')
-  })
-
   test('fail on invalid binaryTarget', async () => {
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'invalid-binary-target-schema.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'invalid-binary-target-schema.prisma') },
     })
 
     await expect(
       getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
       }),
     ).rejects.toThrow('Unknown')
 
@@ -695,13 +620,14 @@ describe('getGenerators', () => {
   test('fail if datasource is missing', async () => {
     expect.assertions(5)
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'missing-datasource-schema.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'missing-datasource-schema.prisma') },
     })
 
     try {
       await getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
       })
     } catch (e) {
       expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
@@ -711,7 +637,6 @@ describe('getGenerators', () => {
 
         datasource db {
           provider = "postgresql"
-          url      = env("DB_URL")
         }
 
         More information in our documentation:
@@ -726,23 +651,53 @@ describe('getGenerators', () => {
     expect(ctx.mocked['console.error'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
   })
 
+  test('fail if no model(s) found and allow-no-models flag is false - prisma7 sqlite guidance', async () => {
+    const schemaContext = await loadSchemaContext({
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'missing-models-sqlite-schema.prisma') },
+    })
+
+    await expect(
+      getGenerators({
+        schemaContext,
+        registry,
+        allowNoModels: false,
+        cliCommand: 'prisma7',
+      }),
+    ).rejects.toThrow('  $ prisma7 generate')
+
+    await expect(
+      getGenerators({
+        schemaContext,
+        registry,
+        allowNoModels: false,
+        cliCommand: 'prisma7',
+      }),
+    ).rejects.not.toThrow('  $ prisma generate')
+  })
+
   test('fail if no model(s) found and allow-no-models flag is false - sqlite', async () => {
     expect.assertions(5)
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'missing-models-sqlite-schema.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'missing-models-sqlite-schema.prisma') },
     })
 
     try {
       await getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
         allowNoModels: false,
       })
     } catch (e) {
       expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
         "
         You don't have any models defined in your schema.prisma, so nothing will be generated.
-        You can define a model like this:
+
+        Prisma Client is typically generated from models defined in your schema. If you plan to use raw SQL queries only (e.g. $queryRaw), remove the --require-models flag to generate the client without models:
+
+          $ prisma generate
+
+        Otherwise, you can define a model like this:
 
         model User {
           id    Int     @id @default(autoincrement())
@@ -762,24 +717,53 @@ describe('getGenerators', () => {
     expect(ctx.mocked['console.error'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
   })
 
+  test('fail if no model(s) found and allow-no-models flag is false - prisma7 mongodb guidance', async () => {
+    const schemaContext = await loadSchemaContext({
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'missing-models-mongodb-schema.prisma') },
+    })
+
+    await expect(
+      getGenerators({
+        schemaContext,
+        registry,
+        allowNoModels: false,
+        cliCommand: 'prisma7',
+      }),
+    ).rejects.toThrow('  $ prisma7 generate')
+
+    await expect(
+      getGenerators({
+        schemaContext,
+        registry,
+        allowNoModels: false,
+        cliCommand: 'prisma7',
+      }),
+    ).rejects.not.toThrow('  $ prisma generate')
+  })
+
   test('fail if no model(s) found and allow-no-models flag is false - mongodb', async () => {
     expect.assertions(5)
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'missing-models-mongodb-schema.prisma'),
-      ignoreEnvVarErrors: true,
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'missing-models-mongodb-schema.prisma') },
     })
 
     try {
       await getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
         allowNoModels: false,
       })
     } catch (e) {
       expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
         "
         You don't have any models defined in your schema.prisma, so nothing will be generated.
-        You can define a model like this:
+
+        Prisma Client is typically generated from models defined in your schema. If you plan to use raw queries only, remove the --require-models flag to generate the client without models:
+
+          $ prisma generate
+
+        Otherwise, you can define a model like this:
 
         model User {
           id    String  @id @default(auto()) @map("_id") @db.ObjectId
@@ -818,13 +802,14 @@ describe('getGenerators', () => {
     } satisfies GeneratorRegistry
 
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'multiple-generators-schema.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'multiple-generators-schema.prisma') },
     })
 
     try {
       await getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
         generatorNames: ['client_1', 'invalid_generator'],
       })
     } catch (e) {
@@ -838,16 +823,19 @@ describe('getGenerators', () => {
     expect.assertions(1)
 
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'missing-models-sqlite-schema.prisma'),
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'missing-models-sqlite-schema.prisma') },
     })
 
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
       allowNoModels: true,
     })
 
-    generators.forEach((g) => g.stop())
+    for (const generator of generators) {
+      generator.stop()
+    }
 
     return expect(generators.length).toBeGreaterThanOrEqual(1)
   })
@@ -863,13 +851,13 @@ describe('getGenerators', () => {
     } satisfies GeneratorRegistry
 
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: path.join(__dirname, 'missing-models-mongodb-schema.prisma'),
-      ignoreEnvVarErrors: true,
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'missing-models-mongodb-schema.prisma') },
     })
 
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
       allowNoModels: true,
     })
 

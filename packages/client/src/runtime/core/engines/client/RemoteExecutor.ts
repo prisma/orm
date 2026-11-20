@@ -1,18 +1,19 @@
 import type { QueryEngineLogLevel } from '@prisma/client-common'
-import type { TransactionOptions } from '@prisma/client-engine-runtime'
+import { applySqlCommenters, type TransactionOptions } from '@prisma/client-engine-runtime'
+import { PrismaClientKnownRequestError } from '@prisma/client-runtime-utils'
 import { Debug } from '@prisma/debug'
-import type { EngineTraceEvent, TracingHelper } from '@prisma/internals'
+import type { EngineTraceEvent, TracingHelper } from '@prisma/instrumentation-contract'
+import type { SqlCommenterPlugin } from '@prisma/sqlcommenter'
 import { parseSetCookie, serialize as serializeCookie } from 'cookie-es'
 
-import { PrismaClientKnownRequestError } from '../../errors/PrismaClientKnownRequestError'
-import { getUrlAndApiKey } from '../common/accelerate/getUrlAndApiKey'
-import { type AccelerateHeaders, HeaderBuilder } from '../common/accelerate/HeaderBuilder'
-import type { AccelerateExtensionFetch, EngineConfig } from '../common/Engine'
+import { getUrlAndApiKey } from '../accelerate/getUrlAndApiKey'
+import { type AccelerateHeaders, HeaderBuilder } from '../accelerate/HeaderBuilder'
+import type { AccelerateExtensionFetch } from '../common/Engine'
 import type { LogEmitter } from '../common/types/Events'
 import type { QueryEngineResultExtensions } from '../common/types/QueryEngine'
 import type { InteractiveTransactionInfo } from '../common/types/Transaction'
-import { dateFromEngineTimestamp } from '../data-proxy/utils/EngineTimestamp'
 import type { ExecutePlanParams, Executor, ProviderAndConnectionInfo } from './Executor'
+import { dateFromEngineTimestamp } from './utils/engine-timestamp'
 
 const debug = Debug('prisma:client:clientEngine:remoteExecutor')
 
@@ -22,9 +23,8 @@ export interface RemoteExecutorOptions {
   logLevel: QueryEngineLogLevel
   logQueries: boolean
   tracingHelper: TracingHelper
-  inlineDatasources: EngineConfig['inlineDatasources']
-  overrideDatasources: EngineConfig['overrideDatasources']
-  env: Record<string, string | undefined>
+  accelerateUrl: string
+  sqlCommenters?: SqlCommenterPlugin[]
 }
 
 export class RemoteExecutor implements Executor {
@@ -33,17 +33,17 @@ export class RemoteExecutor implements Executor {
   readonly #httpClient: HttpClient
   readonly #logEmitter: LogEmitter
   readonly #tracingHelper: TracingHelper
+  readonly #sqlCommenters?: SqlCommenterPlugin[]
 
   constructor(options: RemoteExecutorOptions) {
     this.#clientVersion = options.clientVersion
     this.#logEmitter = options.logEmitter
     this.#tracingHelper = options.tracingHelper
+    this.#sqlCommenters = options.sqlCommenters
 
     const { url, apiKey } = getUrlAndApiKey({
       clientVersion: options.clientVersion,
-      env: options.env,
-      inlineDatasources: options.inlineDatasources,
-      overrideDatasources: options.overrideDatasources,
+      accelerateUrl: options.accelerateUrl,
     })
 
     this.#httpClient = new HttpClient(url)
@@ -73,7 +73,14 @@ export class RemoteExecutor implements Executor {
     operation,
     transaction,
     customFetch,
+    queryInfo,
   }: ExecutePlanParams): Promise<unknown> {
+    // Pre-compute comments from plugins
+    const comments =
+      queryInfo && this.#sqlCommenters?.length
+        ? applySqlCommenters(this.#sqlCommenters, { query: queryInfo })
+        : undefined
+
     const response = await this.#request({
       path: transaction ? `/transaction/${transaction.id}/query` : '/query',
       method: 'POST',
@@ -82,6 +89,8 @@ export class RemoteExecutor implements Executor {
         operation,
         plan,
         params: placeholderValues,
+        // Send pre-computed comments to Query Plan Executor
+        comments: comments && Object.keys(comments).length > 0 ? comments : undefined,
       },
       batchRequestIdx: batchIndex,
       fetch: customFetch,
@@ -116,6 +125,10 @@ export class RemoteExecutor implements Executor {
 
   disconnect(): Promise<void> {
     return Promise.resolve()
+  }
+
+  apiKey(): string | null {
+    return this.#headerBuilder.apiKey
   }
 
   async #request({
@@ -201,20 +214,13 @@ export class RemoteExecutor implements Executor {
   }
 
   #processExtensions(extensions: QueryEngineResultExtensions): void {
-    if (extensions.logs) {
-      for (const log of extensions.logs) {
+    const logEvents = extensions.logs ?? []
+    if (extensions.spans) {
+      this.#tracingHelper.dispatchEngineSpans(extensions.spans, logEvents, (event) => this.#emitLogEvent(event))
+    } else {
+      for (const log of logEvents) {
         this.#emitLogEvent(log)
       }
-    }
-    if (extensions.traces) {
-      // FIXME: log events should be emitted in the context of the corresponding
-      // spans to be consistent with the normal `ClientEngine` behavior. Our
-      // current `TracingHelper` interface makes it challenging to do so.
-      // We need to either change `dispatchEngineSpans` to be log-aware, or
-      // not use `dispatchEngineSpans` here at all and emit the spans directly.
-      // The second option is probably better long term so we can get rid of
-      // `dispatchEngineSpans` entirely when QC is in GA and the QE is gone.
-      this.#tracingHelper.dispatchEngineSpans(extensions.traces)
     }
   }
 
@@ -231,7 +237,7 @@ export class RemoteExecutor implements Executor {
         this.#logEmitter.emit(event.level, {
           timestamp: dateFromEngineTimestamp(event.timestamp),
           message: event.attributes.message ?? '',
-          target: event.target,
+          target: event.target ?? 'RemoteExecutor',
         })
         break
       }
@@ -242,7 +248,7 @@ export class RemoteExecutor implements Executor {
           timestamp: dateFromEngineTimestamp(event.timestamp),
           duration: event.attributes.duration_ms ?? 0,
           params: event.attributes.params ?? '',
-          target: event.target,
+          target: event.target ?? 'RemoteExecutor',
         })
 
         break

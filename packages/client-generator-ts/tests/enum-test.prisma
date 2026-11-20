@@ -1,0 +1,34 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-ts"
+  output   = "./generated"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+  GUEST
+}
+
+enum UserRoleMapped {
+  ADMIN @map("UserRole/ADMIN")
+  USER  @map("UserRole/USER")
+  GUEST // unmapped value
+
+  @@map("user_role_mapped")
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+model User {
+  id     Int      @id
+  role   UserRole
+  status Status
+}

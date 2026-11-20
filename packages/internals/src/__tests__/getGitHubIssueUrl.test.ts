@@ -1,5 +1,7 @@
 import { stripVTControlCharacters } from 'node:util'
 
+import { describe, expect, test } from 'vitest'
+
 import { getGitHubIssueUrl } from '../utils/getGitHubIssueUrl'
 
 describe('getErrorMessageWithLink', () => {

@@ -1,5 +1,6 @@
-import execa from 'execa'
-import path from 'path'
+import path from 'node:path'
+
+import { execaSync } from 'execa'
 
 const packageRoot = path.resolve(__dirname, '..', '..')
 
@@ -25,7 +26,7 @@ export class JestCli {
   }
 
   run(): void {
-    execa.sync(this.path, this.args, {
+    execaSync(this.path, this.args, {
       env: this.env,
       stdio: 'inherit',
       cwd: packageRoot,

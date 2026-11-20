@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "mongodb"
-  url      = env("TEST_MONGO_URI")
 }
 
 model User {

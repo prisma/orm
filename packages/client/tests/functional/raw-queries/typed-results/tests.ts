@@ -7,7 +7,7 @@ declare let prisma: PrismaClient
 declare let Prisma: typeof PrismaNamespace
 
 testMatrix.setupTestSuite(
-  ({ clientRuntime, driverAdapter, provider }) => {
+  ({ driverAdapter, provider }) => {
     beforeEach(async () => {
       await prisma.testModel.deleteMany()
     })
@@ -112,7 +112,7 @@ testMatrix.setupTestSuite(
 
       const result = await getAllEntries()
 
-      if (driverAdapter === 'js_d1' && clientRuntime !== 'wasm-engine-edge') {
+      if (driverAdapter === 'js_d1') {
         expect(result![0].bInt === 9007199254740991).toBe(true)
       } else {
         expect(result![0].bInt === BigInt('9007199254740991')).toBe(true)
@@ -128,7 +128,7 @@ testMatrix.setupTestSuite(
 
       const result = await getAllEntries()
 
-      if (driverAdapter === 'js_d1' && clientRuntime !== 'wasm-engine-edge') {
+      if (driverAdapter === 'js_d1') {
         // It's a number
         expect(result![0].bInt === -9007199254740991).toBe(true)
       } else {
@@ -180,26 +180,18 @@ testMatrix.setupTestSuite(
         testIf(isBigIntNativelySupported)('BigInt is natively supported', async () => {
           const create = createBigIntMinSafeIntPlusMinSafeInt(prisma)
 
-          if (clientRuntime !== 'wasm-engine-edge') {
-            if (driverAdapter === 'js_libsql') {
-              await expect(create).rejects.toThrow(
-                `bigint is too large to be represented as a 64-bit integer and passed as argument`,
-              )
-            } else if (driverAdapter && ['js_neon', 'js_pg', 'js_pg_cockroachdb'].includes(driverAdapter)) {
-              // PostgresError { code: \"22003\", message: \"value \\\"-18428729675200069634\\\" is out of range for type bigint\", severity: \"ERROR\", detail: None, column: None, hint: None }
-              await expect(create).rejects.toThrow(`is out of range for type bigint`)
-            } else if (driverAdapter === 'js_planetscale') {
-              await expect(create).rejects.toThrow(`Value out of range for the type`)
-              await expect(create).rejects.toThrow(
-                `rpc error: code = FailedPrecondition desc = Out of range value for column 'bInt' at row 1`,
-              )
-            }
-          } else {
-            const result = await getAllEntries()
-
-            // It's a bigint
-            expect(result![0].bInt === BigInt('-9007199254740991') + BigInt('-9007199254740991')).toBe(true)
-            expect(result![0].bInt === -18014398509481982n).toBe(true)
+          if (driverAdapter === 'js_libsql') {
+            await expect(create).rejects.toThrow(
+              `bigint is too large to be represented as a 64-bit integer and passed as argument`,
+            )
+          } else if (driverAdapter && ['js_neon', 'js_pg', 'js_pg_cockroachdb'].includes(driverAdapter)) {
+            // PostgresError { code: \"22003\", message: \"value \\\"-18428729675200069634\\\" is out of range for type bigint\", severity: \"ERROR\", detail: None, column: None, hint: None }
+            await expect(create).rejects.toThrow(`is out of range for type bigint`)
+          } else if (driverAdapter === 'js_planetscale') {
+            await expect(create).rejects.toThrow(`Value out of range for the type`)
+            await expect(create).rejects.toThrow(
+              `rpc error: code = FailedPrecondition desc = Out of range value for column 'bInt' at row 1`,
+            )
           }
         })
 

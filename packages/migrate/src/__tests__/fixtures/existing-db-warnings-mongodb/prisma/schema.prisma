@@ -1,6 +1,5 @@
 datasource my_db {
   provider = "mongodb"
-  url      = env("TEST_MONGO_URI_MIGRATE_EXISTING_DB")
 }
 
 generator client {

@@ -5,5 +5,4 @@ generator client {
 
 datasource db {
   provider = "sqlserver"
-  url      = env("TEST_MSSQL_URI")
 }

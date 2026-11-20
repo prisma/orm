@@ -1,5 +1,5 @@
+import { sql } from '@prisma/client-runtime-utils'
 import path from 'path'
-import sql from 'sql-template-tag'
 
 import { getTestClient } from '../../../../utils/getTestClient'
 import { tearDownPostgres } from '../../../../utils/setupPostgres'

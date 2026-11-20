@@ -7,24 +7,11 @@ export { Extensions }
 export { Public }
 
 export { type JsonBatchQuery, type JsonQuery } from './core/engines'
-export { PrismaClientInitializationError } from './core/errors/PrismaClientInitializationError'
-export { PrismaClientKnownRequestError } from './core/errors/PrismaClientKnownRequestError'
-export { PrismaClientRustPanicError } from './core/errors/PrismaClientRustPanicError'
-export { PrismaClientUnknownRequestError } from './core/errors/PrismaClientUnknownRequestError'
-export { PrismaClientValidationError } from './core/errors/PrismaClientValidationError'
 export { serializeJsonQuery } from './core/jsonProtocol/serializeJsonQuery'
-export {
-  type Metric,
-  type MetricHistogram,
-  type MetricHistogramBucket,
-  type Metrics,
-  MetricsClient,
-} from './core/metrics/MetricsClient'
 export { createParam } from './core/model/Param'
 export { defineDmmfProperty } from './core/runtimeDataModel'
 export type * from './core/types/exported'
 export type { ITXClientDenyList } from './core/types/exported/itxClientDenyList'
-export { objectEnumValues } from './core/types/exported/ObjectEnums'
 export { skip } from './core/types/exported/Skip'
 export { makeTypedQueryFactory } from './core/types/exported/TypedSql'
 export type { PrismaClientOptions } from './getPrismaClient'
@@ -32,7 +19,6 @@ export { getPrismaClient } from './getPrismaClient'
 export { makeStrictEnum } from './strictEnum'
 export { deserializeRawResult } from './utils/deserializeRawResults'
 export { getRuntime } from './utils/getRuntime'
-export { warnEnvConflicts } from './warnEnvConflicts'
 export {
   type BaseDMMF,
   dmmfToRuntimeDataModel,
@@ -40,11 +26,37 @@ export {
   type Operation,
   type RuntimeDataModel,
 } from '@prisma/client-common'
-export { deserializeJsonResponse } from '@prisma/client-engine-runtime'
+export { deserializeJsonObject } from '@prisma/client-engine-runtime'
+export type { RawValue, Value } from '@prisma/client-runtime-utils'
+export type { AnyNullClass, DbNullClass, JsonNullClass } from '@prisma/client-runtime-utils'
+export {
+  PrismaClientInitializationError,
+  PrismaClientKnownRequestError,
+  PrismaClientRustPanicError,
+  PrismaClientUnknownRequestError,
+  PrismaClientValidationError,
+} from '@prisma/client-runtime-utils'
+export { empty, join, raw, Sql, sql as sqltag } from '@prisma/client-runtime-utils'
+export {
+  AnyNull,
+  DbNull,
+  isAnyNull,
+  isDbNull,
+  isJsonNull,
+  isObjectEnumValue,
+  JsonNull,
+  NullTypes,
+  ObjectEnumValue,
+} from '@prisma/client-runtime-utils'
+export { Decimal } from '@prisma/client-runtime-utils'
 export { Debug } from '@prisma/debug'
 export * as DMMF from '@prisma/dmmf'
 export type { SqlDriverAdapterFactory } from '@prisma/driver-adapter-utils'
 export { warnOnce } from '@prisma/internals'
-export { default as Decimal } from 'decimal.js'
-export type { RawValue, Value } from 'sql-template-tag'
-export { empty, join, raw, Sql, default as sqltag } from 'sql-template-tag'
+export type {
+  SqlCommenterContext,
+  SqlCommenterPlugin,
+  SqlCommenterQueryInfo,
+  SqlCommenterSingleQueryInfo,
+  SqlCommenterTags,
+} from '@prisma/sqlcommenter'

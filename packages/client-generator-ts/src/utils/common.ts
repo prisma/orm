@@ -8,7 +8,7 @@ export const GraphQLScalarToJSTypeTable = {
   ID: 'string',
   UUID: 'string',
   Json: 'runtime.JsonValue',
-  Bytes: 'Uint8Array',
+  Bytes: 'runtime.Bytes',
   Decimal: ['runtime.Decimal', 'runtime.DecimalJsLike', 'number', 'string'],
   BigInt: ['bigint', 'number'],
 }

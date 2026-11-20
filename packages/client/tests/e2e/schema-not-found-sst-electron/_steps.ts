@@ -5,6 +5,7 @@ import { executeSteps } from '../_utils/executeSteps'
 void executeSteps({
   setup: async () => {
     await $`pnpm install`
+    await $`pnpm prisma generate`
     await $`pnpm exec prisma db push --force-reset`
   },
   test: async () => {

@@ -14,7 +14,7 @@ let prisma: PrismaClient
 declare const newPrismaClient: NewPrismaClient<PrismaClient, typeof PrismaClient>
 
 testMatrix.setupTestSuite(
-  ({ provider, driverAdapter }, _suiteMeta, _clientMeta, cliMeta) => {
+  ({ provider, driverAdapter, clientEngineExecutor }, _suiteMeta, _clientMeta, cliMeta) => {
     const isSqlServer = provider === Providers.SQLSERVER
 
     beforeEach(() => {
@@ -408,12 +408,12 @@ testMatrix.setupTestSuite(
             [{ query: expect.stringContaining('SELECT') }],
             [{ query: expect.stringContaining('COMMIT') }],
           ]
-          if (driverAdapter === undefined) {
+          if (driverAdapter === undefined && clientEngineExecutor !== 'remote') {
             // Driver adapters do not issue BEGIN through the query engine.
             expectation.unshift([{ query: expect.stringContaining('BEGIN') }])
-          }
-          if (isSqlServer && driverAdapter === undefined) {
-            expectation.unshift([{ query: expect.stringContaining('SET TRANSACTION') }])
+            if (isSqlServer) {
+              expectation.unshift([{ query: expect.stringContaining('SET TRANSACTION') }])
+            }
           }
           expect(fnEmitter).toHaveBeenCalledTimes(expectation.length)
           expect(fnEmitter.mock.calls).toMatchObject(expectation)
@@ -468,12 +468,12 @@ testMatrix.setupTestSuite(
             [{ query: expect.stringContaining('SELECT') }],
             [{ query: expect.stringContaining('COMMIT') }],
           ]
-          if (driverAdapter === undefined) {
+          if (driverAdapter === undefined && clientEngineExecutor !== 'remote') {
             // Driver adapters do not issue BEGIN through the query engine.
             expectation.unshift([{ query: expect.stringContaining('BEGIN') }])
-          }
-          if (isSqlServer && driverAdapter === undefined) {
-            expectation.unshift([{ query: expect.stringContaining('SET TRANSACTION') }])
+            if (isSqlServer) {
+              expectation.unshift([{ query: expect.stringContaining('SET TRANSACTION') }])
+            }
           }
           expect(fnEmitter).toHaveBeenCalledTimes(expectation.length)
           expect(fnEmitter.mock.calls).toMatchObject(expectation)

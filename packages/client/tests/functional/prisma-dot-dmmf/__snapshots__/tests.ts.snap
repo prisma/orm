@@ -619,6 +619,68 @@ exports[`prisma-dot-dmmf (provider=postgresql) Prisma.dmmf in JS client exports 
 }
 `;
 
+exports[`prisma-dot-dmmf (provider=postgresql, js_pg) Prisma.dmmf in JS client exports Prisma.dmmf (default) 1`] = `
+{
+  "datamodel": {
+    "enums": [],
+    "models": [
+      {
+        "dbName": null,
+        "fields": [
+          {
+            "kind": "scalar",
+            "name": "id",
+            "type": "String",
+          },
+          {
+            "kind": "scalar",
+            "name": "name",
+            "type": "String",
+          },
+          {
+            "kind": "object",
+            "name": "posts",
+            "relationName": "PostToUser",
+            "type": "Post",
+          },
+        ],
+        "name": "User",
+        "schema": null,
+      },
+      {
+        "dbName": null,
+        "fields": [
+          {
+            "kind": "scalar",
+            "name": "id",
+            "type": "String",
+          },
+          {
+            "kind": "scalar",
+            "name": "title",
+            "type": "String",
+          },
+          {
+            "kind": "scalar",
+            "name": "authorId",
+            "type": "String",
+          },
+          {
+            "kind": "object",
+            "name": "author",
+            "relationName": "PostToUser",
+            "type": "User",
+          },
+        ],
+        "name": "Post",
+        "schema": null,
+      },
+    ],
+    "types": [],
+  },
+}
+`;
+
 exports[`prisma-dot-dmmf (provider=sqlite) Prisma.dmmf in JS client exports Prisma.dmmf (default) 1`] = `
 {
   "datamodel": {

@@ -1,0 +1,36 @@
+services:
+  test-e2e:
+    environment:
+      - POSTGRES_URL=postgres://prisma:prisma@postgres:5432/tests
+      - MYSQL_URL=mysql://root:root@mysql:3306/tests
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_DB=tests
+      - POSTGRES_USER=prisma
+      - POSTGRES_PASSWORD=prisma
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'prisma', '-d', 'tests']
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+  mysql:
+    image: mysql:9.0
+    command: --lower_case_table_names=1
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=tests
+      - MYSQL_PASSWORD=prisma
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h127.0.0.1', '-P3306']
+      interval: 5s
+      timeout: 2s
+      retries: 20

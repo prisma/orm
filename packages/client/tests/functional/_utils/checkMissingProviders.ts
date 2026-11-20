@@ -1,8 +1,6 @@
-import { getTestSuiteMeta, NamedTestSuiteConfig } from './getTestSuiteInfo'
+import { NamedTestSuiteConfig, TestSuiteMeta } from './getTestSuiteInfo'
 import { Providers } from './providers'
 import { MatrixOptions } from './types'
-
-export type TestSuiteMeta = ReturnType<typeof getTestSuiteMeta>
 
 /**
  * Ensure that we are not forgetting to add a provider to the matrix unless we
@@ -33,7 +31,7 @@ export function checkMissingProviders({
     throw new Error(
       `Test: '${suiteMeta.testName}' is missing providers '${missingProviders
         .map((x) => `'${x}'`)
-        .join(', ')}' out out using options.optOut`,
+        .join(', ')}' out using options.optOut`,
     )
   }
 }

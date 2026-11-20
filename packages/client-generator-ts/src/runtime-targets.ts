@@ -1,14 +1,5 @@
-export const supportedInternalRuntimes = ['nodejs', 'workerd', 'vercel-edge', 'deno', 'react-native'] as const
-const supportedPublicRuntimes = [
-  'nodejs',
-  'deno',
-  'bun',
-  'workerd',
-  'cloudflare',
-  'vercel-edge',
-  'edge-light',
-  'react-native',
-] as const
+export const supportedInternalRuntimes = ['nodejs', 'workerd', 'vercel-edge', 'deno'] as const
+const supportedPublicRuntimes = ['nodejs', 'deno', 'bun', 'workerd', 'cloudflare', 'vercel-edge', 'edge-light'] as const
 
 /**
  * The user-facing `runtime` attribute for the `prisma-client` generator.
@@ -36,9 +27,6 @@ function parseRuntimeTarget(target: RuntimeTarget | (string & {})): RuntimeTarge
 
     case 'deno':
       return 'deno'
-
-    case 'react-native':
-      return 'react-native'
 
     default:
       throw new Error(

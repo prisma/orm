@@ -1,7 +1,6 @@
 import * as ts from '@prisma/ts-builders'
 
 import { commonCodeTS } from '../common'
-import { Datasources } from '../Datasources'
 import { Enum } from '../Enum'
 import { FieldRefInput } from '../FieldRefInput'
 import { GenerateContext } from '../GenerateContext'
@@ -31,6 +30,10 @@ export function createPrismaNamespaceFile(context: GenerateContext, options: TSC
   const prismaEnums = context.dmmf.schema.enumTypes.prisma?.map((type) => new Enum(type, true).toTS())
 
   const fieldRefs = context.dmmf.schema.fieldRefTypes.prisma?.map((type) => new FieldRefInput(type).toTS()) ?? []
+
+  const transactionClientDenyList = context.isSqlProvider()
+    ? 'runtime.ITXClientDenyList'
+    : "runtime.ITXClientDenyList | '$transaction'"
 
   return `${jsDocHeader}
 ${imports.join('\n')}
@@ -72,11 +75,10 @@ export type BatchPayload = {
   count: number
 }
 
-${new Datasources(options.datasources).toTS()}
 ${clientExtensionsDefinitions()}
 export type DefaultPrismaClient = PrismaClient
 export type ErrorFormat = 'pretty' | 'colorless' | 'minimal'
-${ts.stringify(ts.moduleExport(buildClientOptions(context, options)))}
+${buildClientOptions(context)}
 ${ts.stringify(globalOmitConfig(context.dmmf))}
 
 /* Types for Logging */
@@ -138,7 +140,7 @@ export type PrismaAction =
 /**
  * \`PrismaClient\` proxy available in interactive transactions.
  */
-export type TransactionClient = Omit<DefaultPrismaClient, runtime.ITXClientDenyList>
+export type TransactionClient = Omit<DefaultPrismaClient, ${transactionClientDenyList}>
 
 `
 }
@@ -162,21 +164,11 @@ function clientExtensionsDefinitions() {
   return ts.stringify(define)
 }
 
-function buildClientOptions(context: GenerateContext, options: TSClientOptions) {
-  const clientOptions = ts
-    .interfaceDeclaration('PrismaClientOptions')
-    .add(
-      ts
-        .property('datasources', ts.namedType('Datasources'))
-        .optional()
-        .setDocComment(ts.docComment('Overwrites the datasource url from your schema.prisma file')),
-    )
-    .add(
-      ts
-        .property('datasourceUrl', ts.stringType)
-        .optional()
-        .setDocComment(ts.docComment('Overwrites the datasource url from your schema.prisma file')),
-    )
+function buildClientOptions(context: GenerateContext) {
+  // Build the shared base options interface.
+  // Matches `PrismaClientBaseOptions` in the runtime.
+  const baseOptions = ts
+    .interfaceDeclaration('PrismaClientBaseOptions')
     .add(
       ts
         .property('errorFormat', ts.namedType('ErrorFormat'))
@@ -207,7 +199,7 @@ function buildClientOptions(context: GenerateContext, options: TSClientOptions) 
               { emit: 'stdout', level: 'error' }
             ]
              \`\`\`
-             Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/logging#the-log-option).
+             Read more in our [docs](https://pris.ly/d/logging).
           `),
     )
 
@@ -220,7 +212,7 @@ function buildClientOptions(context: GenerateContext, options: TSClientOptions) 
     transactionOptions.add(ts.property('isolationLevel', ts.namedType('TransactionIsolationLevel')).optional())
   }
 
-  clientOptions.add(
+  baseOptions.add(
     ts.property('transactionOptions', transactionOptions).optional().setDocComment(ts.docComment`
              The default values for transactionOptions
              maxWait ?= 2000
@@ -228,21 +220,7 @@ function buildClientOptions(context: GenerateContext, options: TSClientOptions) 
           `),
   )
 
-  if (
-    ['library', 'client', 'wasm-compiler-edge', 'wasm-engine-edge'].includes(options.runtimeName) &&
-    context.isPreviewFeatureOn('driverAdapters')
-  ) {
-    clientOptions.add(
-      ts
-        .property('adapter', ts.unionType([ts.namedType('runtime.SqlDriverAdapterFactory'), ts.namedType('null')]))
-        .optional()
-        .setDocComment(
-          ts.docComment('Instance of a Driver Adapter, e.g., like one provided by `@prisma/adapter-planetscale`'),
-        ),
-    )
-  }
-
-  clientOptions.add(
+  baseOptions.add(
     ts.property('omit', ts.namedType('GlobalOmitConfig')).optional().setDocComment(ts.docComment`
         Global configuration for omitting model fields by default.
 
@@ -259,5 +237,142 @@ function buildClientOptions(context: GenerateContext, options: TSClientOptions) 
       `),
   )
 
-  return clientOptions
+  if (context.isSqlProvider()) {
+    baseOptions.add(
+      ts.property('comments', ts.array(ts.namedType('runtime.SqlCommenterPlugin'))).optional()
+        .setDocComment(ts.docComment`
+        SQL commenter plugins that add metadata to SQL queries as comments.
+        Comments follow the sqlcommenter format: https://google.github.io/sqlcommenter/
+
+        @example
+        \`\`\`
+        const prisma = new PrismaClient({
+          adapter,
+          comments: [
+            traceContext(),
+            queryInsights(),
+          ],
+        })
+        \`\`\`
+      `),
+    )
+  }
+
+  baseOptions.add(
+    ts.property('queryPlanCacheMaxSize', ts.numberType).optional().setDocComment(ts.docComment`
+        Optional maximum size for the query plan cache. If not provided, a default size will be used.
+        A value of \`0\` can be used to disable the cache entirely. A higher cache size can improve
+        performance for applications that execute a large number of unique queries, while a smaller
+        cache size can reduce memory usage.
+
+        @example
+        \`\`\`
+        const prisma = new PrismaClient({
+          adapter,
+          queryPlanCacheMaxSize: 100,
+        })
+        \`\`\`
+      `),
+  )
+
+  // Accelerate-specific options interface that extends the base.
+  // Matches `PrismaClientOptionsWithAccelerateUrl` in the runtime.
+  //
+  // NOTE: This is intentionally declared *before* `PrismaClientOptionsWithAdapter`,
+  // and `PrismaClientOptions` (built below) lists them in the same order in its
+  // union. The generator prepends `// @ts-nocheck` to all generated files by
+  // default (see `tsNoCheckPreamble` in `../../generator.ts` and
+  // `addPreambleToSourceFiles` in `../../utils/addPreamble.ts`), and with
+  // `// @ts-nocheck` present on the file that declares the discriminated union
+  // TypeScript reports missing-property errors against the *second* union
+  // member. Putting the adapter branch second therefore makes
+  // `new PrismaClient({ log: [...] })` report "adapter is missing" (the
+  // recommended option for most users) rather than "accelerateUrl is missing".
+  //
+  // The source declaration order matches the union order so that the same
+  // "adapter wins" behavior also holds for the internal client tests that
+  // generate without the preamble (`tsNoCheckPreamble: false`); without
+  // `// @ts-nocheck`, TypeScript picks the later-declared branch instead, so
+  // both orderings need to put adapter last.
+  const withAccelerateUrl = ts
+    .interfaceDeclaration('PrismaClientOptionsWithAccelerateUrl')
+    .extends(ts.namedType('PrismaClientBaseOptions'))
+    .add(
+      ts.property('accelerateUrl', ts.stringType).setDocComment(ts.docComment`
+            The Prisma Accelerate connection URL. Use this option to connect to your database through Prisma Accelerate instead of using a driver adapter to connect directly.
+
+            Learn more: https://pris.ly/d/accelerate
+          `),
+    )
+    .add(ts.property('adapter', ts.neverType).optional())
+
+  // Adapter-specific options interface that extends the base.
+  // Matches `PrismaClientOptionsWithAdapter` in the runtime.
+  const withAdapter = ts
+    .interfaceDeclaration('PrismaClientOptionsWithAdapter')
+    .extends(ts.namedType('PrismaClientBaseOptions'))
+    .add(
+      ts.property('adapter', ts.namedType('runtime.SqlDriverAdapterFactory')).setDocComment(ts.docComment`
+            A driver adapter that PrismaClient uses to connect to your database, such as the ones provided by \`@prisma/adapter-pg\`, \`@prisma/adapter-libsql\`, \`@prisma/adapter-planetscale\`, etc.
+
+            A driver adapter is **required** unless you connect to your database through Prisma Accelerate (in which case use \`accelerateUrl\` instead).
+
+            Learn more: https://pris.ly/d/driver-adapters
+
+            @example
+            \`\`\`ts
+            import { PrismaPg } from '@prisma/adapter-pg'
+            import { PrismaClient } from './generated/prisma/client'
+
+            const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+            const prisma = new PrismaClient({ adapter })
+            \`\`\`
+          `),
+    )
+    .add(ts.property('accelerateUrl', ts.neverType).optional())
+
+  // NOTE: The union members are intentionally ordered with
+  // `PrismaClientOptionsWithAdapter` *last*. TypeScript's missing-property
+  // error elaboration for a discriminated union reports against the *second*
+  // union member, so the adapter branch must come second to make
+  // `new PrismaClient({ log: [...] })` say "adapter is missing" (the
+  // recommended option for most users) rather than "accelerateUrl is missing".
+  const prismaClientOptionsDecl = ts.typeDeclaration(
+    'PrismaClientOptions',
+    ts.unionType([
+      ts.namedType('PrismaClientOptionsWithAccelerateUrl'),
+      ts.namedType('PrismaClientOptionsWithAdapter'),
+    ]),
+  )
+
+  return [
+    ts.stringify(
+      ts.moduleExport(baseOptions).setDocComment(ts.docComment`
+        Options common to all variants of \`PrismaClientOptions\`, regardless of whether you connect to your database through a driver adapter or through Prisma Accelerate.
+      `),
+    ),
+    ts.stringify(
+      ts.moduleExport(withAccelerateUrl).setDocComment(ts.docComment`
+        \`PrismaClient\` options for connecting to your database through Prisma Accelerate instead of a driver adapter.
+
+        Learn more: https://pris.ly/d/accelerate
+      `),
+    ),
+    ts.stringify(
+      ts.moduleExport(withAdapter).setDocComment(ts.docComment`
+        \`PrismaClient\` options for connecting to your database through a driver adapter. This is the common case in Prisma 7.
+
+        Learn more: https://pris.ly/d/driver-adapters
+      `),
+    ),
+    ts.stringify(
+      ts.moduleExport(prismaClientOptionsDecl).setDocComment(ts.docComment`
+        Options passed to the \`PrismaClient\` constructor.
+
+        A driver adapter (or, alternatively, a Prisma Accelerate URL) is **required**. See {@link PrismaClientOptionsWithAdapter} and {@link PrismaClientOptionsWithAccelerateUrl} for the two variants. All other properties live in {@link PrismaClientBaseOptions} and are optional.
+
+        Learn more about driver adapters: https://pris.ly/d/driver-adapters
+      `),
+    ),
+  ].join('\n\n')
 }

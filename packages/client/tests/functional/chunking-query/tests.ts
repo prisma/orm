@@ -11,9 +11,11 @@ import type { PrismaClient, Tag } from './generated/prisma/client'
 declare let prisma: PrismaClient
 
 testMatrix.setupTestSuite(
-  ({ provider, driverAdapter }, _suiteMeta, { runtime }, cliMeta) => {
+  ({ provider, driverAdapter, clientEngineExecutor }, _suiteMeta, _clientMeta, cliMeta) => {
     const MAX_BIND_VALUES = MAX_BIND_VALUES_BY_PROVIDER[provider]
     const EXCESS_BIND_VALUES = EXCESS_BIND_VALUES_BY_PROVIDER[provider]
+
+    const usesJsDrivers = driverAdapter !== undefined || clientEngineExecutor === 'remote'
 
     function generatedIds(n: number) {
       // ["1","2",...,"n"]
@@ -131,14 +133,11 @@ testMatrix.setupTestSuite(
       })
 
       // Sqlite excluded because it's bind parameter limit is currently incorrect which makes the QE chunk queries enough to not trigger the error.
-      testIf(driverAdapter === undefined && provider !== Providers.SQLITE)(
-        'should fail when raw query has EXCESS ids',
-        async () => {
-          const ids = await createTags(EXCESS_BIND_VALUES)
+      testIf(!usesJsDrivers && provider !== Providers.SQLITE)('should fail when raw query has EXCESS ids', async () => {
+        const ids = await createTags(EXCESS_BIND_VALUES)
 
-          await expect(getTagsParams(ids)).rejects.toThrow()
-        },
-      )
+        await expect(getTagsParams(ids)).rejects.toThrow()
+      })
     })
 
     // Sqlite excluded because it's bind parameter limit is currently incorrect which makes the QE chunk queries enough to not trigger the error.
@@ -161,24 +160,24 @@ testMatrix.setupTestSuite(
         })
       }
 
-      test('Selecting MAX ids at once in two inclusive disjunct filters results in error', async () => {
-        const ids = generatedIds(MAX_BIND_VALUES)
-
-        if (driverAdapter === undefined || runtime === 'client') {
-          // When using MAX ids, it fails both with relationJoins and without because the amount of query params that's computed is not beyond the limit.
-          // To be clear: the root problem comes from the way the QE computes the amount of query params.
-          await expect(selectWith2InFilters(ids)).rejects.toThrow()
-        } else {
-          // It's unknown why this test doesn't fail with driver adapters.
-          await expect(selectWith2InFilters(ids)).resolves.toMatchInlineSnapshot(`[]`)
-        }
+      test('Selecting MAX ids at once in two inclusive disjunct filters succeeds', async () => {
+        // subtract 1 to account for the OFFSET parameters and divide by 2 to account for the
+        // two IN filters
+        const ids = generatedIds((MAX_BIND_VALUES - 1) / 2)
+        await expect(selectWith2InFilters(ids)).resolves.toMatchInlineSnapshot(`[]`)
       })
 
       test('Selecting EXCESS ids at once in two inclusive disjunct filters results in error', async () => {
         const ids = generatedIds(EXCESS_BIND_VALUES)
 
         if (usingRelationJoins) {
-          await expect(selectWith2InFilters(ids)).rejects.toThrow(RELATION_JOINS_NO_CHUNKING_ERROR_MSG)
+          if (driverAdapter === 'js_pg' || driverAdapter === 'js_pg_cockroachdb') {
+            await expect(selectWith2InFilters(ids)).rejects.toThrow(
+              'The query parameter limit supported by your database is exceeded',
+            )
+          } else {
+            await expect(selectWith2InFilters(ids)).rejects.toThrow(RELATION_JOINS_NO_CHUNKING_ERROR_MSG)
+          }
         } else {
           await expect(selectWith2InFilters(ids)).rejects.toThrow()
         }
@@ -201,6 +200,14 @@ testMatrix.setupTestSuite(
         'Neon occasionally fails with different parameter counts in its error messages. ' +
         'D1 does not have the correct amount of max_bind_values.' +
         'The query appears to raise no error with the MariaDB driver adapter.',
+    },
+    skip(when, { clientEngineExecutor, provider }) {
+      when(
+        clientEngineExecutor === 'remote' && provider === Providers.MYSQL,
+        `
+        Query plan executor server uses MariaDB driver internally.
+        `,
+      )
     },
   },
 )

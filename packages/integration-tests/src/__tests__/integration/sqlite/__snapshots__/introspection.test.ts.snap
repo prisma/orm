@@ -8,7 +8,6 @@ exports[`introspection: create bigint data: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model migrate {
@@ -27,7 +26,6 @@ exports[`introspection: create with data: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -47,7 +45,6 @@ exports[`introspection: create with empty data and SQL default: datamodel 1`] = 
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -67,7 +64,6 @@ exports[`introspection: delete where composite PK: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model variables {
@@ -91,7 +87,6 @@ exports[`introspection: findMany - email text: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model users {
@@ -111,7 +106,6 @@ exports[`introspection: findMany - email varchar(50) not null unique: datamodel 
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model users {
@@ -131,7 +125,6 @@ exports[`introspection: findMany on column_name_that_becomes_empty_string: datam
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model column_name_that_becomes_empty_string {
@@ -178,7 +171,6 @@ exports[`introspection: findMany orderBy asc: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -199,7 +191,6 @@ exports[`introspection: findMany orderBy desc: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -220,7 +211,6 @@ exports[`introspection: findMany where - case insensitive field: datamodel 1`] =
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model users {
@@ -240,7 +230,6 @@ exports[`introspection: findMany where OR[contains, contains] : datamodel 1`] = 
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -261,7 +250,6 @@ exports[`introspection: findMany where contains and boolean: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -282,7 +270,6 @@ exports[`introspection: findMany where contains: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model crons {
@@ -303,7 +290,6 @@ exports[`introspection: findMany where datetime exact: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model events {
@@ -323,7 +309,6 @@ exports[`introspection: findMany where datetime gt: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model events {
@@ -343,7 +328,6 @@ exports[`introspection: findMany where datetime gte: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model events {
@@ -363,7 +347,6 @@ exports[`introspection: findMany where datetime lt: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model events {
@@ -383,7 +366,6 @@ exports[`introspection: findMany where datetime lte - check instanceof Date: dat
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -404,7 +386,6 @@ exports[`introspection: findMany where datetime lte: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model events {
@@ -424,7 +405,6 @@ exports[`introspection: findMany where datetime not: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model events {
@@ -444,7 +424,6 @@ exports[`introspection: findMany where decimal: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model exercises {
@@ -464,7 +443,6 @@ exports[`introspection: findMany where empty in[]: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -485,7 +463,6 @@ exports[`introspection: findMany where empty notIn[]: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -506,7 +483,6 @@ exports[`introspection: findMany where endsWith: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model crons {
@@ -527,7 +503,6 @@ exports[`introspection: findMany where id empty in[] and token in[]: datamodel 1
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -548,7 +523,6 @@ exports[`introspection: findMany where in[integer]: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -569,7 +543,6 @@ exports[`introspection: findMany where in[string]: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model crons {
@@ -590,7 +563,6 @@ exports[`introspection: findMany where notIn[]: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -611,7 +583,6 @@ exports[`introspection: findMany where startsWith: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model crons {
@@ -632,7 +603,6 @@ exports[`introspection: findMany where timestamp gt than now: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -653,7 +623,6 @@ exports[`introspection: findMany where timestamp gte than now: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -674,7 +643,6 @@ exports[`introspection: findMany where timestamp lt than now: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -695,7 +663,6 @@ exports[`introspection: findMany where unique: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model users {
@@ -715,7 +682,6 @@ exports[`introspection: findUnique where PK with include: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -743,7 +709,6 @@ exports[`introspection: findUnique where PK with select: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -764,7 +729,6 @@ exports[`introspection: findUnique where PK: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -784,7 +748,6 @@ exports[`introspection: findUnique where composite PK with foreign key: datamode
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model a {
@@ -814,7 +777,6 @@ exports[`introspection: findUnique where composite PK: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model variables {
@@ -838,7 +800,6 @@ exports[`introspection: findUnique where decimal - default value: datamodel 1`] 
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model exercises {
@@ -858,7 +819,6 @@ exports[`introspection: findUnique where decimal: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model exercises {
@@ -878,7 +838,6 @@ exports[`introspection: findUnique where unique composite (PK is a composite): d
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model variables {
@@ -903,7 +862,6 @@ exports[`introspection: findUnique where unique composite: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model variables {
@@ -928,7 +886,6 @@ exports[`introspection: findUnique where unique with foreign key and unpack: dat
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -956,7 +913,6 @@ exports[`introspection: findUnique where unique: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model users {
@@ -976,7 +932,6 @@ exports[`introspection: update where composite PK: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model variables {
@@ -1000,7 +955,6 @@ exports[`introspection: update where integer data: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -1020,7 +974,6 @@ exports[`introspection: update where with boolean data and select: datamodel 1`]
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -1041,7 +994,6 @@ exports[`introspection: update where with boolean data: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -1062,7 +1014,6 @@ exports[`introspection: update where with numeric data: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -1082,7 +1033,6 @@ exports[`introspection: update where with string data: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -1102,7 +1052,6 @@ exports[`introspection: updateMany where null - check findMany: datamodel 1`] = 
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -1122,7 +1071,6 @@ exports[`introspection: updateMany where with string data - check findMany: data
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -1142,7 +1090,6 @@ exports[`introspection: updateMany where with string data - check returned count
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model teams {
@@ -1162,7 +1109,6 @@ exports[`introspection: upsert (create): datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -1183,7 +1129,6 @@ exports[`introspection: upsert (update): datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model posts {
@@ -1204,7 +1149,6 @@ exports[`introspection: upsert where composite PK - create: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model variables {
@@ -1228,7 +1172,6 @@ exports[`introspection: upsert where composite PK - update: datamodel 1`] = `
 
 datasource sqlite {
   provider = "sqlite"
-  url = "***"
 }
 
 model variables {

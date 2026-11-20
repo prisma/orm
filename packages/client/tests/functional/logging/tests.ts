@@ -13,9 +13,10 @@ type LogPrismaClient = PrismaClient<{ log: [{ emit: 'event'; level: 'query' }] }
 
 declare const newPrismaClient: NewPrismaClient<LogPrismaClient, typeof PrismaClient>
 
-testMatrix.setupTestSuite(({ provider, driverAdapter }) => {
+testMatrix.setupTestSuite(({ provider, driverAdapter, clientEngineExecutor }) => {
   const isMongoDb = provider === Providers.MONGODB
   const isSqlServer = provider === Providers.SQLSERVER
+  const usesJsDrivers = driverAdapter !== undefined || clientEngineExecutor === 'remote'
 
   let client: LogPrismaClient
 
@@ -112,10 +113,10 @@ testMatrix.setupTestSuite(({ provider, driverAdapter }) => {
       // - Since https://github.com/prisma/prisma-engines/pull/4640,
       //   we also skip a read when possible, on SQLite.
 
-      if (isSqlServer && driverAdapter === undefined) {
+      if (isSqlServer && !usesJsDrivers) {
         expect(logs.shift()?.query).toContain('SET TRANSACTION')
       }
-      if (driverAdapter === undefined) {
+      if (!usesJsDrivers) {
         // Driver adapters do not issue BEGIN through the query engine.
         expect(logs.shift()?.query).toContain('BEGIN')
       }
@@ -188,10 +189,10 @@ testMatrix.setupTestSuite(({ provider, driverAdapter }) => {
       expect(logs[0].query).toContain('User.aggregate')
       expect(logs[0].query).toContain('User.aggregate')
     } else {
-      if (isSqlServer && driverAdapter === undefined) {
+      if (isSqlServer && !usesJsDrivers) {
         expect(logs.shift()?.query).toContain('SET TRANSACTION')
       }
-      if (driverAdapter === undefined) {
+      if (!usesJsDrivers) {
         // Driver adapters do not issue BEGIN through the query engine.
         expect(logs.shift()?.query).toContain('BEGIN')
       }
@@ -254,10 +255,10 @@ testMatrix.setupTestSuite(({ provider, driverAdapter }) => {
       expect(logs[0].query).toContain('User.aggregate')
       expect(logs[0].query).toContain('User.aggregate')
     } else {
-      if (isSqlServer && driverAdapter === undefined) {
+      if (isSqlServer && !usesJsDrivers) {
         expect(logs.shift()?.query).toContain('SET TRANSACTION')
       }
-      if (driverAdapter === undefined) {
+      if (!usesJsDrivers) {
         // Driver adapters do not issue BEGIN through the query engine.
         expect(logs.shift()?.query).toContain('BEGIN')
       }

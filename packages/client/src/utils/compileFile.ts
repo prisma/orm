@@ -1,5 +1,6 @@
-import execa from 'execa'
-import path from 'path'
+import path from 'node:path'
+
+import { execaNode } from 'execa'
 
 type CompileFileOptions = {
   /**
@@ -18,7 +19,7 @@ export async function compileFile(
 ): Promise<void> {
   const workerPath = path.resolve(__dirname, 'compilerWorker.js')
   if (isolateCompiler) {
-    await execa.node(workerPath, [filePath])
+    await execaNode(workerPath, [filePath])
   } else {
     const compile = require(workerPath) as (filePath: string) => void
     compile(filePath)

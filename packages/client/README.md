@@ -8,10 +8,9 @@ It is part of the [Prisma](https://www.prisma.io/) ecosystem. Prisma provides da
 
 Follow one of these guides to get started with Prisma Client JS:
 
-- [Quickstart](https://www.prisma.io/docs/getting-started/quickstart) (5 min)
-- [Set up a new project with Prisma (SQL migrations)](https://www.prisma.io/docs/getting-started/setup-prisma/start-from-scratch-sql) (15 min)
-- [Set up a new project with Prisma (Prisma Migrate)](https://www.prisma.io/docs/getting-started/setup-prisma/start-from-scratch-prisma-migrate) (15 min)
-- [Add Prisma to an existing project](https://www.prisma.io/docs/getting-started/setup-prisma/add-to-existing-project) (15 min)
+- [Quickstart](https://www.prisma.io/docs/getting-started/prisma-orm/quickstart/prisma-postgres) (5 min)
+- [Getting started with Prisma Migrate](https://www.prisma.io/docs/orm/prisma-migrate/getting-started) (15 min)
+- [Add Prisma to an existing project](https://www.prisma.io/docs/getting-started/prisma-orm/add-to-existing-project/prisma-postgres) (15 min)
 
 Alternatively you can explore the ready-to-run [examples](https://github.com/prisma/prisma-examples/) (REST, GraphQL, gRPC, plain JavaScript and TypeScript demos, ...) or watch the [demo videos](https://www.youtube.com/watch?v=0RhtQgIs-TE&list=PLn2e1F9Rfr6k9PnR_figWOcSHgc_erDr5&index=1) (1-2 min per video).
 

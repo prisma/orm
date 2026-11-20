@@ -1,6 +1,7 @@
 generator client {
   provider            = "prisma-client"
-  previewFeatures     = ["typedSql", "queryCompiler", "driverAdapters"]
+  engineType          = "client"
+  previewFeatures     = ["typedSql"]
   output              = "../src/generated/prisma"
   moduleFormat        = "commonjs"
   importFileExtension = ""
@@ -8,7 +9,6 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
 }
 
 model User {

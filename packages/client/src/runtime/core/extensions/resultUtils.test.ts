@@ -151,6 +151,37 @@ describe('getAllComputedFields', () => {
     })
   })
 
+  test('composes computed fields from two extensions targeting the same field and forwards the active model name to both computes', () => {
+    const previousCompute = jest.fn((model: any, modelName: string) => {
+      expect(modelName).toBe('User')
+      return `${model.firstName} ${model.lastName}`
+    })
+    const nextCompute = jest.fn((model: any, modelName: string) => {
+      expect(modelName).toBe('User')
+      return model.fullName.toUpperCase()
+    })
+
+    const result = getComputedFields(
+      {
+        fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: previousCompute },
+      },
+      {
+        result: {
+          user: {
+            fullName: {
+              compute: nextCompute,
+            },
+          },
+        },
+      },
+      'User',
+    )
+
+    const model = { firstName: 'John', lastName: 'Smith' }
+
+    expect(result?.fullName.compute(model, 'User')).toBe('JOHN SMITH')
+  })
+
   test('allows to shadow normal field with a computed fields', () => {
     const result = getComputedFields(
       {},

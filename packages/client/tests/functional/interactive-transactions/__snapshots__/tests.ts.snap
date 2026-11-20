@@ -61,7 +61,7 @@ Invalid \`prisma.user.create()\` invocation in
   XX   },
   XX }),
 → XX prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=cockroachdb, js_pg_cockroachdb) batching rollback within callback 1`] = `
@@ -73,7 +73,7 @@ Invalid \`tx.user.create()\` invocation in
   XX ])
   XX 
 → XX await tx.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=cockroachdb, js_pg_cockroachdb) rollback query 1`] = `
@@ -85,7 +85,7 @@ Invalid \`prisma.user.create()\` invocation in
   XX })
   XX 
 → XX await prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=mongodb) batching rollback 1`] = `
@@ -256,6 +256,50 @@ Invalid \`prisma.user.create()\` invocation in
 Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
+exports[`interactive-transactions (provider=mysql, qpe=remote) batching raw rollback 1`] = `
+"
+Invalid \`prisma.$executeRaw()\` invocation:
+
+
+Raw query failed. Code: \`1062\`. Message: \`Duplicate entry '1' for key 'user.PRIMARY'\`"
+`;
+
+exports[`interactive-transactions (provider=mysql, qpe=remote) batching rollback 1`] = `
+"
+Invalid \`prisma.user.create()\` invocation in
+/client/tests/functional/interactive-transactions/tests.ts:0:0
+
+  XX     email: 'user_1@website.com',
+  XX   },
+  XX }),
+→ XX prisma.user.create(
+Unique constraint failed on the constraint: \`User_email_key\`"
+`;
+
+exports[`interactive-transactions (provider=mysql, qpe=remote) batching rollback within callback 1`] = `
+"
+Invalid \`tx.user.create()\` invocation in
+/client/tests/functional/interactive-transactions/tests.ts:0:0
+
+  XX   }),
+  XX ])
+  XX 
+→ XX await tx.user.create(
+Unique constraint failed on the constraint: \`User_email_key\`"
+`;
+
+exports[`interactive-transactions (provider=mysql, qpe=remote) rollback query 1`] = `
+"
+Invalid \`prisma.user.create()\` invocation in
+/client/tests/functional/interactive-transactions/tests.ts:0:0
+
+  XX   },
+  XX })
+  XX 
+→ XX await prisma.user.create(
+Unique constraint failed on the constraint: \`User_email_key\`"
+`;
+
 exports[`interactive-transactions (provider=postgresql) batching raw rollback 1`] = `
 "
 Invalid \`prisma.$executeRaw()\` invocation:
@@ -361,7 +405,7 @@ Invalid \`prisma.user.create()\` invocation in
   XX   },
   XX }),
 → XX prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=postgresql, js_pg) batching rollback within callback 1`] = `
@@ -373,7 +417,7 @@ Invalid \`tx.user.create()\` invocation in
   XX ])
   XX 
 → XX await tx.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=postgresql, js_pg) rollback query 1`] = `
@@ -385,7 +429,51 @@ Invalid \`prisma.user.create()\` invocation in
   XX })
   XX 
 → XX await prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
+`;
+
+exports[`interactive-transactions (provider=postgresql, qpe=remote) batching raw rollback 1`] = `
+"
+Invalid \`prisma.$executeRaw()\` invocation:
+
+
+Raw query failed. Code: \`23505\`. Message: \`duplicate key value violates unique constraint "User_pkey"\`"
+`;
+
+exports[`interactive-transactions (provider=postgresql, qpe=remote) batching rollback 1`] = `
+"
+Invalid \`prisma.user.create()\` invocation in
+/client/tests/functional/interactive-transactions/tests.ts:0:0
+
+  XX     email: 'user_1@website.com',
+  XX   },
+  XX }),
+→ XX prisma.user.create(
+Unique constraint failed on the constraint: \`User_email_key\`"
+`;
+
+exports[`interactive-transactions (provider=postgresql, qpe=remote) batching rollback within callback 1`] = `
+"
+Invalid \`tx.user.create()\` invocation in
+/client/tests/functional/interactive-transactions/tests.ts:0:0
+
+  XX   }),
+  XX ])
+  XX 
+→ XX await tx.user.create(
+Unique constraint failed on the constraint: \`User_email_key\`"
+`;
+
+exports[`interactive-transactions (provider=postgresql, qpe=remote) rollback query 1`] = `
+"
+Invalid \`prisma.user.create()\` invocation in
+/client/tests/functional/interactive-transactions/tests.ts:0:0
+
+  XX   },
+  XX })
+  XX 
+→ XX await prisma.user.create(
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=sqlite) batching raw rollback 1`] = `

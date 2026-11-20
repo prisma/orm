@@ -19,12 +19,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/adapter-neon"
   },
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
-    "build": "tsx helpers/build.ts"
+    "build": "tsx helpers/build.ts",
+    "test": "vitest run"
   },
   "files": [
     "dist",
@@ -38,5 +39,8 @@
     "@prisma/driver-adapter-utils": "workspace:*",
     "postgres-array": "3.0.4",
     "@neondatabase/serverless": ">0.6.0 <2"
+  },
+  "devDependencies": {
+    "@prisma/debug": "workspace:*"
   }
 }

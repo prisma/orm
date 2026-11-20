@@ -5,7 +5,8 @@
   "packageManager": "yarn@1.22.17",
   "scripts": {},
   "dependencies": {
-    "@prisma/client": "file:/tmp/prisma-client-0.0.0.tgz"
+    "@prisma/client": "file:/tmp/prisma-client-0.0.0.tgz",
+    "@prisma/client-runtime-utils": "file:/tmp/prisma-client-runtime-utils-0.0.0.tgz"
   },
   "devDependencies": {
     "prisma": "file:/tmp/prisma-0.0.0.tgz"

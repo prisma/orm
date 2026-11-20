@@ -12,7 +12,7 @@ declare let prisma: PrismaClient
 const email = faker.internet.email()
 
 testMatrix.setupTestSuite(
-  (_suiteConfig, _suiteMeta, clientMeta) => {
+  (_suiteConfig, _suiteMeta) => {
     beforeEach(async () => {
       await prisma.post.deleteMany()
       await prisma.user.deleteMany()
@@ -31,7 +31,7 @@ testMatrix.setupTestSuite(
       })
     })
 
-    testIf(clientMeta.runtime !== 'edge')('extended client in tx can rollback via normal call', async () => {
+    test('extended client in tx can rollback via normal call', async () => {
       const xprisma = prisma.$extends({
         result: {
           user: {
@@ -71,7 +71,7 @@ testMatrix.setupTestSuite(
       expect(users).toHaveLength(0)
     })
 
-    testIf(clientMeta.runtime !== 'edge')('extended client in tx works via normal call', async () => {
+    test('extended client in tx works via normal call', async () => {
       const xprisma = prisma.$extends({
         result: {
           user: {
@@ -100,7 +100,7 @@ testMatrix.setupTestSuite(
       expect(users).toHaveLength(1)
     })
 
-    testIf(clientMeta.runtime !== 'edge')('extended client in tx can rollback via custom call', async () => {
+    test('extended client in tx can rollback via custom call', async () => {
       const xprisma = prisma
         .$extends({
           result: {
@@ -189,7 +189,7 @@ testMatrix.setupTestSuite(
       expect(users).toHaveLength(1)
     })
 
-    testIf(clientMeta.runtime !== 'edge')('isolation level is properly reflected in extended client', () => {
+    test('isolation level is properly reflected in extended client', () => {
       ;async () => {
         const xprisma = prisma.$extends({})
 

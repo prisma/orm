@@ -1,6 +1,10 @@
+import timers from 'node:timers/promises'
+
 import { $ } from 'zx'
 
 import { executeSteps } from '../_utils/executeSteps'
+import { retry } from '../_utils/retry'
+import { stopProcess, waitForWranglerReady } from '../_utils/wrangler'
 
 void executeSteps({
   setup: async () => {
@@ -8,14 +12,19 @@ void executeSteps({
     await $`pnpm prisma generate`
   },
   test: async () => {
-    const wranglerProcess = $`pnpm wrangler dev --ip 127.0.0.1 --port 8787 src/index.ts`.nothrow()
+    const { stdout } = await retry(async () => {
+      const wranglerProcess = $`pnpm wrangler dev --ip 127.0.0.1 --port 8787 src/index.ts`.nothrow()
 
-    // wait for the server to be fully ready
-    for await (const line of wranglerProcess.stdout) {
-      if (line.includes('Ready')) break
-    }
+      try {
+        await waitForWranglerReady(wranglerProcess)
 
-    const { stdout } = await $`curl http://localhost:8787/ -s`.nothrow()
+        await timers.setTimeout(1000)
+
+        return await $`curl http://localhost:8787/ -s`
+      } finally {
+        await stopProcess(wranglerProcess).catch(() => {})
+      }
+    }, 3)
 
     const expected =
       '{"Role":{"USER":"USER","ADMIN":"ADMIN"},"ModelName":{"User":"User","Post":"Post","Profile":"Profile"}}'
@@ -25,8 +34,6 @@ void executeSteps({
     } else {
       console.log('Success!')
     }
-
-    await wranglerProcess.kill()
   },
   finish: async () => {
     await $`echo "done"`

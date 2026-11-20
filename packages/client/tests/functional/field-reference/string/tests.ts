@@ -4,7 +4,7 @@ import type { PrismaClient } from './generated/prisma/client'
 
 declare let prisma: PrismaClient
 
-testMatrix.setupTestSuite((_suiteConfig, _suiteMeta, { runtime }) => {
+testMatrix.setupTestSuite((_suiteConfig, _suiteMeta) => {
   beforeAll(async () => {
     await prisma.product.create({
       data: {
@@ -49,7 +49,7 @@ testMatrix.setupTestSuite((_suiteConfig, _suiteMeta, { runtime }) => {
   })
 
   // TODO: Edge: skipped because of the error snapshot
-  testIf(runtime !== 'edge')('wrong field type', async () => {
+  test('wrong field type', async () => {
     const products = prisma.product.findMany({
       where: {
         string: {
@@ -66,14 +66,14 @@ testMatrix.setupTestSuite((_suiteConfig, _suiteMeta, { runtime }) => {
 
         XX 
         XX // TODO: Edge: skipped because of the error snapshot
-        XX testIf(runtime !== 'edge')('wrong field type', async () => {
+        XX test('wrong field type', async () => {
       → XX   const products = prisma.product.findMany(
       Input error. Expected a referenced scalar field of type String but found Product.notString of type Int."
     `)
   })
 
   // TODO: Edge: skipped because of the error snapshot
-  testIf(runtime !== 'edge')('wrong model', async () => {
+  test('wrong model', async () => {
     const products = prisma.product.findMany({
       where: {
         string: {
@@ -90,14 +90,14 @@ testMatrix.setupTestSuite((_suiteConfig, _suiteMeta, { runtime }) => {
 
         XX 
         XX // TODO: Edge: skipped because of the error snapshot
-        XX testIf(runtime !== 'edge')('wrong model', async () => {
+        XX test('wrong model', async () => {
       → XX   const products = prisma.product.findMany(
       Input error. Expected a referenced scalar field of model Product, but found a field of model OtherModel."
     `)
   })
 
   // TODO: Edge: skipped because of the error snapshot
-  testIf(runtime !== 'edge')('wrong identical model', async () => {
+  test('wrong identical model', async () => {
     const products = prisma.product.findMany({
       where: {
         string: {
@@ -114,7 +114,7 @@ testMatrix.setupTestSuite((_suiteConfig, _suiteMeta, { runtime }) => {
 
          XX 
          XX // TODO: Edge: skipped because of the error snapshot
-        XX testIf(runtime !== 'edge')('wrong identical model', async () => {
+        XX test('wrong identical model', async () => {
       → XX   const products = prisma.product.findMany(
       Input error. Expected a referenced scalar field of model Product, but found a field of model IdenticalToProduct."
     `)

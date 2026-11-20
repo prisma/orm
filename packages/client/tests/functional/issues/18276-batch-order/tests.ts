@@ -8,8 +8,9 @@ import type { PrismaClient } from './generated/prisma/client'
 declare const newPrismaClient: NewPrismaClient<PrismaClient, typeof PrismaClient>
 
 testMatrix.setupTestSuite(
-  ({ provider, driverAdapter }) => {
+  ({ provider, driverAdapter, clientEngineExecutor }) => {
     const isSqlServer = provider === Providers.SQLSERVER
+    const usesJsDrivers = driverAdapter !== undefined || clientEngineExecutor === 'remote'
 
     test('executes batch queries in the right order when using extensions + middleware', async () => {
       const prisma = newPrismaClient({
@@ -37,11 +38,11 @@ testMatrix.setupTestSuite(
       await xprisma.$queryRawUnsafe('SELECT 2')
 
       const expectation = ['SELECT 1', 'SELECT 2', 'SELECT 3', expect.stringContaining('COMMIT')]
-      if (driverAdapter === undefined) {
+      if (!usesJsDrivers) {
         // Driver adapters do not issue BEGIN through the query engine.
         expectation.unshift(expect.stringContaining('BEGIN'))
       }
-      if (isSqlServer && driverAdapter === undefined) {
+      if (isSqlServer && !usesJsDrivers) {
         expectation.unshift(expect.stringContaining('SET TRANSACTION'))
       }
 
@@ -65,11 +66,11 @@ testMatrix.setupTestSuite(
       ])
 
       const expectation = ['SELECT 1', 'SELECT 2', 'SELECT 3', expect.stringContaining('COMMIT')]
-      if (driverAdapter === undefined) {
+      if (!usesJsDrivers) {
         // Driver adapters do not issue BEGIN through the query engine.
         expectation.unshift(expect.stringContaining('BEGIN'))
       }
-      if (isSqlServer && driverAdapter === undefined) {
+      if (isSqlServer && !usesJsDrivers) {
         expectation.unshift(expect.stringContaining('SET TRANSACTION'))
       }
 

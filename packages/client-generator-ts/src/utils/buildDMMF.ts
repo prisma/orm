@@ -17,7 +17,7 @@ export function buildRuntimeDataModel(datamodel: DMMF.Datamodel, runtimeName: TS
   const runtimeDataModel = dmmfToRuntimeDataModel(datamodel)
 
   let prunedDataModel: PrunedRuntimeDataModel | RuntimeDataModel
-  if (runtimeName === 'wasm-engine-edge' || runtimeName === 'wasm-compiler-edge' || runtimeName === 'client') {
+  if (runtimeName === 'wasm-compiler-edge' || runtimeName === 'client') {
     prunedDataModel = pruneRuntimeDataModel(runtimeDataModel)
   } else {
     prunedDataModel = runtimeDataModel

@@ -15,7 +15,7 @@ generatorHandler({
       defaultOutput: __dirname,
       denylist: ['SomeForbiddenType'],
       prettyName: 'This is a pretty name',
-      requiresEngines: ['queryEngine', 'schemaEngine'],
+      requiresEngines: ['schemaEngine'],
     }
   },
 })

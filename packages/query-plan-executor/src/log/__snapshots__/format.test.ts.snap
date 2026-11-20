@@ -1,0 +1,113 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`JsonFormatter > formats log events as JSON 1`] = `
+[
+  "%s",
+  "{"level":"error","traceId":"00000000000000000000000000000001","spanId":"0000000000000001","timestamp":"2025-04-14T00:00:00Z","message":"error message","attributes":{"code":500}}",
+]
+`;
+
+exports[`TextFormatter > formats debug events correctly 1`] = `
+[
+  "%c%s%c %c%s%c %s %c%s%c=%o %c%s%c=%o",
+  "color: blue",
+  "DEBUG",
+  "color: initial",
+  "color: gray",
+  "2025-04-14T00:00:00Z",
+  "color: initial",
+  "test message",
+  "color: cyan",
+  "userId",
+  "color: initial",
+  "123",
+  "color: cyan",
+  "method",
+  "color: initial",
+  "GET",
+]
+`;
+
+exports[`TextFormatter > formats error events correctly 1`] = `
+[
+  "%c%s%c %c%s%c %s %c%s%c=%o %c%s%c=%o",
+  "color: red",
+  "ERROR",
+  "color: initial",
+  "color: gray",
+  "2025-04-14T00:00:00Z",
+  "color: initial",
+  "test message",
+  "color: cyan",
+  "userId",
+  "color: initial",
+  "123",
+  "color: cyan",
+  "method",
+  "color: initial",
+  "GET",
+]
+`;
+
+exports[`TextFormatter > formats info events correctly 1`] = `
+[
+  "%c%s%c %c%s%c %s %c%s%c=%o %c%s%c=%o",
+  "color: green",
+  "INFO ",
+  "color: initial",
+  "color: gray",
+  "2025-04-14T00:00:00Z",
+  "color: initial",
+  "test message",
+  "color: cyan",
+  "userId",
+  "color: initial",
+  "123",
+  "color: cyan",
+  "method",
+  "color: initial",
+  "GET",
+]
+`;
+
+exports[`TextFormatter > formats query events correctly 1`] = `
+[
+  "%c%s%c %c%s%c %s %c%s%c=%o %c%s%c=%o",
+  "color: magenta",
+  "QUERY",
+  "color: initial",
+  "color: gray",
+  "2025-04-14T00:00:00Z",
+  "color: initial",
+  "test message",
+  "color: cyan",
+  "userId",
+  "color: initial",
+  "123",
+  "color: cyan",
+  "method",
+  "color: initial",
+  "GET",
+]
+`;
+
+exports[`TextFormatter > formats warn events correctly 1`] = `
+[
+  "%c%s%c %c%s%c %s %c%s%c=%o %c%s%c=%o",
+  "color: yellow",
+  "WARN ",
+  "color: initial",
+  "color: gray",
+  "2025-04-14T00:00:00Z",
+  "color: initial",
+  "test message",
+  "color: cyan",
+  "userId",
+  "color: initial",
+  "123",
+  "color: cyan",
+  "method",
+  "color: initial",
+  "GET",
+]
+`;

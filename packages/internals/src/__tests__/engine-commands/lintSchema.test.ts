@@ -1,10 +1,11 @@
-import { jestConsoleContext, jestContext } from '@prisma/get-platform'
+import { vitestConsoleContext, vitestContext } from '@prisma/get-platform/src/test-utils/vitestContext'
+import { describe, expect, test } from 'vitest'
 
 import { lintSchema } from '../../engine-commands'
 import { getLintWarnings, LintError, LintWarning } from '../../engine-commands/lintSchema'
 import { type MultipleSchemas } from '../../utils/schemaFileInput'
 
-const ctx = jestContext.new().add(jestConsoleContext()).assemble()
+const ctx = vitestContext.new().add(vitestConsoleContext()).assemble()
 
 describe('lint valid schema with a deprecated preview feature', () => {
   const schema = /* prisma */ `
@@ -15,7 +16,6 @@ describe('lint valid schema with a deprecated preview feature', () => {
 
     datasource db {
       provider = "cockroachdb"
-      url      = env("TEST_POSTGRES_URI")
     }
 
     model SomeUser {
@@ -54,7 +54,6 @@ describe('lint invalid schema with a deprecated preview feature', () => {
 
     datasource db {
       provider = "cockroachdb"
-      url      = env("TEST_POSTGRES_URI")
     }
 
     model SomeUser {
@@ -78,8 +77,8 @@ describe('lint invalid schema with a deprecated preview feature', () => {
   }
 
   const expectedError: LintError = {
-    start: 344,
-    end: 425,
+    start: 302,
+    end: 383,
     is_warning: false,
     text: `Error parsing attribute "@relation": The \`onUpdate\` referential action of a relation must not be set to \`SetNull\` when a referenced field is required.
 Either choose another referential action, or make the referenced fields optional.

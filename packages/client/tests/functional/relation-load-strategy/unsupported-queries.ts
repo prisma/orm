@@ -293,10 +293,6 @@ testMatrix.setupTestSuite(
     })
   },
   {
-    skipDataProxy: {
-      runtimes: ['edge'],
-      reason: 'Errors are formatted differently in edge client, so snapshots mismatch',
-    },
     optOut: {
       from: providersNotSupportingRelationJoins,
       reason: "Doesn't support relation joins",

@@ -1,7 +1,11 @@
+import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
 import { getEmail } from '@prisma/client/sql'
 
-const prisma = new PrismaClient()
+const adapter = new PrismaPg({
+  connectionString: process.env['TEST_E2E_POSTGRES_URI'],
+})
+const prisma = new PrismaClient({ adapter })
 
 beforeAll(async () => {
   await prisma.user.deleteMany()

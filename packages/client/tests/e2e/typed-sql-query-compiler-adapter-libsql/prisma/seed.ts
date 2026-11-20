@@ -1,3 +1,5 @@
+import { PrismaLibSql } from '@prisma/adapter-libsql'
+
 import { Prisma, PrismaClient, User } from '../src/generated/prisma/client'
 
 const NUM_USERS = 30
@@ -16,7 +18,11 @@ enum EventType {
   CheckedOut = 'CheckedOut',
 }
 
-const prisma = new PrismaClient()
+const adapter = new PrismaLibSql({
+  url: 'file:./prisma/dev.db',
+})
+
+const prisma = new PrismaClient({ adapter })
 
 async function main() {
   const usersInput: Prisma.UserCreateInput[] = []

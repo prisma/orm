@@ -1,25 +1,20 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { promisify } from 'node:util'
+
 import Debug from '@prisma/debug'
-import {
-  assertNodeAPISupported,
-  BinaryTarget,
-  binaryTargets,
-  getNodeAPIName,
-  getPlatformInfo,
-} from '@prisma/get-platform'
-import execa from 'execa'
-import fs from 'fs'
+import { BinaryTarget, binaryTargets, getPlatformInfo } from '@prisma/get-platform'
+import { execa } from 'execa'
 import { ensureDir } from 'fs-extra'
 import { bold, yellow } from 'kleur/colors'
 import pFilter from 'p-filter'
-import path from 'path'
 import tempDir from 'temp-dir'
-import { promisify } from 'util'
 
 import { BinaryType } from './BinaryType'
 import { chmodPlusX } from './chmodPlusX'
 import { cleanupCache } from './cleanupCache'
 import { downloadZip } from './downloadZip'
-import { allEngineEnvVarsSet, getBinaryEnvVarPath } from './env'
+import { getBinaryEnvVarPath } from './env'
 import { getHash } from './getHash'
 import { getBar } from './log'
 import { getCacheDir, getDownloadUrl, overwriteFile } from './utils'
@@ -78,24 +73,14 @@ export async function download(options: DownloadOptions): Promise<BinaryPaths> {
   }
 
   // get platform
-  const { binaryTarget, ...os } = await getPlatformInfo()
+  const { binaryTarget } = await getPlatformInfo()
 
-  if (os.targetDistro && ['nixos'].includes(os.targetDistro) && !allEngineEnvVarsSet(Object.keys(options.binaries))) {
-    console.error(
-      `${yellow('Warning')} Precompiled engine files are not available for ${
-        os.targetDistro
-      }, please provide the paths via environment variables, see https://pris.ly/d/custom-engines`,
-    )
-  } else if (
-    ['freebsd11', 'freebsd12', 'freebsd13', 'freebsd14', 'freebsd15', 'openbsd', 'netbsd'].includes(binaryTarget)
-  ) {
+  if (['freebsd11', 'freebsd12', 'freebsd13', 'freebsd14', 'freebsd15', 'openbsd', 'netbsd'].includes(binaryTarget)) {
     console.error(
       `${yellow(
         'Warning',
       )} Precompiled engine files are not available for ${binaryTarget}. Read more about building your own engines at https://pris.ly/d/build-engines`,
     )
-  } else if (BinaryType.QueryEngineLibrary in options.binaries) {
-    assertNodeAPISupported()
   }
 
   // merge options
@@ -205,12 +190,7 @@ function getCollectiveBar(options: DownloadOptions): {
   finishBar: () => void
   setProgress: (sourcePath: string) => (progress: number) => void
 } {
-  const hasNodeAPI = 'libquery-engine' in options.binaries
-  const bar = getBar(
-    `Downloading Prisma engines${hasNodeAPI ? ' for Node-API' : ''} for ${options.binaryTargets
-      ?.map((p) => bold(p))
-      .join(' and ')}`,
-  )
+  const bar = getBar(`Downloading Prisma engines for ${options.binaryTargets?.map((p) => bold(p)).join(' and ')}`)
 
   const progressMap: { [key: string]: number } = {}
   // Object.values is faster than Object.keys
@@ -343,28 +323,16 @@ async function binaryNeedsToBeDownloaded(
   return false
 }
 
-export async function getVersion(enginePath: string, binaryName: string) {
+export async function getVersion(enginePath: string, _binaryName: string) {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-    if (binaryName === BinaryType.QueryEngineLibrary) {
-      assertNodeAPISupported()
-
-      const commitHash = require(enginePath).version().commit
-      return `${BinaryType.QueryEngineLibrary} ${commitHash}`
-    } else {
-      const result = await execa(enginePath, ['--version'])
-
-      return result.stdout
-    }
+    const result = await execa(enginePath, ['--version'])
+    return result.stdout
   } catch {}
 
   return undefined
 }
 
 export function getBinaryName(binaryName: BinaryType, binaryTarget: BinaryTarget): string {
-  if (binaryName === BinaryType.QueryEngineLibrary) {
-    return `${getNodeAPIName(binaryTarget, 'fs')}`
-  }
   const extension = binaryTarget === 'windows' ? '.exe' : ''
   return `${binaryName}-${binaryTarget}${extension}`
 }

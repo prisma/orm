@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "18.19.76"
+    "@types/node": "~20.19.0"
   },
   "prisma": {
     "seed": "node prisma/seed-deprecated.js"

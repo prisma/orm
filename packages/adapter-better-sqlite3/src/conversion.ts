@@ -1,10 +1,10 @@
 import { ArgType, ColumnType, ColumnTypeEnum, Debug, ResultValue } from '@prisma/driver-adapter-utils'
 
-import { PrismaBetterSQLite3Options } from './better-sqlite3'
+import { PrismaBetterSqlite3Options } from './better-sqlite3'
 
 const debug = Debug('prisma:driver-adapter:better-sqlite3:conversion')
 
-type Value = null | string | number | bigint | ArrayBuffer | Buffer
+type Value = null | string | number | bigint | Buffer
 export type Row = {
   /** Number of columns in this row.
    *
@@ -129,7 +129,7 @@ function inferColumnType(value: NonNullable<Value>): ColumnType {
 }
 
 function inferObjectType(value: {}): ColumnType {
-  if (value instanceof ArrayBuffer) {
+  if (value instanceof ArrayBuffer || value instanceof Uint8Array) {
     return ColumnTypeEnum.Bytes
   }
   throw new UnexpectedTypeError(value)
@@ -150,15 +150,6 @@ export function mapRow(row: Row, columnTypes: ColumnType[]): ResultValue[] {
   for (let i = 0; i < row.length; i++) {
     const value = row[i]
 
-    // Convert array buffers to arrays of bytes.
-    // Base64 would've been more efficient but would collide with the existing
-    // logic that treats string values of type Bytes as raw UTF-8 bytes that was
-    // implemented for other adapters.
-    if (value instanceof ArrayBuffer || value instanceof Buffer) {
-      result[i] = Array.from(new Uint8Array(value))
-      continue
-    }
-
     // If an integer is required and the current number isn't one,
     // discard the fractional part.
     if (
@@ -177,9 +168,10 @@ export function mapRow(row: Row, columnTypes: ColumnType[]): ResultValue[] {
       continue
     }
 
-    // Convert bigint to string as we can only use JSON-encodable types here.
+    // Convert bigint values to numbers when safe, otherwise use strings.
     if (typeof value === 'bigint') {
-      result[i] = value.toString()
+      const asNumber = Number(value)
+      result[i] = Number.isSafeInteger(asNumber) ? asNumber : value.toString()
       continue
     }
 
@@ -192,7 +184,7 @@ export function mapRow(row: Row, columnTypes: ColumnType[]): ResultValue[] {
 export function mapArg<A>(
   arg: A | Date,
   argType: ArgType,
-  options?: PrismaBetterSQLite3Options,
+  options?: PrismaBetterSqlite3Options,
 ): null | number | BigInt | Uint8Array | string | A {
   if (arg === null) {
     return null
@@ -238,10 +230,6 @@ export function mapArg<A>(
 
   if (typeof arg === 'string' && argType.scalarType === 'bytes') {
     return Buffer.from(arg, 'base64')
-  }
-
-  if (Array.isArray(arg) && argType.scalarType === 'bytes') {
-    return Buffer.from(arg)
   }
 
   return arg

@@ -1,4 +1,4 @@
-import { Decimal } from 'decimal.js'
+import { Decimal } from '@prisma/client-runtime-utils'
 
 import type { Input } from '../../__helpers__/integrationTest'
 
@@ -935,7 +935,7 @@ export const scenarios = [
           id integer not null primary key,
           "time" datetime
         );
-        insert into events ("time") values (1536019200000);
+        insert into events ("time") values ('2018-09-04T00:00:00.000+00:00');
       `,
     do: async (client) => {
       return await client.events.findMany({
@@ -956,7 +956,7 @@ export const scenarios = [
           id integer not null primary key,
           "time" datetime
         );
-        insert into events ("time") values (1536019200000);
+        insert into events ("time") values ('2018-09-04T00:00:00.000+00:00');
       `,
     do: (client) => {
       return client.events.findMany({
@@ -972,7 +972,7 @@ export const scenarios = [
           id integer not null primary key,
           "time" datetime
         );
-        insert into events ("time") values (1536019200000);
+        insert into events ("time") values ('2018-09-04T00:00:00.000+00:00');
       `,
     do: (client) => {
       return client.events.findMany({
@@ -993,7 +993,7 @@ export const scenarios = [
           id integer not null primary key,
           "time" datetime
         );
-        insert into events ("time") values (1536019200000);
+        insert into events ("time") values ('2018-09-04T00:00:00.000+00:00');
       `,
     do: (client) => {
       return client.events.findMany({
@@ -1009,7 +1009,7 @@ export const scenarios = [
           id integer not null primary key,
           "time" datetime
         );
-        insert into events ("time") values (1536019200000);
+        insert into events ("time") values ('2018-09-04T00:00:00.000+00:00');
       `,
     do: (client) => {
       return client.events.findMany({
@@ -1030,7 +1030,7 @@ export const scenarios = [
           id integer not null primary key,
           "time" datetime
         );
-        insert into events ("time") values (1536019200000);
+        insert into events ("time") values ('2018-09-04T00:00:00.000+00:00');
       `,
     do: (client) => {
       return client.events.findMany({

@@ -1,15 +1,18 @@
 import { stripVTControlCharacters } from 'node:util'
 
-import { jestConsoleContext, jestContext } from '@prisma/get-platform'
+import { vitestConsoleContext, vitestContext } from '@prisma/get-platform/src/test-utils/vitestContext'
 import { ensureDir } from 'fs-extra'
 import { stdin } from 'mock-stdin'
 import prompt from 'prompts'
 import tempy from 'tempy'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ErrorArea, RustPanic } from '..'
 import { sendPanic } from '../sendPanic'
 import { wouldYouLikeToCreateANewIssue } from '../utils/getGitHubIssueUrl'
 import { handlePanic } from '../utils/handlePanic'
+
+const ctx = vitestContext.new().add(vitestConsoleContext()).assemble()
 
 const keys = {
   up: '\x1B\x5B\x41',
@@ -32,30 +35,45 @@ const oldProcessCwd = process.cwd
 
 const sendPanicTag = 'send-panic-failed'
 
-jest.mock('../sendPanic', () => ({
-  ...jest.requireActual('../sendPanic'),
-  sendPanic: jest.fn().mockImplementation(() => Promise.reject(new Error(sendPanicTag))),
+vi.mock('../sendPanic', async () => ({
+  ...(await vi.importActual('../sendPanic')),
+  sendPanic: vi.fn().mockImplementation(() => Promise.reject(new Error(sendPanicTag))),
 }))
 
-jest.mock('../utils/getGitHubIssueUrl', () => ({
-  ...jest.requireActual('../utils/getGitHubIssueUrl'),
-  wouldYouLikeToCreateANewIssue: jest.fn().mockImplementation(() => Promise.resolve()),
+vi.mock('../utils/getGitHubIssueUrl', async () => ({
+  ...(await vi.importActual('../utils/getGitHubIssueUrl')),
+  wouldYouLikeToCreateANewIssue: vi.fn().mockImplementation(() => Promise.resolve()),
 }))
 
-const ctx = jestContext.new().add(jestConsoleContext()).assemble()
+function restoreEnvSnapshot(snapshot: NodeJS.ProcessEnv) {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in snapshot)) {
+      delete process.env[key]
+    }
+  }
+
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (value === undefined) {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  }
+}
 
 describe('handlePanic', () => {
   // testing with env https://stackoverflow.com/a/48042799/1345244
-  const OLD_ENV = process.env
+  const OLD_ENV = { ...process.env }
 
   // mock for retrieving the database version
   const getDatabaseVersionSafe = () => Promise.resolve(undefined)
 
   beforeEach(async () => {
-    jest.resetModules() // most important - it clears the cache
-    jest.clearAllMocks()
+    vi.resetModules()
+    vi.clearAllMocks()
 
-    process.env = { ...OLD_ENV, GITHUB_ACTIONS: 'true' } // make a copy and simulate CI environment
+    restoreEnvSnapshot(OLD_ENV)
+    process.env.GITHUB_ACTIONS = 'true' // simulate CI environment
     process.cwd = () => testRootDir
 
     await ensureDir(testRootDir)
@@ -68,7 +86,7 @@ describe('handlePanic', () => {
   let io
   beforeAll(() => (io = stdin()))
   afterAll(() => {
-    process.env = OLD_ENV // restore old env
+    restoreEnvSnapshot(OLD_ENV) // restore old env
     io.restore()
   })
 
@@ -127,7 +145,8 @@ describe('handlePanic', () => {
     const rustStackTrace = 'test-rustStack'
     const command = 'test-command'
 
-    const mockExit = jest.spyOn(process, 'exit').mockImplementation()
+    // @ts-expect-error
+    const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {})
 
     const rustPanic = new RustPanic(
       'test-message',
@@ -153,5 +172,6 @@ describe('handlePanic', () => {
       new RegExp(`^Error report submission failed due to:?`),
     )
     expect(mockExit).toHaveBeenCalledWith(1)
+    mockExit.mockRestore()
   })
 })

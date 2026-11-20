@@ -8,7 +8,6 @@ generator client {
 
 datasource db {
   provider = "${provider}"
-  url      = env("DATABASE_URI_${provider}")
   // We are testing that this is still valid:
   referentialIntegrity = "prisma"
 }
