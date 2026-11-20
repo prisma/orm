@@ -172,7 +172,8 @@ describe('updateFirstGraph with relation operations', () => {
         [
           'n1 Find users where id = 1',
           'n2 Update users set invited_by_id = null <- FilterData n1 (id->invited_by_id)',
-          'result: n1',
+          'n3 Find users <- FilterData n1 (id->id)',
+          'result: n3',
         ].join('\n'),
       );
       expect(
@@ -181,7 +182,8 @@ describe('updateFirstGraph with relation operations', () => {
         [
           'n1 Find users where id = 1',
           'n2 Update users set invited_by_id = null where id = 10 <- FilterData n1 (id->invited_by_id)',
-          'result: n1',
+          'n3 Find users <- FilterData n1 (id->id)',
+          'result: n3',
         ].join('\n'),
       );
     });

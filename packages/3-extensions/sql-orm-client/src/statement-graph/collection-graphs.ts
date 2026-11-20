@@ -224,7 +224,6 @@ export function updateFirstGraph(
   relationMutations: readonly ParsedRelationMutation[] = [],
 ): Graph {
   rejectForeignKeyWithRelationMutation(data, relationMutations);
-  const { state } = collection;
   const b = builderOf(collection);
   const set = mappedUpdateRow(collection, data);
   const bare = Object.keys(set).length === 0 && relationMutations.length === 0;
@@ -250,13 +249,11 @@ export function updateFirstGraph(
   if (Object.keys(values).length === 0 && before.keys.length === 0) {
     addAfterWrite(b, model, { ...parent, node: find }, relationMutations);
     b.graph.setResult(
-      state.includes.length === 0 && !before.unlinksAfterWrite
-        ? find
-        : readBack(b, model, find, identityColumnsOf(collection), {
-            shape: shapeOf(collection),
-            by: 'filter',
-            owner,
-          }),
+      readBack(b, model, find, identityColumnsOf(collection), {
+        shape: shapeOf(collection),
+        by: 'filter',
+        owner,
+      }),
     );
     return b.graph;
   }

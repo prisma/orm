@@ -128,7 +128,6 @@ interface NestedConflict {
 export interface BeforeWrite {
   readonly keys: readonly KeyFilter[];
   readonly nullColumns: Readonly<Record<string, null>>;
-  readonly unlinksAfterWrite: boolean;
 }
 
 export function addCreateWithRelations(
@@ -291,7 +290,6 @@ export function addBeforeWrite(
   }
   const keys: KeyFilter[] = [];
   const nullColumns: Record<string, null> = {};
-  let unlinksAfterWrite = false;
   for (const relationMutation of relationMutations) {
     rejectFilteredWriteOnToOne(relationMutation);
     rejectSingleRowWrite(relationMutation);
@@ -306,7 +304,6 @@ export function addBeforeWrite(
           model,
           relationMutation.relation.on.localFields,
         );
-        unlinksAfterWrite = true;
         continue;
       }
       if (isFilteredWrite(mutation)) {
@@ -324,7 +321,6 @@ export function addBeforeWrite(
           continue;
         }
         if (isConditionalUnlink(mutation)) {
-          unlinksAfterWrite = true;
           continue;
         }
         for (const column of localColumnsOf(b.context.contract, model, relationMutation.relation)) {
@@ -335,7 +331,7 @@ export function addBeforeWrite(
       }
     }
   }
-  return { keys, nullColumns, unlinksAfterWrite };
+  return { keys, nullColumns };
 }
 
 export function addAfterWrite(

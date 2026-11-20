@@ -164,7 +164,8 @@ describe('update() and delete() on a relation the parent holds the key for', () 
         'n1 Find users where id = 1',
         "n2 Find users where name = 'Grace' limit 1 <- JunctionFilterData n1 (id->id; users invited_by_id->id)",
         "n3 Update users set name = 'Grace H.' where name = 'Grace' <- FilterData n2 (id->id), JunctionFilterData n1 (id->id; users invited_by_id->id)",
-        'result: n1',
+        'n4 Find users <- FilterData n1 (id->id)',
+        'result: n4',
       ].join('\n'),
     );
   });
