@@ -47,7 +47,7 @@ describe('resolveTarget', () => {
       expect.objectContaining({
         message: 'Invalid value for --target',
         why: expect.stringContaining('is not one of the short names (postgres, mongodb)'),
-        fix: 'Pass a short name (--target postgres, --target mongodb) or the name of a target package (`--target <package>`): a scoped name such as `@prisma/orm-sqlite`, or an unscoped one that begins `prisma-orm-`.',
+        fix: 'Pass a short name (--target postgres, --target mongodb) or the name of a target package (`--target <package>`): a scoped name (`@scope/name`), or an unscoped one that begins `prisma-orm-`.',
       }),
     );
   });

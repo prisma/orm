@@ -53,7 +53,7 @@ export function resolveTargetName(value: string, answeredIn: 'flag' | 'prompt'):
 }
 
 /**
- * The name a community package takes when it has no scope. A bare word such as `sqlite` is far
+ * The name a community package takes when it has no scope. A bare word is far
  * likelier a mistyped short name than a target package, and installing it would run an unrelated
  * package from the registry.
  */

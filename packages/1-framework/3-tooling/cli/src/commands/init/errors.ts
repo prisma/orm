@@ -90,7 +90,7 @@ export function errorInitInvalidTarget(options: {
       ? {
           summary: 'Invalid value for --target',
           why: `\`--target ${options.value}\` is not one of the short names (${SHORT_NAME_LIST}), and init does not take it as a package name: ${problems}.`,
-          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the name of a target package (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`): a scoped name such as \`@prisma/orm-sqlite\`, or an unscoped one that begins \`prisma-orm-\`.`,
+          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the name of a target package (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`): a scoped name (\`@scope/name\`), or an unscoped one that begins \`prisma-orm-\`.`,
         }
       : {
           summary: 'Invalid target package name',
