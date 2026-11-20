@@ -39,7 +39,7 @@
     "@internal/utils": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "catalog:",
-    "arktype": "^2.2.2"
+    "arktype": "^2.2.9"
   },
   "devDependencies": {
     "@internal/cli": "workspace:8.0.0-rc.24",

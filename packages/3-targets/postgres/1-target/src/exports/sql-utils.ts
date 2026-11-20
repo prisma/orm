@@ -1,5 +1,6 @@
 export { renderFullTextIndexDocument } from '../core/full-text-search-document';
 export {
+  CONTROL_PLANE_LC_MONETARY,
   escapeLiteral,
   inlineLiteral,
   qualifyName,

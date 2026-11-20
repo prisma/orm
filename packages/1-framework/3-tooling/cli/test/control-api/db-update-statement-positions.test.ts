@@ -104,6 +104,7 @@ const family = {
   deserializeContract: (json: unknown) => json as Contract,
   toOperationPreview: () => ({ statements: [] }),
   storageNameOf: (operation: MigrationPlanOperation) => `stored ${operation.id}`,
+  accessChangesOf: () => [],
 } as unknown as ControlFamilyInstance<'sql', unknown>;
 
 const migrations = {

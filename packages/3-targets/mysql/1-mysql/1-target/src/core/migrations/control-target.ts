@@ -31,6 +31,7 @@ type ControlTargetKeysMysqlBuilds =
   | 'diffSchema'
   | 'classifySubjectGranularity'
   | 'classifyEntityKind'
+  | 'accessChangesOf'
   | 'migrations'
   | 'create'
   | 'createPlanner'
@@ -57,6 +58,7 @@ export function createMysqlControlTargetDescriptor<TargetId extends string = 'my
     diffSchema: diffMysqlSchema,
     classifySubjectGranularity: relationalNodeGranularity,
     classifyEntityKind: relationalNodeEntityKind,
+    accessChangesOf: () => [],
     migrations: {
       createPlanner(adapter: SqlControlAdapter<TargetId>): MigrationPlanner<'sql', TargetId> {
         return createMysqlMigrationPlanner(adapter, migrationTarget);

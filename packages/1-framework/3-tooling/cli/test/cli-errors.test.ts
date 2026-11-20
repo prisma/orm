@@ -15,7 +15,9 @@ import {
   errorSpaceNotFound,
   mapRefResolutionError,
   type PathUnreachable,
+  planThenApply,
 } from '../src/utils/cli-errors';
+import type { CliInvocation } from '../src/utils/printed-command';
 
 describe('CliStructuredError.toEnvelope()', () => {
   it('converts driver required error to envelope with CONFIG.DRIVER_REQUIRED', () => {
@@ -43,6 +45,8 @@ describe('CliStructuredError.toEnvelope()', () => {
   });
 });
 
+const INVOCATION: CliInvocation = { cwd: '/project', configPath: undefined, dbGiven: false };
+
 describe('errorPathUnreachable', () => {
   const targetHash = `${'a'.repeat(64)}`;
   const fromHash = `${'b'.repeat(64)}`;
@@ -53,7 +57,10 @@ describe('errorPathUnreachable', () => {
       why: 'Cannot reach target.',
       meta: { spaceId: 'app', kind: 'pathUnreachable', fromHash, targetHash },
     };
-    const envelope = errorPathUnreachable(failure).toEnvelope();
+    const envelope = errorPathUnreachable(
+      failure,
+      planThenApply(failure.meta, targetHash, INVOCATION),
+    ).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.PATH_UNREACHABLE');
     expect(envelope.fix).toContain(
       `{bin} migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
@@ -71,7 +78,10 @@ describe('errorPathUnreachable', () => {
       why: 'migrate is replay-only.',
       meta: { spaceId: 'app', kind: 'neverPlanned', targetHash },
     };
-    const envelope = errorPathUnreachable(failure).toEnvelope();
+    const envelope = errorPathUnreachable(
+      failure,
+      planThenApply(failure.meta, targetHash, INVOCATION),
+    ).toEnvelope();
     // A never-planned space has an EMPTY graph, and `--to <hash>` only
     // resolves against graph nodes — the remediation must run verbatim.
     expect(envelope.fix).toContain('{bin} migration plan --name <slug>');
@@ -84,11 +94,7 @@ describe('errorPathUnreachable', () => {
     // Drive the real failure producer so the `why` text is the one users see,
     // not a stub — then assert it composes with the fix without both
     // independently telling the user to run `migration plan`.
-    const failure = buildPathNotFoundFailure(
-      'app',
-      { storageHash: fromHash, invariants: [] },
-      targetHash,
-    );
+    const failure = buildPathNotFoundFailure('app', fromHash, targetHash, targetHash, INVOCATION);
     const envelope = failure.toEnvelope();
 
     // why: names both endpoints + the absence of an edge; does NOT itself
@@ -108,7 +114,13 @@ describe('errorPathUnreachable', () => {
   });
 
   it('omits --from in the fix and names the empty contract when the space has no marker', () => {
-    const envelope = buildPathNotFoundFailure('app', null, targetHash).toEnvelope();
+    const envelope = buildPathNotFoundFailure(
+      'app',
+      EMPTY_CONTRACT_HASH,
+      targetHash,
+      targetHash,
+      INVOCATION,
+    ).toEnvelope();
 
     expect(envelope.why).toContain('No migration edge connects the empty contract to the target');
     expect(envelope.meta?.['fromHash']).toBe(EMPTY_CONTRACT_HASH);
@@ -116,11 +128,125 @@ describe('errorPathUnreachable', () => {
     expect(envelope.fix).not.toMatch(/--from\s/);
   });
 
+  it('leaves --to out of both steps when the target is the emitted contract, which no migration or ref names yet', () => {
+    const error = buildPathNotFoundFailure('app', fromHash, targetHash, undefined, INVOCATION);
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: `{bin} migration plan --from ${fromHash} --name <slug>`,
+      },
+      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
+    ]);
+    expect(error.toEnvelope().fix).toContain(
+      [
+        'Plan the missing edge, then apply it:',
+        `  1. {bin} migration plan --from ${fromHash} --name <slug>`,
+        '  2. {bin} db migrate',
+      ].join('\n'),
+    );
+    expect(error.toEnvelope().meta).toEqual({
+      spaceId: 'app',
+      kind: 'pathUnreachable',
+      fromHash,
+      targetHash,
+    });
+  });
+
+  it('names a ref target by its name in both steps', () => {
+    const error = buildPathNotFoundFailure('app', fromHash, targetHash, 'production', INVOCATION);
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: `{bin} migration plan --from ${fromHash} --to production --name <slug>`,
+      },
+      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate --to production' },
+    ]);
+  });
+
+  it('leaves out --from and --to when the space has no marker and the target is the emitted contract', () => {
+    const error = buildPathNotFoundFailure(
+      'app',
+      EMPTY_CONTRACT_HASH,
+      targetHash,
+      undefined,
+      INVOCATION,
+    );
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: '{bin} migration plan --name <slug>',
+      },
+      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
+    ]);
+  });
+
+  it('repeats the --config and --db the CLI was given, so the commands run as printed', () => {
+    const error = buildPathNotFoundFailure('app', fromHash, targetHash, undefined, {
+      cwd: '/project',
+      configPath: 'apps/api/prisma.config.ts',
+      dbGiven: true,
+    });
+
+    expect(
+      error.nextActions?.map((action) => (action.kind === 'run-command' ? action.command : null)),
+    ).toEqual([
+      `{bin} migration plan --from ${fromHash} --name <slug> --config apps/api/prisma.config.ts`,
+      '{bin} db migrate --config apps/api/prisma.config.ts --db <url>',
+      null,
+      null,
+      '{bin} migration list --config apps/api/prisma.config.ts',
+      '{bin} migration show <bundle> --config apps/api/prisma.config.ts',
+    ]);
+  });
+
+  it('applies with the db migrate the user ran, flags included', () => {
+    const error = buildPathNotFoundFailure('app', fromHash, targetHash, 'production', {
+      ...INVOCATION,
+      rerunArgs: ['--to', 'production', '--permit-policy-change'],
+    });
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: `{bin} migration plan --from ${fromHash} --to production --name <slug>`,
+      },
+      {
+        kind: 'run-command',
+        label: 'Apply it',
+        command: '{bin} db migrate --to production --permit-policy-change',
+      },
+    ]);
+  });
+
+  it('applies with a bare db migrate when the space has no migrations, whatever --to the run had', () => {
+    const error = buildNeverPlannedFailure('app', targetHash, 'migrations', {
+      ...INVOCATION,
+      rerunArgs: ['--to', 'production'],
+    });
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: '{bin} migration plan --name <slug>',
+      },
+      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
+    ]);
+  });
+
   it('composes buildNeverPlannedFailure why with the fix into one plan-then-apply sequence', () => {
     const envelope = buildNeverPlannedFailure(
       'app',
       targetHash,
       'migrations-postgres',
+      INVOCATION,
     ).toEnvelope();
 
     expect(envelope.why).toContain(targetHash);
@@ -209,7 +335,10 @@ describe('typed next actions on the CLI factories', () => {
       meta: { spaceId: 'app', kind: 'pathUnreachable', fromHash, targetHash },
     };
 
-    const actions = errorPathUnreachable(failure).nextActions;
+    const actions = errorPathUnreachable(
+      failure,
+      planThenApply(failure.meta, targetHash, INVOCATION),
+    ).nextActions;
 
     expect(actions.slice(0, 2)).toEqual([
       {

@@ -307,7 +307,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         const planned = await executeMigrateShowPlan({
           config: ctx.config,
           cwd: ctx.cwd,
-          invocation: cliInvocation(ctx, args.flags.db),
+          invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs: rerunFlags(args.flags) },
           createClient,
           ...ifDefined('db', args.flags.db),
           ...ifDefined('to', args.flags.to),
@@ -455,6 +455,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             refName: target.refName,
           },
           storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+          accessChangesOf: (operations) => familyInstance.accessChangesOf(operations),
           migrationsDir,
           invocation: cliInvocation(ctx, args.flags.db),
           readLedger: (spaceId) => client.readLedger(spaceId),

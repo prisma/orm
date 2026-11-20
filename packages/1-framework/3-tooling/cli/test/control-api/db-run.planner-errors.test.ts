@@ -107,6 +107,7 @@ function familyWithAuditMarker(hash: string | undefined) {
     introspect: async () => ({ tables: {} }),
     deserializeContract: (json: unknown) => json as Contract,
     storageNameOf: (operation: MigrationPlanOperation) => operation.id,
+    accessChangesOf: () => [],
   } as unknown as ControlFamilyInstance<'sql', unknown>;
 }
 

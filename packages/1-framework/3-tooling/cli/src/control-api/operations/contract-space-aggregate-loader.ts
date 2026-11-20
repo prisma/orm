@@ -3,6 +3,7 @@ import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type {
   ControlExtensionDescriptor,
+  MigrationAccessChange,
   MigrationPlanOperation,
 } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
@@ -398,6 +399,9 @@ export async function buildReadAggregate(
       readonly aggregate: ContractSpaceAggregate;
       readonly contractHash: string;
       readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+      readonly accessChangesOf: (
+        operations: readonly MigrationPlanOperation[],
+      ) => readonly MigrationAccessChange[];
       /** Where the family keeps its markers, which an unreadable marker's error names. */
       readonly markerLocation: string;
     },
@@ -449,6 +453,8 @@ export async function buildReadAggregate(
       aggregate: loaded.value,
       contractHash,
       storageNameOf: (operation: MigrationPlanOperation) => familyInstance.storageNameOf(operation),
+      accessChangesOf: (operations: readonly MigrationPlanOperation[]) =>
+        familyInstance.accessChangesOf(operations),
       markerLocation: familyInstance.markerLocation,
     });
   } catch (error) {

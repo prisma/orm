@@ -19,6 +19,15 @@ When a retro lesson could land in multiple surfaces, the team's preference:
 
 One entry per finished project, newest first: what it delivered, then what went wrong or right, each with a link to where the lesson lives.
 
+- **2026-11-20 — Scalar convenience types.** `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are convenience types on PostgreSQL, MongoDB, SQLite, MySQL and MariaDB, each choosing one explicit type named after what stores it (ADR 316 and ADR 322).
+  - The merge queue dropped the SQLite pull request because auto-merge was turned on ten seconds after the push, and the queue tested the commit before it ([slice checklist](../calibration/dod.md#pr-side-items)).
+  - It dropped it again on an integration test the slice never touched, which asserted an error message the slice had reworded; search `test/integration` for the old text of every changed message ([slice checklist](../calibration/dod.md#pr-side-items)).
+  - The MySQL pull request failed CI's coverage check on a shared package that requires every branch covered, because coverage was run in the target packages only ([conditional checks](../calibration/dod.md#conditional)).
+  - An earlier `Json` attempt was closed with a note that `Json` gets no convenience type, when only its default had been decided; the pull request comment and the ticket had to be corrected. See [F32](../calibration/failure-modes.md#f32-a-brief-restates-an-operator-ruling-in-its-own-words-and-the-restatement-is-stricter-than-the-ruling).
+  - The MySQL pull request said it closed a ticket whose title also promised work on PostgreSQL and SQLite that it did not do, and the ticket closed. Before writing "Closes", read the ticket's title and done-criteria against the diff.
+  - The MySQL slice was one pull request of about 117 files and took six review rounds, the later ones mostly on fixes to earlier ones.
+  - Measuring both live servers before designing the MySQL codecs turned eight assumptions into decisions, among them that `IN` compares a decimal text as a floating-point number ([reference doc](../../docs/reference/mysql-mariadb-scalar-column-behaviour.md)).
+  - Every review round and each of three manual QA runs on both servers found a defect the tests passed over, and a bot reviewer then found a regular expression that overflowed on an 8 MiB value.
 - **2026-11-19 — MySQL proof of concept.** Prisma 8 has an early MySQL 8.4 target and a MariaDB 10.11 target that extends it, and every place the shared SQL code assumed Postgres is fixed or filed.
   - A finding recorded as "decided by test" had no slice that owned it, and turned out at close-out to be ordinary ORM writes that MySQL refuses. See [F57](../calibration/failure-modes.md#f57-a-row-in-a-projects-register-of-open-findings-is-marked-decided-by-a-test-and-no-slice-owns-it).
   - A rewrite of a write statement passed every test and deadlocked under concurrent writes. See [F58](../calibration/failure-modes.md#f58-a-rewrite-that-makes-a-write-statement-run-passes-every-single-connection-test-and-deadlocks-under-concurrent-writes).

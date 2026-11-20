@@ -101,7 +101,6 @@ import type {
   ModelFragmentReceiver,
   Ordered,
   QueryFragment,
-  // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
   TypeState,
   UniquelyFiltered,

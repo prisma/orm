@@ -17,10 +17,14 @@ type PostgresDriverCursorOptions = NonNullable<PostgresDriverCreateOptions['curs
  */
 export const DEFAULT_CONNECT_TIMEOUT_MILLIS = 20_000;
 
-/** Timeouts for the pool a client creates from a url. */
+/** Timeouts and size of the pool a client creates from a url. */
 export interface PostgresPoolOptions {
+  /** How long to wait for a new connection to open, and for a pooled one to come free, in milliseconds. 20 seconds by default. */
   readonly connectionTimeoutMillis?: number;
+  /** How long a pooled connection may stay idle before the pool closes it, in milliseconds. 30 seconds by default; 0 keeps idle connections open. */
   readonly idleTimeoutMillis?: number;
+  /** The most connections the pool opens, a positive integer. 10 by default. */
+  readonly max?: number;
 }
 
 /**
