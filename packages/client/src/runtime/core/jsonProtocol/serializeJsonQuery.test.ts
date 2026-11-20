@@ -1,9 +1,11 @@
 import { AnyNull, DbNull, Decimal, JsonNull } from '@prisma/client-runtime-utils'
 
 import { field, model, runtimeDataModel } from '../../../testUtils/dataModelBuilder'
+import { deepCloneArgs } from '../../utils/deepCloneArgs'
 import { MergedExtensionsList } from '../extensions/MergedExtensionsList'
 import { FieldRefImpl } from '../model/FieldRef'
 import { skip } from '../types'
+import { JsArgs } from '../types/exported/JsApi'
 import { serializeJsonQuery, SerializeParams } from './serializeJsonQuery'
 
 const User = model('User', [
@@ -636,6 +638,20 @@ test('args - object with toJSON method', () => {
       }
     }"
   `)
+})
+
+test('args - class instance with toJSON method serializes the same after deepCloneArgs', () => {
+  class Name {
+    constructor(readonly equals: string) {}
+    toJSON() {
+      return 'from-toJSON'
+    }
+  }
+  const args = { where: { name: new Name('from-field') } }
+
+  expect(serialize({ modelName: 'User', action: 'findMany', args: deepCloneArgs(args) as JsArgs })).toEqual(
+    serialize({ modelName: 'User', action: 'findMany', args }),
+  )
 })
 
 test('args - object with undefined values', () => {
