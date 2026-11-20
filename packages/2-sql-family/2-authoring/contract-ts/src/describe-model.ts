@@ -16,6 +16,7 @@ import { describeColumn } from './describe-column';
 import { buildDomainField, valueObjectReference } from './domain-fields';
 import { modelNamespaceId } from './model-references';
 import { lowerRelations } from './model-relations';
+import { type NameSite, writeNamedEntry } from './named-entries';
 import { type ForeignKeyResolutionContext, resolveForeignKey } from './resolve-foreign-key';
 import type { ColumnDescription, ModelStorage } from './storage-description';
 import { type ColumnTypeQualifier, resolveColumnDescriptor } from './target-authoring-hooks';
@@ -53,21 +54,27 @@ export function describeModel(
   const fieldToColumn: Record<string, string> = {};
   const domainFields: Record<string, ContractField> = {};
   const executionDefaults: ExecutionMutationDefault[] = [];
+  const fieldSite: NameSite = { kind: 'field', modelName: model.modelName };
   for (const field of model.fields) {
     const executionDefault = executionDefaultOf(field);
-    fieldToColumn[field.fieldName] = field.columnName;
-    domainFields[field.fieldName] = buildDomainField(
-      isValueObjectMember(field)
-        ? field
-        : {
-            ...field,
-            descriptor: resolveColumnDescriptor(
-              field.descriptor,
-              namespaceId,
-              context.qualifyColumnType,
-            ),
-          },
-      context.defaultNamespaceId,
+    writeNamedEntry(fieldToColumn, field.fieldName, field.columnName, fieldSite);
+    writeNamedEntry(
+      domainFields,
+      field.fieldName,
+      buildDomainField(
+        isValueObjectMember(field)
+          ? field
+          : {
+              ...field,
+              descriptor: resolveColumnDescriptor(
+                field.descriptor,
+                namespaceId,
+                context.qualifyColumnType,
+              ),
+            },
+        context.defaultNamespaceId,
+      ),
+      fieldSite,
     );
     if (executionDefault) {
       executionDefaults.push({
@@ -93,7 +100,7 @@ export function describeModel(
 
   const storageFields: Record<string, { readonly column: string }> = {};
   for (const [fieldName, columnName] of Object.entries(fieldToColumn)) {
-    storageFields[fieldName] = { column: columnName };
+    writeNamedEntry(storageFields, fieldName, { column: columnName }, fieldSite);
   }
   const columnToField = new Map(Object.entries(fieldToColumn).map(([field, col]) => [col, field]));
 
