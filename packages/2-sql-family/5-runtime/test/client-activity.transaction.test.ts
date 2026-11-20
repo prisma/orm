@@ -377,14 +377,12 @@ describe('the transaction of an activity handle', () => {
       return inside;
     });
 
-    expect([
-      onRuntime.inTransaction(),
-      onConnection.inTransaction(),
-      onTransaction.inTransaction(),
-      nested.inTransaction(),
-      onOpenConnection.inTransaction(),
-      inContext,
-    ]).toEqual([false, false, true, true, true, true]);
+    expect(onRuntime.inTransaction()).toBe(false);
+    expect(onConnection.inTransaction()).toBe(false);
+    expect(onTransaction.inTransaction()).toBe(true);
+    expect(nested.inTransaction()).toBe(true);
+    expect(onOpenConnection.inTransaction()).toBe(true);
+    expect(inContext).toBe(true);
     for (const handle of [nested, onTransaction, onOpenConnection, onConnection, onRuntime]) {
       await handle.end({ outcome: 'succeeded' });
     }
