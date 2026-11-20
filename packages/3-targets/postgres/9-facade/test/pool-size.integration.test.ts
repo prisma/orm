@@ -292,13 +292,16 @@ describe.each(servers)('postgres() with poolOptions.max of 1, on $name', ({ star
           await tx.execute(tx.raw.sql`INSERT INTO pool_rows VALUES (1)`.affectedCount().build());
         });
 
-      const sent =
+      const [transaction, read] =
         first === 'the transaction'
-          ? { transaction: insert(), read: readRows(db) }
-          : { read: readRows(db), transaction: insert() };
+          ? await Promise.allSettled([insert(), readRows(db)])
+          : await Promise.allSettled([readRows(db), insert()]).then(([r, t]) => [t, r] as const);
 
-      await expect(sent.transaction).resolves.toBeUndefined();
-      await expect(sent.read).resolves.toEqual(expect.any(Array));
+      expect(transaction).toEqual({ status: 'fulfilled', value: undefined });
+      expect(read).toMatchObject({ status: 'fulfilled' });
+      expect([[], [{ id: 1 }]]).toContainEqual(
+        read.status === 'fulfilled' ? read.value : read.reason,
+      );
       expect(await readRows(db)).toEqual([{ id: 1 }]);
     },
     timeouts.spinUpPpgDev,

@@ -190,8 +190,7 @@ describe('the contract marker check before a connection is taken', () => {
 
   describe('when the marker read fails', () => {
     const failure = new Error('simulated marker read failure');
-
-    it.each([
+    const acquiringCalls = [
       ['connection()', (runtime: RawConnectionRuntime) => runtime.connection()],
       [
         'a transaction',
@@ -199,19 +198,38 @@ describe('the contract marker check before a connection is taken', () => {
           withTransaction(runtime, (tx) => tx.execute(affectedCountPlan())),
       ],
       ["a subclass's raw connection", (runtime: RawConnectionRuntime) => runtime.rawConnection()],
-    ])('rejects %s, takes no connection, and the next call retries the read', async (_, open) => {
-      const readMarker = vi
-        .fn<ReadMarker>()
-        .mockRejectedValueOnce(failure)
-        .mockResolvedValue({ kind: 'absent' });
-      const { runtime, acquireConnection } = setup({ readMarker });
+    ] as const;
 
-      await expect(open(runtime)).rejects.toBe(failure);
-      expect(acquireConnection).not.toHaveBeenCalled();
+    it.each(acquiringCalls)(
+      'rejects %s, takes no connection, and the next call retries the read',
+      async (_, open) => {
+        const readMarker = vi
+          .fn<ReadMarker>()
+          .mockRejectedValueOnce(failure)
+          .mockResolvedValue({ kind: 'absent' });
+        const { runtime, acquireConnection } = setup({ readMarker });
 
-      await (await runtime.connection()).release();
-      expect(readMarker).toHaveBeenCalledTimes(2);
-      expect(acquireConnection).toHaveBeenCalledOnce();
-    });
+        await expect(open(runtime)).rejects.toBe(failure);
+        expect(acquireConnection).not.toHaveBeenCalled();
+
+        await (await runtime.connection()).release();
+        expect(readMarker).toHaveBeenCalledTimes(2);
+        expect(acquireConnection).toHaveBeenCalledOnce();
+      },
+    );
+
+    it.each(acquiringCalls)(
+      'leaves nothing for close() to wait for after it rejects %s',
+      async (_, open) => {
+        const { runtime, driver } = setup({
+          readMarker: vi.fn<ReadMarker>().mockRejectedValue(failure),
+        });
+
+        await expect(open(runtime)).rejects.toBe(failure);
+
+        await expect(runtime.close()).resolves.toBeUndefined();
+        expect(driver.close).toHaveBeenCalledOnce();
+      },
+    );
   });
 });

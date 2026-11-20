@@ -650,7 +650,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     };
   }
 
-  /** The activity route of a held connection that `owner` wraps: its statements run on `connection`, and its transactions begin there. */
+  /** The activity route of a held connection that `owner` wraps: its statements run on `connection`, and its transactions begin there. The connection must come from {@link acquireRawConnection}, which checks the contract marker before anything is held. */
   protected connectionRoute(
     connection: SqlConnection,
     owner: TransactionStartTarget,
@@ -694,7 +694,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
   }
 
-  /** The `activitySource` member of a held connection that `owner()` wraps. */
+  /** The `activitySource` member of a held connection that `owner()` wraps. The connection must come from {@link acquireRawConnection}, which checks the contract marker before anything is held. */
   protected connectionActivitySource(
     connection: SqlConnection,
     owner: () => TransactionStartTarget,
@@ -815,7 +815,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   /**
-   * Returns a raw driver connection, after the contract marker check has finished through the driver. SQL issued on it runs below the middleware/codec/telemetry pipeline. It carries its own lifecycle (`release`/`destroy`/`beginTransaction`); the caller owns disposal. It follows the runtime's close rule for connections: see {@link Runtime.close}. Pass the `activityParent` of the activity it is acquired for, so it is admitted after `close()` while that activity is open.
+   * Returns a raw driver connection, after the contract marker check has finished through the driver; it rejects with the marker read's error, such as `CONTRACT.MARKER_READ_FAILED`, and takes no connection when that read fails. Every connection the runtime or a subclass holds must come from here, so the check never waits for a connection its caller holds. SQL issued on it runs below the middleware/codec/telemetry pipeline. It carries its own lifecycle (`release`/`destroy`/`beginTransaction`); the caller owns disposal. It follows the runtime's close rule for connections: see {@link Runtime.close}. Pass the `activityParent` of the activity it is acquired for, so it is admitted after `close()` while that activity is open.
    */
   protected async acquireRawConnection(
     options?: Pick<ActivityExecuteOptions, 'activityParent'>,
@@ -824,7 +824,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     let connection: SqlConnection;
     try {
       // Nothing is held while the marker is read, so the read never waits for a connection its own caller holds.
-      await this.verifyMarkerOnce();
+      await this.ensureMarkerChecked();
       connection = await this.driver.acquireConnection();
     } finally {
       endOperation();
@@ -867,10 +867,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     this.familyAdapter.validatePlan(exec, this.contract);
     this._pendingTelemetry = null;
     this._telemetryCache = null;
-    await this.verifyMarkerOnce();
+    await this.ensureMarkerChecked();
   }
 
-  private verifyMarkerOnce(): Promise<void> {
+  private ensureMarkerChecked(): Promise<void> {
     this.verifyMarkerPromise ??= this.verifyMarker().catch((error: unknown) => {
       this.verifyMarkerPromise = null;
       throw error;
@@ -1044,7 +1044,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.encodeDraftParams(draftWithMutations, codecCtx);
   }
 
-  /** Query rows against a caller-supplied queryable through the shared preparation pipeline. */
+  /** Query rows against a caller-supplied queryable through the shared preparation pipeline. A queryable other than the driver must be a connection from {@link acquireRawConnection}, or a transaction on one, because that is where the contract marker is checked before anything is held. */
   protected queryAgainstQueryable<Row>(
     plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
     queryable: SqlQueryable,
@@ -1087,7 +1087,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return new AsyncIterableResult(generator());
   }
 
-  /** Execute statistics against a caller-supplied queryable through the shared preparation pipeline. */
+  /** Execute statistics against a caller-supplied queryable through the shared preparation pipeline. A queryable other than the driver must be a connection from {@link acquireRawConnection}, or a transaction on one, because that is where the contract marker is checked before anything is held. */
   protected async executeStatisticsAgainstQueryable(
     plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
     queryable: SqlQueryable,
@@ -1222,7 +1222,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     >(prepared);
   }
 
-  /** Query prepared rows against a caller-supplied queryable through the full pipeline. */
+  /** Query prepared rows against a caller-supplied queryable through the full pipeline. A queryable other than the driver must be a connection from {@link acquireRawConnection}, or a transaction on one, because that is where the contract marker is checked before anything is held. */
   protected runPreparedQueryAgainstQueryable<P, Row>(
     ps: PreparedStatementImpl<P, Row>,
     userParams: unknown,
@@ -1325,7 +1325,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     );
   }
 
-  /** Execute a prepared statement's statistics against a caller-supplied queryable through the full pipeline. */
+  /** Execute a prepared statement's statistics against a caller-supplied queryable through the full pipeline. A queryable other than the driver must be a connection from {@link acquireRawConnection}, or a transaction on one, because that is where the contract marker is checked before anything is held. */
   protected async runPreparedExecuteAgainstQueryable<P>(
     ps: PreparedExecutionImpl<P>,
     userParams: unknown,
@@ -1485,7 +1485,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   /**
-   * Begins a transaction on `connection`, which `owner` wraps, as a transaction activity. When the transaction's `activityStarted` hooks refuse the start, no `BEGIN` is sent, `owner` is recorded as clean, and `withTransaction` releases it; after any other start failure it destroys it. The transaction's `activityStarted` hooks run before `BEGIN`. Every statement sent on the transaction, or on `connection`, from the end of `BEGIN` until `commit()` or `rollback()` is called is the transaction's child, and is finalized when the transaction ends, with its outcome. Once `commit()` or `rollback()` is called, a statement sent on the transaction is refused when it starts, and one started earlier that has not reached the driver yet is refused with `RUNTIME.TRANSACTION_CLOSED`, so neither runs after the `COMMIT` or `ROLLBACK`. `commit()` and `rollback()` resolve after every finalization hook has run. A subclass that holds its own connection begins its transactions here.
+   * Begins a transaction on `connection`, which `owner` wraps, as a transaction activity. When the transaction's `activityStarted` hooks refuse the start, no `BEGIN` is sent, `owner` is recorded as clean, and `withTransaction` releases it; after any other start failure it destroys it. The transaction's `activityStarted` hooks run before `BEGIN`. Every statement sent on the transaction, or on `connection`, from the end of `BEGIN` until `commit()` or `rollback()` is called is the transaction's child, and is finalized when the transaction ends, with its outcome. Once `commit()` or `rollback()` is called, a statement sent on the transaction is refused when it starts, and one started earlier that has not reached the driver yet is refused with `RUNTIME.TRANSACTION_CLOSED`, so neither runs after the `COMMIT` or `ROLLBACK`. `commit()` and `rollback()` resolve after every finalization hook has run. A subclass begins its transactions here, on a connection from {@link acquireRawConnection}.
    */
   protected async beginTransactionOn(
     connection: SqlConnection,

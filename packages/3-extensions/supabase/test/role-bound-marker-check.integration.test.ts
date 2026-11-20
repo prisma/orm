@@ -4,29 +4,13 @@ import { SignJWT } from 'jose';
 import pg from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { supabase } from '../src/exports/runtime';
+import { grantDevDatabaseSchema } from './fixtures/dev-database-grants';
 import type { Contract } from './fixtures/example-app/contract';
 import contractJson from './fixtures/example-app/contract.json' with { type: 'json' };
 import { fixtureJwt } from './fixtures/example-app/db';
 import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mock-schema';
 
 const contract = contractFromJson<Contract>(contractJson);
-
-async function grantDevDatabaseSchema(connectionString: string): Promise<void> {
-  await withClient(connectionString, async (client) => {
-    await client.query(
-      'GRANT USAGE ON SCHEMA _prisma_dev_wal TO anon, authenticated, service_role',
-    );
-    await client.query(
-      'GRANT ALL ON ALL TABLES IN SCHEMA _prisma_dev_wal TO anon, authenticated, service_role',
-    );
-    await client.query(
-      'GRANT ALL ON ALL SEQUENCES IN SCHEMA _prisma_dev_wal TO anon, authenticated, service_role',
-    );
-    await client.query(
-      'GRANT EXECUTE ON FUNCTION _prisma_dev_wal.capture_event() TO anon, authenticated, service_role',
-    );
-  });
-}
 
 function signUserJwt(): Promise<string> {
   return new SignJWT({ sub: crypto.randomUUID(), role: 'authenticated' })
@@ -43,7 +27,7 @@ describe('a Supabase client on a pool of one connection, with the contract marke
   beforeEach(async () => {
     database = await createDevDatabase();
     await withClient(database.connectionString, setUpSupabaseMockSchema);
-    await grantDevDatabaseSchema(database.connectionString);
+    await withClient(database.connectionString, grantDevDatabaseSchema);
     pool = new pg.Pool({
       connectionString: database.connectionString,
       max: 1,
