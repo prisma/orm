@@ -103,7 +103,7 @@ describe('resolveStatements, model renames', () => {
         why: 'The contract adds model "User".',
         nextActions: [
           'If model "Profile" was renamed to "Account", add model "Account" to the contract, run `{bin} contract emit`, and run this command again.',
-          'If model "Profile" was renamed to "User": --rename Profile:User',
+          'If model "Profile" was renamed to "User", put this in place of --rename Profile:Account: --rename Profile:User',
         ],
         meta: { statement: 'Profile:Account', verb: 'rename' },
       });
@@ -115,7 +115,7 @@ describe('resolveStatements, model renames', () => {
       expectFailure(
         resolve(['Profile:User'], origin, destination),
         UNRESOLVED,
-        '"app.User" already exists in the origin contract',
+        'The contract had model "User" before this change too, so one change cannot make it the new name of "Profile".',
       );
     });
 

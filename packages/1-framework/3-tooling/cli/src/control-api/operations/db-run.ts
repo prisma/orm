@@ -294,6 +294,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       statements: texts,
       origin: appOrigin.origin,
       destination: contract,
+      ...ifDefined('destinationRef', options.invocation.to),
     });
     if (!resolved.ok) {
       throw resolved.failure;
@@ -473,6 +474,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       origin: fromContract ?? EMPTY_ORIGIN,
       originKnown: fromContract !== null,
       destination: contract,
+      ...ifDefined('destinationRef', options.invocation.to),
       answer: options.answerQuestions,
       keepDataEditAdvice: dbUpdateKeepDataEditAdvice(
         options.invocation,

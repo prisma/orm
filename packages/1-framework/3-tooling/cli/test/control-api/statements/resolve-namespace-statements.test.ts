@@ -87,7 +87,7 @@ describe('resolveStatements, namespace renames', () => {
       why: 'The contract adds namespace "ledger".',
       nextActions: [
         'If namespace "billing" was renamed to "finance", add namespace "finance" to the contract, run `{bin} contract emit`, and run this command again.',
-        'If namespace "billing" was renamed to "ledger": --rename billing:ledger',
+        'If namespace "billing" was renamed to "ledger", put this in place of --rename billing:finance: --rename billing:ledger',
       ],
       meta: { statement: 'billing:finance', verb: 'rename' },
     });

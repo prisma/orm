@@ -1,3 +1,4 @@
+import { BIN_NAME } from '../../orm/bin-name';
 import { shellQuoted, statementFlag } from './statement-flag';
 import type { StatementText } from './statement-text';
 
@@ -22,20 +23,30 @@ export interface RemovedNamespaceParts {
   readonly answers: readonly QuestionAnswer[];
 }
 
+/** A way to keep the data other than a question's own flags. */
+export interface KeepDataWay {
+  /** The way as a refusal with only its question open gives it. */
+  readonly text: string;
+  /** The subject it is for, as a list names it: a refusal with several questions open says so before `text`. */
+  readonly forSubject?: string;
+  /** The way as a refusal with several questions open gives it, when it names its subjects itself. */
+  readonly textNamingSubjects?: string;
+  /** The way as the prompt gives it, when the prompt cannot take what `text` says to give. */
+  readonly atPrompt?: string;
+}
+
 /** The parts the prompt and the refusal are both built from. */
 export interface QuestionParts {
   /** What the change would do, in the words of the user's contract. */
   readonly headline: string;
-  /** The subject as a list of several open questions names it: `model "Bug"`, or `"User"`. */
+  /** The subject as a list of several open questions names it: `model "Bug"`, or `"public.bug"` for storage. */
   readonly subjectInList: string;
   /** The labels of the operations of the plan that do what the headline says. */
   readonly operations: readonly string[];
   /** Facts the user needs beside the headline. */
   readonly notes: readonly string[];
   /** Ways to keep the data other than this question's own flags; a refusal's next actions start with them. */
-  readonly keepDataWays: readonly string[];
-  /** `keepDataWays` as a refusal with several questions open gives them, each naming its subject. */
-  readonly keepDataWaysNamingSubject: readonly string[];
+  readonly keepDataWays: readonly KeepDataWay[];
   readonly answers: readonly QuestionAnswer[];
   /** What else to give when the data goes; a refusal's next actions end with them. */
   readonly alsoGiveWhenDeleted: readonly string[];
@@ -56,13 +67,20 @@ function operationLines(operations: readonly string[]): readonly string[] {
     : ['The operations of the plan that do this:', ...unique.map((label) => `- ${label}`)];
 }
 
+/** How `questionText` builds the prompt text. */
+export interface QuestionTextOptions {
+  /** The name the CLI is run by, which the text gives in the commands it names; `prisma` unless given. */
+  readonly bin?: string;
+  /** Whether to add the removed namespace and the verbs that settle it, in the places the refusal gives them: the fact after the headline, its verbs before the question's. */
+  readonly withNamespace?: boolean;
+}
+
 /**
- * The text the prompt shows: what the change would do, the operations that do it, the notes, and
- * what each verb means. `withNamespace` adds the removed namespace and the verbs that settle it, in
- * the places the refusal gives them: the fact after the headline, its verbs before the question's.
+ * The text the prompt shows: what the change would do, the operations that do it, the notes, the
+ * ways to keep the data, and what each verb means.
  */
-export function questionText(parts: QuestionParts, withNamespace = false): string {
-  const namespace = withNamespace ? parts.removedNamespaceParts : undefined;
+export function questionText(parts: QuestionParts, options: QuestionTextOptions = {}): string {
+  const namespace = options.withNamespace === true ? parts.removedNamespaceParts : undefined;
   const meanings = [
     ...(namespace?.answers ?? []).map(({ promptMeaning }) => promptMeaning),
     ...parts.answers.map(({ promptMeaning }) => promptMeaning),
@@ -72,10 +90,17 @@ export function questionText(parts: QuestionParts, withNamespace = false): strin
     ...(namespace === undefined ? [] : [namespace.fact]),
     ...operationLines(parts.operations),
     ...parts.notes,
-    ...parts.keepDataWays,
+    ...parts.keepDataWays.map((way) => way.atPrompt ?? way.text),
     ...parts.alsoGiveWhenDeleted,
     `${meanings.join('; ')}.`,
-  ].join('\n');
+  ]
+    .join('\n')
+    .replaceAll('{bin}', options.bin ?? BIN_NAME);
+}
+
+/** The text with its first letter in upper case, as a sentence that starts a line. */
+export function capitalized(text: string): string {
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 }
 
 /** A flag that names a subject of the change with a verb its question does not take. */
@@ -123,7 +148,8 @@ function yesLine(open: readonly QuestionParts[]): string {
   return `--yes does not allow this: it ${joinedWithAnd(done)}.`;
 }
 
-function misdirectedLine({ verb, text, subjectInList }: MisdirectedFlag): string {
+/** The line that says to remove a flag naming a subject with a verb its question does not take. */
+export function misdirectedLine({ verb, text, subjectInList }: MisdirectedFlag): string {
   const flag = `--${verb} ${shellQuoted(text)}`;
   switch (verb) {
     case 'allow':
@@ -192,22 +218,17 @@ function removedNamespaces(open: readonly QuestionParts[]): readonly RemovedName
  * questions give alike is given once, naming all of them.
  */
 function waysNamingSubjects(open: readonly QuestionParts[]): readonly string[] {
-  const ways = new Map<string, { naming: string; subjects: string[] }>();
-  for (const question of open) {
-    question.keepDataWays.forEach((way, index) => {
-      const naming = question.keepDataWaysNamingSubject[index] ?? way;
-      const seen = ways.get(way);
-      if (seen === undefined) {
-        ways.set(way, { naming, subjects: [question.subjectInList] });
-      } else if (!seen.subjects.includes(question.subjectInList)) {
-        seen.subjects.push(question.subjectInList);
-      }
-    });
+  const ways = new Map<string, { way: KeepDataWay; subjects: string[] }>();
+  for (const way of open.flatMap(({ keepDataWays }) => keepDataWays)) {
+    const seen = ways.get(way.text) ?? { way, subjects: [] };
+    if (way.forSubject !== undefined && !seen.subjects.includes(way.forSubject)) {
+      seen.subjects.push(way.forSubject);
+    }
+    ways.set(way.text, seen);
   }
-  return [...ways].map(([way, { naming, subjects }]) =>
-    subjects.length > 1 && naming === wayFor(subjects.slice(0, 1), way)
-      ? wayFor(subjects, way)
-      : naming,
+  return [...ways.values()].map(
+    ({ way, subjects }) =>
+      way.textNamingSubjects ?? (subjects.length === 0 ? way.text : wayFor(subjects, way.text)),
   );
 }
 
@@ -256,7 +277,7 @@ export function refusalText(
       ...removeFlagLines(flags),
       ...(several
         ? waysNamingSubjects(open)
-        : new Set(open.flatMap(({ keepDataWays }) => keepDataWays))),
+        : new Set(open.flatMap(({ keepDataWays }) => keepDataWays.map(({ text }) => text)))),
       ...answerLines(
         removedNamespaces(open).flatMap(({ answers }) => answers),
         ({ meaning: each }) => each,

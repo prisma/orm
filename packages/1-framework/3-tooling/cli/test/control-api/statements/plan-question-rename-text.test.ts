@@ -27,7 +27,7 @@ describe('the rename of a removed field when the contract adds several fields', 
         "prompts": [
           "Removing field "Shop.legacy" would delete its values.
       The operation of the plan that does this: Drop column "legacy" from "shop".
-      rename keeps the values under the new name, "rating" or "score"; delete lets them go.",
+      rename keeps the values under the new name, "rating" or "score"; delete lets the values go.",
         ],
         "refusal": {
           "nextActions": [
@@ -121,7 +121,7 @@ describe('the texts of an enum value whose member keeps its name with a new stor
         "prompts": [
           "Changing the stored value of enum value "Status.ACTIVE" from "active" to "on" would remove "active" from the data that holds it.
       The operation of the plan that does this: Remove value "active" from "task"."status".
-      To keep that data, run this command with --delete Status.ACTIVE, then in the migration.ts it writes replace this.removeStoredValue() with this.replaceStoredValue(), run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`.
+      To keep that data, run this command with --delete Status.ACTIVE, then in the migration.ts it writes replace this.removeStoredValue() with this.replaceStoredValue(), run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`prisma db migrate\`.
       delete removes it from the data.",
         ],
         "refusal": {

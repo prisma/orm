@@ -36,7 +36,7 @@ function refusalOf(error: unknown) {
 describe('a refusal to answer', () => {
   it('leads its next actions with the ways to keep the data, and leaves them out of why', async () => {
     const way = 'To keep it, plan the change with `prisma migration plan`.';
-    const kept = planQuestion({ ...question('Status.DONE'), keepDataWays: [way] });
+    const kept = planQuestion({ ...question('Status.DONE'), keepDataWays: [{ text: way }] });
     const meta = { unanswered: [{ subject: 'Status.DONE', verbs: ['delete'] }] };
 
     const error = await refusing(meta)([kept]).catch((caught: unknown) => caught);
@@ -155,7 +155,7 @@ describe('a refusal about access changes', () => {
 
     expect(refusalOf(error)).toEqual({
       code: 'CLI.CONSENT_REQUIRED',
-      message: 'This change would lose data and change access: model "Bug", "User".',
+      message: 'This change would lose data and change access: model "Bug", model "User".',
       why: [
         'Removing model "Bug" would delete its data.',
         'The operation of the plan that does this: Drop Bug.',
@@ -165,7 +165,7 @@ describe('a refusal about access changes', () => {
       ].join('\n'),
       nextActions: [
         { kind: 'user-choice', label: 'If the data of model "Bug" can go: --delete Bug' },
-        { kind: 'user-choice', label: 'To allow the change to "User": --allow User' },
+        { kind: 'user-choice', label: 'To allow the change to model "User": --allow User' },
       ],
       meta,
     });
@@ -220,7 +220,7 @@ describe('a refusal of a typed answer', () => {
     const statements: StatementSurface = { take: vi.fn(() => []), values: () => [] };
     const asked = planQuestion({
       ...question('Bug'),
-      keepDataWays: ['To keep it, run `{bin} contract emit`.'],
+      keepDataWays: [{ text: 'To keep it, run `{bin} contract emit`.' }],
       validate: (_verb, text) => (text === 'Bug' ? undefined : 'give it as --delete Bug.'),
     });
 
@@ -232,7 +232,7 @@ describe('a refusal of a typed answer', () => {
     expect({ shown, error: refusalOf(error) }).toEqual({
       shown: [
         'Removing model "Bug" would delete its data.\nThe operation of the plan that does this: Drop Bug.\nTo keep it, run `prisma contract emit`.\ndelete lets its data go.',
-        'give it as --delete Bug.',
+        'Give it as --delete Bug.',
       ],
       error: {
         code: 'CLI.PROMPT_INVALID',

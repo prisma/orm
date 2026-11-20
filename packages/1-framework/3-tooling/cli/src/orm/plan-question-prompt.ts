@@ -3,7 +3,9 @@ import { InternalError } from '@internal/utils/internal-error';
 import type { PromptSurface, StatementSurface } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import {
+  capitalized,
   type MisdirectedFlag,
+  misdirectedLine,
   questionText,
   refusalText,
 } from '../control-api/statements/plan-question-text';
@@ -16,7 +18,7 @@ import {
   type PlanQuestionVerb,
 } from '../control-api/statements/plan-questions';
 import { statementFlag } from '../control-api/statements/statement-flag';
-import { errorConsentUnused } from '../utils/cli-errors';
+import { errorConsentMisdirected, errorConsentUnused } from '../utils/cli-errors';
 import { chooseAction } from '../utils/next-actions';
 import { BIN_NAME } from './bin-name';
 
@@ -93,14 +95,14 @@ function engineQuestion(
           },
         };
   return {
-    question: withBinName(questionText(shown, withNamespace)),
+    question: questionText(shown, { bin: BIN_NAME, withNamespace }),
     subject: question.subject,
     verbs: question.verbs,
     forms: question.forms,
     validate: (verb: PlanQuestionVerb, text: string) => {
       const reason = question.validate(verb, text);
       refusals.last = reason === undefined ? undefined : { question, verb, text, reason };
-      return reason === undefined ? undefined : withBinName(reason);
+      return reason === undefined ? undefined : capitalized(withBinName(reason));
     },
   };
 }
@@ -285,12 +287,16 @@ function rebuiltError(
 ): unknown {
   if (!CliStructuredError.is(error)) return error;
   if (isConsentRequired(error)) {
+    const misdirected = misdirectedFlags(questions, statements);
+    const unmatched = records(error.meta?.['unmatched']).flatMap(({ verb, values }) => {
+      const kept = strings(values).filter(
+        (text) => !misdirected.some((flag) => flag.verb === String(verb) && flag.text === text),
+      );
+      return kept.length === 0 ? [] : [{ verb: String(verb), values: kept }];
+    });
     const refusal = refusalText(openQuestions(error, questions), {
-      unmatched: records(error.meta?.['unmatched']).map(({ verb, values }) => ({
-        verb: String(verb),
-        values: strings(values),
-      })),
-      misdirected: misdirectedFlags(questions, statements),
+      unmatched,
+      misdirected,
       confirm: strings(error.meta?.['confirm']),
       yes: error.message.includes('--yes'),
     });
@@ -320,6 +326,7 @@ export function promptPlanQuestions(
   return async (questions, answeredWithoutAsking = []) => {
     takeConsentsAnsweredWithoutAsking(questions, answeredWithoutAsking, statements);
     refuseRepeatedConsents(questions, statements);
+    refuseMisdirectedConsents(questions, statements);
     const refusals: { last: Refused | undefined } = { last: undefined };
     return answering(
       prompt,
@@ -358,6 +365,40 @@ function refuseRepeatedConsents(
         questions.map(({ subject }) => subject),
       );
     }
+  }
+}
+
+/**
+ * Refuses, before anything is asked, a flag that names a subject with a verb its question does not
+ * take when another flag settles that subject, as `--delete Bug --allow Bug` for a removed model:
+ * nothing else would say to remove it, so it gets the line a refusal gives it.
+ */
+function refuseMisdirectedConsents(
+  questions: readonly PlanQuestion[],
+  statements: StatementSurface,
+): void {
+  const given = statements.values();
+  const settled = (subject: string) =>
+    questions.some(
+      (question) =>
+        question.subject === subject &&
+        given.some(
+          ({ verb, text }) =>
+            namesSubject(text, subject) && question.verbs.some((each) => each === verb),
+        ),
+    );
+  const misdirected = misdirectedFlags(questions, statements).filter(({ text }) =>
+    questions.some(({ subject }) => namesSubject(text, subject) && settled(subject)),
+  );
+  if (misdirected.length > 0) {
+    throw errorConsentMisdirected(
+      misdirected.map((flag) => ({
+        verb: flag.verb,
+        text: flag.text,
+        line: misdirectedLine(flag),
+      })),
+      questions.map(({ subject }) => subject),
+    );
   }
 }
 

@@ -75,8 +75,8 @@ describe('resolveStatements, value object field renames', () => {
     expectFailure(
       resolve([rename('GeoPoint.lat:GeoPoint.lng')]),
       UNRESOLVED,
-      'The field "lng" already exists in the origin value object "GeoPoint", so it cannot be the new name of a field.',
-      'If another field holds the name "lng" in the origin and this change renames or removes it, make the change in two migrations: first change the contract so that field has its new name or is gone, and plan only that; then give "lat" the name "lng" and plan it with --rename GeoPoint.lat:GeoPoint.lng.',
+      'The contract had value object field "GeoPoint.lng" before this change too, so one change cannot make it the new name of "GeoPoint.lat".',
+      'If value object field "GeoPoint.lat" was renamed to "GeoPoint.latitude", put this in place of --rename GeoPoint.lat:GeoPoint.lng: --rename GeoPoint.lat:GeoPoint.latitude',
     );
   });
 

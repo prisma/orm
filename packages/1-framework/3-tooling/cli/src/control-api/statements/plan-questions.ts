@@ -26,18 +26,32 @@ import {
   STORE_ORIGIN_SNAPSHOT_STEPS,
   type UnusedConsent,
 } from '../../utils/cli-errors';
-import { EMIT_COMMAND, missingNameReason, nameHadBeforeReason } from './missing-new-name';
+import { EMIT_COMMAND, missingNameReason, nameHadBeforeReason, runAgain } from './missing-new-name';
 import type { ConsentVerb } from './parse-consent';
-import {
-  type QuestionAnswer,
-  type QuestionParts,
-  type RemovedNamespaceParts,
-  wayFor,
+import type {
+  KeepDataWay,
+  QuestionAnswer,
+  QuestionParts,
+  RemovedNamespaceParts,
 } from './plan-question-text';
+import {
+  type ContractsAndRenames,
+  enumMembers,
+  enumValueAfterRenames,
+  modelAfterRenames,
+  namespaceAfterRenames,
+  newModelFields,
+  newModels,
+  newValueObjectFields,
+  possibleNewNames,
+  sameModel,
+  valueObjectFieldAfterRenames,
+  valueObjectFields,
+} from './possible-new-names';
 import { resolveStatements } from './resolve-statements';
-import { statementFlag } from './statement-flag';
+import { shellQuoted, statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
-import { newVariantsOfBase, variantValue, variantValueChanged } from './variants';
+import { variantValue, variantValueChanged } from './variants';
 
 /** A verb a plan question accepts. */
 export type PlanQuestionVerb = 'rename' | 'convert' | ConsentVerb;
@@ -152,6 +166,8 @@ export interface StatementContracts {
   readonly destination?: ContractWithDomain;
   /** The rename, convert and backfill statements the plan carries out, in the order given. */
   readonly statements: readonly StatementText[];
+  /** The `--to` value the command plans to, when its destination is a stored contract and not the emitted one. */
+  readonly destinationRef?: string;
 }
 
 /** The plan's renames, resolved; empty when there are none or they do not resolve. */
@@ -166,43 +182,21 @@ function resolvedRenames(contracts: StatementContracts): readonly ResolvedMigrat
   return resolved.ok ? resolved.value : [];
 }
 
-function sameModel(left: ModelCoordinate, right: ModelCoordinate): boolean {
-  return left.namespaceId === right.namespaceId && left.model === right.model;
+function contractsAndRenames(
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): ContractsAndRenames {
+  return {
+    origin: contracts.origin,
+    destination: contracts.destination,
+    renames: resolvedRenames(contracts),
+  };
 }
 
-/**
- * The model a rename statement of `contracts` gives `coordinate` in the destination, if any: a
- * rename of the model, or else a rename of its namespace, under which the model keeps its name when
- * the destination has it there.
- */
 function renamedModel(
   coordinate: ModelCoordinate,
   contracts: StatementContracts,
 ): ModelCoordinate | undefined {
-  const renames = resolvedRenames(contracts);
-  for (const statement of renames) {
-    if (
-      statement.kind === 'rename' &&
-      statement.entity === 'model' &&
-      sameModel(statement.from, coordinate)
-    ) {
-      return statement.to;
-    }
-  }
-  for (const statement of renames) {
-    if (
-      statement.kind === 'rename' &&
-      statement.entity === 'namespace' &&
-      statement.from === coordinate.namespaceId
-    ) {
-      const moved = { namespaceId: statement.to, model: coordinate.model };
-      const destinationHas =
-        contracts.destination?.domain.namespaces[moved.namespaceId]?.models[moved.model] !==
-        undefined;
-      return destinationHas ? moved : undefined;
-    }
-  }
-  return undefined;
+  return modelAfterRenames(coordinate, resolvedRenames(contracts), contracts.destination);
 }
 
 /** The field of the origin contract at `coordinate`, as the destination names it after the plan's renames. */
@@ -223,60 +217,18 @@ function destinationField(
   return { ...(renamedModel(coordinate, contracts) ?? coordinate), field: coordinate.field };
 }
 
-/** An enum value under the namespace a namespace rename of `contracts` gives its enum, when the destination has the enum there. */
 function renamedEnumValue(
   value: EnumValueCoordinate,
   contracts: StatementContracts,
 ): EnumValueCoordinate | undefined {
-  for (const statement of resolvedRenames(contracts)) {
-    if (
-      statement.kind === 'rename' &&
-      statement.entity === 'namespace' &&
-      statement.from === value.namespaceId
-    ) {
-      const renamed = { ...value, namespaceId: statement.to };
-      return contracts.destination?.domain.namespaces[statement.to]?.enum?.[value.enum] ===
-        undefined
-        ? undefined
-        : renamed;
-    }
-  }
-  return undefined;
+  return enumValueAfterRenames(value, resolvedRenames(contracts), contracts.destination);
 }
 
-/** The fields of a value object in a contract's storage; `undefined` when the contract has no such value object. */
-function valueObjectFields(
-  contract: ContractWithDomain,
-  field: ValueObjectFieldCoordinate,
-): readonly string[] | undefined {
-  const valueObject = valueObjectAt(contract.storage, {
-    plane: 'storage',
-    namespaceId: field.namespaceId,
-    entityKind: 'valueObject',
-    entityName: field.valueObject,
-  });
-  return valueObject === undefined ? undefined : Object.keys(valueObject.fields);
-}
-
-/** A value object field under the namespace a namespace rename of `contracts` gives its value object, when the destination has the value object there. */
 function renamedValueObjectField(
   field: ValueObjectFieldCoordinate,
   contracts: StatementContracts,
 ): ValueObjectFieldCoordinate | undefined {
-  for (const statement of resolvedRenames(contracts)) {
-    if (
-      statement.kind === 'rename' &&
-      statement.entity === 'namespace' &&
-      statement.from === field.namespaceId
-    ) {
-      const renamed = { ...field, namespaceId: statement.to };
-      return contracts.destination === undefined ||
-        valueObjectFields(contracts.destination, renamed) === undefined
-        ? undefined
-        : renamed;
-    }
-  }
-  return undefined;
+  return valueObjectFieldAfterRenames(field, resolvedRenames(contracts), contracts.destination);
 }
 
 /**
@@ -350,18 +302,8 @@ function lossKind(loss: PlannedDataLoss, contracts: DataLossContracts): LossKind
   return knownRemoved(subject, contracts) ? 'removed' : 'deleted';
 }
 
-/** The namespace a rename of the plan gives `namespaceId`, if any. */
 function renamedNamespace(namespaceId: string, contracts: StatementContracts): string | undefined {
-  for (const statement of resolvedRenames(contracts)) {
-    if (
-      statement.kind === 'rename' &&
-      statement.entity === 'namespace' &&
-      statement.from === namespaceId
-    ) {
-      return statement.to;
-    }
-  }
-  return undefined;
+  return namespaceAfterRenames(namespaceId, resolvedRenames(contracts));
 }
 
 /**
@@ -514,7 +456,7 @@ function deleteAnswer(
         flag,
         meaning: `If the values can go${also}`,
         meaningNamingSubject: `If the values of ${named} can go${also}`,
-        promptMeaning: 'delete lets them go',
+        promptMeaning: 'delete lets the values go',
       };
   }
 }
@@ -537,6 +479,7 @@ function renameMeaning(
   keep: string,
   newNames: readonly string[],
   placeholder: string,
+  destinationRef: string | undefined,
 ): string {
   const [only] = newNames;
   if (only !== undefined && newNames.length === 1)
@@ -544,7 +487,9 @@ function renameMeaning(
   if (newNames.length > 1) {
     return `If ${renamed} was renamed to ${eitherOf(newNames)}, put that name in place of ${placeholder} to ${keep}`;
   }
-  return `If ${renamed} was renamed, add it to the contract under its new name and run ${EMIT_COMMAND}; then ${keep}`;
+  return destinationRef === undefined
+    ? `If ${renamed} was renamed, add it to the contract under its new name and run ${EMIT_COMMAND}; then ${keep}`
+    : `If ${renamed} was renamed, add it to the contract under its new name and run ${EMIT_COMMAND}, then run this command without --to ${shellQuoted(destinationRef)} and ${keep}`;
 }
 
 /** A rename as a flag writes it, and the names the contract can give the subject. */
@@ -557,6 +502,7 @@ function renameAnswer(
   subject: MigrationSubject,
   text: string,
   rename: RenameTarget,
+  destinationRef: string | undefined,
 ): QuestionAnswer {
   const kind = subject.kind === 'storage' ? 'data' : ENTITY_WORDS[subject.kind];
   const keep =
@@ -573,16 +519,17 @@ function renameAnswer(
         : 'keeps the values';
   return {
     flag: { verb: 'rename', text: rename.form },
-    meaning: renameMeaning(`the ${kind}`, keep, rename.newNames, NEW_NAME),
+    meaning: renameMeaning(`the ${kind}`, keep, rename.newNames, NEW_NAME, destinationRef),
     meaningNamingSubject: renameMeaning(
       namedSubject(subject, text),
       keep,
       rename.newNames,
       NEW_NAME,
+      destinationRef,
     ),
     promptMeaning:
       rename.newNames.length === 0
-        ? `rename works once you add the ${kind} to the contract under its new name and run ${EMIT_COMMAND}`
+        ? `rename works only once the contract has the ${kind} under its new name: stop this command, add it to the contract, run ${EMIT_COMMAND}, and ${runAgain(destinationRef)}`
         : rename.newNames.length === 1
           ? `rename ${kept} under the new name`
           : `rename ${kept} under the new name, ${eitherOf(rename.newNames)}`,
@@ -592,7 +539,7 @@ function renameAnswer(
 const NEW_NAME = '<new name>';
 
 const SNAPSHOT_RECOVERY_WAY =
-  'keep its data: store a snapshot of the contract before this change, which is the contract the database was last updated to, then run this command again, and it gives the --rename to use.';
+  'store a snapshot of the contract before this change, which is the contract the database was last updated to, then run this command again, and it gives the --rename to use.';
 
 /**
  * How to keep the data of a storage subject that was renamed, when the contract before this change
@@ -601,15 +548,20 @@ const SNAPSHOT_RECOVERY_WAY =
  * subject.
  */
 export const ORIGIN_SNAPSHOT_RECOVERY: readonly string[] = [
-  `If it was renamed, ${SNAPSHOT_RECOVERY_WAY}`,
+  `If it was renamed, keep its data: ${SNAPSHOT_RECOVERY_WAY}`,
   ...STORE_ORIGIN_SNAPSHOT_STEPS,
 ];
 
-/** `ORIGIN_SNAPSHOT_RECOVERY` beside other questions: it names the storage subjects it is for. */
-function originSnapshotRecoveryNaming(storage: readonly string[]): readonly string[] {
+/** `ORIGIN_SNAPSHOT_RECOVERY` as ways to keep the data, naming the storage subjects it is for beside other questions. */
+function originSnapshotRecovery(storage: readonly string[]): readonly KeepDataWay[] {
+  const [first, ...steps] = ORIGIN_SNAPSHOT_RECOVERY;
   return [
-    `If ${eitherOf(storage)} was renamed, ${SNAPSHOT_RECOVERY_WAY}`,
-    ...STORE_ORIGIN_SNAPSHOT_STEPS,
+    {
+      text: first ?? '',
+      textNamingSubjects: `If ${eitherOf(storage)} was renamed, keep its data: ${SNAPSHOT_RECOVERY_WAY}`,
+      atPrompt: `If it was renamed, stop this command and keep its data: ${SNAPSHOT_RECOVERY_WAY}`,
+    },
+    ...steps.map((text) => ({ text })),
   ];
 }
 
@@ -653,53 +605,31 @@ function namesSubject(verb: ConsentVerb, subject: string) {
 function modelRenameWay(
   model: ModelCoordinate,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): string {
+): KeepDataWay {
   const name = modelStatementText(contracts.origin, model);
-  const newNames = newModels(model, contracts).map((each) =>
+  const newNames = newModels(model, contractsAndRenames(contracts)).map((each) =>
     modelStatementText(contracts.destination, each),
   );
   const [only] = newNames;
   const to = only !== undefined && newNames.length === 1 ? only : NEW_NAME;
-  const meaning = renameMeaning(`model "${name}"`, 'say so first', newNames, NEW_NAME);
-  return `${meaning}: ${statementFlag({ verb: 'rename', text: `${name}:${to}` })}`;
-}
-
-/** The members of the enum of an enum value that the contract adds and no rename of the plan names. */
-function newMembers(
-  subject: EnumValueCoordinate,
-  contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): readonly string[] {
-  const value = renamedEnumValue(subject, contracts) ?? subject;
-  const originMembers = enumMembers(contracts.origin, subject);
-  const renamedTo = new Set(
-    resolvedRenames(contracts).flatMap((statement) =>
-      statement.kind === 'rename' && statement.entity === 'enumValue' ? [statement.to.member] : [],
-    ),
+  const flag = statementFlag({ verb: 'rename', text: `${name}:${to}` });
+  const renamed = `If model "${name}" was renamed`;
+  const meaning = renameMeaning(
+    `model "${name}"`,
+    'say so first',
+    newNames,
+    NEW_NAME,
+    contracts.destinationRef,
   );
-  return enumMembers(contracts.destination, value)
-    .map(({ name }) => name)
-    .filter(
-      (name) => !renamedTo.has(name) && !originMembers.some((member) => member.name === name),
-    );
-}
-
-/** The fields of a value object field's value object that the contract adds and no rename of the plan names. */
-function newValueObjectFields(
-  subject: ValueObjectFieldCoordinate,
-  contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): readonly string[] {
-  const field = renamedValueObjectField(subject, contracts) ?? subject;
-  const originFields = valueObjectFields(contracts.origin, subject) ?? [];
-  const renamedTo = new Set(
-    resolvedRenames(contracts).flatMap((statement) =>
-      statement.kind === 'rename' && statement.entity === 'valueObjectField'
-        ? [statement.to.field]
-        : [],
-    ),
-  );
-  return (valueObjectFields(contracts.destination, field) ?? []).filter(
-    (name) => !renamedTo.has(name) && !originFields.includes(name),
-  );
+  return {
+    text: `${meaning}: ${flag}`,
+    atPrompt:
+      newNames.length === 0
+        ? `${renamed}, stop this command, add it to the contract under its new name, run ${EMIT_COMMAND}, and ${runAgain(contracts.destinationRef)} with ${flag}.`
+        : newNames.length === 1
+          ? `${renamed} to "${only}", stop this command and run it again with ${flag}.`
+          : `${renamed} to ${eitherOf(newNames)}, stop this command and run it again with ${flag}, putting that name in place of ${NEW_NAME}.`,
+  };
 }
 
 /** The plan's backfill statements, resolved; empty when they do not resolve. */
@@ -715,97 +645,13 @@ function resolvedBackfills(
   return resolved.ok ? resolved.value.filter((statement) => statement.kind === 'backfill') : [];
 }
 
-/** The fields of a model's field's destination model that the origin model does not have and no rename of the plan names. */
-function newModelFields(
-  subject: FieldCoordinate,
-  contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): readonly string[] {
-  const model = renamedModel(subject, contracts) ?? subject;
-  const originFields = Object.keys(
-    contracts.origin.domain.namespaces[subject.namespaceId]?.models[subject.model]?.fields ?? {},
-  );
-  const renamedTo = new Set(
-    resolvedRenames(contracts).flatMap((statement) =>
-      statement.kind === 'rename' && statement.entity === 'field' && sameModel(statement.to, model)
-        ? [statement.to.field]
-        : [],
-    ),
-  );
-  return Object.keys(
-    contracts.destination.domain.namespaces[model.namespaceId]?.models[model.model]?.fields ?? {},
-  ).filter((name) => !renamedTo.has(name) && !originFields.includes(name));
-}
-
-/**
- * The models of the contract a removed model can have been renamed to: the new variants of its
- * base, for a variant, or else the new models that are no variant, those of its own namespace when
- * it has any there. A model the contract has under a namespace a rename of the plan gives, or that
- * a rename of the plan names, is not new.
- */
-function newModels(
-  subject: ModelCoordinate,
-  contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): readonly ModelCoordinate[] {
-  const renamedTo = resolvedRenames(contracts).flatMap((statement) =>
-    statement.kind === 'rename' && statement.entity === 'model' ? [statement.to] : [],
-  );
-  if (contracts.origin.domain.namespaces[subject.namespaceId]?.models[subject.model]?.base) {
-    return newVariantsOfBase(contracts.origin, contracts.destination, subject, renamedTo);
-  }
-  const movedHere = new Map<string, string>(
-    resolvedRenames(contracts).flatMap((statement) =>
-      statement.kind === 'rename' && statement.entity === 'namespace'
-        ? [[statement.to, statement.from] as const]
-        : [],
-    ),
-  );
-  const inOrigin = (namespaceId: string, model: string) =>
-    contracts.origin.domain.namespaces[asNamespaceId(movedHere.get(namespaceId) ?? namespaceId)]
-      ?.models[model] !== undefined;
-  const added = Object.entries(contracts.destination.domain.namespaces).flatMap(
-    ([namespaceId, namespace]) =>
-      Object.entries(namespace.models).flatMap(([model, definition]) => {
-        const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
-        return definition.base === undefined &&
-          !inOrigin(namespaceId, model) &&
-          !renamedTo.some((each) => sameModel(each, coordinate))
-          ? [coordinate]
-          : [];
-      }),
-  );
-  const namespaceId = renamedNamespace(subject.namespaceId, contracts) ?? subject.namespaceId;
-  const inSameNamespace = added.filter((model) => model.namespaceId === namespaceId);
-  return inSameNamespace.length > 0 ? inSameNamespace : added;
-}
-
-/** The names the contract can give a removed subject: none for storage. */
-function possibleNewNames(
-  subject: MigrationSubject,
-  contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): readonly string[] {
-  switch (subject.kind) {
-    case 'storage':
-      return [];
-    case 'model':
-      return newModels(subject, contracts).map((model) =>
-        modelStatementText(contracts.destination, model),
-      );
-    case 'enumValue':
-      return newMembers(subject, contracts);
-    case 'valueObjectField':
-      return newValueObjectFields(subject, contracts);
-    case 'field':
-      return newModelFields(subject, contracts);
-  }
-}
-
 /** A rename as a flag writes it, with the new name when only one fits: a field's new name keeps the model, `User.nickname:User.<new name>`. */
 function renameTarget(
   subject: MigrationSubject,
   text: string,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
 ): RenameTarget {
-  const newNames = possibleNewNames(subject, contracts);
+  const newNames = possibleNewNames(subject, contractsAndRenames(contracts));
   const [only] = newNames;
   const parent =
     subject.kind === 'model' || subject.kind === 'storage'
@@ -869,6 +715,7 @@ function resolvesWith(
     statements: [...contracts.statements, statement],
     origin: { kind: 'contract', contract: contracts.origin },
     destination: contracts.destination,
+    ...ifDefined('destinationRef', contracts.destinationRef),
   });
   if (!resolved.ok) return notOk(resolved.failure.why ?? resolved.failure.message);
   return ok(resolved.value.at(-1));
@@ -931,7 +778,10 @@ function newNameProblem(
       entity,
       from: text,
       to,
-      candidates: possibleNewNames(subject, contracts).map((each) => `${parent}${each}`),
+      candidates: possibleNewNames(subject, contractsAndRenames(contracts)).map(
+        (each) => `${parent}${each}`,
+      ),
+      destinationRef: contracts.destinationRef,
     });
   }
   return namesBeside(subject, contracts.origin).includes(name)
@@ -974,13 +824,6 @@ export type KeepDataEditAdvice = (
   subject: KeptSubject,
   kept: readonly KeptSubject[],
 ) => KeepDataAdvice;
-
-function enumMembers(
-  contract: ContractWithDomain,
-  value: EnumValueCoordinate,
-): readonly { readonly name: string; readonly value: unknown }[] {
-  return contract.domain.namespaces[value.namespaceId]?.enum?.[value.enum]?.members ?? [];
-}
 
 function booleanEnum(contract: ContractWithDomain, value: EnumValueCoordinate): boolean {
   return enumMembers(contract, value).some((member) => typeof member.value === 'boolean');
@@ -1113,7 +956,7 @@ function newRequiredFieldsBeside(
       entityKind: 'valueObject',
       entityName: field.valueObject,
     });
-    return newValueObjectFields(subject, contracts)
+    return newValueObjectFields(subject, contractsAndRenames(contracts))
       .filter(
         (name) =>
           valueObject?.fields[name]?.nullable === false &&
@@ -1134,7 +977,7 @@ function newRequiredFieldsBeside(
   const model = renamedModel(subject, contracts) ?? subject;
   const fields =
     contracts.destination.domain.namespaces[model.namespaceId]?.models[model.model]?.fields ?? {};
-  return newModelFields(subject, contracts)
+  return newModelFields(subject, contractsAndRenames(contracts))
     .filter(
       (name) =>
         fields[name]?.nullable === false &&
@@ -1261,18 +1104,17 @@ export function dataLossQuestion(
       ? []
       : [loss.keepDataAdvice]),
     ...(keepData?.ways ?? []),
-  ];
+  ].map((text): KeepDataWay => ({ text, forSubject: subjectInList }));
   const recovers = recoveryFor.length > 0;
   const parts = {
     headline: lossHeadline(loss, kind, subject, contracts),
     subjectInList,
     operations: [...new Set(labels)],
     notes: [...(keepData?.lead === undefined ? [] : [keepData.lead]), ...required.notes],
-    keepDataWays: [...modelWay, ...otherWays, ...(recovers ? ORIGIN_SNAPSHOT_RECOVERY : [])],
-    keepDataWaysNamingSubject: [
+    keepDataWays: [
       ...modelWay,
-      ...otherWays.map((way) => wayFor([subjectInList], way)),
-      ...(recovers ? originSnapshotRecoveryNaming(recoveryFor) : []),
+      ...otherWays,
+      ...(recovers ? originSnapshotRecovery(recoveryFor) : []),
     ],
     alsoGiveWhenDeleted: required.alsoGiveWhenDeleted,
     effect: kind === 'retyped' ? 'may change data' : 'deletes data',
@@ -1335,7 +1177,9 @@ export function dataLossQuestion(
   return planQuestion({
     ...parts,
     answers:
-      rename === undefined ? [deleting] : [renameAnswer(loss.subject, subject, rename), deleting],
+      rename === undefined
+        ? [deleting]
+        : [renameAnswer(loss.subject, subject, rename, contracts.destinationRef), deleting],
     validate: (verb, text) => {
       if (verb !== 'rename') return deleteNames(text);
       if (!text.includes(':')) {
@@ -1369,20 +1213,20 @@ export function accessChangeQuestion(
     throw new InternalError('An access change question needs at least one access change.');
   }
   const subject = subjectText(first.subject, contracts);
+  const named = namedSubject(first.subject, subject);
   const several = new Set(changes.map(({ label }) => label)).size > 1;
   const them = several ? (changes.length === 2 ? 'both changes' : 'these changes') : 'it';
   return planQuestion({
     headline: `Access to the data of "${subject}" would ${changes.some(({ widens }) => widens) ? 'widen' : 'change'}.`,
-    subjectInList: `"${subject}"`,
+    subjectInList: named,
     operations: changes.map(({ label }) => label),
     notes: [],
     keepDataWays: [],
-    keepDataWaysNamingSubject: [],
     answers: [
       {
         flag: { verb: 'allow', text: subject },
         meaning: `To allow ${them}`,
-        meaningNamingSubject: `To allow ${several ? them : 'the change'} to "${subject}"`,
+        meaningNamingSubject: `To allow ${several ? them : 'the change'} to ${named}`,
         promptMeaning: `allow lets the plan make ${several ? 'these changes' : 'this change'}`,
       },
     ],
@@ -1488,6 +1332,7 @@ function removedNamespaceParts(removed: string, added: readonly string[]): Remov
     'keep its data',
     added,
     '<new namespace>',
+    undefined,
   );
   const rename: readonly QuestionAnswer[] =
     only === undefined
@@ -1552,6 +1397,7 @@ function acceptingNamespaceAnswers(
           from: removedNamespace,
           to,
           candidates: added,
+          destinationRef: contracts.destinationRef,
         });
       }
       return question.validate(verb, text);
@@ -1593,6 +1439,8 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
   readonly origin: ContractWithDomain;
   readonly originKnown: boolean;
   readonly destination: ContractWithDomain;
+  /** The `--to` value the command plans to, when the destination is a stored contract and not the emitted one. */
+  readonly destinationRef?: string;
   readonly answer: AnswerPlanQuestions;
   readonly replan: (statements: readonly StatementText[]) => Promise<Result<TPlan, TFailure>>;
   /** The command's words for the edits that keep a subject's data. */
@@ -1618,6 +1466,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
       origin: input.origin,
       originKnown: input.originKnown,
       destination: input.destination,
+      ...ifDefined('destinationRef', input.destinationRef),
       canConvert: input.canConvert,
       statements,
       ...ifDefined('keepDataEditAdvice', input.keepDataEditAdvice),
@@ -1675,6 +1524,14 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
           });
         }
       });
+    }
+    if (round === 0 && alreadyAnswered.size > 0) {
+      return notOk(
+        errorConsentUnused(
+          [...alreadyAnswered.values()],
+          questionSubjects(plan, input.askAccess, contracts),
+        ),
+      );
     }
     const losses = pending('delete', plan.dataLoss);
     const sameSubject = (loss: PlannedDataLoss) =>

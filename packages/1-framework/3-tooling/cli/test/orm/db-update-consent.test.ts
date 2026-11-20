@@ -29,7 +29,7 @@ describe('db update questions', () => {
       code: 'CLI.CONSENT_REQUIRED',
       severity: 'error',
       summary:
-        'This change would lose data and change access: "audit_old", model "Legacy", "User".',
+        'This change would lose data and change access: "audit_old", model "Legacy", model "User".',
       why: [
         'This change would delete the data in "audit_old", which no model of the contract before this change stores.',
         'The operation of the plan that does this: Drop table "audit_old".',
@@ -47,7 +47,7 @@ describe('db update questions', () => {
           label: `If model "Legacy" was renamed, add it to the contract under its new name and run \`prisma-test contract emit\`; then keep its data: --rename 'Legacy:<new name>'`,
         },
         { kind: 'user-choice', label: 'If the data of model "Legacy" can go: --delete Legacy' },
-        { kind: 'user-choice', label: 'To allow the change to "User": --allow User' },
+        { kind: 'user-choice', label: 'To allow the change to model "User": --allow User' },
       ],
       meta: {
         unanswered: [

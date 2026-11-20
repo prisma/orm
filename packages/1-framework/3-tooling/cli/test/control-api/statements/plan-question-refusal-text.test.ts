@@ -74,12 +74,12 @@ describe('the summary and the --yes line of a refusal', () => {
     ).toEqual([
       {
         summary:
-          'This change would lose data and change access: field "Shop.age", field "Shop.legacy", "User".',
+          'This change would lose data and change access: field "Shop.age", field "Shop.legacy", model "User".',
         yes: '--yes does not allow this: it would delete data, can change or lose data and would change who can read and write data.',
       },
       {
         summary:
-          'This change would change or lose data and change access: field "Shop.age", "User".',
+          'This change would change or lose data and change access: field "Shop.age", model "User".',
         yes: '--yes does not allow this: it can change or lose data and would change who can read and write data.',
       },
     ]);

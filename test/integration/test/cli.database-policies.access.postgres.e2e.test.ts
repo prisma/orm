@@ -221,10 +221,8 @@ withTempDir(({ createTempDir }) => {
           expect(errorOf(twice)).toEqual({
             code: 'CLI.CONSENT_UNUSED',
             severity: 'error',
-            summary:
-              '--allow User was given, but the question about User was already answered by --allow User.',
-            why: 'The run asked about User.',
-            nextActions: [{ kind: 'user-choice', label: 'Give one flag per question.' }],
+            summary: '--allow User is given twice, and one is enough.',
+            nextActions: [{ kind: 'user-choice', label: 'Remove one --allow User.' }],
             meta: { unused: [{ verb: 'allow', values: ['User'] }], asked: ['User'] },
             docsUrl:
               'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_UNUSED',

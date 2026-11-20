@@ -72,8 +72,8 @@ describe('a plan question asked through the engine', () => {
 
     await expect(promptPlanQuestions(prompt, statements)([invoice])).rejects.toMatchObject({
       code: 'CLI.CONSENT_UNUSED',
-      message: '--delete nope was given but nothing in this run asked about nope.',
-      why: 'The run asked about billing.Invoice.',
+      message: '--delete nope names nothing whose data this change deletes.',
+      nextActions: [{ kind: 'user-choice', label: 'Remove --delete nope, or correct its name.' }],
       meta: { unused: [{ verb: 'delete', values: ['nope'] }], asked: ['billing.Invoice'] },
     });
   });
@@ -97,8 +97,14 @@ describe('a plan question asked through the engine', () => {
     await expect(promptPlanQuestions(prompt, statements)([invoice])).rejects.toMatchObject({
       code: 'CLI.CONSENT_UNUSED',
       message:
-        '--delete billing was given, but every question about namespace "billing" was already answered by another flag.',
-      nextActions: [{ kind: 'user-choice', label: 'Give one flag per question.' }],
+        '--delete billing does nothing: the other --delete flags already cover everything in namespace "billing".',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Remove --delete billing, or the --delete flags of the models and fields of namespace "billing".',
+        },
+      ],
     });
   });
 });
@@ -368,7 +374,7 @@ describe('a --delete for a subject answered without asking', () => {
       promptPlanQuestions(prompt, statements)([], [{ verb: 'delete', subject: 'app.User' }]),
     ).rejects.toMatchObject({
       code: 'CLI.CONSENT_UNUSED',
-      message: '--delete app.Other was given but nothing in this run asked about app.Other.',
+      message: '--delete app.Other names nothing whose data this change deletes.',
     });
   });
 });

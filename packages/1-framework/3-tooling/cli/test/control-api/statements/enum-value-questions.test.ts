@@ -184,7 +184,10 @@ describe('a question about an enum value', () => {
         question:
           'This change would remove the stored value of enum value "Status.ARCHIVED" from the data that holds it.\nThe operation of the plan that does this: Remove value "archived".\nDelete loses it.\nKeep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).\ndelete removes it from the data.',
         keepDataWays: [
-          'Keep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).',
+          {
+            text: 'Keep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).',
+            forSubject: 'enum value "Status.ARCHIVED"',
+          },
         ],
       },
     ]);
@@ -246,11 +249,21 @@ describe('a question about an enum value', () => {
     expect(asked.map(({ subject, keepDataWays }) => ({ subject, keepDataWays }))).toEqual([
       {
         subject: 'Status.ARCHIVED',
-        keepDataWays: ['Keep Status.ARCHIVED with 0 edits among Status.ARCHIVED, Status.OPEN.'],
+        keepDataWays: [
+          {
+            text: 'Keep Status.ARCHIVED with 0 edits among Status.ARCHIVED, Status.OPEN.',
+            forSubject: 'enum value "Status.ARCHIVED"',
+          },
+        ],
       },
       {
         subject: 'Status.OPEN',
-        keepDataWays: ['Keep Status.OPEN with 1 edits among Status.ARCHIVED, Status.OPEN.'],
+        keepDataWays: [
+          {
+            text: 'Keep Status.OPEN with 1 edits among Status.ARCHIVED, Status.OPEN.',
+            forSubject: 'enum value "Status.OPEN"',
+          },
+        ],
       },
       { subject: 'Status.OLD', keepDataWays: [] },
     ]);

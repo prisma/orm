@@ -1,3 +1,5 @@
+import { writeRef } from '@internal/migration-tools/refs';
+import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HASH_FROM, HASH_TO, harness } from './fixtures/migration-plan-project';
 import {
@@ -325,12 +327,106 @@ describe('the output when a --rename gives a name the contract does not have', (
           {
             kind: 'user-choice',
             label:
-              'If field "Shop.legacy" was renamed to "Shop.rating": --rename Shop.legacy:Shop.rating',
+              'If field "Shop.legacy" was renamed to "Shop.rating", put this in place of --rename Shop.legacy:Shop.nope: --rename Shop.legacy:Shop.rating',
           },
         ],
         meta: { statement: 'Shop.legacy:Shop.nope', verb: 'rename' },
       },
       exitCode: 0,
     });
+  });
+});
+
+describe('the output when migration plan plans to a ref', () => {
+  const HASH_NEXT = `abba${'2'.repeat(60)}`;
+
+  /** The shop project with a ref `next` at a stored contract whose Shop has `fields`. */
+  async function shopWithNext(fields: readonly string[]): Promise<OfflineProject> {
+    const project = await shopProject();
+    await seedContractSnapshot({
+      migrationsDir: project.migrationsDir,
+      storageHash: HASH_NEXT,
+      models: [{ name: 'Shop', fields }],
+    });
+    await writeRef(join(project.appMigrationsDir, 'refs'), 'next', {
+      hash: HASH_NEXT,
+      invariants: [],
+    });
+    return project;
+  }
+
+  it('says a --rename to a name the ref lacks is not fixed by emitting, and plans to the emitted contract without --to', async () => {
+    const project = await shopWithNext(['id']);
+    const script = { ...removedLegacy, statementsResolveDataLoss: true };
+
+    const run = await harness(project, { script }).run(
+      ['migration', 'plan', '--to', 'next', '--rename', 'Shop.legacy:Shop.rating', '--json'],
+      { cwd: project.dir },
+    );
+    const withoutTo = await harness(project, { script }).run(
+      ['migration', 'plan', '--rename', 'Shop.legacy:Shop.rating'],
+      { cwd: project.dir },
+    );
+
+    expect({ error: errorOf(run), withoutTo: withoutTo.exitCode }).toEqual({
+      error: {
+        code: 'MIGRATION.STATEMENT_UNRESOLVED',
+        severity: 'error',
+        summary:
+          'The contract --to next names has no field "Shop.rating" to rename "Shop.legacy" to.',
+        nextActions: [
+          {
+            kind: 'user-choice',
+            label:
+              'If field "Shop.legacy" was renamed to "Shop.rating", add field "Shop.rating" to the contract, run `prisma-test contract emit`, and run this command again without --to next.',
+          },
+        ],
+        meta: { statement: 'Shop.legacy:Shop.rating', verb: 'rename' },
+      },
+      withoutTo: 0,
+    });
+  });
+
+  it('names the fields the ref adds as the new names a --rename can give', async () => {
+    const project = await shopWithNext(['id', 'rating']);
+
+    const run = await harness(project, { script: removedLegacy }).run(
+      ['migration', 'plan', '--to', 'next', '--rename', 'Shop.legacy:Shop.nope', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(errorOf(run)).toEqual({
+      code: 'MIGRATION.STATEMENT_UNRESOLVED',
+      severity: 'error',
+      summary: 'The contract --to next names has no field "Shop.nope" to rename "Shop.legacy" to.',
+      why: 'That contract adds field "Shop.rating".',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'If field "Shop.legacy" was renamed to "Shop.nope", add field "Shop.nope" to the contract, run `prisma-test contract emit`, and run this command again without --to next.',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'If field "Shop.legacy" was renamed to "Shop.rating", put this in place of --rename Shop.legacy:Shop.nope: --rename Shop.legacy:Shop.rating',
+        },
+      ],
+      meta: { statement: 'Shop.legacy:Shop.nope', verb: 'rename' },
+    });
+  });
+
+  it('says to plan without --to after adding the new name, when the ref adds no field', async () => {
+    const project = await shopWithNext(['id']);
+
+    const run = await harness(project, { script: removedLegacy }).run(
+      ['migration', 'plan', '--to', 'next', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(labelsOf(errorOf(run))).toEqual([
+      "If the field was renamed, add it to the contract under its new name and run `prisma-test contract emit`, then run this command without --to next and keep its values: --rename 'Shop.legacy:Shop.<new name>'",
+      'If the values can go: --delete Shop.legacy',
+    ]);
   });
 });

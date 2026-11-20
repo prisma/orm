@@ -11,7 +11,6 @@ export function question(subject: string, namespace?: string): PlanQuestion {
     operations: [`Drop ${subject}`],
     notes: [],
     keepDataWays: [],
-    keepDataWaysNamingSubject: [],
     answers: [
       {
         flag: { verb: 'delete', text: subject },

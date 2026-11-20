@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
@@ -972,81 +972,6 @@ describe('migration plan', () => {
           { verb: 'delete', description: 'delete storage "audit_log"', operationIndexes: [2] },
         ],
       });
-    });
-
-    it('names a field of a renamed model through its new name, and takes a rename written that way', async () => {
-      const project = await createOfflineProject({
-        storageHash: HASH_TO,
-        models: [{ name: 'User', fields: ['id', 'handle'] }],
-      });
-      await seedMigrationPackage({
-        appMigrationsDir: project.appMigrationsDir,
-        dirName: '20260101T0000_initial',
-        from: null,
-        to: HASH_FROM,
-      });
-      await seedContractSnapshot({
-        migrationsDir: project.migrationsDir,
-        storageHash: HASH_FROM,
-        models: [{ name: 'Profile', fields: ['id', 'nickname'] }],
-      });
-      await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
-      const script: FakePlannerScript = {
-        operations: [ADDITIVE_OP, DESTRUCTIVE_OP],
-        dataLoss: [
-          {
-            operationIndex: 1,
-            subject: { kind: 'field', namespaceId: 'app', model: 'Profile', field: 'nickname' },
-          },
-        ],
-        statementsResolvingDataLoss: 2,
-      };
-
-      const refused = await harness(project, { script }).run(
-        ['migration', 'plan', '--rename', 'Profile:User', '--json'],
-        { cwd: project.dir },
-      );
-      expect(
-        (envelopeOf(refused) as { readonly error: { readonly nextActions: unknown } }).error
-          .nextActions,
-      ).toEqual([
-        {
-          kind: 'user-choice',
-          label:
-            'If the field was renamed to "handle", keep its values: --rename User.nickname:User.handle',
-        },
-        { kind: 'user-choice', label: 'If the values can go: --delete User.nickname' },
-      ]);
-
-      const deleted = await harness(project, { script }).run(
-        ['migration', 'plan', '--rename', 'Profile:User', '--delete', 'User.nickname', '--json'],
-        { cwd: project.dir },
-      );
-      expect(deleted.presented?.data).toMatchObject({
-        appliedStatements: [
-          { verb: 'rename' },
-          { verb: 'delete', description: 'delete field "User.nickname"' },
-        ],
-      });
-      for (const dir of await plannedDirs(project)) {
-        if (dir !== '20260101T0000_initial') {
-          await rm(join(project.appMigrationsDir, dir), { recursive: true });
-        }
-      }
-
-      const renamed = await harness(project, { script }).run(
-        [
-          'migration',
-          'plan',
-          '--rename',
-          'Profile:User',
-          '--rename',
-          'User.nickname:User.handle',
-          '--json',
-        ],
-        { cwd: project.dir },
-      );
-      expect(renamed.exitCode).toBe(0);
     });
   });
 

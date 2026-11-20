@@ -11,6 +11,7 @@ import {
   type PlannedSubject,
   type PlanQuestion,
 } from '../../../src/control-api/statements/plan-questions';
+import { RECOVERY_AT_PROMPT } from './plan-question-fixtures';
 import { contractOf } from './statement-fixtures';
 
 const origin = contractOf({ app: { models: { T: { fields: ['id', 'ratio'] } } } });
@@ -82,7 +83,7 @@ describe('a rename typed at the prompt', () => {
     expect((await result).ok).toBe(true);
     expect(asked).toEqual([
       [
-        'Removing field "T.ratio" would delete its values.\nThe operation of the plan that does this: Drop column "ratio" from "T".\nrename keeps the values under the new name; delete lets them go.',
+        'Removing field "T.ratio" would delete its values.\nThe operation of the plan that does this: Drop column "ratio" from "T".\nrename keeps the values under the new name; delete lets the values go.',
       ],
       [
         'Changing the type of field "T.ratio" can change or lose its values.\nThe operation of the plan that does this: Alter type of "T"."ratio2" to int4.\nconvert writes a conversion for you to fill in; delete lets the database cast the values, which can change or lose some.',
@@ -132,7 +133,7 @@ describe('questions about storage when the origin contract is unknown', () => {
     });
 
     expect(asked).toEqual([
-      `This change would delete the data in "Legacy", named by its storage name because the contract before this change is not known.\nThe operation of the plan that does this: Drop table Legacy.\n${ORIGIN_SNAPSHOT_RECOVERY.join('\n')}\ndelete lets the data go.`,
+      `This change would delete the data in "Legacy", named by its storage name because the contract before this change is not known.\nThe operation of the plan that does this: Drop table Legacy.\n${RECOVERY_AT_PROMPT}\ndelete lets the data go.`,
       'This change would delete the data in "Profile", named by its storage name because the contract before this change is not known.\nThe operation of the plan that does this: Drop table Profile.\ndelete lets the data go.',
     ]);
     expect(ORIGIN_SNAPSHOT_RECOVERY.map((line) => line.slice(0, 2))).toEqual([
@@ -332,9 +333,9 @@ describe('allow statements given as pre-answers', () => {
       meta: failure?.meta,
     }).toEqual({
       code: 'CLI.CONSENT_UNUSED',
-      summary: '--allow T was given, but the question about T was already answered by --allow T.',
-      why: 'The run asked about T.',
-      nextActions: [{ kind: 'user-choice', label: 'Give one flag per question.' }],
+      summary: '--allow T is given twice, and one is enough.',
+      why: undefined,
+      nextActions: [{ kind: 'user-choice', label: 'Remove one --allow T.' }],
       meta: { unused: [{ verb: 'allow', values: ['T'] }], asked: ['T'] },
     });
   });

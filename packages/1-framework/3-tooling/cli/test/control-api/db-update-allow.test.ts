@@ -95,10 +95,9 @@ function update(mode: 'plan' | 'apply', allows: number) {
 
 const SECOND_ALLOW = {
   code: 'CLI.CONSENT_UNUSED',
-  message:
-    '--allow user was given, but the question about user was already answered by --allow user.',
-  why: 'The run asked about user.',
-  nextActions: [{ kind: 'user-choice', label: 'Give one flag per question.' }],
+  message: '--allow user is given twice, and one is enough.',
+  why: undefined,
+  nextActions: [{ kind: 'user-choice', label: 'Remove one --allow user.' }],
   meta: { unused: [{ verb: 'allow', values: ['user'] }], asked: ['user'] },
 };
 

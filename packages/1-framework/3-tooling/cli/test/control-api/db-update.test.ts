@@ -13,11 +13,9 @@ import { notOk, ok } from '@internal/utils/result';
 import { describe, expect, it, vi } from 'vitest';
 import { executeDbUpdate } from '../../src/control-api/operations/db-update';
 import { questionText } from '../../src/control-api/statements/plan-question-text';
-import {
-  ORIGIN_SNAPSHOT_RECOVERY,
-  type PlanQuestion,
-} from '../../src/control-api/statements/plan-questions';
+import type { PlanQuestion } from '../../src/control-api/statements/plan-questions';
 import type { ControlProgressEvent } from '../../src/control-api/types';
+import { RECOVERY_AT_PROMPT } from './statements/plan-question-fixtures';
 
 const TEST_INVOCATION = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 
@@ -730,13 +728,9 @@ describe('executeDbUpdate', () => {
           migrations: createDestructiveMigrations(execute),
           answerQuestions: async (questions) => {
             expect(execute).not.toHaveBeenCalled();
-            asked.push(
-              ...questions.map((each) => ({
-                question: questionText(each),
-                subject: each.subject,
-                verbs: each.verbs,
-              })),
-            );
+            for (const { subject, verbs, ...parts } of questions) {
+              asked.push({ question: questionText(parts), subject, verbs });
+            }
             return questions.map((question) => ({
               verb: question.verbs.includes('allow') ? 'allow' : 'delete',
               text: question.subject,
@@ -747,7 +741,7 @@ describe('executeDbUpdate', () => {
 
       expect(asked).toEqual([
         {
-          question: `This change would delete the data in "user.nickname", named by its storage name because the contract before this change is not known.\nThe operation of the plan that does this: Drop column nickname from user.\n${ORIGIN_SNAPSHOT_RECOVERY.join('\n')}\ndelete lets the data go.`,
+          question: `This change would delete the data in "user.nickname", named by its storage name because the contract before this change is not known.\nThe operation of the plan that does this: Drop column nickname from user.\n${RECOVERY_AT_PROMPT}\ndelete lets the data go.`,
           subject: 'user.nickname',
           verbs: ['delete'],
         },

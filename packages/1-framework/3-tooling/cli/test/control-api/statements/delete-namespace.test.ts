@@ -104,8 +104,8 @@ describe('--delete with a namespace of the origin contract', () => {
     });
 
     expect(questions).toEqual([
-      'This change would delete the data of model "billing.Invoice".\nThe contract no longer has namespace "billing".\nThe operation of the plan that does this: Drop table "invoice".\ndelete billing lets the data of every model and field of namespace "billing" go; rename works once you add the model to the contract under its new name and run `{bin} contract emit`; delete lets its data go.',
-      'This change would delete the data of model "billing.Receipt".\nThe operation of the plan that does this: Drop table "receipt".\nrename works once you add the model to the contract under its new name and run `{bin} contract emit`; delete lets its data go.',
+      'This change would delete the data of model "billing.Invoice".\nThe contract no longer has namespace "billing".\nThe operation of the plan that does this: Drop table "invoice".\ndelete billing lets the data of every model and field of namespace "billing" go; rename works only once the contract has the model under its new name: stop this command, add it to the contract, run `prisma contract emit`, and run this command again; delete lets its data go.',
+      'This change would delete the data of model "billing.Receipt".\nThe operation of the plan that does this: Drop table "receipt".\nrename works only once the contract has the model under its new name: stop this command, add it to the contract, run `prisma contract emit`, and run this command again; delete lets its data go.',
     ]);
   });
 
@@ -420,7 +420,7 @@ describe('a --delete of a subject beside a --delete of its namespace', () => {
     const refusal = {
       code: 'CLI.CONSENT_UNUSED',
       message:
-        '--delete billing was given, but every question about namespace "billing" was already answered by another flag.',
+        '--delete billing does nothing: the other --delete flags already cover everything in namespace "billing".',
     };
     expect(!dryRun.ok && dryRun.failure).toMatchObject(refusal);
     await expect(apply).rejects.toMatchObject(refusal);

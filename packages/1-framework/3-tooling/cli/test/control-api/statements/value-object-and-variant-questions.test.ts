@@ -106,8 +106,8 @@ describe('a question about a value object field', () => {
     );
 
     expect(asked).toEqual([
-      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "GeoPoint.latitude" still needs a value: add --backfill GeoPoint.latitude to write it in migration.ts.\nrename keeps the values under the new name; delete lets them go.',
-      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required field "GeoPoint.latitude".\nrename keeps the values under the new name; delete lets them go.',
+      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "GeoPoint.latitude" still needs a value: add --backfill GeoPoint.latitude to write it in migration.ts.\nrename keeps the values under the new name; delete lets the values go.',
+      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required field "GeoPoint.latitude".\nrename keeps the values under the new name; delete lets the values go.',
     ]);
   });
 
@@ -125,8 +125,8 @@ describe('a question about a value object field', () => {
     );
 
     expect(asked).toEqual([
-      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required field "GeoPoint.latitude".\nrename keeps the values under the new name; delete lets them go.',
-      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "GeoPoint.latitude" gets no temporary value: plan the change with migration plan --backfill GeoPoint.latitude to write its value in migration.ts.\nrename keeps the values under the new name; delete lets them go.',
+      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required field "GeoPoint.latitude".\nrename keeps the values under the new name; delete lets the values go.',
+      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "GeoPoint.latitude" gets no temporary value: plan the change with migration plan --backfill GeoPoint.latitude to write its value in migration.ts.\nrename keeps the values under the new name; delete lets the values go.',
     ]);
   });
 
@@ -146,7 +146,7 @@ describe('a question about a value object field', () => {
     });
 
     expect(question === undefined ? undefined : textOf(question)).toBe(
-      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required field "app.GeoPoint.latitude".\nrename keeps the values under the new name; delete lets them go.',
+      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required field "app.GeoPoint.latitude".\nrename keeps the values under the new name; delete lets the values go.',
     );
   });
 
@@ -162,7 +162,7 @@ describe('a question about a value object field', () => {
     });
 
     expect(question === undefined ? undefined : textOf(question)).toBe(
-      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nrename keeps the values under the new name; delete lets them go.',
+      'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nrename keeps the values under the new name; delete lets the values go.',
     );
   });
 
@@ -193,14 +193,14 @@ describe('a question about a value object field', () => {
 
     it('names every new required field', async () => {
       expect([await askedText(true), await askedText(false)]).toEqual([
-        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required fields "GeoPoint.latitude" and "GeoPoint.longitude" still need a value: add --backfill GeoPoint.latitude --backfill GeoPoint.longitude to write them in migration.ts.\nrename keeps the values under the new name, "latitude" or "longitude"; delete lets them go.',
-        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required fields "GeoPoint.latitude" and "GeoPoint.longitude".\nrename keeps the values under the new name, "latitude" or "longitude"; delete lets them go.',
+        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required fields "GeoPoint.latitude" and "GeoPoint.longitude" still need a value: add --backfill GeoPoint.latitude --backfill GeoPoint.longitude to write them in migration.ts.\nrename keeps the values under the new name, "latitude" or "longitude"; delete lets the values go.',
+        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required fields "GeoPoint.latitude" and "GeoPoint.longitude".\nrename keeps the values under the new name, "latitude" or "longitude"; delete lets the values go.',
       ]);
     });
 
     it('names under migration plan only the new required fields the run does not backfill', async () => {
       expect(await askedText(true, [{ verb: 'backfill', text: 'GeoPoint.latitude' }])).toBe(
-        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "GeoPoint.longitude" still needs a value: add --backfill GeoPoint.longitude to write it in migration.ts.\nrename keeps the values under the new name, "latitude" or "longitude"; delete lets them go.',
+        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "GeoPoint.longitude" still needs a value: add --backfill GeoPoint.longitude to write it in migration.ts.\nrename keeps the values under the new name, "latitude" or "longitude"; delete lets the values go.',
       );
     });
   });
@@ -219,7 +219,7 @@ describe('a question about a value object field', () => {
     expect(question === undefined ? undefined : withText(question)).toMatchObject({
       subject: 'GeoPoint.lat',
       question:
-        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operations of the plan that do this:\n- Remove key "lat" from "place"."location"\n- Remove key "lat" from "trip"."stops"\nIf the values go, the existing objects get a temporary value in the new required field "GeoPoint.latitude".\nrename keeps the values under the new name; delete lets them go.',
+        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operations of the plan that do this:\n- Remove key "lat" from "place"."location"\n- Remove key "lat" from "trip"."stops"\nIf the values go, the existing objects get a temporary value in the new required field "GeoPoint.latitude".\nrename keeps the values under the new name; delete lets the values go.',
       verbs: ['rename', 'delete'],
       forms: { rename: 'GeoPoint.lat:GeoPoint.latitude' },
     });
@@ -248,7 +248,7 @@ describe('a question about a value object field', () => {
       {
         subject: 'GeoPoint.lng',
         question:
-          'Removing value object field "GeoPoint.lng" would delete its values.\nThe operations of the plan that do this:\n- Remove key "lng" at path "$" in column "location" of "place"\n- Remove key "lng" at path "$[*]" in column "stops" of "trip"\nrename works once you add the value object field to the contract under its new name and run `{bin} contract emit`; delete lets them go.',
+          'Removing value object field "GeoPoint.lng" would delete its values.\nThe operations of the plan that do this:\n- Remove key "lng" at path "$" in column "location" of "place"\n- Remove key "lng" at path "$[*]" in column "stops" of "trip"\nrename works only once the contract has the value object field under its new name: stop this command, add it to the contract, run `prisma contract emit`, and run this command again; delete lets the values go.',
         verbs: ['rename', 'delete'],
       },
     ]);
@@ -355,7 +355,7 @@ describe('a question about a removed variant', () => {
       {
         subject: 'Bug',
         question:
-          'Removing model "Bug" would delete its data.\nThe operations of the plan that do this:\n- Drop column "severity" of "tasks"\n- Delete the rows of "tasks" that hold value "bug" in column "type"\nrename works once you add the model to the contract under its new name and run `{bin} contract emit`; delete lets its data go.',
+          'Removing model "Bug" would delete its data.\nThe operations of the plan that do this:\n- Drop column "severity" of "tasks"\n- Delete the rows of "tasks" that hold value "bug" in column "type"\nrename works only once the contract has the model under its new name: stop this command, add it to the contract, run `prisma contract emit`, and run this command again; delete lets its data go.',
         verbs: ['rename', 'delete'],
       },
     ]);
@@ -455,8 +455,8 @@ describe('a question about a field of an embedded model', () => {
     );
 
     expect(asked).toEqual([
-      'Removing field "Line.sku" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "Line.code" still needs a value: add --backfill Line.code to write it in migration.ts.\nrename keeps the values under the new name; delete lets them go.',
-      'Removing field "Line.sku" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required field "Line.code".\nrename keeps the values under the new name; delete lets them go.',
+      'Removing field "Line.sku" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "Line.code" still needs a value: add --backfill Line.code to write it in migration.ts.\nrename keeps the values under the new name; delete lets the values go.',
+      'Removing field "Line.sku" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required field "Line.code".\nrename keeps the values under the new name; delete lets the values go.',
     ]);
   });
 
@@ -473,7 +473,7 @@ describe('a question about a field of an embedded model', () => {
     });
 
     expect(question === undefined ? undefined : textOf(question)).toBe(
-      'Removing field "Line.sku" would delete its values.\nThe operation of the plan that does this: Remove key.\nrename keeps the values under the new name; delete lets them go.',
+      'Removing field "Line.sku" would delete its values.\nThe operation of the plan that does this: Remove key.\nrename keeps the values under the new name; delete lets the values go.',
     );
   });
 });

@@ -13,6 +13,8 @@ export interface CliInvocation {
   readonly rerunArgs?: readonly string[];
   /** The run's statements, as flags, which another command that plans the same change repeats. */
   readonly statementArgs?: readonly string[];
+  /** The `--to` value the command plans to, when it plans to a stored contract and not the emitted one. */
+  readonly to?: string;
 }
 
 /** The invocation of a command run with `ctx`, given `--db` when `db` is defined. */

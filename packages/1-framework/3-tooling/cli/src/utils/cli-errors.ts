@@ -35,9 +35,11 @@ import {
   candidateRenames,
   candidatesFact,
   missingNameFact,
+  nameHadBeforeReason,
   type RenameToMissingName,
+  renameInTwoMigrations,
 } from '../control-api/statements/missing-new-name';
-import { statementFlag } from '../control-api/statements/statement-flag';
+import { shellQuoted, statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
 import { chooseAction, editFileAction, runCommandAction } from './next-actions';
 import {
@@ -694,6 +696,30 @@ export function errorRenameToMissingName(
 }
 
 /**
+ * A rename's old name is gone from the contract, and its new name, in the same model, enum, value
+ * object or contract, was there before the change too, so one change cannot give it to the old
+ * name: said in the words the prompt uses.
+ */
+export function errorRenameToNameHadBefore(
+  statement: WrittenStatement,
+  rename: RenameToMissingName,
+): ActionableCliError {
+  const reason = nameHadBeforeReason(rename.entity, rename.from, rename.to);
+  const twoMigrations = renameInTwoMigrations(rename);
+  const nextActions = [...candidateRenames(rename), twoMigrations];
+  return new ActionableCliError(
+    'MIGRATION.STATEMENT_UNRESOLVED',
+    `${reason.charAt(0).toUpperCase()}${reason.slice(1)}`,
+    {
+      ...ifDefined('why', candidatesFact(rename)),
+      fix: nextActions[0] ?? twoMigrations,
+      nextActions: nextActions.map(chooseAction),
+      meta: { statement: statement.text, verb: statement.verb },
+    },
+  );
+}
+
+/**
  * A rename or convert typed in answer to a data-loss question was planned, and the plan still loses
  * the subject's data: the statement does not account for the operation the question was about.
  */
@@ -779,11 +805,12 @@ export function errorStatementNeedsMigrationFile(
   );
 }
 
-/**
- * Consent flags the command took from the CLI engine and that answered no question: the engine's
- * own `CLI.CONSENT_UNUSED`, in its words, for values the engine no longer holds.
- */
-/** A consent flag nothing used, and the flag that had already answered its question, if one did. */
+/** A flag as the user gave it, its value quoted for a shell where needed. */
+function givenFlag({ verb, text }: WrittenStatement): string {
+  return `--${verb} ${shellQuoted(text)}`;
+}
+
+/** A consent flag nothing used, and what had already done what it asks, if anything had. */
 export interface UnusedConsent extends WrittenStatement {
   readonly alreadyAnsweredBy:
     | { readonly kind: 'subject'; readonly subject: string; readonly flag: WrittenStatement }
@@ -791,43 +818,91 @@ export interface UnusedConsent extends WrittenStatement {
     | undefined;
 }
 
-function unusedConsentSentence({
-  verb,
-  text,
-  alreadyAnsweredBy: answeredBy,
-}: UnusedConsent): string {
-  if (answeredBy === undefined) {
-    return `--${verb} ${text} was given but nothing in this run asked about ${text}.`;
-  }
-  if (answeredBy.kind === 'namespace') {
-    return `--${verb} ${text} was given, but every question about namespace "${answeredBy.namespace}" was already answered by another flag.`;
-  }
-  return `--${verb} ${text} was given, but the question about ${answeredBy.subject} was already answered by --${answeredBy.flag.verb} ${answeredBy.flag.text}.`;
+function times(count: number): string {
+  return count === 2 ? 'twice' : `${count} times`;
 }
 
+/** What one unused flag did not do, and how to fix the run, once per flag however often it was given. */
+function unusedConsentLines(
+  { verb, text, alreadyAnsweredBy: answeredBy }: UnusedConsent,
+  unusedCount: number,
+): { readonly summary: string; readonly action: string } {
+  const flag = givenFlag({ verb, text });
+  if (answeredBy === undefined) {
+    return {
+      summary:
+        verb === 'allow'
+          ? `${flag} names nothing whose access this change changes.`
+          : `${flag} names nothing whose data this change deletes.`,
+      action: `Remove ${flag}, or correct its name.`,
+    };
+  }
+  if (answeredBy.kind === 'namespace') {
+    return {
+      summary: `${flag} does nothing: the other --${verb} flags already cover everything in namespace "${answeredBy.namespace}".`,
+      action: `Remove ${flag}, or the --${verb} flags of the models and fields of namespace "${answeredBy.namespace}".`,
+    };
+  }
+  return {
+    summary: `${flag} is given ${times(unusedCount + 1)}, and one is enough.`,
+    action: unusedCount === 1 ? `Remove one ${flag}.` : `Remove all but one ${flag}.`,
+  };
+}
+
+/**
+ * `--delete` or `--allow` flags that did nothing: they name nothing the change deletes or changes
+ * access to, repeat a flag that already did it, or name a namespace whose models and fields other
+ * flags already cover. `asked` is the subjects of the run, which `meta` lists.
+ */
 export function errorConsentUnused(
   unused: readonly UnusedConsent[],
   asked: readonly string[],
 ): CliStructuredError {
-  const actions = [
-    ...(unused.some(({ alreadyAnsweredBy }) => alreadyAnsweredBy === undefined)
-      ? ['Remove the flag, or spell the subject the way the command names it.']
-      : []),
-    ...(unused.some(({ alreadyAnsweredBy }) => alreadyAnsweredBy !== undefined)
-      ? ['Give one flag per question.']
-      : []),
-  ];
-  return new CliStructuredError('CLI.CONSENT_UNUSED', unused.map(unusedConsentSentence).join(' '), {
-    ...ifDefined(
-      'why',
-      asked.length === 0 ? undefined : `The run asked about ${asked.join(', ')}.`,
-    ),
-    nextActions: actions.map((label) => ({ kind: 'user-choice', label })),
-    meta: {
-      unused: unused.map(({ verb, text }) => ({ verb, values: [text] })),
-      ...(asked.length === 0 ? {} : { asked }),
+  const byFlag = new Map<string, { readonly consent: UnusedConsent; count: number }>();
+  for (const consent of unused) {
+    const key = givenFlag(consent);
+    const seen = byFlag.get(key);
+    if (seen === undefined) byFlag.set(key, { consent, count: 1 });
+    else seen.count += 1;
+  }
+  const lines = [...byFlag.values()].map(({ consent, count }) =>
+    unusedConsentLines(consent, count),
+  );
+  return new CliStructuredError(
+    'CLI.CONSENT_UNUSED',
+    lines.map(({ summary }) => summary).join(' '),
+    {
+      nextActions: lines.map(({ action }) => ({ kind: 'user-choice', label: action })),
+      meta: {
+        unused: unused.map(({ verb, text }) => ({ verb, values: [text] })),
+        ...(asked.length === 0 ? {} : { asked }),
+      },
     },
-  });
+  );
+}
+
+/**
+ * `--delete` or `--allow` flags that name a subject of the change with a verb its question does not
+ * take, beside a flag that does settle it: each gets the line the refusal gives it.
+ */
+export function errorConsentMisdirected(
+  flags: readonly { readonly verb: string; readonly text: string; readonly line: string }[],
+  asked: readonly string[],
+): CliStructuredError {
+  const given = flags.map(givenFlag);
+  const listed =
+    given.length < 2 ? given.join('') : `${given.slice(0, -1).join(', ')} and ${given.at(-1)}`;
+  return new CliStructuredError(
+    'CLI.CONSENT_UNUSED',
+    `${listed} ${given.length === 1 ? 'does' : 'do'} nothing in this change.`,
+    {
+      nextActions: flags.map(({ line }) => ({ kind: 'user-choice', label: line })),
+      meta: {
+        unused: flags.map(({ verb, text }) => ({ verb, values: [text] })),
+        ...(asked.length === 0 ? {} : { asked }),
+      },
+    },
+  );
 }
 
 /**

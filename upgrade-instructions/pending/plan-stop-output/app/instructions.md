@@ -11,15 +11,23 @@ changes:
         - 'Run the command again with --(delete|rename|allow|convert)'
   - id: one-allow-per-model
     summary: |
-      `db update` asks once per model about the operations that change who can read or write its data, so one `--allow User` allows them all, such as disabling row-level security and dropping a policy on Postgres. A second `--allow User` in the same run fails with `CLI.CONSENT_UNUSED`, and `meta.unanswered` lists one entry per model. In the control API, one `allow` statement in `statements` answers every access change of its model, and a second fails with `CLI.CONSENT_UNUSED` too. `appliedStatements` has one `allow` entry for the flag, whose `operationIndexes` hold every operation it allowed. The detection matches a flag or statement given twice for one model, with other flags between them or not.
+      `db update` asks once per model about the operations that change who can read or write its data, so one `--allow User` allows them all, such as disabling row-level security and dropping a policy on Postgres. A second `--allow User` in the same run fails with `CLI.CONSENT_UNUSED`, and `meta.unanswered` lists one entry per model. In the control API, one `allow` statement in `statements` answers every access change of its model, and a second fails with `CLI.CONSENT_UNUSED` too, before `answerQuestions` is called. A second `delete` statement of one subject through the control API now fails with `CLI.CONSENT_UNUSED` too, where it failed with `MIGRATION.STATEMENT_ANSWERS_NO_QUESTION`. `appliedStatements` has one `allow` entry per model, whose `operationIndexes` hold every operation allowed for it, whether a flag allowed them or the database's data protection policy allowed them without asking. The detection matches a flag or statement given twice for one model, with other flags between them or not, and code that checks for `MIGRATION.STATEMENT_ANSWERS_NO_QUESTION`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,sh,bash,yml,yaml}"
       matches:
         - "--allow[ =](\\S+)\\s(?:.*\\s)?--allow[ =]\\1(\\s|$)"
         - "'--allow',\\s*'([^']+)',\\s*(?:[^\\]]*,\\s*)?'--allow',\\s*'\\1'"
+        - 'STATEMENT_ANSWERS_NO_QUESTION'
+  - id: rename-to-missing-name-reworded
+    summary: |
+      A `--rename` whose old name is gone from the contract and whose new name the contract does not have, in the same model, enum, value object or contract, still fails with `MIGRATION.STATEMENT_UNRESOLVED` and the same `meta` (`statement`, `verb`), but its text changed. The summary no longer says `Cannot resolve statement "--rename …"`; it says `The contract has no field "Shop.nope" to rename "Shop.legacy" to.` Its `why` lists the names the contract adds, or is absent when it adds none. Its next actions say to add the name and run `prisma contract emit` (with `--to <ref>`, to run again without `--to`), and give a `--rename` to each name the contract adds, to put in place of the one given. A `--rename` to a name the contract had before the change too gets the same code and `meta`, with the summary `The contract had field "Shop.id" before this change too, so one change cannot make it the new name of "Shop.legacy".` The detection matches code that reads the old summary.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,sh,bash,yml,yaml}"
+      matches:
+        - 'Cannot resolve statement'
   - id: plan-question-parts
     summary: |
-      A `PlanQuestion` that the control API hands to `answerQuestions` no longer has `question`, its prompt text. It carries the parts the text is built from (`headline`, `subjectInList`, `operations`, `notes`, `keepDataWays`, `keepDataWaysNamingSubject`, `answers`, `alsoGiveWhenDeleted`, `effect`), and `questionText(question)` from `@prisma/orm-toolchain/cli/control-api` builds the text. `verbs`, `forms`, `subject` and `validate` are unchanged.
+      A `PlanQuestion` that the control API hands to `answerQuestions` no longer has `question`, its prompt text. It carries the parts the text is built from (`headline`, `subjectInList`, `operations`, `notes`, `keepDataWays`, `answers`, `alsoGiveWhenDeleted`, `effect`), and `questionText(question)` from `@prisma/orm-toolchain/cli/control-api` builds the text, with `prisma` as the name of the CLI in the commands it names unless `questionText(question, { bin })` gives another. Each of `keepDataWays` is an object: `text`, and, when they apply, `forSubject`, `textNamingSubjects` and `atPrompt`, the way as the prompt gives it. `verbs`, `forms`, `subject` and `validate` are unchanged.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -69,7 +77,28 @@ An `answerQuestions` callback that read `question.question` builds the text with
 import { questionText } from '@prisma/orm-toolchain/cli/control-api';
 
 answerQuestions: async (questions) => {
-  for (const question of questions) console.log(questionText(question));
+  for (const question of questions) console.log(questionText(question, { bin: 'prisma' }));
   return questions.map(({ subject, verbs }) => ({ verb: verbs[0] ?? 'delete', text: subject }));
 },
 ```
+
+# A `--rename` to a name the contract does not have
+
+A script that matched `Cannot resolve statement` to find a `--rename` whose new name is missing reads the code and `meta` instead: `MIGRATION.STATEMENT_UNRESOLVED`, with `meta.statement` the rename's text. Before:
+
+```text
+✘ [MIGRATION.STATEMENT_UNRESOLVED] Cannot resolve statement "--rename Shop.legacy:Shop.nope"
+```
+
+After:
+
+```text
+✘ [MIGRATION.STATEMENT_UNRESOLVED] The contract has no field "Shop.nope" to rename "Shop.legacy" to.
+  why: The contract adds field "Shop.rating".
+→ If field "Shop.legacy" was renamed to "Shop.nope", add field "Shop.nope" to the contract, run `prisma contract emit`, and run this command again.
+→ If field "Shop.legacy" was renamed to "Shop.rating", put this in place of --rename Shop.legacy:Shop.nope: --rename Shop.legacy:Shop.rating
+```
+
+# A repeated `delete` statement through the control API
+
+Code that passed the same `delete` statement twice in `statements` and checked for `MIGRATION.STATEMENT_ANSWERS_NO_QUESTION` checks for `CLI.CONSENT_UNUSED` instead, or passes the statement once. The call fails before `answerQuestions` is called.

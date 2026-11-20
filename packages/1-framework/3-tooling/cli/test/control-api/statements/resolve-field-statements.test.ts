@@ -178,7 +178,7 @@ describe('resolveStatements, field renames', () => {
         why: 'The contract adds field "User.fullName".',
         nextActions: [
           'If field "User.name" was renamed to "User.email", add field "User.email" to the contract, run `{bin} contract emit`, and run this command again.',
-          'If field "User.name" was renamed to "User.fullName": --rename User.name:User.fullName',
+          'If field "User.name" was renamed to "User.fullName", put this in place of --rename User.name:User.email: --rename User.name:User.fullName',
         ],
         meta: { statement: 'User.name:User.email', verb: 'rename' },
       });
@@ -190,8 +190,8 @@ describe('resolveStatements, field renames', () => {
       expectFailure(
         resolve(['User.name:User.fullName'], origin, destination),
         UNRESOLVED,
-        'field "fullName" already exists on the origin model "app.User"',
-        'If another field holds the name "fullName" in the origin and this change renames or removes it, make the change in two migrations: first change the contract so that field has its new name or is gone, and plan only that; then give "name" the name "fullName" and plan it with --rename User.name:User.fullName.',
+        'The contract had field "User.fullName" before this change too, so one change cannot make it the new name of "User.name".',
+        'If "User.name" takes the name of field "User.fullName", which this change renames or removes, make the change in two migrations: first change the contract so that "User.fullName" has its new name or is gone, and plan only that; then rename "User.name" to "User.fullName" with --rename User.name:User.fullName.',
       );
     });
 

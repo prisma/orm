@@ -17,6 +17,7 @@ import {
   type EnumValueCoordinate,
   type FieldCoordinate,
   fieldStatementText,
+  type MigrationSubject,
   type ModelCoordinate,
   modelDisplayName,
   modelStatementText,
@@ -29,6 +30,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import {
   errorRenameToMissingName,
+  errorRenameToNameHadBefore,
   errorStatementInvalid,
   errorStatementOriginUnknown,
   errorStatementUnresolved,
@@ -41,6 +43,7 @@ import {
   parseRenameStatement,
   type StatementSide,
 } from './parse-rename';
+import { possibleNewNames } from './possible-new-names';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
 import { variantValue } from './variants';
@@ -68,6 +71,8 @@ export interface ResolveStatementsInput {
   readonly statements: readonly StatementText[];
   readonly origin: StatementOrigin;
   readonly destination: ContractWithDomain;
+  /** The `--to` value the command plans to, when the destination is a stored contract and not the emitted one. */
+  readonly destinationRef?: string;
 }
 
 type Side = 'old' | 'new';
@@ -154,6 +159,9 @@ interface ResolutionState {
   readonly renamedTo: Set<string>;
   /** Each field a convert or backfill statement names, keyed by its verb and the field. */
   readonly fieldStatements: Set<string>;
+  /** The renames resolved so far, in order. */
+  readonly renames: ResolvedMigrationStatement[];
+  readonly destinationRef: string | undefined;
 }
 
 const NAMESPACE_RENAMES = 'namespace';
@@ -1428,24 +1436,16 @@ function resolveOneNameStatement(
     !namespacesOf(state.destination).includes(to)
   ) {
     return notOk(
-      errorRenameToMissingName(statement, { entity: 'namespace', from, to, candidates: added }),
+      errorRenameToMissingName(statement, {
+        entity: 'namespace',
+        from,
+        to,
+        candidates: added,
+        destinationRef: state.destinationRef,
+      }),
     );
   }
   return notOk(unresolved(statement, asNamespace.failure));
-}
-
-/** The models the destination contract has and the origin does not, without those a rename names. */
-function modelsAdded(state: ResolutionState): readonly ModelCoordinate[] {
-  return Object.entries(state.destination.contract.domain.namespaces).flatMap(
-    ([namespaceId, namespace]) =>
-      Object.keys(namespace.models).flatMap((model) => {
-        const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
-        const renamedTo = state.renamedTo.has(`${MODEL_RENAMES}:${qualifiedModel(coordinate)}`);
-        return renamedTo || modelAt(state.origin.contract, coordinate) !== undefined
-          ? []
-          : [coordinate];
-      }),
-  );
 }
 
 function namesAdded(before: readonly string[], after: readonly string[]): readonly string[] {
@@ -1457,60 +1457,81 @@ function namesAdded(before: readonly string[], after: readonly string[]): readon
  * the same model, enum or value object, or as a model, the destination does not have either: said
  * in the user's terms, with the names the destination adds there that it can be instead.
  */
-function renameToMissingName(
+function subjectRead(reading: SideReading): MigrationSubject {
+  switch (reading.entity) {
+    case 'model':
+      return { kind: 'model', ...reading.coordinate };
+    case 'field':
+      return { kind: 'field', ...reading.coordinate };
+    case 'enumValue':
+      return { kind: 'enumValue', ...reading.coordinate };
+    case 'valueObjectField':
+      return { kind: 'valueObjectField', ...reading.coordinate };
+  }
+}
+
+/**
+ * A rename whose old name the destination contract no longer has, and whose new name, written in
+ * the same model, enum or value object, or as a model, the destination does not have either, or
+ * had in the origin too: said in the user's terms, with the names the destination adds there that
+ * it can be instead.
+ */
+function newNameRefusal(
   state: ResolutionState,
   statement: ParsedRename,
   from: SideReading,
+  to: SideReading | undefined,
 ): CliStructuredError | undefined {
   const parent = statement.from.slice(0, -1).join('.');
   const sameParent = statement.to.slice(0, -1).join('.') === parent;
   const name = statement.to.at(-1) ?? '';
-  const written = (each: string) => (parent === '' ? each : `${parent}.${each}`);
-  const missing = (candidates: readonly string[]) =>
-    errorRenameToMissingName(statement, {
-      entity: ENTITY_WORDS[from.entity],
-      from: statement.from.join('.'),
-      to: statement.to.join('.'),
-      candidates: candidates.map(written),
-    });
+  const rename = {
+    entity: ENTITY_WORDS[from.entity],
+    from: statement.from.join('.'),
+    to: statement.to.join('.'),
+    candidates: possibleNewNames(subjectRead(from), {
+      origin: state.origin.contract,
+      destination: state.destination.contract,
+      renames: state.renames,
+    }).map((each) => (from.entity === 'model' || parent === '' ? each : `${parent}.${each}`)),
+    destinationRef: state.destinationRef,
+  };
+  const missing = () =>
+    to === undefined ? errorRenameToMissingName(statement, rename) : undefined;
+  const hadBefore = () =>
+    to?.entity === from.entity ? errorRenameToNameHadBefore(statement, rename) : undefined;
   switch (from.entity) {
     case 'model': {
       if (modelAt(state.destination.contract, from.coordinate) !== undefined) return undefined;
+      if (to !== undefined) {
+        return to.entity === 'model' && modelAt(state.origin.contract, to.coordinate) !== undefined
+          ? hadBefore()
+          : undefined;
+      }
       const [first, second] = statement.to;
       const lookup =
         second === undefined
           ? lookupModel(state.destination, undefined, first)
           : lookupModel(state.destination, first, second);
-      if (lookup.kind !== 'missing') return undefined;
-      return errorRenameToMissingName(statement, {
-        entity: 'model',
-        from: statement.from.join('.'),
-        to: statement.to.join('.'),
-        candidates: modelsAdded(state).map((model) =>
-          modelStatementText(state.destination.contract, model),
-        ),
-      });
+      return lookup.kind === 'missing' ? missing() : undefined;
     }
     case 'field': {
       const destination = from.destinationModel;
       const model =
         destination === undefined ? undefined : modelAt(state.destination.contract, destination);
       if (destination === undefined || model === undefined || !sameParent) return undefined;
-      if (hasField(model, from.coordinate.field) || hasField(model, name)) return undefined;
-      return missing(
-        namesAdded(fieldNames(from.model), Object.keys(model.fields)).filter(
-          (field) =>
-            !state.renamedTo.has(`${FIELD_RENAMES}:${qualifiedField({ ...destination, field })}`),
-        ),
-      );
+      if (hasField(model, from.coordinate.field)) return undefined;
+      if (hasField(model, name)) return hasField(from.model, name) ? hadBefore() : undefined;
+      return missing();
     }
     case 'enumValue': {
       if (!sameParent) return undefined;
       const { namespaceId, enum: enumName, member } = from.coordinate;
       const lookup = lookupEnum(state.destination, namespaceId, enumName);
       if (lookup.kind !== 'found' || lookup.members.includes(member)) return undefined;
-      if (lookup.members.includes(name)) return undefined;
-      return missing(namesAdded(from.members, lookup.members));
+      if (lookup.members.includes(name))
+        return from.members.includes(name) ? hadBefore() : undefined;
+      return missing();
     }
     case 'valueObjectField': {
       if (!sameParent) return undefined;
@@ -1518,8 +1539,9 @@ function renameToMissingName(
       const lookup = lookupValueObject(state.destination, namespaceId, valueObject);
       if (lookup.kind !== 'found') return undefined;
       const fields = Object.keys(lookup.valueObject.fields);
-      if (fields.includes(field) || fields.includes(name)) return undefined;
-      return missing(namesAdded(from.fields, fields));
+      if (fields.includes(field)) return undefined;
+      if (fields.includes(name)) return from.fields.includes(name) ? hadBefore() : undefined;
+      return missing();
     }
   }
 }
@@ -1542,8 +1564,8 @@ function resolveStatement(
   const from = readSide(state, 'old', statement.from);
   if (!from.ok) return notOk(oldSideRefusal(state, statement, later, from.failure));
   const to = readSide(state, 'new', statement.to);
-  const missingNewName = to.ok ? undefined : renameToMissingName(state, statement, from.value);
-  if (missingNewName !== undefined) return notOk(missingNewName);
+  const refusal = newNameRefusal(state, statement, from.value, to.ok ? to.value : undefined);
+  if (refusal !== undefined) return notOk(refusal);
   if (
     !to.ok &&
     (from.value.entity === 'enumValue' || from.value.entity === 'valueObjectField') &&
@@ -2009,6 +2031,8 @@ export function resolveStatements(
     renamedFrom: new Set(),
     renamedTo: new Set(),
     fieldStatements: new Set(),
+    renames: [],
+    destinationRef: input.destinationRef,
   };
   const resolved: { readonly index: number; readonly statement: ResolvedMigrationStatement }[] = [];
   const parsedRenames = renames.map(({ statement }) => statement);
@@ -2017,6 +2041,7 @@ export function resolveStatements(
   for (const [position, { index, statement }] of renames.entries()) {
     const result = resolveStatement(state, statement, parsedRenames.slice(position + 1));
     if (!result.ok) return result;
+    state.renames.push(result.value);
     resolved.push({ index, statement: result.value });
   }
   for (const { index, statement } of fieldStatements) {

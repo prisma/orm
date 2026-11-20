@@ -374,6 +374,8 @@ async function answerPlannedDataLoss(input: {
   readonly origin: ContractWithDomain;
   readonly originKnown: boolean;
   readonly destination: ContractWithDomain;
+  /** The `--to` value of a destination stored under a ref, not emitted. */
+  readonly destinationRef: string | undefined;
   readonly answer: AnswerPlanQuestions;
   readonly invocation: CliInvocation;
   readonly planDelta: (
@@ -405,6 +407,7 @@ async function answerPlannedDataLoss(input: {
     origin: input.origin,
     originKnown: input.originKnown,
     destination: input.destination,
+    ...ifDefined('destinationRef', input.destinationRef),
     answer: input.answer,
     keepDataEditAdvice: migrationPlanKeepDataEditAdvice(input.invocation),
     replan: async (statements) => {
@@ -705,6 +708,7 @@ async function executeMigrationPlanCommandInner(
     destinationInStore = true;
     toRef = toResolution.value.ref;
   }
+  const destinationRef = destinationInStore ? options.to : undefined;
 
   // Statements resolve against the two contracts now settled, before anything
   // is written. A plan from an empty database has no model to rename.
@@ -716,6 +720,7 @@ async function executeMigrationPlanCommandInner(
       statements: statementTexts,
       origin: { kind: 'contract', contract: fromContract ?? EMPTY_ORIGIN },
       destination: toContract,
+      ...ifDefined('destinationRef', destinationRef),
     });
     if (!resolved.ok) {
       return notOk(resolved.failure);
@@ -893,6 +898,7 @@ async function executeMigrationPlanCommandInner(
         origin: fromContract ?? EMPTY_ORIGIN,
         originKnown: true,
         destination: toContract,
+        destinationRef,
         answer: options.answerQuestions,
         invocation: invocationOf(options),
         planDelta: async (planned) => {
@@ -900,6 +906,7 @@ async function executeMigrationPlanCommandInner(
             statements: planned,
             origin: { kind: 'contract', contract: fromContract ?? EMPTY_ORIGIN },
             destination: toContract,
+            ...ifDefined('destinationRef', destinationRef),
           });
           if (!resolved.ok) return resolved;
           return planDelta([...consentTexts, ...planned], resolved.value);

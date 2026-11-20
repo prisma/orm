@@ -444,6 +444,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             ...cliInvocation(ctx, args.flags.db),
             rerunArgs: rerunFlags(args.flags),
             statementArgs,
+            ...ifDefined('to', args.flags.to),
           },
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
           onProgress: controlProgressReporter(ctx.report),

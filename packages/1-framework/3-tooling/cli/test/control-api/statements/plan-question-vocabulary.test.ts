@@ -11,6 +11,7 @@ import type {
 } from '../../../src/control-api/statements/plan-questions';
 import { resolveStatements } from '../../../src/control-api/statements/resolve-statements';
 import { promptPlanQuestions } from '../../../src/orm/plan-question-prompt';
+import { errorConsentMisdirected, errorConsentUnused } from '../../../src/utils/cli-errors';
 import {
   dbUpdateKeepDataEditAdvice,
   migrationPlanKeepDataEditAdvice,
@@ -199,21 +200,66 @@ async function rebuiltPromptInvalid(
 /** The errors a `--rename` flag to a name the contract does not have gets, for each kind of subject. */
 function missingNameFlagErrors(): readonly string[] {
   return [
-    'Shop.legacy:Shop.nope',
-    'Legacy:Nope',
-    'Status.ARCHIVED:Status.NOPE',
-    'GeoPoint.note:GeoPoint.nope',
-    'billing:nope',
-  ].flatMap((text) => {
+    ['Shop.legacy:Shop.nope', undefined],
+    ['Shop.legacy:Shop.nope', 'next'],
+    ['Shop.legacy:Shop.age', undefined],
+    ['Legacy:Nope', undefined],
+    ['Status.ARCHIVED:Status.NOPE', undefined],
+    ['Status.ARCHIVED:Status.OPEN', undefined],
+    ['GeoPoint.note:GeoPoint.nope', undefined],
+    ['GeoPoint.note:GeoPoint.lat', undefined],
+    ['billing:nope', 'next'],
+  ].flatMap(([text = '', destinationRef]) => {
     const resolved = resolveStatements({
       statements: [{ verb: 'rename', text }],
       origin: { kind: 'contract', contract: origin },
       destination,
+      ...(destinationRef === undefined ? {} : { destinationRef }),
     });
     if (resolved.ok) throw new Error(`Expected --rename ${text} to fail`);
     const { message, why, nextActions } = resolved.failure;
     return [message, why ?? '', ...(nextActions ?? []).map(({ label }) => label)];
   });
+}
+
+/** The CLI's own errors for `--delete` and `--allow` flags that did nothing. */
+function flagsThatDidNothing(): readonly string[] {
+  const subject = (text: string) => ({
+    kind: 'subject' as const,
+    subject: text,
+    flag: { verb: 'allow', text },
+  });
+  return [
+    errorConsentUnused(
+      [
+        { verb: 'delete', text: 'Nope', alreadyAnsweredBy: undefined },
+        { verb: 'allow', text: 'Nope', alreadyAnsweredBy: undefined },
+        {
+          verb: 'delete',
+          text: 'billing',
+          alreadyAnsweredBy: { kind: 'namespace', namespace: 'billing' },
+        },
+        { verb: 'allow', text: 'User', alreadyAnsweredBy: subject('User') },
+        { verb: 'allow', text: 'Task', alreadyAnsweredBy: subject('Task') },
+        { verb: 'allow', text: 'Task', alreadyAnsweredBy: subject('Task') },
+      ],
+      ['User', 'Task'],
+    ),
+    errorConsentMisdirected(
+      [
+        {
+          verb: 'allow',
+          text: 'Bug',
+          line: 'Remove --allow Bug: this change does not change access to model "Bug".',
+        },
+      ],
+      ['Bug'],
+    ),
+  ].flatMap(({ message, why, nextActions }) => [
+    message,
+    why ?? '',
+    ...(nextActions ?? []).map(({ label }) => label),
+  ]);
 }
 
 const TOOL_WORDS =
@@ -245,10 +291,13 @@ describe('the texts built when a plan stops to ask', () => {
       }),
     );
     const texts = [
-      ...runs.flatMap((questions) => questions.map((each) => questionText(each, true))),
+      ...runs.flatMap((questions) =>
+        questions.map((each) => questionText(each, { withNamespace: true })),
+      ),
       ...refused.map(({ reason }) => reason),
       ...prompted.flatMap(({ shown, rebuilt }) => [...shown, ...rebuilt]),
       ...missingNameFlagErrors(),
+      ...flagsThatDidNothing(),
     ];
     const joined = [...texts, ...refusalTexts].join('\n');
 
@@ -273,7 +322,7 @@ describe('the texts built when a plan stops to ask', () => {
         'The rename\'s old name is not "app.Shop.legacy"',
         '"rename app.Shop.legacy:app.Shop.nope" does not fit this change',
         'add field "app.Shop.nope" to the contract, run `prisma contract emit`, and run this command again.',
-        'and run `prisma contract emit`; delete',
+        'stop this command, add it to the contract, run `prisma contract emit`, and run this command again; delete',
         '"delete nope" does not fit this change: give it as --delete',
         'The contract has no enum value "Status.NOPE" to rename "Status.ARCHIVED" to.',
         'The contract has no value object field "GeoPoint.nope" to rename "GeoPoint.note" to.',
@@ -284,6 +333,23 @@ describe('the texts built when a plan stops to ask', () => {
         'This change would lose data and change access:',
         'Remove --allow Legacy: this change does not change access to model "Legacy".',
         'Access to the data of "app.Shop" would widen.',
+        'The contract --to next names has no field "Shop.nope"',
+        'and run this command again without --to next.',
+        'put this in place of --rename Shop.legacy:Shop.nope: --rename Shop.legacy:Shop.rating',
+        'The contract had field "Shop.age" before this change too, so one change cannot make it the new name of "Shop.legacy".',
+        'The contract had enum value "Status.OPEN" before this change too',
+        'The contract had value object field "GeoPoint.lat" before this change too',
+        'make the change in two migrations',
+        'stop this command and run it again with --rename',
+        'stop this command and keep its data: store a snapshot',
+        '--delete Nope names nothing whose data this change deletes.',
+        '--allow Nope names nothing whose access this change changes.',
+        '--delete billing does nothing: the other --delete flags already cover everything in namespace "billing".',
+        '--allow User is given twice, and one is enough.',
+        'Remove one --allow User.',
+        '--allow Task is given 3 times, and one is enough.',
+        'Remove all but one --allow Task.',
+        '--allow Bug does nothing in this change.',
       ].filter((text) => !joined.includes(text)),
       toolWords: [...texts, ...refusalTexts].filter((text) => TOOL_WORDS.test(text)),
       promptsWithoutTheBinary: prompted

@@ -144,8 +144,10 @@ export type {
 } from '../control-api/render-contract-dts';
 export {
   type ChangeEffect,
+  type KeepDataWay,
   type QuestionAnswer,
   type QuestionParts,
+  type QuestionTextOptions,
   questionText,
   type RemovedNamespaceParts,
 } from '../control-api/statements/plan-question-text';

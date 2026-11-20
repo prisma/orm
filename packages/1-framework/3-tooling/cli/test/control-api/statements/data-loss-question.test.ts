@@ -248,7 +248,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
     expect({ verbs: question.verbs, question: questionText(question) }).toEqual({
       verbs: ['delete'],
       question:
-        'This change would delete the values of field "Profile.nickname".\nThe operation of the plan that does this: Remove field nickname from collection profiles.\nIf model "Profile" was renamed to "Person", say so first: --rename Profile:Person\ndelete lets them go.',
+        'This change would delete the values of field "Profile.nickname".\nThe operation of the plan that does this: Remove field nickname from collection profiles.\nIf model "Profile" was renamed to "Person", stop this command and run it again with --rename Profile:Person.\ndelete lets the values go.',
     });
   });
 

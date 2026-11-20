@@ -116,9 +116,10 @@ describe('resolveStatements, enum value renames', () => {
       'The value "OPEN" still exists in the destination enum "Status", so it was not renamed.',
     );
     expect(
-      expectFailure(resolve(['Status.ARCHIVED:Status.OPEN'], origin, destination), UNRESOLVED).why,
+      expectFailure(resolve(['Status.ARCHIVED:Status.OPEN'], origin, destination), UNRESOLVED)
+        .message,
     ).toBe(
-      'The value "OPEN" already exists in the origin enum "Status", so it cannot be the new name of a value.',
+      'The contract had enum value "Status.OPEN" before this change too, so one change cannot make it the new name of "Status.ARCHIVED".',
     );
   });
 
