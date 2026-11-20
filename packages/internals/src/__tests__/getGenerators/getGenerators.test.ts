@@ -59,6 +59,7 @@ describe('getGenerators', () => {
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -134,6 +135,7 @@ describe('getGenerators', () => {
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -217,6 +219,7 @@ describe('getGenerators', () => {
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -300,6 +303,7 @@ describe('getGenerators', () => {
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -384,6 +388,7 @@ describe('getGenerators', () => {
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -482,6 +487,7 @@ describe('getGenerators', () => {
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
     })
 
     expect(generators.map((g) => g.manifest)).toMatchInlineSnapshot(`
@@ -579,6 +585,7 @@ describe('getGenerators', () => {
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
       generatorNames: ['client_1', 'client_3'],
     })
 
@@ -600,6 +607,7 @@ describe('getGenerators', () => {
       getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
       }),
     ).rejects.toThrow('Unknown')
 
@@ -619,6 +627,7 @@ describe('getGenerators', () => {
       await getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
       })
     } catch (e) {
       expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
@@ -642,6 +651,30 @@ describe('getGenerators', () => {
     expect(ctx.mocked['console.error'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
   })
 
+  test('fail if no model(s) found and allow-no-models flag is false - prisma7 sqlite guidance', async () => {
+    const schemaContext = await loadSchemaContext({
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'missing-models-sqlite-schema.prisma') },
+    })
+
+    await expect(
+      getGenerators({
+        schemaContext,
+        registry,
+        allowNoModels: false,
+        cliCommand: 'prisma7',
+      }),
+    ).rejects.toThrow('  $ prisma7 generate')
+
+    await expect(
+      getGenerators({
+        schemaContext,
+        registry,
+        allowNoModels: false,
+        cliCommand: 'prisma7',
+      }),
+    ).rejects.not.toThrow('  $ prisma generate')
+  })
+
   test('fail if no model(s) found and allow-no-models flag is false - sqlite', async () => {
     expect.assertions(5)
     const schemaContext = await loadSchemaContext({
@@ -652,13 +685,19 @@ describe('getGenerators', () => {
       await getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
         allowNoModels: false,
       })
     } catch (e) {
       expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
         "
         You don't have any models defined in your schema.prisma, so nothing will be generated.
-        You can define a model like this:
+
+        Prisma Client is typically generated from models defined in your schema. If you plan to use raw SQL queries only (e.g. $queryRaw), remove the --require-models flag to generate the client without models:
+
+          $ prisma generate
+
+        Otherwise, you can define a model like this:
 
         model User {
           id    Int     @id @default(autoincrement())
@@ -678,6 +717,30 @@ describe('getGenerators', () => {
     expect(ctx.mocked['console.error'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
   })
 
+  test('fail if no model(s) found and allow-no-models flag is false - prisma7 mongodb guidance', async () => {
+    const schemaContext = await loadSchemaContext({
+      schemaPath: { cliProvidedPath: path.join(__dirname, 'missing-models-mongodb-schema.prisma') },
+    })
+
+    await expect(
+      getGenerators({
+        schemaContext,
+        registry,
+        allowNoModels: false,
+        cliCommand: 'prisma7',
+      }),
+    ).rejects.toThrow('  $ prisma7 generate')
+
+    await expect(
+      getGenerators({
+        schemaContext,
+        registry,
+        allowNoModels: false,
+        cliCommand: 'prisma7',
+      }),
+    ).rejects.not.toThrow('  $ prisma generate')
+  })
+
   test('fail if no model(s) found and allow-no-models flag is false - mongodb', async () => {
     expect.assertions(5)
     const schemaContext = await loadSchemaContext({
@@ -688,13 +751,19 @@ describe('getGenerators', () => {
       await getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
         allowNoModels: false,
       })
     } catch (e) {
       expect(stripVTControlCharacters(e.message)).toMatchInlineSnapshot(`
         "
         You don't have any models defined in your schema.prisma, so nothing will be generated.
-        You can define a model like this:
+
+        Prisma Client is typically generated from models defined in your schema. If you plan to use raw queries only, remove the --require-models flag to generate the client without models:
+
+          $ prisma generate
+
+        Otherwise, you can define a model like this:
 
         model User {
           id    String  @id @default(auto()) @map("_id") @db.ObjectId
@@ -740,6 +809,7 @@ describe('getGenerators', () => {
       await getGenerators({
         schemaContext,
         registry,
+        cliCommand: 'prisma',
         generatorNames: ['client_1', 'invalid_generator'],
       })
     } catch (e) {
@@ -759,6 +829,7 @@ describe('getGenerators', () => {
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
       allowNoModels: true,
     })
 
@@ -786,6 +857,7 @@ describe('getGenerators', () => {
     const generators = await getGenerators({
       schemaContext,
       registry,
+      cliCommand: 'prisma',
       allowNoModels: true,
     })
 

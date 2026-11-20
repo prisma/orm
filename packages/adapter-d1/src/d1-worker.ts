@@ -121,15 +121,15 @@ class D1WorkerTransaction extends D1WorkerQueryable<StdClient> implements Transa
   }
 
   async createSavepoint(name: string): Promise<void> {
-    await this.executeRaw({ sql: `SAVEPOINT ${name}`, args: [], argTypes: [] })
+    debug(`[js::createSavepoint] %s`, name)
   }
 
   async rollbackToSavepoint(name: string): Promise<void> {
-    await this.executeRaw({ sql: `ROLLBACK TO ${name}`, args: [], argTypes: [] })
+    debug(`[js::rollbackToSavepoint] %s`, name)
   }
 
   async releaseSavepoint(name: string): Promise<void> {
-    await this.executeRaw({ sql: `RELEASE SAVEPOINT ${name}`, args: [], argTypes: [] })
+    debug(`[js::releaseSavepoint] %s`, name)
   }
 }
 

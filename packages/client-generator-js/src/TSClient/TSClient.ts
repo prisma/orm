@@ -232,8 +232,8 @@ ${fieldRefs.join('\n\n')}`
  * Deep Input Types
  */
 
-${this.dmmf.inputObjectTypes.prisma
-  ?.reduce((acc, inputType) => {
+${(this.dmmf.inputObjectTypes.prisma ?? [])
+  .reduce((acc, inputType) => {
     if (inputType.name.includes('Json') && inputType.name.includes('Filter')) {
       const needsGeneric = this.genericsInfo.typeNeedsGenericModelArg(inputType)
       const innerName = needsGeneric ? `${inputType.name}Base<$PrismaModel>` : `${inputType.name}Base`

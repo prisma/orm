@@ -5,9 +5,9 @@
   "license": "Apache-2.0",
   "engines": {
     "node": "^20.19 || ^22.12 || >=24.0",
-    "pnpm": ">=10.15 <11"
+    "pnpm": ">=11 <12"
   },
-  "packageManager": "pnpm@10.15.1",
+  "packageManager": "pnpm@11.13.1",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
@@ -47,7 +47,7 @@
     "@types/fs-extra": "11.0.4",
     "@types/graphviz": "0.0.39",
     "@types/jest": "29.5.14",
-    "@types/node": "~20.19.24",
+    "@types/node": "~20.19.37",
     "@types/resolve": "1.20.6",
     "@typescript-eslint/eslint-plugin": "7.15.0",
     "@typescript-eslint/parser": "7.15.0",
@@ -71,12 +71,12 @@
     "execa": "8.0.1",
     "format-util": "1.0.5",
     "fs-extra": "11.3.0",
-    "globals": "16.0.0",
+    "globals": "17.7.0",
     "globby": "11.1.0",
     "graphviz-mit": "0.0.9",
     "husky": "9.1.7",
     "is-ci": "4.1.0",
-    "jest-junit": "16.0.0",
+    "jest-junit": "17.0.0",
     "kleur": "4.1.5",
     "lint-staged": "15.4.3",
     "p-map": "4.0.0",
@@ -87,7 +87,7 @@
     "regenerator-runtime": "0.14.1",
     "resolve": "1.22.10",
     "safe-buffer": "5.2.1",
-    "semver": "7.7.0",
+    "semver": "7.8.5",
     "size-limit": "11.2.0",
     "spdx-exceptions": "2.5.0",
     "spdx-license-ids": "3.0.21",
@@ -95,7 +95,7 @@
     "ts-node": "10.9.2",
     "ts-toolbelt": "9.6.0",
     "tsx": "4.19.3",
-    "turbo": "2.5.6",
+    "turbo": "2.10.5",
     "typescript": "5.4.5",
     "vitest": "4.0.18",
     "wrangler": "3.114.15",
@@ -158,14 +158,5 @@
       "gzip": false,
       "brotli": false
     }
-  ],
-  "pnpm": {
-    "overrides": {
-      "form-data": ">=4.0.4",
-      "hono": ">=4.12.2",
-      "jws": ">=4.0.1",
-      "tar-fs": ">=2.1.4",
-      "lodash": ">=4.17.23"
-    }
-  }
+  ]
 }

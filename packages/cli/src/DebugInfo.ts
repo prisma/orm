@@ -14,35 +14,24 @@ import {
 import { bold, dim, red, underline } from 'kleur/colors'
 
 import { getRootCacheDir } from '../../fetch-engine/src/utils'
+import type { CliDistributionIdentity } from './utils/cli-distribution-identity'
 
 /**
  * $ prisma debug
  */
 export class DebugInfo implements Command {
-  static new(): DebugInfo {
-    return new DebugInfo()
+  static new(identity: CliDistributionIdentity): DebugInfo {
+    return new DebugInfo(identity)
   }
 
-  private static help = format(`
-  Print information helpful for debugging and bug reports
-
-  ${bold('Usage')}
-
-    ${dim('$')} prisma debug [options]
-
-  ${bold('Options')}
-
-    -h, --help     Display this help message
-    --config       Custom path to your Prisma config file
-    --schema       Custom path to your Prisma schema
-`)
+  constructor(private readonly identity: CliDistributionIdentity) {}
 
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${DebugInfo.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
     }
 
-    return DebugInfo.help
+    return createHelp(this.identity)
   }
 
   async parse(argv: string[], config: PrismaConfigInternal, baseDir: string = process.cwd()): Promise<string | Error> {
@@ -146,4 +135,20 @@ ${underline('-- CI detected? --')}
 ${isCi()}
 `
   }
+}
+
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
+  Print information helpful for debugging and bug reports
+
+  ${bold('Usage')}
+
+    ${dim('$')} ${identity} debug [options]
+
+  ${bold('Options')}
+
+    -h, --help     Display this help message
+    --config       Custom path to your Prisma config file
+    --schema       Custom path to your Prisma schema
+`)
 }

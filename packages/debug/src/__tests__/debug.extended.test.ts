@@ -277,7 +277,7 @@ test('regex characters do not mess with matching', async () => {
   expect(consoleWarnParams.length).toBe(0)
 })
 
-// utility to to map the calls to the stderr mock this makes it easier to read
+// utility to map the calls to the stderr mock this makes it easier to read
 // snapshots and separates time diffs from the message logs
 const mapper = (call: any[]) => {
   const [args, time] = call as [string, string]

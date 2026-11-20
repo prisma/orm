@@ -498,7 +498,7 @@ test('chunking a SELECT..IN with multiple parameterTuples', () => {
 })
 
 test('a SELECT..IN with a large parameterTuple that is not chunkable', () => {
-  expect(
+  expect(() =>
     renderQuery(
       {
         type: 'templateSql',
@@ -526,19 +526,38 @@ test('a SELECT..IN with a large parameterTuple that is not chunkable', () => {
       {},
       TEST_MAX_CHUNK_SIZE,
     ),
-  ).toMatchObject([
+  ).toThrowErrorMatchingInlineSnapshot(`
+    [UserFacingError: The query parameter limit supported by your database is exceeded.]
+  `)
+})
+
+// Regression test for https://github.com/prisma/prisma/issues/29746: rendering a non-chunkable
+// query whose IN list holds hundreds of thousands of parameters used to blow the call stack
+// because the flattened parameters were pushed onto the array via spread.
+test('renders a non-chunkable IN template with a very large parameter list without overflowing the stack', () => {
+  const listSize = 200_000
+  const rendered = renderQuery(
     {
-      sql: expect.stringMatching(
-        /^SELECT FROM "public"\."User" WHERE "banned" = \$1 AND "id" IN \((\$[0-9]+,?){3000}\) AND "name" = \$3002$/,
-      ),
-      args: [false, ...Array.from({ length: 3000 }, (_, i) => i + 1), 'John Doe'],
-      argTypes: [
-        { arity: 'scalar', scalarType: 'boolean' },
-        ...Array.from({ length: 3000 }, () => ({ arity: 'scalar', scalarType: 'int' })),
-        { arity: 'scalar', scalarType: 'string' },
+      type: 'templateSql',
+      fragments: [
+        { type: 'stringChunk', chunk: 'SELECT * FROM users WHERE "userId" IN ' },
+        { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
       ],
-    },
-  ])
+      placeholderFormat: {
+        prefix: '$',
+        hasNumbering: true,
+      } satisfies PlaceholderFormat,
+      args: [Array.from({ length: listSize }, (_, i) => i + 1)],
+      argTypes: [{ arity: 'scalar', scalarType: 'int' }],
+      chunkable: false,
+    } satisfies QueryPlanDbQuery,
+    {} as ScopeBindings,
+    {},
+  )
+
+  expect(rendered).toHaveLength(1)
+  expect(rendered[0].args).toHaveLength(listSize)
+  expect(rendered[0].argTypes).toHaveLength(listSize)
 })
 
 test('executes a generator', () => {

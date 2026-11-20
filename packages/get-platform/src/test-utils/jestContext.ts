@@ -5,6 +5,9 @@ import fs from 'fs-jetpack'
 import type { FSJetpack, InspectTreeResult } from 'fs-jetpack/types'
 import tempy from 'tempy'
 
+// `globalThis.jest` is not available even in Jest, it's probably injected via an IIFE wrapper and not globalThis
+const test: typeof jest = typeof jest !== 'undefined' ? jest : globalThis.vi
+
 /**
  * Base test context.
  */
@@ -159,10 +162,10 @@ export const jestConsoleContext =
     const ctx = c as Ctx & ConsoleContext
 
     beforeEach(() => {
-      ctx.mocked['console.error'] = jest.spyOn(console, 'error').mockImplementation(() => {})
-      ctx.mocked['console.log'] = jest.spyOn(console, 'log').mockImplementation(() => {})
-      ctx.mocked['console.info'] = jest.spyOn(console, 'info').mockImplementation(() => {})
-      ctx.mocked['console.warn'] = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      ctx.mocked['console.error'] = test.spyOn(console, 'error').mockImplementation(() => {})
+      ctx.mocked['console.log'] = test.spyOn(console, 'log').mockImplementation(() => {})
+      ctx.mocked['console.info'] = test.spyOn(console, 'info').mockImplementation(() => {})
+      ctx.mocked['console.warn'] = test.spyOn(console, 'warn').mockImplementation(() => {})
     })
 
     afterEach(() => {
@@ -209,8 +212,8 @@ export const jestStdoutContext =
     }
 
     beforeEach(() => {
-      ctx.mocked['process.stderr.write'] = jest.spyOn(process.stderr, 'write').mockImplementation(() => true)
-      ctx.mocked['process.stdout.write'] = jest.spyOn(process.stdout, 'write').mockImplementation(() => true)
+      ctx.mocked['process.stderr.write'] = test.spyOn(process.stderr, 'write').mockImplementation(() => true)
+      ctx.mocked['process.stdout.write'] = test.spyOn(process.stdout, 'write').mockImplementation(() => true)
       ctx.normalizedCapturedStdout = () =>
         normalize(ctx.mocked['process.stdout.write'].mock.calls.join(''), normalizationRules)
       ctx.normalizedCapturedStderr = () =>
@@ -244,7 +247,7 @@ export const processExitContext =
     const ctx = c as C & ProcessExitContext
 
     beforeEach(() => {
-      ctx.mocked['process.exit'] = jest.spyOn(process, 'exit').mockImplementation((number) => {
+      ctx.mocked['process.exit'] = test.spyOn(process, 'exit').mockImplementation((number) => {
         throw new Error('process.exit: ' + number)
       })
       ctx.recordedExitCode = () => ctx.mocked['process.exit'].mock.calls[0]?.[0]

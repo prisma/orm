@@ -123,8 +123,9 @@ testMatrix.setupTestSuite(
     const usesJsDrivers = driverAdapter !== undefined || clientEngineExecutor === 'remote'
 
     const usesSyntheticTxQueries =
-      (driverAdapter !== undefined && ['js_d1', 'js_libsql', 'js_planetscale', 'js_mssql'].includes(driverAdapter)) ||
-      (clientEngineExecutor === 'remote' && provider === Providers.SQLSERVER)
+      (driverAdapter !== undefined &&
+        ['js_d1', 'js_libsql', 'js_planetscale', 'js_mssql', 'js_mariadb'].includes(driverAdapter)) ||
+      (clientEngineExecutor === 'remote' && [Providers.SQLSERVER, Providers.MYSQL].includes(provider))
 
     beforeEach(async () => {
       await prisma.$connect()

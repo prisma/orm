@@ -5,7 +5,7 @@ export function maskQuery(query?: string): string {
   return (
     query
       // replace all strings with X
-      .replace(/".*"/g, '"X"')
+      .replace(/"(?:[^"\\]|\\.)*"/g, '"X"')
       // replace all numbers with 5
       .replace(/[\s:\[]([+-]?([0-9]*[.])?[0-9]+)/g, (substr) => {
         return `${substr[0]}5`

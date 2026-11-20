@@ -32,10 +32,11 @@ More Information: https://pris.ly/d/execute-raw
 type RawQueryArgsMapperInput = {
   clientMethod: string
   activeProvider: string
+  clientVersion: string
 }
 
 export const rawQueryArgsMapper =
-  ({ clientMethod, activeProvider }: RawQueryArgsMapperInput) =>
+  ({ clientMethod, activeProvider, clientVersion }: RawQueryArgsMapperInput) =>
   (args: RawQueryArgs) => {
     // TODO Clean up types
     let queryString = ''
@@ -43,7 +44,7 @@ export const rawQueryArgsMapper =
     if (isTypedSql(args)) {
       queryString = args.sql
       parameters = {
-        values: serializeRawParameters(args.values),
+        values: serializeRawParameters(args.values, clientVersion),
         __prismaRawParameters__: true,
       }
     } else if (Array.isArray(args)) {
@@ -51,7 +52,7 @@ export const rawQueryArgsMapper =
       const [query, ...values] = args
       queryString = query
       parameters = {
-        values: serializeRawParameters(values || []),
+        values: serializeRawParameters(values || [], clientVersion),
         __prismaRawParameters__: true,
       }
     } else {
@@ -61,7 +62,7 @@ export const rawQueryArgsMapper =
         case 'mysql': {
           queryString = args.sql
           parameters = {
-            values: serializeRawParameters(args.values),
+            values: serializeRawParameters(args.values, clientVersion),
             __prismaRawParameters__: true,
           }
           break
@@ -73,7 +74,7 @@ export const rawQueryArgsMapper =
           queryString = args.text
 
           parameters = {
-            values: serializeRawParameters(args.values),
+            values: serializeRawParameters(args.values, clientVersion),
             __prismaRawParameters__: true,
           }
           break
@@ -82,7 +83,7 @@ export const rawQueryArgsMapper =
         case 'sqlserver': {
           queryString = mssqlPreparedStatement(args)
           parameters = {
-            values: serializeRawParameters(args.values),
+            values: serializeRawParameters(args.values, clientVersion),
             __prismaRawParameters__: true,
           }
           break

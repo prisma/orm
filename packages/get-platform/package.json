@@ -9,7 +9,7 @@
   "homepage": "https://www.prisma.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/get-platform"
   },
   "bugs": "https://github.com/prisma/prisma/issues",
@@ -23,7 +23,7 @@
     "kleur": "4.1.5",
     "tempy": "1.0.1",
     "terminal-link": "4.0.0",
-    "ts-pattern": "5.6.2",
+    "ts-pattern": "5.9.0",
     "typescript": "5.4.5"
   },
   "dependencies": {

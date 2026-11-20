@@ -1,4 +1,4 @@
 import { build } from '../../../helpers/compile/build'
-import { adapterConfig } from '../../../helpers/compile/configs'
+import { bundledConfig } from '../../../helpers/compile/configs'
 
-void build(adapterConfig)
+void build(bundledConfig)

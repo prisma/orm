@@ -3,11 +3,11 @@ name: Benchmark
 on:
   push:
     branches:
-      - main
+      - v7
       - '*.*.x'
     paths-ignore:
       # Any update here needs to be done for `pull_request` (see below) and all files
-      # (test.yml, benchmark.yml, release.yml, bundle-size.yml, ci-aux-files.yml)
+      # (test.yml, benchmark.yml, publish.yml, bundle-size.yml, ci-aux-files.yml)
       - '*.md'
       # - '*.bench.ts' -> should not be ignored in this workflow
       - 'LICENSE'
@@ -23,7 +23,7 @@ on:
   pull_request:
     paths-ignore:
       # Any update here needs to be done for `branches` (see above) and all files
-      # (test.yml, benchmark.yml, release.yml, bundle-size.yml, ci-aux-files.yml)
+      # (test.yml, benchmark.yml, publish.yml, bundle-size.yml, ci-aux-files.yml)
       - '*.md'
       # - '*.bench.ts' -> should not be ignored in this workflow
       - 'LICENSE'
@@ -49,11 +49,11 @@ jobs:
   benchmark:
     name: Benchmark
     runs-on: ubuntu-latest
-    # Only run on main repo (not on forks)
-    # This avoids notifications to be sent to `alert-comment-cc-users`, see below
-    if: github.repository == 'prisma/prisma'
+    # Only run on the main repo (not on forks): neither the CodSpeed token nor write
+    # access to the `gh-pages` benchmark history is available to a fork.
+    if: github.repository == 'prisma/orm'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -65,8 +65,8 @@ jobs:
         run: pnpm run bench
 
       - name: Store benchmark result
-        if: ${{ github.ref == 'refs/heads/main' }}
-        uses: rhysd/github-action-benchmark@v1
+        if: ${{ github.ref == 'refs/heads/v7' }}
+        uses: rhysd/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
         with:
           name: Benchmark.js Benchmark
           tool: 'benchmarkjs'
@@ -74,14 +74,20 @@ jobs:
           # Note: must use personal access token
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
-          # Show alert with commit comment on detecting possible performance regression
-          alert-threshold: '200%'
-          comment-on-alert: true
-          fail-on-alert: true
-          alert-comment-cc-users: '@millsp,@aqrln,@SevInf,@jkomyno'
+          # This step only records history for the chart at
+          # https://prisma.github.io/prisma/dev/bench/. Alerting stays off because the
+          # wall-clock throughput of GitHub-hosted runners varies by more than 2x between
+          # jobs, which is wider than the spread this comparison would need to resolve: it
+          # compares a commit against its immediate predecessor only, so a fast runner on
+          # one commit manufactures an alert on the next, while a genuine regression
+          # smaller than the machine-to-machine spread goes unreported. The CodSpeed step
+          # below measures the same benchmarks under simulation and owns regression
+          # detection.
+          comment-on-alert: false
+          fail-on-alert: false
 
       - name: Run benchmarks for Codspeed
-        uses: CodSpeedHQ/action@v4
+        uses: CodSpeedHQ/action@f22792bfac16f3e14eb9fbea76f4a48e9cc22b93 # v4.19.1
         with:
           mode: simulation
           run: pnpm run bench-stdout-only

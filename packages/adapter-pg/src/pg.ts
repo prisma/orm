@@ -98,40 +98,26 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
    * Should the query fail due to a connection error, the connection is
    * marked as unhealthy.
    */
-  private async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+  protected async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
     const { sql, args } = query
     const values = args.map((arg, i) => mapArg(arg, query.argTypes[i]))
 
     try {
-      const result = await this.client.query(
-        {
-          text: sql,
-          values,
-          rowMode: 'array',
-          types: {
-            // This is the error expected:
-            // No overload matches this call.
-            // The last overload gave the following error.
-            // Type '(oid: number, format?: any) => (json: string) => unknown' is not assignable to type '{ <T>(oid: number): TypeParser<string, string | T>; <T>(oid: number, format: "text"): TypeParser<string, string | T>; <T>(oid: number, format: "binary"): TypeParser<...>; }'.
-            //   Type '(json: string) => unknown' is not assignable to type 'TypeParser<Buffer, any>'.
-            //     Types of parameters 'json' and 'value' are incompatible.
-            //       Type 'Buffer' is not assignable to type 'string'.ts(2769)
-            //
-            // Because pg-types types expect us to handle both binary and text protocol versions,
-            // where as far we can see, pg will ever pass only text version.
-            //
-            // @ts-expect-error
-            getTypeParser: (oid: number, format?) => {
-              if (format === 'text' && customParsers[oid]) {
-                return customParsers[oid]
-              }
+      const result = await this.client.query({
+        name: this.pgOptions?.statementNameGenerator?.(query),
+        text: sql,
+        values,
+        rowMode: 'array',
+        types: {
+          getTypeParser: (oid: number, format?) => {
+            if (format === 'text' && customParsers[oid]) {
+              return customParsers[oid]
+            }
 
-              return types.getTypeParser(oid, format)
-            },
+            return types.getTypeParser(oid, format)
           },
         },
-        values,
-      )
+      })
 
       return result
     } catch (e) {
@@ -146,6 +132,9 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
 }
 
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
+  private closed = false
+  private runningStatements = 0
+
   constructor(
     client: pg.PoolClient,
     readonly options: TransactionOptions,
@@ -155,18 +144,55 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
     super(client, pgOptions)
   }
 
+  protected override async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+    if (this.closed) {
+      throw new DriverAdapterError({
+        kind: 'TransactionAlreadyClosed',
+        cause: 'The transaction has already been committed or rolled back',
+      })
+    }
+
+    this.runningStatements++
+    try {
+      return await super.performIO(query)
+    } finally {
+      this.runningStatements--
+    }
+  }
+
+  /**
+   * Closes the transaction at most once. Once the pool has lent the client to
+   * a new owner, a second `release()` would corrupt the pool's bookkeeping, so
+   * it is skipped. A client with a statement still running is released with an
+   * error so the pool destroys it instead of lending out a busy connection.
+   */
+  private close(): void {
+    if (this.closed) {
+      return
+    }
+    this.closed = true
+
+    try {
+      this.cleanup?.()
+    } finally {
+      if (this.runningStatements > 0) {
+        this.client.release(new Error('Transaction closed with a statement still running'))
+      } else {
+        this.client.release()
+      }
+    }
+  }
+
   async commit(): Promise<void> {
     debug(`[js::commit]`)
 
-    this.cleanup?.()
-    this.client.release()
+    this.close()
   }
 
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
-    this.cleanup?.()
-    this.client.release()
+    this.close()
   }
 
   async createSavepoint(name: string): Promise<void> {
@@ -183,14 +209,32 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
 }
 
 export type PrismaPgOptions = {
+  /** The name of the schema to use in generated queries */
   schema?: string
+  /**
+   * Whether to call `pool.end()` on an externally provided pool when the adapter is disposed.
+   * Defaults to `false`.
+   */
   disposeExternalPool?: boolean
+  /** Callback attached to the pool's 'error' events. */
   onPoolError?: (err: Error) => void
+  /** Callback attached to connection's 'error' events. */
   onConnectionError?: (err: Error) => void
+  /**
+   * Optional parser for user-defined types. Called with the type's OID, the value to parse, and
+   * a queryable for performing additional queries if necessary.
+   */
   userDefinedTypeParser?: UserDefinedTypeParser
+  /**
+   * Optional function to generate names for prepared statements. The generated strings are passed
+   * as the `name` property in the query to `pg.Client#query()`, which uses them to cache the
+   * underlying statements. If not provided, prepared statements are not cached.
+   */
+  statementNameGenerator?: StatementNameGenerator
 }
 
 export type UserDefinedTypeParser = (oid: number, value: unknown, adapter: SqlQueryable) => Promise<unknown>
+export type StatementNameGenerator = (query: SqlQuery) => string
 
 export class PrismaPgAdapter extends PgQueryable<StdClient> implements SqlDriverAdapter {
   constructor(
@@ -278,12 +322,15 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
   private externalPool: pg.Pool | null
 
   constructor(
-    poolOrConfig: pg.Pool | pg.PoolConfig,
+    poolOrConfig: pg.Pool | pg.PoolConfig | string,
     private readonly options?: PrismaPgOptions,
   ) {
     if (poolOrConfig instanceof pg.Pool) {
       this.externalPool = poolOrConfig
       this.config = poolOrConfig.options
+    } else if (typeof poolOrConfig === 'string') {
+      this.externalPool = null
+      this.config = { connectionString: poolOrConfig }
     } else {
       this.externalPool = null
       this.config = poolOrConfig

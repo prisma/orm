@@ -24,7 +24,7 @@ describeMatrix(postgresOnly, 'postgresql - missing database', () => {
   test('basic introspection', async () => {
     ctx.fixture('introspection/postgresql')
 
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
     await expect(result).rejects.toThrowErrorMatchingInlineSnapshot(`
       "

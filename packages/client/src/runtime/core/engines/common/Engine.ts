@@ -12,6 +12,8 @@ import type * as Transaction from './types/Transaction'
 
 export type BatchTransactionOptions = {
   isolationLevel?: Transaction.IsolationLevel
+  maxWait?: number
+  timeout?: number
 }
 
 export type TransactionOptions<InteractiveTransactionPayload> =
@@ -162,6 +164,14 @@ export interface EngineConfig {
    * Runtime data model for enum lookups during parameterization.
    */
   runtimeDataModel: RuntimeDataModel
+
+  /**
+   * Optional maximum size for the query plan cache. If not provided, a default size will be used.
+   * A value of `0` can be used to disable the cache entirely. A higher cache size can improve
+   * performance for applications that execute a large number of unique queries, while a smaller
+   * cache size can reduce memory usage.
+   */
+  queryPlanCacheMaxSize?: number
 }
 
 /**

@@ -66,6 +66,7 @@ export class PrismaClientTsGenerator implements Generator {
             tsconfig,
             generatedFileExtension,
             importFileExtension,
+            outputDir,
           })
 
     await generateClient({

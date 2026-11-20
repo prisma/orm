@@ -16,7 +16,7 @@ import sql from 'mssql'
 
 import { name as packageName } from '../package.json'
 import { parseConnectionString } from './connection-string'
-import { mapArg, mapColumnType, mapIsolationLevel, mapRow } from './conversion'
+import { isFloatArg, mapArg, mapColumnType, mapIsolationLevel, mapRow } from './conversion'
 import { convertDriverError } from './errors'
 
 const debug = Debug('prisma:driver-adapter:mssql')
@@ -53,7 +53,19 @@ class MssqlQueryable implements SqlQueryable {
       req.arrayRowMode = true
 
       for (let i = 0; i < query.args.length; i++) {
-        req.input(`P${i + 1}`, mapArg(query.args[i], query.argTypes[i]))
+        const argType = query.argTypes[i]
+        const arg = query.args[i]
+        // When the value is null, mssql cannot infer that the parameter should
+        // be VARBINARY and defaults to nvarchar, causing an implicit conversion
+        // error. We therefore provide sql.VarBinary explicitly.
+        // See: https://github.com/prisma/prisma/issues/29557
+        if (arg === null && argType.scalarType === 'bytes') {
+          req.input(`P${i + 1}`, sql.VarBinary, null)
+        } else if (isFloatArg(arg, argType)) {
+          req.input(`P${i + 1}`, sql.Float, arg)
+        } else {
+          req.input(`P${i + 1}`, mapArg(arg, argType))
+        }
       }
       const res = (await req.query(query.sql)) as unknown as ArrayModeResult
       return res

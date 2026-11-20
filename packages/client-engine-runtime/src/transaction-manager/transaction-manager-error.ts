@@ -28,6 +28,14 @@ export class TransactionRolledBackError extends TransactionManagerError {
   }
 }
 
+export class NestedTransactionRolledBackError extends TransactionManagerError {
+  constructor(operation: string) {
+    super(
+      `Nested transaction already closed: A ${operation} cannot be executed on a nested transaction that was rolled back.`,
+    )
+  }
+}
+
 export class TransactionStartTimeoutError extends TransactionManagerError {
   constructor() {
     super('Unable to start a transaction in the given time.')

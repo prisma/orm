@@ -11,11 +11,10 @@ import { handle } from '../blaze/handle'
 import { map } from '../blaze/map'
 import { omit } from '../blaze/omit'
 import { pipe } from '../blaze/pipe'
-import { transduce } from '../blaze/transduce'
 import { fixImportsPlugin } from './plugins/fixImportsPlugin'
 import { onErrorPlugin } from './plugins/onErrorPlugin'
 import { resolvePathsPlugin } from './plugins/resolvePathsPlugin'
-import { tscPlugin } from './plugins/tscPlugin'
+import { createTypeEmissionCache, tscPlugin, TypeEmissionCache } from './plugins/tscPlugin'
 
 export type BuildResult = esbuild.BuildResult
 export type BuildOptions = esbuild.BuildOptions & {
@@ -37,7 +36,7 @@ const DEFAULT_BUILD_OPTIONS = {
  * Apply defaults to the original build options
  * @param options the original build options
  */
-const applyDefaults = (options: BuildOptions): BuildOptions => ({
+const applyDefaults = (options: BuildOptions, typeEmission: TypeEmissionCache): BuildOptions => ({
   ...DEFAULT_BUILD_OPTIONS,
   format: 'cjs',
   outExtension: { '.js': '.js' },
@@ -54,7 +53,7 @@ const applyDefaults = (options: BuildOptions): BuildOptions => ({
     ...(options.plugins ?? []),
     resolvePathsPlugin,
     fixImportsPlugin,
-    tscPlugin(options.emitTypes),
+    tscPlugin(options.emitTypes, typeEmission),
     onErrorPlugin,
   ],
   external: [...(options.external ?? []), ...getProjectExternals(options)],
@@ -67,19 +66,18 @@ const applyDefaults = (options: BuildOptions): BuildOptions => ({
  * @param options the original build options
  * @returns if options = [a, b], we get [a-esm, a-cjs, b-esm, b-cjs]
  */
-function createBuildOptions(options: BuildOptions[]) {
+function createBuildOptions(options: BuildOptions[], typeEmission: TypeEmissionCache) {
   return flatten(
     map(options, (options) => [
       // we defer it so that we don't trigger glob immediately
-      () => applyDefaults(options),
+      () => applyDefaults(options, typeEmission),
       // ... here can go more steps
     ]),
   )
 }
 
 /**
- * We only want to trigger the glob search once we are ready, and that is when
- * the previous build has finished. We get the build options from the deferred.
+ * Resolves a deferred build options object, running the glob search it carries.
  */
 function computeOptions(options: () => BuildOptions) {
   return options()
@@ -136,18 +134,44 @@ async function executeEsBuild(options: BuildOptions) {
  * @param options
  */
 export async function build(options: BuildOptions[]) {
-  return transduce.async(
-    createBuildOptions(options),
-    pipe.async(computeOptions, logStartBuild, addExtensionFormat, addDefaultOutDir, executeEsBuild),
+  const buildOptions = createBuildOptions(options, createTypeEmissionCache())
+  const progress: Progress = { done: 0, total: buildOptions.length }
+
+  return Promise.all(
+    buildOptions.map(
+      pipe.async(
+        computeOptions,
+        logStartBuild,
+        addExtensionFormat,
+        addDefaultOutDir,
+        executeEsBuild,
+        logEndBuild(progress),
+      ),
+    ),
   )
 }
 
 /**
- * Prints a message every time a new bundle is built
+ * Prints a message every time a new bundle starts to build
  */
 function logStartBuild(options: BuildOptions): BuildOptions {
   console.log(`Building ${options.name} as ${options.format ?? 'cjs'}...`)
   return options
+}
+
+type Progress = {
+  done: number
+  readonly total: number
+}
+
+/**
+ * Prints a message every time a bundle is finished building
+ */
+function logEndBuild(progress: Progress) {
+  return ([options, result]: readonly [BuildOptions, esbuild.BuildResult]): [BuildOptions, esbuild.BuildResult] => {
+    console.log(`Built ${options.name} as ${options.format ?? 'cjs'} (${++progress.done}/${progress.total})`)
+    return [options, result]
+  }
 }
 
 /**

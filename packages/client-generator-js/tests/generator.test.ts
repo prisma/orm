@@ -70,7 +70,7 @@ expect.addSnapshotSerializer({
 const registry = {
   'prisma-client-js': {
     type: 'in-process',
-    generator: new PrismaClientJsGenerator(),
+    generator: new PrismaClientJsGenerator({ cliCommand: 'prisma' }),
   },
 } satisfies GeneratorRegistry
 
@@ -95,6 +95,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -168,6 +169,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -222,6 +224,29 @@ describe('generator', () => {
     expect(warn).not.toHaveBeenCalled()
   })
 
+  test('schema without models', async () => {
+    const prismaClientTarget = path.join(__dirname, './node_modules/@prisma/client')
+    await fsPromises.rm(prismaClientTarget, { recursive: true, force: true })
+    await getPackedPackage('@prisma/client', prismaClientTarget)
+    await fsPromises.cp(path.join(__dirname, '../../client/runtime'), path.join(prismaClientTarget, 'runtime'), {
+      recursive: true,
+    })
+
+    const generator = await getGenerator({
+      schemaPath: path.join(__dirname, 'no-models.prisma'),
+      printDownloadProgress: false,
+      skipDownload: true,
+      registry,
+      cliCommand: 'prisma',
+    })
+
+    await generator.generate()
+    generator.stop()
+
+    const declarations = await fsPromises.readFile(path.join(__dirname, 'generated-no-models', 'index.d.ts'), 'utf8')
+    expect(declarations).not.toMatch(/^\s*undefined\s*$/m)
+  })
+
   test('denylist from engine validation', async () => {
     expect.assertions(1)
     const prismaClientTarget = path.join(__dirname, './node_modules/@prisma/client')
@@ -239,6 +264,7 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
     }).rejects.toThrowErrorMatchingInlineSnapshot(`
       [GetDmmfError: Prisma schema validation - (get-dmmf wasm)
@@ -283,6 +309,7 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
     }).rejects.toThrowErrorMatchingInlineSnapshot(
       `[Error: Could not load \`--schema\` from provided path \`tests/doesnotexist.prisma\`: file or directory not found]`,
@@ -295,6 +322,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     await expect(generator.generate()).rejects.toThrowErrorMatchingInlineSnapshot(`
@@ -328,6 +356,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -397,6 +426,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     await generator.generate()

@@ -18,7 +18,6 @@ import { buildPrismaConfig } from './config-builder'
 import type { NamedTestSuiteConfig, TestSuiteMeta } from './getTestSuiteInfo'
 import {
   getTestSuiteFolderPath,
-  getTestSuitePreviewFeatures,
   getTestSuiteSchema,
   getTestSuiteSchemaPath,
   testSuiteHasTypedSql,
@@ -59,8 +58,7 @@ export async function setupTestSuiteClient({
   const suiteFolderPath = getTestSuiteFolderPath({ suiteMeta, suiteConfig })
   const schemaPath = getTestSuiteSchemaPath({ suiteMeta, suiteConfig })
   const schema = getTestSuiteSchema({ cliMeta, suiteMeta, matrixOptions: suiteConfig.matrixOptions })
-  const previewFeatures = getTestSuitePreviewFeatures(schema)
-  const dmmf = await getDMMF({ datamodel: [[schemaPath, schema]], previewFeatures })
+  const dmmf = await getDMMF({ datamodel: [[schemaPath, schema]] })
   const schemaContext = await processSchemaResult({
     schemaResult: { schemas: [[schemaPath, schema]], schemaPath, schemaRootDir: path.dirname(schemaPath) },
   })
@@ -88,7 +86,10 @@ export async function setupTestSuiteClient({
   let typedSql: SqlQueryOutput[] | undefined
   if (hasTypedSql) {
     const config = buildPrismaConfig({ suiteMeta, suiteConfig, datasourceInfo })
-    const validatedConfig = validatePrismaConfigWithDatasource({ config, cmd: '<test-suite> generate --sql' })
+    const validatedConfig = validatePrismaConfigWithDatasource({
+      config,
+      command: 'prisma <test-suite> generate --sql',
+    })
     const schemaContextIntrospect = await processSchemaResult({
       schemaResult: { schemas: [[schemaPath, schema]], schemaPath, schemaRootDir: path.dirname(schemaPath) },
     })

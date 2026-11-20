@@ -45,7 +45,7 @@ describeMatrix({ providers: { mysql: true } }, 'mysql', () => {
 
   test('basic introspection', async () => {
     ctx.fixture('introspection/mysql')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`

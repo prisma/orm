@@ -1,6 +1,7 @@
+import type { MultipleSchemas } from '@prisma/get-dmmf'
+
 import { SchemaContext } from '../cli/schemaContext'
 import { MigrateTypes } from '../migrateTypes'
-import { MultipleSchemas } from './schemaFileInput'
 
 export function toSchemasContainer(schemas: MultipleSchemas): MigrateTypes.SchemasContainer {
   return {

@@ -11,7 +11,7 @@ export const debug = Debug('prisma:generator')
 /**
  * Resolves the path to the Prisma Client to determine the default output directory.
  */
-export async function resolvePrismaClient(baseDir: string): Promise<string> {
+export async function resolvePrismaClient(baseDir: string, cliCommand: string): Promise<string> {
   const prismaClientDir = await findPrismaClientDir(baseDir)
 
   debug('baseDir', baseDir)
@@ -21,7 +21,7 @@ export async function resolvePrismaClient(baseDir: string): Promise<string> {
       `Could not resolve @prisma/client.
 Please try to install it with ${bold(
         green(await getPackageCmd(baseDir, 'install', '@prisma/client')),
-      )} and rerun ${bold(await getPackageCmd(baseDir, 'execute', 'prisma generate'))} 🙏.`,
+      )} and rerun ${bold(await getPackageCmd(baseDir, 'execute', `${cliCommand} generate`))} 🙏.`,
     )
   }
 

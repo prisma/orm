@@ -11,7 +11,7 @@ import {
   type QueryPlanDbQuery,
 } from '../query-plan'
 import { UserFacingError } from '../user-facing-error'
-import { assertNever, DeepReadonly } from '../utils'
+import { appendToArray, assertNever, DeepReadonly } from '../utils'
 import { GeneratorRegistrySnapshot } from './generators'
 import { ScopeBindings } from './scope'
 
@@ -29,11 +29,11 @@ export function renderQuery(
     case 'templateSql': {
       const chunks = dbQuery.chunkable ? chunkParams(dbQuery.fragments, args, maxChunkSize) : [args]
       return chunks.map((params) => {
-        if (maxChunkSize !== undefined && params.length > maxChunkSize) {
+        const rendered = renderTemplateSql(dbQuery.fragments, dbQuery.placeholderFormat, params, dbQuery.argTypes)
+        if (maxChunkSize !== undefined && rendered.args.length > maxChunkSize) {
           throw new UserFacingError('The query parameter limit supported by your database is exceeded.', 'P2029')
         }
-
-        return renderTemplateSql(dbQuery.fragments, dbQuery.placeholderFormat, params, dbQuery.argTypes)
+        return rendered
       })
     }
     default:
@@ -48,7 +48,17 @@ export function evaluateArg(arg: unknown, scope: ScopeBindings, generators: Gene
       if (found === undefined) {
         throw new Error(`Missing value for query variable ${arg.prisma__value.name}`)
       }
-      arg = found
+      if (arg.prisma__value.type === 'DateTime' && typeof found === 'string') {
+        // Convert input datetime strings to Date objects. This is done to prevent issues that
+        // arise when query input values end up being directly compared to values retrieved from
+        // the database. One example of this is a query containing a DateTime cursor value being
+        // used against a DATE MySQL column. The pagination logic doesn't have parameter type
+        // information, therefore it ends up comparing the two datetimes as strings and would yield
+        // false even if the two date datetime strings represent the same Date.
+        arg = new Date(found)
+      } else {
+        arg = found
+      }
     } else if (isPrismaValueGenerator(arg)) {
       const { name, args } = arg.prisma__value
       const generator = generators[name]
@@ -84,8 +94,9 @@ function renderTemplateSql(
     if (fragment.type === 'stringChunk') {
       continue
     }
-    const length = flattenedParams.length
-    const added = flattenedParams.push(...flattenedFragmentParams(fragment)) - length
+    const fragmentParams = Array.from(flattenedFragmentParams(fragment))
+    const added = fragmentParams.length
+    appendToArray(flattenedParams, fragmentParams)
 
     if (fragment.argType.arity === 'tuple') {
       if (added % fragment.argType.elements.length !== 0) {

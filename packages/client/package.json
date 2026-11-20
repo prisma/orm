@@ -99,11 +99,6 @@
       "import": "./runtime/index-browser.mjs",
       "default": "./runtime/index-browser.mjs"
     },
-    "./generator-build": {
-      "require": "./generator-build/index.js",
-      "import": "./generator-build/index.js",
-      "default": "./generator-build/index.js"
-    },
     "./sql": {
       "require": {
         "types": "./sql.d.ts",
@@ -126,7 +121,7 @@
   "homepage": "https://www.prisma.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/client"
   },
   "author": "Tim Suchanek <suchanek@prisma.io>",
@@ -148,7 +143,6 @@
     "README.md",
     "runtime",
     "scripts",
-    "generator-build",
     "edge.js",
     "edge.d.ts",
     "index.js",
@@ -167,7 +161,7 @@
     "@codspeed/benchmark.js-plugin": "4.0.0",
     "@faker-js/faker": "9.6.0",
     "@fast-check/jest": "2.0.3",
-    "@hono/node-server": "1.19.0",
+    "@hono/node-server": "^1.19.14",
     "@inquirer/prompts": "7.3.3",
     "@jest/create-cache-key-function": "29.7.0",
     "@jest/globals": "29.7.0",
@@ -198,7 +192,7 @@
     "@prisma/dmmf": "workspace:*",
     "@prisma/driver-adapter-utils": "workspace:*",
     "@prisma/engines": "workspace:*",
-    "@prisma/engines-version": "7.5.0-10.94a226be1cf2967af2541cca5529f0f7ba866919",
+    "@prisma/engines-version": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@prisma/fetch-engine": "workspace:*",
     "@prisma/generator": "workspace:*",
     "@prisma/generator-helper": "workspace:*",
@@ -210,7 +204,7 @@
     "@prisma/migrate": "workspace:*",
     "@prisma/param-graph": "workspace:*",
     "@prisma/param-graph-builder": "workspace:*",
-    "@prisma/query-compiler-wasm": "7.5.0-10.94a226be1cf2967af2541cca5529f0f7ba866919",
+    "@prisma/query-compiler-wasm": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@prisma/query-plan-executor": "workspace:*",
     "@prisma/sqlcommenter": "workspace:*",
     "@prisma/sqlcommenter-trace-context": "workspace:*",
@@ -238,7 +232,7 @@
     "indent-string": "4.0.0",
     "jest": "29.7.0",
     "jest-extended": "4.0.2",
-    "jest-junit": "16.0.0",
+    "jest-junit": "17.0.0",
     "jest-serializer-ansi-escapes": "4.0.0",
     "jest-snapshot": "29.7.0",
     "js-levenshtein": "1.1.6",
@@ -258,7 +252,7 @@
     "strip-ansi": "7.1.0",
     "strip-indent": "4.0.0",
     "tempy": "3.0.0",
-    "ts-pattern": "5.6.2",
+    "ts-pattern": "5.9.0",
     "tsd": "0.31.2",
     "typescript": "5.4.5",
     "undici": "7.4.0",

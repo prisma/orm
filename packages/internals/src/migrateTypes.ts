@@ -61,7 +61,7 @@ export namespace MigrateTypes {
     /**
      * An init script that will be run on the shadow database before the migrations are applied.
      * Useful in combination with external tables. Can be empty.
-     * Set via `migrations.initShadowDb` in `prisma.config.ts`.
+     * Set via `migrations.initShadowDb` in the Prisma config file.
      */
     shadowDbInitScript: string
 

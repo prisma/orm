@@ -1,15 +1,46 @@
-onlyBuiltDependencies:
-  - '@swc/core'
-  - better-sqlite3
-  - esbuild
-  - sharp
-  - sqlite3
-  - workerd
-  - yarn
+allowBuilds:
+  '@swc/core': true
+  better-sqlite3: true
+  esbuild: true
+  sharp: true
+  sqlite3: true
+  workerd: true
+  yarn: true
 
 packages:
   - 'packages/*'
 
+shellEmulator: true
+autoInstallPeers: false
+savePrefix: ''
+
+overrides:
+  form-data: '>=4.0.4'
+  jws: '>=4.0.1'
+  tar-fs: '>=2.1.4'
+  lodash: '>=4.18.1'
+  '@tootallnate/once': '>=3.0.1'
+  ajv@^8.0.0: '>=8.18.0'
+  '@azure/core-rest-pipeline@^1.0.0': '>=1.14.0'
+  '@azure/msal-node>uuid': '>=14.0.0'
+  fast-uri@<3.1.9: '>=3.1.9 <4'
+  ws@>=8.0.0 <8.20.1: '>=8.20.1'
+  source-map-js@<1.2.2: '>=1.2.2 <2'
+
+# No patched release exists. Neither is reachable with attacker input: fast-glob in client-generator-ts only expands the
+# user's own output path, and tedious only passes its own constant format strings to sprintf-js.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-vfj7-8cjw-p6xm # braces
+    - GHSA-hp3w-g68c-fv3c # sprintf-js
+
 peerDependencyRules:
   allowedVersions:
     '@octokit/core': '>=3'
+
+minimumReleaseAgeExclude:
+  - '@prisma/engines-version@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3 || 8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8'
+  - '@prisma/prisma-schema-wasm@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3 || 8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8'
+  - '@prisma/query-compiler-wasm@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3 || 8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8'
+  - '@prisma/schema-engine-wasm@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3 || 8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8'
+  - '@prisma/dev@0.24.17'

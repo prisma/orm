@@ -1,4 +1,4 @@
 import { build } from '../../../helpers/compile/build'
-import { unbundledConfig } from '../../../helpers/compile/configs'
+import { bundledConfig } from '../../../helpers/compile/configs'
 
-void build(unbundledConfig)
+void build(bundledConfig)

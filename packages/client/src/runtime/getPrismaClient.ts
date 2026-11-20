@@ -69,26 +69,11 @@ typeof globalThis === 'object' ? (globalThis.NODE_CLIENT = true) : 0
 export type ErrorFormat = 'pretty' | 'colorless' | 'minimal'
 
 /**
- * Since Prisma 7, a PrismaClient needs either an adapter or an accelerateUrl.
- * The two options are mutually exclusive.
+ * Options common to all variants of `PrismaClientOptions`, regardless of
+ * whether you connect to your database through a driver adapter or through
+ * Prisma Accelerate.
  */
-type PrismaClientMutuallyExclusiveOptions =
-  | {
-      /**
-       * Instance of a Driver Adapter, e.g., like one provided by `@prisma/adapter-pg`.
-       */
-      adapter: SqlDriverAdapterFactory
-      accelerateUrl?: never
-    }
-  | {
-      /**
-       * Prisma Accelerate URL allowing the client to connect through Accelerate instead of a direct database.
-       */
-      accelerateUrl: string
-      adapter?: never
-    }
-
-export type PrismaClientOptions = PrismaClientMutuallyExclusiveOptions & {
+export interface PrismaClientBaseOptions {
   /**
    * @default "colorless"
    */
@@ -138,6 +123,22 @@ export type PrismaClientOptions = PrismaClientMutuallyExclusiveOptions & {
   comments?: SqlCommenterPlugin[]
 
   /**
+   * Optional maximum size for the query plan cache. If not provided, a default size will be used.
+   * A value of `0` can be used to disable the cache entirely. A higher cache size can improve
+   * performance for applications that execute a large number of unique queries, while a smaller
+   * cache size can reduce memory usage.
+   *
+   * @example
+   * ```
+   * const prisma = new PrismaClient({
+   *   adapter,
+   *   queryPlanCacheMaxSize: 100,
+   * })
+   * ```
+   */
+  queryPlanCacheMaxSize?: number
+
+  /**
    * @internal
    * You probably don't want to use this. \`__internal\` is used by internal tooling.
    */
@@ -147,6 +148,75 @@ export type PrismaClientOptions = PrismaClientMutuallyExclusiveOptions & {
     configOverride?: (config: GetPrismaClientConfig) => GetPrismaClientConfig
   }
 }
+
+// NOTE: `PrismaClientOptionsWithAccelerateUrl` is intentionally declared before
+// `PrismaClientOptionsWithAdapter`, and `PrismaClientOptions` lists them in
+// the same order in its union. TypeScript's missing-property error elaboration
+// for a discriminated union reports against the *second* union member, so the
+// adapter branch must come second to make `new PrismaClient({ log: [...] })`
+// say "adapter is missing" (the recommended option for most users) rather than
+// "accelerateUrl is missing". The generated client mirrors this order in
+// `prismaNamespace.ts`.
+
+/**
+ * `PrismaClient` options for connecting to your database through Prisma
+ * Accelerate instead of a driver adapter.
+ *
+ * Learn more: https://pris.ly/d/accelerate
+ */
+export interface PrismaClientOptionsWithAccelerateUrl extends PrismaClientBaseOptions {
+  /**
+   * The Prisma Accelerate connection URL. Use this option to connect to
+   * your database through Prisma Accelerate instead of using a driver
+   * adapter to connect directly.
+   *
+   * Learn more: https://pris.ly/d/accelerate
+   */
+  accelerateUrl: string
+  adapter?: never
+}
+
+/**
+ * `PrismaClient` options for connecting to your database through a driver
+ * adapter. This is the common case in Prisma 7.
+ *
+ * Learn more: https://pris.ly/d/driver-adapters
+ */
+export interface PrismaClientOptionsWithAdapter extends PrismaClientBaseOptions {
+  /**
+   * A driver adapter that PrismaClient uses to connect to your database,
+   * such as the ones provided by `@prisma/adapter-pg`,
+   * `@prisma/adapter-libsql`, `@prisma/adapter-planetscale`, etc.
+   *
+   * A driver adapter is **required** unless you connect to your database
+   * through Prisma Accelerate (in which case use `accelerateUrl` instead).
+   *
+   * Learn more: https://pris.ly/d/driver-adapters
+   *
+   * @example
+   * ```ts
+   * import { PrismaPg } from '@prisma/adapter-pg'
+   * import { PrismaClient } from './generated/prisma/client'
+   *
+   * const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+   * const prisma = new PrismaClient({ adapter })
+   * ```
+   */
+  adapter: SqlDriverAdapterFactory
+  accelerateUrl?: never
+}
+
+/**
+ * Options passed to the `PrismaClient` constructor.
+ *
+ * A driver adapter (or, alternatively, a Prisma Accelerate URL) is **required**.
+ * See {@link PrismaClientOptionsWithAdapter} and
+ * {@link PrismaClientOptionsWithAccelerateUrl} for the two variants. All other
+ * properties live in {@link PrismaClientBaseOptions} and are optional.
+ *
+ * Learn more about driver adapters: https://pris.ly/d/driver-adapters
+ */
+export type PrismaClientOptions = PrismaClientOptionsWithAccelerateUrl | PrismaClientOptionsWithAdapter
 
 export type Unpacker = (data: any) => any
 
@@ -319,22 +389,19 @@ export function getPrismaClient(config: GetPrismaClientConfig) {
       if (!optionsArg) {
         throw new PrismaClientInitializationError(
           `\
-\`PrismaClient\` needs to be constructed with a non-empty, valid \`PrismaClientOptions\`:
+PrismaClient was instantiated without any options. A driver adapter is required to connect to your database.
 
-\`\`\`
-new PrismaClient({
-  ...
-})
-\`\`\`
+Pass a driver adapter to the PrismaClient constructor, for example:
 
-or
+  import { PrismaPg } from '@prisma/adapter-pg'
+  import { PrismaClient } from './generated/prisma/client'
 
-\`\`\`
-constructor() {
-  super({ ... });
-}
-\`\`\`
-          `,
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+  const prisma = new PrismaClient({ adapter })
+
+Learn more about driver adapters: https://pris.ly/d/driver-adapters
+
+If you use Prisma Accelerate instead of connecting to your database directly, pass \`accelerateUrl\` to the PrismaClient constructor instead of \`adapter\`.`,
           clientVersion,
         )
       }
@@ -430,6 +497,7 @@ constructor() {
           sqlCommenters: options.comments,
           parameterizationSchema: config.parameterizationSchema,
           runtimeDataModel: config.runtimeDataModel,
+          queryPlanCacheMaxSize: optionsArg.queryPlanCacheMaxSize,
         }
 
         // Used in <https://github.com/prisma/prisma-extension-accelerate/blob/b6ffa853f038780f5ab2fc01bff584ca251f645b/src/extension.ts#L514>
@@ -534,7 +602,7 @@ new PrismaClient({
         args,
         transaction,
         clientMethod,
-        argsMapper: rawQueryArgsMapper({ clientMethod, activeProvider }),
+        argsMapper: rawQueryArgsMapper({ clientMethod, activeProvider, clientVersion: this._clientVersion }),
         callsite: getCallSite(this._errorFormat),
         dataPath: [],
         middlewareArgsMapper,
@@ -633,7 +701,7 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
         args,
         transaction,
         clientMethod,
-        argsMapper: rawQueryArgsMapper({ clientMethod, activeProvider }),
+        argsMapper: rawQueryArgsMapper({ clientMethod, activeProvider, clientVersion: this._clientVersion }),
         callsite: getCallSite(this._errorFormat),
         dataPath: [],
         middlewareArgsMapper,
@@ -720,7 +788,15 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
         }
 
         const isolationLevel = options?.isolationLevel ?? this._engineConfig.transactionOptions.isolationLevel
-        const transaction = { kind: 'batch', id, index, isolationLevel, lock } as const
+        const transaction = {
+          kind: 'batch',
+          id,
+          index,
+          isolationLevel,
+          maxWait: options?.maxWait ?? this._engineConfig.transactionOptions.maxWait,
+          timeout: options?.timeout ?? this._engineConfig.transactionOptions.timeout,
+          lock,
+        } as const
         return request.requestTransaction?.(transaction) ?? request
       })
 
@@ -754,9 +830,6 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
         if (activeScope !== itxContext.scopeId) {
           throw new Error('Concurrent nested transactions are not supported')
         }
-
-        // Re-use the underlying transaction in the engine by reusing the same transaction id.
-        options.newTxId = itxContext.txId
       }
       scopeStack.push(scopeId)
 
@@ -766,7 +839,8 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
         maxWait: options?.maxWait ?? this._engineConfig.transactionOptions.maxWait,
         timeout: options?.timeout ?? this._engineConfig.transactionOptions.timeout,
         isolationLevel: options?.isolationLevel ?? this._engineConfig.transactionOptions.isolationLevel,
-        newTxId: options.newTxId,
+        // Re-use the underlying transaction in the engine by reusing the same transaction id.
+        newTxId: isNested ? itxContext.txId : undefined,
       }
       let info: Transaction.InteractiveTransactionInfo<unknown>
       try {

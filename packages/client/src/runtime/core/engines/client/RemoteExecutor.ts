@@ -214,20 +214,13 @@ export class RemoteExecutor implements Executor {
   }
 
   #processExtensions(extensions: QueryEngineResultExtensions): void {
-    if (extensions.logs) {
-      for (const log of extensions.logs) {
+    const logEvents = extensions.logs ?? []
+    if (extensions.spans) {
+      this.#tracingHelper.dispatchEngineSpans(extensions.spans, logEvents, (event) => this.#emitLogEvent(event))
+    } else {
+      for (const log of logEvents) {
         this.#emitLogEvent(log)
       }
-    }
-    if (extensions.spans) {
-      // FIXME: log events should be emitted in the context of the corresponding
-      // spans to be consistent with the normal `ClientEngine` behavior. Our
-      // current `TracingHelper` interface makes it challenging to do so.
-      // We need to either change `dispatchEngineSpans` to be log-aware, or
-      // not use `dispatchEngineSpans` here at all and emit the spans directly.
-      // The second option is probably better long term so we can get rid of
-      // `dispatchEngineSpans` entirely when QC is in GA and the QE is gone.
-      this.#tracingHelper.dispatchEngineSpans(extensions.spans)
     }
   }
 

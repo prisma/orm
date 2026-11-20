@@ -206,13 +206,15 @@ function batchingTransactionDefinition(context: GenerateContext) {
     .addParameter(ts.parameter('arg', ts.arraySpread(ts.namedType('P'))))
     .setReturnType(tsx.promise(ts.namedType('runtime.Types.Utils.UnwrapTuple').addGenericArgument(ts.namedType('P'))))
 
+  const options = ts.objectType().formatInline()
+  options.add(ts.property('maxWait', ts.numberType).optional())
+  options.add(ts.property('timeout', ts.numberType).optional())
+
   if (context.dmmf.hasEnumInNamespace('TransactionIsolationLevel', 'prisma')) {
-    const options = ts
-      .objectType()
-      .formatInline()
-      .add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
-    method.addParameter(ts.parameter('options', options).optional())
+    options.add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
   }
+
+  method.addParameter(ts.parameter('options', options).optional())
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
 }
@@ -431,7 +433,7 @@ export class PrismaClient<
 
   ${indent(this.jsDoc, TAB_SIZE)}
 
-  constructor(optionsArg ?: Prisma.Subset<ClientOptions, Prisma.PrismaClientOptions>);
+  constructor(optionsArg ?: Prisma.PrismaClientConstructorArgs<ClientOptions>);
   $on<V extends U>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : Prisma.LogEvent) => void): PrismaClient;
 
   /**
@@ -618,24 +620,31 @@ export type TransactionClient = Omit<Prisma.DefaultPrismaClient, ${transactionCl
       this.internalDatasources.some((d) => d.provider !== 'mongodb')
     ) {
       clientOptions.add(
-        ts
-          .property('adapter', ts.namedType('runtime.SqlDriverAdapterFactory'))
-          .optional()
-          .setDocComment(
-            ts.docComment('Instance of a Driver Adapter, e.g., like one provided by `@prisma/adapter-planetscale`'),
-          ),
+        ts.property('adapter', ts.namedType('runtime.SqlDriverAdapterFactory')).optional().setDocComment(ts.docComment`
+            A driver adapter that PrismaClient uses to connect to your database, such as the ones provided by \`@prisma/adapter-pg\`, \`@prisma/adapter-libsql\`, \`@prisma/adapter-planetscale\`, etc.
+
+            A driver adapter is **required** unless you connect to your database through Prisma Accelerate (in which case use \`accelerateUrl\` instead).
+
+            Learn more: https://pris.ly/d/driver-adapters
+
+            @example
+            \`\`\`ts
+            import { PrismaPg } from '@prisma/adapter-pg'
+            import { PrismaClient } from './generated/prisma/client'
+
+            const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+            const prisma = new PrismaClient({ adapter })
+            \`\`\`
+          `),
       )
     }
 
     clientOptions.add(
-      ts
-        .property('accelerateUrl', ts.stringType)
-        .optional()
-        .setDocComment(
-          ts.docComment(
-            'Prisma Accelerate URL allowing the client to connect through Accelerate instead of a direct database.',
-          ),
-        ),
+      ts.property('accelerateUrl', ts.stringType).optional().setDocComment(ts.docComment`
+            The Prisma Accelerate connection URL. Use this option to connect to your database through Prisma Accelerate instead of using a driver adapter to connect directly.
+
+            Learn more: https://pris.ly/d/accelerate
+          `),
     )
 
     clientOptions.add(

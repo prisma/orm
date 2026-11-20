@@ -1,6 +1,9 @@
+import { Debug } from '@prisma/debug'
 import paths from 'env-paths'
 import fs from 'fs'
 import path from 'path'
+
+const debug = Debug('prisma:cli:commandState')
 
 export interface CommandState {
   firstCommandTimestamp: string
@@ -16,20 +19,38 @@ function getCommandStatePath(): string {
  */
 export async function loadOrInitializeCommandState(): Promise<CommandState> {
   const filePath = getCommandStatePath()
-  const data = await fs.promises
-    .readFile(filePath, 'utf-8')
-    .catch((err) => (err.code === 'ENOENT' ? Promise.resolve(undefined) : Promise.reject(err)))
-  const state = data === undefined ? { firstCommandTimestamp: new Date().toISOString() } : JSON.parse(data)
+  const data = await fs.promises.readFile(filePath, 'utf-8').catch((err) => {
+    if (err.code !== 'ENOENT') {
+      debug('Failed to read command state: %O', err)
+    }
+    return undefined
+  })
 
-  if (data === undefined) {
-    await fs.promises.writeFile(filePath, JSON.stringify(state))
+  let state: CommandState | undefined
+  if (data !== undefined) {
+    try {
+      const parsed = JSON.parse(data)
+      if (parsed && typeof parsed.firstCommandTimestamp === 'string') {
+        state = parsed
+      }
+    } catch (err) {
+      debug('Failed to parse command state: %O', err)
+    }
   }
 
-  if (typeof state.firstCommandTimestamp === 'string') {
-    return state
-  } else {
-    throw new Error('Invalid command state schema')
+  if (state === undefined) {
+    state = { firstCommandTimestamp: new Date().toISOString() }
+    try {
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
+      const tempFilePath = `${filePath}.tmp`
+      await fs.promises.writeFile(tempFilePath, JSON.stringify(state))
+      await fs.promises.rename(tempFilePath, filePath)
+    } catch (err) {
+      debug('Failed to write command state: %O', err)
+    }
   }
+
+  return state
 }
 
 /*

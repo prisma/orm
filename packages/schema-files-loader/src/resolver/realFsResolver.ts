@@ -13,7 +13,7 @@ export const realFsResolver: FilesResolver = {
     }
 
     if (stat.isDirectory()) {
-      return { kind: 'directory' }
+      return { kind: 'directory', realPath: await fs.realpath(path) }
     }
 
     if (stat.isSymbolicLink()) {

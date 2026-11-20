@@ -43,6 +43,80 @@ describe('convertDriverError', () => {
     })
   })
 
+  it('should handle UniqueConstraintViolation (23505) with constraint', () => {
+    const error = { code: '23505', message: 'msg', severity: 'ERROR', detail: 'Key (id)', constraint: 'users_id_key' }
+    // No `table` on the error (as with CockroachDB), so it is derived from the
+    // default-named constraint `users_id_key` and the parsed field `id`.
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'users_id_key' },
+      table: 'users',
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should handle UniqueConstraintViolation (23505) with only constraint', () => {
+    const error = { code: '23505', message: 'msg', severity: 'ERROR', constraint: 'users_email_key' }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'users_email_key' },
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should report the table for UniqueConstraintViolation (23505)', () => {
+    const error = {
+      code: '23505',
+      message: 'duplicate key value violates unique constraint "users_email_key"',
+      severity: 'ERROR',
+      detail: 'Key (email)=(a@b.c) already exists.',
+      table: 'users',
+      constraint: 'users_email_key',
+    }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'users_email_key' },
+      table: 'users',
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should derive the table from a default-named constraint when the error carries no table (CockroachDB)', () => {
+    const error = {
+      code: '23505',
+      message: 'duplicate key value violates unique constraint "app_major_versions_appId_number_key"',
+      severity: 'ERROR',
+      detail: "Key (appId, number)=('x', 1) already exists.",
+      constraint: 'app_major_versions_appId_number_key',
+    }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'app_major_versions_appId_number_key' },
+      table: 'app_major_versions',
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should report no table for a custom-named constraint when the error carries no table', () => {
+    const error = {
+      code: '23505',
+      message: 'duplicate key value violates unique constraint "my_custom_constraint"',
+      severity: 'ERROR',
+      detail: 'Key (email)=(a@b.c) already exists.',
+      constraint: 'my_custom_constraint',
+    }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'my_custom_constraint' },
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
   it('should handle NullConstraintViolation (23502)', () => {
     const error = { code: '23502', message: 'msg', severity: 'ERROR', detail: 'Key (foo)' }
     expect(convertDriverError(error)).toEqual({
@@ -67,6 +141,26 @@ describe('convertDriverError', () => {
     const error = { code: '23503', message: 'msg', severity: 'ERROR', constraint: 'baz' }
     expect(convertDriverError(error)).toEqual({
       kind: 'ForeignKeyConstraintViolation',
+      constraint: { index: 'baz' },
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should handle RestrictViolation (23001) with column', () => {
+    const error = { code: '23001', message: 'msg', severity: 'ERROR', column: 'bar' }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'RestrictViolation',
+      constraint: { fields: ['bar'] },
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should handle RestrictViolation (23001) with constraint', () => {
+    const error = { code: '23001', message: 'msg', severity: 'ERROR', constraint: 'baz' }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'RestrictViolation',
       constraint: { index: 'baz' },
       originalCode: error.code,
       originalMessage: error.message,
@@ -107,8 +201,8 @@ describe('convertDriverError', () => {
     })
   })
 
-  it('should handle TransactionWriteConflict (40001)', () => {
-    const error = { code: '40001', message: 'msg', severity: 'ERROR' }
+  it.each(['40001', '40P01'])('should handle TransactionWriteConflict (%s)', (code) => {
+    const error = { code, message: 'msg', severity: 'ERROR' }
     expect(convertDriverError(error)).toEqual({
       kind: 'TransactionWriteConflict',
       originalCode: error.code,
@@ -126,11 +220,22 @@ describe('convertDriverError', () => {
     })
   })
 
-  it('should handle ColumnNotFound (42703)', () => {
-    const error = { code: '42703', message: 'column "foo" does not exist', severity: 'ERROR' }
+  it.each([
+    ['unquoted column name', 'column foo does not exist', 'foo'],
+    ['quoted column name', 'column "foo" does not exist', 'foo'],
+    ['unquoted qualified column name', 'column users.first_name does not exist', 'users.first_name'],
+    ['quoted qualified column name', 'column "users"."first name" does not exist', 'users.first name'],
+    ['partially quoted qualified column name (1)', 'column users."first name" does not exist', 'users.first name'],
+    ['partially quoted qualified column name (2)', 'column "users".first_name does not exist', 'users.first_name'],
+    ['quoted column name containing spaces', 'column "first name" does not exist', 'first name'],
+    ['quoted column name containing dots', 'column "first.name" does not exist', 'first.name'],
+    ['quoted qualified column name containing dots', 'column "users"."first.name" does not exist', 'users.first.name'],
+    ['quoted column name containing escaped quotes', 'column "a""b" does not exist', 'a"b'],
+  ])('should handle ColumnNotFound (42703) with %s', (description, message, expectedColumn) => {
+    const error = { code: '42703', message, severity: 'ERROR' }
     expect(convertDriverError(error)).toEqual({
       kind: 'ColumnNotFound',
-      column: 'foo',
+      column: expectedColumn,
       originalCode: error.code,
       originalMessage: error.message,
     })

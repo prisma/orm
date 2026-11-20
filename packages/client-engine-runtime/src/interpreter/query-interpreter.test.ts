@@ -1,0 +1,530 @@
+import {
+  ColumnTypeEnum,
+  SqlDriverAdapter,
+  SqlQuery,
+  SqlQueryable,
+  SqlResultSet,
+  Transaction,
+} from '@prisma/driver-adapter-utils'
+import { describe, expect, test, vi } from 'vitest'
+
+import type { PlaceholderFormat, QueryPlanNode } from '../query-plan'
+import { noopTracingHelper } from '../tracing'
+import { TransactionManager } from '../transaction-manager/transaction-manager'
+import { purifyQueryPlan, QueryInterpreter, type QueryRuntimeOptions } from './query-interpreter'
+
+function resultSetWithRows(rowCount: number): SqlResultSet {
+  return {
+    columnNames: ['id'],
+    columnTypes: [ColumnTypeEnum.Int32],
+    rows: Array.from({ length: rowCount }, (_, i) => [i]),
+  }
+}
+
+function queryNode(sql: string): QueryPlanNode {
+  return {
+    type: 'query',
+    args: {
+      type: 'templateSql',
+      fragments: [{ type: 'stringChunk', chunk: sql }],
+      placeholderFormat: { prefix: '$', hasNumbering: true },
+      args: [],
+      argTypes: [],
+      chunkable: false,
+    },
+  }
+}
+
+function userResultSet(id: number, name: string): SqlResultSet {
+  return {
+    columnNames: ['id', 'name'],
+    columnTypes: [ColumnTypeEnum.Int32, ColumnTypeEnum.Text],
+    rows: [[id, name]],
+  }
+}
+
+// Regression test for https://github.com/prisma/prisma/issues/29746: merging the rows of a chunked
+// query used to spread the whole result set onto the stack (`results.rows.push(...result.rows)`),
+// overflowing the call stack when a single chunk returned hundreds of thousands of rows.
+test('merges chunked query results without overflowing the stack', async () => {
+  const rowsPerLaterChunk = 200_000
+
+  let call = 0
+  const queryable: SqlQueryable = {
+    provider: 'postgres',
+    adapterName: 'test',
+    queryRaw: (_query: SqlQuery) => {
+      call++
+      // The first chunk yields no rows so the whole result set is delivered by the second chunk
+      // through the spread-based merge path that used to overflow the stack.
+      return Promise.resolve(resultSetWithRows(call === 1 ? 0 : rowsPerLaterChunk))
+    },
+    executeRaw: () => Promise.resolve(0),
+  }
+
+  const interpreter = QueryInterpreter.forSql({
+    tracingHelper: noopTracingHelper,
+    connectionInfo: { maxBindValues: 2, supportsRelationJoins: false },
+  })
+
+  const queryPlan: QueryPlanNode = {
+    type: 'query',
+    args: {
+      type: 'templateSql',
+      fragments: [
+        { type: 'stringChunk', chunk: 'SELECT * FROM users WHERE "id" IN ' },
+        { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
+      ],
+      placeholderFormat: {
+        prefix: '$',
+        hasNumbering: true,
+      } satisfies PlaceholderFormat,
+      args: [[1, 2, 3, 4]],
+      argTypes: [{ arity: 'scalar', scalarType: 'int' }],
+      chunkable: true,
+    },
+  }
+
+  const result = await interpreter.run(queryPlan, {
+    queryable,
+    transactionManager: { enabled: false },
+    scope: {},
+  })
+
+  expect(call).toBe(2)
+  expect(result).toHaveLength(rowsPerLaterChunk)
+})
+
+class MockTransactionAdapter implements SqlDriverAdapter {
+  adapterName = 'mock-adapter'
+  provider = 'postgres' as const
+
+  startTransactionMock = vi.fn()
+  commitMock = vi.fn().mockResolvedValue(undefined)
+  rollbackMock = vi.fn().mockResolvedValue(undefined)
+  txExecuteRawMock = vi.fn().mockResolvedValue(1)
+  txQueryRawMock = vi.fn().mockImplementation(() => Promise.resolve(resultSetWithRows(1)))
+  executeRawMock = vi.fn().mockResolvedValue(1)
+  queryRawMock = vi.fn().mockImplementation(() => Promise.resolve(resultSetWithRows(1)))
+
+  executeRaw(query: SqlQuery): Promise<number> {
+    return this.executeRawMock(query)
+  }
+
+  queryRaw(query: SqlQuery): Promise<SqlResultSet> {
+    return this.queryRawMock(query)
+  }
+
+  executeScript(): Promise<void> {
+    throw new Error('Not implemented for test')
+  }
+
+  dispose(): Promise<void> {
+    return Promise.resolve()
+  }
+
+  startTransaction(): Promise<Transaction> {
+    this.startTransactionMock()
+    return Promise.resolve({
+      adapterName: this.adapterName,
+      provider: this.provider,
+      options: { usePhantomQuery: true },
+      executeRaw: this.txExecuteRawMock,
+      queryRaw: this.txQueryRawMock,
+      commit: this.commitMock,
+      rollback: this.rollbackMock,
+      createSavepoint: () => Promise.resolve(),
+      rollbackToSavepoint: () => Promise.resolve(),
+      releaseSavepoint: () => Promise.resolve(),
+    })
+  }
+}
+
+function makeTransactionManager(driverAdapter: SqlDriverAdapter): TransactionManager {
+  return new TransactionManager({
+    driverAdapter,
+    transactionOptions: {},
+    tracingHelper: noopTracingHelper,
+  })
+}
+
+// The plans below get split into two chunks: `maxBindValues` is 2 and four values are bound.
+const chunkedInterpreter = QueryInterpreter.forSql({
+  tracingHelper: noopTracingHelper,
+  connectionInfo: { maxBindValues: 2, supportsRelationJoins: false },
+})
+
+function statementNode(type: 'query' | 'execute', args: number[]): QueryPlanNode {
+  return {
+    type,
+    args: {
+      type: 'templateSql',
+      fragments: [
+        { type: 'stringChunk', chunk: 'DELETE FROM users WHERE "id" IN ' },
+        { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
+      ],
+      placeholderFormat: {
+        prefix: '$',
+        hasNumbering: true,
+      } satisfies PlaceholderFormat,
+      args: [args],
+      argTypes: [{ arity: 'scalar', scalarType: 'int' }],
+      chunkable: true,
+    },
+  }
+}
+
+// A statement that gets split into multiple chunks is no longer atomic on its own, so the
+// interpreter must wrap the chunks in a transaction to avoid committing a partial write when
+// a later chunk fails (see https://github.com/prisma/prisma-engines/pull/5840).
+test('wraps a chunked execute in a transaction', async () => {
+  const adapter = new MockTransactionAdapter()
+
+  const result = await chunkedInterpreter.run(statementNode('execute', [1, 2, 3, 4]), {
+    queryable: adapter,
+    transactionManager: { enabled: true, manager: makeTransactionManager(adapter) },
+    scope: {},
+  })
+
+  expect(result).toBe(2)
+  expect(adapter.startTransactionMock).toHaveBeenCalledTimes(1)
+  expect(adapter.txExecuteRawMock).toHaveBeenCalledTimes(2)
+  expect(adapter.executeRawMock).not.toHaveBeenCalled()
+  expect(adapter.commitMock).toHaveBeenCalledTimes(1)
+  expect(adapter.rollbackMock).not.toHaveBeenCalled()
+})
+
+test('wraps a chunked query in a transaction', async () => {
+  const adapter = new MockTransactionAdapter()
+
+  const result = await chunkedInterpreter.run(statementNode('query', [1, 2, 3, 4]), {
+    queryable: adapter,
+    transactionManager: { enabled: true, manager: makeTransactionManager(adapter) },
+    scope: {},
+  })
+
+  expect(result).toHaveLength(2)
+  expect(adapter.startTransactionMock).toHaveBeenCalledTimes(1)
+  expect(adapter.txQueryRawMock).toHaveBeenCalledTimes(2)
+  expect(adapter.queryRawMock).not.toHaveBeenCalled()
+  expect(adapter.commitMock).toHaveBeenCalledTimes(1)
+})
+
+test('rolls back the chunk transaction when a later chunk fails', async () => {
+  const adapter = new MockTransactionAdapter()
+  adapter.txExecuteRawMock.mockResolvedValueOnce(1).mockRejectedValueOnce(new Error('chunk failed'))
+
+  await expect(
+    chunkedInterpreter.run(statementNode('execute', [1, 2, 3, 4]), {
+      queryable: adapter,
+      transactionManager: { enabled: true, manager: makeTransactionManager(adapter) },
+      scope: {},
+    }),
+  ).rejects.toThrow('chunk failed')
+
+  expect(adapter.txExecuteRawMock).toHaveBeenCalledTimes(2)
+  expect(adapter.commitMock).not.toHaveBeenCalled()
+  expect(adapter.rollbackMock).toHaveBeenCalledTimes(1)
+})
+
+test('does not start a transaction for a single-chunk statement', async () => {
+  const adapter = new MockTransactionAdapter()
+
+  const result = await chunkedInterpreter.run(statementNode('execute', [1, 2]), {
+    queryable: adapter,
+    transactionManager: { enabled: true, manager: makeTransactionManager(adapter) },
+    scope: {},
+  })
+
+  expect(result).toBe(1)
+  expect(adapter.startTransactionMock).not.toHaveBeenCalled()
+  expect(adapter.executeRawMock).toHaveBeenCalledTimes(1)
+})
+
+test('does not start a nested transaction for chunked statements inside a transaction node', async () => {
+  const adapter = new MockTransactionAdapter()
+
+  const plan: QueryPlanNode = { type: 'transaction', args: statementNode('execute', [1, 2, 3, 4]) }
+  const result = await chunkedInterpreter.run(plan, {
+    queryable: adapter,
+    transactionManager: { enabled: true, manager: makeTransactionManager(adapter) },
+    scope: {},
+  })
+
+  expect(result).toBe(2)
+  expect(adapter.startTransactionMock).toHaveBeenCalledTimes(1)
+  expect(adapter.txExecuteRawMock).toHaveBeenCalledTimes(2)
+  expect(adapter.commitMock).toHaveBeenCalledTimes(1)
+})
+
+test('rethrows the original chunk error when the rollback fails as well', async () => {
+  const adapter = new MockTransactionAdapter()
+  adapter.txExecuteRawMock.mockResolvedValueOnce(1).mockRejectedValueOnce(new Error('chunk failed'))
+  adapter.rollbackMock.mockRejectedValue(new Error('rollback failed'))
+
+  await expect(
+    chunkedInterpreter.run(statementNode('execute', [1, 2, 3, 4]), {
+      queryable: adapter,
+      transactionManager: { enabled: true, manager: makeTransactionManager(adapter) },
+      scope: {},
+    }),
+  ).rejects.toThrow('chunk failed')
+
+  expect(adapter.rollbackMock).toHaveBeenCalledTimes(1)
+})
+
+// Executors pass `transactionManager: { enabled: false }` exactly when the plan runs inside an
+// interactive transaction, with that transaction as the queryable, so the chunks are already
+// covered by it.
+test('runs chunked statements directly when already inside an interactive transaction', async () => {
+  const adapter = new MockTransactionAdapter()
+
+  const result = await chunkedInterpreter.run(statementNode('execute', [1, 2, 3, 4]), {
+    queryable: adapter,
+    transactionManager: { enabled: false },
+    scope: {},
+  })
+
+  expect(result).toBe(2)
+  expect(adapter.startTransactionMock).not.toHaveBeenCalled()
+  expect(adapter.executeRawMock).toHaveBeenCalledTimes(2)
+})
+
+test('run() leaves a shared query plan intact between runs', async () => {
+  const plan: QueryPlanNode = {
+    type: 'unique',
+    args: queryNode('SELECT "id", "name" FROM "User" WHERE "id" = 1'),
+  }
+  const original = structuredClone(plan)
+
+  const queryable = {
+    provider: 'postgres' as const,
+    adapterName: 'mock',
+    queryRaw: vi.fn().mockResolvedValueOnce(userResultSet(1, 'Alice')).mockResolvedValueOnce(userResultSet(2, 'Bob')),
+    executeRaw: vi.fn(),
+  }
+
+  const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+  const options: QueryRuntimeOptions = { queryable, transactionManager: { enabled: false }, scope: {} }
+
+  await expect(interpreter.run(plan, options)).resolves.toEqual({ id: 1, name: 'Alice' })
+  await expect(interpreter.run(plan, options)).resolves.toEqual({ id: 2, name: 'Bob' })
+
+  expect(queryable.queryRaw).toHaveBeenCalledTimes(2)
+  expect(plan).toEqual(original)
+})
+
+describe('purifyQueryPlan', () => {
+  test('substitutes the single impure node without mutating the input plan', async () => {
+    const query = queryNode('SELECT "id" FROM "User" LIMIT 1')
+    const plan: QueryPlanNode = { type: 'unique', args: query }
+    const original = structuredClone(plan)
+
+    const evalNode = vi.fn().mockResolvedValue({ value: [{ id: 1 }], lastInsertId: '1' })
+    const purified = await purifyQueryPlan(plan, evalNode)
+
+    expect(evalNode).toHaveBeenCalledTimes(1)
+    expect(evalNode).toHaveBeenCalledWith(query)
+    expect(purified).toEqual({
+      type: 'unique',
+      args: { type: 'value', args: [{ id: 1 }], lastInsertId: '1', isEvaluated: true },
+    })
+    expect(plan).toEqual(original)
+  })
+
+  test('shares unaffected subtrees with the input plan', async () => {
+    const sibling: QueryPlanNode = { type: 'value', args: 1 }
+    const plan: QueryPlanNode = {
+      type: 'seq',
+      args: [sibling, { type: 'unique', args: queryNode('SELECT 1') }],
+    }
+
+    const purified = await purifyQueryPlan(plan, vi.fn().mockResolvedValue({ value: 2 }))
+
+    expect(purified?.type).toBe('seq')
+    if (purified?.type === 'seq') {
+      expect(purified.args[0]).toBe(sibling)
+    }
+  })
+
+  test('returns undefined when the plan contains a transaction node', () => {
+    const plan: QueryPlanNode = {
+      type: 'seq',
+      args: [{ type: 'transaction', args: queryNode('INSERT INTO "User" DEFAULT VALUES') }, queryNode('SELECT 1')],
+    }
+
+    const evalNode = vi.fn()
+    expect(purifyQueryPlan(plan, evalNode)).toBeUndefined()
+    expect(evalNode).not.toHaveBeenCalled()
+  })
+
+  test('returns undefined when the plan contains multiple impure nodes', () => {
+    const plan: QueryPlanNode = {
+      type: 'seq',
+      args: [queryNode('SELECT 1'), queryNode('SELECT 2')],
+    }
+
+    expect(purifyQueryPlan(plan, vi.fn())).toBeUndefined()
+  })
+
+  test('returns undefined for fully pure plans', () => {
+    const plan: QueryPlanNode = { type: 'value', args: 42 }
+
+    expect(purifyQueryPlan(plan, vi.fn())).toBeUndefined()
+  })
+
+  test('does not copy result rows when running an already purified plan', async () => {
+    const rows = [
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' },
+    ]
+    const plan: QueryPlanNode = queryNode('SELECT "id", "name" FROM "User"')
+
+    const evalNode = vi.fn().mockResolvedValue({ value: rows })
+    const purified = await purifyQueryPlan(plan, evalNode)
+    expect(purified).toBeDefined()
+
+    const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+    const result = await interpreter.run(purified!, {
+      queryable: {
+        provider: 'postgres' as const,
+        adapterName: 'mock',
+        queryRaw: vi.fn(),
+        executeRaw: vi.fn(),
+      },
+      transactionManager: { enabled: false },
+      scope: {},
+    })
+
+    expect(result).toBe(rows)
+  })
+
+  test('does not copy result rows when run purifies the plan itself', async () => {
+    const rows = [
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' },
+    ]
+    const interpreter = new QueryInterpreter({ tracingHelper: noopTracingHelper, serializer: () => rows })
+
+    const result = await interpreter.run(queryNode('SELECT "id", "name" FROM "User"'), {
+      queryable: {
+        provider: 'postgres',
+        adapterName: 'mock',
+        queryRaw: () => Promise.resolve(userResultSet(1, 'Alice')),
+        executeRaw: vi.fn(),
+      },
+      transactionManager: { enabled: false },
+      scope: {},
+    })
+
+    expect(result).toBe(rows)
+  })
+
+  test('evaluating reverse on a purified plan does not mutate cached rows on repeated runs', async () => {
+    const rows = [
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' },
+    ]
+    const plan: QueryPlanNode = {
+      type: 'reverse',
+      args: queryNode('SELECT "id", "name" FROM "User"'),
+    }
+
+    const evalNode = vi.fn().mockResolvedValue({ value: rows })
+    const purified = await purifyQueryPlan(plan, evalNode)
+    expect(purified).toBeDefined()
+
+    const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+    const context: QueryRuntimeOptions = {
+      queryable: {
+        provider: 'postgres',
+        adapterName: 'mock',
+        queryRaw: vi.fn(),
+        executeRaw: vi.fn(),
+      },
+      transactionManager: { enabled: false },
+      scope: {},
+    }
+
+    const firstRun = await interpreter.run(purified!, context)
+    expect(firstRun).toEqual([
+      { id: 2, name: 'Bob' },
+      { id: 1, name: 'Alice' },
+    ])
+    expect(rows[0].id).toBe(1)
+    expect(rows[1].id).toBe(2)
+
+    const secondRun = await interpreter.run(purified!, context)
+    expect(secondRun).toEqual([
+      { id: 2, name: 'Bob' },
+      { id: 1, name: 'Alice' },
+    ])
+    expect(rows[0].id).toBe(1)
+  })
+})
+
+describe('join', () => {
+  function joinPlan(): QueryPlanNode {
+    return {
+      type: 'join',
+      args: {
+        parent: queryNode('SELECT "id", "tagId" FROM "Child"'),
+        children: [
+          {
+            child: queryNode('SELECT "id" FROM "Tag"'),
+            on: [['tagId', 'id']],
+            parentField: 'tag',
+            isRelationUnique: true,
+          },
+        ],
+        canAssumeStrictEquality: true,
+      },
+    }
+  }
+
+  function childResultSet(rows: [number, number | null][]): SqlResultSet {
+    return { columnNames: ['id', 'tagId'], columnTypes: [ColumnTypeEnum.Int32, ColumnTypeEnum.Int32], rows }
+  }
+
+  async function run(parentRows: [number, number | null][]) {
+    const queryable = {
+      provider: 'postgres' as const,
+      adapterName: 'mock',
+      queryRaw: vi
+        .fn()
+        .mockResolvedValueOnce(childResultSet(parentRows))
+        .mockResolvedValueOnce({ columnNames: ['id'], columnTypes: [ColumnTypeEnum.Int32], rows: [[7]] }),
+      executeRaw: vi.fn(),
+    }
+    const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+    const result = await interpreter.run(joinPlan(), {
+      queryable,
+      transactionManager: { enabled: false },
+      scope: {},
+    })
+    return { result, queries: queryable.queryRaw.mock.calls.length }
+  }
+
+  test('skips the child query when there are no parent rows', async () => {
+    await expect(run([])).resolves.toEqual({ result: [], queries: 1 })
+  })
+
+  test('skips the child query when no parent row has a join key', async () => {
+    await expect(run([[1, null]])).resolves.toEqual({ result: [{ id: 1, tagId: null, tag: null }], queries: 1 })
+  })
+
+  test('runs the child query when a parent row has a join key', async () => {
+    await expect(
+      run([
+        [1, null],
+        [2, 7],
+      ]),
+    ).resolves.toEqual({
+      result: [
+        { id: 1, tagId: null, tag: null },
+        { id: 2, tagId: 7, tag: { id: 7 } },
+      ],
+      queries: 2,
+    })
+  })
+})

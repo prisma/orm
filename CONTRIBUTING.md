@@ -2,7 +2,7 @@
 
 Welcome! You've arrived at our Contributing page and are now one step away from joining our quest to make databases easy. We're thankful for all your contributions, whether it's helping us find issues in our code, highlighting features we're missing, or contributing to the codebase. If you've found your way here, you'll soon be ready to join in the fun of building features and fixing bugs directly with us - and we're thrilled to have you on board!
 
-To get you started on a good foot, we've created an easy overview of the most important things to get you started contributing code to Prisma below as well as a [Code of Conduct](https://github.com/prisma/prisma/blob/main/CODE_OF_CONDUCT.md) for contributing to the development of Prisma.
+To get you started on a good foot, we've created an easy overview of the most important things to get you started contributing code to Prisma below as well as a [Code of Conduct](https://github.com/prisma/prisma/blob/v7/CODE_OF_CONDUCT.md) for contributing to the development of Prisma.
 
 We also encourage you to join our sprawling [community](https://www.prisma.io/community) online, where you can discuss ideas, ask questions and get inspiration for what to build next.
 
@@ -167,10 +167,10 @@ pnpm run test integration
 
 ###### Creating a new folder-based integration test
 
-If you want to create a new one, we recommend to copy over the [minimal test](https://github.com/prisma/prisma/tree/main/packages/client/src/__tests__/integration/happy/minimal) and adjust it to your needs.
+If you want to create a new one, we recommend to copy over the [minimal test](https://github.com/prisma/prisma/tree/v7/packages/client/src/__tests__/integration/happy/minimal) and adjust it to your needs.
 It will give you an in-memory Prisma Client instance to use in the test. It utilizes the `getTestClient`) helper method.
 
-Sometimes you need an actual generated Client, that has been generated to the filesystem. In that case use `generateTestClient`. An example that uses this helper is the [blog example](https://github.com/prisma/prisma/tree/main/packages/client/src/__tests__/integration/happy/blog)
+Sometimes you need an actual generated Client, that has been generated to the filesystem. In that case use `generateTestClient`. An example that uses this helper is the [blog example](https://github.com/prisma/prisma/tree/v7/packages/client/src/__tests__/integration/happy/blog)
 
 ##### General Client integration tests (`./integration-tests`)
 
@@ -327,30 +327,6 @@ List of types:
 - perf: A code change that improves performance
 - test: Adding missing or correcting existing tests
 - chore: Changes to the build process or auxiliary tools and libraries such as documentation generation
-
-List of directories in the monorepo:
-
-- adapter-better-sqlite3
-- adapter-d1
-- adapter-libsql
-- adapter-mssql
-- adapter-neon
-- adapter-pg
-- adapter-planetscale
-- adapter-mariadb
-- cli
-- client
-- debug
-- driver-adapter-utils
-- engines
-- fetch-engine
-- generator-helper
-- get-platform
-- instrumentation
-- integration-tests
-- internals
-- migrate
-- nextjs-monorepo-workaround-plugin
 
 ## Legal
 

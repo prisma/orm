@@ -45,9 +45,12 @@ export interface ValueGenerator {
 }
 
 class NowGenerator implements ValueGenerator {
-  #now: Date = new Date()
+  #now: Date | undefined
 
   generate(): string {
+    if (this.#now === undefined) {
+      this.#now = new Date()
+    }
     return this.#now.toISOString()
   }
 }

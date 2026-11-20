@@ -1,10 +1,12 @@
-import { Decimal } from '@prisma/client-runtime-utils'
+import { Decimal, PrismaClientValidationError } from '@prisma/client-runtime-utils'
 import { describe, expect, test } from 'vitest'
 
 import { serializeRawParameters } from '../runtime/utils/serializeRawParameters'
 
+const CLIENT_VERSION = 'test-client-version'
+
 function serialize(data: any[]) {
-  return JSON.parse(serializeRawParameters(data))
+  return JSON.parse(serializeRawParameters(data, CLIENT_VERSION))
 }
 
 describe('serializeRawParameters', () => {
@@ -26,6 +28,11 @@ describe('serializeRawParameters', () => {
         prisma__value: '2020-06-22T17:07:16.348Z',
       },
     ])
+  })
+
+  test('invalid date throws', () => {
+    expect(() => serialize([new Date('not a valid date')])).toThrow(PrismaClientValidationError)
+    expect(() => serialize([new Date('invalid')])).toThrow(PrismaClientValidationError)
   })
 
   test('BigInt', () => {

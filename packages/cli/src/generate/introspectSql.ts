@@ -1,5 +1,5 @@
 import { inferDirectoryConfig, isValidJsIdentifier, type SchemaContext } from '@prisma/internals'
-import { PrismaConfigWithDatasource } from '@prisma/internals/src/utils/validatePrismaConfigWithDatasource'
+import { PrismaConfigWithDatasource } from '@prisma/internals'
 import { introspectSql as migrateIntrospectSql, IntrospectSqlError, IntrospectSqlInput } from '@prisma/migrate'
 import fs from 'fs/promises'
 import { bold } from 'kleur/colors'

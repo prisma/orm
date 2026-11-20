@@ -8,6 +8,7 @@ export {
   type QueryInterpreterTransactionManager,
 } from './interpreter/query-interpreter'
 export * from './json-protocol'
+export { parameterizeBatch, parameterizeQuery } from './parameterization/parameterize'
 export * from './query-plan'
 export * from './raw-json-protocol'
 export type { SchemaProvider } from './schema'

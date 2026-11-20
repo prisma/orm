@@ -1,4 +1,4 @@
-import { Decimal, ObjectEnumValue, Sql } from '@prisma/client-runtime-utils'
+import { Decimal, isObjectEnumValue, Sql } from '@prisma/client-runtime-utils'
 import { assertNever } from '@prisma/internals'
 
 import { isFieldRef } from '../core/model/FieldRef'
@@ -8,6 +8,7 @@ import { JsArgs, JsInputValue } from '../core/types/exported/JsApi'
 import { RawQueryArgs } from '../core/types/exported/RawQueryArgs'
 import { isDate } from './date'
 import { isDecimalJsLike } from './decimalJsLike'
+import { isJSONConvertible } from './jsonConvertible'
 
 export function deepCloneArgs(args: JsArgs | RawQueryArgs): JsArgs | RawQueryArgs {
   if (args instanceof Sql) {
@@ -44,7 +45,7 @@ function cloneTypedSql(rawParam: UnknownTypedSql): UnknownTypedSql {
 
 // based on https://github.com/lukeed/klona/blob/v2.0.6/src/index.js
 function deepCloneValue(x: JsInputValue): JsInputValue {
-  if (typeof x !== 'object' || x == null || x instanceof ObjectEnumValue || isFieldRef(x) || isSkip(x)) {
+  if (typeof x !== 'object' || x == null || isObjectEnumValue(x) || isFieldRef(x) || isSkip(x)) {
     return x
   }
 
@@ -67,6 +68,10 @@ function deepCloneValue(x: JsInputValue): JsInputValue {
       copy[k] = deepCloneValue(x[k])
     }
     return copy
+  }
+
+  if (isJSONConvertible(x)) {
+    return x
   }
 
   if (typeof x === 'object') {

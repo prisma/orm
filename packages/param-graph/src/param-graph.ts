@@ -18,10 +18,15 @@ import type {
 } from './types'
 
 /**
+ * Map of enum names to their respective values.
+ */
+export type EnumNameToValueMap = Record<string, string>
+
+/**
  * Function type for looking up enum values by name.
  * This allows ParamGraph to remain decoupled from RuntimeDataModel.
  */
-export type EnumLookup = (enumName: string) => readonly string[] | undefined
+export type EnumLookup = (enumName: string) => Readonly<EnumNameToValueMap> | undefined
 
 /**
  * Readable view of root entry.
@@ -68,6 +73,7 @@ export interface OutputEdge {
  * needed for parameterization decisions.
  */
 export class ParamGraph {
+  static readonly #decodedGraphs = new WeakMap<SerializedParamGraph, ParamGraphData>()
   readonly #data: ParamGraphData
   readonly #stringIndex: Map<string, number>
   readonly #enumLookup: EnumLookup
@@ -86,9 +92,14 @@ export class ParamGraph {
   /**
    * Creates a ParamGraph from serialized format.
    * This is the primary factory method for runtime use.
+   * Serialized schemas must not be mutated after successful deserialization.
    */
   static deserialize(serialized: SerializedParamGraph, enumLookup: EnumLookup): ParamGraph {
-    const data = deserializeParamGraph(serialized)
+    let data = ParamGraph.#decodedGraphs.get(serialized)
+    if (data === undefined) {
+      data = deserializeParamGraph(serialized)
+      ParamGraph.#decodedGraphs.set(serialized, data)
+    }
     return new ParamGraph(data, enumLookup)
   }
 
@@ -198,7 +209,7 @@ export class ParamGraph {
    * Get enum values for an edge that references a user enum.
    * Returns undefined if the edge doesn't reference an enum.
    */
-  enumValues(edge: InputEdge | undefined): readonly string[] | undefined {
+  enumValues(edge: InputEdge | undefined): Readonly<EnumNameToValueMap> | undefined {
     if (edge?.enumNameIndex === undefined) {
       return undefined
     }

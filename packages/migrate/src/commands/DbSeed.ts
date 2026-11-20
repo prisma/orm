@@ -5,17 +5,13 @@ import { bold, dim, red } from 'kleur/colors'
 
 import { executeSeedCommand } from '../utils/seed'
 
-export class DbSeed implements Command {
-  public static new(): DbSeed {
-    return new DbSeed()
-  }
-
-  private static help = format(`
+function renderHelp(cliCommand: string): string {
+  return format(`
 ${process.platform === 'win32' ? '' : '🙌  '}Seed your database
 
 ${bold('Usage')}
 
-  ${dim('$')} prisma db seed [options]
+  ${dim('$')} ${cliCommand} db seed [options]
 
 ${bold('Options')}
 
@@ -25,8 +21,16 @@ ${bold('Options')}
 ${bold('Examples')}
 
   Passing extra arguments to the seed command
-    ${dim('$')} prisma db seed -- --arg1 value1 --arg2 value2
+    ${dim('$')} ${cliCommand} db seed -- --arg1 value1 --arg2 value2
 `)
+}
+
+export class DbSeed implements Command {
+  public static new(cliCommand: string): DbSeed {
+    return new DbSeed(cliCommand)
+  }
+
+  private constructor(private readonly cliCommand: string) {}
 
   public async parse(argv: string[], config: PrismaConfigInternal): Promise<string | Error> {
     const args = arg(
@@ -45,7 +49,7 @@ ${bold('Examples')}
       if (args instanceof ArgError && args.code === 'ARG_UNKNOWN_OPTION') {
         throw new Error(`${args.message}
 Did you mean to pass these as arguments to your seed script? If so, add a -- separator before them:
-${dim('$')} prisma db seed -- --arg1 value1 --arg2 value2`)
+${dim('$')} ${this.cliCommand} db seed -- --arg1 value1 --arg2 value2`)
       }
       return this.help(args.message)
     }
@@ -63,7 +67,7 @@ To seed your database, add a ${bold('seed')} property to the ${bold('migrations'
 
 ${bold('Example')}
 
-  ${dim('// prisma.config.ts')}
+  ${dim('// prisma7.config.ts')}
   export default defineConfig({
     ${bold('migrations: {')}
       ${bold(`seed: 'bun·./prisma/seed.ts'`)},
@@ -92,8 +96,8 @@ ${bold('Example')}
 
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${DbSeed.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${renderHelp(this.cliCommand)}`)
     }
-    return DbSeed.help
+    return renderHelp(this.cliCommand)
   }
 }

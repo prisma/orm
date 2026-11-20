@@ -3,10 +3,10 @@
   "version": "0.0.0",
   "description": "This package is intended for Prisma's internal use",
   "main": "dist/index.js",
-  "types": "dist/migrate/src/index.d.ts",
+  "types": "dist/src/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/migrate"
   },
   "author": "Tim Suchanek <suchanek@prisma.io>",
@@ -32,7 +32,7 @@
     "fs-jetpack": "5.1.0",
     "indent-string": "4.0.0",
     "jest": "29.7.0",
-    "jest-junit": "16.0.0",
+    "jest-junit": "17.0.0",
     "kleur": "4.1.5",
     "log-update": "6.1.0",
     "mariadb": "3.4.5",
@@ -43,7 +43,7 @@
     "pg": "8.14.1",
     "strip-indent": "4.0.0",
     "tempy": "1.0.1",
-    "ts-pattern": "5.6.2",
+    "ts-pattern": "5.9.0",
     "typescript": "5.4.5"
   },
   "peerDependencies": {
@@ -54,7 +54,7 @@
     "@prisma/config": "workspace:*",
     "@prisma/debug": "workspace:*",
     "@prisma/driver-adapter-utils": "workspace:*",
-    "@prisma/engines-version": "7.5.0-10.94a226be1cf2967af2541cca5529f0f7ba866919",
+    "@prisma/engines-version": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@prisma/generator": "workspace:*",
     "@prisma/get-platform": "workspace:*",
     "@prisma/internals": "workspace:*",

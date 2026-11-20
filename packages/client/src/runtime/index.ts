@@ -43,6 +43,7 @@ export {
   isAnyNull,
   isDbNull,
   isJsonNull,
+  isObjectEnumValue,
   JsonNull,
   NullTypes,
   ObjectEnumValue,

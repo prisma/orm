@@ -202,7 +202,7 @@ describeMatrix(postgresOnly, 'postgresql-views', () => {
     test('re-introspection with views removed', async () => {
       ctx.fixture(fixturePath)
 
-      const introspectWithViews = new DbPull()
+      const introspectWithViews = DbPull.new('prisma')
       const resultWithViews = introspectWithViews.parse([], await ctx.config(), ctx.configDir())
       await expect(resultWithViews).resolves.toMatchInlineSnapshot(`""`)
 
@@ -232,7 +232,7 @@ describeMatrix(postgresOnly, 'postgresql-views', () => {
       // remove any view in the database
       await runQueryPostgres(setupParams, dropViewsSQL!)
 
-      const introspectWithoutViews = new DbPull()
+      const introspectWithoutViews = DbPull.new('prisma')
       const resultWithoutViews = introspectWithoutViews.parse([], await ctx.config(), ctx.configDir())
       await expect(resultWithoutViews).resolves.toMatchInlineSnapshot(`""`)
 
@@ -265,7 +265,7 @@ describeMatrix(postgresOnly, 'postgresql-views', () => {
     test('basic introspection', async () => {
       ctx.fixture(fixturePath)
 
-      const introspect = new DbPull()
+      const introspect = DbPull.new('prisma')
       const result = introspect.parse([], await ctx.config(), ctx.configDir())
       await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
@@ -332,7 +332,7 @@ describeMatrix(postgresOnly, 'postgresql-views', () => {
           await ctx.fs.moveAsync('schema.prisma', schemaPath)
         }
 
-        const introspect = new DbPull()
+        const introspect = DbPull.new('prisma')
         const args = needsPathsArg ? ['--schema', `${schemaPath}`] : []
         const result = introspect.parse(args, await ctx.config(), ctx.configDir())
         await expect(result).resolves.toMatchInlineSnapshot(`""`)
@@ -409,7 +409,7 @@ describeMatrix(postgresOnly, 'postgresql-views', () => {
         ]
       `)
 
-      const introspect = new DbPull()
+      const introspect = DbPull.new('prisma')
       const result = introspect.parse([], await ctx.config(), ctx.configDir())
       await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
@@ -445,7 +445,7 @@ describeMatrix(postgresOnly, 'postgresql-views', () => {
     test('basic introspection', async () => {
       ctx.fixture(path.join(fixturePath))
 
-      const introspect = new DbPull()
+      const introspect = DbPull.new('prisma')
       const result = introspect.parse([], await ctx.config(), ctx.configDir())
       await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
@@ -480,7 +480,7 @@ describeMatrix(postgresOnly, 'postgresql-views', () => {
         ]
       `)
 
-      const introspect = new DbPull()
+      const introspect = DbPull.new('prisma')
       const result = introspect.parse([], await ctx.config(), ctx.configDir())
       await expect(result).resolves.toMatchInlineSnapshot(`""`)
 

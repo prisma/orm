@@ -43,14 +43,14 @@ jobs:
     name: Build
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-14, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     needs: parseCommand
     if: ${{ needs.parseCommand.outputs.branchName != '' }}
     outputs:
       engineHash: ${{ steps.engine-hash.outputs.engineHash }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: prisma/prisma-engines
           ref: ${{ needs.parseCommand.outputs.branchName }}
@@ -60,7 +60,7 @@ jobs:
         shell: bash
         run: echo "engineHash=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         name: Artifacts cache
         id: artifacts-cache
         with:
@@ -72,10 +72,10 @@ jobs:
             schema-engine/schema-engine-wasm/pkg
           key: ${{ runner.os }}-engine-${{ steps.engine-hash.outputs.engineHash }}-${{ github.event.number }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         if: steps.artifacts-cache.outputs.cache-hit != 'true'
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         name: Dependencies cache
         if: steps.artifacts-cache.outputs.cache-hit != 'true'
         with:
@@ -93,7 +93,7 @@ jobs:
         run: |
           cargo build --release -p schema-engine-cli
 
-      - uses: cargo-bins/cargo-binstall@main
+      - uses: cargo-bins/cargo-binstall@b5723a5790b379eeac6713950acef86189492996 # main
 
       - name: Extract wasm-bindgen version and install matching CLI
         if: steps.artifacts-cache.outputs.cache-hit != 'true'
@@ -120,7 +120,7 @@ jobs:
           fi
 
       - name: Install Binaryen (includes wasm-opt)
-        uses: jaxxstorm/action-install-gh-release@v2.1.0
+        uses: jaxxstorm/action-install-gh-release@6096f2a2bbfee498ced520b6922ac2c06e990ed2 # v2.1.0
         with:
           repo: WebAssembly/binaryen
           tag: version_122

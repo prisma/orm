@@ -7,7 +7,7 @@ type AdapterEntry = {
   outfile: string
 }
 
-export function createAdapterConfig(entries: AdapterEntry[]): BuildOptions[] {
+export function createBundledConfig(entries: AdapterEntry[]): BuildOptions[] {
   return entries.flatMap(({ entry, outfile }) => {
     const baseName = path.basename(outfile)
 
@@ -34,7 +34,7 @@ export function createAdapterConfig(entries: AdapterEntry[]): BuildOptions[] {
   })
 }
 
-export const adapterConfig = createAdapterConfig([{ entry: 'src/index.ts', outfile: 'dist/index' }])
+export const bundledConfig = createBundledConfig([{ entry: 'src/index.ts', outfile: 'dist/index' }])
 
 export const unbundledConfig: BuildOptions[] = [
   {

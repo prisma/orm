@@ -1,3 +1,5 @@
+import util from 'node:util'
+
 import { zValidator } from '@hono/zod-validator'
 import { QueryPlanNode, TransactionManagerError, UserFacingError } from '@prisma/client-engine-runtime'
 import { Context, Hono } from 'hono'
@@ -62,7 +64,7 @@ function createHonoServer(app: App, options: Options) {
   return server
     .onError((error, c) => {
       log.error('Error processing request', {
-        error,
+        error: util.inspect(error),
         method: c.req.method,
         pathname: c.req.path,
         requestId: c.get('requestId'),

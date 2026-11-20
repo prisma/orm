@@ -11,7 +11,9 @@ import {
 } from '@opentelemetry/api'
 import type {
   EngineSpan,
+  EngineSpanId,
   EngineSpanKind,
+  EngineTraceEvent,
   ExtendedSpanOptions,
   SpanCallback,
   TracingHelper,
@@ -61,13 +63,26 @@ export class ActiveTracingHelper implements TracingHelper {
     return nonSampledTraceParent
   }
 
-  dispatchEngineSpans(spans: EngineSpan[]): void {
+  dispatchEngineSpans(
+    spans: EngineSpan[],
+    events: EngineTraceEvent[],
+    emitLogEvent: (event: EngineTraceEvent) => void,
+  ): void {
     const tracer = this.tracerProvider.getTracer('prisma')
-    const linkIds = new Map<string, string>()
+    const linkIds = new Map<EngineSpanId, EngineSpanId>()
     const roots = spans.filter((span) => span.parentId === null)
+    const eventsBySpanId = groupEventsBySpanId(events)
 
     for (const root of roots) {
-      dispatchEngineSpan(tracer, root, spans, linkIds, this.ignoreSpanTypes)
+      dispatchEngineSpan(tracer, root, spans, linkIds, this.ignoreSpanTypes, eventsBySpanId, emitLogEvent)
+    }
+
+    // Emit any remaining events that weren't consumed by `dispatchEngineSpan`
+    // (for example, the parent span might've been ignored)
+    for (const spanEvents of eventsBySpanId.values()) {
+      for (const event of spanEvents) {
+        emitLogEvent(event)
+      }
     }
   }
 
@@ -105,12 +120,35 @@ export class ActiveTracingHelper implements TracingHelper {
   }
 }
 
+function groupEventsBySpanId(events: EngineTraceEvent[]): Map<EngineSpanId, EngineTraceEvent[]> {
+  const eventsBySpanId = new Map<EngineSpanId, EngineTraceEvent[]>()
+
+  for (const event of events) {
+    let spanEvents = eventsBySpanId.get(event.spanId)
+    if (!spanEvents) {
+      spanEvents = []
+      eventsBySpanId.set(event.spanId, spanEvents)
+    }
+
+    spanEvents.push(event)
+  }
+
+  return eventsBySpanId
+}
+
+/**
+ * Emits `engineSpan` and its descendants, deleting each span's events from
+ * `eventsBySpanId` as they are emitted so that the caller can tell which events
+ * were left without a span of their own.
+ */
 function dispatchEngineSpan(
   tracer: Tracer,
   engineSpan: EngineSpan,
   allSpans: EngineSpan[],
-  linkIds: Map<string, string>,
+  linkIds: Map<EngineSpanId, EngineSpanId>,
   ignoreSpanTypes: (string | RegExp)[],
+  eventsBySpanId: Map<EngineSpanId, EngineTraceEvent[]>,
+  emitLogEvent: (event: EngineTraceEvent) => void,
 ) {
   if (shouldIgnoreSpan(engineSpan.name, ignoreSpanTypes)) return
 
@@ -121,32 +159,53 @@ function dispatchEngineSpan(
   } satisfies SpanOptions
 
   tracer.startActiveSpan(engineSpan.name, spanOptions, (span) => {
-    linkIds.set(engineSpan.id, span.spanContext().spanId)
+    try {
+      linkIds.set(engineSpan.id, span.spanContext().spanId)
 
-    if (engineSpan.links) {
-      span.addLinks(
-        engineSpan.links.flatMap((link) => {
-          const linkedId = linkIds.get(link)
-          if (!linkedId) {
-            return []
+      if (engineSpan.links) {
+        span.addLinks(
+          engineSpan.links.flatMap((link) => {
+            const linkedId = linkIds.get(link)
+            if (!linkedId) {
+              return []
+            }
+            return {
+              context: {
+                spanId: linkedId,
+                traceId: span.spanContext().traceId,
+                traceFlags: span.spanContext().traceFlags,
+              },
+            }
+          }),
+        )
+      }
+
+      const spanEvents = eventsBySpanId.get(engineSpan.id)
+
+      if (spanEvents !== undefined) {
+        eventsBySpanId.delete(engineSpan.id)
+
+        for (const event of spanEvents) {
+          emitLogEvent(event)
+          span.addEvent(event.level, event.attributes as Attributes, event.timestamp)
+
+          if (event.level === 'error') {
+            span.recordException({ message: event.attributes.message ?? '' }, event.timestamp)
           }
-          return {
-            context: {
-              spanId: linkedId,
-              traceId: span.spanContext().traceId,
-              traceFlags: span.spanContext().traceFlags,
-            },
-          }
-        }),
-      )
-    }
+        }
+      }
 
-    const children = allSpans.filter((s) => s.parentId === engineSpan.id)
-    for (const child of children) {
-      dispatchEngineSpan(tracer, child, allSpans, linkIds, ignoreSpanTypes)
+      const children = allSpans.filter((s) => s.parentId === engineSpan.id)
+      for (const child of children) {
+        dispatchEngineSpan(tracer, child, allSpans, linkIds, ignoreSpanTypes, eventsBySpanId, emitLogEvent)
+      }
+    } finally {
+      // `emitLogEvent` invokes listeners registered by the user via `$on`, which
+      // may throw. The span has already been started at this point, so it has to
+      // be ended whatever happens, or it is never exported. The error itself
+      // propagates, matching how a throwing listener behaves on the local path.
+      span.end(engineSpan.endTime)
     }
-
-    span.end(engineSpan.endTime)
   })
 }
 

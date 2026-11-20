@@ -30,7 +30,7 @@ describe('migrate diff', () => {
     it('should succeed when --from-config-datasource and a single local Cloudflare D1 database exists', async () => {
       ctx.fixture('cloudflare-d1-one-db')
 
-      const result = await MigrateDiff.new().parse(
+      const result = await MigrateDiff.new('prisma').parse(
         ['--to-empty', '--from-config-datasource', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -54,7 +54,7 @@ describe('migrate diff', () => {
     it('should succeed when --to-config-datasource and a single local Cloudflare D1 database exists', async () => {
       ctx.fixture('cloudflare-d1-one-db')
 
-      const result = await MigrateDiff.new().parse(
+      const result = await MigrateDiff.new('prisma').parse(
         ['--from-empty', '--to-config-datasource', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -77,7 +77,7 @@ describe('migrate diff', () => {
       )
       ctx.setDatasource({ url: `file:${url}` })
 
-      const result = await MigrateDiff.new().parse(
+      const result = await MigrateDiff.new('prisma').parse(
         ['--to-empty', '--from-config-datasource', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -112,7 +112,7 @@ describe('migrate diff', () => {
       )
       ctx.setDatasource({ url: `file:${url}` })
 
-      const result = await MigrateDiff.new().parse(
+      const result = await MigrateDiff.new('prisma').parse(
         ['--from-empty', '--to-config-datasource', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -145,7 +145,7 @@ describe('migrate diff', () => {
 
   describe('generic', () => {
     it('wrong flag', async () => {
-      const commandInstance = MigrateDiff.new()
+      const commandInstance = MigrateDiff.new('prisma')
       const spy = jest.spyOn(commandInstance, 'help').mockImplementation(() => 'Help Me')
 
       await commandInstance.parse(['--something'], await ctx.config(), ctx.configDir())
@@ -154,7 +154,7 @@ describe('migrate diff', () => {
     })
 
     it('help flag', async () => {
-      const commandInstance = MigrateDiff.new()
+      const commandInstance = MigrateDiff.new('prisma')
       const spy = jest.spyOn(commandInstance, 'help').mockImplementation(() => 'Help Me')
 
       await commandInstance.parse(['--help'], await ctx.config(), ctx.configDir())
@@ -165,28 +165,28 @@ describe('migrate diff', () => {
     it('should fail if missing --from-... and --to-...', async () => {
       ctx.fixture('schema-only')
 
-      const result = MigrateDiff.new().parse([], await ctx.config(), ctx.configDir())
+      const result = MigrateDiff.new('prisma').parse([], await ctx.config(), ctx.configDir())
       await expect(result).rejects.toThrow()
     })
 
     it('should fail if only --from-... is provided', async () => {
       ctx.fixture('schema-only')
 
-      const result = MigrateDiff.new().parse(['--from-empty'], await ctx.config(), ctx.configDir())
+      const result = MigrateDiff.new('prisma').parse(['--from-empty'], await ctx.config(), ctx.configDir())
       await expect(result).rejects.toThrow()
     })
 
     it('should fail if only --to-... is provided', async () => {
       ctx.fixture('schema-only')
 
-      const result = MigrateDiff.new().parse(['--to-empty'], await ctx.config(), ctx.configDir())
+      const result = MigrateDiff.new('prisma').parse(['--to-empty'], await ctx.config(), ctx.configDir())
       await expect(result).rejects.toThrow()
     })
 
     it('should fail if more than 1 --from-... is provided', async () => {
       ctx.fixture('schema-only')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-empty', '--from-config-datasource'],
         await ctx.config(),
         ctx.configDir(),
@@ -197,7 +197,7 @@ describe('migrate diff', () => {
     it('should fail if more than 1 --to-... is provided', async () => {
       ctx.fixture('schema-only')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--to-empty', '--to-config-datasource'],
         await ctx.config(),
         ctx.configDir(),
@@ -210,7 +210,7 @@ describe('migrate diff', () => {
       expect.assertions(2)
 
       try {
-        await MigrateDiff.new().parse(['--from-empty', '--to-empty'], await ctx.config(), ctx.configDir())
+        await MigrateDiff.new('prisma').parse(['--from-empty', '--to-empty'], await ctx.config(), ctx.configDir())
       } catch (e) {
         expect(e.code).toEqual(undefined)
         expect(e.message).toMatchInlineSnapshot(`
@@ -233,7 +233,7 @@ describe('migrate diff', () => {
     ])('should fail with a hint when providing a %s parameter', async (param) => {
       ctx.fixture('schema-only')
 
-      const result = MigrateDiff.new().parse([param], await ctx.config(), ctx.configDir())
+      const result = MigrateDiff.new('prisma').parse([param], await ctx.config(), ctx.configDir())
       await expect(result).rejects.toThrowErrorMatchingSnapshot()
     })
   })
@@ -242,7 +242,7 @@ describe('migrate diff', () => {
     it('should diff --from-empty --to-schema=./prisma/schema.prisma', async () => {
       ctx.fixture('schema-only-sqlite')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-empty', '--to-schema=./prisma/schema.prisma'],
         await ctx.config(),
         ctx.configDir(),
@@ -259,7 +259,7 @@ describe('migrate diff', () => {
     it('should diff --from-empty --to-schema=./prisma/schema (folder)', async () => {
       ctx.fixture('schema-folder-sqlite')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-empty', '--to-schema=./prisma/schema'],
         await ctx.config(),
         ctx.configDir(),
@@ -277,7 +277,7 @@ describe('migrate diff', () => {
     it('should diff --from-empty --to-schema=./prisma/schema.prisma --script', async () => {
       ctx.fixture('schema-only-sqlite')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-empty', '--to-schema=./prisma/schema.prisma', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -296,7 +296,7 @@ describe('migrate diff', () => {
     it('should diff --from-schema=./prisma/schema.prisma --to-empty', async () => {
       ctx.fixture('schema-only-sqlite')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-schema=./prisma/schema.prisma', '--to-empty'],
         await ctx.config(),
         ctx.configDir(),
@@ -313,7 +313,7 @@ describe('migrate diff', () => {
     it('should diff --from-schema=./prisma/schema (folder) --to-empty', async () => {
       ctx.fixture('schema-folder-sqlite')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-schema=./prisma/schema', '--to-empty'],
         await ctx.config(),
         ctx.configDir(),
@@ -331,7 +331,7 @@ describe('migrate diff', () => {
     it('should diff --from-schema=./prisma/schema.prisma --to-empty --script', async () => {
       ctx.fixture('schema-only-sqlite')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-schema=./prisma/schema.prisma', '--to-empty', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -349,7 +349,7 @@ describe('migrate diff', () => {
     it('should diff and write to output path', async () => {
       ctx.fixture('schema-only-sqlite')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-schema=./prisma/schema.prisma', '--to-empty', '--script', '--output=./output.sql'],
         await ctx.config(),
         ctx.configDir(),
@@ -368,7 +368,7 @@ describe('migrate diff', () => {
     it('should diff and write to output path if directory does not exist', async () => {
       ctx.fixture('schema-only-sqlite')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-schema=./prisma/schema.prisma', '--to-empty', '--script', '--output=./subdir/output.sql'],
         await ctx.config(),
         ctx.configDir(),
@@ -391,7 +391,7 @@ describe('migrate diff', () => {
       ctx.fs.write('./readonly.sql', 'test', {
         mode: 0o444,
       })
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-schema=./prisma/schema.prisma', '--to-empty', '--script', '--output=./readonly.sql'],
         await ctx.config(),
         ctx.configDir(),
@@ -409,7 +409,7 @@ describe('migrate diff', () => {
         ctx.fixture('schema-only-sqlite')
         ctx.setDatasource({ url: 'file:doesnotexists.db' })
 
-        const result = MigrateDiff.new().parse(
+        const result = MigrateDiff.new('prisma').parse(
           ['--from-empty', '--to-config-datasource'],
           await ctx.config(),
           ctx.configDir(),
@@ -426,7 +426,7 @@ describe('migrate diff', () => {
         ctx.fixture('schema-only-sqlite')
         ctx.setDatasource({ url: 'file:doesnotexists.db' })
 
-        const result = MigrateDiff.new().parse(
+        const result = MigrateDiff.new('prisma').parse(
           ['--from-config-datasource', '--to-empty'],
           await ctx.config(),
           ctx.configDir(),
@@ -443,7 +443,7 @@ describe('migrate diff', () => {
         ctx.fixture('schema-only-sqlite')
         ctx.setDatasource({ url: 'file:./something/doesnotexists.db' })
 
-        const result = MigrateDiff.new().parse(
+        const result = MigrateDiff.new('prisma').parse(
           ['--from-config-datasource', '--to-empty'],
           await ctx.config(),
           ctx.configDir(),
@@ -460,7 +460,7 @@ describe('migrate diff', () => {
       it('should diff --from-empty --to-config-datasource', async () => {
         ctx.fixture('introspection/sqlite')
 
-        const result = MigrateDiff.new().parse(
+        const result = MigrateDiff.new('prisma').parse(
           ['--from-empty', '--to-config-datasource'],
           await ctx.config(),
           ctx.configDir(),
@@ -489,7 +489,7 @@ describe('migrate diff', () => {
 
         await fs.writeFile(path.join(ctx.configDir(), 'dev.db'), '')
 
-        const result = MigrateDiff.new().parse(
+        const result = MigrateDiff.new('prisma').parse(
           ['--from-empty', '--to-config-datasource'],
           await ctx.config(),
           ctx.configDir(),
@@ -507,7 +507,7 @@ describe('migrate diff', () => {
 
         await fs.writeFile(path.join(ctx.configDir(), 'dev.db'), '')
 
-        const result = MigrateDiff.new().parse(
+        const result = MigrateDiff.new('prisma').parse(
           ['--from-config-datasource', '--to-empty'],
           await ctx.config(),
           ctx.configDir(),
@@ -522,7 +522,7 @@ describe('migrate diff', () => {
       it('should diff --from-empty --to-config-datasource --script', async () => {
         ctx.fixture('introspection/sqlite')
 
-        const result = MigrateDiff.new().parse(
+        const result = MigrateDiff.new('prisma').parse(
           ['--from-empty', '--to-config-datasource', '--script'],
           await ctx.config(),
           ctx.configDir(),
@@ -584,7 +584,7 @@ describe('migrate diff', () => {
       it('should exit with code 2 when diff is not empty without --script', async () => {
         ctx.fixture('schema-only-sqlite')
 
-        const result = MigrateDiff.new().parse(
+        const result = MigrateDiff.new('prisma').parse(
           ['--from-schema=./prisma/schema.prisma', '--to-empty', '--exit-code'],
           await ctx.config(),
           ctx.configDir(),
@@ -605,7 +605,7 @@ describe('migrate diff', () => {
       it('should exit with code 2 when diff is not empty with --script', async () => {
         ctx.fixture('schema-only-sqlite')
 
-        const result = MigrateDiff.new().parse(
+        const result = MigrateDiff.new('prisma').parse(
           ['--from-schema=./prisma/schema.prisma', '--to-empty', '--script', '--exit-code'],
           await ctx.config(),
           ctx.configDir(),
@@ -630,7 +630,7 @@ describe('migrate diff', () => {
     // it('should diff --from-url=$TEST_MONGO_URI --to-schema=./prisma/schema.prisma', async () => {
     //   ctx.fixture('schema-only-mongodb')
 
-    //   const result = MigrateDiff.new().parse([
+    //   const result = MigrateDiff.new('prisma').parse([
     //     '--from-url',
     //     process.env.TEST_MONGO_URI!,
     //     // '--to-empty',
@@ -646,7 +646,7 @@ describe('migrate diff', () => {
     it('should diff --from-empty --to-schema=./prisma/schema.prisma', async () => {
       ctx.fixture('schema-only-mongodb')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-empty', '--to-schema=./prisma/schema.prisma'],
         await ctx.config(),
         ctx.configDir(),
@@ -661,7 +661,7 @@ describe('migrate diff', () => {
     it('should diff --from-schema=./prisma/schema.prisma --to-empty', async () => {
       ctx.fixture('schema-only-mongodb')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-schema=./prisma/schema.prisma', '--to-empty'],
         await ctx.config(),
         ctx.configDir(),
@@ -676,7 +676,7 @@ describe('migrate diff', () => {
     it('should fail with not supported error with --script', async () => {
       ctx.fixture('schema-only-mongodb')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-empty', '--to-schema=./prisma/schema.prisma', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -722,7 +722,7 @@ describe('migrate diff', () => {
     it('should diff --from-config-datasource --to-schema=./prisma/schema.prisma --script', async () => {
       ctx.fixture('schema-only-cockroachdb')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-config-datasource', '--to-schema=./prisma/schema.prisma', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -765,7 +765,7 @@ describe('migrate diff', () => {
     it('should diff --from-config-datasource --to-schema=./prisma/schema.prisma --script', async () => {
       ctx.fixture('schema-only-postgresql')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-config-datasource', '--to-schema=./prisma/schema.prisma', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -786,7 +786,7 @@ describe('migrate diff', () => {
     it('should exclude external tables from diff', async () => {
       ctx.fixture('external-tables')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-empty', '--to-schema=./schema.prisma'],
         await ctx.config(),
         ctx.configDir(),
@@ -831,7 +831,7 @@ describe('migrate diff', () => {
     it('should diff --from-config-datasource --to-schema=./prisma/schema.prisma --script', async () => {
       ctx.fixture('schema-only-mysql')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-config-datasource', '--to-schema=./prisma/schema.prisma', '--script'],
         await ctx.config(),
         ctx.configDir(),
@@ -889,7 +889,7 @@ describe('migrate diff', () => {
     it('should diff --from-config-datasource --to-schema=./prisma/schema.prisma --script', async () => {
       ctx.fixture('schema-only-sqlserver')
 
-      const result = MigrateDiff.new().parse(
+      const result = MigrateDiff.new('prisma').parse(
         ['--from-config-datasource', '--to-schema=./prisma/schema.prisma', '--script'],
         await ctx.config(),
         ctx.configDir(),

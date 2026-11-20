@@ -4,7 +4,7 @@ import path from 'node:path'
 import { generateClient } from '@prisma/client-generator-js'
 import Debug from '@prisma/debug'
 import { type GetSchemaResult, getSchemaWithPath, mergeSchemas } from '@prisma/internals'
-import { extractPreviewFeatures, getConfig, getDMMF, getPackedPackage } from '@prisma/internals'
+import { getConfig, getDMMF, getPackedPackage } from '@prisma/internals'
 import copy from '@timsuchanek/copy'
 import { performance } from 'perf_hooks'
 
@@ -40,7 +40,6 @@ export async function generateInFolder({ projectDir, packageSource }: GenerateIn
   const { schemas, schemaPath } = schemaPathResult
 
   const config = await getConfig({ datamodel: schemas })
-  const previewFeatures = extractPreviewFeatures(config.generators)
 
   const outputDir = path.join(projectDir, 'node_modules/@prisma/client')
 
@@ -59,10 +58,7 @@ export async function generateInFolder({ projectDir, packageSource }: GenerateIn
   }
 
   // TODO: use engine.getDmmf()
-  const dmmf = await getDMMF({
-    datamodel: schemas,
-    previewFeatures,
-  })
+  const dmmf = await getDMMF({ datamodel: schemas })
 
   const schema = mergeSchemas({ schemas })
 

@@ -1,4 +1,30 @@
+export { BuiltInProvider } from './built-in-provider'
 export { checkUnsupportedDataProxy } from './cli/checkUnsupportedDataProxy'
+export {
+  completionApiKeyHint,
+  completionClientOutputPaths,
+  completionCompositeTypeDepths,
+  completionConfigPaths,
+  completionDatabaseIdHint,
+  completionDatabaseSchemas,
+  completionDatasourceProviders,
+  completionDatasourceUrls,
+  completionDevDbPorts,
+  completionDevHttpPorts,
+  completionDevServerNames,
+  completionDevShadowDbPorts,
+  completionDiffOutputPaths,
+  completionGeneratorNames,
+  completionGeneratorProviders,
+  completionMigrationIds,
+  completionMigrationNames,
+  completionMigrationsDirPaths,
+  completionPreviewFeatures,
+  completionSchemaPaths,
+  completionSqlScriptPaths,
+  completionStudioBrowsers,
+  completionStudioPorts,
+} from './cli/completion-values'
 export { type DirectoryConfig, inferDirectoryConfig } from './cli/directoryConfig'
 export { getGeneratorSuccessMessage } from './cli/getGeneratorSuccessMessage'
 export {
@@ -21,8 +47,11 @@ export {
 } from './cli/schemaContext'
 export type {
   Command,
+  CommandCompletion,
   Commands,
   CompiledGeneratorDefinition,
+  CompletionOption,
+  CompletionValue,
   Dictionary,
   GeneratorConfig,
   GeneratorDefinition,
@@ -96,8 +125,7 @@ export {
   PRISMA_POSTGRES_PROTOCOL,
   PRISMA_POSTGRES_PROVIDER,
 } from './utils/prismaPostgres'
-export { extractSchemaContent, type SchemaFileInput } from './utils/schemaFileInput'
-export { type MultipleSchemas } from './utils/schemaFileInput'
+export { extractSchemaContent } from './utils/schemaFileInput'
 export { setClassName } from './utils/setClassName'
 export { toSchemasContainer, toSchemasWithConfigDir } from './utils/toSchemasContainer'
 export {
@@ -108,6 +136,7 @@ export { vercelPkgPathRegex } from './utils/vercelPkgPathRegex'
 export { warnOnce } from './warnOnce'
 export * as wasm from './wasm'
 export { wasmSchemaEngineLoader } from './WasmSchemaEngineLoader'
+export { type MultipleSchemas, type SchemaFileInput } from '@prisma/get-dmmf'
 export type { BinaryTarget } from '@prisma/get-platform'
 export { getBinaryTargetForCurrentPlatform } from '@prisma/get-platform'
 export type { GetSchemaResult } from '@prisma/schema-files-loader'

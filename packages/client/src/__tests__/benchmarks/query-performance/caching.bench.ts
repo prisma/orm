@@ -3,13 +3,13 @@ import path from 'node:path'
 
 import { withCodSpeed } from '@codspeed/benchmark.js-plugin'
 import { dmmfToRuntimeDataModel, type QueryCompiler, type QueryCompilerConstructor } from '@prisma/client-common'
+import { parameterizeQuery } from '@prisma/client-engine-runtime'
 import { getDMMF } from '@prisma/client-generator-js'
 import type { JsonQuery } from '@prisma/json-protocol'
 import { ParamGraph } from '@prisma/param-graph'
 import { buildParamGraph } from '@prisma/param-graph-builder'
 import Benchmark from 'benchmark'
 
-import { parameterizeQuery } from '../../../runtime/core/engines/client/parameterization/parameterize'
 import { loadQueryCompiler } from './qc-loader'
 
 let QueryCompilerClass: QueryCompilerConstructor
@@ -127,7 +127,11 @@ async function setup(): Promise<void> {
 
   paramGraph = ParamGraph.fromData(paramGraphData, (enumName) => {
     const enumDef = runtimeDataModel.enums[enumName]
-    return enumDef?.values.map((v) => v.name)
+    const mapping: Record<string, string> = {}
+    for (const value of enumDef?.values ?? []) {
+      mapping[value.name] = value.dbName ?? value.name
+    }
+    return mapping
   })
 }
 

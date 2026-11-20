@@ -1,13 +1,19 @@
 import timers from 'node:timers/promises'
 
-import type { SqlDriverAdapter, SqlQuery, SqlResultSet, Transaction } from '@prisma/driver-adapter-utils'
 import { expect, test, vi } from 'vitest'
 
 import { noopTracingHelper } from '../tracing'
-import { Options } from './transaction'
+import {
+  MockDriverAdapter,
+  START_TRANSACTION_TIME,
+  startTransaction,
+  TRANSACTION_EXECUTION_TIMEOUT,
+  TRANSACTION_OPTIONS,
+} from './test-utils'
 import { TransactionManager } from './transaction-manager'
 import {
   InvalidTransactionIsolationLevelError,
+  NestedTransactionRolledBackError,
   TransactionClosedError,
   TransactionExecutionTimeoutError,
   TransactionManagerError,
@@ -17,122 +23,6 @@ import {
 } from './transaction-manager-error'
 
 vi.useFakeTimers()
-
-const START_TRANSACTION_TIME = 200
-const TRANSACTION_EXECUTION_TIMEOUT = 500
-
-const TRANSACTION_OPTIONS = {
-  timeout: TRANSACTION_EXECUTION_TIMEOUT,
-  maxWait: START_TRANSACTION_TIME * 2,
-  isolationLevel: undefined,
-} as Options
-
-class MockDriverAdapter implements SqlDriverAdapter {
-  adapterName = 'mock-adapter'
-  provider: SqlDriverAdapter['provider']
-  private readonly usePhantomQuery: boolean
-  private readonly createSavepoint: Transaction['createSavepoint']
-  private readonly rollbackToSavepoint: Transaction['rollbackToSavepoint']
-  private readonly releaseSavepoint: Transaction['releaseSavepoint']
-
-  executeRawMock = vi.fn().mockResolvedValue(1)
-  commitMock = vi.fn().mockResolvedValue(undefined)
-  rollbackMock = vi.fn().mockResolvedValue(undefined)
-
-  constructor(
-    options: {
-      provider?: SqlDriverAdapter['provider']
-      usePhantomQuery?: boolean
-      createSavepoint?: Transaction['createSavepoint']
-      rollbackToSavepoint?: Transaction['rollbackToSavepoint']
-      releaseSavepoint?: Transaction['releaseSavepoint']
-    } = {},
-  ) {
-    const { provider = 'postgres' as SqlDriverAdapter['provider'], usePhantomQuery = false } = options
-    this.usePhantomQuery = usePhantomQuery
-    this.provider = provider
-
-    this.createSavepoint = Object.hasOwn(options, 'createSavepoint')
-      ? options.createSavepoint
-      : async (name) => {
-          const sql = this.provider === 'sqlserver' ? `SAVE TRANSACTION ${name}` : `SAVEPOINT ${name}`
-          await this.executeRawMock({ sql, args: [], argTypes: [] })
-        }
-    this.rollbackToSavepoint = Object.hasOwn(options, 'rollbackToSavepoint')
-      ? options.rollbackToSavepoint
-      : async (name) => {
-          const sql =
-            this.provider === 'sqlserver'
-              ? `ROLLBACK TRANSACTION ${name}`
-              : this.provider === 'postgres'
-                ? `ROLLBACK TO SAVEPOINT ${name}`
-                : `ROLLBACK TO ${name}`
-          await this.executeRawMock({ sql, args: [], argTypes: [] })
-        }
-    this.releaseSavepoint = Object.hasOwn(options, 'releaseSavepoint')
-      ? options.releaseSavepoint
-      : this.provider === 'sqlserver'
-        ? undefined
-        : async (name) => {
-            await this.executeRawMock({ sql: `RELEASE SAVEPOINT ${name}`, args: [], argTypes: [] })
-          }
-  }
-
-  executeRaw(params: SqlQuery): Promise<number> {
-    return this.executeRawMock(params)
-  }
-
-  queryRaw(_params: SqlQuery): Promise<SqlResultSet> {
-    throw new Error('Not implemented for test')
-  }
-
-  executeScript(_script: string): Promise<void> {
-    throw new Error('Method not implemented.')
-  }
-
-  dispose(): Promise<void> {
-    throw new Error('Method not implemented.')
-  }
-
-  startTransaction(): Promise<Transaction> {
-    const executeRawMock = this.executeRawMock
-    const commitMock = this.commitMock
-    const rollbackMock = this.rollbackMock
-    const usePhantomQuery = this.usePhantomQuery
-    const provider = this.provider
-
-    const mockTransaction: Transaction = {
-      adapterName: 'mock-adapter',
-      provider,
-      options: { usePhantomQuery },
-      queryRaw: vi.fn().mockRejectedValue('Not implemented for test'),
-      executeRaw: executeRawMock,
-      commit: commitMock,
-      rollback: rollbackMock,
-      createSavepoint: this.createSavepoint,
-      rollbackToSavepoint: this.rollbackToSavepoint,
-      releaseSavepoint: this.releaseSavepoint,
-    }
-
-    return new Promise((resolve) =>
-      setTimeout(() => {
-        resolve(mockTransaction)
-      }, START_TRANSACTION_TIME),
-    )
-  }
-}
-
-async function startTransaction(transactionManager: TransactionManager, options: Partial<Options> = {}) {
-  const [{ id }] = await Promise.all([
-    transactionManager.startTransaction({
-      timeout: TRANSACTION_EXECUTION_TIMEOUT,
-      maxWait: START_TRANSACTION_TIME * 2,
-      ...options,
-    }),
-    vi.advanceTimersByTimeAsync(START_TRANSACTION_TIME + 100),
-  ])
-  return id
-}
 
 test('transaction executes normally', async () => {
   const driverAdapter = new MockDriverAdapter()
@@ -423,8 +313,16 @@ test('missing rollbackToSavepoint fails nested rollback', async () => {
 
   const id = await startTransaction(transactionManager)
   await transactionManager.startTransaction({ ...TRANSACTION_OPTIONS, newTxId: id })
+  const nested = await transactionManager.getTransaction({ id }, 'query')
 
   await expect(transactionManager.rollbackTransaction(id)).rejects.toThrow('rollbackToSavepoint is not implemented')
+
+  await expect(nested.executeRaw({ sql: 'INSERT', args: [], argTypes: [] })).rejects.toEqual(
+    new NestedTransactionRolledBackError('query'),
+  )
+  expect(driverAdapter.executeRawMock.mock.calls.map(([query]) => query.sql)).toEqual([
+    expect.stringMatching(/^SAVEPOINT /),
+  ])
 })
 
 test('transaction is rolled back', async () => {
@@ -488,8 +386,10 @@ test('commitTransaction during a rollback caused by a time out raises a Transact
 
   await expect(Promise.all([vi.advanceTimersByTimeAsync(rollbackDelay), commitPromise])).rejects.toEqual(
     new TransactionExecutionTimeoutError('commit', {
+      // `START_TRANSACTION_TIME` is deliberately absent: the time reported is how long the
+      // transaction itself ran, not how long it took to open.
       timeout,
-      timeTaken: START_TRANSACTION_TIME + timeout + rollbackDelay,
+      timeTaken: timeout + rollbackDelay,
     }),
   )
 
@@ -610,6 +510,7 @@ test('transaction start timeout cleans up connection if transaction eventually s
   const REMAINING_TIME_FOR_START = SLOW_START_TRANSACTION_TIME - TIME_PAST_MAX_WAIT
 
   const rollbackMock = vi.fn().mockResolvedValue(undefined)
+  const executeRawMock = vi.fn().mockResolvedValue(1)
 
   const driverAdapter = {
     adapterName: 'slow-adapter',
@@ -628,7 +529,7 @@ test('transaction start timeout cleans up connection if transaction eventually s
                 provider: 'postgres',
                 options: { usePhantomQuery: false },
                 queryRaw: vi.fn(),
-                executeRaw: vi.fn(),
+                executeRaw: executeRawMock,
                 commit: vi.fn(),
                 rollback: rollbackMock,
               }),
@@ -660,9 +561,220 @@ test('transaction start timeout cleans up connection if transaction eventually s
   // Now advance time to let the startTransaction promise resolve
   await vi.advanceTimersByTimeAsync(REMAINING_TIME_FOR_START)
 
-  // After the background startTransaction completes, rollback should be called
-  // to release the connection and avoid pool exhaustion
+  // After the background startTransaction completes, the discarded transaction must send an
+  // explicit ROLLBACK before releasing the connection. Without it, a non-phantom-query adapter
+  // (e.g. pg/neon) returns a connection to the pool while it is still mid-transaction.
+  expect(executeRawMock).toHaveBeenCalledWith(expect.objectContaining({ sql: 'ROLLBACK' }))
   expect(rollbackMock).toHaveBeenCalled()
+})
+
+test('transaction start failure clears the maxWait timer', async () => {
+  const driverAdapter = new MockDriverAdapter()
+  const startError = new Error('connection refused')
+  vi.spyOn(driverAdapter, 'startTransaction').mockRejectedValue(startError)
+
+  const transactionManager = new TransactionManager({
+    driverAdapter,
+    transactionOptions: TRANSACTION_OPTIONS,
+    tracingHelper: noopTracingHelper,
+  })
+
+  vi.clearAllTimers()
+
+  await expect(transactionManager.startTransaction()).rejects.toBe(startError)
+
+  // The maxWait timer must not outlive the failed startup attempt. No execution
+  // timeout is armed either, because startup never reached the running state.
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+test('cancelAllTransactions waits for a transaction whose start is still in flight', async () => {
+  // A transaction is only registered once the driver hands it over, so one that is still
+  // starting is invisible to `cancelAllTransactions`. Callers dispose the driver adapter right
+  // after cancelling, so if cancellation does not cover it the connection is abandoned.
+
+  const SLOW_START_TRANSACTION_TIME = 500
+
+  const rollbackMock = vi.fn().mockResolvedValue(undefined)
+  const executeRawMock = vi.fn().mockResolvedValue(1)
+
+  const driverAdapter = {
+    adapterName: 'slow-adapter',
+    provider: 'postgres' as const,
+    executeRaw: vi.fn().mockResolvedValue(1),
+    queryRaw: vi.fn(),
+    executeScript: vi.fn(),
+    dispose: vi.fn(),
+    startTransaction: vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                adapterName: 'slow-adapter',
+                provider: 'postgres',
+                options: { usePhantomQuery: false },
+                queryRaw: vi.fn(),
+                executeRaw: executeRawMock,
+                commit: vi.fn(),
+                rollback: rollbackMock,
+              }),
+            SLOW_START_TRANSACTION_TIME,
+          ),
+        ),
+    ),
+  }
+
+  const transactionManager = new TransactionManager({
+    driverAdapter,
+    // `maxWait` is long enough that the start is still in flight, not timed out, when cancelled.
+    transactionOptions: { timeout: TRANSACTION_EXECUTION_TIMEOUT, maxWait: SLOW_START_TRANSACTION_TIME * 10 },
+    tracingHelper: noopTracingHelper,
+  })
+
+  const starting = transactionManager.startTransaction().catch((e) => e)
+
+  // Let the start reach the driver, so the transaction is genuinely in flight when cancelled
+  // rather than still waiting on its id.
+  await vi.advanceTimersByTimeAsync(SLOW_START_TRANSACTION_TIME / 2)
+  expect(driverAdapter.startTransaction).toHaveBeenCalled()
+
+  let cancelled = false
+  const cancelling = transactionManager.cancelAllTransactions().then(() => {
+    cancelled = true
+  })
+
+  // Let any already-scheduled work run. The start is still in flight, so cancellation cannot
+  // be finished yet.
+  await vi.advanceTimersByTimeAsync(0)
+  expect(cancelled).toBe(false)
+  expect(rollbackMock).not.toHaveBeenCalled()
+
+  await vi.advanceTimersByTimeAsync(SLOW_START_TRANSACTION_TIME)
+  await cancelling
+
+  expect(cancelled).toBe(true)
+  // The connection must be released before disposal, and an explicit ROLLBACK sent first,
+  // because this adapter does not use phantom queries.
+  expect(executeRawMock).toHaveBeenCalledWith(expect.objectContaining({ sql: 'ROLLBACK' }))
+  expect(rollbackMock).toHaveBeenCalled()
+
+  expect(await starting).toBeInstanceOf(TransactionStartTimeoutError)
+})
+
+test('cancelAllTransactions rolls back once when cancelling as the driver hands over', async () => {
+  // Whichever of the driver and the abort wins the race, the transaction must be rolled back
+  // exactly once. Releasing a pooled connection twice is worse than not releasing it at all.
+
+  const rollbackMock = vi.fn().mockResolvedValue(undefined)
+  const executeRawMock = vi.fn().mockResolvedValue(1)
+
+  let resolveStart!: (tx: unknown) => void
+  const startPromise = new Promise((resolve) => {
+    resolveStart = resolve
+  })
+
+  const driverAdapter = {
+    adapterName: 'manual-adapter',
+    provider: 'postgres' as const,
+    executeRaw: vi.fn().mockResolvedValue(1),
+    queryRaw: vi.fn(),
+    executeScript: vi.fn(),
+    dispose: vi.fn(),
+    startTransaction: vi.fn().mockImplementation(() => startPromise),
+  }
+
+  const transactionManager = new TransactionManager({
+    driverAdapter,
+    transactionOptions: { timeout: TRANSACTION_EXECUTION_TIMEOUT, maxWait: START_TRANSACTION_TIME * 10 },
+    tracingHelper: noopTracingHelper,
+  })
+
+  const starting = transactionManager.startTransaction().catch((e) => e)
+
+  // Let the start reach the driver.
+  await vi.advanceTimersByTimeAsync(0)
+  expect(driverAdapter.startTransaction).toHaveBeenCalled()
+
+  // Hand the transaction over, then cancel before the continuation gets to run: the abort loop
+  // in `cancelAllTransactions` is synchronous, so it lands inside that window.
+  resolveStart({
+    adapterName: 'manual-adapter',
+    provider: 'postgres',
+    options: { usePhantomQuery: false },
+    queryRaw: vi.fn(),
+    executeRaw: executeRawMock,
+    commit: vi.fn(),
+    rollback: rollbackMock,
+  })
+  const cancelling = transactionManager.cancelAllTransactions()
+
+  await vi.advanceTimersByTimeAsync(0)
+  await cancelling
+
+  expect(await starting).toBeInstanceOf(TransactionStartTimeoutError)
+  expect(rollbackMock).toHaveBeenCalledTimes(1)
+})
+
+test('cancelAllTransactions gives up on a driver that never settles the start', async () => {
+  // The rollback cannot run until the driver settles the promise it is holding. A driver stuck
+  // on a dead connection never will, and disconnect must not wait on it forever.
+
+  const driverAdapter = {
+    adapterName: 'hanging-adapter',
+    provider: 'postgres' as const,
+    executeRaw: vi.fn(),
+    queryRaw: vi.fn(),
+    executeScript: vi.fn(),
+    dispose: vi.fn(),
+    startTransaction: vi.fn().mockImplementation(() => new Promise(() => {})),
+  }
+
+  const transactionManager = new TransactionManager({
+    driverAdapter,
+    transactionOptions: { timeout: TRANSACTION_EXECUTION_TIMEOUT, maxWait: START_TRANSACTION_TIME },
+    tracingHelper: noopTracingHelper,
+  })
+
+  void transactionManager.startTransaction().catch(() => {})
+  await vi.advanceTimersByTimeAsync(0)
+  expect(driverAdapter.startTransaction).toHaveBeenCalled()
+
+  let cancelled = false
+  const cancelling = transactionManager.cancelAllTransactions().then(() => {
+    cancelled = true
+  })
+
+  // Long past `maxWait`: nothing about the driver will ever change, so only the grace period
+  // can release this.
+  await vi.advanceTimersByTimeAsync(START_TRANSACTION_TIME * 4)
+  expect(cancelled).toBe(false)
+
+  await vi.advanceTimersByTimeAsync(2_000)
+  await cancelling
+
+  expect(cancelled).toBe(true)
+})
+
+test('cancelAllTransactions abandons a start that has not reached the driver yet', async () => {
+  // Starting a transaction awaits its generated id before calling the driver. A cancellation
+  // landing in that window must not go on to open a transaction that nobody will close.
+
+  const driverAdapter = new MockDriverAdapter()
+  const startTransactionSpy = vi.spyOn(driverAdapter, 'startTransaction')
+  const transactionManager = new TransactionManager({
+    driverAdapter,
+    transactionOptions: TRANSACTION_OPTIONS,
+    tracingHelper: noopTracingHelper,
+  })
+
+  const starting = transactionManager.startTransaction().catch((e) => e)
+  await transactionManager.cancelAllTransactions()
+
+  await vi.advanceTimersByTimeAsync(START_TRANSACTION_TIME * 2)
+
+  expect(await starting).toBeInstanceOf(TransactionStartTimeoutError)
+  expect(startTransactionSpy).not.toHaveBeenCalled()
 })
 
 test('transaction times out during execution', async () => {
@@ -679,6 +791,59 @@ test('transaction times out during execution', async () => {
 
   await expect(transactionManager.commitTransaction(id)).rejects.toBeInstanceOf(TransactionExecutionTimeoutError)
   await expect(transactionManager.rollbackTransaction(id)).rejects.toBeInstanceOf(TransactionExecutionTimeoutError)
+})
+
+test('execution timeout does not produce an unhandled rejection when rollback fails on a dead connection', async () => {
+  // Regression test: when the database kills the backend connection before the execution timeout
+  // fires, the timeout-driven ROLLBACK rejects. Since nothing awaits the timer callback's promise,
+  // such a rejection used to escape as an unhandled rejection and crash the process outside the
+  // user's try/catch around $transaction. The timer callback must therefore never reject.
+  const originalSetTimeout = global.setTimeout
+  const timerCallbackResults: Promise<unknown>[] = []
+  const setTimeoutSpy = vi
+    .spyOn(global, 'setTimeout')
+    .mockImplementation((callback: (...args: any[]) => void, ms?: number, ...args: any[]) => {
+      return originalSetTimeout(
+        (...cbArgs: any[]) => {
+          const result = callback(...cbArgs) as unknown
+          if (result instanceof Promise) {
+            timerCallbackResults.push(result)
+          }
+        },
+        ms,
+        ...args,
+      )
+    })
+
+  try {
+    const driverAdapter = new MockDriverAdapter()
+    const connectionError = new Error('Client has encountered a connection error and is not queryable')
+    driverAdapter.executeRawMock = vi.fn().mockRejectedValue(connectionError)
+
+    const transactionManager = new TransactionManager({
+      driverAdapter,
+      transactionOptions: TRANSACTION_OPTIONS,
+      tracingHelper: noopTracingHelper,
+    })
+
+    const id = await startTransaction(transactionManager)
+
+    await vi.advanceTimersByTimeAsync(TRANSACTION_EXECUTION_TIMEOUT + 100)
+
+    expect(driverAdapter.executeRawMock).toHaveBeenCalled()
+    expect(driverAdapter.executeRawMock.mock.calls[0][0].sql).toEqual('ROLLBACK')
+
+    // No timer callback promise may reject: in production nothing awaits it, so a rejection
+    // would surface as an unhandled rejection.
+    const settledResults = await Promise.allSettled(timerCallbackResults)
+    expect(settledResults.filter((result) => result.status === 'rejected')).toEqual([])
+
+    // The transaction is still cleanly closed, so subsequent operations reject through the normal path.
+    await expect(transactionManager.commitTransaction(id)).rejects.toBeInstanceOf(TransactionExecutionTimeoutError)
+    await expect(transactionManager.rollbackTransaction(id)).rejects.toBeInstanceOf(TransactionExecutionTimeoutError)
+  } finally {
+    setTimeoutSpy.mockRestore()
+  }
 })
 
 test('internal transaction does not apply the default start timeout', async () => {

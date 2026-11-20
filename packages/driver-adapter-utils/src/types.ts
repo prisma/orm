@@ -85,6 +85,7 @@ export type MappedError =
   | {
       kind: 'UniqueConstraintViolation'
       constraint?: { fields: string[] } | { index: string } | { foreignKey: {} }
+      table?: string
     }
   | {
       kind: 'NullConstraintViolation'
@@ -92,6 +93,10 @@ export type MappedError =
     }
   | {
       kind: 'ForeignKeyConstraintViolation'
+      constraint?: { fields: string[] } | { index: string } | { foreignKey: {} }
+    }
+  | {
+      kind: 'RestrictViolation'
       constraint?: { fields: string[] } | { index: string } | { foreignKey: {} }
     }
   | {
@@ -276,6 +281,12 @@ export type TransactionOptions = {
   usePhantomQuery: boolean
 }
 
+/**
+ * A transaction on one connection. The caller calls either `commit()` or `rollback()`, once,
+ * and sends nothing on the transaction afterwards. `commit()` is called only when no statement is
+ * running. `rollback()`, `rollbackToSavepoint()`, `releaseSavepoint()` and a `ROLLBACK` sent through
+ * `executeRaw` may be called while one is.
+ */
 export interface Transaction extends AdapterInfo, SqlQueryable {
   /**
    * Transaction options.

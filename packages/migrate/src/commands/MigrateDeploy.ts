@@ -23,19 +23,15 @@ import { printFilesFromMigrationIds } from '../utils/printFiles'
 
 const debug = Debug('prisma:migrate:deploy')
 
-export class MigrateDeploy implements Command {
-  public static new(): MigrateDeploy {
-    return new MigrateDeploy()
-  }
-
-  private static help = format(`
+function renderHelp(cliCommand: string): string {
+  return format(`
 Apply pending migrations to update the database schema in production/staging
 
 ${bold('Usage')}
 
-  ${dim('$')} prisma migrate deploy [options]
+  ${dim('$')} ${cliCommand} migrate deploy [options]
 
-  The datasource URL configuration is read from the Prisma config file (e.g., ${italic('prisma.config.ts')}).
+  The datasource URL configuration is read from the Prisma config file (e.g., ${italic('prisma7.config.ts')}).
 
 ${bold('Options')}
 
@@ -46,12 +42,20 @@ ${bold('Options')}
 ${bold('Examples')}
 
   Deploy your pending migrations to your production/staging database
-  ${dim('$')} prisma migrate deploy
+  ${dim('$')} ${cliCommand} migrate deploy
 
   Specify a schema
-  ${dim('$')} prisma migrate deploy --schema=./schema.prisma
+  ${dim('$')} ${cliCommand} migrate deploy --schema=./schema.prisma
 
 `)
+}
+
+export class MigrateDeploy implements Command {
+  public static new(cliCommand: string): MigrateDeploy {
+    return new MigrateDeploy(cliCommand)
+  }
+
+  private constructor(private readonly cliCommand: string) {}
 
   public async parse(argv: string[], config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(
@@ -83,10 +87,10 @@ ${bold('Examples')}
     })
     const { migrationsDirPath } = inferDirectoryConfig(schemaContext, config)
 
-    const cmd = 'migrate deploy'
-    const validatedConfig = validatePrismaConfigWithDatasource({ config, cmd })
+    const cmd = `${this.cliCommand} migrate deploy`
+    const validatedConfig = validatePrismaConfigWithDatasource({ config, command: cmd })
 
-    checkUnsupportedDataProxy({ cmd, validatedConfig })
+    checkUnsupportedDataProxy({ command: cmd, validatedConfig })
 
     printDatasource({ datasourceInfo: parseDatasourceInfo(schemaContext.primaryDatasource, validatedConfig) })
 
@@ -160,8 +164,8 @@ ${green('All migrations have been successfully applied.')}`
 
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${MigrateDeploy.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${renderHelp(this.cliCommand)}`)
     }
-    return MigrateDeploy.help
+    return renderHelp(this.cliCommand)
   }
 }

@@ -129,7 +129,10 @@ export type DynamicResultExtensionArgs<R_, TypeMap extends TypeMapDef> = {
   [K in keyof R_]: {
     [P in keyof R_[K]]?: {
       needs?: DynamicResultExtensionNeeds<TypeMap, ModelKey<TypeMap, K>, R_[K][P]>
-      compute(data: DynamicResultExtensionData<TypeMap, ModelKey<TypeMap, K>, R_[K][P]>): any
+      compute(
+        data: DynamicResultExtensionData<TypeMap, ModelKey<TypeMap, K>, R_[K][P]>,
+        modelName: ModelKey<TypeMap, K>,
+      ): any
     }
   }
 }
@@ -295,7 +298,7 @@ export type DynamicClientExtensionThisBuiltin<
   $extends: ExtendsHook<'extends', TypeMapCb, ExtArgs, Call<TypeMapCb, { extArgs: ExtArgs }>>
   $transaction<P extends PrismaPromise<any>[]>(
     arg: [...P],
-    options?: { isolationLevel?: TypeMap['meta']['txIsolationLevel'] },
+    options?: { maxWait?: number; timeout?: number; isolationLevel?: TypeMap['meta']['txIsolationLevel'] },
   ): Promise<UnwrapTuple<P>>
   $transaction<R>(
     fn: (client: Omit<DynamicClientExtensionThis<TypeMap, TypeMapCb, ExtArgs>, ITXClientDenyList>) => Promise<R>,

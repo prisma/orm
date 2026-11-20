@@ -46,13 +46,15 @@ function batchingTransactionDefinition(context: GenerateContext) {
     .addParameter(ts.parameter('arg', ts.arraySpread(ts.namedType('P'))))
     .setReturnType(tsx.promise(ts.namedType('runtime.Types.Utils.UnwrapTuple').addGenericArgument(ts.namedType('P'))))
 
+  const options = ts.objectType().formatInline()
+  options.add(ts.property('maxWait', ts.numberType).optional())
+  options.add(ts.property('timeout', ts.numberType).optional())
+
   if (context.dmmf.hasEnumInNamespace('TransactionIsolationLevel', 'prisma')) {
-    const options = ts
-      .objectType()
-      .formatInline()
-      .add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
-    method.addParameter(ts.parameter('options', options).optional())
+    options.add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
   }
+
+  method.addParameter(ts.parameter('options', options).optional())
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
 }
@@ -272,13 +274,13 @@ export interface PrismaClientConstructor {
     LogOpts extends LogOptions<Options> = LogOptions<Options>,
     OmitOpts extends Prisma.PrismaClientOptions['omit'] = Options extends { omit: infer U } ? U : Prisma.PrismaClientOptions['omit'],
     ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs
-  >(options: Prisma.Subset<Options, Prisma.PrismaClientOptions> ): PrismaClient<LogOpts, OmitOpts, ExtArgs>
+  >(options: Prisma.PrismaClientConstructorArgs<Options>): PrismaClient<LogOpts, OmitOpts, ExtArgs>
 }
 
 ${this.jsDoc}
 export interface PrismaClient<
   in LogOpts extends Prisma.LogLevel = never,
-  in out OmitOpts extends Prisma.PrismaClientOptions['omit'] = undefined,
+  in out OmitOpts extends Prisma.PrismaClientOptions['omit'] = Prisma.PrismaClientOptions['omit'],
   in out ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs
 > {
   [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['other'] }

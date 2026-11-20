@@ -153,10 +153,9 @@ function deserializeTaggedValue({ $type, value }: JsonInputTaggedValue | JsonOut
   switch ($type) {
     case 'BigInt':
       return BigInt(value)
-    case 'Bytes': {
-      const { buffer, byteOffset, byteLength } = Buffer.from(value, 'base64')
-      return new Uint8Array(buffer, byteOffset, byteLength)
-    }
+    case 'Bytes':
+      // copy instead of returning a view into Node's shared Buffer pool
+      return new Uint8Array(Buffer.from(value, 'base64'))
     case 'DateTime':
       return new Date(value)
     case 'Decimal':

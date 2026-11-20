@@ -28,6 +28,14 @@ describe('deserializeJsonObject', () => {
     expect(value).toEqual(new Uint8Array(Buffer.from('hello world')))
   })
 
+  test('Bytes is backed by a standalone buffer', () => {
+    const value = deserializeJsonObject({ $type: 'Bytes', value: 'aGVsbG8gd29ybGQ=' }) as Uint8Array
+    // must not be a view into Node's shared Buffer pool, which would expose
+    // unrelated pool data through `value.buffer`
+    expect(value.byteOffset).toBe(0)
+    expect(value.buffer.byteLength).toBe(value.byteLength)
+  })
+
   test('Decimal', () => {
     const value = deserializeJsonObject({ $type: 'Decimal', value: '123.45' })
     expect(value).toBeInstanceOf(Decimal)

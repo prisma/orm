@@ -1,7 +1,7 @@
+import type { MultipleSchemas } from '@prisma/get-dmmf'
 import { yellow } from 'kleur/colors'
 
 import { ErrorArea, getWasmError, RustPanic, WasmPanic } from '../panic'
-import { type MultipleSchemas } from '../utils/schemaFileInput'
 import { prismaSchemaWasm } from '../wasm'
 
 type LintSchemaParams = { schemas: MultipleSchemas }

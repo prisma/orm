@@ -1,6 +1,8 @@
 import { link } from '@prisma/internals'
 import { bold, green } from 'kleur/colors'
 
+import type { CliDistributionIdentity } from '../utils/cli-distribution-identity'
+
 export function successMessage(message: string): string {
   return `${green('Success!')} ${message}`
 }
@@ -11,12 +13,14 @@ export function printPpgInitOutput({
   projectId,
   environmentId,
   isExistingPrismaProject = false,
+  identity,
 }: {
   databaseUrl: string
   workspaceId: string
   projectId: string
   environmentId?: string
   isExistingPrismaProject?: boolean
+  identity: CliDistributionIdentity
 }): string {
   const newPrismaProjectOutput = `
 We created an initial ${green('schema.prisma')} file and a ${green('.env')} file with your ${green(
@@ -34,11 +38,11 @@ Open the ${green('schema.prisma')} file and define your first models. Check the 
 
 ${bold('2. Apply migrations')}
 Run the following command to create and apply a migration:
-${green('npx prisma migrate dev --name init')}
+${green(`npx ${identity} migrate dev --name init`)}
 
 ${bold('3. Manage your data')}
 View and edit your data locally by running this command:
-${green('npx prisma studio')}
+${green(`npx ${identity} studio`)}
 ${
   environmentId !== undefined
     ? `...or online in Console:
@@ -80,11 +84,11 @@ ${green('const prisma = new PrismaClient({ adapter });')}
 
 ${bold('2. Apply migrations')}
 Run the following command to create and apply a migration:
-${green('npx prisma migrate dev')}
+${green(`npx ${identity} migrate dev`)}
 
 ${bold(`3. Manage your data`)}
 View and edit your data locally by running this command:
-${green('npx prisma studio')}
+${green(`npx ${identity} studio`)}
 ${
   environmentId !== undefined
     ? `...or online in Console:

@@ -32,6 +32,14 @@ describe('validate', () => {
   beforeEach(() => {
     restoreEnv()
   })
+
+  test('uses the Prisma 7 config filename in help examples', () => {
+    const help = Validate.new('prisma').help()
+
+    expect(help).toEqual(expect.any(String))
+    expect(help).toContain('validate --config=./prisma7.config.ts')
+    expect(help).not.toContain('validate --config=./prisma.config.ts')
+  })
   afterAll(() => {
     restoreEnv()
   })
@@ -55,28 +63,28 @@ describe('validate', () => {
         `)
 
         // implicit: single schema file (`schema.prisma`)
-        await expect(Validate.new().parse([], defaultTestConfig())).resolves.toMatchInlineSnapshot(
+        await expect(Validate.new('prisma').parse([], defaultTestConfig())).resolves.toMatchInlineSnapshot(
           `"The schema at schema.prisma is valid 🚀"`,
         )
 
         // explicit: single schema file (`schema.prisma`)
         await expect(
-          Validate.new().parse(['--schema=schema.prisma'], defaultTestConfig()),
+          Validate.new('prisma').parse(['--schema=schema.prisma'], defaultTestConfig()),
         ).resolves.toMatchInlineSnapshot(`"The schema at schema.prisma is valid 🚀"`)
 
         // explicit: single schema file (`custom.prisma`)
         await expect(
-          Validate.new().parse(['--schema=custom.prisma'], defaultTestConfig()),
+          Validate.new('prisma').parse(['--schema=custom.prisma'], defaultTestConfig()),
         ).resolves.toMatchInlineSnapshot(`"The schema at custom.prisma is valid 🚀"`)
 
         // explicit: single schema file (`prisma/custom.prisma`)
         await expect(
-          Validate.new().parse(['--schema=prisma/custom.prisma'], defaultTestConfig()),
+          Validate.new('prisma').parse(['--schema=prisma/custom.prisma'], defaultTestConfig()),
         ).resolves.toMatchInlineSnapshot(`"The schema at prisma/custom.prisma is valid 🚀"`)
 
         // explicit: multi schema files
         await expect(
-          Validate.new().parse(['--schema=prisma/schema'], defaultTestConfig()),
+          Validate.new('prisma').parse(['--schema=prisma/schema'], defaultTestConfig()),
         ).resolves.toMatchInlineSnapshot(`"The schemas at prisma/schema are valid 🚀"`)
 
         await ctx.fs.removeAsync('schema.prisma')
@@ -94,7 +102,7 @@ describe('validate', () => {
         `)
 
         // implicit: single schema file (`prisma/schema.prisma`)
-        await expect(Validate.new().parse([], defaultTestConfig())).resolves.toMatchInlineSnapshot(
+        await expect(Validate.new('prisma').parse([], defaultTestConfig())).resolves.toMatchInlineSnapshot(
           `"The schema at prisma/schema.prisma is valid 🚀"`,
         )
       })
@@ -112,7 +120,7 @@ describe('validate', () => {
           "
         `)
 
-        await expect(Validate.new().parse(['--schema=prisma/schema'], defaultTestConfig())).rejects
+        await expect(Validate.new('prisma').parse(['--schema=prisma/schema'], defaultTestConfig())).rejects
           .toMatchInlineSnapshot(`
           "Prisma schema validation - (validate wasm)
           Error code: P1012
@@ -142,7 +150,7 @@ describe('validate', () => {
           "
         `)
 
-        await expect(Validate.new().parse(['--schema=prisma/schema'], defaultTestConfig())).rejects
+        await expect(Validate.new('prisma').parse(['--schema=prisma/schema'], defaultTestConfig())).rejects
           .toMatchInlineSnapshot(`
           "Prisma schema validation - (validate wasm)
           Error code: P1012
@@ -192,7 +200,7 @@ describe('validate', () => {
           "
         `)
 
-        await expect(Validate.new().parse(['--schema=prisma/schema'], defaultTestConfig())).rejects
+        await expect(Validate.new('prisma').parse(['--schema=prisma/schema'], defaultTestConfig())).rejects
           .toMatchInlineSnapshot(`
           "Prisma schema validation - (validate wasm)
           Error code: P1012
@@ -224,7 +232,7 @@ describe('validate', () => {
           "
         `)
 
-        await expect(Validate.new().parse(['--schema=prisma/schema'], defaultTestConfig())).rejects
+        await expect(Validate.new('prisma').parse(['--schema=prisma/schema'], defaultTestConfig())).rejects
           .toMatchInlineSnapshot(`
           "Prisma schema validation - (validate wasm)
           Error code: P1012
@@ -246,12 +254,14 @@ describe('validate', () => {
 
   it('should succeed if schema is valid', async () => {
     ctx.fixture('example-project/prisma')
-    await expect(Validate.new().parse(['--schema=schema.prisma'], defaultTestConfig())).resolves.toContain('is valid')
+    await expect(Validate.new('prisma').parse(['--schema=schema.prisma'], defaultTestConfig())).resolves.toContain(
+      'is valid',
+    )
   })
 
   it('should throw if schema is invalid', async () => {
     ctx.fixture('example-project/prisma')
-    await expect(Validate.new().parse(['--schema=broken.prisma'], defaultTestConfig())).rejects.toThrow(
+    await expect(Validate.new('prisma').parse(['--schema=broken.prisma'], defaultTestConfig())).rejects.toThrow(
       'Prisma schema validation',
     )
   })
@@ -259,7 +269,7 @@ describe('validate', () => {
   it('should succeed and show a warning on stderr (preview feature deprecated)', async () => {
     ctx.fixture('lint-warnings')
     await expect(
-      Validate.new().parse(['--schema=preview-feature-deprecated.prisma'], defaultTestConfig()),
+      Validate.new('prisma').parse(['--schema=preview-feature-deprecated.prisma'], defaultTestConfig()),
     ).resolves.toBeTruthy()
 
     // stderr
@@ -274,7 +284,7 @@ describe('validate', () => {
   it('should throw with an error and show a warning on stderr (preview feature deprecated)', async () => {
     ctx.fixture('lint-warnings')
     await expect(
-      Validate.new().parse(['--schema=preview-feature-deprecated-and-error.prisma'], defaultTestConfig()),
+      Validate.new('prisma').parse(['--schema=preview-feature-deprecated-and-error.prisma'], defaultTestConfig()),
     ).rejects.toThrow('P1012')
 
     // stderr
@@ -292,7 +302,7 @@ describe('validate', () => {
     process.env.PRISMA_DISABLE_WARNINGS = 'true'
 
     await expect(
-      Validate.new().parse(['--schema=preview-feature-deprecated.prisma'], defaultTestConfig()),
+      Validate.new('prisma').parse(['--schema=preview-feature-deprecated.prisma'], defaultTestConfig()),
     ).resolves.toBeTruthy()
 
     // stderr
@@ -304,7 +314,7 @@ describe('validate', () => {
     ctx.fixture('prisma-config-nested')
     const configDir = path.join(process.cwd(), 'config')
     await expect(
-      Validate.new()
+      Validate.new('prisma')
         .parse(['--config=./config/prisma.config.ts'], defaultTestConfig(), configDir)
         .then((res) => (typeof res === 'string' ? stripVTControlCharacters(res) : res)),
     ).resolves.toContain(`The schema at ${path.join('config', 'schema.prisma')} is valid`)
@@ -319,7 +329,7 @@ describe('validate', () => {
       expect.assertions(1)
 
       try {
-        await Validate.new().parse(['--schema', './prisma/postgres.prisma'], defaultTestConfig())
+        await Validate.new('prisma').parse(['--schema', './prisma/postgres.prisma'], defaultTestConfig())
       } catch (e) {
         expect(e.message).toMatchInlineSnapshot(`
           "Prisma schema validation - (validate wasm)
@@ -349,7 +359,7 @@ describe('validate', () => {
       expect.assertions(1)
 
       try {
-        await Validate.new().parse(['--schema', './prisma/postgres.prisma'], defaultTestConfig())
+        await Validate.new('prisma').parse(['--schema', './prisma/postgres.prisma'], defaultTestConfig())
       } catch (e) {
         expect(e.message).toMatchInlineSnapshot(`
           "Prisma schema validation - (validate wasm)
@@ -376,7 +386,7 @@ describe('validate', () => {
     })
 
     it('should accept NoAction referential action on e.g. MySQL when relationMode = "prisma"', async () => {
-      const result = await Validate.new().parse(['--schema', './prisma/mysql.prisma'], defaultTestConfig())
+      const result = await Validate.new('prisma').parse(['--schema', './prisma/mysql.prisma'], defaultTestConfig())
       expect(result).toBeTruthy()
     })
   })

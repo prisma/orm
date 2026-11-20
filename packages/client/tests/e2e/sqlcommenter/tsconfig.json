@@ -1,6 +1,6 @@
 {
   "extends": "../tsconfig.base.json",
-  "exclude": ["_steps.cts"],
+  "exclude": ["_steps.ts", "_steps.cts"],
   "compilerOptions": {
     "target": "ESNext",
     "module": "NodeNext",

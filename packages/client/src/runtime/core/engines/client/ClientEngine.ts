@@ -2,6 +2,8 @@ import { QueryCompiler, QueryCompilerConstructor, QueryEngineLogLevel } from '@p
 import {
   BatchResponse,
   convertCompactedRows,
+  parameterizeBatch,
+  parameterizeQuery,
   QueryEvent,
   QueryPlanNode,
   safeJsonStringify,
@@ -34,12 +36,15 @@ import { getBatchRequestPayload } from '../common/utils/getBatchRequestPayload'
 import { getErrorMessageWithLink as genericGetErrorMessageWithLink } from '../common/utils/getErrorMessageWithLink'
 import type { Executor } from './Executor'
 import { LocalExecutor } from './LocalExecutor'
-import { parameterizeBatch, parameterizeQuery } from './parameterization/parameterize'
 import { QueryPlanCache } from './query-plan-cache'
 import { RemoteExecutor } from './RemoteExecutor'
 import { QueryCompilerLoader } from './types/QueryCompiler'
 import { wasmQueryCompilerLoader } from './WasmQueryCompilerLoader'
 
+/**
+ * Prisma error code for the `PrismaClientInitializationError` raised when
+ * `PrismaClient` is instantiated without a driver adapter.
+ */
 const CLIENT_ENGINE_ERROR = 'P2038'
 
 const debug = Debug('prisma:client:clientEngine')
@@ -101,7 +106,7 @@ export class ClientEngine implements Engine {
   #state: EngineState = { type: 'disconnected' }
   #queryCompilerLoader: QueryCompilerLoader
   #executorKind: ExecutorKind
-  #queryPlanCache: QueryPlanCache
+  #queryPlanCache?: QueryPlanCache
   #paramGraph: ParamGraph
 
   config: EngineConfig
@@ -122,7 +127,7 @@ export class ClientEngine implements Engine {
       debug('Using driver adapter: %O', config.adapter)
     } else {
       throw new PrismaClientInitializationError(
-        'Missing configured driver adapter. Engine type `client` requires an active driver adapter. Please check your PrismaClient initialization code.',
+        'PrismaClient requires a driver adapter to connect to your database, but none was provided. Pass one to the PrismaClient constructor, e.g. `new PrismaClient({ adapter })`. Learn more: https://pris.ly/d/driver-adapters',
         config.clientVersion,
         CLIENT_ENGINE_ERROR,
       )
@@ -140,12 +145,17 @@ export class ClientEngine implements Engine {
     this.logEmitter = config.logEmitter
     this.datamodel = config.inlineSchema
     this.tracingHelper = config.tracingHelper
-    this.#queryPlanCache = new QueryPlanCache()
+    this.#queryPlanCache =
+      config.queryPlanCacheMaxSize === 0 ? undefined : new QueryPlanCache(config.queryPlanCacheMaxSize)
     this.#paramGraph = ParamGraph.deserialize(config.parameterizationSchema, (enumName) => {
       if (!Object.hasOwn(config.runtimeDataModel.enums, enumName)) {
         return undefined
       }
-      return config.runtimeDataModel.enums[enumName].values.map((v) => v.name)
+      const mapping: Record<string, string> = {}
+      for (const value of config.runtimeDataModel.enums[enumName].values) {
+        mapping[value.name] = value.dbName ?? value.name
+      }
+      return mapping
     })
 
     if (config.enableDebugLogs) {
@@ -467,6 +477,7 @@ export class ClientEngine implements Engine {
 
     let plan: QueryPlanNode
     let placeholderValues: Record<string, unknown> = {}
+    let queryInfoQuery = query.query
 
     if (isRawQuery(query)) {
       plan = compileRawQuery(query)
@@ -474,15 +485,22 @@ export class ClientEngine implements Engine {
       const { parameterizedQuery, placeholderValues: extractedValues } = parameterizeQuery(query, this.#paramGraph)
       const cacheKey = JSON.stringify(parameterizedQuery)
       placeholderValues = extractedValues
+      queryInfoQuery = parameterizedQuery.query
 
-      const cached = this.#queryPlanCache.getSingle(cacheKey)
+      // We do not cache `createMany` and `createManyAndReturn` queries as they are very unlikely
+      // to benefit from caching due to their high variability in parameters, which leads to a very
+      // high cache miss rate and potential cache bloat.
+      const isCacheable = query.action !== 'createMany' && query.action !== 'createManyAndReturn'
+      const cached = isCacheable ? this.#queryPlanCache?.getSingle(cacheKey) : undefined
       if (cached) {
         debug('query plan cache hit')
         plan = cached
       } else {
         debug('query plan cache miss')
         plan = this.#compileQuery(parameterizedQuery, cacheKey, queryCompiler)
-        this.#queryPlanCache.setSingle(cacheKey, plan)
+        if (isCacheable) {
+          this.#queryPlanCache?.setSingle(cacheKey, plan)
+        }
       }
     }
 
@@ -501,7 +519,7 @@ export class ClientEngine implements Engine {
           type: 'single',
           modelName: query.modelName,
           action: query.action,
-          query: query.query,
+          query: queryInfoQuery,
         },
       })
 
@@ -531,19 +549,23 @@ export class ClientEngine implements Engine {
       throw this.#transformRequestError(err, request)
     })
 
-    const hasRawQueries = firstModelName === undefined
+    const onlyRawQueries = queries.every(isRawQuery)
     let batchResponse: BatchResponse
     let placeholderValues: Record<string, unknown> = {}
+    let queryInfoQueries = queries.map((query) => query.query)
 
-    if (!hasRawQueries) {
+    if (!onlyRawQueries) {
       const { parameterizedBatch, placeholderValues: extractedValues } = parameterizeBatch(
         batchPayload as JsonBatchQuery,
         this.#paramGraph,
       )
       const cacheKeyStr = JSON.stringify(parameterizedBatch)
       placeholderValues = extractedValues
+      queryInfoQueries = parameterizedBatch.batch.map((query) => query.query)
 
-      const cached = this.#queryPlanCache.getBatch(cacheKeyStr)
+      // Raw queries are not parameterized, so their values would end up in the cache key.
+      const isCacheable = !queries.some(isRawQuery)
+      const cached = isCacheable ? this.#queryPlanCache?.getBatch(cacheKeyStr) : undefined
       if (cached) {
         debug('batch query plan cache hit')
         batchResponse = cached
@@ -551,7 +573,9 @@ export class ClientEngine implements Engine {
         debug('batch query plan cache miss')
         try {
           batchResponse = this.#compileBatch(parameterizedBatch.batch, cacheKeyStr, queryCompiler)
-          this.#queryPlanCache.setBatch(cacheKeyStr, batchResponse)
+          if (isCacheable) {
+            this.#queryPlanCache?.setBatch(cacheKeyStr, batchResponse)
+          }
         } catch (error) {
           throw this.#transformCompileError(error)
         }
@@ -570,14 +594,18 @@ export class ClientEngine implements Engine {
       switch (batchResponse.type) {
         case 'multi': {
           if (transaction?.kind !== 'itx') {
-            const txOptions = transaction?.options.isolationLevel
-              ? { ...this.config.transactionOptions, isolationLevel: transaction.options.isolationLevel }
-              : this.config.transactionOptions
+            const batchOptions = transaction?.options
+            const txOptions = {
+              maxWait: batchOptions?.maxWait ?? this.config.transactionOptions.maxWait,
+              timeout: batchOptions?.timeout ?? this.config.transactionOptions.timeout,
+              isolationLevel: batchOptions?.isolationLevel ?? this.config.transactionOptions.isolationLevel,
+            }
             txInfo = await this.transaction('start', {}, txOptions)
           }
 
           const results: BatchQueryEngineResult<unknown>[] = []
           let rollback = false
+          let canContinueOnError: boolean | undefined
           for (const [batchIndex, plan] of batchResponse.plans.entries()) {
             try {
               const rows = await executor.execute({
@@ -590,14 +618,23 @@ export class ClientEngine implements Engine {
                 customFetch: customDataProxyFetch?.(globalThis.fetch) as typeof globalThis.fetch | undefined,
                 queryInfo: {
                   type: 'single',
-                  ...queries[batchIndex],
+                  modelName: queries[batchIndex].modelName,
+                  action: queries[batchIndex].action,
+                  query: queryInfoQueries[batchIndex],
                 },
               })
               results.push({ data: { [queries[batchIndex].action]: rows } })
             } catch (err) {
+              canContinueOnError ??=
+                transaction?.kind !== 'batch' &&
+                queries.every((query) => query.action === 'findUnique' || query.action === 'findUniqueOrThrow')
+
               results.push(err as Error)
               rollback = true
-              break
+              if (!canContinueOnError) {
+                results.push(...queries.slice(batchIndex + 1).map(() => err as Error))
+                break
+              }
             }
           }
 
@@ -639,7 +676,7 @@ export class ClientEngine implements Engine {
               type: 'compacted',
               action: firstAction,
               modelName: firstModelName,
-              queries,
+              queries: queryInfoQueries,
             },
           })
 
@@ -665,7 +702,7 @@ export class ClientEngine implements Engine {
       return this.#withLocalPanicHandler(() =>
         this.#withCompileSpan({
           queries: [query],
-          execute: () => compiler.compile(request) as QueryPlanNode,
+          execute: () => compiler.compile(request),
         }),
       )
     } catch (error) {

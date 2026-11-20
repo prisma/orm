@@ -44,8 +44,13 @@ const myTracingHelper: TracingHelper = {
     return '00-traceId-spanId-01'
   },
 
-  dispatchEngineSpans(spans) {
+  dispatchEngineSpans(spans, events, emitLogEvent) {
     // Handle emulated remote spans. In Prisma 7, this is only used for Accelerate spans.
+    // Every event must be handed to `emitLogEvent`, ideally while the span it
+    // belongs to is active, or the client drops logs the user asked for.
+    for (const event of events) {
+      emitLogEvent(event)
+    }
   },
 
   getActiveContext() {
@@ -92,7 +97,11 @@ The main interface for tracing integration:
 interface TracingHelper {
   isEnabled(): boolean
   getTraceParent(context?: Context): string
-  dispatchEngineSpans(spans: EngineSpan[]): void
+  dispatchEngineSpans(
+    spans: EngineSpan[],
+    events: EngineTraceEvent[],
+    emitLogEvent: (event: EngineTraceEvent) => void,
+  ): void
   getActiveContext(): Context | undefined
   runInChildSpan<R>(nameOrOptions: string | ExtendedSpanOptions, callback: SpanCallback<R>): R
 }

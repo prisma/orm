@@ -16,10 +16,14 @@ export function convertDriverError(error: unknown): DriverAdapterErrorObject {
 export function mapDriverError(error: DriverError): MappedError {
   switch (error.errno) {
     case 1062: {
-      const index = error.sqlMessage?.split(' ').pop()?.split("'").at(1)?.split('.').pop()
+      const rawKey = error.sqlMessage?.split(' ').pop()?.split("'").at(1)
+      const keyParts = rawKey?.split('.')
+      const table = keyParts && keyParts.length > 1 ? keyParts.slice(0, -1).join('.') : undefined
+      const index = keyParts?.at(-1)
       return {
         kind: 'UniqueConstraintViolation',
         constraint: index !== undefined ? { index } : undefined,
+        table,
       }
     }
 

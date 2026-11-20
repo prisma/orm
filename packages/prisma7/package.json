@@ -1,0 +1,68 @@
+{
+  "name": "@prisma/prisma7",
+  "version": "0.0.0",
+  "private": false,
+  "description": "Compatibility wrapper for running the Prisma 7 CLI",
+  "license": "Apache-2.0",
+  "author": "Prisma Data, Inc.",
+  "homepage": "https://www.prisma.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/prisma7"
+  },
+  "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "prisma7": "build/prisma7.js"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "require": {
+        "types": "./index.d.ts",
+        "default": "./index.js"
+      },
+      "import": {
+        "types": "./index.d.ts",
+        "default": "./index.js"
+      },
+      "default": "./index.js"
+    },
+    "./config": {
+      "require": {
+        "types": "./config.d.ts",
+        "default": "./config.js"
+      },
+      "import": {
+        "types": "./config.d.ts",
+        "default": "./config.js"
+      },
+      "default": "./config.js"
+    }
+  },
+  "files": [
+    "build",
+    "index.js",
+    "index.d.ts",
+    "config.js",
+    "config.d.ts"
+  ],
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24.0"
+  },
+  "scripts": {
+    "dev": "DEV=true tsx helpers/build.ts",
+    "build": "tsx helpers/build.ts",
+    "tsc": "tsc -d -p tsconfig.build.json",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "prisma": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "~20.19.24",
+    "typescript": "5.4.5"
+  },
+  "sideEffects": false
+}
