@@ -7,3 +7,15 @@ reviews:
   auto_review:
     base_branches:
       - ".*"
+  path_instructions:
+    - path: "**/*.{ts,tsx,mts,cts,js,mjs,cjs}"
+      instructions: >-
+        Decimal, bigint and 64-bit integer types exist to hold values a JavaScript number would round, so flag
+        a change that routes such a value through a number for convenience: Number() or parseFloat() on it
+        without a check that proves the conversion is exact (a safe-integer range check is enough for a bigint or
+        64-bit integer, but not for a Decimal, since 1.0000000000000001 passes a range check and becomes 1), or
+        an override of valueOf or Symbol.toPrimitive on a value class meant to make <, >, == or arithmetic
+        work. A string-returning override is wrong too, because < then compares "10" and "2" as text. Native
+        bigint comparison, addition, subtraction and multiplication are already exact (division drops the fraction). Decimal has no exact operators, since JavaScript has no operator
+        overloading, so ask for its own methods instead, such as a.lt(b) or a.cmp(b). Also flag a subclass
+        or patch that changes a third-party library's documented behaviour; that belongs upstream.
