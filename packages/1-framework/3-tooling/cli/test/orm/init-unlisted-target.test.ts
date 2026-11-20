@@ -334,6 +334,7 @@ describe('an unlisted package that cannot be used', () => {
           meta: { packageName: NO_INIT, takenAsPackageName: true },
         },
       });
+      expect(JSON.stringify(run.json)).not.toContain(`add ${NO_INIT}`);
     },
     timeouts.coldTransformImport,
   );
@@ -376,7 +377,7 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
         ok: false,
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
-          summary: `${value} is not a Prisma 8 package`,
+          summary: `${value} does not list the keyword \`${KEYWORD}\``,
           why: `${TAKEN(value)} The latest version of ${value} on ${REGISTRY} does not list the keyword \`${KEYWORD}\` in its package.json. init requires that keyword of a target package before it installs or uses one, so it did not install ${value}. Nothing was changed.`,
           nextActions: [
             expect.objectContaining({
@@ -552,6 +553,34 @@ describe('an unlisted package that does not list the Prisma 8 keyword', () => {
   );
 
   it(
+    'names the registry init asked as it asked it, without credentials',
+    async () => {
+      vi.stubGlobal('fetch', async () => new Response('{}', { status: 404 }));
+
+      const run = await harness(importFromProject, realRegistryLookup).run(starter('acmedb'), {
+        cwd: projectDir,
+        env: { npm_config_registry: 'https://user:token@registry.example/' },
+      });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          why: `${TAKEN('acmedb')} No package named acmedb was found on https://registry.example. Nothing was changed.`,
+          nextActions: [
+            expect.objectContaining({
+              label: expect.stringContaining(
+                'init asks only https://registry.example and sends no credentials',
+              ),
+            }),
+          ],
+          meta: { reason: 'not-found', registry: 'https://registry.example' },
+        },
+      });
+      expect(JSON.stringify(run.json)).not.toMatch(/token|\*\*\*\*/);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
     'never looks up a listed package',
     async () => {
       const run = await harness().run([...starter('postgres'), '--skip-install'], {
@@ -599,6 +628,22 @@ describe('which copy of an unlisted package init checks', () => {
       expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
       expect(lookups).toEqual([]);
       expect(installs).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'installs a package on disk but not declared once the registry copy lists the keyword',
+    async () => {
+      installPackage('acmedb', ['database']);
+
+      const run = await harness(await unlistedPackage('acmedb')).run(starter('acmedb'), {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
+      expect(lookups).toEqual(['acmedb']);
+      expect(installs[0]).toEqual(['add', 'acmedb', 'dotenv']);
     },
     timeouts.coldTransformImport,
   );

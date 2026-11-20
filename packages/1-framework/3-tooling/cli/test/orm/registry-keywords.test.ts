@@ -117,7 +117,7 @@ describe('lookUpRegistryKeywords', () => {
     expect(requested.map(({ url }) => url)).toEqual(['https://registry.example/acmedb/latest']);
     expect(result).toMatchObject({
       kind: 'lookup-failed',
-      registry: 'https://****:****@registry.example',
+      registry: 'https://registry.example',
     });
     expect(JSON.stringify(result)).not.toContain('token');
   });

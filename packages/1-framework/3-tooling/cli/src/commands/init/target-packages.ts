@@ -92,8 +92,8 @@ export function findTargetByName(value: string): KnownTarget | undefined {
 }
 
 /**
- * The target package `init` installs, listed or not. A listed package and an unlisted one run the
- * same code.
+ * The target package `init` installs, listed or not. Both run the same code, except that `init`
+ * checks the keyword of an unlisted package first.
  */
 export interface TargetPackage {
   readonly packageName: string;

@@ -159,11 +159,6 @@ function resolveFromProject(cwd: string, specifier: string): Resolution {
   };
 }
 
-/** Whether the project at `cwd` has the package `name` where Node would find it. */
-export function isInstalledInProject(cwd: string, name: string): boolean {
-  return installedManifest(cwd, name) !== undefined;
-}
-
 /**
  * Resolves with the import conditions, so a package that exports a module only under `import`
  * loads. A package the project does not have is `not-installed`; one that does not export the

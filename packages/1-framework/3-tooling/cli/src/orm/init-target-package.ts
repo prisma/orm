@@ -29,7 +29,7 @@ import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
 import { normalizeError } from './normalize-error';
 import { keywordsOf } from './package-manifest';
-import { type ImportFromProject, installedManifest, isInstalledInProject } from './project-modules';
+import { type ImportFromProject, installedManifest } from './project-modules';
 import type { LookUpRegistryKeywords, RegistryLookup } from './registry-keywords';
 
 const InitContributionSchema = type({
@@ -151,8 +151,15 @@ export function createTargetPackagePreparation(ctx: {
     const { packageName } = target;
     const drivers = firstInstallDrivers(target);
     rejectUnparseableManifest(ctx.cwd);
+    const declaredBefore = declaredPackages(ctx.cwd);
+    const manifestPath = installedManifest(ctx.cwd, packageName);
+    // Asking again for a package the project declares rewrites its declared range, which a
+    // refusal later would leave behind; the later install puts those in place instead. The
+    // target package is left out only when it is also on disk, since init loads it now.
+    const targetInPlace = manifestPath !== undefined && declaredBefore.has(packageName);
+    const installsTarget = ctx.install && !targetInPlace;
     if (target.listed === undefined) {
-      await checkTargetPackageKeyword(ctx, packageName);
+      await checkTargetPackageKeyword(ctx, packageName, { manifestPath, installsTarget });
     }
     const warnings: string[] = [];
     let installed: readonly string[] = [];
@@ -160,14 +167,8 @@ export function createTargetPackagePreparation(ctx: {
     let ranCommand: string | undefined;
 
     if (ctx.install) {
-      const declaredBefore = declaredPackages(ctx.cwd);
-      // Asking again for a package the project declares rewrites its declared range, which a
-      // refusal later would leave behind; the later install puts those in place instead. The
-      // target package is left out only when it is also on disk, since init loads it now.
-      const targetInPlace =
-        declaredBefore.has(packageName) && isInstalledInProject(ctx.cwd, packageName);
       const deps = [
-        ...(targetInPlace ? [] : [packageName]),
+        ...(installsTarget ? [packageName] : []),
         ...['dotenv', ...drivers].filter((dep) => !declaredBefore.has(dep)),
       ];
       const installFailure = await installProjectDependencies({
@@ -184,7 +185,7 @@ export function createTargetPackagePreparation(ctx: {
       }
       // A target package already in place counts as installed, so the later install leaves it
       // alone too and the project keeps the version it has.
-      installed = targetInPlace ? [packageName, ...deps] : deps;
+      installed = installsTarget ? deps : [packageName, ...deps];
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
       added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
     }
@@ -214,14 +215,19 @@ async function checkTargetPackageKeyword(
     readonly signal: AbortSignal;
   },
   packageName: string,
+  copy: {
+    /** The installed `package.json`, when the project has the package on disk. */
+    readonly manifestPath: string | undefined;
+    /** Whether init's first install installs the package, so the registry's copy is the one used. */
+    readonly installsTarget: boolean;
+  },
 ): Promise<void> {
-  const manifestPath = installedManifest(ctx.cwd, packageName);
+  const { manifestPath } = copy;
   if (!ctx.install && manifestPath === undefined) {
     return;
   }
-  const inPlace = manifestPath !== undefined && declaredPackages(ctx.cwd).has(packageName);
   const lookup: KeywordLookup =
-    manifestPath === undefined || (ctx.install && !inPlace)
+    manifestPath === undefined || copy.installsTarget
       ? await ctx.lookUpRegistryKeywords(packageName, { env: ctx.env, signal: ctx.signal })
       : installedKeywords(ctx.cwd, manifestPath);
   const refusal = {

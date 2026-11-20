@@ -2,7 +2,7 @@ import { type } from 'arktype';
 import { redactUrlCredentials } from '../utils/url-credentials';
 import { keywordsOf } from './package-manifest';
 
-/** What asking the registry for the latest version of a package gave. `registry` is safe to show. */
+/** What asking the registry for the latest version of a package gave. `registry` is the URL asked, without credentials. */
 export type RegistryLookup =
   | { readonly kind: 'read'; readonly registry: string; readonly keywords: readonly string[] }
   | { readonly kind: 'not-found'; readonly registry: string }
@@ -58,7 +58,7 @@ function withoutCredentials(registry: string): string {
     url.password = '';
     return url.href.replace(/\/+$/, '');
   } catch {
-    return registry;
+    return redactUrlCredentials(registry);
   }
 }
 
@@ -131,8 +131,8 @@ async function readLatest(
 
 export const lookUpRegistryKeywords: LookUpRegistryKeywords = async (packageName, options) => {
   const configured = registryOf(options.env);
-  const registry = redactUrlCredentials(configured);
-  const url = `${withoutCredentials(configured)}/${packageName.replace('/', '%2F')}/latest`;
+  const registry = withoutCredentials(configured);
+  const url = `${registry}/${packageName.replace('/', '%2F')}/latest`;
   const failed = (cause: string): RegistryLookup => ({
     kind: 'lookup-failed',
     registry,

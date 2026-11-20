@@ -520,7 +520,9 @@ export function errorInitTargetPackageNotInstalled(options: {
       docsUrl: docsUrlFor('CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED'),
       meta: {
         packageName: options.packageName,
-        installCommand: options.installCommand,
+        ...(options.unlisted && ranCommand === undefined
+          ? {}
+          : { installCommand: options.installCommand }),
         ...takenAsPackageNameMeta(options.unlisted),
       },
     },
@@ -581,12 +583,12 @@ export function errorInitTargetPackageNotVerified(
       case 'keyword-missing':
         return options.registry === undefined
           ? {
-              summary: `${packageName} is not a Prisma 8 package`,
+              summary: `${packageName} does not list the keyword ${keyword}`,
               why: `The installed ${packageName} does not list the keyword ${keyword} in its package.json. ${required}, so it did not use ${packageName}. Nothing was changed.`,
               fix: `Check the package name. If a newer version of ${packageName} lists the keyword, update it with \`${options.updateCommand}\` and ${runAgain}. ${maintainer}`,
             }
           : {
-              summary: `${packageName} is not a Prisma 8 package`,
+              summary: `${packageName} does not list the keyword ${keyword}`,
               why: `The latest version of ${packageName} on ${options.registry} does not list the keyword ${keyword} in its package.json. ${required}, so it did not install ${packageName}. Nothing was changed.`,
               fix: `Check the package name. ${maintainer}`,
             };
