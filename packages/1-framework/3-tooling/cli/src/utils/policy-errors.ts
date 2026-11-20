@@ -179,8 +179,8 @@ function keepAppProtected(
     return [
       KEEP_APPLIED_MIGRATION,
       setting === 'accessWidening'
-        ? `${unapplied}, delete the migration, put the contract's access rules back as they were, and plan it again.`
-        : `${unapplied}, delete the migration and plan it again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting the model or field back in the contract.`,
+        ? `${unapplied}, delete the migration and any later ones no database has applied, put the contract's access rules back as they were, and plan again.`
+        : `${unapplied}, delete the migration and any later ones no database has applied, and plan again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting back in the contract what the migration removes.`,
     ];
   }
   if (setting === 'accessWidening') {
