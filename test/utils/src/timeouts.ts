@@ -8,6 +8,7 @@ const BASE_TIMEOUTS = {
   pslRoundTrip: 5000,
   repeatedScriptRuns: 60000,
   largeContractPlanning: 4000,
+  poolConnectionWait: 1000,
   default: 100,
   /**
    * Vitest `testTimeout` / `hookTimeout` when a package uses mostly local I/O
@@ -135,6 +136,14 @@ export const timeouts = {
    */
   get largeContractPlanning(): number {
     return Math.round(BASE_TIMEOUTS.largeContractPlanning * getMultiplier());
+  },
+
+  /**
+   * A connection pool's wait for a connection, when a test lets that wait run out: long enough to
+   * open a connection to a local server on a busy worker, short enough to keep the test fast.
+   */
+  get poolConnectionWait(): number {
+    return Math.round(BASE_TIMEOUTS.poolConnectionWait * getMultiplier());
   },
 
   /**
