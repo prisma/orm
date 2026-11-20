@@ -56,7 +56,7 @@ In both cases the runtime proceeds with the same verification and execution pipe
 
 - **verify**: "startup" | "onFirstUse" | "always" per ADR 021
 - **Startup**: verify DB marker before accepting connections
-- **OnFirstUse**: verify at the first execution that touches the connection
+- **OnFirstUse**: verify before the first execution, or before the first connection is taken to hold, whichever comes first
 - **Always**: verify on every execution, intended for tests and high-safety contexts
 
 ## API shape
