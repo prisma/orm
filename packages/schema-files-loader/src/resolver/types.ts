@@ -4,6 +4,11 @@ export type FsEntryType =
     }
   | {
       kind: 'directory'
+      /**
+       * Canonical path of the directory, if the resolver is able to provide one.
+       * Used for detecting directories that are reachable from themselves through symlinks.
+       */
+      realPath?: string
     }
   | {
       kind: 'symlink'

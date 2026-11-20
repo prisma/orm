@@ -2,7 +2,7 @@ import { Decimal } from '@prisma/client-runtime-utils'
 
 import { FieldScalarType, FieldType, ResultNode } from '../query-plan'
 import { UserFacingError } from '../user-facing-error'
-import { assertNever, safeJsonStringify } from '../utils'
+import { assertNever, isDate, isUint8Array, safeJsonStringify } from '../utils'
 import { PrismaObject, Value } from './scope'
 
 export class DataMapperError extends UserFacingError {
@@ -221,7 +221,7 @@ function mapValue(
           throw new DataMapperError(`Expected a boolean in column '${columnName}', got ${typeof value}: ${value}`)
         }
       }
-      if (Array.isArray(value) || value instanceof Uint8Array) {
+      if (Array.isArray(value) || isUint8Array(value)) {
         for (const byte of value) {
           if (byte !== 0) return true
         }
@@ -240,7 +240,7 @@ function mapValue(
       if (typeof value === 'string') {
         return { $type: 'DateTime', value: normalizeDateTime(value) }
       }
-      if (typeof value === 'number' || value instanceof Date) {
+      if (typeof value === 'number' || isDate(value)) {
         return { $type: 'DateTime', value }
       }
       throw new DataMapperError(`Expected a date in column '${columnName}', got ${typeof value}: ${value}`)
@@ -279,7 +279,7 @@ function mapValue(
           if (Array.isArray(value)) {
             return { $type: 'Bytes', value: Buffer.from(value).toString('base64') }
           }
-          if (value instanceof Uint8Array) {
+          if (isUint8Array(value)) {
             return { $type: 'Bytes', value: Buffer.from(value).toString('base64') }
           }
           throw new DataMapperError(`Expected a byte array in column '${columnName}', got ${typeof value}: ${value}`)

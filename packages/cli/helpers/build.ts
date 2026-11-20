@@ -23,24 +23,20 @@ const cliLifecyclePlugin: esbuild.Plugin = {
       // we copy the contents from xdg-open to build
       await fs.promises.copyFile(path.join(path.dirname(require.resolve('open')), 'xdg-open'), './build/xdg-open')
 
-      // as a convention, we install all Prisma's Wasm modules in the internals package
-      const wasmResolveDir = path.join(__dirname, '..', '..', 'internals', 'node_modules')
+      // the schema Wasm packages are dependencies of @prisma/internals, so we resolve them from there
+      const internalsPath = path.join(__dirname, '..', '..', 'internals')
 
-      const prismaWasmFile = path.join(
-        wasmResolveDir,
-        '@prisma',
-        'prisma-schema-wasm',
-        'src',
-        'prisma_schema_build_bg.wasm',
-      )
+      const prismaWasmFile = require.resolve('@prisma/prisma-schema-wasm/src/prisma_schema_build_bg.wasm', {
+        paths: [internalsPath],
+      })
       await fs.promises.copyFile(prismaWasmFile, './build/prisma_schema_build_bg.wasm')
 
-      const prismaSchemaEngineWasmFile = path.join(
-        wasmResolveDir,
-        '@prisma',
-        'schema-engine-wasm',
-        'schema_engine_bg.wasm',
-      )
+      // the package's `exports` map exposes the JS bindings but not the .wasm file, so we resolve
+      // the former and derive the latter
+      const schemaEngineRuntimePath = require.resolve('@prisma/schema-engine-wasm/schema_engine_bg', {
+        paths: [internalsPath],
+      })
+      const prismaSchemaEngineWasmFile = path.join(path.dirname(schemaEngineRuntimePath), 'schema_engine_bg.wasm')
       await fs.promises.copyFile(prismaSchemaEngineWasmFile, './build/schema_engine_bg.wasm')
 
       await copyClientWasmRuntime()
@@ -55,7 +51,6 @@ const cliLifecyclePlugin: esbuild.Plugin = {
 async function copyClientWasmRuntime() {
   const clientPath = path.join(__dirname, '..', '..', 'client')
   const clientRuntimePath = path.join(clientPath, 'runtime')
-  const clientPrismaDepsPath = path.join(clientPath, 'node_modules', '@prisma')
 
   for (const provider of ['cockroachdb', 'mysql', 'postgresql', 'sqlite', 'sqlserver']) {
     for (const build of ['fast', 'small']) {
@@ -65,16 +60,32 @@ async function copyClientWasmRuntime() {
         await fs.promises.copyFile(path.join(clientRuntimePath, file), `./build/${file}`)
       }
 
-      const wasmFilePath = path.join(
-        clientPrismaDepsPath,
-        `query-compiler-wasm`,
-        provider,
-        `query_compiler_${build}_bg.wasm`,
-      )
+      // @prisma/query-compiler-wasm is a dependency of @prisma/client, so we resolve it from there
+      const wasmFilePath = require.resolve(`@prisma/query-compiler-wasm/${provider}/query_compiler_${build}_bg.wasm`, {
+        paths: [clientPath],
+      })
 
       await fs.promises.copyFile(wasmFilePath, `./build/${baseName}.wasm`)
     }
   }
+}
+
+async function buildStudioFrontend() {
+  const { build } = await import('esbuild')
+
+  await build({
+    bundle: true,
+    entryPoints: ['src/studio-entry.ts'],
+    format: 'esm',
+    logLevel: 'error',
+    minify: true,
+    outfile: 'build/studio.js',
+    platform: 'browser',
+    target: 'ES2022',
+    tsconfig: 'tsconfig.build.json',
+  })
+
+  await fs.promises.copyFile(require.resolve('@prisma/studio-core/ui/index.css'), './build/studio.css')
 }
 
 /**
@@ -110,14 +121,32 @@ const cliConfigBuildConfig: BuildOptions = {
   minify: false,
 }
 
-// Setup build config for the cli
-const cliBuildConfig: BuildOptions = {
-  name: 'cli',
-  entryPoints: ['src/bin.ts'],
+const cliDispatcherBuildConfig: BuildOptions = {
+  name: 'cli-dispatcher',
+  entryPoints: ['src/bin-dispatcher.ts'],
   outfile: 'build/index',
   plugins: [cliLifecyclePlugin],
   bundle: true,
+  external: ['./cli.js', './completion.js'],
+  emitTypes: false,
+  minify: true,
+}
+
+const cliBuildConfig: BuildOptions = {
+  name: 'cli',
+  entryPoints: ['src/cli-entry.ts'],
+  outfile: 'build/cli',
+  bundle: true,
   external: ['better-sqlite3', 'esbuild'],
+  emitTypes: false,
+  minify: true,
+}
+
+const cliCompletionBuildConfig: BuildOptions = {
+  name: 'cli-completion',
+  entryPoints: ['src/completions/completion-entry.ts'],
+  outfile: 'build/completion',
+  bundle: true,
   emitTypes: false,
   minify: true,
 }
@@ -134,10 +163,12 @@ const preinstallBuildConfig: BuildOptions = {
 
 const optionalPlugins = process.env.DEV === 'true' ? [] : [cliTypesBuildConfig, cliConfigBuildConfig]
 
-build([...optionalPlugins, cliBuildConfig, preinstallBuildConfig]).catch((e) => {
-  console.error(e)
-  process.exit(1)
-})
+build([...optionalPlugins, cliDispatcherBuildConfig, cliBuildConfig, cliCompletionBuildConfig, preinstallBuildConfig])
+  .then(buildStudioFrontend)
+  .catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
 
 // Utils ::::::::::::::::::::::::::::::::::::::::::::::::::
 

@@ -209,9 +209,6 @@ export namespace EngineArgs {
     // By default, the response will contain a human-readable diff.
     // If you want an executable script, pass the "script": true param.
     script: boolean
-    // The URL to a live database to use as a shadow database. The schema and data on that database will be wiped during diffing.
-    // This is only necessary when one of from or to is referencing a migrations directory as a source for the schema.
-    shadowDatabaseUrl: string | null
     // Change the exit code behavior when diff is not empty
     // Empty: 0, Error: 1, Non empty: 2
     exitCode: boolean | null

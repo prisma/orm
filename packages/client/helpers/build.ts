@@ -198,15 +198,6 @@ function wasmEdgeRuntimeBuildConfig(format: ModuleFormat, name: string): BuildOp
   }
 }
 
-// old-style generator compatiblity shim for studio
-const generatorBuildConfig: BuildOptions = {
-  name: 'generator',
-  entryPoints: ['src/generation/generator.ts'],
-  outfile: 'generator-build/index',
-  bundle: true,
-  emitTypes: false,
-}
-
 // default-index.js file in scripts
 const defaultIndexConfig: BuildOptions = {
   name: 'default-index',
@@ -243,7 +234,6 @@ function* allWasmBindgenRuntimeConfigs(): Generator<BuildOptions> {
 }
 
 void build([
-  generatorBuildConfig,
   ...allNodeRuntimeBuildConfigs(),
   ...browserBuildConfigs(),
   ...allWasmEdgeRuntimeConfigs(),

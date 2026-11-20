@@ -6,12 +6,12 @@
   "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/query-plan-executor"
   },
   "license": "Apache-2.0",
   "devDependencies": {
-    "@hono/node-server": "1.19.0",
+    "@hono/node-server": "^1.19.14",
     "@hono/zod-validator": "0.7.2",
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/context-async-hooks": "2.1.0",
@@ -21,7 +21,7 @@
     "@prisma/adapter-mssql": "workspace:*",
     "@prisma/client-engine-runtime": "workspace:*",
     "@prisma/driver-adapter-utils": "workspace:*",
-    "hono": "4.11.7",
+    "hono": "^4.12.23",
     "temporal-polyfill": "0.3.0",
     "zod": "4.1.3"
   },

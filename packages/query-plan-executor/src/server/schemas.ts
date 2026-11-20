@@ -50,6 +50,7 @@ export const TransactionStartRequestBody = z.object({
   isolationLevel: z
     .enum(['READ UNCOMMITTED', 'READ COMMITTED', 'REPEATABLE READ', 'SNAPSHOT', 'SERIALIZABLE'])
     .optional(),
+  newTxId: z.string().optional(),
 })
 
 export type TransactionStartRequestBody = z.infer<typeof TransactionStartRequestBody>

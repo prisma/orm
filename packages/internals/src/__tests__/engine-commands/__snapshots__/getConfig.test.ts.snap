@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`getConfig datasource with env var 1`] = `
+exports[`getConfig > datasource with env var 1`] = `
 ""{
   "generators": [],
   "datasources": [
@@ -16,7 +16,7 @@ exports[`getConfig datasource with env var 1`] = `
 }""
 `;
 
-exports[`getConfig empty config 1`] = `
+exports[`getConfig > empty config 1`] = `
 ""{
   "generators": [],
   "datasources": [
@@ -32,7 +32,7 @@ exports[`getConfig empty config 1`] = `
 }""
 `;
 
-exports[`getConfig with generator and datasource 1`] = `
+exports[`getConfig > with generator and datasource 1`] = `
 ""{
   "generators": [
     {

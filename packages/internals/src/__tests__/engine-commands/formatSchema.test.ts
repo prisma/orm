@@ -1,7 +1,8 @@
 import path from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 
-import { jestConsoleContext, jestContext } from '@prisma/get-platform'
+import { vitestConsoleContext, vitestContext } from '@prisma/get-platform/src/test-utils/vitestContext'
+import { describe, expect, test, vi } from 'vitest'
 
 import { getCliProvidedSchemaFile } from '../../cli/getSchema'
 import { formatSchema } from '../../engine-commands'
@@ -9,10 +10,10 @@ import { extractSchemaContent, type MultipleSchemas } from '../../utils/schemaFi
 import { fixturesPath } from '../__utils__/fixtures'
 
 if (process.env.CI) {
-  jest.setTimeout(20_000)
+  vi.setConfig({ testTimeout: 20_000 })
 }
 
-const ctx = jestContext.new().add(jestConsoleContext()).assemble()
+const ctx = vitestContext.new().add(vitestConsoleContext()).assemble()
 
 describe('schema wasm', () => {
   describe('diff', () => {

@@ -5,24 +5,26 @@
 const secret = Symbol()
 
 /**
- * Emulate a private property via a WeakMap manually. Using native private
- * properties is a breaking change for downstream users with minimal TypeScript
- * configs, because TypeScript uses ES3 as the default target.
- *
- * TODO: replace this with a `#representation` private property in the
- * `ObjectEnumValue` class and document minimal required `target` for TypeScript.
+ * Global symbol used to identify ObjectEnumValue instances across bundle
+ * boundaries. `Symbol.for()` returns the same symbol globally, so it works
+ * even when multiple copies of this module are loaded (e.g., browser and
+ * server bundles in Next.js, or HMR reloads).
+ * See: https://github.com/prisma/prisma/issues/29257
  */
-const representations = new WeakMap<ObjectEnumValue, string>()
+const PRISMA_OBJECT_ENUM_VALUE = Symbol.for('prisma.objectEnumValue')
 
 /**
  * Base class for unique values of object-valued enums.
  */
 export abstract class ObjectEnumValue {
+  readonly [PRISMA_OBJECT_ENUM_VALUE] = true
+  #representation: string
+
   constructor(arg?: symbol) {
     if (arg === secret) {
-      representations.set(this, `Prisma.${this._getName()}`)
+      this.#representation = `Prisma.${this._getName()}`
     } else {
-      representations.set(this, `new Prisma.${this._getNamespace()}.${this._getName()}()`)
+      this.#representation = `new Prisma.${this._getNamespace()}.${this._getName()}()`
     }
   }
 
@@ -33,7 +35,7 @@ export abstract class ObjectEnumValue {
   }
 
   toString() {
-    return representations.get(this)!
+    return this.#representation
   }
 }
 
@@ -87,6 +89,19 @@ export const NullTypes = {
 export const DbNull = new DbNullClass(secret)
 export const JsonNull = new JsonNullClass(secret)
 export const AnyNull = new AnyNullClass(secret)
+
+/**
+ * Check if a value is an ObjectEnumValue instance. Uses a global symbol
+ * instead of instanceof to work across bundle boundaries (e.g., when a
+ * Next.js app bundles browser and server code separately, creating duplicate
+ * module instances of @prisma/client-runtime-utils).
+ * See: https://github.com/prisma/prisma/issues/29257
+ */
+export function isObjectEnumValue(value: unknown): value is ObjectEnumValue {
+  return (
+    typeof value === 'object' && value !== null && (value as Record<symbol, unknown>)[PRISMA_OBJECT_ENUM_VALUE] === true
+  )
+}
 
 /**
  * Check if a value is the DBNull singleton instance.

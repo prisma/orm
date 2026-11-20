@@ -9,7 +9,12 @@ export class EventCaptureError extends Error {
 }
 
 const posthogCaptureUrl = new URL('https://proxyhog.prisma-data.net/capture')
-const posthogKey = 'phc_gr2e9OTFh5iwE6IOuHPngwVm9jDtbC04nBjb8gcVG9a'
+
+/** Publishable PostHog project API key for NPS survey feedback events. */
+export const PUBLIC_POSTHOG_NPS_PROJECT_KEY = 'phc_gr2e9OTFh5iwE6IOuHPngwVm9jDtbC04nBjb8gcVG9a'
+
+/** Publishable PostHog project API key for bootstrap activation telemetry (Prisma Web Properties). */
+export const PUBLIC_POSTHOG_BOOTSTRAP_ACTIVATION_PROJECT_KEY = 'phc_cmc85avbWyuJ2JyKdGPdv7dxXli8xLdWDBPbvIXWJfs'
 
 type PosthogCapture<Props> = {
   api_key: string
@@ -19,9 +24,15 @@ type PosthogCapture<Props> = {
 }
 
 export class PosthogEventCapture implements EventCapture {
+  #apiKey: string
+
+  constructor(apiKey: string) {
+    this.#apiKey = apiKey
+  }
+
   async capture(id: string, name: string, payload: unknown) {
     const capture: PosthogCapture<unknown> = {
-      api_key: posthogKey,
+      api_key: this.#apiKey,
       event: name,
       distinct_id: id,
       properties: payload,

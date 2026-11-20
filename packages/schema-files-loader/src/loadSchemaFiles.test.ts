@@ -3,7 +3,7 @@ import path from 'node:path'
 import { expect, test } from 'vitest'
 
 import { loadSchemaFiles } from './loadSchemaFiles'
-import { CompositeFilesResolver, InMemoryFilesResolver, realFsResolver } from './resolver'
+import { CompositeFilesResolver, FilesResolver, FsEntryType, InMemoryFilesResolver, realFsResolver } from './resolver'
 import { fixturePath, line, loadedFile } from './testUtils'
 
 test('simple list', async () => {
@@ -44,6 +44,43 @@ test('reads symlinks', async () => {
 test('ignores symlinks to directories', async () => {
   const files = await loadSchemaFiles(fixturePath('symlinks-to-dir'))
   expect(files).toEqual([])
+})
+
+test('does not get stuck on circular symlinks', async () => {
+  const rootDir = path.join('/', 'root')
+  const otherDir = path.join('/', 'other')
+  // the root can also be reached under a different path, like `/tmp` and `/private/tmp` on macOS
+  const rootAlias = path.join('/', 'alias-of-root')
+  const canonical = (entryPath: string) => (entryPath === rootAlias ? rootDir : entryPath)
+  // both directories contain a symlink to each other
+  const dirs: Record<string, Record<string, FsEntryType>> = {
+    [rootDir]: { 'a.prisma': { kind: 'file' }, link: { kind: 'symlink', realPath: otherDir } },
+    [otherDir]: { 'b.prisma': { kind: 'file' }, link: { kind: 'symlink', realPath: rootDir } },
+  }
+  let lookups = 0
+  const resolver: FilesResolver = {
+    listDirContents: (dirPath) => Promise.resolve(Object.keys(dirs[canonical(dirPath)] ?? {})),
+    getEntryType: (entryPath) => {
+      // fails the test instead of running out of memory if the cycle is not detected
+      if (++lookups > 20) {
+        throw new Error('too many lookups: traversal did not terminate')
+      }
+      const realPath = canonical(entryPath)
+      return Promise.resolve(
+        dirs[realPath]
+          ? { kind: 'directory', realPath }
+          : dirs[canonical(path.dirname(entryPath))]?.[path.basename(entryPath)],
+      )
+    },
+    getFileContents: (filePath) => Promise.resolve(`// this is ${path.basename(filePath)}`),
+  }
+
+  const files = await loadSchemaFiles(rootAlias, resolver)
+
+  expect(files).toEqual([
+    [path.join(rootAlias, 'a.prisma'), '// this is a.prisma'],
+    [path.join(otherDir, 'b.prisma'), '// this is b.prisma'],
+  ])
 })
 
 test('allows to use in-memory resolver', async () => {

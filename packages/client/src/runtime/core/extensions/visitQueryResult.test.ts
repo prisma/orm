@@ -165,7 +165,7 @@ test('visits nested relations when using select', () => {
   expect(visitor).toHaveBeenCalledWith(result.group, 'Group', {})
 })
 
-test('does not visit nested nested relations when include = false', () => {
+test('does not visit nested relations when include = false', () => {
   const result = {
     id: '1',
     name: 'Boaty McBoatface',
@@ -188,7 +188,7 @@ test('does not visit nested nested relations when include = false', () => {
   expect(visitor).not.toHaveBeenCalledWith(expect.anything(), GroupModel, expect.anything())
 })
 
-test('does not visit nested nested relations when corresponding field is null', () => {
+test('does not visit nested relations when corresponding field is null', () => {
   const result = {
     id: '1',
     name: 'Boaty McBoatface',

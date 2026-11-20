@@ -1,14 +1,13 @@
+import path from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 
-import { serialize } from '@prisma/get-platform/src/test-utils/jestSnapshotSerializer'
-import path from 'path'
+import { serialize } from '@prisma/get-platform/src/test-utils/vitest-snapshot-serializer'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { isRustPanic, validate } from '../..'
 import { getCliProvidedSchemaFile } from '../../cli/getSchema'
 import type { MultipleSchemas, SchemaFileInput } from '../../utils/schemaFileInput'
 import { fixturesPath } from '../__utils__/fixtures'
-
-jest.setTimeout(10_000)
 
 function restoreEnvSnapshot(snapshot: NodeJS.ProcessEnv) {
   for (const key of Object.keys(process.env)) {
@@ -26,10 +25,9 @@ function restoreEnvSnapshot(snapshot: NodeJS.ProcessEnv) {
   }
 }
 
-if (process.env.CI) {
-  // 10s is not always enough for the "big schema" test on macOS CI.
-  jest.setTimeout(60_000)
-}
+vi.setConfig({
+  testTimeout: process.env.CI ? 60_000 : 10_000,
+})
 
 describe('validate', () => {
   // Note: to run these tests locally, prepend the env vars `FORCE_COLOR=0` and `CI=1` to your test command,

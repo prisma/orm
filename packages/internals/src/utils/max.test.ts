@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest'
+
 import { maxBy, maxWithComparator } from './max'
 
 describe('maxWithComparator', () => {

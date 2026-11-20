@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { credentialsToUri, uriToCredentials } from '../convertCredentials'
 
 const uris = [

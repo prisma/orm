@@ -1,6 +1,6 @@
 export type QueryEvent = {
   timestamp: Date
   query: string
-  params: unknown[]
+  params: readonly unknown[]
   duration: number
 }

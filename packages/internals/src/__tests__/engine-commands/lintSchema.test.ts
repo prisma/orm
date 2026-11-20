@@ -1,10 +1,11 @@
-import { jestConsoleContext, jestContext } from '@prisma/get-platform'
+import { vitestConsoleContext, vitestContext } from '@prisma/get-platform/src/test-utils/vitestContext'
+import { describe, expect, test } from 'vitest'
 
 import { lintSchema } from '../../engine-commands'
 import { getLintWarnings, LintError, LintWarning } from '../../engine-commands/lintSchema'
 import { type MultipleSchemas } from '../../utils/schemaFileInput'
 
-const ctx = jestContext.new().add(jestConsoleContext()).assemble()
+const ctx = vitestContext.new().add(vitestConsoleContext()).assemble()
 
 describe('lint valid schema with a deprecated preview feature', () => {
   const schema = /* prisma */ `

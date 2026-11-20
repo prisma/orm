@@ -25,7 +25,7 @@ export type MatrixOptions<MatrixT extends TestSuiteMatrix = []> = {
 // This allows callers to omit adapter/accelerateUrl since they're already provided by setupTestSuiteMatrix
 type MakeAdapterAndAccelerateUrlOptional<T> = T extends [infer Options, ...infer Rest]
   ? Options extends object
-    ? [Partial<Options>, ...Rest]
+    ? [Partial<Options>?, ...Rest]
     : T
   : T
 

@@ -1,4 +1,5 @@
 import { enginesVersion } from '@prisma/engines'
+import { describe, expect, test } from 'vitest'
 
 import { BinaryType, getEngineVersion } from '../..'
 

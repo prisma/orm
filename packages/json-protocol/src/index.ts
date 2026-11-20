@@ -74,6 +74,7 @@ export type FieldRefTaggedValue = { $type: 'FieldRef'; value: { _ref: string; _c
 export type EnumTaggedValue = { $type: 'Enum'; value: string }
 export type JsonTaggedValue = { $type: 'Json'; value: string }
 export type RawTaggedValue = { $type: 'Raw'; value: unknown }
+export type PlaceholderTaggedValue = { $type: 'Param'; value: Placeholder }
 
 export type JsonInputTaggedValue =
   | DateTaggedValue
@@ -84,6 +85,7 @@ export type JsonInputTaggedValue =
   | JsonTaggedValue
   | EnumTaggedValue
   | RawTaggedValue
+  | PlaceholderTaggedValue
 
 export type JsonOutputTaggedValue =
   | DateTaggedValue
@@ -91,3 +93,21 @@ export type JsonOutputTaggedValue =
   | BytesTaggedValue
   | BigIntTaggedValue
   | JsonTaggedValue
+
+export type Placeholder = {
+  name: string
+} & PlaceholderType
+
+export type PlaceholderType =
+  | { type: 'Any' }
+  | { type: 'BigInt' }
+  | { type: 'Boolean' }
+  | { type: 'Bytes' }
+  | { type: 'DateTime' }
+  | { type: 'Enum' }
+  | { type: 'Float' }
+  | { type: 'Int' }
+  | { type: 'Json' }
+  | { type: 'List'; inner: PlaceholderType }
+  | { type: 'String' }
+  | { type: 'Uuid' }

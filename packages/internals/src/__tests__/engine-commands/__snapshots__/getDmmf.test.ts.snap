@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`getDMMF success @@id model 1`] = `
+exports[`getDMMF > success > @@id model 1`] = `
 {
   "datamodel": {
     "enums": [],
@@ -8894,7 +8894,7 @@ exports[`getDMMF success @@id model 1`] = `
 }
 `;
 
-exports[`getDMMF success @@map model 1`] = `
+exports[`getDMMF > success > @@map model 1`] = `
 {
   "enums": [],
   "indexes": [
@@ -8958,7 +8958,7 @@ exports[`getDMMF success @@map model 1`] = `
 }
 `;
 
-exports[`getDMMF success @@map model 2`] = `
+exports[`getDMMF > success > @@map model 2`] = `
 {
   "datamodel": {
     "enums": [],
@@ -13719,7 +13719,7 @@ exports[`getDMMF success @@map model 2`] = `
 }
 `;
 
-exports[`getDMMF success @@unique model 1`] = `
+exports[`getDMMF > success > @@unique model 1`] = `
 {
   "datamodel": {
     "enums": [],
@@ -30383,11 +30383,11 @@ exports[`getDMMF success @@unique model 1`] = `
 }
 `;
 
-exports[`getDMMF success big schema read 1`] = `178601452`;
+exports[`getDMMF > success > big schema read 1`] = `178601452`;
 
-exports[`getDMMF success chinook introspected schema 1`] = `1106509`;
+exports[`getDMMF > success > chinook introspected schema 1`] = `1106509`;
 
-exports[`getDMMF success if a datamodel is provided, succeeds even when a non-existing datamodel path is given 2`] = `
+exports[`getDMMF > success > if a datamodel is provided, succeeds even when a non-existing datamodel path is given 2`] = `
 {
   "datamodel": {
     "enums": [],
@@ -30509,7 +30509,7 @@ exports[`getDMMF success if a datamodel is provided, succeeds even when a non-ex
 }
 `;
 
-exports[`getDMMF success multiple files 1`] = `
+exports[`getDMMF > success > multiple files 1`] = `
 {
   "datamodel": {
     "enums": [],
@@ -37132,9 +37132,9 @@ exports[`getDMMF success multiple files 1`] = `
 }
 `;
 
-exports[`getDMMF success odoo introspected schema 1`] = `150655492`;
+exports[`getDMMF > success > odoo introspected schema 1`] = `150655492`;
 
-exports[`getDMMF success simple model, mongodb 1`] = `
+exports[`getDMMF > success > simple model, mongodb 1`] = `
 {
   "enums": [],
   "indexes": [
@@ -37195,7 +37195,7 @@ exports[`getDMMF success simple model, mongodb 1`] = `
 }
 `;
 
-exports[`getDMMF success simple model, mongodb 2`] = `
+exports[`getDMMF > success > simple model, mongodb 2`] = `
 {
   "datamodel": {
     "enums": [],
@@ -41647,7 +41647,7 @@ exports[`getDMMF success simple model, mongodb 2`] = `
 }
 `;
 
-exports[`getDMMF success simple model, mysql 1`] = `
+exports[`getDMMF > success > simple model, mysql 1`] = `
 {
   "enums": [],
   "indexes": [
@@ -41707,7 +41707,7 @@ exports[`getDMMF success simple model, mysql 1`] = `
 }
 `;
 
-exports[`getDMMF success simple model, mysql 2`] = `
+exports[`getDMMF > success > simple model, mysql 2`] = `
 {
   "datamodel": {
     "enums": [],
@@ -46182,7 +46182,7 @@ exports[`getDMMF success simple model, mysql 2`] = `
 }
 `;
 
-exports[`getDMMF success simple model, no datasource 1`] = `
+exports[`getDMMF > success > simple model, no datasource 1`] = `
 {
   "enums": [],
   "indexes": [
@@ -46242,7 +46242,7 @@ exports[`getDMMF success simple model, no datasource 1`] = `
 }
 `;
 
-exports[`getDMMF success simple model, no datasource 2`] = `
+exports[`getDMMF > success > simple model, no datasource 2`] = `
 {
   "datamodel": {
     "enums": [],
@@ -50263,7 +50263,7 @@ exports[`getDMMF success simple model, no datasource 2`] = `
 }
 `;
 
-exports[`getDMMF success simple model, postgresql 1`] = `
+exports[`getDMMF > success > simple model, postgresql 1`] = `
 {
   "enums": [],
   "indexes": [
@@ -50323,7 +50323,7 @@ exports[`getDMMF success simple model, postgresql 1`] = `
 }
 `;
 
-exports[`getDMMF success simple model, postgresql 2`] = `
+exports[`getDMMF > success > simple model, postgresql 2`] = `
 {
   "datamodel": {
     "enums": [],
@@ -55080,7 +55080,7 @@ exports[`getDMMF success simple model, postgresql 2`] = `
 }
 `;
 
-exports[`getDMMF success simple model, sql server 1`] = `
+exports[`getDMMF > success > simple model, sql server 1`] = `
 {
   "enums": [],
   "indexes": [
@@ -55140,7 +55140,7 @@ exports[`getDMMF success simple model, sql server 1`] = `
 }
 `;
 
-exports[`getDMMF success simple model, sql server 2`] = `
+exports[`getDMMF > success > simple model, sql server 2`] = `
 {
   "datamodel": {
     "enums": [],
@@ -59472,7 +59472,7 @@ exports[`getDMMF success simple model, sql server 2`] = `
 }
 `;
 
-exports[`getDMMF success simple model, sqlite 1`] = `
+exports[`getDMMF > success > simple model, sqlite 1`] = `
 {
   "enums": [],
   "indexes": [
@@ -59532,7 +59532,7 @@ exports[`getDMMF success simple model, sqlite 1`] = `
 }
 `;
 
-exports[`getDMMF success simple model, sqlite 2`] = `
+exports[`getDMMF > success > simple model, sqlite 2`] = `
 {
   "datamodel": {
     "enums": [],

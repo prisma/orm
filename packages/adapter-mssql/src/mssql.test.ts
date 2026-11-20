@@ -1,6 +1,8 @@
 import { Mutex } from 'async-mutex'
 import { beforeEach, describe, expect, Mock, test, vi } from 'vitest'
 
+import { PrismaMssql } from './index'
+
 /**
  * Tests for MssqlTransaction race condition fix.
  *
@@ -166,5 +168,69 @@ describe('MssqlTransaction mutex serialization', () => {
     const commitIndex = events.findIndex((e) => e.startsWith('commit:called'))
     const lastQueryEndIndex = events.lastIndexOf('query:end')
     expect(commitIndex).toBeGreaterThan(lastQueryEndIndex)
+  })
+})
+
+describe('null Bytes? field handling', () => {
+  const connectionString = process.env.TEST_MSSQL_URI
+
+  test('setting a VarBinary(Max) field to null does not throw implicit conversion error', async () => {
+    // This test requires a live MSSQL connection. It is intentionally skipped
+    // in CI environments that do not provide TEST_MSSQL_URI. Integration tests
+    // against a real MSSQL instance are run separately in the MSSQL CI pipeline.
+    if (!connectionString) {
+      console.log('Skipping integration test: TEST_MSSQL_URI not set')
+      return
+    }
+
+    const factory = new PrismaMssql(connectionString)
+    const adapter = await factory.connect()
+
+    try {
+      await adapter.executeRaw({
+        sql: `IF OBJECT_ID('dbo.PrismaTest') IS NOT NULL DROP TABLE dbo.PrismaTest`,
+        args: [],
+        argTypes: [],
+      })
+
+      await adapter.executeRaw({
+        sql: `CREATE TABLE dbo.PrismaTest (id NVARCHAR(36) PRIMARY KEY, bic VARBINARY(MAX))`,
+        args: [],
+        argTypes: [],
+      })
+
+      await adapter.executeRaw({
+        sql: `INSERT INTO dbo.PrismaTest VALUES (@P1, @P2)`,
+        args: ['test-id', 'AQID'],
+        argTypes: [
+          { scalarType: 'string', arity: 'scalar' },
+          { scalarType: 'bytes', arity: 'scalar' },
+        ],
+      })
+
+      const result = await adapter.executeRaw({
+        sql: `UPDATE dbo.PrismaTest SET bic = @P1 WHERE id = @P2`,
+        args: [null, 'test-id'],
+        argTypes: [
+          { scalarType: 'bytes', arity: 'scalar' },
+          { scalarType: 'string', arity: 'scalar' },
+        ],
+      })
+
+      expect(result).toBeGreaterThanOrEqual(0)
+    } finally {
+      // Use IF OBJECT_ID so cleanup remains idempotent even if
+      // the test fails before CREATE TABLE completes.
+      // Always dispose the connection, even if DROP TABLE fails.
+      try {
+        await adapter.executeRaw({
+          sql: `IF OBJECT_ID('dbo.PrismaTest') IS NOT NULL DROP TABLE dbo.PrismaTest`,
+          args: [],
+          argTypes: [],
+        })
+      } finally {
+        await adapter.dispose()
+      }
+    }
   })
 })

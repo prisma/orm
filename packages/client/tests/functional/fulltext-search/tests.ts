@@ -91,8 +91,13 @@ testMatrix.setupTestSuite(
         })
         .catch((e) => {
           const error = e as Error
-          const matches = error.message.match(/code: [^,]+, message: (".*"), (severity|state)/)
-          error.message = matches?.[1] ? JSON.parse(matches[1]) : error.message
+          // Prisma Client surfaces unmapped DB errors as P2039 and raw
+          // query failures as P2010; both use the same `Code: \`X\`.
+          // Message: \`Y\`` suffix. Extract just the DB message to keep
+          // the snapshot portable across drivers and engine modes
+          // (local driver adapter vs. qpe=remote).
+          const matches = error.message.match(/(?:Code: `[^`]+`\. )?Message: `([^`]*)`/)
+          error.message = matches?.[1] ?? error.message
           throw error
         })
 

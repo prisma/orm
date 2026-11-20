@@ -11,6 +11,12 @@ export type Options = {
 
   /** Transaction isolation level */
   isolationLevel?: IsolationLevel
+
+  /**
+   * Used for nested interactive transactions. When provided, the engine may
+   * re-use an existing open transaction instead of opening a new one.
+   */
+  newTxId?: string
 }
 
 export type InteractiveTransactionInfo<Payload = unknown> = {

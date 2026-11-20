@@ -1,5 +1,5 @@
 import { Context } from '@opentelemetry/api'
-import { deserializeJsonResponse } from '@prisma/client-engine-runtime'
+import { deserializeJsonObject } from '@prisma/client-engine-runtime'
 import { hasBatchIndex } from '@prisma/client-runtime-utils'
 import { Debug } from '@prisma/debug'
 import { assertNever } from '@prisma/internals'
@@ -34,6 +34,7 @@ import { CallSite } from './utils/CallSite'
 import { createErrorMessageWithContext } from './utils/createErrorMessageWithContext'
 import { deepGet } from './utils/deep-set'
 import { deserializeRawResult, RawResponse } from './utils/deserializeRawResults'
+import { modelNameForTable } from './utils/modelNameForTable'
 
 const debug = Debug('prisma:client:request_handler')
 
@@ -119,6 +120,15 @@ export class RequestHandler {
       },
 
       batchBy: (request) => {
+        // If the request is part of an interactive transaction, we want to group all requests with the same
+        // protocolQuery together to take advantage of automatic batching in the engine.
+        // Note that we only do this for interactive transactions, not for batch transactions, as it can lead to queries
+        // being executed out of order in batch transactions.
+        if (request.transaction?.kind === 'itx') {
+          const batchId = getBatchId(request.protocolQuery)
+          return `itx-${request.transaction.id}${batchId ? `-${batchId}` : ''}`
+        }
+
         if (request.transaction?.id) {
           return `transaction-${request.transaction.id}`
         }
@@ -224,7 +234,7 @@ export class RequestHandler {
     message = this.sanitizeMessage(message)
     // TODO: Do request with callsite instead, so we don't need to rethrow
     if (error.code) {
-      const meta = modelName ? { modelName, ...error.meta } : error.meta
+      const meta = this.resolveErrorMeta(error.meta, error.code, modelName)
       throw new PrismaClientKnownRequestError(message, {
         code: error.code,
         clientVersion: this.client._clientVersion,
@@ -249,6 +259,35 @@ export class RequestHandler {
     throw error
   }
 
+  /**
+   * Builds the `meta` object for a `PrismaClientKnownRequestError`.
+   *
+   * P2002 errors carry the physical name of the table the violated constraint
+   * belongs to (`meta.table`, extracted by the driver adapters). It is mapped
+   * back to the Prisma model name so that `meta.modelName` points at the model
+   * where the violation actually occurred — which for nested writes is not
+   * necessarily the model of the top-level operation — and the internal
+   * `table` key is dropped from the user-facing meta.
+   */
+  private resolveErrorMeta(
+    errorMeta: Record<string, unknown> | undefined,
+    errorCode: string,
+    topLevelModelName: string | undefined,
+  ): Record<string, unknown> | undefined {
+    if (errorCode !== 'P2002' || typeof errorMeta?.table !== 'string') {
+      return topLevelModelName ? { modelName: topLevelModelName, ...errorMeta } : errorMeta
+    }
+
+    const meta: Record<string, unknown> = { ...errorMeta }
+    delete meta.table
+
+    const modelName =
+      modelNameForTable(this.client._runtimeDataModel, errorMeta.table) ??
+      (typeof meta.modelName === 'string' ? meta.modelName : topLevelModelName)
+
+    return modelName !== undefined ? { ...meta, modelName } : meta
+  }
+
   sanitizeMessage(message) {
     if (this.client._errorFormat && this.client._errorFormat !== 'pretty') {
       return stripAnsi(message)
@@ -269,12 +308,12 @@ export class RequestHandler {
     }
     const operation = Object.keys(data)[0]
     const response = Object.values(data)[0]
-    const pathForGet = dataPath.filter((key) => key !== 'select' && key !== 'include')
+    const pathForGet = dataPathToGetPath(dataPath)
     const extractedResponse = deepGet(response, pathForGet)
     const deserializedResponse =
       operation === 'queryRaw'
         ? deserializeRawResult(extractedResponse as RawResponse)
-        : (deserializeJsonResponse(extractedResponse) as unknown)
+        : (deserializeJsonObject(extractedResponse) as unknown)
 
     return unpacker ? unpacker(deserializedResponse) : deserializedResponse
   }
@@ -296,6 +335,8 @@ function getTransactionOptions<PayloadType>(
       kind: 'batch',
       options: {
         isolationLevel: transaction.isolationLevel,
+        maxWait: transaction.maxWait,
+        timeout: transaction.timeout,
       },
     }
   }
@@ -355,4 +396,20 @@ function convertValidationError(error: EngineValidationError): EngineValidationE
   }
 
   return error
+}
+
+/**
+ * Converts a fluent-API dataPath into the path used to read the result out of
+ * the response. dataPath is a sequence of [selector, relationField] pairs where
+ * the selector is always 'select' or 'include'. The relation field names (the
+ * odd positions) form the path. Filtering by the literal values 'select' or
+ * 'include' would also drop a relation field that happens to be named that way,
+ * so the path is derived positionally instead.
+ */
+export function dataPathToGetPath(dataPath: string[]): string[] {
+  const getPath: string[] = []
+  for (let index = 1; index < dataPath.length; index += 2) {
+    getPath.push(dataPath[index])
+  }
+  return getPath
 }

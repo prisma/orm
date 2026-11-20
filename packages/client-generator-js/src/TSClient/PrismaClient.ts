@@ -199,20 +199,22 @@ function batchingTransactionDefinition(context: GenerateContext) {
         ])
         \`\`\`
 
-        Read more in our [docs](https://www.prisma.io/docs/concepts/components/prisma-client/transactions).
+        Read more in our [docs](https://www.prisma.io/docs/orm/prisma-client/queries/transactions).
       `,
     )
     .addGenericParameter(ts.genericParameter('P').extends(ts.array(tsx.prismaPromise(ts.anyType))))
     .addParameter(ts.parameter('arg', ts.arraySpread(ts.namedType('P'))))
     .setReturnType(tsx.promise(ts.namedType('runtime.Types.Utils.UnwrapTuple').addGenericArgument(ts.namedType('P'))))
 
+  const options = ts.objectType().formatInline()
+  options.add(ts.property('maxWait', ts.numberType).optional())
+  options.add(ts.property('timeout', ts.numberType).optional())
+
   if (context.dmmf.hasEnumInNamespace('TransactionIsolationLevel', 'prisma')) {
-    const options = ts
-      .objectType()
-      .formatInline()
-      .add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
-    method.addParameter(ts.parameter('options', options).optional())
+    options.add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
   }
+
+  method.addParameter(ts.parameter('options', options).optional())
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
 }
@@ -233,9 +235,7 @@ function interactiveTransactionDefinition(context: GenerateContext) {
 
   const callbackType = ts
     .functionType()
-    .addParameter(
-      ts.parameter('prisma', ts.omit(ts.namedType('PrismaClient'), ts.namedType('runtime.ITXClientDenyList'))),
-    )
+    .addParameter(ts.parameter('prisma', ts.omit(ts.namedType('PrismaClient'), itxTransactionClientDenyList(context))))
     .setReturnType(returnType)
 
   const method = ts
@@ -246,6 +246,14 @@ function interactiveTransactionDefinition(context: GenerateContext) {
     .setReturnType(returnType)
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
+}
+
+function itxTransactionClientDenyList(context: GenerateContext) {
+  if (context.provider === 'mongodb') {
+    return ts.unionType([ts.namedType('runtime.ITXClientDenyList'), ts.stringLiteral('$transaction')])
+  }
+
+  return ts.namedType('runtime.ITXClientDenyList')
 }
 
 function queryRawDefinition(context: GenerateContext) {
@@ -401,7 +409,9 @@ export class PrismaClientClass implements Generable {
  * Type-safe database client for TypeScript & Node.js
  * @example
  * \`\`\`
- * const prisma = new PrismaClient()
+ * const prisma = new PrismaClient({
+ *   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
+ * })
  * // Fetch zero or more ${capitalize(example.plural)}
  * const ${uncapitalize(example.plural)} = await prisma.${uncapitalize(example.model)}.findMany()
  * \`\`\`
@@ -423,7 +433,7 @@ export class PrismaClient<
 
   ${indent(this.jsDoc, TAB_SIZE)}
 
-  constructor(optionsArg ?: Prisma.Subset<ClientOptions, Prisma.PrismaClientOptions>);
+  constructor(optionsArg ?: Prisma.PrismaClientConstructorArgs<ClientOptions>);
   $on<V extends U>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : Prisma.LogEvent) => void): PrismaClient;
 
   /**
@@ -476,6 +486,8 @@ get ${methodName}(): Prisma.${m.model}Delegate<${generics.join(', ')}>;`
   }
   public toTS(): string {
     const clientOptions = this.buildClientOptions()
+    const transactionClientDenyList =
+      this.context.provider === 'mongodb' ? "runtime.ITXClientDenyList | '$transaction'" : 'runtime.ITXClientDenyList'
 
     return `${clientExtensionsDefinitions(this.context)}
 export type DefaultPrismaClient = PrismaClient
@@ -545,7 +557,7 @@ export function getLogLevel(log: Array<LogLevel | LogDefinition>): LogLevel | un
 /**
  * \`PrismaClient\` proxy available in interactive transactions.
  */
-export type TransactionClient = Omit<Prisma.DefaultPrismaClient, runtime.ITXClientDenyList>
+export type TransactionClient = Omit<Prisma.DefaultPrismaClient, ${transactionClientDenyList}>
 `
   }
 
@@ -608,24 +620,31 @@ export type TransactionClient = Omit<Prisma.DefaultPrismaClient, runtime.ITXClie
       this.internalDatasources.some((d) => d.provider !== 'mongodb')
     ) {
       clientOptions.add(
-        ts
-          .property('adapter', ts.namedType('runtime.SqlDriverAdapterFactory'))
-          .optional()
-          .setDocComment(
-            ts.docComment('Instance of a Driver Adapter, e.g., like one provided by `@prisma/adapter-planetscale`'),
-          ),
+        ts.property('adapter', ts.namedType('runtime.SqlDriverAdapterFactory')).optional().setDocComment(ts.docComment`
+            A driver adapter that PrismaClient uses to connect to your database, such as the ones provided by \`@prisma/adapter-pg\`, \`@prisma/adapter-libsql\`, \`@prisma/adapter-planetscale\`, etc.
+
+            A driver adapter is **required** unless you connect to your database through Prisma Accelerate (in which case use \`accelerateUrl\` instead).
+
+            Learn more: https://pris.ly/d/driver-adapters
+
+            @example
+            \`\`\`ts
+            import { PrismaPg } from '@prisma/adapter-pg'
+            import { PrismaClient } from './generated/prisma/client'
+
+            const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+            const prisma = new PrismaClient({ adapter })
+            \`\`\`
+          `),
       )
     }
 
     clientOptions.add(
-      ts
-        .property('accelerateUrl', ts.stringType)
-        .optional()
-        .setDocComment(
-          ts.docComment(
-            'Prisma Accelerate URL allowing the client to connect through Accelerate instead of a direct database.',
-          ),
-        ),
+      ts.property('accelerateUrl', ts.stringType).optional().setDocComment(ts.docComment`
+            The Prisma Accelerate connection URL. Use this option to connect to your database through Prisma Accelerate instead of using a driver adapter to connect directly.
+
+            Learn more: https://pris.ly/d/accelerate
+          `),
     )
 
     clientOptions.add(

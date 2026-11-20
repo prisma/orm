@@ -1,8 +1,9 @@
-import { CompilerWasmLoadingConfig } from '@prisma/client-common'
+import { CompilerWasmLoadingConfig, RuntimeDataModel } from '@prisma/client-common'
 import type { SqlDriverAdapterFactory } from '@prisma/driver-adapter-utils'
 import type { DataSource, GeneratorConfig } from '@prisma/generator'
 import type { TracingHelper } from '@prisma/instrumentation-contract'
 import type { JsonQuery } from '@prisma/json-protocol'
+import type { SerializedParamGraph } from '@prisma/param-graph'
 import type { SqlCommenterPlugin } from '@prisma/sqlcommenter'
 
 import type { LogEmitter } from './types/Events'
@@ -11,6 +12,8 @@ import type * as Transaction from './types/Transaction'
 
 export type BatchTransactionOptions = {
   isolationLevel?: Transaction.IsolationLevel
+  maxWait?: number
+  timeout?: number
 }
 
 export type TransactionOptions<InteractiveTransactionPayload> =
@@ -150,6 +153,25 @@ export interface EngineConfig {
    * Each plugin receives query context and returns key-value pairs.
    */
   sqlCommenters?: SqlCommenterPlugin[]
+
+  /**
+   * Parameterization schema (ParamGraph) for schema-aware query parameterization.
+   * Enables precise parameterization based on DMMF metadata.
+   */
+  parameterizationSchema: SerializedParamGraph
+
+  /**
+   * Runtime data model for enum lookups during parameterization.
+   */
+  runtimeDataModel: RuntimeDataModel
+
+  /**
+   * Optional maximum size for the query plan cache. If not provided, a default size will be used.
+   * A value of `0` can be used to disable the cache entirely. A higher cache size can improve
+   * performance for applications that execute a large number of unique queries, while a smaller
+   * cache size can reduce memory usage.
+   */
+  queryPlanCacheMaxSize?: number
 }
 
 /**

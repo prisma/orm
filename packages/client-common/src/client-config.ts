@@ -1,4 +1,5 @@
 import { ActiveConnectorType } from '@prisma/generator'
+import type { SerializedParamGraph } from '@prisma/param-graph'
 
 import { CompilerWasmLoadingConfig } from './QueryCompiler'
 import { RuntimeDataModel } from './runtimeDataModel'
@@ -24,4 +25,10 @@ export type GetPrismaClientConfig = {
    * Optional wasm loading configuration
    */
   compilerWasm?: CompilerWasmLoadingConfig
+
+  /**
+   * Parameterization schema for schema-aware query parameterization.
+   * Enables precise parameterization based on DMMF metadata.
+   */
+  parameterizationSchema: SerializedParamGraph
 }

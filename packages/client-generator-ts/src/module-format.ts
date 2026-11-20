@@ -1,4 +1,7 @@
+import fs from 'node:fs'
+
 import { TsConfigJson, TsConfigJsonResolved } from 'get-tsconfig'
+import { packageUpSync } from 'package-up'
 
 import { GeneratedFileExtension } from './file-extensions'
 
@@ -30,15 +33,17 @@ type InferModuleFormatOptions = {
   tsconfig: TsConfigJsonResolved | undefined
   generatedFileExtension: GeneratedFileExtension
   importFileExtension: GeneratedFileExtension
+  outputDir: string
 }
 
 export function inferModuleFormat({
   tsconfig,
   generatedFileExtension,
   importFileExtension,
+  outputDir,
 }: InferModuleFormatOptions): ModuleFormat {
   if (tsconfig?.compilerOptions?.module) {
-    return fromTsConfigModule(tsconfig.compilerOptions.module)
+    return fromTsConfigModule(tsconfig.compilerOptions.module, outputDir)
   }
 
   if (generatedFileExtension === 'cts' || importFileExtension === 'cjs') {
@@ -48,12 +53,36 @@ export function inferModuleFormat({
   return 'esm'
 }
 
-function fromTsConfigModule(module: TsConfigJson.CompilerOptions.Module) {
+// With these `module` settings, TypeScript does not treat the project as ESM or CommonJS
+// uniformly. Instead, it determines the format on a per-file basis by looking at the nearest
+// `package.json`'s `type` field, defaulting to CommonJS when it is absent or not `"module"`.
+const nodeNextModuleModes = new Set<TsConfigJson.CompilerOptions.Module>(['node16', 'nodenext'])
+
+function fromTsConfigModule(module: TsConfigJson.CompilerOptions.Module, outputDir: string): ModuleFormat {
   const normalizedModule = module.toLowerCase() as TsConfigJson.CompilerOptions.Module
 
   if (normalizedModule === 'commonjs') {
     return 'cjs'
   }
 
+  if (nodeNextModuleModes.has(normalizedModule)) {
+    return inferModuleFormatFromNearestPackageJson(outputDir)
+  }
+
   return 'esm'
+}
+
+function inferModuleFormatFromNearestPackageJson(outputDir: string): ModuleFormat {
+  const packageJsonPath = packageUpSync({ cwd: outputDir })
+
+  if (!packageJsonPath) {
+    return 'cjs'
+  }
+
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
+    return packageJson.type === 'module' ? 'esm' : 'cjs'
+  } catch {
+    return 'cjs'
+  }
 }

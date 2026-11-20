@@ -1,11 +1,12 @@
 import { RuntimeDataModel, RuntimeModel, uncapitalize } from '@prisma/client-common'
-import { isAnyNull, isDbNull, isJsonNull, ObjectEnumValue } from '@prisma/client-runtime-utils'
+import { isObjectEnumValue } from '@prisma/client-runtime-utils'
 import { assertNever } from '@prisma/internals'
 
 import { ErrorFormat } from '../../getPrismaClient'
 import { CallSite } from '../../utils/CallSite'
 import { isDate, isValidDate } from '../../utils/date'
 import { isDecimalJsLike } from '../../utils/decimalJsLike'
+import { isJSONConvertible } from '../../utils/jsonConvertible'
 import {
   JsonArgumentValue,
   JsonFieldSelection,
@@ -21,15 +22,7 @@ import { computeEngineSideOmissions, computeEngineSideSelection } from '../exten
 import { isFieldRef } from '../model/FieldRef'
 import { isParam } from '../model/Param'
 import { isSkip, Skip } from '../types'
-import {
-  Action,
-  JsArgs,
-  JsInputValue,
-  JsonConvertible,
-  Omission,
-  RawParameters,
-  Selection,
-} from '../types/exported/JsApi'
+import { Action, JsArgs, JsInputValue, Omission, RawParameters, Selection } from '../types/exported/JsApi'
 import { ValidationError } from '../types/ValidationError'
 
 const jsActionToProtocolAction: Record<Action, JsonQueryAction> = {
@@ -75,6 +68,7 @@ export type SerializeParams = {
   errorFormat: ErrorFormat
   previewFeatures: string[]
   globalOmit?: GlobalOmitOptions
+  wrapRawValues?: boolean
 }
 
 const STRICT_UNDEFINED_ERROR_MESSAGE = 'explicitly `undefined` values are not allowed'
@@ -91,6 +85,7 @@ export function serializeJsonQuery({
   clientVersion,
   previewFeatures,
   globalOmit,
+  wrapRawValues,
 }: SerializeParams): JsonQuery {
   const context = new SerializeContext({
     runtimeDataModel,
@@ -106,6 +101,7 @@ export function serializeJsonQuery({
     clientVersion,
     previewFeatures,
     globalOmit,
+    wrapRawValues,
   })
   return {
     modelName,
@@ -309,6 +305,7 @@ function serializeArgumentsValue(
 
   if (ArrayBuffer.isView(jsValue)) {
     const { buffer, byteOffset, byteLength } = jsValue
+    // TODO(perf): get rid of this conversion
     return { $type: 'Bytes', value: Buffer.from(buffer, byteOffset, byteLength).toString('base64') }
   }
 
@@ -320,11 +317,12 @@ function serializeArgumentsValue(
     return { $type: 'Decimal', value: jsValue.toFixed() }
   }
 
-  if (jsValue instanceof ObjectEnumValue) {
-    if (!isDbNull(jsValue) && !isJsonNull(jsValue) && !isAnyNull(jsValue)) {
-      throw new Error('Invalid ObjectEnumValue')
+  if (isObjectEnumValue(jsValue)) {
+    const name = jsValue._getName()
+    if (name !== 'DbNull' && name !== 'JsonNull' && name !== 'AnyNull') {
+      throw new Error(`Invalid ObjectEnumValue: expected DbNull, JsonNull, or AnyNull, got ${name}`)
     }
-    return { $type: 'Enum', value: jsValue._getName() }
+    return { $type: 'Enum', value: name }
   }
 
   if (isJSONConvertible(jsValue)) {
@@ -353,8 +351,10 @@ function serializeArgumentsObject(
   object: Record<string, JsInputValue>,
   context: SerializeContext,
 ): Record<string, JsonArgumentValue> | RawTaggedValue {
-  if (object['$type']) {
-    return { $type: 'Raw', value: object }
+  if (context.shouldWrapRawValues()) {
+    if (object['$type']) {
+      return { $type: 'Raw', value: object }
+    }
   }
   const result: Record<string, JsonArgumentValue> = {}
   for (const key in object) {
@@ -405,10 +405,6 @@ function isRawParameters(value: JsInputValue): value is RawParameters {
   return typeof value === 'object' && value !== null && value['__prismaRawParameters__'] === true
 }
 
-function isJSONConvertible(value: JsInputValue): value is JsonConvertible {
-  return typeof value === 'object' && value !== null && typeof value['toJSON'] === 'function'
-}
-
 function validateSelectionForUndefined(value: unknown, context: SerializeContext) {
   if (value === undefined && context.isPreviewFeatureOn('strictUndefinedChecks')) {
     context.throwValidationError({
@@ -433,6 +429,7 @@ type ContextParams = {
   clientVersion: string
   previewFeatures: string[]
   globalOmit?: GlobalOmitOptions
+  wrapRawValues?: boolean
 }
 
 class SerializeContext {
@@ -490,6 +487,10 @@ class SerializeContext {
 
   isPreviewFeatureOn(previewFeature: string) {
     return this.params.previewFeatures.includes(previewFeature)
+  }
+
+  shouldWrapRawValues(): boolean {
+    return this.params.wrapRawValues ?? true
   }
 
   getComputedFields() {

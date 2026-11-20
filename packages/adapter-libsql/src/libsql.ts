@@ -129,6 +129,18 @@ class LibSqlTransaction extends LibSqlQueryable<TransactionClient> implements Tr
       this.#unlockParent()
     }
   }
+
+  async createSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
+
+  async rollbackToSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `ROLLBACK TO ${name}`, args: [], argTypes: [] })
+  }
+
+  async releaseSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `RELEASE SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
 }
 
 export class PrismaLibSqlAdapter extends LibSqlQueryable<StdClient> implements SqlDriverAdapter {

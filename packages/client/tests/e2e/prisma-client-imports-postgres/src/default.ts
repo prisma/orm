@@ -2,10 +2,6 @@ import { neonConfig } from '@neondatabase/serverless'
 import { PrismaNeon, PrismaNeonHttp } from '@prisma/adapter-neon'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
-// @ts-ignore no types available
-import * as G1 from '@prisma/client/generator-build'
-// @ts-ignore no types available
-import * as G2 from '@prisma/client/generator-build/index.js'
 import { PrismaClientKnownRequestError as E1 } from '@prisma/client/runtime/client'
 import { PrismaClientKnownRequestError as E2 } from '@prisma/client/runtime/client.js'
 // import { withAccelerate } from '@prisma/extension-accelerate'
@@ -26,8 +22,6 @@ export const errors = [E1, E2]
 
 // export const replicaClient = client.$extends(readReplicas({ url: '' }))
 // void replicaClient.user.findMany()
-
-export const generators = [G1, G2]
 
 /* Driver Adapters */
 

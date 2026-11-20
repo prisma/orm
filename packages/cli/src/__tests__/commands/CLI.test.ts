@@ -9,11 +9,11 @@ const ctx = jestContext.new().add(jestConsoleContext()).assemble()
 function createCLI(download = jest.fn()) {
   return CLI.new(
     {
-      // init: Init.new(),
+      // init: Init.new('prisma'),
       // migrate: MigrateCommand.new({
       //   diff: MigrateDiff.new(),
       //   dev: MigrateDev.new(),
-      //   status: MigrateStatus.new(),
+      //   status: MigrateStatus.new('prisma'),
       //   resolve: MigrateResolve.new(),
       //   reset: MigrateReset.new(),
       //   deploy: MigrateDeploy.new(),
@@ -21,18 +21,19 @@ function createCLI(download = jest.fn()) {
       // db: DbCommand.new({
       //   pull: DbPull.new(),
       //   push: DbPush.new(),
-      //   // drop: DbDrop.new(),
+      //   // drop: DbDrop.new('prisma'),
       //   seed: DbSeed.new(),
       // }),
       // dev: Dev.new(),
-      // generate: Generate.new(),
+      // generate: Generate.new('prisma'),
       // version: Version.new(),
-      validate: Validate.new(),
-      // format: Format.new(),
+      validate: Validate.new('prisma'),
+      // format: Format.new('prisma'),
       // telemetry: Telemetry.new(),
     },
     ['version', 'init', 'migrate', 'db', 'dev', 'generate', 'validate', 'format', 'telemetry'],
     download,
+    'prisma',
   )
 }
 

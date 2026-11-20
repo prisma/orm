@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import type { PrismaConfigInternal } from '@prisma/config'
 import { enginesVersion } from '@prisma/engines'
 import {
@@ -18,6 +20,7 @@ import {
 import { bold, dim, red } from 'kleur/colors'
 import os from 'os'
 
+import type { CliDistributionIdentity } from './utils/cli-distribution-identity'
 import { getInstalledPrismaClientVersion } from './utils/getClientVersion'
 
 const packageJson = require('../package.json')
@@ -26,30 +29,18 @@ const packageJson = require('../package.json')
  * $ prisma version
  */
 export class Version implements Command {
-  static new(): Version {
-    return new Version()
+  static new(identity: CliDistributionIdentity): Version {
+    return new Version(identity)
   }
 
-  private static help = format(`
-  Print current version of Prisma components
-
-  ${bold('Usage')}
-
-    ${dim('$')} prisma -v [options]
-    ${dim('$')} prisma version [options]
-
-  ${bold('Options')}
-
-    -h, --help     Display this help message
-        --json     Output JSON
-`)
+  constructor(private readonly identity: CliDistributionIdentity) {}
 
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${Version.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
     }
 
-    return Version.help
+    return createHelp(this.identity)
   }
 
   async parse(argv: string[], config: PrismaConfigInternal, baseDir: string = process.cwd()): Promise<string | Error> {
@@ -78,9 +69,10 @@ export class Version implements Command {
 
     const prismaClientVersion = await getInstalledPrismaClientVersion()
     const typescriptVersion = await getTypescriptVersion()
+    const prismaCliPath = path.dirname(require.resolve('../package.json'))
 
     const rows = [
-      [packageJson.name, packageJson.version],
+      [this.identity, packageJson.version],
       ['@prisma/client', prismaClientVersion ?? 'Not found'],
       ['Operating System', os.platform()],
       ['Architecture', os.arch()],
@@ -92,6 +84,7 @@ export class Version implements Command {
 
       ['Default Engines Hash', enginesVersion],
       ['Studio', packageJson.dependencies['@prisma/studio-core']],
+      ['Prisma CLI Path', prismaCliPath],
     ]
 
     /**
@@ -127,4 +120,20 @@ export class Version implements Command {
     }
     return []
   }
+}
+
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
+  Print current version of Prisma components
+
+  ${bold('Usage')}
+
+    ${dim('$')} ${identity} -v [options]
+    ${dim('$')} ${identity} version [options]
+
+  ${bold('Options')}
+
+    -h, --help     Display this help message
+        --json     Output JSON
+`)
 }

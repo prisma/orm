@@ -424,6 +424,9 @@ describe('createAdapter wrapper error handling', () => {
         rollback: vi.fn(),
         executeRaw: vi.fn(),
         queryRaw: vi.fn(),
+        createSavepoint: vi.fn(),
+        rollbackToSavepoint: vi.fn(),
+        releaseSavepoint: vi.fn(),
       }
 
       mockAdapter = {
@@ -466,6 +469,18 @@ describe('createAdapter wrapper error handling', () => {
           return tx.queryRaw(query)
         },
       },
+      {
+        method: 'createSavepoint' as const,
+        execute: async (tx: Transaction) => tx.createSavepoint?.('sp1'),
+      },
+      {
+        method: 'rollbackToSavepoint' as const,
+        execute: async (tx: Transaction) => tx.rollbackToSavepoint?.('sp1'),
+      },
+      {
+        method: 'releaseSavepoint' as const,
+        execute: async (tx: Transaction) => tx.releaseSavepoint?.('sp1'),
+      },
     ])('wraps transaction.$method() to sanitize errors', async ({ method, execute }) => {
       const error = new Error(`${method} failed for postgresql://user:pass@host:5432/db`)
       ;(mockTransaction as any)[method] = vi.fn().mockRejectedValue(error)
@@ -493,6 +508,9 @@ describe('createAdapter wrapper error handling', () => {
       mockTransaction.rollback = vi.fn().mockResolvedValue(undefined)
       mockTransaction.executeRaw = vi.fn().mockResolvedValue(1)
       mockTransaction.queryRaw = vi.fn().mockResolvedValue(mockResult)
+      mockTransaction.createSavepoint = vi.fn().mockResolvedValue(undefined)
+      mockTransaction.rollbackToSavepoint = vi.fn().mockResolvedValue(undefined)
+      mockTransaction.releaseSavepoint = vi.fn().mockResolvedValue(undefined)
 
       const wrappedFactory = createAdapter('postgresql://user:pass@host:5432/db', [
         {
@@ -509,12 +527,18 @@ describe('createAdapter wrapper error handling', () => {
       await expect(tx.rollback()).resolves.toBeUndefined()
       expect(await tx.executeRaw(query)).toBe(1)
       expect(await tx.queryRaw(query)).toEqual(mockResult)
+      await expect(tx.createSavepoint?.('sp1')).resolves.toBeUndefined()
+      await expect(tx.rollbackToSavepoint?.('sp1')).resolves.toBeUndefined()
+      await expect(tx.releaseSavepoint?.('sp1')).resolves.toBeUndefined()
 
       /* eslint-disable @typescript-eslint/unbound-method */
       expect(mockTransaction.commit).toHaveBeenCalledOnce()
       expect(mockTransaction.rollback).toHaveBeenCalledOnce()
       expect(mockTransaction.executeRaw).toHaveBeenCalledWith(query)
       expect(mockTransaction.queryRaw).toHaveBeenCalledWith(query)
+      expect(mockTransaction.createSavepoint).toHaveBeenCalledWith('sp1')
+      expect(mockTransaction.rollbackToSavepoint).toHaveBeenCalledWith('sp1')
+      expect(mockTransaction.releaseSavepoint).toHaveBeenCalledWith('sp1')
       /* eslint-enable @typescript-eslint/unbound-method */
     })
 

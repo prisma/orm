@@ -2,8 +2,8 @@ import events from 'node:events'
 import http from 'node:http'
 import { AddressInfo } from 'node:net'
 
-import type { ManagementAPI } from '@prisma/management-api-sdk'
-import { AuthError as SDKAuthError, createManagementAPI } from '@prisma/management-api-sdk'
+import type { ManagementApiSdk } from '@prisma/management-api-sdk'
+import { AuthError as SDKAuthError, createManagementApiSdk } from '@prisma/management-api-sdk'
 import open from 'open'
 
 import { FileTokenStorage } from './token-storage'
@@ -71,7 +71,7 @@ export async function login(options: LoginOptions): Promise<void> {
 export class LoginState {
   private latestVerifier?: string
   private latestState?: string
-  private managementAPI: ManagementAPI
+  private managementAPI: ManagementApiSdk
   private tokenStorage: FileTokenStorage
 
   constructor(
@@ -80,7 +80,7 @@ export class LoginState {
     private utmMedium: string,
   ) {
     this.tokenStorage = new FileTokenStorage()
-    this.managementAPI = createManagementAPI({
+    this.managementAPI = createManagementApiSdk({
       clientId: CLIENT_ID,
       redirectUri: `http://${hostname}:${port}/auth/callback`,
       tokenStorage: this.tokenStorage,

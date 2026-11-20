@@ -111,6 +111,7 @@ export const JOIN_PLAN: QueryPlanNode = {
             isRelationUnique: false,
           },
         ],
+        canAssumeStrictEquality: true,
       },
     },
     structure: {
@@ -231,6 +232,7 @@ export const DEEP_JOIN_PLAN: QueryPlanNode = {
                 isRelationUnique: true,
               },
             ],
+            canAssumeStrictEquality: true,
           },
         },
         children: [
@@ -278,6 +280,7 @@ export const DEEP_JOIN_PLAN: QueryPlanNode = {
                     isRelationUnique: false,
                   },
                 ],
+                canAssumeStrictEquality: true,
               },
             },
             on: [['id', 'authorId']],
@@ -285,6 +288,7 @@ export const DEEP_JOIN_PLAN: QueryPlanNode = {
             isRelationUnique: false,
           },
         ],
+        canAssumeStrictEquality: true,
       },
     },
     structure: {

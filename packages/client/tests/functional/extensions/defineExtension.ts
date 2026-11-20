@@ -220,7 +220,6 @@ function itxWithinGenericExtension() {
 
     void xclient.$transaction((tx) => {
       expectTypeOf(tx).toHaveProperty('helperMethod')
-      expectTypeOf(tx).not.toHaveProperty('$transaction')
       expectTypeOf(tx).not.toHaveProperty('$extends')
       return Promise.resolve()
     })

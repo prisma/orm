@@ -1,6 +1,7 @@
 import { Debug } from '@prisma/debug'
 import {
   arg,
+  BuiltInProvider,
   createSchemaPathInput,
   getCLIPathHash,
   getProjectHash,
@@ -134,7 +135,7 @@ export async function tryToReadDataFromSchema(schemaPath: SchemaPathInput) {
       .filter((generator) => generator && generator.provider)
       .map((generator) => parseEnvValue(generator.provider))
 
-    const clientGeneratorProviders = ['prisma-client', 'prisma-client-js']
+    const clientGeneratorProviders: string[] = [BuiltInProvider.PrismaClientTs, BuiltInProvider.PrismaClientJs]
     const previewFeatures = schemaContext.generators
       .filter((generator) => {
         const provider = generator?.provider ? parseEnvValue(generator.provider) : undefined
@@ -183,6 +184,7 @@ export const SENSITIVE_CLI_OPTIONS = [
   '--rolled-back',
   // 4. Platform CLI
   '--token',
+  '--api-key',
 ]
 /*
  * removes potentially sensitive information from the command array (argv strings)

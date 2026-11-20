@@ -1,5 +1,5 @@
 import { uncapitalize } from '@prisma/client-common'
-import { ObjectEnumValue } from '@prisma/client-runtime-utils'
+import { isObjectEnumValue } from '@prisma/client-runtime-utils'
 import { Writer } from '@prisma/ts-builders'
 
 import { ErrorFormat } from '../../getPrismaClient'
@@ -95,7 +95,7 @@ function buildInputValue(value: unknown) {
     return new ScalarValue(`new Date("${dateStr}")`)
   }
 
-  if (value instanceof ObjectEnumValue) {
+  if (isObjectEnumValue(value)) {
     return new ScalarValue(`Prisma.${value._getName()}`)
   }
 

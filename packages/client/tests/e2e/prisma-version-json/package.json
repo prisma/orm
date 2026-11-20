@@ -11,6 +11,6 @@
     "@types/node": "~20.19.0",
     "prisma": "/tmp/prisma-0.0.0.tgz",
     "typescript": "5.9.3",
-    "vitest": "3.2.4"
+    "vitest": "4.0.18"
   }
 }

@@ -3,11 +3,11 @@ name: CI
 on:
   push:
     branches:
-      - main
+      - v7
       - '*.*.x'
     paths-ignore:
       # Any update here needs to be done for `pull_request` (see below) and all files
-      # (test.yml, benchmark.yml, release.yml, bundle-size.yml, ci-aux-files.yml)
+      # (test.yml, benchmark.yml, publish.yml, bundle-size.yml, ci-aux-files.yml)
       - '*.md'
       - '*.bench.ts'
       - 'LICENSE'
@@ -23,7 +23,7 @@ on:
   pull_request:
     paths-ignore:
       # Any update here needs to be done for `branches` (see above) and all files
-      # (test.yml, benchmark.yml, release.yml, bundle-size.yml, ci-aux-files.yml)
+      # (test.yml, benchmark.yml, publish.yml, bundle-size.yml, ci-aux-files.yml)
       - '*.md'
       - '*.bench.ts'
       - 'LICENSE'
@@ -45,10 +45,11 @@ jobs:
     outputs:
       jobs: ${{ steps.detect.outputs.jobs }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - id: files
-        uses: Ana06/get-changed-files@v2.3.0 # it's a fork of jitterbit/get-changed-files@v1 which works better with pull requests
+        # This fork of jitterbit/get-changed-files@v1 works better with pull requests.
+        uses: Ana06/get-changed-files@25f79e676e7ea1868813e21465014798211fad8c # v2.3.0
         with:
           format: 'json'
       - id: detect
@@ -65,7 +66,7 @@ jobs:
           echo "Pull Request Body contains /integration: ${{ contains(env.PR_BODY, '/integration') }}"
 
       - name: Find "ci test all" comment
-        uses: peter-evans/find-comment@v4
+        uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4.0.0
         id: findTestAllComment
         if: ${{ github.event_name == 'pull_request' }}
         with:
@@ -89,9 +90,9 @@ jobs:
             github.event.pull_request.author_association == 'COLLABORATOR' ||
             github.event.pull_request.author_association == 'CONTRIBUTOR'
           )
-        uses: benc-uk/workflow-dispatch@v1
+        uses: benc-uk/workflow-dispatch@31e2b3319479a63f0ab15bf800eff9e913504e26 # v1.3.2
         with:
-          workflow: release.yml
+          workflow: publish.yml
           token: ${{ secrets.BOT_TOKEN }}
           inputs: '{ "forceIntegrationRelease": "true" }'
           ref: ${{ github.event.pull_request.head.ref }}
@@ -107,14 +108,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Find past custom engine comment
-        uses: peter-evans/find-comment@v4
+        uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4.0.0
         id: findEngineComment
         if: ${{ github.event_name == 'pull_request' }}
         with:
           issue-number: ${{ github.event.pull_request.number }}
           body-includes: '<!-- custom-engine -->'
       - name: Create or update comment (block)
-        uses: peter-evans/create-or-update-comment@v5
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
         if: ${{ needs.build_custom_engine.outputs.engineHash != '' }}
         with:
           comment-id: ${{ steps.findEngineComment.outputs.comment-id }}
@@ -131,7 +132,7 @@ jobs:
           edit-mode: replace
 
       - name: Create or update comment (clear)
-        uses: peter-evans/create-or-update-comment@v5
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
         if: ${{ steps.findEngineComment.outputs.comment-id != '' && needs.build_custom_engine.outputs.engineHash == '' }}
         with:
           comment-id: ${{ steps.findEngineComment.outputs.comment-id }}

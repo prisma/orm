@@ -27,21 +27,77 @@ function mapIsolationLevelFromString(level: string): number {
 const debug = Debug('prisma:driver-adapter:mssql:connection-string')
 
 /**
- * Extracts the schema parameter from a connection string.
- * @param connectionString The connection string.
- * @returns The schema value or undefined if not found.
+ * Splits a connection string by semicolons while respecting curly brace escaping.
+ * Values wrapped in curly braces like {value} are treated as literals where
+ * semicolons and equals signs are not treated as delimiters.
+ *
+ * Important: Curly braces are only treated as quote characters when { is the
+ * FIRST character of a value (after the = sign). This matches tedious behavior.
+ *
+ * @param str The string to split
+ * @returns Array of parts split by semicolon (outside of curly braces)
  */
-export function extractSchemaFromConnectionString(connectionString: string): string | undefined {
-  const withoutProtocol = connectionString.replace(/^sqlserver:\/\//, '')
-  const parts = withoutProtocol.split(';')
+function splitRespectingBraces(str: string): string[] {
+  const parts: string[] = []
+  let current = ''
+  let braceDepth = 0
+  let valueStartIndex = -1
 
-  for (const part of parts) {
-    const [key, value] = part.split('=', 2)
-    if (key?.trim() === 'schema') {
-      return value?.trim()
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i]
+
+    if (char === '=') {
+      current += char
+      if (braceDepth === 0) {
+        valueStartIndex = i + 1
+      }
+    } else if (char === '{') {
+      // Only treat { as opening brace if it's the first character of a value
+      const isFirstCharOfValue = i === valueStartIndex
+      if (isFirstCharOfValue) {
+        braceDepth++
+      } else if (braceDepth > 0) {
+        throw new Error(`Malformed connection string: nested '{' braces are not supported`)
+      }
+      current += char
+    } else if (char === '}') {
+      if (braceDepth > 0) {
+        braceDepth--
+      }
+      current += char
+    } else if (char === ';' && braceDepth === 0) {
+      parts.push(current)
+      current = ''
+      valueStartIndex = -1
+    } else {
+      current += char
     }
   }
-  return undefined
+
+  if (current) {
+    parts.push(current)
+  }
+
+  if (braceDepth !== 0) {
+    throw new Error(`Malformed connection string: unclosed '{' brace (braceDepth=${braceDepth})`)
+  }
+
+  return parts
+}
+
+/**
+ * Extracts the value from a parameter, removing curly braces if present.
+ * If the value is wrapped in curly braces like {value}, returns value.
+ * Otherwise returns the value as-is.
+ * @param value The value to process
+ * @returns The unescaped value
+ */
+function unescapeValue(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed.startsWith('{') && trimmed.endsWith('}') && trimmed.length >= 2) {
+    return trimmed.slice(1, -1)
+  }
+  return trimmed
 }
 
 /**
@@ -50,11 +106,11 @@ export function extractSchemaFromConnectionString(connectionString: string): str
  * @param connectionString The connection string.
  * @returns A sql.config object
  */
-export function parseConnectionString(connectionString: string): sql.config {
+export function parseConnectionString(connectionString: string): { config: sql.config; schema?: string } {
   const withoutProtocol = connectionString.replace(/^sqlserver:\/\//, '')
 
-  // Split by semicolon to get key-value pairs
-  const [hostPart, ...paramParts] = withoutProtocol.split(';')
+  const parts = splitRespectingBraces(withoutProtocol)
+  const [hostPart, ...paramParts] = parts
 
   const config: sql.config = {
     server: '',
@@ -63,6 +119,10 @@ export function parseConnectionString(connectionString: string): sql.config {
   }
 
   // Parse the first part which contains host and port
+  if (!hostPart || hostPart.trim() === '') {
+    throw new Error('Server host is required in connection string')
+  }
+
   const [host, portStr] = hostPart.split(':')
   config.server = host.trim()
 
@@ -78,14 +138,15 @@ export function parseConnectionString(connectionString: string): sql.config {
   const parameters: Record<string, string> = {}
 
   for (const part of paramParts) {
-    const [key, value] = part.split('=', 2)
+    const [key, ...valueParts] = part.split('=')
     if (!key) continue
 
     const trimmedKey = key.trim()
     if (trimmedKey in parameters) {
       throw new Error(`Duplication configuration parameter: ${trimmedKey}`)
     }
-    parameters[trimmedKey] = value.trim()
+    const value = valueParts.join('=')
+    parameters[trimmedKey] = unescapeValue(value)
     if (!handledParameters.includes(trimmedKey)) {
       debug(`Unknown connection string parameter: ${trimmedKey}`)
     }
@@ -192,7 +253,9 @@ export function parseConnectionString(connectionString: string): sql.config {
     throw new Error('Server host is required in connection string')
   }
 
-  return config
+  const schema = firstKey(parameters, 'schema') ?? undefined
+
+  return { config, schema }
 }
 
 /**
@@ -303,6 +366,7 @@ const handledParameters = [
   'password',
   'poolTimeout',
   'pwd',
+  'schema',
   'socketTimeout',
   'trustServerCertificate',
   'uid',

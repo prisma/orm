@@ -1,3 +1,5 @@
+import { afterAll, beforeEach, describe, expect, test } from 'vitest'
+
 import { isCi } from '../isCi'
 
 const originalEnv = { ...process.env }

@@ -2,10 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+
 import { getDMMF, MultipleSchemas } from '../..'
 import { fixturesPath } from '../__utils__/fixtures'
-
-jest.setTimeout(10_000)
 
 function restoreEnvSnapshot(snapshot: NodeJS.ProcessEnv) {
   for (const key of Object.keys(process.env)) {
@@ -25,7 +25,7 @@ function restoreEnvSnapshot(snapshot: NodeJS.ProcessEnv) {
 
 if (process.env.CI) {
   // 10s is not always enough for the "big schema" test on macOS CI.
-  jest.setTimeout(60_000)
+  vi.setConfig({ testTimeout: 60_000 })
 }
 
 describe('getDMMF', () => {

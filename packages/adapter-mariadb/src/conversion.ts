@@ -2,7 +2,8 @@ import { ArgType, ColumnType, ColumnTypeEnum, ResultValue } from '@prisma/driver
 import * as mariadb from 'mariadb'
 
 const UNSIGNED_FLAG = 1 << 5
-const BINARY_FLAG = 1 << 7
+// https://github.com/mariadb-corporation/mariadb-connector-nodejs/blob/be72ebf9fee6e0bd153b6ff6e0bb252f794dbf0e/lib/const/collations.js#L150
+const BINARY_COLLATION_INDEX = 63
 
 const enum MariaDbColumnType {
   DECIMAL = 'DECIMAL',
@@ -81,9 +82,12 @@ export function mapColumnType(field: mariadb.FieldInfo): ColumnType {
     case MariaDbColumnType.LONG_BLOB:
       // Special handling for MariaDB, the database returns JSON columns as BLOB
       // https://github.com/mariadb-corporation/mariadb-connector-nodejs/blob/1bbbb41e92d2123948c2322a4dbb5021026f2d05/lib/cmd/column-definition.js#L27
-      if (field['dataTypeFormat'] === 'json') {
+      if (field.isDataTypeFormatJson()) {
         return ColumnTypeEnum.Json
-      } else if (field.flags.valueOf() & BINARY_FLAG) {
+      }
+      // The Binary flag of column definition applies to both text and binary data. To distinguish them, check if collation == 'binary' instead of checking the flag.
+      // https://github.com/mariadb-corporation/mariadb-connector-nodejs/blob/be72ebf9fee6e0bd153b6ff6e0bb252f794dbf0e/lib/cmd/decoder/text-decoder.js#L44
+      else if (field.collation.index === BINARY_COLLATION_INDEX) {
         return ColumnTypeEnum.Bytes
       } else {
         return ColumnTypeEnum.Text

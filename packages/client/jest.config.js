@@ -3,7 +3,6 @@ module.exports = {
   modulePathIgnorePatterns: [
     '<rootDir>/dist/',
     '<rootDir>/fixtures/',
-    '<rootDir>/generator-build/',
     '<rootDir>/runtime/',
     '<rootDir>/runtime-dist/',
     '<rootDir>/scripts/',

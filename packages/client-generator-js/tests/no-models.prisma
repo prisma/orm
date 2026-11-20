@@ -1,0 +1,8 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated-no-models"
+}

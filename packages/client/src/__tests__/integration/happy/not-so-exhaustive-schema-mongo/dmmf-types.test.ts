@@ -15,9 +15,7 @@ if (isMacOrWindowsCI) {
  */
 test('dmmf-types', async () => {
   const datamodel = fs.readFileSync(path.join(__dirname, 'schema.prisma'), 'utf-8')
-  const dmmf = await getDMMF({
-    datamodel,
-  })
+  const dmmf = await getDMMF({ datamodel })
   const dmmfFile = path.join(__dirname, 'generated-dmmf.ts')
 
   fs.writeFileSync(

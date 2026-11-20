@@ -62,7 +62,7 @@ export function applyResultExtensions({ result, modelName, select, omit, extensi
 
     if (areNeedsMet(result, field.needs)) {
       computedPropertiesLayers.push(
-        computedPropertyLayer(field, createCompositeProxy(result, computedPropertiesLayers)),
+        computedPropertyLayer(field, createCompositeProxy(result, computedPropertiesLayers), modelName),
       )
     }
   }
@@ -77,6 +77,6 @@ function areNeedsMet(result: object, neededProperties: string[]) {
   return neededProperties.every((property) => hasOwnProperty(result, property))
 }
 
-function computedPropertyLayer(field: ComputedField, result: object): CompositeProxyLayer {
-  return cacheProperties(addProperty(field.name, () => field.compute(result)))
+function computedPropertyLayer(field: ComputedField, result: object, modelName: string): CompositeProxyLayer {
+  return cacheProperties(addProperty(field.name, () => field.compute(result, modelName)))
 }

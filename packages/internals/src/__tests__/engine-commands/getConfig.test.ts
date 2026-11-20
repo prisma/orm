@@ -1,4 +1,5 @@
-import { serialize } from '@prisma/get-platform/src/test-utils/jestSnapshotSerializer'
+import { serialize } from '@prisma/get-platform/src/test-utils/vitest-snapshot-serializer'
+import { describe, expect, test } from 'vitest'
 
 import { getConfig, isRustPanic } from '../..'
 

@@ -53,7 +53,23 @@ export interface EngineTrace {
 export interface TracingHelper {
   isEnabled(): boolean
   getTraceParent(context?: Context): string
-  dispatchEngineSpans(spans: EngineSpan[]): void
+
+  /**
+   * Emits spans reported by a remote engine, together with the log events that
+   * were recorded while those spans were open.
+   *
+   * Implementations must call `emitLogEvent` exactly once for every entry in
+   * `events`, otherwise the client silently drops logs the user asked for. Each
+   * event should be emitted while the span identified by its `spanId` is the
+   * active one, so that handlers registered via `$on` observe the same context
+   * they would for a locally executed query. Events whose span is missing or
+   * not emitted must still be passed to `emitLogEvent`.
+   */
+  dispatchEngineSpans(
+    spans: EngineSpan[],
+    events: EngineTraceEvent[],
+    emitLogEvent: (event: EngineTraceEvent) => void,
+  ): void
 
   getActiveContext(): Context | undefined
 

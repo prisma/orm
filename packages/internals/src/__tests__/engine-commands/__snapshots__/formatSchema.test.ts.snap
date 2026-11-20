@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`format valid blog schema 1`] = `
+exports[`format > valid blog schema 1`] = `
 "datasource db {
   provider = "sqlite"
 }
@@ -42,7 +42,7 @@ model Like {
 "
 `;
 
-exports[`format valid blog schemaPath 1`] = `
+exports[`format > valid blog schemaPath 1`] = `
 "datasource db {
   provider = "sqlite"
 }
@@ -83,7 +83,7 @@ model Like {
 "
 `;
 
-exports[`format valid schema with 1 preview feature flag warning 1`] = `
+exports[`format > valid schema with 1 preview feature flag warning 1`] = `
 "generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["cockroachdb"]
@@ -99,7 +99,7 @@ model SomeUser {
 "
 `;
 
-exports[`format valid schema with 3 preview feature flag warnings 1`] = `
+exports[`format > valid schema with 3 preview feature flag warnings 1`] = `
 "generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["cockroachdb", "mongoDb", "microsoftSqlServer"]

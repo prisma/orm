@@ -1,12 +1,13 @@
-import { serialize } from '@prisma/get-platform/src/test-utils/jestSnapshotSerializer'
+import { serialize } from '@prisma/get-platform/src/test-utils/vitest-snapshot-serializer'
 import tempy from 'tempy'
+import { describe, expect, test, vi } from 'vitest'
 
 import { credentialsToUri, uriToCredentials } from '../convertCredentials'
 import { canConnectToDatabase, createDatabase, dropDatabase, execaCommand } from '../schemaEngineCommands'
 
 if (process.env.CI) {
   // 5s is often not enough for the "postgresql - create database" test on macOS CI.
-  jest.setTimeout(60_000)
+  vi.setConfig({ testTimeout: 60_000 })
 }
 
 const testIf = (condition: boolean) => (condition ? test : test.skip)
@@ -94,10 +95,10 @@ describe('createDatabase', () => {
   test('postgresql - server does not exist', async () => {
     await expect(createDatabase('postgresql://johndoe:randompassword@doesnotexist:5432/mydb?schema=public', __dirname))
       .rejects.toThrowErrorMatchingInlineSnapshot(`
-            "P1001: Can't reach database server at \`doesnotexist:5432\`
+      [Error: P1001: Can't reach database server at \`doesnotexist:5432\`
 
-            Please make sure your database server is running at \`doesnotexist:5432\`."
-          `)
+      Please make sure your database server is running at \`doesnotexist:5432\`.]
+    `)
   }, 30_000)
 
   test('postgresql - database already exists', async () => {
@@ -153,13 +154,13 @@ describe('createDatabase', () => {
 
   test('invalid database type', async () => {
     await expect(createDatabase('invalid:somedburl')).rejects.toThrowErrorMatchingInlineSnapshot(
-      `"P1013: The provided database string is invalid. The scheme is not recognized in database URL. Please refer to the documentation in https://pris.ly/d/config-url for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters."`,
+      `[Error: P1013: The provided database string is invalid. The scheme is not recognized in database URL. Please refer to the documentation in https://pris.ly/d/config-url for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters.]`,
     )
   })
 
   test('empty connection string', async () => {
     await expect(createDatabase('')).rejects.toThrowErrorMatchingInlineSnapshot(
-      `"Connection url is empty. See https://pris.ly/d/config-url"`,
+      `[Error: Connection url is empty. See https://pris.ly/d/config-url]`,
     )
   })
 })

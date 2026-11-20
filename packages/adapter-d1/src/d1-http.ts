@@ -199,6 +199,18 @@ class D1HttpTransaction extends D1HttpQueryable implements Transaction {
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
   }
+
+  async createSavepoint(name: string): Promise<void> {
+    debug(`[js::createSavepoint] %s`, name)
+  }
+
+  async rollbackToSavepoint(name: string): Promise<void> {
+    debug(`[js::rollbackToSavepoint] %s`, name)
+  }
+
+  async releaseSavepoint(name: string): Promise<void> {
+    debug(`[js::releaseSavepoint] %s`, name)
+  }
 }
 
 export class PrismaD1HttpAdapter extends D1HttpQueryable implements SqlDriverAdapter {

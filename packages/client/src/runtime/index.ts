@@ -26,7 +26,7 @@ export {
   type Operation,
   type RuntimeDataModel,
 } from '@prisma/client-common'
-export { deserializeJsonResponse } from '@prisma/client-engine-runtime'
+export { deserializeJsonObject } from '@prisma/client-engine-runtime'
 export type { RawValue, Value } from '@prisma/client-runtime-utils'
 export type { AnyNullClass, DbNullClass, JsonNullClass } from '@prisma/client-runtime-utils'
 export {
@@ -43,6 +43,7 @@ export {
   isAnyNull,
   isDbNull,
   isJsonNull,
+  isObjectEnumValue,
   JsonNull,
   NullTypes,
   ObjectEnumValue,

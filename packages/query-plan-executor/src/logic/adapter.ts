@@ -118,7 +118,8 @@ function createConnectionStringRegex(protocols: string[]) {
 
 function wrapFactory(protocols: string[], factory: SqlDriverAdapterFactory): SqlDriverAdapterFactory {
   return {
-    ...factory,
+    adapterName: factory.adapterName,
+    provider: factory.provider,
     connect: () =>
       factory.connect().then(wrapAdapter.bind(null, protocols), rethrowSanitizedError.bind(null, protocols)),
   }
@@ -126,7 +127,8 @@ function wrapFactory(protocols: string[], factory: SqlDriverAdapterFactory): Sql
 
 function wrapAdapter(protocols: string[], adapter: SqlDriverAdapter): SqlDriverAdapter {
   return {
-    ...adapter,
+    adapterName: adapter.adapterName,
+    provider: adapter.provider,
     dispose: () => adapter.dispose().catch(rethrowSanitizedError.bind(null, protocols)),
     executeRaw: (query) => adapter.executeRaw(query).catch(rethrowSanitizedError.bind(null, protocols)),
     queryRaw: (query) => adapter.queryRaw(query).catch(rethrowSanitizedError.bind(null, protocols)),
@@ -141,10 +143,21 @@ function wrapAdapter(protocols: string[], adapter: SqlDriverAdapter): SqlDriverA
 
 function wrapTransaction(protocols: string[], tx: Transaction): Transaction {
   return {
-    ...tx,
+    adapterName: tx.adapterName,
+    provider: tx.provider,
+    options: tx.options,
     commit: () => tx.commit().catch(rethrowSanitizedError.bind(null, protocols)),
     rollback: () => tx.rollback().catch(rethrowSanitizedError.bind(null, protocols)),
     executeRaw: (query) => tx.executeRaw(query).catch(rethrowSanitizedError.bind(null, protocols)),
     queryRaw: (query) => tx.queryRaw(query).catch(rethrowSanitizedError.bind(null, protocols)),
+    createSavepoint: tx.createSavepoint
+      ? (name) => tx.createSavepoint!(name).catch(rethrowSanitizedError.bind(null, protocols))
+      : undefined,
+    rollbackToSavepoint: tx.rollbackToSavepoint
+      ? (name) => tx.rollbackToSavepoint!(name).catch(rethrowSanitizedError.bind(null, protocols))
+      : undefined,
+    releaseSavepoint: tx.releaseSavepoint
+      ? (name) => tx.releaseSavepoint!(name).catch(rethrowSanitizedError.bind(null, protocols))
+      : undefined,
   }
 }

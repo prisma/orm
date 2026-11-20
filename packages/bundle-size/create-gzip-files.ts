@@ -29,7 +29,11 @@ void (async () => {
     return `${__dirname}/schema.sqlite.prisma`
   }
 
-  await $`pnpm install` // needs this for `pnpm prisma`
+  // Invoke the Prisma CLI through the workspace dependency symlink rather than a
+  // `prisma` entry in node_modules/.bin: pnpm 11 does not create a workspace
+  // package's bin when the target file is absent at install time (the CLI is
+  // built afterwards) and never backfills it, so `pnpm prisma` cannot find it.
+  const prismaCli = `${__dirname}/node_modules/prisma/build/index.js`
 
   await $`pnpm list -r --depth -2` // print the versions of the dependencies installed
 
@@ -39,7 +43,7 @@ void (async () => {
 
     // Install deps & copy schema & generate Prisma Client
     await $`cp ${getSchemaFile(project)} ${projectDir}/schema.prisma`
-    await $`pnpm prisma generate --schema=${projectDir}/schema.prisma`.catch((error) => {
+    await $`node ${prismaCli} generate --schema=${projectDir}/schema.prisma`.catch((error) => {
       const e = error as Error
       console.error(
         `Failed to generate Prisma Client from ${getSchemaFile(project)} (copied to ${projectDir}/schema.prisma)`,

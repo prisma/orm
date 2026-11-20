@@ -1,10 +1,6 @@
 import { D1Database } from '@cloudflare/workers-types'
 import { PrismaD1 } from '@prisma/adapter-d1'
 import { PrismaClient } from '@prisma/client'
-// @ts-ignore no types available
-import * as G1 from '@prisma/client/generator-build'
-// @ts-ignore no types available
-import * as G2 from '@prisma/client/generator-build/index.js'
 import { PrismaClientKnownRequestError as E1 } from '@prisma/client/runtime/client'
 import { PrismaClientKnownRequestError as E2 } from '@prisma/client/runtime/client.js'
 // import { withAccelerate } from '@prisma/extension-accelerate'
@@ -21,8 +17,6 @@ export const errors = [E1, E2]
 
 // export const replicaClient = client.$extends(readReplicas({ url: '' }))
 // void replicaClient.user.findMany()
-
-export const generators = [G1, G2]
 
 /* Driver Adapters */
 const d1Db = {} as D1Database

@@ -1,6 +1,5 @@
 import type { SqlCommenterQueryInfo } from '@prisma/sqlcommenter'
 
-import { parameterizeQuery } from '../parameterize/parameterize'
 import { shapeQuery } from '../shape/shape'
 
 /**
@@ -28,8 +27,7 @@ export function formatQueryInsight(queryInfo: SqlCommenterQueryInfo): string {
         return action
       }
 
-      const parameterizedQuery = parameterizeQuery(query)
-      const shapedQuery = shapeQuery(parameterizedQuery)
+      const shapedQuery = shapeQuery(query)
       const encoded = toBase64Url(JSON.stringify(shapedQuery))
 
       return `${modelName}.${action}:${encoded}`
@@ -38,7 +36,7 @@ export function formatQueryInsight(queryInfo: SqlCommenterQueryInfo): string {
     case 'compacted': {
       const { modelName, action, queries } = queryInfo
 
-      const shapedQueries = queries.map((q) => shapeQuery(parameterizeQuery(q)))
+      const shapedQueries = queries.map((q) => shapeQuery(q))
       const encoded = toBase64Url(JSON.stringify(shapedQueries))
 
       return `${modelName}.${action}:${encoded}`

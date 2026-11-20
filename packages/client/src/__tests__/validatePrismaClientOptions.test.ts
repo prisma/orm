@@ -64,7 +64,19 @@ describe('valid options', () => {
 describe('invalid options', () => {
   test('empty', () => {
     expect(() => validatePrismaClientOptions({}, config)).toThrowErrorMatchingInlineSnapshot(`
-      "Using engine type "client" requires either "adapter" or "accelerateUrl" to be provided to PrismaClient constructor.
+      "PrismaClient requires a driver adapter to connect to your database, but none was provided.
+
+      Pass a driver adapter to the PrismaClient constructor, for example:
+
+        import { PrismaPg } from '@prisma/adapter-pg'
+        import { PrismaClient } from './generated/prisma/client'
+
+        const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+        const prisma = new PrismaClient({ adapter })
+
+      Learn more about driver adapters: https://pris.ly/d/driver-adapters
+
+      If you use Prisma Accelerate instead of connecting to your database directly, pass \`accelerateUrl\` to the PrismaClient constructor instead of \`adapter\`.
       Read more at https://pris.ly/d/client-constructor"
     `)
   })
@@ -216,6 +228,86 @@ describe('comments option', () => {
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
       "Invalid value at index 0 for "comments" provided to PrismaClient constructor. Each plugin must be a function.
+      Read more at https://pris.ly/d/client-constructor"
+    `)
+  })
+})
+
+describe('queryPlanCacheMaxSize option', () => {
+  test('accepts a positive integer', () => {
+    expect.assertions(0)
+    validatePrismaClientOptions(
+      {
+        adapter: {} as any,
+        queryPlanCacheMaxSize: 100,
+      },
+      config,
+    )
+  })
+
+  test('accepts 0 as the minimum valid value', () => {
+    expect.assertions(0)
+    validatePrismaClientOptions(
+      {
+        adapter: {} as any,
+        queryPlanCacheMaxSize: 0,
+      },
+      config,
+    )
+  })
+
+  test('accepts undefined', () => {
+    expect.assertions(0)
+    validatePrismaClientOptions(
+      {
+        adapter: {} as any,
+        queryPlanCacheMaxSize: undefined,
+      },
+      config,
+    )
+  })
+
+  test('rejects negative numbers', () => {
+    expect(() =>
+      validatePrismaClientOptions(
+        {
+          adapter: {} as any,
+          queryPlanCacheMaxSize: -1,
+        },
+        config,
+      ),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      "Invalid value -1 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Cache size needs to be greater or equal to 0.
+      Read more at https://pris.ly/d/client-constructor"
+    `)
+  })
+
+  test('rejects non-integer floats', () => {
+    expect(() =>
+      validatePrismaClientOptions(
+        {
+          adapter: {} as any,
+          queryPlanCacheMaxSize: 1.5,
+        },
+        config,
+      ),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      "Invalid value 1.5 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected an integer.
+      Read more at https://pris.ly/d/client-constructor"
+    `)
+  })
+
+  test('rejects string values', () => {
+    expect(() =>
+      validatePrismaClientOptions(
+        {
+          adapter: {} as any,
+          queryPlanCacheMaxSize: '100' as any,
+        },
+        config,
+      ),
+    ).toThrowErrorMatchingInlineSnapshot(`
+      "Invalid value "100" for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected a number.
       Read more at https://pris.ly/d/client-constructor"
     `)
   })

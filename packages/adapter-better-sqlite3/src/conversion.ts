@@ -129,7 +129,7 @@ function inferColumnType(value: NonNullable<Value>): ColumnType {
 }
 
 function inferObjectType(value: {}): ColumnType {
-  if (value instanceof ArrayBuffer) {
+  if (value instanceof ArrayBuffer || value instanceof Uint8Array) {
     return ColumnTypeEnum.Bytes
   }
   throw new UnexpectedTypeError(value)
@@ -168,9 +168,10 @@ export function mapRow(row: Row, columnTypes: ColumnType[]): ResultValue[] {
       continue
     }
 
-    // Convert bigint to string as we can only use JSON-encodable types here.
+    // Convert bigint values to numbers when safe, otherwise use strings.
     if (typeof value === 'bigint') {
-      result[i] = value.toString()
+      const asNumber = Number(value)
+      result[i] = Number.isSafeInteger(asNumber) ? asNumber : value.toString()
       continue
     }
 

@@ -1,8 +1,9 @@
 import type { SqlCommenterQueryInfo } from '@prisma/sqlcommenter'
 import { describe, expect, it } from 'vitest'
 
-import { PARAM_PLACEHOLDER } from '../parameterize/parameterize'
 import { formatQueryInsight, toBase64Url } from './format'
+
+const PARAM_PLACEHOLDER = { $type: 'Param' }
 
 // Helper to decode base64url for test assertions
 function fromBase64Url(data: string): string {
@@ -92,7 +93,7 @@ describe('formatQueryInsight', () => {
         modelName: 'User',
         action: 'findUnique',
         query: {
-          arguments: { where: { id: 123 } },
+          arguments: { where: { id: PARAM_PLACEHOLDER } },
           selection: { $scalars: true },
         },
       }
@@ -113,7 +114,7 @@ describe('formatQueryInsight', () => {
         action: 'createOne',
         query: {
           arguments: {
-            data: { email: 'test@example.com', name: 'Test User' },
+            data: { email: PARAM_PLACEHOLDER, name: PARAM_PLACEHOLDER },
           },
           selection: { $scalars: true },
         },
@@ -134,7 +135,7 @@ describe('formatQueryInsight', () => {
         modelName: 'User',
         action: 'findMany',
         query: {
-          arguments: { where: { active: true } },
+          arguments: { where: { active: PARAM_PLACEHOLDER } },
           selection: {
             $scalars: true,
             $composites: true,
@@ -187,8 +188,8 @@ describe('formatQueryInsight', () => {
         modelName: 'User',
         action: 'findUnique',
         queries: [
-          { arguments: { where: { id: 1 } }, selection: { $scalars: true } },
-          { arguments: { where: { id: 2 } }, selection: { $scalars: true } },
+          { arguments: { where: { id: PARAM_PLACEHOLDER } }, selection: { $scalars: true } },
+          { arguments: { where: { id: PARAM_PLACEHOLDER } }, selection: { $scalars: true } },
         ],
       }
       const result = formatQueryInsight(queryInfo)
@@ -206,11 +207,11 @@ describe('formatQueryInsight', () => {
         action: 'findUnique',
         queries: [
           {
-            arguments: { where: { id: 1 } },
+            arguments: { where: { id: PARAM_PLACEHOLDER } },
             selection: { $scalars: true, posts: { $scalars: true, $composites: true } },
           },
           {
-            arguments: { where: { id: 2 } },
+            arguments: { where: { id: PARAM_PLACEHOLDER } },
             selection: { $scalars: true, posts: { $scalars: true, $composites: true } },
           },
         ],
@@ -314,7 +315,7 @@ describe('formatQueryInsight', () => {
         modelName: 'User',
         action: 'findMany',
         query: {
-          arguments: { where: { active: true } },
+          arguments: { where: { active: PARAM_PLACEHOLDER } },
           selection: {
             name: true,
             posts: {

@@ -15,7 +15,8 @@ export TEST_E2E_MONGO_URI="mongodb://${DOCKER_BRIDGE_HOST}:27018/${PRISMA_DB_NAM
 export TEST_E2E_COCKROACH_URI="postgresql://prisma@${DOCKER_BRIDGE_HOST}:26257/${PRISMA_DB_NAME}"
 
 # Other env variables
-export NODE_PATH=$(npm root --quiet -g) # make global packages available
+GLOBAL_NODE_MODULES=$(npm root --quiet -g)
+export NODE_PATH="$GLOBAL_NODE_MODULES" # make global packages available to CommonJS
 export NEXT_TELEMETRY_DISABLED=1
 export NO_COLOR=1
 
@@ -35,6 +36,9 @@ rm -f /e2e/$NAME/LOGS.txt
 (
   cd /e2e;
   mkdir -p /test/$NAME;
+  mkdir -p /test/node_modules;
+  # ESM resolution ignores NODE_PATH, but several `_steps.ts` files import the globally installed `zx`.
+  ln -sfn "$GLOBAL_NODE_MODULES/zx" /test/node_modules/zx;
   cp -r _utils /test/_utils;
   # include _shared folders which are useful to share code in multi-folders
   find $BASE_DIR -type d -name '_shared' -exec cp -r --parents '{}' /test \;

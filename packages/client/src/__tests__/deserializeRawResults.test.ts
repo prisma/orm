@@ -70,6 +70,15 @@ describe('deserializeRawResult', () => {
     ])
   })
 
+  test('bytes is backed by a standalone buffer', () => {
+    const [row] = deserializeRawResult({ columns: ['a'], types: ['bytes'], rows: [['Ynl0ZXM=']] })
+    const value = (row as { a: Uint8Array }).a
+    // must not be a view into Node's shared Buffer pool, which would expose
+    // unrelated pool data through `value.buffer`
+    expect(value.byteOffset).toBe(0)
+    expect(value.buffer.byteLength).toBe(value.byteLength)
+  })
+
   test('bool', () => {
     expect(deserializeRawResult({ columns: ['a', 'b'], types: ['bool', 'bool'], rows: [[true, false]] })).toEqual([
       {

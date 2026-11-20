@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -117,10 +117,10 @@ jobs:
       JEST_JUNIT_SUITE_NAME: 'client/functional'
       JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -145,8 +145,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -169,10 +169,10 @@ jobs:
         node: ['20.19.0', '22.12.0', '24']
         flavor: ['js_pg']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -197,8 +197,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -237,10 +237,10 @@ jobs:
         node: ['20.19.0']
         previewFeatures: ['', 'relationJoins']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -265,8 +265,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -304,10 +304,10 @@ jobs:
         node: ['20.19.0']
         previewFeatures: ['', 'relationJoins']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -332,8 +332,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -359,10 +359,10 @@ jobs:
         shard: ['1/6', '2/6', '3/6', '4/6', '5/6', '6/6']
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -387,8 +387,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -397,101 +397,10 @@ jobs:
           secret: ${{ secrets.BUILDPULSE_SECRET_ACCESS_KEY }}
 
   #
-  # CLIENT (memory tests)
-  #
-  client-memory:
-    name: Client (memory tests) [v${{ matrix.node }}]
-    timeout-minutes: ${{ inputs.jobTimeout }}
-    runs-on: ubuntu-latest
-    if: |
-      contains(inputs.jobsToRun, '-all-') ||
-      contains(inputs.jobsToRun, '-client-')
-    strategy:
-      fail-fast: false
-      matrix:
-        queryEngine: [client]
-        node: ['20.19.0', '22.12.0', '24']
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 5
-          retry_wait_seconds: 120
-          command: docker compose -f docker/docker-compose.yml up --wait --detach postgres
-
-      - name: Install & build
-        uses: ./.github/actions/setup
-        with:
-          node-version: ${{ matrix.node }}
-          engine-hash: ${{ inputs.engineHash }}
-          skip-tsc: true
-
-      - run: pnpm run test:memory
-        working-directory: packages/client
-
-      - uses: actions/github-script@v8
-        if: ${{ failure() && github.event_name == 'pull_request' }}
-        id: upload-report
-        env:
-          NODE_VERSION: ${{ matrix.node }}
-        with:
-          github-token: ${{ secrets.BOT_TOKEN }}
-          script: |
-            const fs = require('fs')
-            const nodeVersion = process.env.NODE_VERSION
-            const reportPath = `client-memory-test/${context.issue.number}/${context.sha}.${nodeVersion}.html`
-            const url = `https://prisma.github.io/ci-reports/${reportPath}`
-            const localReport = './packages/client/tests/memory/memory-report.html'
-            if (fs.existsSync(localReport)) {
-              await github.rest.repos.createOrUpdateFileContents({
-                owner: 'prisma',
-                repo: 'ci-reports',
-                branch: 'gh-pages',
-                path: reportPath,
-                message: `Add memory results for PR ${context.issue.number}`,
-                content: fs.readFileSync(localReport, 'base64'),
-              });
-              core.setOutput('url', url);
-            }
-      - name: Find report comment
-        uses: peter-evans/find-comment@v4
-        id: fc
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-author: 'github-actions[bot]'
-          body-includes: 'Client memory tests, node ${{ matrix.node}}, ${{ matrix.queryEngine }}:'
-
-      - name: Create or update remote comment (failure)
-        uses: peter-evans/create-or-update-comment@v5
-        if: ${{ failure() && steps.upload-report.outputs.url }}
-        with:
-          comment-id: ${{ steps.fc.outputs.comment-id }}
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            Client memory tests, node ${{ matrix.node}}, ${{ matrix.queryEngine }}:
-            ❌ Failure, [see report](${{ steps.upload-report.outputs.url }}).
-          edit-mode: replace
-
-      - name: Create or update remote comment (success)
-        uses: peter-evans/create-or-update-comment@v5
-        if: ${{ success() && steps.fc.outputs.comment-id != '' }}
-        with:
-          comment-id: ${{ steps.fc.outputs.comment-id }}
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            Client memory tests, node ${{ matrix.node}}, ${{ matrix.queryEngine }}:
-            ✅ Success
-          edit-mode: replace
-
-  #
   # CLIENT test:e2e
   #
   client-e2e:
-    name: Client E2E ${{ matrix.os }} [v${{ matrix.node }}]
+    name: Client E2E ${{ matrix.os }} [v${{ matrix.node }}] (shard ${{ matrix.shard }})
     timeout-minutes: 35
     runs-on: ${{ matrix.os }}
     if: |
@@ -505,12 +414,16 @@ jobs:
         # The version used by the tests is actually defined in
         # ./packages/client/tests/e2e/_utils/standard.dockerfile
         node: ['20.19.0']
+        # The ~90-test Docker-based e2e suite does not fit in one job's time
+        # budget (it chronically hit `timeout-minutes`), so we split it across
+        # several machines. See `--shard` in tests/e2e/_utils/run.ts.
+        shard: ['1/3', '2/3', '3/3']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       # Not currently needed, but we might need it in the future
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -525,7 +438,7 @@ jobs:
           # Fails if set to true
           skip-tsc: false
 
-      - run: pnpm run test:e2e --verbose --maxWorkers 3
+      - run: pnpm run test:e2e --verbose --maxWorkers 3 --shard ${{ matrix.shard }}
         working-directory: packages/client
         env:
           NODE_OPTIONS: '--max-old-space-size=8096'
@@ -551,7 +464,7 @@ jobs:
       JEST_JUNIT_SUITE_NAME: 'client/functional'
       JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set RELATION_MODE custom test env var
         run: |
@@ -561,7 +474,7 @@ jobs:
           fi
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -597,8 +510,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -621,7 +534,7 @@ jobs:
       matrix:
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -649,7 +562,7 @@ jobs:
       matrix:
         node: ['20.19.0', '22.12.0', '24']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -672,7 +585,7 @@ jobs:
       matrix:
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -698,10 +611,10 @@ jobs:
       matrix:
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -734,10 +647,10 @@ jobs:
         os: [ubuntu-latest]
         node: ['20.19.0', '22.12.0', '24']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -772,10 +685,10 @@ jobs:
         # driverAdapter: ['', 'libsql'] # TODO: once we have all tests pass with driver adapters actually enable them on CI and add further adapters
         driverAdapter: ['']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -810,10 +723,10 @@ jobs:
         os: [ubuntu-latest]
         node: ['20.19.0', '22.12.0', '24']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -851,7 +764,7 @@ jobs:
           - os: macos-latest
             version: 18
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -874,7 +787,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -906,14 +819,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-latest, windows-latest]
         node: ['20.19.0']
         shard: ['1/2', '2/2']
     if: |
       contains(inputs.jobsToRun, '-all-') ||
       contains(inputs.jobsToRun, '-client-')
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Prerequisites
         shell: bash
@@ -944,15 +857,15 @@ jobs:
         env:
           # allow Node.js to allocate at most 14GB of heap on macOS and 7GB on Windows
           # https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
-          NODE_OPTIONS: "${{ matrix.os == 'macos-14' && '--max-old-space-size=14336' || '--max-old-space-size=7168' }}"
+          NODE_OPTIONS: "${{ matrix.os == 'macos-latest' && '--max-old-space-size=14336' || '--max-old-space-size=7168' }}"
           JEST_JUNIT_SUITE_NAME: 'client/functional'
           JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
 
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason =='buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason =='buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -973,10 +886,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-latest, windows-latest]
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Prerequisites
         shell: bash
@@ -1021,7 +934,7 @@ jobs:
           # Allow Node.js to allocate at most a certain amount heap on macOS and a different amount on Windows
           # Note that this value should be lower than the total amount of RAM available
           # https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
-          NODE_OPTIONS: "${{ matrix.os == 'macos-14' && '--max-old-space-size=14336' || '--max-old-space-size=3072' }}"
+          NODE_OPTIONS: "${{ matrix.os == 'macos-latest' && '--max-old-space-size=14336' || '--max-old-space-size=3072' }}"
           JEST_JUNIT_SUITE_NAME: 'client/old'
           JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
 
@@ -1044,8 +957,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833

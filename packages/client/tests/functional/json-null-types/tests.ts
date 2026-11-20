@@ -72,15 +72,14 @@ testMatrix.setupTestSuite(
         expect(Prisma.AnyNull).toBeInstanceOf(Prisma.NullTypes.AnyNull)
       })
 
-      test('custom instances are not allowed', async () => {
-        await expect(
-          prisma.requiredJsonField.create({
-            data: {
-              // @ts-expect-error
-              json: new Prisma.NullTypes.JsonNull(),
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`"Invalid ObjectEnumValue"`)
+      test('custom instances are accepted for cross-bundle compatibility', async () => {
+        const record = await prisma.requiredJsonField.create({
+          data: {
+            // @ts-expect-error
+            json: new Prisma.NullTypes.JsonNull(),
+          },
+        })
+        expect(record.json).toBeNull()
       })
     })
   },

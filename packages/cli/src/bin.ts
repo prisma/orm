@@ -5,11 +5,11 @@ import path from 'node:path'
 import { context, trace } from '@opentelemetry/api'
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks'
 import { BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
-import { InjectFormatters } from '@prisma/config'
+import { defaultConfig, InjectFormatters } from '@prisma/config'
 import { Debug } from '@prisma/debug'
 import { enginesVersion } from '@prisma/engines'
 import { download } from '@prisma/fetch-engine'
-import { arg, handlePanic, HelpError, isRustPanic, link } from '@prisma/internals'
+import { arg, handlePanic, HelpError, isError, isRustPanic, link } from '@prisma/internals'
 import {
   DbCommand,
   DbExecute,
@@ -28,13 +28,18 @@ import {
 } from '@prisma/migrate'
 import { bold, dim, red, yellow } from 'kleur/colors'
 
+import { Bootstrap } from './bootstrap/Bootstrap'
 import { CLI } from './CLI'
+import { Completions } from './completions'
 import { DebugInfo } from './DebugInfo'
 import { Format } from './Format'
 import { Generate } from './Generate'
 import { Init } from './Init'
 import { Mcp } from './mcp/MCP'
 import { Platform } from './platform/_Platform'
+import { Link as PostgresLink } from './postgres/link/Link'
+import { PostgresCommand } from './postgres/PostgresCommand'
+import { Status } from './Status'
 import { Studio } from './Studio'
 /*
   When running bin.ts with ts-node with DEBUG="*"
@@ -48,7 +53,9 @@ import { Studio } from './Studio'
 import { SubCommand } from './SubCommand'
 import { Telemetry } from './Telemetry'
 import { redactCommandArray } from './utils/checkpoint'
+import { getCliDistributionIdentity } from './utils/cli-distribution-identity'
 import { loadOrInitializeCommandState } from './utils/commandState'
+import { UserFacingError } from './utils/errors'
 import { loadConfig } from './utils/loadConfig'
 import { Validate } from './Validate'
 import { Version } from './Version'
@@ -90,81 +97,54 @@ const args = arg(
 async function main(): Promise<number> {
   // create a new CLI with our subcommands
 
+  const identity = getCliDistributionIdentity()
+
   const cli = CLI.new(
     {
-      init: Init.new(),
-      platform: Platform.$.new({
-        workspace: Platform.Workspace.$.new({
-          show: Platform.Workspace.Show.new(),
-        }),
-        auth: Platform.Auth.$.new({
-          login: Platform.Auth.Login.new(),
-          logout: Platform.Auth.Logout.new(),
-          show: Platform.Auth.Show.new(),
-        }),
-        environment: Platform.Environment.$.new({
-          create: Platform.Environment.Create.new(),
-          delete: Platform.Environment.Delete.new(),
-          show: Platform.Environment.Show.new(),
-        }),
-        project: Platform.Project.$.new({
-          create: Platform.Project.Create.new(),
-          delete: Platform.Project.Delete.new(),
-          show: Platform.Project.Show.new(),
-        }),
-        pulse: Platform.Pulse.$.new({
-          enable: Platform.Pulse.Enable.new(),
-          disable: Platform.Pulse.Disable.new(),
-        }),
-        accelerate: Platform.Accelerate.$.new({
-          enable: Platform.Accelerate.Enable.new(),
-          disable: Platform.Accelerate.Disable.new(),
-        }),
-        serviceToken: Platform.ServiceToken.$.new({
-          create: Platform.ServiceToken.Create.new(),
-          delete: Platform.ServiceToken.Delete.new(),
-          show: Platform.ServiceToken.Show.new(),
-        }),
-        // Alias to "serviceToken". This will be removed in a future ORM release.
-        apikey: Platform.ServiceToken.$.new({
-          create: Platform.ServiceToken.Create.new(true),
-          delete: Platform.ServiceToken.Delete.new(true),
-          show: Platform.ServiceToken.Show.new(true),
-        }),
-      }),
-      mcp: Mcp.new(),
-      migrate: MigrateCommand.new({
-        dev: MigrateDev.new(),
-        status: MigrateStatus.new(),
-        resolve: MigrateResolve.new(),
-        reset: MigrateReset.new(),
-        deploy: MigrateDeploy.new(),
-        diff: MigrateDiff.new(),
-      }),
-      db: DbCommand.new({
-        execute: DbExecute.new(),
-        pull: DbPull.new(),
-        push: DbPush.new(),
-        // drop: DbDrop.new(),
-        seed: DbSeed.new(),
-      }),
-      generate: Generate.new(),
-      version: Version.new(),
-      validate: Validate.new(),
-      format: Format.new(),
+      bootstrap: Bootstrap.new(identity),
+      init: Init.new(identity),
+      mcp: Mcp.new(identity),
+      migrate: MigrateCommand.new(
+        {
+          dev: MigrateDev.new(identity),
+          status: MigrateStatus.new(identity),
+          resolve: MigrateResolve.new(identity),
+          reset: MigrateReset.new(identity),
+          deploy: MigrateDeploy.new(identity),
+          diff: MigrateDiff.new(identity),
+        },
+        identity,
+      ),
+      db: DbCommand.new(
+        {
+          execute: DbExecute.new(identity),
+          pull: DbPull.new(identity),
+          push: DbPush.new(identity),
+          // drop: DbDrop.new('prisma'),
+          seed: DbSeed.new(identity),
+        },
+        identity,
+      ),
+      postgres: PostgresCommand.new(
+        {
+          link: PostgresLink.new(identity),
+        },
+        identity,
+      ),
+      generate: Generate.new(identity),
+      version: Version.new(identity),
+      validate: Validate.new(identity),
+      format: Format.new(identity),
       telemetry: Telemetry.new(),
-      debug: DebugInfo.new(),
-      // TODO: add rules subcommand to --help after EA
-      rules: new SubCommand('@prisma/cli-security-rules'),
-      dev: new SubCommand('@prisma/cli-dev'),
-      // TODO: add deploy subcommand to --help after it works.
-      deploy: new SubCommand('@prisma/cli-deploy'),
-      // TODO: add login subcommand to --help after it works.
-      login: new SubCommand('@prisma/cli-login'),
-      studio: Studio.new(),
+      debug: DebugInfo.new(identity),
+      complete: Completions.new(identity),
+      dev: new SubCommand('@prisma/cli-dev', identity),
+      studio: Studio.new(identity),
+      platform: Platform.$.new({ status: Status.new(identity) }, identity),
     },
     ['version', 'init', 'migrate', 'db', 'generate', 'validate', 'format', 'telemetry'],
     download,
+    identity,
   )
 
   await loadOrInitializeCommandState().catch((err) => {
@@ -174,7 +154,9 @@ async function main(): Promise<number> {
   const configFile = args['--config']
   const configDir = configFile ? path.resolve(configFile, '..') : process.cwd()
 
-  const configEither = await loadConfig(configFile)
+  const isCompleteCommand = !isError(args) && args._[0] === 'complete'
+
+  const configEither = isCompleteCommand ? { config: defaultConfig(), diagnostics: [] } : await loadConfig(configFile)
 
   if (configEither instanceof HelpError) {
     console.error(configEither.message)
@@ -210,7 +192,11 @@ async function main(): Promise<number> {
     debug(`Execution time for executing "await cli.parse(commandArray)": ${cliExecElapsedTime} ms`)
 
     if (result instanceof Error) {
-      console.error(result instanceof HelpError ? result.message : result)
+      if (result instanceof HelpError || result instanceof UserFacingError) {
+        console.error(result.message)
+      } else {
+        console.error(result)
+      }
       return 1
     }
 
@@ -232,10 +218,7 @@ async function main(): Promise<number> {
   }
 }
 
-/**
- * Run our program
- */
-if (eval('require.main === module')) {
+export function run(): void {
   main()
     .then((code) => {
       if (code !== 0) {
@@ -252,6 +235,13 @@ if (eval('require.main === module')) {
         handleIndividualError(err)
       }
     })
+}
+
+/**
+ * Run our program
+ */
+if (eval('require.main === module')) {
+  run()
 }
 
 function handleIndividualError(error: Error): void {

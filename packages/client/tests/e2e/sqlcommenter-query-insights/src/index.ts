@@ -32,7 +32,9 @@ function extractPrismaQuery(sql: string): string | null {
   return decodeURIComponent(match[1].replace(/\\'/g, "'"))
 }
 
-const PARAM_PLACEHOLDER = { $type: 'Param' }
+function isParamPlaceholder(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && '$type' in value && value.$type === 'Param'
+}
 
 const adapter = new PrismaBetterSqlite3({
   url: './dev.db',
@@ -142,11 +144,7 @@ let createdUserId: number
     containsInPayload: (p) => {
       const payload = p as { data?: { email?: unknown; name?: unknown } }
       const data = payload.data
-      return (
-        data !== undefined &&
-        JSON.stringify(data.email) === JSON.stringify(PARAM_PLACEHOLDER) &&
-        JSON.stringify(data.name) === JSON.stringify(PARAM_PLACEHOLDER)
-      )
+      return data !== undefined && isParamPlaceholder(data.email) && isParamPlaceholder(data.name)
     },
     notContains: ['secret@private.com', 'Secret Name'],
   })
@@ -165,7 +163,7 @@ let createdUserId: number
     prefix: 'User.findFirst',
     containsInPayload: (p) => {
       const payload = p as { where?: { email?: unknown } }
-      return JSON.stringify(payload.where?.email) === JSON.stringify(PARAM_PLACEHOLDER)
+      return isParamPlaceholder(payload.where?.email)
     },
     notContains: ['secret@private.com'],
   })
@@ -226,11 +224,7 @@ let createdUserId: number
     containsInPayload: (p) => {
       const payload = p as { data?: { title?: unknown; content?: unknown } }
       const data = payload.data
-      return (
-        data !== undefined &&
-        JSON.stringify(data.title) === JSON.stringify(PARAM_PLACEHOLDER) &&
-        JSON.stringify(data.content) === JSON.stringify(PARAM_PLACEHOLDER)
-      )
+      return data !== undefined && isParamPlaceholder(data.title) && isParamPlaceholder(data.content)
     },
     notContains: ['Secret Title', 'Secret Content'],
   })
@@ -278,13 +272,13 @@ let createdUserId: number
 
       // Check email.contains is parameterized
       const emailCondition = and[0]?.email?.contains
-      if (JSON.stringify(emailCondition) !== JSON.stringify(PARAM_PLACEHOLDER)) return false
+      if (!isParamPlaceholder(emailCondition)) return false
 
       // Check OR conditions are parameterized
       const orConditions = and[1]?.OR
       if (!orConditions || !Array.isArray(orConditions)) return false
 
-      return orConditions.every((cond) => JSON.stringify(cond.name) === JSON.stringify(PARAM_PLACEHOLDER))
+      return orConditions.every((cond) => isParamPlaceholder(cond.name))
     },
     notContains: ['@private.com', 'Alice', 'Bob'],
   })

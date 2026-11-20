@@ -1,11 +1,5 @@
 generator min {
-  // https://github.com/prisma/minimal-generator
-  provider = "npx github:prisma/minimal-generator"
-  // Other examples:
-  // https://github.com/search?q=path%3A**%2F**.prisma+provider+%3D+%22npx+&type=code
-  // provider = "npx prisma-typegraphql-types-generator"
-  // provider = "npx prisma-generator-kysely"
-  // provider = "npx prisma-generator-checker"
+  provider = "node ./minimal-generator.js"
 }
 
 datasource db {

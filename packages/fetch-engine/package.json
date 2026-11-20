@@ -9,7 +9,7 @@
   "homepage": "https://www.prisma.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/fetch-engine"
   },
   "bugs": "https://github.com/prisma/prisma/issues",
@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@prisma/debug": "workspace:*",
-    "@prisma/engines-version": "7.4.0-16.d0314091cdd30494eefc61d346f8c09aca20dfca",
+    "@prisma/engines-version": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@prisma/get-platform": "workspace:*"
   },
   "scripts": {

@@ -18,39 +18,17 @@ import {
 } from '@prisma/internals'
 import { bold, dim, red, underline } from 'kleur/colors'
 
+import type { CliDistributionIdentity } from './utils/cli-distribution-identity'
+
 /**
  * $ prisma validate
  */
 export class Validate implements Command {
-  public static new(): Validate {
-    return new Validate()
+  public static new(identity: CliDistributionIdentity): Validate {
+    return new Validate(identity)
   }
 
-  private static help = format(`
-Validate a Prisma schema.
-
-${bold('Usage')}
-
-  ${dim('$')} prisma validate [options]
-
-${bold('Options')}
-
-  -h, --help   Display this help message
-    --config   Custom path to your Prisma config file
-    --schema   Custom path to your Prisma schema
-
-${bold('Examples')}
-
-  With an existing Prisma schema
-    ${dim('$')} prisma validate
-
-  With a Prisma config file
-    ${dim('$')} prisma validate --config=./prisma.config.ts
-
-  Or specify a Prisma schema path
-    ${dim('$')} prisma validate --schema=./schema.prisma
-
-`)
+  constructor(private readonly identity: CliDistributionIdentity) {}
 
   public async parse(
     argv: string[],
@@ -114,8 +92,36 @@ ${bold('Examples')}
   // help message
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${Validate.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
     }
-    return Validate.help
+    return createHelp(this.identity)
   }
+}
+
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
+Validate a Prisma schema.
+
+${bold('Usage')}
+
+  ${dim('$')} ${identity} validate [options]
+
+${bold('Options')}
+
+  -h, --help   Display this help message
+    --config   Custom path to your Prisma config file
+    --schema   Custom path to your Prisma schema
+
+${bold('Examples')}
+
+  With an existing Prisma schema
+    ${dim('$')} ${identity} validate
+
+  With a Prisma config file
+    ${dim('$')} ${identity} validate --config=./prisma7.config.ts
+
+  Or specify a Prisma schema path
+    ${dim('$')} ${identity} validate --schema=./schema.prisma
+
+`)
 }

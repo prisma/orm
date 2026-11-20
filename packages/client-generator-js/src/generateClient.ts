@@ -383,11 +383,10 @@ export async function generateClient(options: GenerateClientOptions): Promise<vo
     const filename = `query_compiler_${compilerBuild}_bg`
 
     // Despite the `!testMode` condition above, we can't assume we are
-    // necessarily inside the bundled Prisma CLI because the `prisma-client-js`
-    // generator has a legacy entrypoint inside `@prisma/client/generator-build`
-    // which is still used by Studio, some e2e tests and possibly more. This means
-    // we can only rely on what's shipped in the `@prisma/client` package here,
-    // and we have to decode the WebAssembly binaries from base64.
+    // necessarily inside the bundled Prisma CLI (`prisma generate` can also run
+    // from a standalone or programmatic invocation). This means we can only rely
+    // on what's shipped in the `@prisma/client` package here, and we have to
+    // decode the WebAssembly binaries from base64.
     const wasmJsBundlePath = path.join(runtimeSourcePath, `${filename}.${suffix}.wasm-base64.js`)
     const wasmBase64: string = require(wasmJsBundlePath).wasm
 

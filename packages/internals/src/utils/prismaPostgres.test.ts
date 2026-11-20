@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest'
+
 import { isPrismaPostgres, isPrismaPostgresDev, PRISMA_POSTGRES_PROTOCOL } from './prismaPostgres'
 
 describe('isPrismaPostgres', () => {

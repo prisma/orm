@@ -3,7 +3,7 @@ import type { SqlQuery } from '@prisma/driver-adapter-utils'
 
 import { QueryEvent } from './events'
 import type { SchemaProvider } from './schema'
-import { assertNever } from './utils'
+import { assertNever, DeepReadonly } from './utils'
 
 export type SpanCallback<R> = (span?: Span, context?: Context) => R
 
@@ -51,7 +51,7 @@ export async function withQuerySpanAndEvent<T>({
   onQuery,
   execute,
 }: {
-  query: SqlQuery
+  query: DeepReadonly<SqlQuery>
   tracingHelper: TracingHelper
   provider: SchemaProvider
   onQuery?: (event: QueryEvent) => void

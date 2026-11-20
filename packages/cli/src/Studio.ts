@@ -1,26 +1,26 @@
 import { access, constants, readFile } from 'node:fs/promises'
 
-import { serve } from '@hono/node-server'
 import type { PrismaConfigInternal } from '@prisma/config'
 import { arg, type Command, format, HelpError, isError } from '@prisma/internals'
 import type { Executor, SequenceExecutor } from '@prisma/studio-core/data'
-import { serializeError, type StudioBFFRequest } from '@prisma/studio-core/data/bff'
+import { type SerializedError, serializeError, type StudioBFFRequest } from '@prisma/studio-core/data/bff'
 import { createMySQL2Executor } from '@prisma/studio-core/data/mysql2'
 import { createNodeSQLiteExecutor } from '@prisma/studio-core/data/node-sqlite'
 import { createPostgresJSExecutor } from '@prisma/studio-core/data/postgresjs'
 import type { StudioProps } from '@prisma/studio-core/ui'
 import { type Check, check as sendEvent } from 'checkpoint-client'
 import { getPort } from 'get-port-please'
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 import { bold, dim, red, yellow } from 'kleur/colors'
 import { digest } from 'ohash'
 import open from 'open'
 import { dirname, extname, join, resolve } from 'pathe'
 import { runtime } from 'std-env'
-import { z } from 'zod'
 
 import packageJson from '../package.json' assert { type: 'json' }
+import { STUDIO_CSS_FILE_NAME, STUDIO_JS_FILE_NAME, type StudioAdapterType } from './studio-frontend-shared'
+import { startStudioServer, STUDIO_SERVER_HOST } from './studio-server'
+import type { CliDistributionIdentity } from './utils/cli-distribution-identity'
+import { UserFacingError } from './utils/errors'
 import { getPpgInfo } from './utils/ppgInfo'
 
 /**
@@ -30,42 +30,36 @@ const DEFAULT_PORT = 51_212
 
 const MIN_PORT = 49_152
 
-const STATIC_ASSETS_DIR = join(require.resolve('@prisma/studio-core/data'), '../..')
-
 const FILE_EXTENSION_TO_CONTENT_TYPE: Record<string, string> = {
   '.css': 'text/css',
   '.js': 'application/javascript',
-  '.mjs': 'application/javascript',
   '.html': 'text/html',
-  '.htm': 'text/html',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.ttf': 'font/ttf',
-  '.otf': 'font/otf',
-  '.eot': 'application/vnd.ms-fontobject',
 }
 
-const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
+const PRISMA_LOGO_SVG = `<svg width="12" height="14" viewBox="0 0 12 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    fill-rule="evenodd"
+    clip-rule="evenodd"
+    d="M0.396923 8.8719C0.25789 9.09869 0.260041 9.38484 0.402469 9.60951L2.98037 13.6761C3.14768 13.94 3.47018 14.0603 3.76949 13.9705L11.2087 11.7388C11.6147 11.617 11.8189 11.1641 11.6415 10.7792L6.8592 0.405309C6.62598 -0.100601 5.92291 -0.142128 5.63176 0.332808L0.396923 8.8719ZM6.73214 2.77688C6.6305 2.54169 6.2863 2.57792 6.23585 2.82912L4.3947 11.9965C4.35588 12.1898 4.53686 12.3549 4.72578 12.2985L9.86568 10.7642C10.0157 10.7194 10.093 10.5537 10.0309 10.41L6.73214 2.77688Z"
+    fill="currentColor"
+  />
+</svg>`
+const PRISMA_LOGO_SVG_DATA_URL = `data:image/svg+xml,${encodeURIComponent(PRISMA_LOGO_SVG)}`
 
-const ADAPTER_FILE_NAME = 'adapter.js'
-const ADAPTER_FACTORY_FUNCTION_NAME = 'createAdapter'
+const ACCELERATE_UNSUPPORTED_MESSAGE =
+  'Prisma Studio no longer supports Accelerate URLs (`prisma://` or `prisma+postgres://`). Use a direct database connection string instead.'
 
-const ACCELERATE_API_KEY_QUERY_PARAMETER = 'api_key'
-
-const AccelerateAPIKeyPayloadSchema = z.object({
-  secure_key: z.string(),
-  tenant_id: z.string(),
-})
+/**
+ * Protocols whose connection strings are not valid WHATWG URLs.
+ * URL.canParse would reject them, so we skip that validation.
+ *
+ * https://github.com/prisma/prisma/issues/29620
+ */
+const PROTOCOLS_SKIPPING_URL_VALIDATION = new Set(['sqlserver'])
 
 interface StudioStuff {
+  adapter: StudioAdapterType
   createExecutor(connectionString: string, relativeTo: string): Promise<Executor>
-  reExportAdapterScript: string
 }
 
 /**
@@ -87,7 +81,16 @@ const PRISMA_ORM_SPECIFIC_QUERY_PARAMETERS = [
   'statement_cache_size',
 ] as const
 
+const PRISMA_ORM_SPECIFIC_MYSQL_QUERY_PARAMETERS = [
+  'connection_limit',
+  'pool_timeout',
+  'socket_timeout',
+  'sslaccept',
+  'sslidentity',
+] as const
+
 const POSTGRES_STUDIO_STUFF: StudioStuff = {
+  adapter: 'postgres',
   async createExecutor(connectionString) {
     const postgresModule = await import('postgres')
 
@@ -104,7 +107,6 @@ const POSTGRES_STUDIO_STUFF: StudioStuff = {
 
     return createPostgresJSExecutor(postgres)
   },
-  reExportAdapterScript: `export { createPostgresAdapter as ${ADAPTER_FACTORY_FUNCTION_NAME} } from '/data/postgres-core/index.js';`,
 }
 
 type Database = { new (path: string): import('better-sqlite3').Database }
@@ -112,6 +114,7 @@ type Database = { new (path: string): import('better-sqlite3').Database }
 const CONNECTION_STRING_PROTOCOL_TO_STUDIO_STUFF: Record<string, StudioStuff | null> = {
   // TODO: figure out PGLite support later.
   file: {
+    adapter: 'sqlite',
     async createExecutor(uri, relativeTo) {
       const path = uri.replace('file:', '')
 
@@ -180,118 +183,38 @@ Please use Node.js >=22.5, Deno >=2.2 or Bun >=1.0 or ensure you have the \`bett
 
       return createNodeSQLiteExecutor(database)
     },
-    reExportAdapterScript: `export { createSQLiteAdapter as ${ADAPTER_FACTORY_FUNCTION_NAME} } from '/data/sqlite-core/index.js';`,
   },
   postgres: POSTGRES_STUDIO_STUFF,
   postgresql: POSTGRES_STUDIO_STUFF,
-  'prisma+postgres': {
-    async createExecutor(connectionString, relativeTo) {
-      const connectionURL = new URL(connectionString)
-
-      if (['localhost', '127.0.0.1', '[::1]'].includes(connectionURL.hostname)) {
-        // TODO: support `prisma dev` accelerate URLs.
-
-        throw new Error('The "prisma+postgres" protocol with localhost is not supported in Prisma Studio yet.')
-      }
-
-      const apiKey = connectionURL.searchParams.get(ACCELERATE_API_KEY_QUERY_PARAMETER)
-
-      if (!apiKey) {
-        throw new Error(
-          `\`${ACCELERATE_API_KEY_QUERY_PARAMETER}\` query parameter is missing in the provided "prisma+postgres" connection string.`,
-        )
-      }
-
-      const [, payload] = apiKey.split('.')
-
-      try {
-        const decodedPayload = AccelerateAPIKeyPayloadSchema.parse(
-          JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')),
-        )
-
-        connectionURL.password = decodedPayload.secure_key
-        connectionURL.username = decodedPayload.tenant_id
-      } catch {
-        throw new Error(
-          `Invalid/outdated \`${ACCELERATE_API_KEY_QUERY_PARAMETER}\` query parameter in the provided "prisma+postgres" connection string. Please create a new API key and use the new connection string OR use a direct TCP connection string instead.`,
-        )
-      }
-
-      connectionURL.host = 'db.prisma.io:5432'
-      connectionURL.pathname = '/postgres'
-      connectionURL.protocol = 'postgres:'
-      connectionURL.searchParams.delete(ACCELERATE_API_KEY_QUERY_PARAMETER)
-      connectionURL.searchParams.set('sslmode', 'require')
-
-      return await POSTGRES_STUDIO_STUFF.createExecutor(connectionURL.toString(), relativeTo)
-    },
-    reExportAdapterScript: POSTGRES_STUDIO_STUFF.reExportAdapterScript,
-  },
   mysql: {
+    adapter: 'mysql',
     async createExecutor(connectionString) {
       const { createPool } = await import('mysql2/promise')
 
-      const pool = createPool(connectionString)
+      const pool = createPool(normalizeMySQLConnectionString(connectionString))
 
       process.once('SIGINT', () => pool.end())
       process.once('SIGTERM', () => pool.end())
 
       return createMySQL2Executor(pool)
     },
-    reExportAdapterScript: `export { createMySQLAdapter as ${ADAPTER_FACTORY_FUNCTION_NAME} } from '/data/mysql-core/index.js';`,
   },
   sqlserver: null,
 }
 
 export class Studio implements Command {
-  private static help = format(`
-Browse your data with Prisma Studio
-
-${bold('Usage')}
-
-  ${dim('$')} prisma studio [options]
-
-${bold('Options')}
-
-  -h, --help        Display this help message
-  -p, --port        Port to start Studio on
-  -b, --browser     Browser to open Studio in
-  --config          Custom path to your Prisma config file
-  --url             Database connection string (overrides the one in your Prisma config)
-
-${bold('Examples')}
-
-  Start Studio on the default port
-    ${dim('$')} prisma studio
-
-  Start Studio on a custom port
-    ${dim('$')} prisma studio --port 5555
-
-  Start Studio in a specific browser
-    ${dim('$')} prisma studio --port 5555 --browser firefox
-    ${dim('$')} BROWSER=firefox prisma studio --port 5555
-
-  Start Studio without opening in a browser
-    ${dim('$')} prisma studio --port 5555 --browser none
-    ${dim('$')} BROWSER=none prisma studio --port 5555
-
-  Specify a custom prisma config file
-    ${dim('$')} prisma studio --config=./prisma.config.ts
-
-  Specify a direct database connection string
-    ${dim('$')} prisma studio --url="postgresql://user:password@localhost:5432/dbname"
-`)
-
-  static new(): Studio {
-    return new Studio()
+  static new(identity: CliDistributionIdentity): Studio {
+    return new Studio(identity)
   }
+
+  constructor(private readonly identity: CliDistributionIdentity) {}
 
   help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${Studio.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
     }
 
-    return Studio.help
+    return createHelp(this.identity)
   }
 
   /**
@@ -320,113 +243,311 @@ ${bold('Examples')}
       return this.help()
     }
 
+    const requestedPort = args['--port']
+
+    if (
+      requestedPort !== undefined &&
+      (!Number.isInteger(requestedPort) || requestedPort < 1 || requestedPort > 65_535)
+    ) {
+      return new UserFacingError('The Studio port must be an integer between 1 and 65535.')
+    }
+
     const connectionString = args['--url'] || config.datasource?.url
 
     if (!connectionString) {
-      return new Error(
+      return new UserFacingError(
         'No database URL found. Provide it via the `--url <url>` argument or define it in your Prisma config file as `datasource.url`.',
       )
     }
 
-    if (!URL.canParse(connectionString)) {
-      return new Error('The provided database URL is not valid.')
+    const protocol = connectionString.split('://')[0].toLowerCase()
+
+    if (!PROTOCOLS_SKIPPING_URL_VALIDATION.has(protocol) && !URL.canParse(connectionString)) {
+      return new UserFacingError('The provided database URL is not valid.')
     }
 
-    const protocol = new URL(connectionString).protocol.replace(':', '')
+    if (isAccelerateProtocol(protocol)) {
+      return new UserFacingError(ACCELERATE_UNSUPPORTED_MESSAGE)
+    }
 
     const studioStuff = CONNECTION_STRING_PROTOCOL_TO_STUDIO_STUFF[protocol]
 
     if (!studioStuff) {
-      return new Error(`Prisma Studio is not supported for the "${protocol}" protocol.`)
+      return new UserFacingError(`Prisma Studio is not supported for the "${protocol}" protocol.`)
     }
 
     const executor = await studioStuff.createExecutor(
       connectionString,
       getUrlBasePath(args['--url'], config.loadedFromFile),
     )
+    const version = packageJson.dependencies['@prisma/studio-core']
+    const ppgDbInfo = await getPpgInfo(connectionString)
+    const port = await resolveStudioPort(requestedPort)
+    const handler = createStudioRequestHandler({
+      adapter: studioStuff.adapter,
+      executor,
+      ppgDbInfo,
+      port,
+      protocol,
+      version,
+    })
 
-    const app = new Hono()
+    const url = `http://localhost:${port}`
 
-    app.use('*', cors())
+    const server = startStudioServer({
+      handler,
+      onListen: () => {
+        console.log(bold(`\nPrisma Studio is running at:`), url)
 
-    app.get('/', (ctx) => {
+        const browser = args['--browser'] || process.env.BROWSER
+
+        if (browser?.toLowerCase() !== 'none') {
+          void open(url, { app: browser ? { name: browser } : undefined })
+        }
+      },
+      port,
+    })
+
+    process.once('SIGINT', () => server.close())
+    process.once('SIGTERM', () => server.close())
+
+    return ''
+  }
+}
+
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
+Browse your data with Prisma Studio
+
+${bold('Usage')}
+
+  ${dim('$')} ${identity} studio [options]
+
+${bold('Options')}
+
+  -h, --help        Display this help message
+  -p, --port        Port to start Studio on
+  -b, --browser     Browser to open Studio in
+  --config          Custom path to your Prisma config file
+  --url             Database connection string (overrides the one in your Prisma config)
+
+${bold('Examples')}
+
+  Start Studio on the default port
+    ${dim('$')} ${identity} studio
+
+  Start Studio on a custom port
+    ${dim('$')} ${identity} studio --port 5555
+
+  Start Studio in a specific browser
+    ${dim('$')} ${identity} studio --port 5555 --browser firefox
+    ${dim('$')} BROWSER=firefox ${identity} studio --port 5555
+
+  Start Studio without opening in a browser
+    ${dim('$')} ${identity} studio --port 5555 --browser none
+    ${dim('$')} BROWSER=none ${identity} studio --port 5555
+
+  Specify a custom prisma config file
+    ${dim('$')} ${identity} studio --config=./prisma7.config.ts
+
+  Specify a direct database connection string
+    ${dim('$')} ${identity} studio --url="postgresql://user:password@localhost:5432/dbname"
+`)
+}
+
+function getUrlBasePath(url: string | undefined, configPath: string | null): string {
+  return url ? process.cwd() : configPath ? dirname(configPath) : process.cwd()
+}
+
+async function resolveStudioPort(requestedPort: number | undefined): Promise<number> {
+  if (requestedPort !== undefined) {
+    return requestedPort
+  }
+
+  return getPort({
+    host: STUDIO_SERVER_HOST,
+    port: DEFAULT_PORT,
+    portRange: [MIN_PORT, DEFAULT_PORT - 1],
+  })
+}
+
+function serializeBffError(error: unknown): SerializedError {
+  return getSerializedBffError(error) ?? serializeError(error)
+}
+
+function getSerializedBffError(error: unknown): SerializedError | null {
+  if (isSerializedError(error)) {
+    return error
+  }
+
+  if (!isRecord(error)) {
+    return null
+  }
+
+  const nestedError = error.error
+
+  if (isSerializedError(nestedError)) {
+    return nestedError
+  }
+
+  const rpcSerializedError = error['@@error']
+
+  if (isSerializedError(rpcSerializedError)) {
+    return rpcSerializedError
+  }
+
+  return null
+}
+
+function isSerializedError(error: unknown): error is SerializedError {
+  if (!isRecord(error)) {
+    return false
+  }
+
+  if (typeof error.name !== 'string' || typeof error.message !== 'string') {
+    return false
+  }
+
+  if (error.errors === undefined) {
+    return true
+  }
+
+  return Array.isArray(error.errors) && error.errors.every(isSerializedError)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isAccelerateProtocol(protocol: string): boolean {
+  return protocol === 'prisma' || protocol === 'prisma+postgres'
+}
+
+function normalizeMySQLConnectionString(connectionString: string): string {
+  const connectionURL = new URL(connectionString)
+
+  const connectionLimit = connectionURL.searchParams.get('connection_limit')
+
+  if (connectionLimit && !connectionURL.searchParams.has('connectionLimit')) {
+    connectionURL.searchParams.set('connectionLimit', connectionLimit)
+  }
+
+  const sslAccept = connectionURL.searchParams.get('sslaccept')
+
+  if (sslAccept && !connectionURL.searchParams.has('ssl')) {
+    connectionURL.searchParams.set('ssl', JSON.stringify(prismaSslAcceptToMySQL2Ssl(sslAccept)))
+  }
+
+  for (const queryParameter of PRISMA_ORM_SPECIFIC_MYSQL_QUERY_PARAMETERS) {
+    connectionURL.searchParams.delete(queryParameter)
+  }
+
+  return connectionURL.toString()
+}
+
+function prismaSslAcceptToMySQL2Ssl(sslAccept: string): { rejectUnauthorized: boolean } {
+  switch (sslAccept) {
+    case 'strict':
+      return { rejectUnauthorized: true }
+    case 'accept_invalid_certs':
+      return { rejectUnauthorized: false }
+    default:
+      throw new Error(
+        `Unknown Prisma MySQL sslaccept value "${sslAccept}". Supported values are "strict" and "accept_invalid_certs".`,
+      )
+  }
+}
+
+// prettier-ignore
+function getIndexHtml(adapter: StudioAdapterType): string {
+  return `<!doctype html>
+<html lang="en" style="height: 100%">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="${PRISMA_LOGO_SVG_DATA_URL}" type="image/svg+xml">
+    <link rel="stylesheet" href="/${STUDIO_CSS_FILE_NAME}">
+    <style>
+      html {
+        height: 100%;
+      }
+
+      body {
+        color: black;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      #root {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>window.__STUDIO_CONFIG__ = ${JSON.stringify({ adapter })};</script>
+    <script type="module" src="/${STUDIO_JS_FILE_NAME}"></script>
+  </body>
+</html>`
+}
+
+function isGetOrHeadRequest(method: string): boolean {
+  return method === 'GET' || method === 'HEAD'
+}
+
+function createStudioRequestHandler({
+  adapter,
+  executor,
+  ppgDbInfo,
+  port,
+  protocol,
+  version,
+}: {
+  adapter: StudioAdapterType
+  executor: Executor
+  ppgDbInfo: Awaited<ReturnType<typeof getPpgInfo>>
+  port: number
+  protocol: string
+  version: string
+}): (request: Request) => Promise<Response> {
+  let projectHash: string | null = null
+
+  return async (request) => {
+    if (!isAllowedStudioOrigin(request, port)) {
+      return textResponse('Forbidden', 403)
+    }
+
+    const { pathname } = new URL(request.url)
+
+    if (isGetOrHeadRequest(request.method) && pathname === '/') {
       const contentType = FILE_EXTENSION_TO_CONTENT_TYPE[extname('index.html')]
 
-      return ctx.text(INDEX_HTML, 200, { 'Content-Type': contentType })
-    })
+      return textResponse(getIndexHtml(adapter), 200, { 'Content-Type': contentType })
+    }
 
-    app.get(`/${ADAPTER_FILE_NAME}`, (ctx) => {
-      const contentType = FILE_EXTENSION_TO_CONTENT_TYPE[extname(ctx.req.path)]
+    if (isGetOrHeadRequest(request.method) && pathname === '/favicon.ico') {
+      return textResponse(PRISMA_LOGO_SVG, 200, { 'Content-Type': 'image/svg+xml' })
+    }
 
-      return ctx.text(studioStuff.reExportAdapterScript, 200, { 'Content-Type': contentType })
-    })
+    if (
+      isGetOrHeadRequest(request.method) &&
+      (pathname === `/${STUDIO_JS_FILE_NAME}` || pathname === `/${STUDIO_CSS_FILE_NAME}`)
+    ) {
+      return serveStudioAsset(pathname)
+    }
 
-    app.get('/*', async (ctx) => {
-      const filePath = join(STATIC_ASSETS_DIR, ctx.req.path.substring(1))
+    if (request.method === 'POST' && pathname === '/bff') {
+      return handleStudioBffRequest(await request.json(), executor)
+    }
 
-      const contentType = FILE_EXTENSION_TO_CONTENT_TYPE[extname(filePath)] || DEFAULT_CONTENT_TYPE
-
-      try {
-        return ctx.body(await readFile(filePath), 200, { 'Content-Type': contentType })
-      } catch {
-        return ctx.text('Not Found', 404)
-      }
-    })
-
-    app.post('/bff', async (ctx) => {
-      const request = (await ctx.req.json()) as StudioBFFRequest
-
-      const { procedure } = request
-
-      if (procedure === 'query') {
-        const [error, results] = await executor.execute(request.query)
-
-        if (error) {
-          return ctx.json([serializeError(error)])
-        }
-
-        return ctx.json([null, results])
-      }
-
-      if (procedure === 'sequence') {
-        if (!('executeSequence' in executor)) {
-          return ctx.json([[serializeError(new Error('Executor does not support sequences'))]])
-        }
-
-        const [[error0, result0], maybeResult1] = await (executor as SequenceExecutor).executeSequence(request.sequence)
-
-        if (error0) {
-          return ctx.json([[serializeError(error0)]])
-        }
-
-        const [error1, result1] = maybeResult1 || []
-
-        if (error1) {
-          return ctx.json([[null, result0], [serializeError(error1)]])
-        }
-
-        return ctx.json([
-          [null, result0],
-          [null, result1],
-        ])
-      }
-
-      procedure satisfies undefined
-
-      return ctx.text('Unknown procedure', { status: 500 })
-    })
-
-    let projectHash: string | null = null
-    const version = packageJson.dependencies['@prisma/studio-core']
-
-    const ppgDbInfo = await getPpgInfo(connectionString)
-
-    app.post('/telemetry', async (ctx) => {
-      const { eventId, name, payload, timestamp } =
-        await ctx.req.json<Parameters<NonNullable<StudioProps['onEvent']>>[0]>()
+    if (request.method === 'POST' && pathname === '/telemetry') {
+      const { eventId, name, payload, timestamp } = (await request.json()) as Parameters<
+        NonNullable<StudioProps['onEvent']>
+      >[0]
 
       if (name !== 'studio_launched') {
-        return ctx.body(null, 200)
+        return emptyResponse(200)
       }
 
       const input: Check.Input = {
@@ -448,94 +569,168 @@ ${bold('Examples')}
         // noop
       })
 
-      return ctx.body(null, 200)
-    })
+      return emptyResponse(200)
+    }
 
-    const port = args['--port'] || (await getPort({ port: DEFAULT_PORT, portRange: [MIN_PORT, DEFAULT_PORT - 1] }))
-
-    const url = `http://localhost:${port}`
-
-    const server = serve({ fetch: app.fetch, overrideGlobalObjects: false, port }, () => {
-      process.once('SIGINT', () => server.close())
-      process.once('SIGTERM', () => server.close())
-
-      console.log(bold(`\nPrisma Studio is running at:`), url)
-
-      const browser = args['--browser'] || process.env.BROWSER
-
-      if (browser?.toLowerCase() !== 'none') {
-        void open(url, { app: browser ? { name: browser } : undefined })
-      }
-    })
-
-    return ''
+    return textResponse('Not Found', 404)
   }
 }
 
-function getUrlBasePath(url: string | undefined, configPath: string | null): string {
-  return url ? process.cwd() : configPath ? dirname(configPath) : process.cwd()
+async function handleStudioBffRequest(payload: unknown, executor: Executor): Promise<Response> {
+  const request = payload as StudioBFFRequest
+  const { procedure } = request
+
+  if (procedure === 'query') {
+    const [error, results] = await executor.execute(request.query)
+
+    if (error) {
+      return jsonResponse([serializeBffError(error)])
+    }
+
+    return jsonResponse([null, results])
+  }
+
+  if (procedure === 'sequence') {
+    if (!('executeSequence' in executor)) {
+      return jsonResponse([[serializeBffError(new Error('Executor does not support sequences'))]])
+    }
+
+    const [[error0, result0], maybeResult1] = await (executor as SequenceExecutor).executeSequence(request.sequence)
+
+    if (error0) {
+      return jsonResponse([[serializeBffError(error0)]])
+    }
+
+    const [error1, result1] = maybeResult1 || []
+
+    if (error1) {
+      return jsonResponse([[null, result0], [serializeBffError(error1)]])
+    }
+
+    return jsonResponse([
+      [null, result0],
+      [null, result1],
+    ])
+  }
+
+  if (procedure === 'transaction') {
+    if (!executor.executeTransaction) {
+      return jsonResponse([serializeBffError(new Error('Executor does not support transactions'))])
+    }
+
+    const [error, results] = await executor.executeTransaction(request.queries)
+
+    if (error) {
+      return jsonResponse([serializeBffError(error)])
+    }
+
+    return jsonResponse([null, results])
+  }
+
+  if (procedure === 'sql-lint') {
+    if (!executor.lintSql) {
+      return jsonResponse([serializeBffError(new Error('Executor does not support SQL lint'))])
+    }
+
+    const [error, result] = await executor.lintSql({
+      schemaVersion: request.schemaVersion,
+      sql: request.sql,
+    })
+
+    if (error) {
+      return jsonResponse([serializeBffError(error)])
+    }
+
+    return jsonResponse([null, result])
+  }
+
+  if (procedure === 'query-insights') {
+    return jsonResponse([serializeError(new Error('Executor does not support query insights'))])
+  }
+
+  procedure satisfies undefined
+
+  return textResponse('Unknown procedure', 500)
 }
 
-// prettier-ignore
-const INDEX_HTML =
-`<!doctype html>
-<html lang="en" style="height: 100%">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.17"></script>
-    <link rel="stylesheet" href="/ui/index.css">
-    <style>
-      body {
-        color: black;
-        height: 100%;
-        margin: 0;
-        padding: 0;
+async function serveStudioAsset(requestPath: string): Promise<Response> {
+  const fileName = requestPath.substring(1)
+  const contentType = FILE_EXTENSION_TO_CONTENT_TYPE[extname(fileName)]
+
+  try {
+    return new Response(await readStudioAsset(fileName), {
+      headers: { 'Content-Type': contentType },
+      status: 200,
+    })
+  } catch (error: unknown) {
+    if (isNotFoundError(error)) {
+      return textResponse('Not Found', 404)
+    }
+
+    return textResponse('Internal Server Error', 500)
+  }
+}
+
+async function readStudioAsset(fileName: string): Promise<Buffer | string> {
+  const triedPaths: string[] = []
+
+  for (const directory of getStudioAssetDirectories()) {
+    const filePath = join(directory, fileName)
+    triedPaths.push(filePath)
+
+    try {
+      return await readFile(filePath)
+    } catch (error: unknown) {
+      if (!isNotFoundError(error)) {
+        throw error
       }
+    }
+  }
 
-      #root {
-        height: 100%;
-      }
-    </style>
-    <script type="importmap">
-      {
-        "imports": {
-          "react": "https://esm.sh/react@19.2.0",
-          "react/jsx-runtime": "https://esm.sh/react@19.2.0/jsx-runtime",
-          "react-dom": "https://esm.sh/react-dom@19.2.0",
-          "react-dom/client": "https://esm.sh/react-dom@19.2.0/client"
-        }
-      }
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module">
-      'use strict';
-      import React from 'react';
-      import ReactDOMClient from 'react-dom/client';
+  const error = new Error(`Prisma Studio asset "${fileName}" was not found.`) as Error & { code?: string }
+  error.code = 'ENOENT'
+  error.message = `${error.message}\nSearched in:\n${triedPaths.map((filePath) => `- ${filePath}`).join('\n')}`
+  throw error
+}
 
-      import { ${ADAPTER_FACTORY_FUNCTION_NAME} } from '/${ADAPTER_FILE_NAME}';
-      import { createStudioBFFClient } from '/data/bff/index.js';
-      import { Studio } from '/ui/index.js';
+function getStudioAssetDirectories(): string[] {
+  return [...new Set([__dirname, join(__dirname, '..', 'build')])]
+}
 
-      const adapter = ${ADAPTER_FACTORY_FUNCTION_NAME}({
-        executor: createStudioBFFClient({ url: '/bff' }),
-      });
+function isNotFoundError(error: unknown): error is NodeJS.ErrnoException {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+}
 
-      const onEvent = (event) => {
-        fetch('/telemetry', {
-          body: JSON.stringify(event),
-          method: 'POST',
-        });
-      };
+function jsonResponse(payload: unknown): Response {
+  return Response.json(payload)
+}
 
-      window.__PVCE__ = true;
+function emptyResponse(status: number, headers?: Record<string, string>): Response {
+  return new Response(null, { headers, status })
+}
 
-      const container = document.getElementById('root');
-      const root = ReactDOMClient.createRoot(container);
+function textResponse(text: string, status: number, headers?: Record<string, string>): Response {
+  return new Response(text, {
+    headers,
+    status,
+  })
+}
 
-      root.render(React.createElement(Studio, { adapter, onEvent }));
-    </script>
-  </body>
-</html>`
+function isAllowedStudioOrigin(request: Request, port: number): boolean {
+  const origin = request.headers.get('Origin')
+
+  if (origin === null) {
+    return true
+  }
+
+  try {
+    const normalizedOrigin = new URL(origin).origin
+
+    return (
+      normalizedOrigin === new URL(`http://localhost:${port}`).origin ||
+      normalizedOrigin === new URL(`http://127.0.0.1:${port}`).origin
+    )
+  } catch {
+    return false
+  }
+}

@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       # Any update here needs to be done for all files
-      # (test.yml, benchmark.yml, release.yml, bundle-size.yml, ci-aux-files.yml)
+      # (test.yml, benchmark.yml, publish.yml, bundle-size.yml, ci-aux-files.yml)
       - '*.md'
       - '*.bench.ts'
       - 'LICENSE'

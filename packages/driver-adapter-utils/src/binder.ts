@@ -113,7 +113,7 @@ export const bindAdapter = (
 // *.bind(transaction) is required to preserve the `this` context of functions whose
 // execution is delegated to napi.rs.
 const bindTransaction = (errorRegistry: ErrorRegistryInternal, transaction: Transaction): ErrorCapturingTransaction => {
-  return {
+  const boundTransaction: ErrorCapturingTransaction = {
     adapterName: transaction.adapterName,
     provider: transaction.provider,
     options: transaction.options,
@@ -122,6 +122,20 @@ const bindTransaction = (errorRegistry: ErrorRegistryInternal, transaction: Tran
     commit: wrapAsync(errorRegistry, transaction.commit.bind(transaction)),
     rollback: wrapAsync(errorRegistry, transaction.rollback.bind(transaction)),
   }
+
+  if (transaction.createSavepoint) {
+    boundTransaction.createSavepoint = wrapAsync(errorRegistry, transaction.createSavepoint.bind(transaction))
+  }
+
+  if (transaction.rollbackToSavepoint) {
+    boundTransaction.rollbackToSavepoint = wrapAsync(errorRegistry, transaction.rollbackToSavepoint.bind(transaction))
+  }
+
+  if (transaction.releaseSavepoint) {
+    boundTransaction.releaseSavepoint = wrapAsync(errorRegistry, transaction.releaseSavepoint.bind(transaction))
+  }
+
+  return boundTransaction
 }
 
 function wrapAsync<A extends unknown[], R>(

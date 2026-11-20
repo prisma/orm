@@ -1,55 +1,35 @@
-import { format, HelpError } from '@prisma/internals'
-import { bold, dim, red } from 'kleur/colors'
+import { format } from '@prisma/internals'
+import { bold, dim } from 'kleur/colors'
 
-interface HelpContent {
-  command?: string
-  subcommand?: string
-  subcommands?: string[][]
-  options?: string[][]
-  examples?: string[]
-  additionalContent?: string[]
+import type { CliDistributionIdentity } from '../../utils/cli-distribution-identity'
+
+interface HelpOptions {
+  subcommands: [string, string][]
+  examples: string[]
 }
 
-export const createHelp = (content: HelpContent) => {
-  const { command, subcommand, subcommands, options, examples, additionalContent } = content
-  const command_ = subcommand
-    ? `prisma platform ${command} ${subcommand}`
-    : command && subcommands
-      ? `prisma platform ${command} [command]`
-      : `prisma platform [command]`
+export function createHelp(identity: CliDistributionIdentity, { subcommands, examples }: HelpOptions): string {
+  const maxNameLen = Math.max(...subcommands.map(([name]) => name.length))
+  const subcommandLines = subcommands.map(([name, desc]) => `    ${name.padEnd(maxNameLen)}   ${desc}`).join('\n')
+  const exampleLines = examples.map((example) => `    ${dim('$')} ${example}`).join('\n')
 
-  const usage = format(`
-${bold('Usage')}
+  return format(`
+  Prisma Data Platform commands
 
-  ${dim('$')} ${command_} [options]
+  ${bold('Usage')}
+
+    ${dim('$')} ${identity} platform [command]
+
+  ${bold('Commands')}
+
+${subcommandLines}
+
+  ${bold('Flags')}
+
+    -h, --help   Display this help message
+
+  ${bold('Examples')}
+
+${exampleLines}
 `)
-
-  // prettier-ignore
-  const commands = subcommands && format(`
-${bold('Commands')}
-
-${subcommands.map(([option, description]) => `${option.padStart(15)}   ${description}`).join('\n')}
-  `)
-
-  // prettier-ignore
-  const options_ = options && format(`
-${bold('Options')}
-
-${options.map(([option, alias, description]) => `  ${option.padStart(15)} ${alias && alias+','}   ${description}`).join('\n')}
-  `)
-
-  // prettier-ignore
-  const examples_ = examples && format(`
-${bold('Examples')}
-
-${examples.map(example => `  ${dim('$')} ${example}`).join('\n')}
-  `)
-
-  // prettier-ignore
-  const additionalContent_ = additionalContent && format(`
-${additionalContent.map(entry => `${entry}`).join('\n')}
-  `)
-
-  const help = [usage, commands, options_, examples_, additionalContent_].filter(Boolean).join('')
-  return (error?: string) => (error ? new HelpError(`\n${bold(red(`!`))} ${error}\n${help}`) : help)
 }

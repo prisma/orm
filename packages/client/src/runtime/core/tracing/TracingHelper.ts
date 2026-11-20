@@ -1,10 +1,11 @@
 import type { Context } from '@opentelemetry/api'
 import {
-  EngineSpan,
-  ExtendedSpanOptions,
+  type EngineSpan,
+  type EngineTraceEvent,
+  type ExtendedSpanOptions,
   getGlobalTracingHelper,
-  SpanCallback,
-  TracingHelper,
+  type SpanCallback,
+  type TracingHelper,
 } from '@prisma/instrumentation-contract'
 
 export const disabledTracingHelper: TracingHelper = {
@@ -18,7 +19,19 @@ export const disabledTracingHelper: TracingHelper = {
     return `00-10-10-00`
   },
 
-  dispatchEngineSpans() {},
+  // Without tracing there are no spans to emit the events in the context of,
+  // but the events themselves must still reach the log emitter: logging is
+  // configured independently of tracing, and tracing can be disabled in the
+  // middle of a request that already asked the server for spans.
+  dispatchEngineSpans(
+    _spans: EngineSpan[],
+    events: EngineTraceEvent[],
+    emitLogEvent: (event: EngineTraceEvent) => void,
+  ) {
+    for (const event of events) {
+      emitLogEvent(event)
+    }
+  },
 
   getActiveContext() {
     return undefined
@@ -42,8 +55,12 @@ class DynamicTracingHelper implements TracingHelper {
     return this.getTracingHelper().getTraceParent(context)
   }
 
-  dispatchEngineSpans(spans: EngineSpan[]) {
-    return this.getTracingHelper().dispatchEngineSpans(spans)
+  dispatchEngineSpans(
+    spans: EngineSpan[],
+    events: EngineTraceEvent[],
+    emitLogEvent: (event: EngineTraceEvent) => void,
+  ) {
+    return this.getTracingHelper().dispatchEngineSpans(spans, events, emitLogEvent)
   }
 
   getActiveContext() {

@@ -55,7 +55,6 @@ In the `prisma/prisma` repository we have a few places where you can write tests
 - **`client`**
   - [`./packages/client/tests/functional/`](./packages/client/tests/functional/) - The functional test setup, current default place where to add tests, tests are fully isolated and can easily be ran on all supported databases.
     - Check out the example test: [`./packages/client/tests/functional/_example/`](./packages/client/tests/functional/_example/)
-  - [`./packages/client/tests/memory/`](./packages/client/tests/memory/) - Memory leaks tests
   - [`./packages/client/src/__tests__/*.test.ts`](./packages/client/src/__tests__/) - Unit tests
   - [`./packages/client/src/__tests__/integration/happy/**`](./packages/client/src/__tests__/integration/happy/) - Legacy integration tests for the happy path. Please, write functional tests instead.
   - [`./packages/client/src/__tests__/integration/errors/**`](./packages/client/src/__tests__/integration/errors/) - Legacy integration tests for error cases. Please write functional tests instead.
@@ -327,56 +326,6 @@ If JS expression, following `@ts-test-if:` evaluates to truthy value, `@ts-expec
 inserted in its place during the generation. All parameters from the test matrix can be used within that
 expression.
 
-## Memory tests
-
-This suite tests client for memory leaks. It works by repeatedly running test code in a loop
-and monitoring V8 heap usage after every iteration. If it detects that memory usage grows
-with a rate higher than the threshold, it will report a memory leak and fail the test.
-
-To create a memory test you need 2 files:
-
-- schema, located in `tests/memory/<your-test-name>/prisma/schema.prisma` file, which will be
-  used for setting up the database.
-- test code, `tests/memory/<your-test-name>/test.ts`
-
-### Writing memory test
-
-Tests are created using `createMemoryTest` function:
-
-```ts
-import { createMemoryTest } from '../_utils/createMemoryTest'
-
-//@ts-ignore
-type PrismaModule = typeof import('./.generated/node_modules/@prisma/client')
-
-void createMemoryTest({
-  async prepare({ PrismaClient }: PrismaModule) {
-    const client = new PrismaClient()
-    await client.$connect()
-    return client
-  },
-  async run(client) {
-    await client.user.findMany()
-  },
-  async cleanup(client) {
-    await client.$disconnect()
-  },
-  iterations: 1500,
-})
-```
-
-`createMemoryTest` accepts following options:
-
-- `prepare(prismaModule)` is used for any setup code, needed by the test. It is executed only once. Return value of this function will be passed into `run` and `cleanup` methods.
-- `run(prepareResult)` - actual test code. It is expected that after executing this function, memory usage does not increase. This function is repeatedly executed in a loop while the test runs.
-- `cleanup(prepareResult)` used for cleaning up any work, done in `prepare` function.
-- `iterations` specifies the number of executions of `run` function, for which memory measurement will be done, default is 1000. On top of that, test setup also adds 100 iterations for warming up.
-
-### Running memory tests
-
-- `pnpm test:memory` for running whole test suite
-- `pnpm test:memory <test name>` for running single test
-
 ## How to use custom engines
 
 By default, you get the engines that are downloaded on postinstall in `@prisma/engines` thanks to `@prisma/engines-version`.
@@ -423,8 +372,8 @@ on CI.
 
 By creating a Pull Request the following pipelines will be triggered
 
-- [GitHub Action `CI`](https://github.com/prisma/prisma/blob/main/.github/workflows/test.yml)
-- [GitHub Action `Benchmark`](https://github.com/prisma/prisma/blob/main/.github/workflows/benchmark.yml)
+- [GitHub Action `CI`](https://github.com/prisma/prisma/blob/v7/.github/workflows/test.yml)
+- [GitHub Action `Benchmark`](https://github.com/prisma/prisma/blob/v7/.github/workflows/benchmark.yml)
 
 `CI` will need to be successful before merging ("flaky" tests might show up and might be ignored).
 
@@ -432,7 +381,7 @@ By default, some tests are tested only during daily builds. If you need to run a
 
 ### Publishing all the packages to npm on the `integration` tag
 
-If a branch name starts with `integration/` like `integration/fix-all-the-things` the [GitHub Actions - npm - release to dev/integration](https://github.com/prisma/prisma/blob/main/.github/workflows/release-ci.yml) pipeline will be triggered.
+If a branch name starts with `integration/` like `integration/fix-all-the-things` the [GitHub Actions - v7 - npm - release](https://github.com/prisma/prisma/blob/v7/.github/workflows/publish.yml) pipeline will be triggered.
 This workflow will directly publish (without running tests) the packages to npm on the `integration` tag with a version like `5.3.0-integration-fix-all-the-things.1` (where `5.3.0-` is the current dev version prefix, `integration-` is statically added, `fix-all-the-things` is from the branch name and `.1` indicates the first version published from this branch)
 
 To make a Pull Request which will release a version to the `integration` tag automatically, the name of the branch of the PR would need to start with `integration/`.
@@ -441,10 +390,10 @@ Alternatively, add `/integration` in the Pull Request description:
 - If this is added before opening the Pull Request, a release will happen automatically.
 - If this is added after the creation of the PR, the `Detect jobs to run` job from the `CI` workflow needs to be re-triggered to get a release.
 
-The [GitHub Actions - npm - release to dev/integration](https://github.com/prisma/prisma/blob/main/.github/workflows/release-ci.yml) workflow can also be manually triggered to run on any branch.
+The [GitHub Actions - v7 - npm - release](https://github.com/prisma/prisma/blob/v7/.github/workflows/publish.yml) workflow can also be manually triggered to run on any branch.
 Example:
 
-- Go to https://github.com/prisma/prisma/actions/workflows/release-ci.yml?query=branch%3Ajoel%2Fdotenv
+- Go to https://github.com/prisma/prisma/actions/workflows/publish.yml?query=branch%3Ajoel%2Fdotenv
 - Click "Run workflow"
 - Change "Use workflow from" to match the branch you want to release, here `joel/dotenv`
 - Check the box for "Check to force an integration release for any given branch name"

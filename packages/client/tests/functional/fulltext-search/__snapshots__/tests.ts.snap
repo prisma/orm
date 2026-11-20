@@ -6,17 +6,7 @@ exports[`fulltext-search (provider=mysql, js_mariadb) bad query 1`] = `"syntax e
 
 exports[`fulltext-search (provider=mysql, js_planetscale) bad query 1`] = `"target: test-0000-00000000.0.primary: vttablet: rpc error: code = InvalidArgument desc = syntax error, unexpected '-'"`;
 
-exports[`fulltext-search (provider=mysql, qpe=remote) bad query 1`] = `
-"
-Invalid \`.findMany()\` invocation in
-/client/tests/functional/fulltext-search/tests.ts:0:0
-
-  XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(process.platform !== 'win32')('bad query', async () => {
-  XX   const result = prisma.user
-→ XX     .findMany(
-syntax error, unexpected '-'"
-`;
+exports[`fulltext-search (provider=mysql, qpe=remote) bad query 1`] = `"syntax error, unexpected '-'"`;
 
 exports[`fulltext-search (provider=postgresql) bad query 1`] = `"syntax error in tsquery: "John Smith""`;
 
@@ -24,14 +14,4 @@ exports[`fulltext-search (provider=postgresql, js_neon) bad query 1`] = `"syntax
 
 exports[`fulltext-search (provider=postgresql, js_pg) bad query 1`] = `"syntax error in tsquery: "John Smith""`;
 
-exports[`fulltext-search (provider=postgresql, qpe=remote) bad query 1`] = `
-"
-Invalid \`.findMany()\` invocation in
-/client/tests/functional/fulltext-search/tests.ts:0:0
-
-  XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(process.platform !== 'win32')('bad query', async () => {
-  XX   const result = prisma.user
-→ XX     .findMany(
-syntax error in tsquery: "John Smith""
-`;
+exports[`fulltext-search (provider=postgresql, qpe=remote) bad query 1`] = `"syntax error in tsquery: "John Smith""`;

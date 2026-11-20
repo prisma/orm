@@ -188,6 +188,18 @@ class PrismaPostgresTransaction implements Transaction {
     }
   }
 
+  async createSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
+
+  async rollbackToSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `ROLLBACK TO SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
+
+  async releaseSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `RELEASE SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
+
   async executeRaw(params: SqlQuery): Promise<number> {
     await this.#ensureBegun()
     return executeRawStatement(this.#session, params)
