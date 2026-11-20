@@ -1766,6 +1766,7 @@ interface OutputSettings {
   readonly dateStyle: string;
   readonly intervalStyle: string;
   readonly byteaOutput: string;
+  readonly lcMonetary: string;
 }
 
 const INTROSPECTION_OUTPUT_SETTINGS: OutputSettings = {
@@ -1773,65 +1774,65 @@ const INTROSPECTION_OUTPUT_SETTINGS: OutputSettings = {
   dateStyle: 'ISO, MDY',
   intervalStyle: 'postgres',
   byteaOutput: 'hex',
+  lcMonetary: 'C',
 };
 
-async function readOutputSettings(
+const TRANSACTION_PROBE = 'prisma.introspection_in_transaction';
+
+/**
+ * The caller's output settings when the connection is inside a transaction, and `undefined` when it is not. A local setting outlives its own statement only inside a transaction, so reading one back tells the two apart.
+ */
+async function callerSettingsInsideTransaction(
   driver: SqlControlDriverInstance<'postgres'>,
 ): Promise<OutputSettings | undefined> {
-  const { rows } = await driver.query<OutputSettings>(
-    `SELECT current_setting('TimeZone') AS "timeZone",
+  await driver.query(`SELECT set_config('${TRANSACTION_PROBE}', 'on', true)`);
+  const { rows } = await driver.query<OutputSettings & { readonly insideTransaction: boolean }>(
+    `SELECT current_setting('${TRANSACTION_PROBE}', true) = 'on' AS "insideTransaction",
+            current_setting('TimeZone') AS "timeZone",
             current_setting('DateStyle') AS "dateStyle",
             current_setting('IntervalStyle') AS "intervalStyle",
-            current_setting('bytea_output') AS "byteaOutput"`,
+            current_setting('bytea_output') AS "byteaOutput",
+            current_setting('lc_monetary') AS "lcMonetary"`,
   );
-  return rows[0];
+  const row = rows[0];
+  if (row?.insideTransaction !== true) return undefined;
+  const { insideTransaction: _, ...settings } = row;
+  return settings;
 }
 
-async function applyOutputSettings(
+async function applyLocalOutputSettings(
   driver: SqlControlDriverInstance<'postgres'>,
   settings: OutputSettings,
-  local: boolean,
 ): Promise<void> {
   await driver.query(
-    `SELECT set_config('TimeZone', $1, $5),
-            set_config('DateStyle', $2, $5),
-            set_config('IntervalStyle', $3, $5),
-            set_config('bytea_output', $4, $5)`,
-    [settings.timeZone, settings.dateStyle, settings.intervalStyle, settings.byteaOutput, local],
-  );
-}
-
-function sameOutputSettings(a: OutputSettings | undefined, b: OutputSettings): boolean {
-  return (
-    a?.timeZone === b.timeZone &&
-    a.dateStyle === b.dateStyle &&
-    a.intervalStyle === b.intervalStyle &&
-    a.byteaOutput === b.byteaOutput
+    `SELECT set_config('TimeZone', $1, true),
+            set_config('DateStyle', $2, true),
+            set_config('IntervalStyle', $3, true),
+            set_config('bytea_output', $4, true),
+            set_config('lc_monetary', $5, true)`,
+    [
+      settings.timeZone,
+      settings.dateStyle,
+      settings.intervalStyle,
+      settings.byteaOutput,
+      settings.lcMonetary,
+    ],
   );
 }
 
 /**
- * Runs `read` with the settings that shape printed values pinned to Postgres's defaults, then
- * restores the caller's. Postgres prints a `timestamptz` default in the session time zone, and
- * dates, intervals and bytea in the session styles, so pinning them gives the same text whatever
- * the server, the role, or the caller set.
+ * Runs `read` with the settings that shape printed values pinned to Postgres's defaults, and `lc_monetary` to C. Postgres prints a `timestamptz` default in the session time zone, dates, intervals and bytea in the session styles, and money in the session's monetary locale, so pinning them gives the same text whatever the server, the role, or the caller set.
  *
- * The settings are first set locally. A local setting outlives its own statement only inside a
- * transaction, so reading them back tells the two cases apart. Inside the caller's transaction they
- * are set and restored locally, so the caller's session values return when it commits; outside
- * one they are set and restored for the session. When `read` fails, its error is the one thrown;
- * inside a transaction the failure aborts it, and the caller's rollback restores the settings.
+ * The settings are always set locally, so they never reach a server connection that a connection pooler shares with other clients. Inside the caller's transaction they are restored locally afterwards, so the caller's values return for the rest of it; when `read` fails there, the failure aborts the transaction and the caller's rollback restores them. Outside a transaction, `read` runs in a transaction of its own, which is rolled back.
  */
 async function readWithDefaultOutputSettings<T>(
   driver: SqlControlDriverInstance<'postgres'>,
   read: () => Promise<T>,
 ): Promise<T> {
-  const callerSettings = await readOutputSettings(driver);
-  if (callerSettings === undefined) return read();
-  await applyOutputSettings(driver, INTROSPECTION_OUTPUT_SETTINGS, true);
-  const local = sameOutputSettings(await readOutputSettings(driver), INTROSPECTION_OUTPUT_SETTINGS);
-  if (!local) await applyOutputSettings(driver, INTROSPECTION_OUTPUT_SETTINGS, false);
-  const restore = () => applyOutputSettings(driver, callerSettings, local);
+  const callerSettings = await callerSettingsInsideTransaction(driver);
+  if (callerSettings === undefined) return readInOwnTransaction(driver, read);
+  await applyLocalOutputSettings(driver, INTROSPECTION_OUTPUT_SETTINGS);
+  const restore = () => applyLocalOutputSettings(driver, callerSettings);
   let result: T;
   try {
     result = await read();
@@ -1840,6 +1841,23 @@ async function readWithDefaultOutputSettings<T>(
     throw error;
   }
   await restore();
+  return result;
+}
+
+async function readInOwnTransaction<T>(
+  driver: SqlControlDriverInstance<'postgres'>,
+  read: () => Promise<T>,
+): Promise<T> {
+  await driver.query('BEGIN');
+  let result: T;
+  try {
+    await applyLocalOutputSettings(driver, INTROSPECTION_OUTPUT_SETTINGS);
+    result = await read();
+  } catch (error) {
+    await driver.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  }
+  await driver.query('ROLLBACK');
   return result;
 }
 

@@ -2,6 +2,7 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
+import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import postgresTarget from '@internal/target-postgres/control';
 import {
   createDevDatabase,
@@ -75,7 +76,9 @@ describe('a pooler that accepts only DateStyle, TimeZone and extra_float_digits 
       adapter: postgresAdapter,
       driver: postgresDriver,
     });
-    const driver = await stack.driver?.create(pooler.url);
+    const driver = (await stack.driver?.create(pooler.url)) as
+      | SqlControlDriverInstance<'postgres'>
+      | undefined;
     if (driver === undefined) throw new Error('the control stack has no driver');
     try {
       expect((await driver.query<{ one: number }>('SELECT 1 AS one')).rows).toEqual([{ one: 1 }]);

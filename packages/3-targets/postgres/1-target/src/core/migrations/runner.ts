@@ -144,6 +144,9 @@ function failedTypeChangeOf(
   return reason === undefined ? undefined : { field, by: 'cast', reason, operationIndex };
 }
 
+/** PostgreSQL reads a `money` literal in DDL, such as `DEFAULT '12.34'::money`, with the session's monetary locale, which stores it in another locale's units; C reads it in cents. Set for the migration's transaction only. */
+const MONEY_LOCALE_SQL = "SELECT set_config('lc_monetary', 'C', true)";
+
 export function createPostgresMigrationRunner(
   family: SqlControlFamilyInstance,
 ): SqlMigrationRunner<PostgresPlanTargetDetails> {
@@ -939,6 +942,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
   ): Promise<void> {
     await driver.query('BEGIN');
+    await driver.query(MONEY_LOCALE_SQL);
   }
 
   private async commitTransaction(
