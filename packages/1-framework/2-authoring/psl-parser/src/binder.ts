@@ -3,6 +3,7 @@ import type {
   AuthoringPslBlockDescriptorNamespace,
   DataTypeSupport,
 } from '@internal/framework-components/authoring';
+import type { GeneratorFunctionRegistry } from '@internal/framework-components/components';
 import type {
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
@@ -32,9 +33,8 @@ import { blockSpecFactoryOf } from './block-spec/descriptor';
 import { blockSpecContext } from './block-spec/spec-context';
 import {
   type ContributedTypeNamespace,
-  type ContributedTypeSymbol,
+  type ContributedTypeUse,
   contributedTypeScope,
-  mergeContributedTypes,
 } from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
 import {
@@ -44,7 +44,7 @@ import {
 } from './entity-reference';
 import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
-import type { ResolvedAttribute } from './resolve';
+import type { ResolvedAttribute, ResolvedTypeConstructorCall } from './resolve';
 import {
   contributedScope,
   documentScope,
@@ -160,12 +160,17 @@ export interface UnresolvedTypeReference {
   readonly field: FieldSymbol;
   readonly owner: FieldOwner;
   readonly written: string;
+  /** Whether a declaration of the schema, rather than a contributed type, takes the name `name` where the field is written. */
+  readonly isDeclared: (name: string) => boolean;
 }
 
 export type DescribeUnresolvedType = (unresolved: UnresolvedTypeReference) => string | undefined;
 
 export interface BinderContext
-  extends Pick<ContractSourceContext, 'authoringContributions' | 'pslDiagnostics' | 'dataTypes'> {
+  extends Pick<
+    ContractSourceContext,
+    'authoringContributions' | 'pslDiagnostics' | 'dataTypes' | 'generatorFunctions'
+  > {
   readonly controlMutationDefaults: Pick<ControlMutationDefaults, 'defaultFunctionRegistry'>;
 }
 
@@ -181,6 +186,7 @@ interface BindingInputs {
   readonly contributedTypes: ContributedTypeNamespace;
   readonly attributeSpecs: AttributeSpecNamespace;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly generatorFunctions: GeneratorFunctionRegistry;
   readonly dataTypes: DataTypeSupport;
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
   readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
@@ -196,13 +202,27 @@ export function typeReferenceNode(symbol: FieldSymbol | NamedTypeSymbol): Syntax
   return symbol.node.typeAnnotation()?.name()?.syntax;
 }
 
+/**
+ * The contributed type a field's or type alias's type resolves to, through a named type when it is declared with one, and the call it is written with there: `call`, the field's own, for a contributed type, or the named type's.
+ */
 export function contributedTypeOf(
   resolution: Resolution | undefined,
   binder: Binder,
-): ContributedTypeSymbol | undefined {
-  const base = resolution?.kind === 'namedType' ? typeReferenceNode(resolution.symbol) : undefined;
-  const target = base === undefined ? resolution : binder.symbolForNode(base);
-  return target?.kind === 'contributedType' ? target.symbol : undefined;
+  call: ResolvedTypeConstructorCall | undefined,
+): ContributedTypeUse | undefined {
+  return contributedTypeOfResolution(resolution, (base) => binder.symbolForNode(base), call);
+}
+
+function contributedTypeOfResolution(
+  resolution: Resolution | undefined,
+  resolve: (node: SyntaxNode) => Resolution | undefined,
+  call: ResolvedTypeConstructorCall | undefined,
+): ContributedTypeUse | undefined {
+  const named = resolution?.kind === 'namedType' ? resolution.symbol : undefined;
+  const base = named === undefined ? undefined : typeReferenceNode(named);
+  const target = base === undefined ? resolution : resolve(base);
+  if (target?.kind !== 'contributedType') return undefined;
+  return { symbol: target.symbol, call: named === undefined ? call : named.typeConstructor };
 }
 
 class PslBinder implements Binder {
@@ -268,24 +288,20 @@ function walkFieldOwners(
   symbolTable: SymbolTable,
   stack: ScopeStack,
   binder: Binder,
-  visit: (owner: FieldOwner, namespace?: NamespaceSymbol) => void,
+  visit: (owner: FieldOwner, namespace: NamespaceSymbol) => void,
 ): void {
-  const { topLevel } = symbolTable;
-  const visitAll = (
-    records: SymbolTable['topLevel'] | NamespaceSymbol,
-    namespace?: NamespaceSymbol,
-  ): void => {
+  const visitAll = (records: NamespaceSymbol, namespace: NamespaceSymbol): void => {
     for (const entity of Object.values(records.models)) visit(entity, namespace);
     for (const entity of Object.values(records.compositeTypes)) visit(entity, namespace);
     for (const mixin of Object.values(records.mixins)) {
       if (hasFields(mixin)) visit(mixin, namespace);
     }
   };
-  visitAll(topLevel);
-  for (const namespace of Object.values(topLevel.namespaces)) {
-    stack.push(binder.scopeAt(namespace.declarations[0].node.syntax));
+  for (const namespace of Object.values(symbolTable.namespaces)) {
+    const [declaration] = namespace.declarations;
+    if (declaration !== undefined) stack.push(binder.scopeAt(declaration.node.syntax));
     visitAll(namespace, namespace);
-    stack.pop();
+    if (declaration !== undefined) stack.pop();
   }
 }
 
@@ -306,11 +322,11 @@ function ownAttributes<TAttribute extends ResolvedAttribute>(holder: {
 
 function declarationResolution(
   entity: ModelSymbol | CompositeTypeSymbol,
-  namespace: NamespaceSymbol | undefined,
+  namespace: NamespaceSymbol,
 ): Resolution {
   return entity.kind === 'model'
-    ? { kind: 'model', symbol: entity, ...(namespace === undefined ? {} : { namespace }) }
-    : { kind: 'compositeType', symbol: entity, ...(namespace === undefined ? {} : { namespace }) };
+    ? { kind: 'model', symbol: entity, namespace }
+    : { kind: 'compositeType', symbol: entity, namespace };
 }
 
 export function createBinder(input: CreateBinderInput): BinderResult {
@@ -324,10 +340,11 @@ export function createBinder(input: CreateBinderInput): BinderResult {
   return bind({
     sources,
     symbolTable,
-    contributedTypes: mergeContributedTypes(contributions.field, contributions.type),
+    contributedTypes: contributions.type,
     attributeSpecs: assembleAttributeSpecs(contributions),
     pslBlockDescriptors: contributions.pslBlockDescriptors,
     defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
+    generatorFunctions: context.generatorFunctions,
     dataTypes: context.dataTypes,
     ...(describeUnsupportedAttributeFactory !== undefined
       ? { describeUnsupportedAttribute: describeUnsupportedAttributeFactory(sources) }
@@ -345,13 +362,14 @@ function bind(options: BindingInputs): BinderResult {
     contributedTypes,
     attributeSpecs,
     defaultFunctionRegistry,
+    generatorFunctions,
     dataTypes,
     describeUnsupportedAttribute,
     describeUnresolvedType,
   } = options;
   const pslBlockDescriptors = options.pslBlockDescriptors ?? {};
   const contributed = contributedScope(contributedTypeScope(contributedTypes));
-  const document = documentScope(symbolTable.topLevel, contributed);
+  const document = documentScope(symbolTable, contributed);
   const stack = new ScopeStack(document);
   const scopes = new WeakMap<SyntaxNode, Scope>();
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
@@ -359,8 +377,8 @@ function bind(options: BindingInputs): BinderResult {
   const diagnostics: ParseDiagnostic[] = [];
   const binder = new PslBinder(declarations, references, document, scopes);
 
-  const baseScope = namedTypeBaseScope(symbolTable.topLevel, contributed);
-  for (const symbol of Object.values(symbolTable.topLevel.namedTypes)) {
+  const baseScope = namedTypeBaseScope(symbolTable, contributed);
+  for (const symbol of Object.values(symbolTable.namedTypes)) {
     declarations.set(symbol.node.syntax, symbol);
     const declaredName = symbol.node.name()?.syntax;
     if (declaredName !== undefined) references.set(declaredName, { kind: 'namedType', symbol });
@@ -375,18 +393,9 @@ function bind(options: BindingInputs): BinderResult {
       diagnostics,
     });
   }
-  for (const symbol of Object.values(symbolTable.topLevel.blocks)) {
-    declarations.set(symbol.node.syntax, symbol);
-    const declaredName = symbol.node.name()?.syntax;
-    if (declaredName !== undefined) references.set(declaredName, { kind: 'block', symbol });
-  }
-  for (const symbol of Object.values(symbolTable.topLevel.mixins)) {
-    declarations.set(symbol.node.syntax, symbol);
-    const declaredName = symbol.node.name()?.syntax;
-    if (declaredName !== undefined) references.set(declaredName, { kind: 'mixin', symbol });
-  }
-  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
-    const scope = namespaceScope(namespace, document);
+  for (const namespace of Object.values(symbolTable.namespaces)) {
+    const scope =
+      namespace === symbolTable.defaultNamespace ? document : namespaceScope(namespace, document);
     for (const declaration of namespace.declarations) {
       declarations.set(declaration.node.syntax, namespace);
       scopes.set(declaration.node.syntax, scope);
@@ -412,9 +421,9 @@ function bind(options: BindingInputs): BinderResult {
   }
   const included = new Map<SyntaxNode, MixinSymbol>();
   const inclusionContext = { sources, references, diagnostics, included };
-  bindInclusions(symbolTable.topLevel, document, inclusionContext);
-  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
-    const scope = binder.scopeAt(namespace.declarations[0].node.syntax);
+  for (const namespace of Object.values(symbolTable.namespaces)) {
+    const [declaration] = namespace.declarations;
+    const scope = declaration === undefined ? document : binder.scopeAt(declaration.node.syntax);
     bindInclusions(namespace, scope, inclusionContext);
   }
   diagnostics.push(
@@ -443,8 +452,14 @@ function bind(options: BindingInputs): BinderResult {
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
       const name = field.node.typeAnnotation()?.name();
-      const outcome = resolveTypeReference(name, stack.current(), references, (written) =>
-        describeUnresolvedType?.({ field, owner: entity, written }),
+      const scope = stack.current();
+      const outcome = resolveTypeReference(name, scope, references, (written) =>
+        describeUnresolvedType?.({
+          field,
+          owner: entity,
+          written,
+          isDeclared: (declaredName) => declaredInSchema(scope, declaredName),
+        }),
       );
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
@@ -481,7 +496,13 @@ function bind(options: BindingInputs): BinderResult {
     };
     const specContext =
       entity.kind === 'model' || (entity.kind === 'mixin' && entity.keyword === 'model')
-        ? { symbols: symbolTable, model: entity, defaultFunctionRegistry, dataTypes }
+        ? {
+            symbols: symbolTable,
+            model: entity,
+            defaultFunctionRegistry,
+            generatorFunctions,
+            dataTypes,
+          }
         : undefined;
     bindAttributes(
       entity,
@@ -499,7 +520,12 @@ function bind(options: BindingInputs): BinderResult {
           if (specContext === undefined) return undefined;
           const node = typeReferenceNode(field);
           const typeResolution = node === undefined ? undefined : references.get(node);
-          return factory({ ...specContext, field, typeResolution });
+          const contributedType = contributedTypeOfResolution(
+            typeResolution,
+            (base) => references.get(base),
+            field.typeConstructor,
+          );
+          return factory({ ...specContext, field, typeResolution, contributedType });
         },
         { ...context, field },
       );
@@ -514,7 +540,7 @@ function bind(options: BindingInputs): BinderResult {
     references,
     diagnostics,
   };
-  const bindBlocks = (records: SymbolTable['topLevel'] | NamespaceSymbol) => {
+  const bindBlocks = (records: NamespaceSymbol) => {
     const context = { ...blockContext, scope: stack.current() };
     for (const block of Object.values(records.blocks)) {
       bindBlock(
@@ -530,11 +556,11 @@ function bind(options: BindingInputs): BinderResult {
       if (!hasFields(mixin)) bindBlock(mixin, context);
     }
   };
-  bindBlocks(symbolTable.topLevel);
-  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
-    stack.push(binder.scopeAt(namespace.declarations[0].node.syntax));
+  for (const namespace of Object.values(symbolTable.namespaces)) {
+    const [declaration] = namespace.declarations;
+    if (declaration !== undefined) stack.push(binder.scopeAt(declaration.node.syntax));
     bindBlocks(namespace);
-    stack.pop();
+    if (declaration !== undefined) stack.pop();
   }
 
   return { binder, diagnostics };
@@ -547,11 +573,7 @@ interface InclusionContext {
   readonly included: Map<SyntaxNode, MixinSymbol>;
 }
 
-function bindInclusions(
-  records: SymbolTable['topLevel'] | NamespaceSymbol,
-  scope: Scope,
-  ctx: InclusionContext,
-): void {
+function bindInclusions(records: NamespaceSymbol, scope: Scope, ctx: InclusionContext): void {
   const report = (code: string, message: string, inclusion: MixinInclusionAst): void => {
     ctx.diagnostics.push({
       code,
@@ -1083,6 +1105,13 @@ function bindQualifier(
   return resolution;
 }
 
+function declaredInSchema(scope: Scope, name: string): boolean {
+  const found = scope.lookup(name);
+  return (
+    found !== undefined && found.kind !== 'contributedType' && found.kind !== 'contributedNamespace'
+  );
+}
+
 function resolveTypeReference(
   reference: QualifiedNameAst | undefined,
   scope: Scope,
@@ -1124,7 +1153,7 @@ function resolveTypeReference(
     const kind = found.kind === 'mixin' ? 'mixin' : 'namespace';
     return {
       resolution: found,
-      message: `"${written}" is a ${kind}; a type reference must name a model, composite type, enum, or named type`,
+      message: `"${written}" is a ${kind}; a type reference must name a model, composite type, enum, or type alias`,
       name: written,
     };
   }
@@ -1158,7 +1187,7 @@ function describeQualifier(resolution: ScopeResolution): string {
     case 'compositeType':
       return 'a composite type';
     case 'namedType':
-      return 'a named type';
+      return 'a type alias';
     case 'block':
       return `${resolution.symbol.keyword === 'enum' ? 'an' : 'a'} ${resolution.symbol.keyword}`;
     default:

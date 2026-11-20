@@ -24,7 +24,9 @@
  * install packed tarballs and run in a child process, so both roots never
  * load into one module graph. The fixtures of every upgrade script's tests,
  * `test/integration/test/upgrade-instructions/<fragment>/fixtures/`, are user
- * projects a script rewrites as text; nothing imports them.
+ * projects a script rewrites as text; nothing imports them. Each fragment's
+ * `detection.test.ts` holds sample import lines as strings to match its
+ * detection patterns against; those specifiers are sample text, not imports.
  *
  * Exits 1 listing every mixed package; exits 0 otherwise.
  */
@@ -37,6 +39,7 @@ const CONSUMER_ROOTS = ['examples', 'apps', 'test'];
 const EXEMPT_SUBTREES = [
   /^test\/integration\/test\/packaging\//,
   /^test\/integration\/test\/upgrade-instructions\/[^/]+\/fixtures\//,
+  /^test\/integration\/test\/upgrade-instructions\/[^/]+\/detection\.test\.ts$/,
 ];
 const INTERNAL_SCOPE = '@internal/';
 const PUBLISHED_SCOPE = '@prisma/orm-';

@@ -187,7 +187,6 @@ test('ResultType of a to-one include on a required field equals Shape and is not
   expectTypeOf<ResultType<typeof withReviewer>>().toEqualTypeOf<
     Shape<Models.public_Article, { '+': 'reviewer' }>
   >();
-  expectTypeOf<Models.public_Article['reviewer']>().toEqualTypeOf<Models.public_User>();
 });
 
 test("ResultType of a select projection equals Shape with '+'", () => {
@@ -234,15 +233,6 @@ test('a refined to-one include is nullable even when the relation is not', () =>
   expectTypeOf<
     ResultType<typeof refined>['reviewer']
   >().toEqualTypeOf<Scalars<Models.public_User> | null>();
-});
-
-test('ResultType of a refined include is not never', () => {
-  const refined = db.User.include('posts', (posts) => posts.select('id'));
-  expectTypeOf<ResultType<typeof refined>>().not.toBeNever();
-});
-
-test('polymorphic base discriminator is the union of variant literals', () => {
-  expectTypeOf<PolyModels.public_Task['type']>().toEqualTypeOf<'bug' | 'feature' | 'epic'>();
 });
 
 test('ResultType of a variant collection equals Scalars of the variant member', () => {

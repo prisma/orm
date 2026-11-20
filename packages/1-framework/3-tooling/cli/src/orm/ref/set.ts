@@ -5,12 +5,13 @@ import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { RefSetResult } from '../../control-api/operations/ref';
 import { executeRefSetCommand } from '../../control-api/operations/ref';
 import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
+import { valueLines } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 
 function setPresentations(document: RefSetResult): Presentations {
   return {
-    stdout: () => [],
+    stdout: () => valueLines([document.hash]),
     next: () => [],
     human: (): readonly Block[] => [
       {

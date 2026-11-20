@@ -36,19 +36,20 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 - **Skills — presentation symlinks:** `.claude/skills/<skill-name>` and `.agents/skills/<skill-name>` are symlink directories pointing into `skills-contrib/`. They exist so the various agent harnesses (Cursor, Claude Code, …) can find the skills at the paths they expect. Both symlink trees are gitignored.
 - **Skills — wired post-install:** the symlink trees (and any tooling-specific copies) are materialized by the `prepare` script in [`package.json`](./package.json), which runs `skills add ./skills-contrib --skill '*' --agent universal claude-code -y`. After `pnpm install`, `.claude/skills/` and `.agents/skills/` are populated automatically — no manual setup. If you add a new skill under `skills-contrib/`, re-run `pnpm install` (or just the prepare hook) to wire it into the tooling locations. `pnpm lint:skills` validates skill frontmatter in CI.
 - **Drive upstream in ignite:** `drive-*` skills and [`docs/drive/`](https://github.com/prisma/ignite/tree/main/docs/drive) live in [prisma/ignite](https://github.com/prisma/ignite) (`skills/.pilot/`); install with `npx skills add prisma/ignite/skills/.pilot --skill '*'`. This repo keeps only `drive/` project-context overlays.
-- **Rules — canonical home:** `.agents/rules/<rule-name>.mdc` — the only tracked copy (rule files must use the `.mdc` extension; a `.md` rule is never loaded by the harnesses) (a whitelist exception in `.gitignore` keeps `.agents/rules/**` tracked even though the rest of `.agents/` is ignored). The `.cursor/rules/` and `.claude/rules/` trees are gitignored presentation mirrors containing only relative symlinks back into `.agents/rules/`.
+- **Rules — canonical home:** `.agents/rules/<rule-name>.mdc` — the only tracked copy (rule files must use the `.mdc` extension; a `.md` rule is never loaded by the harnesses). The `.cursor/rules/` and `.claude/rules/` trees are gitignored presentation mirrors containing only relative symlinks back into `.agents/rules/`.
 - **Rules — wired post-install:** like skills, the symlink trees are materialized by `prepare` (which runs `node scripts/sync-agent-rules.mjs` after `skills add`). After `pnpm install` the trees are regenerated automatically — no manual setup. A rule added only to `.cursor/rules` is gitignored and silently lost, so **always add it under `.agents/rules/`** and run `pnpm rules:sync`. `pnpm lint:rules:symlinks` enforces tree/canonical consistency in CI.
-- **Practical implication for editors and sub-agents:** when amending or authoring a skill or rule, **edit at the canonical path** (`skills-contrib/` for skills, `.agents/rules/` for rules) — not at the symlinked path. An edit through a symlink writes to the canonical file on disk, but `git status` and `git ls-files` report against the canonical path; addressing the canonical path keeps diffs legible and avoids surface churn.
+- **Practical implication for editors and sub-agents:** when amending or authoring a skill or rule, **edit at the canonical path** (`skills-contrib/` for skills, `.agents/rules/` for rules) — not at the symlinked path. `git status` reports the canonical path, so edit there.
 
 ## Golden Rules
 
+- **Never change the framework domain** (`packages/1-framework`). If a design needs to, stop and tell the operator: `.agents/rules/never-change-the-framework-domain.mdc`.
 - **Node.js version**: Use the shell's Node — do not run `nvm`/`fnm` or any version switcher. Source of truth is the root `package.json` `engines.node`. If the shell's `node -v` doesn't satisfy that, report that the shell is misconfigured (e.g. user should set their default Node in their version manager, or use Volta) — don't try to switch it yourself.
 - Use `pnpm`, not `npm`. Never use `npx`.
-- Build with `pnpm build` (delegates to Turbo). After changing exported types in a workspace package consumed elsewhere, run that package's `pnpm build` to refresh `dist/*.d.mts` before validating downstream TypeScript.
+- Build with `pnpm build` (delegates to Turbo). After changing exported types in a workspace package consumed elsewhere, run `pnpm build` to refresh `dist/*.d.mts` before validating downstream TypeScript. Never build single packages: a partial build leaves stale `dist`.
 - For typecheck/test, use the local `pnpm typecheck` / `pnpm test` scripts rather than writing `tsc`/`vitest` invocations from scratch.
 - Use arktype, not zod.
 - Never add file extensions to imports in TypeScript.
-- Don't add comments if avoidable, prefer code that expresses its intent.
+- Don't add comments if avoidable, prefer code that expresses its intent; prefer links to canonical docs over long comments.
 - Don't add backwards-compat exports unless asked.
 - Always write tests before creating or modifying implementation.
 - Don't reexport from one file in another, except in `exports/` folders.
@@ -56,7 +57,7 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 - Keep tests concise; omit "should": `.agents/rules/omit-should-in-tests.mdc`.
 - In sql-orm-client tests, assert the whole result shape (`toEqual`/snapshot) with explicit `select`: `.agents/rules/sql-orm-client-whole-shape-assertions.mdc`.
 - Keep docs current (READMEs, rules, links): `.agents/rules/doc-maintenance.mdc`.
-- Prefer links to canonical docs over long comments.
+- `Decimal`/`bigint`/int8 exist to hold values a JS number would round, so never convert one to a number for convenience without proving it exact, nor override `valueOf`/`Symbol.toPrimitive` to make operators work; use `Decimal`'s own methods (`a.lt(b)`).
 
 ## Typesafety rules
 
@@ -70,7 +71,8 @@ The repo keeps a single canonical home for each kind of agent surface, with pres
 
 ```bash
 pnpm build                 # Build via Turbo
-pnpm test:packages         # Run package tests (cheapest healthy-workspace signal)
+# Full suites: CI runs them; locally, run your packages' tests (.agents/rules/running-tests.mdc)
+pnpm test:packages         # Package tests
 pnpm test:integration      # Integration tests (PGlite + mongodb-memory-server, no external DB)
 pnpm test:e2e              # E2E tests (also self-contained)
 pnpm test:all              # Everything
@@ -85,12 +87,12 @@ pnpm fixtures:check        # Use this rather than ad-hoc emit-and-diff
 
 1. **Authoring**: Write `schema.psl` or use TypeScript builders → canonicalized Contract IR
 2. **Emission**: Emitter validates and generates `contract.json` + `contract.d.ts`
-3. **Hydration**: the client factory (or a family `ContractSerializer`) validates `contract.json` into the typed contract
+3. **Hydration**: `contractFromJson` (facade `/static`) validates `contract.json` into the typed contract
 4. **Usage**: DSL functions (`sql()`, `schema()`) accept the contract and propagate types
 
 ### Key Patterns
 
-- **Type Parameter Pattern**: JSON imports lose literal types. Name the `contract.d.ts` type where the JSON enters — `postgres<Contract>({ contractJson, url })`, or `validateSqlContractFully<Contract>(contractJson)` in tests. Never a generic like `SqlContract<SqlStorage>`.
+- **Type Parameter Pattern**: JSON imports lose literal types. Name the `contract.d.ts` type where the JSON enters — `contractFromJson<Contract>(contractJson)`, then `postgres({ contract, url })`; `validateSqlContractFully<Contract>(contractJson)` in client-less tests. Never a generic like `SqlContract<SqlStorage>`.
 - **ExecutionContext**: Encapsulates contract, codecs, operations, and types. Pass to `schema()`, `sql()`, `orm()`.
 - **Interface + factory pattern for stateful services**: Stateful services (registries, runtimes, adapters, drivers) expose an interface plus a `createX()` factory; the implementing class stays package-private and consumers depend on the interface, never it. Pattern reference: [`docs/architecture docs/patterns/interface-plus-factory.md`](docs/architecture%20docs/patterns/interface-plus-factory.md).
 - **Three-layer polymorphic IR for AST/IR class hierarchies**: AST/IR nodes (Contract IR, Schema IR, migration ops) go framework interface → family abstract base → target concrete classes. Concrete classes are the target's exported IR alphabet and call `freezeNode(this)` in their constructor; target packs add entity kinds via `AuthoringContributions.entityTypes` (see [`docs/reference/typescript-patterns.md`](docs/reference/typescript-patterns.md) § "AST/IR class hierarchies"). Pattern references: [`three-layer-polymorphic-ir.md`](docs/architecture%20docs/patterns/three-layer-polymorphic-ir.md), [`frozen-class-ast.md`](docs/architecture%20docs/patterns/frozen-class-ast.md), [`json-canonical-class-in-memory.md`](docs/architecture%20docs/patterns/json-canonical-class-in-memory.md).
@@ -113,6 +115,10 @@ See `architecture.config.json` for the complete mapping and `pnpm lint:deps` to 
 - Day-to-day playbook (add SQL operation, split monolith, fix import violation, etc.): [Common Tasks Playbook](docs/onboarding/Common-Tasks-Playbook.md)
 - Shape and deliver a project (spec → plan → implement): run `drive-start-workflow`; methodology in [`prisma/ignite docs/drive/`](https://github.com/prisma/ignite/tree/main/docs/drive); project artifacts live under `projects/` (see [`projects/README.md`](projects/README.md))
 - Cut the next npm minor release: `.agents/skills/publish-npm-version/SKILL.md` (policy in [`docs/oss/versioning.md`](docs/oss/versioning.md))
+
+## Check requests and proposals against the vision
+
+Before you judge a feature request or pull request, or propose a feature or solution, read the [project intent](docs/design/00-purpose/project-intent.md), the [vision](docs/design/00-purpose/vision.md#how-to-use-this-page) and the [steering list](docs/architecture%20docs/ADR-INDEX.md#steering-list).
 
 ## Subsystem Deep Dives
 

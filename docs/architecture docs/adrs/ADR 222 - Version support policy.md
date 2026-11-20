@@ -1,6 +1,6 @@
 # ADR 222 — Version support policy for Prisma Next
 
-**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)
+**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md); the CLI's copy of the server floors removed by [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)
 **Date:** 2026-05-31
 **Linear:** TML-1810, TML-1809
 
@@ -16,15 +16,15 @@ The ratified floor table:
 |---|---|---|
 | Node.js | `>=24` | `engines.node` on every publishable package |
 | TypeScript | `>=5.9` | optional `peerDependencies.typescript` on every publishable package + source-of-truth constant + drift test |
-| PostgreSQL (server) | `15` (lowered from `17` by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)) | `prismaNext.minServerVersion` on `@internal/target-postgres` + CLI mirror + `postgres:15` CI service containers + `docker-compose.yaml` |
-| MongoDB (server) | `8.0` | `prismaNext.minServerVersion` on `@internal/target-mongo` + CLI mirror; MMS 11.x downloads 8.2.x by default |
+| PostgreSQL (server) | `15` (lowered from `17` by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md)) | `POSTGRES_MIN_SERVER_VERSION` exported by `@internal/target-postgres/server-version` + `postgres:15` CI service containers + `docker-compose.yaml` |
+| MongoDB (server) | `8.0` | `MONGO_MIN_SERVER_VERSION` exported by `@internal/target-mongo/server-version`; MMS 11.x downloads 8.2.x by default |
 | Bun | `>=1.2` | documented; runtime detection already exists |
 | Deno | `>=2.0` | documented; runtime detection already exists |
 
 Additional constraints (documented, no enforcement overhead needed):
 
 - **Module system**: ESM-only. No CommonJS entry points are published.
-- **Consumer `tsconfig`**: `moduleResolution: "bundler"` and `strict: true` are required. The `prisma-next init` CLI configures these automatically.
+- **Consumer `tsconfig`**: `strict: true` is required, with `moduleResolution: "bundler"`, or `"nodenext"` or `"node16"` in a package whose `package.json` sets `"type": "module"` (each paired with a `module` value TypeScript accepts; Node 18 and Node 20 projects use `"node16"` resolution). The `prisma orm init` CLI configures these automatically.
 
 ---
 
@@ -74,14 +74,14 @@ The workspace-level source of truth is `MIN_TYPESCRIPT_PEER` in `scripts/validat
 
 ### DB server versions
 
-Each target package is the authoritative source of truth for its database server floor, stored at `package.json#prismaNext.minServerVersion`. The CLI mirrors these values in `packages/1-framework/3-tooling/cli/src/commands/init/templates/env.ts` as `MIN_SERVER_VERSION`. A test in `packages/1-framework/3-tooling/cli/test/commands/init/templates/tsconfig-env.test.ts` asserts that the CLI constant and the target package values never drift.
+Each target package is the authoritative source of truth for its database server floor: a constant in its `src/core/server-version.ts`, exported from its `server-version` entry point (`POSTGRES_MIN_SERVER_VERSION`, `MONGO_MIN_SERVER_VERSION`). A target's `package.json` carries no Prisma configuration or metadata; Prisma 8 reads configuration only from `prisma.config.ts`.
+
+`prisma orm init` takes the floor from the target package too. Since [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md), the package's init contribution reads the constant for its `serverRequirement`, and the CLI keeps no copy. There is nothing to drift, so there is no drift test.
 
 The correct sequence for raising a DB floor:
 
-1. Update `prismaNext.minServerVersion` in the target package's `package.json`.
-2. Update `MIN_SERVER_VERSION` in `env.ts` to match.
-3. Update the test infrastructure — the Postgres service-container image tags in `.github/workflows/ci.yml` and the `docker-compose.yaml` image tag — to match the new floor.
-4. Run `pnpm --filter @internal/cli test` to verify the drift test passes.
+1. Update the constant in the target package's `src/core/server-version.ts`.
+2. Update the test infrastructure to match the new floor. For PostgreSQL, that is the service-container image tags in `.github/workflows/ci.yml` and the `docker-compose.yaml` image tag. For MongoDB, it is the `mongod` version the tests download: `mongodb-memory-server`, pinned in the `pnpm-workspace.yaml` catalog, downloads its own default, so a raised floor needs a version that runs at least the floor.
 
 ---
 
@@ -90,4 +90,4 @@ The correct sequence for raising a DB floor:
 - The `prisma-next init` scaffold's `.env.example` and the "Requirements" section of `prisma-next.md` reflect accurate, tested server floors (PostgreSQL 15 per [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md), MongoDB 8.0) rather than the out-of-date values that preceded this ADR.
 - Consumers running PostgreSQL 14 or older, or MongoDB 6.x–7.x, are outside our supported range; PostgreSQL 15 and 16 are supported. Given that PostgreSQL 14 reaches end of life in November 2026 and MongoDB 6.x is well behind the current release, this is an acceptable trade-off.
 - The TypeScript optional peer declaration allows downstream tooling (IDEs, LSPs, type-checking pipelines) to surface correct minimum version requirements without forcing a hard install dependency.
-- Raising any floor in the future requires updating the corresponding source-of-truth field (see the sequences above). The drift tests make silent drift impossible in CI.
+- Raising any floor in the future requires updating the corresponding source-of-truth field (see the sequences above). The TypeScript drift check makes silent drift impossible in CI; the server floors have one source each.

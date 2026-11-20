@@ -13,7 +13,7 @@ A mixin is a named set of block members, written once and included in any number
 ```prisma
 model mixin Timestamps {
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  updatedAt DateTime @onCreate(now()) @onUpdate(now())
   @@index([createdAt])
 }
 

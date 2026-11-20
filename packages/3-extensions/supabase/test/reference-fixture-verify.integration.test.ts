@@ -14,17 +14,17 @@
  *      A framework gap this fixture surfaced is now resolved:
  *        - Foreign-key-derived columns default to requiring a backing index
  *          (`ForeignKeyInput.index` defaults `true`, `DEFAULT_FK_INDEX` in
- *          `packages/2-sql/1-core/contract/src/types.ts`), but several real
+ *          `packages/2-sql-family/1-core/contract/src/types.ts`), but several real
  *          Supabase FK columns (e.g. `mfa_amr_claims.session_id`) have no
  *          physical index. PSL's `@relation` attribute now takes an `index`
- *          argument (`packages/2-sql/2-authoring/contract-psl/src/psl-relation-resolution.ts`'s
+ *          argument (`packages/2-sql-family/2-authoring/contract-psl/src/psl-relation-resolution.ts`'s
  *          `sqlRelation` spec), and the postgres PSL inferrer's relation-inference step
- *          (`packages/2-sql/9-family/src/core/psl-contract-infer/relation-inference.ts`) stamps
+ *          (`packages/2-sql-family/9-family/src/core/psl-contract-infer/relation-inference.ts`) stamps
  *          `index: false` on a relation whose FK columns have no live backing index, using the same
  *          column-exact-match predicate FK1's contract construction now uses to materialize a
  *          table's FK-backing `indexes[]` entries — the entries `db verify` checks against (shared
  *          as `@internal/sql-contract/foreign-key-materialization`,
- *          `packages/2-sql/1-core/contract/src/foreign-key-materialization.ts`).
+ *          `packages/2-sql-family/1-core/contract/src/foreign-key-materialization.ts`).
  *
  *   2. Negative: on a second database, `auth.refresh_tokens` is dropped
  *      after restoring the fixture; `dbVerify` on the `supabase` space

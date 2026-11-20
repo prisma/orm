@@ -31,7 +31,11 @@ const namespaces = [
 
 function bind(source: string, rule: ArgType<unknown, AttributeCtx>) {
   const { document, sources } = parse(`${source}\n${namespaces}`, 'qualified.psl');
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
   const parameters = {
     positional: [{ key: 'target', type: rule, documentation: 'target' }],
     documentation: 'references',
@@ -59,7 +63,7 @@ function bind(source: string, rule: ArgType<unknown, AttributeCtx>) {
       },
     }),
   });
-  const auth = symbolTable.topLevel.namespaces['auth']!;
+  const auth = symbolTable.namespaces['auth']!;
   const parseValue = (expression: ExpressionAst) =>
     rule.parse(expression, { sources, symbols: symbolTable, binder: result.binder });
   return { ...result, sources, symbolTable, auth, parseValue };
@@ -72,8 +76,8 @@ function parsedValue(parsed: ReturnType<ReturnType<typeof bind>['parseValue']>):
 
 function entryValue(result: ReturnType<typeof bind>, block: string): ExpressionAst {
   const symbol =
-    result.symbolTable.topLevel.blocks[block] ??
-    result.symbolTable.topLevel.namespaces['app']?.blocks[block];
+    result.symbolTable.defaultNamespace.blocks[block] ??
+    result.symbolTable.namespaces['app']?.blocks[block];
   return [...symbol!.node.entries()][0]!.value()!;
 }
 
@@ -91,7 +95,7 @@ function qualifierOf(expression: ExpressionAst): SyntaxNode {
 }
 
 function firstModelArgument(result: ReturnType<typeof bind>, model: string): ExpressionAst {
-  const holder = result.symbolTable.topLevel.models[model]!;
+  const holder = result.symbolTable.defaultNamespace.models[model]!;
   return [...[...holder.node.attributes()][0]!.argList()!.args()][0]!.value()!;
 }
 
@@ -133,7 +137,7 @@ describe('qualified entity references', () => {
       'namespace app {\n policy P {\n  target = reporting.Report\n }\n}',
       modelRef,
     );
-    const reporting = result.symbolTable.topLevel.namespaces['reporting']!;
+    const reporting = result.symbolTable.namespaces['reporting']!;
     expect(result.diagnostics).toEqual([]);
     expect(result.binder.symbolForNode(entryValue(result, 'P').syntax)).toEqual({
       kind: 'model',
@@ -144,7 +148,7 @@ describe('qualified entity references', () => {
 
   it('binds a qualified reference in an attribute argument', () => {
     const result = bind('model Holder {\n @@refs(auth.Account)\n}', modelRef);
-    const holder = result.symbolTable.topLevel.models['Holder']!;
+    const holder = result.symbolTable.defaultNamespace.models['Holder']!;
     const arg = [...[...holder.node.attributes()][0]!.argList()!.args()][0]!.value()!;
     expect(result.diagnostics).toEqual([]);
     expect(result.binder.symbolForNode(arg.syntax)).toEqual({

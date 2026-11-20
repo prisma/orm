@@ -15,6 +15,7 @@ import {
 } from '../src/exports';
 import { Cursor, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
+import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
@@ -26,16 +27,11 @@ function argOf(source: string): { expr: ExpressionAst; ctx: AttributeCtx } {
   const expr = [...(FieldAttributeAst.cast(root)?.argList()?.args() ?? [])][0]?.value();
   if (expr === undefined) throw new Error('expected an argument expression');
   const sources = new PslSources([[root, cursor.sourceFile]]);
-  const symbols = {
-    topLevel: {
-      namespaces: {},
-      models: {},
-      compositeTypes: {},
-      namedTypes: {},
-      blocks: {},
-      mixins: {},
-    },
-  };
+  const { symbolTable: symbols } = buildSymbolTable({
+    documents: [],
+    sources,
+    defaultNamespaceId: 'public',
+  });
   const { binder } = createBinder({
     sources,
     symbolTable: symbols,

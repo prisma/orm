@@ -1,6 +1,12 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import type { MigrationPlanOperation } from '@internal/framework-components/control';
+import {
+  type MigrationPlanOperation,
+  migrationRunnerFailure,
+  type SchemaDiffIssue,
+  schemaCheckWhy,
+} from '@internal/framework-components/control';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
@@ -10,10 +16,19 @@ import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import { errorPathUnreachable } from '../../src/utils/cli-errors';
+import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
+import { stdoutErrorMeta } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
+
+const MISSING_COLUMN: SchemaDiffIssue = {
+  path: ['public', 'event', 'id'],
+  expected: { id: 'id', nodeKind: 'sql-column', isEqualTo: () => false, children: () => [] },
+};
 
 const mocks = {
   connect: vi.fn(),
@@ -23,6 +38,7 @@ const mocks = {
   close: vi.fn(),
 };
 const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
+const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /** The command tree mounted over a control-client double instead of the real client. */
 const commands = createBinCommands(
@@ -104,7 +120,10 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
       familyId: FAMILY,
       version: '1.0.0',
       emission: {},
-      create: () => ({ deserializeContract: (json: unknown) => json }),
+      create: () => ({
+        deserializeContract: (json: unknown) => json,
+        accessChangesOf: () => [],
+      }),
     },
     target: {
       kind: 'target',
@@ -135,6 +154,7 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(cwd, 'contract.json'),
+      typesModule: '@acme/orm-db/contract-types',
     },
     migrations: { dir: 'migrations' },
     ...overrides,
@@ -223,13 +243,13 @@ describe('migrate', () => {
       });
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
         contract: expect.objectContaining({ storage: { storageHash: C2, namespaces: {} } }),
-        resolveImportSpecifier: expect.any(Function),
+        typesModule: '@acme/orm-db/contract-types',
       });
       expect(mocks.renderContractDts.mock.invocationCallOrder[0]).toBeLessThan(
         mocks.migrate.mock.invocationCallOrder[0]!,
       );
       const storeDir = contractSnapshotDir(join(cwd, 'migrations'), C2);
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
     });
 
     it('refuses before applying when the contract types cannot be rendered', async () => {
@@ -363,7 +383,15 @@ describe('migrate', () => {
     ]);
   });
 
-  it('writes nothing to stdout in human mode', async () => {
+  it('prints one data line per applied migration: space, name, from, to and operations run', async () => {
+    const cwd = await buildProject();
+
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate'], { cwd });
+
+    expect(run.stdout).toBe(`app\t20260101_100000_111111\t\t${C1}\t1\n`);
+  });
+
+  it('writes no data lines when stdout and stderr share one terminal', async () => {
     const cwd = await buildProject();
 
     const run = await harness(ormConfig(cwd)).run(['db', 'migrate'], {
@@ -385,20 +413,6 @@ describe('migrate', () => {
     expect(mocks.connect).toHaveBeenCalledWith('postgres://other/db');
   });
 
-  it('errors when no connection is configured', async () => {
-    const cwd = await buildProject();
-
-    const run = await harness(ormConfig(cwd, { db: undefined })).run(['db', 'migrate', '--json'], {
-      cwd,
-    });
-
-    expect(run.exitCode).toBe(2);
-    expect(envelopeOf(run.json)).toMatchObject({
-      ok: false,
-      error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' },
-    });
-  });
-
   it('errors when the target has no migration runner', async () => {
     const cwd = await buildProject();
     const config = ormConfig(cwd);
@@ -417,12 +431,18 @@ describe('migrate', () => {
   it('maps an unreachable path to its migration code', async () => {
     const cwd = await buildProject();
     mocks.migrate.mockResolvedValue(
-      notOk({
-        code: 'MIGRATION_PATH_NOT_FOUND',
-        summary: 'no path',
-        why: 'no recorded path',
-        meta: { fromHash: '<empty>', targetHash: C2 },
-      }),
+      notOk(
+        errorPathUnreachable({
+          summary: 'no path',
+          why: 'no recorded path',
+          meta: {
+            spaceId: 'app',
+            fromHash: EMPTY_CONTRACT_HASH,
+            targetHash: C2,
+            kind: 'pathUnreachable',
+          },
+        }),
+      ),
     );
 
     const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
@@ -432,6 +452,61 @@ describe('migrate', () => {
       ok: false,
       error: { code: 'MIGRATION.PATH_UNREACHABLE' },
     });
+  });
+
+  it('reports a runner failure with the runner code and meta, and the advice', async () => {
+    const cwd = await buildProject();
+    const runnerFailure = migrationRunnerFailure(
+      'MIGRATION.SCHEMA_VERIFY_FAILED',
+      'Database schema does not satisfy contract',
+      {
+        why: schemaCheckWhy([MISSING_COLUMN]),
+        meta: { schemaIssues: [MISSING_COLUMN], failingSpace: 'app', databaseUnchanged: true },
+      },
+    );
+    const invocation = { cwd, configPath: undefined, dbGiven: false };
+    mocks.migrate.mockResolvedValue(
+      notOk(
+        migrateRunnerFailureError(
+          runnerFailure,
+          runnerFailureFacts(runnerFailure, []),
+          { directory: join(cwd, 'migrations', 'app', '20261015T1200_initial'), from: C1 },
+          invocation,
+        ),
+      ),
+    );
+
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'MIGRATION.SCHEMA_VERIFY_FAILED',
+        summary: 'Database schema does not satisfy contract',
+        why: 'The schema check after apply found: missing: public/event/id.',
+        nextActions: [
+          {
+            kind: 'edit-file',
+            label: `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run \`prisma-test contract emit\`, delete \`migrations/app/20261015T1200_initial\` (copy any code you wrote in its migration.ts first), plan it again with \`prisma-test migration plan --from ${C1} --name initial\`, put any code you copied into the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and run \`prisma-test db migrate\``,
+          },
+          {
+            kind: 'edit-file',
+            label:
+              'If `migrations/app/20261015T1200_initial/migration.ts` does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, run `node migrations/app/20261015T1200_initial/migration.ts`, and run `prisma-test db migrate`',
+          },
+        ],
+        meta: {
+          schemaIssues: [{ path: ['public', 'event', 'id'] }],
+          failingSpace: 'app',
+          databaseUnchanged: true,
+        },
+      },
+    });
+    expect(stdoutErrorMeta(run.stdout)).toEqual(JSON.parse(JSON.stringify(runnerFailure.meta)));
+    expect(mocks.migrate).toHaveBeenCalledWith(
+      expect.objectContaining({ invocation: { ...invocation, rerunArgs: [] } }),
+    );
   });
 
   describe('a close that fails on the way out', () => {

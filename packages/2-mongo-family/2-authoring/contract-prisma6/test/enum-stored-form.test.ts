@@ -1,5 +1,9 @@
 import { buildEnumsMapForNamespace } from '@internal/contract/enum-accessor';
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type {
+  Codec,
+  CodecLookupWithDescriptors,
+  DataTypeValue,
+} from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { prisma6MongoBinding } from '@internal/target-mongo/prisma6-binding';
 import { join } from 'pathe';
@@ -9,13 +13,14 @@ import { fixturesDir, mongoSourceContext, mongoStack } from './support';
 
 const enumSchema = join(fixturesDir, 'enums', 'schema.prisma');
 
-const wrappedStringCodec = Object.assign(
-  Object.create(mongoStack.codecLookup.get('mongo/string@1') ?? null) as Codec,
-  {
-    encodeJson: (v: unknown) => (v as { readonly text: string }).text,
-    decodeJson: (j: unknown) => ({ text: j }),
-  },
-);
+const stringCodec = mongoStack.codecLookup.get('mongo/string@1');
+if (stringCodec === undefined) throw new Error('the Mongo stack has no mongo/string@1 codec');
+
+const wrappedStringCodec = Object.assign(Object.create(stringCodec) as Codec, {
+  toDataTypeValue: (v: unknown) =>
+    stringCodec.dataType.valueFrom((v as { readonly text: string }).text, {}),
+  fromDataTypeValue: (value: DataTypeValue) => ({ text: value.value }),
+});
 
 const codecLookup: CodecLookupWithDescriptors = {
   ...mongoStack.codecLookup,
@@ -32,7 +37,7 @@ async function loadWithWrappedStrings() {
 }
 
 describe('Prisma 6 MongoDB enum members', () => {
-  it('are written in their stored form, the codec encodeJson of each decoded value', async () => {
+  it('are written in their stored form, the value the codec gives for each decoded value', async () => {
     const contract = await loadWithWrappedStrings();
 
     expect(contract.domain.namespaces[UNBOUND_NAMESPACE_ID]?.enum).toEqual({

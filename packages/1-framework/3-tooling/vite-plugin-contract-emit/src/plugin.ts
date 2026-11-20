@@ -2,7 +2,7 @@ import type { ContractEmitResult } from '@internal/cli/control-api';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
 import { expandContractInputs, loadConfigForSections } from '@internal/config-loader';
 import { getEmittedArtifactPaths } from '@internal/emitter';
-import { dirname, extname, resolve } from 'pathe';
+import { extname, resolve } from 'pathe';
 import type { Plugin, ViteDevServer } from 'vite';
 import type { PrismaVitePluginOptions } from './types';
 
@@ -129,13 +129,15 @@ export function prismaVitePlugin(
       const result = await executeContractEmit({
         config: configResult.value,
         cwd: process.cwd(),
-        projectDir: dirname(absoluteConfigPath),
         signal,
       });
 
       log(`Emitted contract (storageHash: ${result.storageHash.slice(0, 8)}...)`);
       log(`  → ${result.files.json}`, 'debug');
       log(`  → ${result.files.dts}`, 'debug');
+      for (const { spaceId, path } of result.pinnedFiles) {
+        log(`Wrote ${path} for extension pack space ${spaceId}`);
+      }
 
       if (server) {
         server.moduleGraph.onFileChange(result.files.json);

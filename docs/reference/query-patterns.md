@@ -10,148 +10,96 @@ This document covers standard patterns for working with Prisma 8 queries, includ
 
 ```typescript
 // src/prisma/db.ts
-import postgres from '@internal/postgres/runtime';
-import type { Contract, TypeMaps } from './contract.d';
+import postgres from '@prisma/orm-postgres/runtime';
+import { contractFromJson } from '@prisma/orm-postgres/static';
+import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = postgres<Contract, TypeMaps>({
-  contractJson,
+export const db = postgres({
+  contract: contractFromJson<Contract>(contractJson),
   url: process.env['DATABASE_URL']!,
 });
 ```
 
 **Why?**
 - One obvious runtime entrypoint for app code
-- Keeps static query roots and runtime boundary together (`db.runtime()`)
+- The query surfaces (`db.sql`, `db.orm`, `db.raw`) and the runtime boundary (`db.runtime()`) come from one value
 - Reduces drift from re-exported aliases as surfaces evolve
 
 ## Import and use `db`
 
-**Pattern**: Import `db` directly and optionally extract table/column locals for reuse.
-
-**✅ CORRECT: Direct access (shorter, more readable)**
+**Pattern**: Import `db` and address tables through their namespace: `db.sql.<namespace>.<table>` for the SQL builder, `db.orm.<namespace>.<Model>` for the ORM. A table outside any `namespace { }` block is in `public`. There is no `db.sql.from(...)` and no `db.schema.tables`.
 
 ```typescript
 import { db } from '../prisma/db';
 
-const plan = db.sql
-  .from(db.schema.tables.user)
-  .select({
-    id: db.schema.tables.user.columns.id,
-    email: db.schema.tables.user.columns.email,
-  })
+const plan = db.sql.public.user
+  .select('id', 'email')
+  .where((f, fns) => fns.eq(f.email, email))
   .build();
+const rows = await db.query(plan);
 ```
 
-**✅ CORRECT: Extract variables for reuse (common pattern)**
-
-```typescript
-import { db } from '../prisma/db';
-
-const userTable = db.schema.tables.user;
-const userColumns = userTable.columns;
-
-const plan = db.sql
-  .from(userTable)
-  .select({ id: userColumns.id, email: userColumns.email })
-  .build();
-```
-
-**When to extract variables:**
-- When the same table/columns are used multiple times in a function
-- When it improves readability (e.g., long column paths)
-- When you want to reuse the same table reference across multiple queries
-
-**When to use direct access:**
-- Single-use queries
-- When the path is short and clear
-- When you want to keep code concise
+Run a plan that returns rows with `db.query(plan)`, and a write without `RETURNING` with `db.execute(plan)`, which resolves `{ affectedRows }`. Values go into the query as they are: there is no `param(...)` placeholder for ad-hoc queries. For a statement built once and run many times, use `db.prepare(...)`.
 
 ## Type Inference with `ResultType`
 
-**Pattern**: Use `ResultType<typeof plan>` to extract row types from plans.
+**Pattern**: Use `ResultType<typeof plan>` to name the row type of a plan.
 
 `ResultType` also names the row of any ORM query (`db.orm.public.User.include('posts')`). The same rows can be named without a query in scope: `contract.d.ts` emits a `Models` namespace, and the family package exports the `Scalars` and `Shape` utilities that are applied to those model types; see [Naming model and result types](./model-and-result-types.md).
 
-**✅ CORRECT: Extract row type from plan**
-
 ```typescript
 import { db } from '../prisma/db';
-import type { ResultType } from '@internal/sql-query/types';
+import type { ResultType } from '@prisma/orm-postgres/components/runtime';
 
-const plan = db.sql
-  .from(db.schema.tables.user)
-  .select({
-    id: db.schema.tables.user.columns.id,
-    email: db.schema.tables.user.columns.email,
-  })
-  .build();
+const plan = db.sql.public.user.select('id', 'email').build();
 
 type UserRow = ResultType<typeof plan>;  // { id: number; email: string }
-```
-
-**✅ CORRECT: Extract type before execution**
-
-```typescript
-const plan = db.sql
-  .insert(db.schema.tables.user, { email: param('email') })
-  .returning(db.schema.tables.user.columns.id, db.schema.tables.user.columns.email)
-  .build({ params: { email: 'alice@example.com' } });
-
-type InsertRow = ResultType<typeof plan>;  // { id: number; email: string }
-const result = await collectRows<InsertRow>(plan);
 ```
 
 **Why?**
 - Type-safe: TypeScript infers the exact row type from the plan
 - No manual type definitions needed
-- Works with all query types (SELECT, INSERT, UPDATE, DELETE)
+- Works with every plan that returns rows: a select, and a write with `.returning(...)`
 - Preserves nullability and nested types
 
 ## Common Patterns
 
 ### DML Operations with Returning
 
+From `examples/prisma-8-demo/src/queries/dml-operations.ts`:
+
 ```typescript
 import { db } from '../prisma/db';
-import { param } from '@internal/sql-query/param';
-import type { ResultType } from '@internal/sql-query/types';
 
-const userTable = db.schema.tables.user;
-const userColumns = userTable.columns;
+const insertPlan = db.sql.public.user
+  .insert([{ email, displayName, kind: 'user' }])
+  .returning('id', 'email')
+  .build();
+const [inserted] = await db.query(insertPlan);
 
-// Insert with returning
-const insertPlan = db.sql
-  .insert(userTable, { email: param('email') })
-  .returning(userColumns.id, userColumns.email)
-  .build({ params: { email: 'alice@example.com' } });
-
-type InsertRow = ResultType<typeof insertPlan>;
-const result = await collectRows<InsertRow>(insertPlan);
+const updatePlan = db.sql.public.user
+  .update({ email: newEmail })
+  .where((f, fns) => fns.eq(f.id, userId))
+  .returning('id', 'email')
+  .build();
+const updated = await db.query(updatePlan);
 ```
+
+`insert` takes an array of rows.
 
 ### Queries with Joins
 
+The join callback receives the columns of every table in scope, keyed by table name or alias. Alias a table with `.as(...)`; in a self-join alias both sides. `where`, `orderBy` and `limit` come after `select`.
+
 ```typescript
 import { db } from '../prisma/db';
-import { param } from '@internal/sql-query/param';
-import type { ResultType } from '@internal/sql-query/types';
 
-const userTable = db.schema.tables.user;
-const postTable = db.schema.tables.post;
-
-const plan = db.sql
-  .from(userTable)
-  .innerJoin(postTable, (on) => on.eqCol(userTable.columns.id, postTable.columns.userId))
-  .where(userTable.columns.active.eq(param('active')))
-  .select({
-    userId: userTable.columns.id,
-    postId: postTable.columns.id,
-    title: postTable.columns.title,
-  })
-  .build({ params: { active: true } });
-
-type JoinedRow = ResultType<typeof plan>;
+const plan = db.sql.public.user
+  .innerJoin(db.sql.public.post, (f, fns) => fns.eq(f.user.id, f.post.userId))
+  .select((f) => ({ userId: f.user.id, postId: f.post.id, title: f.post.title }))
+  .where((f, fns) => fns.eq(f.user.kind, 'admin'))
+  .build();
 ```
 
 ## Locking the rows a select reads
@@ -249,49 +197,9 @@ The ORM client has the same four methods with `nowait` and `skipLocked`, but no 
 - A lock is refused together with `distinct`, `distinctOn`, `groupBy`, `having`, or an aggregate or window function in the projection, because Postgres refuses those statements. A locked select cannot be used as a subquery.
 - On the ORM client, a lock is refused together with `include`, `groupBy`, `aggregate`, `distinct` or `distinctOn`, and a mutation terminal (`create`, `update`, `delete`, `upsert` and their variants) on a locked collection is refused, because a mutation already locks the rows it changes.
 
-## Anti-Patterns
-
-**❌ WRONG: Don't create extra aliases for one-off usage**
-
-```typescript
-import { db } from '../prisma/db';
-
-const userTable = db.schema.tables.user;
-const userColumns = userTable.columns;
-const plan = db.sql
-  .from(userTable)
-  .select({ id: userColumns.id })
-  .build();
-```
-
-**❌ WRONG: Don't create intermediate variables unnecessarily**
-
-```typescript
-// Don't extract variables for single-use queries
-const tables = schema.tables;  // Unnecessary
-const userTable = tables.user;  // Unnecessary
-const userColumns = userTable.columns;  // Unnecessary
-
-const plan = sql
-  .from(userTable)  // Only used once
-  .select({ id: userColumns.id })
-  .build();
-```
-
-**✅ CORRECT: Use direct access for single-use queries**
-
-```typescript
-const plan = sql
-  .from(tables.user)
-  .select({ id: tables.user.columns.id })
-  .build();
-```
-
 ## Summary
 
 1. **Use one `db.ts` entrypoint** for config and runtime boundary
-2. **Import `db` directly** in query modules
-3. **Extract variables** when tables/columns are reused multiple times
-4. **Use `ResultType<typeof plan>`** to extract row types from plans
-5. **Use direct access** for single-use queries to keep code concise
-6. **Lock rows you read then write** with `forUpdate()` or `forNoKeyUpdate()` inside a transaction
+2. **Address tables by namespace**: `db.sql.<namespace>.<table>` and `db.orm.<namespace>.<Model>`
+3. **Use `ResultType<typeof plan>`** to name row types of plans
+4. **Lock rows you read then write** with `forUpdate()` or `forNoKeyUpdate()` inside a transaction

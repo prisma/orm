@@ -499,7 +499,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [x] `queries::filters::filter_regression::work_with_nulls` — m:n none/every relation filters with nullable fields [connectors: all] → PASS `test/integration/test/ports/engines/queries/filters/filter_regression/filter_regression.test.ts` › `work_with_nulls (many-to-many)`
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/queries/filters/filter_unwrap.rs
-- [x] `queries::filters::filter_unwrap::many_filter` — nested deleteMany with in filter on subItems succeeds [connectors: all] → non-ported `test/integration/test/ports/engines/non-ported/queries/filters/filter_unwrap/filter_unwrap.md`
+- [x] `queries::filters::filter_unwrap::many_filter` — nested deleteMany with in filter on subItems succeeds [connectors: all] → PASS `test/integration/test/ports/engines/queries/filters/filter_unwrap/filter_unwrap.test.ts` › `a nested deleteMany with an in filter on the child rows succeeds (many_filter)` (the MongoDB variant is not applicable: the Mongo ORM has no nested relation writes)
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/queries/filters/filters.rs
 - [x] `queries::filters::filters::no_filter` — findMany with empty filter returns all rows for each model [connectors: all] → PASS `test/integration/test/ports/engines/queries/filters/filters/filters.test.ts` › `no_filter`
@@ -777,9 +777,9 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [ ] `queries::order_and_pagination::nested_pagination::mid_lvl_skip_1_take_minus_3` — nested middles skip 1 take -3 returns first two middles [connectors: all]
 - [ ] `queries::order_and_pagination::nested_pagination::mid_order_by_take_1` — nested middles orderBy desc take 1 returns last middle [connectors: all]
 - [ ] `queries::order_and_pagination::nested_pagination::mid_lvl_order_by_take_3` — nested middles orderBy desc take 3 returns all in reverse [connectors: all]
-- [ ] `queries::order_and_pagination::nested_pagination::m2m_many_children_nested_cursor` — m2m nested cursor pagination across shared children [connectors: all]
-- [ ] `queries::order_and_pagination::nested_pagination::m2m_many_children_nested_cursor_skip_take` — m2m nested cursor with skip/take/negative-take [connectors: all]
-- [ ] `queries::order_and_pagination::nested_pagination::m2m_many_children_nested_skip_take` — m2m nested skip/take pagination without cursor [connectors: all]
+- [x] `queries::order_and_pagination::nested_pagination::m2m_many_children_nested_cursor` — m2m nested cursor pagination across shared children [connectors: all] → test.fails `test/integration/test/ports/engines/queries/order_and_pagination/nested_pagination/nested_pagination.test.ts` › `a many-to-many include with a cursor returns the children from the cursor on (m2m_many_children_nested_cursor)`
+- [x] `queries::order_and_pagination::nested_pagination::m2m_many_children_nested_cursor_skip_take` — m2m nested cursor with skip/take/negative-take [connectors: all] → test.fails `test/integration/test/ports/engines/queries/order_and_pagination/nested_pagination/nested_pagination.test.ts` › `a many-to-many include with a cursor, skip and take, also a negative take (m2m_many_children_nested_cursor_skip_take)`
+- [x] `queries::order_and_pagination::nested_pagination::m2m_many_children_nested_skip_take` — m2m nested skip/take pagination without cursor [connectors: all] → test.fails `test/integration/test/ports/engines/queries/order_and_pagination/nested_pagination/nested_pagination.test.ts` › `a many-to-many include with skip and take, also a negative take (m2m_many_children_nested_skip_take)`
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/queries/order_and_pagination/order_by.rs
 - [ ] `queries::order_and_pagination::order_by::unique_asc` — orders by unique field ascending [connectors: all]

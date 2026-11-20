@@ -10,10 +10,14 @@ function build(...texts: string[]) {
       ({ document, sources }) => [document.syntax, sources.sourceFileFor(document.syntax)] as const,
     ),
   );
-  const result = buildSymbolTable({ documents: parsed.map(({ document }) => document), sources });
+  const result = buildSymbolTable({
+    documents: parsed.map(({ document }) => document),
+    sources,
+    defaultNamespaceId: 'public',
+  });
   return {
     ...result,
-    topLevel: result.symbolTable.topLevel,
+    symbolTable: result.symbolTable,
     parseDiagnostics: parsed.flatMap(({ diagnostics }) => diagnostics),
   };
 }
@@ -37,7 +41,7 @@ function lines(...parts: string[]): string {
 
 describe('buildSymbolTable() given mixin declarations', () => {
   it('collects a mixin of each keyword into the mixins record, with fields or entries', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       lines(
         'model mixin Timestamps {',
         '  createdAt DateTime @default(now())',
@@ -58,9 +62,14 @@ describe('buildSymbolTable() given mixin declarations', () => {
     );
 
     expect(diagnostics).toEqual([]);
-    expect(Object.keys(topLevel.mixins)).toEqual(['Timestamps', 'Geo', 'BaseRoles', 'OwnerRead']);
+    expect(Object.keys(symbolTable.defaultNamespace.mixins)).toEqual([
+      'Timestamps',
+      'Geo',
+      'BaseRoles',
+      'OwnerRead',
+    ]);
     expect(
-      Object.values(topLevel.mixins).map((mixin) => ({
+      Object.values(symbolTable.defaultNamespace.mixins).map((mixin) => ({
         kind: mixin.kind,
         name: mixin.name,
         keyword: mixin.keyword,
@@ -95,14 +104,14 @@ describe('buildSymbolTable() given mixin declarations', () => {
         attributes: ['map'],
       },
     ]);
-    expect(Object.keys(topLevel.models)).toEqual([]);
-    expect(Object.keys(topLevel.compositeTypes)).toEqual([]);
-    expect(Object.keys(topLevel.blocks)).toEqual([]);
+    expect(Object.keys(symbolTable.defaultNamespace.models)).toEqual([]);
+    expect(Object.keys(symbolTable.defaultNamespace.compositeTypes)).toEqual([]);
+    expect(Object.keys(symbolTable.defaultNamespace.blocks)).toEqual([]);
   });
 
   it('keeps the node and the span of a mixin and resolves its fields like model fields', () => {
     const source = 'model mixin Timestamps {\n  createdAt DateTime? @default(now())\n}';
-    const mixin = build(source).topLevel.mixins['Timestamps'];
+    const mixin = build(source).symbolTable.defaultNamespace.mixins['Timestamps'];
 
     expect(mixin?.node.name()?.name()).toBe('Timestamps');
     expect(mixin?.span).toEqual({
@@ -121,14 +130,14 @@ describe('buildSymbolTable() given mixin declarations', () => {
   });
 
   it('collects a mixin declared in a namespace into that namespace', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       'namespace auth {\n  model mixin Timestamps {\n    createdAt DateTime\n  }\n}',
     );
 
     expect(diagnostics).toEqual([]);
-    expect(Object.keys(topLevel.mixins)).toEqual([]);
-    expect(Object.keys(topLevel.namespaces['auth']?.mixins ?? {})).toEqual(['Timestamps']);
-    expect(Object.keys(topLevel.namespaces['auth']?.models ?? {})).toEqual([]);
+    expect(Object.keys(symbolTable.defaultNamespace.mixins)).toEqual([]);
+    expect(Object.keys(symbolTable.namespaces['auth']?.mixins ?? {})).toEqual(['Timestamps']);
+    expect(Object.keys(symbolTable.namespaces['auth']?.models ?? {})).toEqual([]);
   });
 
   it('names the mixin as the owner of a field with an invalid qualified type', () => {
@@ -148,7 +157,7 @@ describe('buildSymbolTable() given mixin declarations', () => {
 
   it('reports a field declared twice in a mixin at the later field', () => {
     const source = 'model mixin T {\n  a Int\n  a String\n}';
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -158,7 +167,7 @@ describe('buildSymbolTable() given mixin declarations', () => {
         range: rangeOf(source, 'a', 1),
       },
     ]);
-    expect(topLevel.mixins['T']?.fields['a']?.typeName).toBe('Int');
+    expect(symbolTable.defaultNamespace.mixins['T']?.fields['a']?.typeName).toBe('Int');
   });
 
   it.each([
@@ -169,7 +178,7 @@ describe('buildSymbolTable() given mixin declarations', () => {
   ] as const)(
     'reports a mixin that shares its name with %s declared first',
     (_kind, source, record) => {
-      const { diagnostics, topLevel } = build(source);
+      const { diagnostics, symbolTable } = build(source);
 
       expect(diagnostics).toEqual([
         {
@@ -179,14 +188,16 @@ describe('buildSymbolTable() given mixin declarations', () => {
           range: rangeOf(source, 'User', 1),
         },
       ]);
-      expect(Object.keys(topLevel[record])).toEqual(['User']);
-      expect(topLevel.mixins['User']?.keyword).toBe(record === 'mixins' ? 'model' : undefined);
+      expect(Object.keys(symbolTable.defaultNamespace[record])).toEqual(['User']);
+      expect(symbolTable.defaultNamespace.mixins['User']?.keyword).toBe(
+        record === 'mixins' ? 'model' : undefined,
+      );
     },
   );
 
   it('reports a declaration that shares its name with a mixin declared first', () => {
     const source = 'model mixin User {\n}\nmodel User {\n}';
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -196,8 +207,8 @@ describe('buildSymbolTable() given mixin declarations', () => {
         range: rangeOf(source, 'User', 1),
       },
     ]);
-    expect(Object.keys(topLevel.mixins)).toEqual(['User']);
-    expect(Object.keys(topLevel.models)).toEqual([]);
+    expect(Object.keys(symbolTable.defaultNamespace.mixins)).toEqual(['User']);
+    expect(Object.keys(symbolTable.defaultNamespace.models)).toEqual([]);
   });
 
   it('checks a mixin name against the models, types, blocks and mixins of its namespace', () => {
@@ -219,7 +230,7 @@ describe('buildSymbolTable() given mixin declarations', () => {
       'model mixin User {',
       '}',
     );
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -235,16 +246,16 @@ describe('buildSymbolTable() given mixin declarations', () => {
         range: rangeOf(source, 'Roles', 1),
       },
     ]);
-    expect(Object.keys(topLevel.namespaces['a']?.mixins ?? {})).toEqual(['Roles']);
-    expect(Object.keys(topLevel.namespaces['a']?.blocks ?? {})).toEqual([]);
-    expect(Object.keys(topLevel.namespaces['b']?.mixins ?? {})).toEqual(['User']);
-    expect(Object.keys(topLevel.mixins)).toEqual(['User']);
+    expect(Object.keys(symbolTable.namespaces['a']?.mixins ?? {})).toEqual(['Roles']);
+    expect(Object.keys(symbolTable.namespaces['a']?.blocks ?? {})).toEqual([]);
+    expect(Object.keys(symbolTable.namespaces['b']?.mixins ?? {})).toEqual(['User']);
+    expect(Object.keys(symbolTable.defaultNamespace.mixins)).toEqual(['User']);
   });
 });
 
 describe('buildSymbolTable() given a block that includes a mixin', () => {
   it('keeps only the members written in the block and reports nothing for the inclusion', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       lines(
         'model mixin Timestamps {',
         '  createdAt DateTime',
@@ -271,9 +282,15 @@ describe('buildSymbolTable() given a block that includes a mixin', () => {
     );
 
     expect(diagnostics).toEqual([]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['id']);
-    expect(topLevel.models['User']?.attributes.map((attribute) => attribute.name)).toEqual(['map']);
-    expect(Object.keys(topLevel.compositeTypes['Address']?.fields ?? {})).toEqual(['street']);
-    expect(topLevel.blocks['Role']?.entries.map((entry) => entry.key()?.name())).toEqual(['GUEST']);
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual(['id']);
+    expect(
+      symbolTable.defaultNamespace.models['User']?.attributes.map((attribute) => attribute.name),
+    ).toEqual(['map']);
+    expect(
+      Object.keys(symbolTable.defaultNamespace.compositeTypes['Address']?.fields ?? {}),
+    ).toEqual(['street']);
+    expect(
+      symbolTable.defaultNamespace.blocks['Role']?.entries.map((entry) => entry.key()?.name()),
+    ).toEqual(['GUEST']);
   });
 });

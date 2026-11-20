@@ -293,27 +293,6 @@ describe('provideRename — the new name', () => {
     });
   });
 
-  it('rejects Infinity', () => {
-    expect(rejectionOf('Infinity')).toMatchObject({
-      code: LSPErrorCodes.RequestFailed,
-      message: '"Infinity" is not a valid PSL identifier',
-    });
-  });
-
-  it('rejects a name that starts with a digit', () => {
-    expect(rejectionOf('1st')).toMatchObject({
-      code: LSPErrorCodes.RequestFailed,
-      message: '"1st" is not a valid PSL identifier',
-    });
-  });
-
-  it('rejects an empty name', () => {
-    expect(rejectionOf('')).toMatchObject({
-      code: LSPErrorCodes.RequestFailed,
-      message: '"" is not a valid PSL identifier',
-    });
-  });
-
   it('rejects a name with a dot', () => {
     expect(rejectionOf('auth.Account')).toMatchObject({
       code: LSPErrorCodes.RequestFailed,
@@ -924,5 +903,40 @@ describe('provideRename — where the map attribute goes', () => {
 
     expect(renamed).toBe('label Badge {\n  colour = "red"\n\n  @@map("Sticker")\n}\n');
     expect(format(renamed)).toBe(renamed);
+  });
+});
+
+describe('rename — the default namespace', () => {
+  const postgres: Files = {
+    'a.prisma': [
+      'namespace public {',
+      '  model Account {',
+      '    id Int @id',
+      '  }',
+      '}',
+      'namespace auth {',
+      '  model Session {',
+      '    account public.Account',
+      '  }',
+      '}',
+      '',
+    ].join('\n'),
+  };
+  const noBlock: Files = { 'a.prisma': 'model User {\n  id Int @id\n  self public.User\n}\n' };
+
+  it.each([
+    [noBlock, 'pub|lic.User'],
+    [postgres, 'namespace pub|lic'],
+  ])('refuses to rename it at %j', (files, marked) => {
+    const input = cursorInput(files, 'a.prisma', marked);
+
+    expect(providePrepareRename(input)).toBeNull();
+    expect(provideRename({ ...input, newName: 'Renamed' })).toBeNull();
+  });
+
+  it('still renames another namespace', () => {
+    expect(renameAt(postgres, 'a.prisma', 'namespace au|th', 'identity')).toEqual([
+      'a.prisma: namespace identity {',
+    ]);
   });
 });

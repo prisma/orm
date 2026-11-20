@@ -3,6 +3,7 @@ import type {
   AuthoringTypeNamespace,
   DataTypeSupport,
 } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import { notOk, ok } from '@internal/utils/result';
 import { identifier } from '../src/attribute-spec/combinators/identifier';
@@ -136,7 +137,6 @@ export function binderContext(
   const dataTypes = input.dataTypes ?? EMPTY_DATA_TYPES;
   return {
     authoringContributions: {
-      field: {},
       type: input.contributedTypes ?? {},
       entityTypes: {},
       pslBlockDescriptors: input.pslBlockDescriptors ?? {},
@@ -147,6 +147,7 @@ export function binderContext(
     controlMutationDefaults: {
       defaultFunctionRegistry: input.defaultFunctionRegistry ?? new Map(),
     },
+    generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     dataTypes,
     pslDiagnostics: {
       ...(describeUnsupportedAttribute === undefined
@@ -181,8 +182,12 @@ export function blockAttributeFixture(attributeSource: string): {
   readonly ctx: BlockAttributeCtx;
 } {
   const { document, sources } = parse(`fixture Probe {\n  ${attributeSource}\n}`, 'schema.prisma');
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-  const block = symbolTable.topLevel.blocks['Probe'];
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
+  const block = symbolTable.defaultNamespace.blocks['Probe'];
   const node = block === undefined ? undefined : [...block.node.attributes()][0];
   if (block === undefined || node === undefined) throw new Error('expected a block attribute');
   return {

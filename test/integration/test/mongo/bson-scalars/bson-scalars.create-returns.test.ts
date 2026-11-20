@@ -27,7 +27,7 @@ describe('Mongo create return values', () => {
       withMongoPort<Contract>({ contractJson }, async ({ db }) => {
         const created = await db.posts.create(post(1));
 
-        const [read] = await db.posts.where({ _id: created._id }).all();
+        const [read] = await db.posts.where({ id: created.id }).all();
         expect(created).toStrictEqual(read);
         expect(created.raw).toMatchObject({ smallLong: 5, wholeDouble: 2, int: 7 });
       }),

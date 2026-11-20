@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { ContractSourceContext } from '@internal/cli/config-types';
-import { loadConfig, type PrismaNextConfig } from '@internal/config-loader';
+import { loadConfig, type PrismaConfig } from '@internal/config-loader';
 import type { ControlStack } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
@@ -13,7 +13,7 @@ import { setupIntegrationTestDirectoryFromFixtures } from './utils/cli-test-help
 
 const fixtureSubdir = 'emit-contract';
 
-function buildControlStack(config: PrismaNextConfig) {
+function buildControlStack(config: PrismaConfig) {
   return createControlStack({
     family: config.family,
     target: config.target,
@@ -29,18 +29,20 @@ function buildSourceContext(
 ): ContractSourceContext {
   return {
     composedExtensions: stack.extensions.map((p) => p.id),
+    defaultNamespaceId: stack.target.defaultNamespaceId,
     composedExtensionContracts: new Map(),
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
     dataTypes: stack.dataTypes,
     controlMutationDefaults: stack.controlMutationDefaults,
+    generatorFunctions: stack.generatorFunctions,
     resolvedInputs,
     capabilities: stack.capabilities,
   };
 }
 
 const resolveContract = async (
-  source: NonNullable<PrismaNextConfig['contract']>['source'],
+  source: NonNullable<PrismaConfig['contract']>['source'],
   stack: ControlStack,
 ) => {
   const sourceResult = await source.load(buildSourceContext(stack, source.inputs ?? []));

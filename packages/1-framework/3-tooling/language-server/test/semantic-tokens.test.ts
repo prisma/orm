@@ -56,6 +56,7 @@ function parseSemanticTokenSource(
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   return {
     document,
@@ -294,16 +295,19 @@ policy Probe { target = Invoice\n value = Int }`);
     const source = `namespace pgvector { model Vector { id Int } }
 model Doc { declared pgvector.Vector\n contributed postgis.Geometry\n model Doc.Vector\n remote other:pgvector.Vector }`;
     const { document, sources } = parse(source, 'language-server-test.psl');
-    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      defaultNamespaceId: 'public',
+    });
     const typeConstructor = {
       kind: 'typeConstructor',
-      output: { codecId: 'fixture/scalar', nativeType: 'fixture' },
+      output: { codecId: 'fixture/scalar' },
     } as const;
     const binder = testBinder({
       sources,
       symbolTable,
       authoringContributions: {
-        field: {},
         type: {
           pgvector: { Vector: typeConstructor },
           postgis: { Geometry: typeConstructor },

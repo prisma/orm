@@ -1,7 +1,9 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
+import type { JsonValue } from '@internal/contract/types';
 import sql from '@internal/family-sql/control';
 import { dataTypeId } from '@internal/framework-components/codec';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   createControlStack,
@@ -23,13 +25,18 @@ const PREFIX = '  id Int @id @x(';
 
 function parseArgument(source: string) {
   const { document, sources } = parse(`model M {\n${PREFIX}${source})\n}\n`, 'schema.prisma');
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
   const binder = createBinder({
     sources,
     symbolTable,
     context: {
       authoringContributions: assembleAuthoringContributions([]),
       controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       dataTypes: EMPTY_DATA_TYPES,
     },
   }).binder;
@@ -82,6 +89,8 @@ describe.each([
     fraction: 'sqlite/real',
   },
 ])('dataTypeValue on the assembled $name stack', ({ stack, integer, canonicalEight, fraction }) => {
+  const typedValue = (type: string, json: JsonValue) =>
+    stack.dataTypes.lookup.get(type)?.fromContract(json, {});
   const read = (type: string, source: string) => {
     const { argument, ctx } = parseArgument(source);
     return dataTypeValue(dataTypeId(type), stack.dataTypes).parse(argument, ctx);
@@ -89,13 +98,13 @@ describe.each([
 
   it('takes a number for the integer type', () => {
     expect(read(integer, '8')).toEqual(
-      ok({ type: integer, value: canonicalEight, span: span('8') }),
+      ok({ value: typedValue(integer, canonicalEight), span: span('8') }),
     );
   });
 
   it('refuses a quoted string for the integer type', () => {
     expect(read(integer, '"8"')).toEqual(
-      refusal('"8"', 'PSL_VALUE_TYPE_INCOMPATIBLE', 'Expected a number'),
+      refusal('"8"', 'PSL_VALUE_TYPE_INCOMPATIBLE', 'Expected a number; write 8'),
     );
   });
 
@@ -129,7 +138,7 @@ describe.each([
 
   it('takes a sql literal for sql/expression', () => {
     expect(read('sql/expression', 'sql`x`')).toEqual(
-      ok({ type: 'sql/expression', value: 'x', span: span('sql`x`') }),
+      ok({ value: typedValue('sql/expression', 'x'), span: span('sql`x`') }),
     );
   });
 });
@@ -138,7 +147,7 @@ describe('a refusal written as a default and as a dataTypeValue argument on the 
   const stack = createControlStack({ family: sql, target: postgres, adapter: postgresAdapter });
 
   it.each([
-    ['a quoted string on an integer type', 'Int', 'pg/int4', '"8"', 'Expected a number'],
+    ['a quoted string on an integer type', 'Int', 'pg/int4', '"8"', 'Expected a number; write 8'],
     [
       'a number with a fraction on an integer type',
       'Int',

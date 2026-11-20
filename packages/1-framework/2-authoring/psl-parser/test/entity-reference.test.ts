@@ -42,11 +42,12 @@ function fixture(value: string, local = true) {
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   expect(diagnostics).toEqual([]);
-  const namespace = symbolTable.topLevel.namespaces['Local'];
+  const namespace = symbolTable.namespaces['Local'];
   if (!namespace) throw new Error('Missing namespace');
-  const owner = namespace.models['Owner'] ?? symbolTable.topLevel.models['Owner'];
+  const owner = namespace.models['Owner'] ?? symbolTable.defaultNamespace.models['Owner'];
   if (!owner) throw new Error('Missing owner');
   const { binder, diagnostics: binderDiagnostics } = createBinder({
     sources,
@@ -110,6 +111,7 @@ describe('syntax-scoped entity resolution', () => {
     const result = buildSymbolTable({
       documents: [document],
       sources,
+      defaultNamespaceId: 'public',
     });
     expect(result.diagnostics).toEqual([]);
     const { binder, diagnostics: binderDiagnostics } = createBinder({
@@ -120,7 +122,7 @@ describe('syntax-scoped entity resolution', () => {
       }),
     });
     expect(binderDiagnostics).toEqual([]);
-    const namespace = result.symbolTable.topLevel.namespaces['Local'];
+    const namespace = result.symbolTable.namespaces['Local'];
     const block = namespace?.blocks['Reader'];
     if (block === undefined) throw new Error('Missing block');
     const parsed = interpretExtensionBlockAttributes({
@@ -153,21 +155,25 @@ describe('syntax-scoped entity resolution', () => {
     [{ kind: 'namedType' }, 'Email'],
     [{ kind: 'block', keyword: 'permission' }, 'Reader'],
   ])('falls back to top-level %j', (selector, name) => {
-    const { expression, ctx } = fixture(name);
+    const { expression, ctx, table } = fixture(name);
     const rule = entityRef(selector);
     expect(rule.expected).toEqual(selector);
-    expect(rule.parse(expression, ctx)).toMatchObject({
+    const result = rule.parse(expression, ctx);
+    expect(result).toMatchObject({
       ok: true,
-      value: { declaration: { name, kind: selector.kind }, namespace: undefined },
+      value: { declaration: { name, kind: selector.kind } },
     });
+    expect(result.ok ? result.value.namespace : null).toBe(
+      selector.kind === 'namedType' ? undefined : table.defaultNamespace,
+    );
   });
 
   it('selects only top-level declarations outside namespaces', () => {
     const { expression, ctx, table } = fixture('Shared', false);
     expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
       ok({
-        declaration: table.topLevel.models['Shared'],
-        namespace: undefined,
+        declaration: table.defaultNamespace.models['Shared'],
+        namespace: table.defaultNamespace,
       }),
     );
   });
@@ -194,10 +200,11 @@ describe('syntax-scoped entity resolution', () => {
     const { symbolTable, diagnostics } = buildSymbolTable({
       documents: [document],
       sources,
+      defaultNamespaceId: 'public',
     });
     expect(diagnostics).toEqual([]);
-    expect(Object.hasOwn(symbolTable.topLevel.models, '__proto__')).toBe(true);
-    const declaration = Object.entries(symbolTable.topLevel.models).find(
+    expect(Object.hasOwn(symbolTable.defaultNamespace.models, '__proto__')).toBe(true);
+    const declaration = Object.entries(symbolTable.defaultNamespace.models).find(
       ([name]) => name === '__proto__',
     )?.[1];
     expect(declaration).toBeDefined();
@@ -224,11 +231,11 @@ describe('syntax-scoped entity resolution', () => {
           },
         }),
       });
-      const selfModel = symbolTable.topLevel.models['Owner'];
+      const selfModel = symbolTable.defaultNamespace.models['Owner'];
       if (!selfModel) throw new Error('Missing owner');
       const ctx = { sources, symbols: symbolTable, binder, selfModel };
       expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
-        ok({ declaration, namespace: undefined }),
+        ok({ declaration, namespace: symbolTable.defaultNamespace }),
       );
       return;
     }
@@ -274,8 +281,8 @@ describe('syntax-scoped entity resolution', () => {
     );
     expect(rule.parse(top.expression, top.ctx)).toEqual(
       ok({
-        declaration: top.table.topLevel.models['Shared'],
-        namespace: undefined,
+        declaration: top.table.defaultNamespace.models['Shared'],
+        namespace: top.table.defaultNamespace,
       }),
     );
   });

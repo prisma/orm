@@ -1,0 +1,107 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "NativeType": {
+            "storage": {
+              "table": "NativeType",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "value": {
+                  "column": "value"
+                },
+                "optional": {
+                  "column": "optional"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "value": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/xml@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "optional": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/xml@1"
+                },
+                "nullable": true,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "NativeType": {
+      "namespace": "public",
+      "model": "NativeType"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "2440da5711b4a9c728c24b2919503b1339d40a3f4c5594be24f014a1354ba70d",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "NativeType": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "value": {
+                  "dataType": "pg/xml",
+                  "codecId": "pg/xml@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "optional": {
+                  "dataType": "pg/xml",
+                  "codecId": "pg/xml@1",
+                  "nullable": true,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,11 +1,15 @@
 import { charColumn, int4Column } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPushedContractRuntime } from './integration-helpers';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import {
+  expectPerRelationStatements,
+  timeouts,
+  withPushedContractRuntime,
+} from './integration-helpers';
 
 const OwnerBase = model('Owner', {
   fields: {
@@ -28,12 +32,18 @@ const Owner = OwnerBase.relations({
 }).sql({ table: 'char_owners' });
 
 const contract = defineContract({ models: { Owner, Tag } });
-const context = createExecutionContext({
-  contract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
+function contextOf(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+    }),
+  });
+}
 
-describe('a char(3) value', () => {
+describe.each(includeStrategies)('a char(3) value (%s)', (strategy) => {
+  const context = contextOf(strategy);
   it(
     'reads the same through a flat read, a to-many include and a to-one include, losing only the padding',
     async () => {
@@ -47,16 +57,20 @@ describe('a char(3) value', () => {
           .select('id', 'code')
           .orderBy((o) => o['id']!.asc())
           .all();
+        runtime.resetExecutions();
         const toMany = await new Collection({ runtime, context }, 'Owner', namespace)
           .select('id')
           .include('tags', (tag) => tag.select('id', 'code'))
           .orderBy((o) => o['id']!.asc())
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
+        runtime.resetExecutions();
         const toOne = await new Collection({ runtime, context }, 'Tag', namespace)
           .select('id')
           .include('owner', (owner) => owner.select('id', 'code'))
           .orderBy((t) => t['id']!.asc())
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect({ flat, toMany, toOne }).toEqual({
           flat: [

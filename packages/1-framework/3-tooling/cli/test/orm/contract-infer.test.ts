@@ -236,7 +236,7 @@ describe('contract infer', () => {
         ],
       },
     ]);
-    expect(run.presented?.presentation.stdout).toEqual([]);
+    expect(run.presented?.presentation.stdout).toEqual(['generated/contract.prisma']);
     expect(stripAnsi(run.stderr)).toContain('Contract written to generated/contract.prisma');
     expect(run.stdout).toBe('');
   });
@@ -254,7 +254,8 @@ describe('contract infer', () => {
     expect(run.exitCode).toBe(2);
     expect(envelope).toMatchObject({ ok: false, error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' } });
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
-    expect(envelope).not.toHaveProperty('fix');
+    expect(envelope?.ok).toBe(false);
+    expect(envelope).not.toHaveProperty('error.fix');
   });
 
   it('errors when the config declares no driver', async () => {

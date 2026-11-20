@@ -1,0 +1,7 @@
+// use prisma-8
+
+namespace public {
+  model User {
+    id Int @id
+  }
+}

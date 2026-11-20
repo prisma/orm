@@ -1,0 +1,95 @@
+import type {
+  PostgresClient,
+  PostgresTransactionContext,
+  PostgresTransactionOptions,
+} from '@internal/postgres/runtime';
+import type { Collection } from '@internal/sql-orm-client';
+import type { Pool } from 'pg';
+import { expectTypeOf, test } from 'vitest';
+import type {
+  RoleBoundDb,
+  SupabaseInternalDb,
+  SupabaseOptions,
+  SupabaseTransactionContext,
+} from '../src/exports/runtime';
+import type { Contract } from './fixtures/example-app/contract';
+
+declare class ProfileCollection extends Collection<Contract, 'Profile'> {
+  named(username: string): this;
+}
+type Classes = { Profile: typeof ProfileCollection };
+type Client = RoleBoundDb<Contract, Classes>;
+type Tx = SupabaseTransactionContext<Contract, Classes>;
+
+test('a role-bound transaction receives the transaction context', () => {
+  expectTypeOf<Parameters<Parameters<Client['transaction']>[0]>[0]>().toEqualTypeOf<Tx>();
+});
+
+test('each query member of a transaction has the type it has on the role-bound client', () => {
+  expectTypeOf<Tx['sql']>().toEqualTypeOf<Client['sql']>();
+  expectTypeOf<Tx['orm']>().toEqualTypeOf<Client['orm']>();
+  expectTypeOf<Tx['raw']>().toEqualTypeOf<Client['raw']>();
+  expectTypeOf<Tx['prepare']>().toEqualTypeOf<Client['prepare']>();
+  expectTypeOf<Tx['query']>().toEqualTypeOf<Client['query']>();
+  expectTypeOf<Tx['execute']>().toEqualTypeOf<Client['execute']>();
+  expectTypeOf<Tx['toSql']>().toEqualTypeOf<Client['toSql']>();
+  expectTypeOf<Tx['orm']['public']['Profile']['named']>().toBeFunction();
+});
+
+test('query, execute and toSql have the types a postgres client has', () => {
+  type Postgres = PostgresClient<Contract, Classes>;
+  expectTypeOf<Client['query']>().toEqualTypeOf<Postgres['query']>();
+  expectTypeOf<Client['execute']>().toEqualTypeOf<Postgres['execute']>();
+  expectTypeOf<Client['toSql']>().toEqualTypeOf<Postgres['toSql']>();
+});
+
+test('a transaction has no lifecycle members or runtime', () => {
+  expectTypeOf<Extract<keyof Tx, 'close' | 'runtime' | typeof Symbol.asyncDispose>>().toBeNever();
+});
+
+test('tx.transaction takes one callback, passes a context of the same type and infers the result', () => {
+  const tx = {} as Tx;
+  expectTypeOf(tx.transaction).parameters.toEqualTypeOf<[(tx: Tx) => PromiseLike<unknown>]>();
+  expectTypeOf(tx.transaction).parameter(0).parameter(0).toEqualTypeOf<Tx>();
+  expectTypeOf(tx.transaction(async () => 42)).toEqualTypeOf<Promise<number>>();
+  expectTypeOf(
+    tx.transaction(async (inner) => inner.transaction(async () => 'value' as const)),
+  ).toEqualTypeOf<Promise<'value'>>();
+});
+
+test('a role-bound client and its transaction have the enums and nativeEnums a postgres client has', () => {
+  type Postgres = PostgresClient<Contract, Classes>;
+  expectTypeOf<Client['enums']>().toEqualTypeOf<Postgres['enums']>();
+  expectTypeOf<Client['nativeEnums']>().toEqualTypeOf<Postgres['nativeEnums']>();
+  expectTypeOf<Tx['enums']>().toEqualTypeOf<Postgres['enums']>();
+  expectTypeOf<Tx['nativeEnums']>().toEqualTypeOf<Postgres['nativeEnums']>();
+});
+
+test('a role-bound transaction is a postgres transaction', () => {
+  expectTypeOf<Tx>().toEqualTypeOf<PostgresTransactionContext<Contract, Classes>>();
+});
+
+test('role callback options use PostgreSQL levels and preserve result inference', () => {
+  expectTypeOf<Parameters<Client['transaction']>[1]>().toEqualTypeOf<
+    PostgresTransactionOptions | undefined
+  >();
+  expectTypeOf<SupabaseOptions<Contract>['transactionOptions']>().toEqualTypeOf<
+    PostgresTransactionOptions | undefined
+  >();
+  expectTypeOf<PostgresTransactionOptions['timeout']>().toEqualTypeOf<number | null | undefined>();
+  // @ts-expect-error
+  expectTypeOf({ timeout: true } satisfies PostgresTransactionOptions);
+  expectTypeOf<null>().not.toExtend<PostgresTransactionOptions>();
+  expectTypeOf<{ isolationLevel: null }>().not.toExtend<PostgresTransactionOptions>();
+  expectTypeOf<{ isolationLevel: 'Snapshot' }>().not.toExtend<PostgresTransactionOptions>();
+  expectTypeOf<
+    Extract<keyof SupabaseInternalDb, 'transaction' | 'transactionOptions'>
+  >().toBeNever();
+  const check = (db: Client) =>
+    db.transaction(async () => ({ value: 42 }), { isolationLevel: 'Serializable', timeout: null });
+  expectTypeOf(check).returns.toEqualTypeOf<Promise<{ value: number }>>();
+});
+
+test('the pg option takes a pg.Pool only', () => {
+  expectTypeOf<SupabaseOptions<Contract>['pg']>().toEqualTypeOf<Pool | undefined>();
+});

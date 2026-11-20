@@ -39,8 +39,8 @@ export default async function OrdersPage() {
             const status = lastStatus?.status;
             return (
               <Link
-                key={order._id}
-                href={`/orders/${order._id}`}
+                key={order.id}
+                href={`/orders/${order.id}`}
                 className="no-underline text-inherit"
               >
                 <Card className="hover:shadow-md transition-shadow">

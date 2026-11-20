@@ -9,7 +9,10 @@
  * The project's `node_modules/prisma` is a fake package whose
  * `prisma` bin records its argv and cwd; the package-manager install step
  * is satisfied by a PATH shim `npm` that exits 0, so `init` reaches the emit
- * step without the network.
+ * step without the network. Because the shim installs nothing, the project's
+ * `node_modules/@prisma/orm-postgres` is a symlink to this repository's built
+ * package, from which `init` loads the init contribution it writes the project
+ * from.
  */
 
 import { execFile } from 'node:child_process';
@@ -20,6 +23,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -33,6 +37,7 @@ const execFileAsync = promisify(execFile);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI_BIN = resolve(__dirname, '../../../../packages/1-framework/3-tooling/cli/dist/bin.mjs');
+const TARGET_PACKAGE_DIR = resolve(__dirname, '../../../../packages/9-public/@prisma/orm-postgres');
 
 let projectDir: string;
 let shimDir: string;
@@ -54,6 +59,12 @@ beforeEach(() => {
   const npmShim = join(shimDir, 'npm');
   writeFileSync(npmShim, '#!/bin/sh\nexit 0\n');
   chmodSync(npmShim, 0o755);
+  mkdirSync(join(projectDir, 'node_modules', '@prisma'), { recursive: true });
+  symlinkSync(
+    TARGET_PACKAGE_DIR,
+    join(projectDir, 'node_modules', '@prisma', 'orm-postgres'),
+    'dir',
+  );
 });
 
 afterEach(() => {

@@ -33,8 +33,9 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
-  const selfModel = symbolTable.topLevel.models['M'];
+  const selfModel = symbolTable.defaultNamespace.models['M'];
   if (selfModel === undefined) throw new Error('expected model M');
   const node = selfModel.fields['id']?.node.attributes()[Symbol.iterator]().next().value;
   const value = node?.argList()?.args()[Symbol.iterator]().next().value?.value();

@@ -23,7 +23,7 @@ const ctx: AuthoringEntityContext = {
   family: 'sql',
   target: 'postgres',
   codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
-  dataTypeLookup: createDataTypeLookup([]),
+  dataTypes: { entries: {}, lookup: createDataTypeLookup([]), dataTypeOfCodec: () => undefined },
 };
 
 const badgeDescriptor: AuthoringEntityTypeDescriptor = {
@@ -41,7 +41,7 @@ const badgeDescriptor: AuthoringEntityTypeDescriptor = {
 const labelDescriptor: AuthoringEntityTypeDescriptor = {
   kind: 'entity',
   discriminator: 'label',
-  args: [{ kind: 'string', name: 'text' }],
+  args: [{ kind: 'value', dataType: 'demo/text', name: 'text' }],
   output: { template: { text: { kind: 'arg', index: 0 } } },
 };
 

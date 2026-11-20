@@ -41,7 +41,7 @@ function writeProject(parent: string): Project {
   const dbPath = join(appDir, 'journey.db');
   const config = readFileSync(sqlitePslConfigFixture, 'utf-8')
     .replace('{{DB_PATH}}', () => dbPath)
-    .replace("migrations: { dir: 'migrations' }", "migrations: { dir: './db/migrations' }");
+    .replace("migrations: { dir: 'migrations',", "migrations: { dir: './db/migrations',");
   writeFileSync(join(parent, CONFIG), config, 'utf-8');
   writeFileSync(join(appDir, 'contract.prisma'), psl('  age String'), 'utf-8');
   writeProjectManifest(appDir);

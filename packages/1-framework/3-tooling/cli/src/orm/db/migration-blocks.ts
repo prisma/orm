@@ -1,14 +1,19 @@
 import type { OperationPreview } from '@internal/framework-components/control';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
+import { labelsText } from '../../control-api/statements/plan-questions';
 import { statementFlag } from '../../control-api/statements/statement-flag';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
+import { skippedOperationsText } from '../../utils/applied-summary';
+import type { DataProtectionSetting } from '../../utils/data-protection-settings';
 import {
   type MigrationCommandResult,
   previewBlockHeader,
   renderPreviewStatement,
 } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
+import { plannerWarningText } from '../../utils/planner-warning-text';
+import { declaredSettingsText } from '../../utils/policy-errors';
 import { type CliInvocation, cliCommand, printedPlanCommand } from '../../utils/printed-command';
 import { appliedStatementBlocks } from '../statement-blocks';
 
@@ -103,6 +108,13 @@ function operationBlocks(result: MigrationCommandResult): readonly Block[] {
   ];
 }
 
+/** What the planner flagged without refusing to plan it, each its summary followed by its why. */
+function plannerWarningBlocks(result: MigrationCommandResult): readonly Block[] {
+  return (result.plannerWarnings ?? []).map(
+    (warning): Block => ({ kind: 'summary', status: 'warn', text: plannerWarningText(warning) }),
+  );
+}
+
 /** The statements a database would run, printed verbatim rather than laid out. */
 function previewBlocks(preview: OperationPreview | undefined): readonly Block[] {
   if (preview === undefined) {
@@ -122,21 +134,6 @@ function previewBlocks(preview: OperationPreview | undefined): readonly Block[] 
     : [header, { kind: 'drawing', lines: statements }];
 }
 
-/**
- * What the planner flagged without refusing to plan it. Only `db update`
- * produces these — the additive-only policies cannot reach the branch.
- */
-function plannerWarningBlocks(result: MigrationCommandResult): readonly Block[] {
-  const warnings = result.warnings ?? [];
-  if (warnings.length === 0) {
-    return [];
-  }
-  return [
-    { kind: 'summary', status: 'warn', text: 'Planner warnings' },
-    { kind: 'list', items: warnings.map((warning) => warning.summary) },
-  ];
-}
-
 /** The new required fields whose existing rows get a temporary value, and how to choose the value. */
 function temporaryValueBlocks(
   result: MigrationCommandResult,
@@ -148,7 +145,7 @@ function temporaryValueBlocks(
     ({ field, value }): Block => ({
       kind: 'summary',
       status: 'warn',
-      text: `Existing rows ${get} ${value} in field "${field}". To choose the value, plan a migration with ${printedPlanCommand(invocation, databaseStorageHash, [statementFlag({ verb: 'backfill', text: field })])} instead.`,
+      text: `Field "${field}" ${get} the temporary value ${value} where existing data has none. To choose the value, plan a migration with ${printedPlanCommand(invocation, databaseStorageHash, [statementFlag({ verb: 'backfill', text: field })])} instead.`,
     }),
   );
 }
@@ -163,22 +160,73 @@ function planSummaryText(result: MigrationCommandResult): string {
 
 function applySummaryText(result: MigrationCommandResult): string {
   const executed = result.execution?.operationsExecuted ?? 0;
+  const planned = result.plan.operations.length;
   const spaces = result.perSpace?.length ?? 0;
   const across = spaces > 0 ? ` across ${spaces} contract space${spaces === 1 ? '' : 's'}` : '';
+  const policies = result.databasePoliciesUpdated;
+  if (result.changedStorageEntities !== undefined) return result.summary;
   if (executed === 0) {
-    return `Database already matches contract${across}`;
+    return policies === undefined
+      ? `Database already matches contract${across}`
+      : `Policies updated: ${declaredSettingsText(policies)}`;
   }
-  return `Applied ${executed} operation(s)${across}`;
+  const applied =
+    executed < planned
+      ? `Applied ${executed} of ${planned} operation(s)${across}; ${skippedOperationsText(planned - executed)}`
+      : `Applied ${executed} operation(s)${across}`;
+  return policies === undefined
+    ? applied
+    : `${applied}; policies updated: ${declaredSettingsText(policies)}`;
+}
+
+/** For each namespace the plan removes, the answers that answer all of its questions. */
+function namespaceAnswerLines(result: MigrationCommandResult): readonly { label: string }[] {
+  const added = result.addedNamespaces ?? [];
+  return (result.removedNamespaces ?? []).map(({ namespaceId, answeredBy }) => {
+    const deleteFlag = statementFlag({ verb: 'delete', text: namespaceId });
+    const rename =
+      added.length === 0
+        ? ''
+        : `, or ${added.map((target) => statementFlag({ verb: 'rename', text: `${namespaceId}:${target}` })).join(' or ')} if it was renamed`;
+    return {
+      label: `every question about namespace "${namespaceId}": ${deleteFlag}${rename}${answeredBy === undefined ? '' : ' (answered)'}`,
+    };
+  });
+}
+
+/** The entries a dry run lists, one group per answer: a `--delete` answers every operation of its subject, an `--allow` one operation. */
+function answerGroups<TEntry extends { readonly text: string; readonly operationIndex: number }>(
+  entries: readonly { readonly entry: TEntry; readonly verb: 'delete' | 'allow' }[],
+): readonly {
+  readonly verb: 'delete' | 'allow';
+  readonly text: string;
+  readonly entries: readonly TEntry[];
+}[] {
+  const groups = new Map<string, { verb: 'delete' | 'allow'; text: string; entries: TEntry[] }>();
+  entries.forEach(({ entry, verb }, index) => {
+    const key = verb === 'delete' ? `delete ${entry.text}` : `allow ${index}`;
+    const group = groups.get(key) ?? { verb, text: entry.text, entries: [] };
+    group.entries.push(entry);
+    groups.set(key, group);
+  });
+  return [...groups.values()];
 }
 
 /**
  * The questions an apply would ask, as a dry run lists them: each operation that would lose data,
- * answered by `--delete` or `--rename`, and each that would widen access, answered by `--allow`.
+ * answered by `--delete` or `--rename`, and each that would change access, answered by `--allow`.
  */
 function questionBlocks(result: MigrationCommandResult): readonly Block[] {
+  const asks = (setting: DataProtectionSetting) => result.permitted?.includes(setting) !== true;
   const entries = [
-    ...(result.dataLoss ?? []).map((entry) => ({ entry, verb: 'delete' as const })),
-    ...(result.accessWidening ?? []).map((entry) => ({ entry, verb: 'allow' as const })),
+    ...(asks('dataLoss') ? (result.dataLoss ?? []) : []).map((entry) => ({
+      entry,
+      verb: 'delete' as const,
+    })),
+    ...(asks('accessWidening') ? (result.accessChanges ?? []) : []).map((entry) => ({
+      entry,
+      verb: 'allow' as const,
+    })),
   ];
   if (entries.length === 0) {
     return [];
@@ -189,9 +237,12 @@ function questionBlocks(result: MigrationCommandResult): readonly Block[] {
       roots: [
         {
           label: 'An apply asks about',
-          children: entries.map(({ entry, verb }) => ({
-            label: `${result.plan.operations[entry.operationIndex]?.label ?? 'an operation'}: ${statementFlag({ verb, text: entry.text })}${entry.answered ? ' (answered)' : ''}`,
-          })),
+          children: [
+            ...answerGroups(entries).map(({ entries: answered, verb, text }) => ({
+              label: `${labelsText(answered.map((entry) => result.plan.operations[entry.operationIndex]?.label ?? 'an operation'))}: ${statementFlag({ verb, text })}${answered.some((entry) => entry.answered) ? ' (answered)' : ''}`,
+            })),
+            ...namespaceAnswerLines(result),
+          ],
         },
       ],
     },
@@ -269,6 +320,31 @@ function fallbackMarkerBlocks(result: MigrationCommandResult): readonly Block[] 
   ];
 }
 
+const PERMITTED_STATEMENTS = {
+  dataLoss: { verb: 'delete', text: 'permits losing data, so these deletes' },
+  accessWidening: {
+    verb: 'allow',
+    text: 'permits changing who can read or write data, so these access changes',
+  },
+} as const satisfies Record<DataProtectionSetting, { verb: string; text: string }>;
+
+/** Says which applied statements the database's data protection policy answered, without asking. */
+function permittedStatementBlocks(result: MigrationCommandResult): readonly Block[] {
+  const verbs = new Set((result.appliedStatements ?? []).map(({ verb }) => verb));
+  return (result.permitted ?? []).flatMap((setting) => {
+    const { verb, text } = PERMITTED_STATEMENTS[setting];
+    return verbs.has(verb)
+      ? [
+          {
+            kind: 'summary' as const,
+            status: 'info' as const,
+            text: `This database's data protection policy ${text} were applied without asking.`,
+          },
+        ]
+      : [];
+  });
+}
+
 function applyBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
@@ -281,6 +357,7 @@ function applyBlocks(
     ...operationBlocks(result),
     ...temporaryValueBlocks(result, invocation, databaseStorageHash),
     ...appliedStatementBlocks(result.appliedStatements ?? []),
+    ...permittedStatementBlocks(result),
     ...fallbackMarkerBlocks(result),
     ...(advanced === null || advanced === undefined
       ? []

@@ -1,5 +1,5 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config-loader';
+import type { PrismaConfig } from '@internal/config-loader';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
@@ -35,7 +35,7 @@ describe('executeMigrateShowPlan', () => {
   let tempDir: string;
   let migrationsDir: string;
   let appMigrationsDir: string;
-  let config: PrismaNextConfig;
+  let config: PrismaConfig;
   let firstDirName: string;
   let firstMigrationHash: string;
   let secondDirName: string;
@@ -100,6 +100,7 @@ describe('executeMigrateShowPlan', () => {
         familyId: 'sql',
         create: vi.fn().mockReturnValue({
           deserializeContract: (json: unknown) => json,
+          accessChangesOf: () => [],
         }),
       },
       target: {
@@ -111,7 +112,7 @@ describe('executeMigrateShowPlan', () => {
       },
       contract: { output: join(tempDir, 'contract.json') },
       migrations: { dir: 'migrations' },
-    } as unknown as PrismaNextConfig;
+    } as unknown as PrismaConfig;
   });
 
   afterEach(async () => {
@@ -122,6 +123,7 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
       from: HASH_A,
     });
     expect(result.ok).toBe(true);
@@ -146,6 +148,7 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
       from: EMPTY_CONTRACT_HASH,
     });
     expect(result.ok).toBe(true);
@@ -163,6 +166,7 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
       from: HASH_A,
       onPreflightComplete,
     });

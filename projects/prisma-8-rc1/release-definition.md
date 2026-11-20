@@ -27,7 +27,7 @@ Anything not on this list — message wording, documentation, additional tests, 
 
 1. **Nobody gets v8 by accident.** The RC publishes under a dist-tag other than `latest`, so `npm install prisma` continues to install Prisma 7 until 8.0.0 final ships.
 2. **API stability from RC 1**, with the experimental parts named explicitly. The experimental list is what protects the stability promise. The database tiers are part of this statement: **PostgreSQL is the general-availability target — and the only one. MongoDB ships in early access; SQLite is a proof of concept.**
-3. **Prisma 7 is maintained for 12 months, counted from the day 8.0.0 final ships** (not from the RC — if final slips, the promise must not silently shrink). Bug fixes on a `v7` branch; this window is stated in the announcement.
+3. **Prisma 7 is maintained for 18 months, counted from the day 8.0.0 final ships** (not from the RC — if final slips, the promise must not silently shrink). Bug fixes and security updates on a `v7` branch; this window is stated in the announcement.
 4. **v7 and v8 run side by side in one project**, so migration can be incremental. This claim gets its own document: [parallel-install.md](parallel-install.md).
 5. **A public scoreboard instead of promises.** The feature-support matrix (see [scoreboard.md](scoreboard.md)) shows exactly what works where, what's experimental, and what's not in 8.0.
 6. **Promotion criteria instead of a date for 8.0.0 final.** Final ships when every matrix cell is either proven or explicitly excluded, the migration recipe passes its test, and a quiet period passes with no new release blockers. We give a target window, never per-feature dates.

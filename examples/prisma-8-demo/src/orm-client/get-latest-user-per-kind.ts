@@ -1,9 +1,7 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
-export async function ormClientGetLatestUserPerKind(runtime: Runtime) {
-  const db = createOrmClient(runtime);
-  return db.User.orderBy([
+export async function ormClientGetLatestUserPerKind(orm: DemoOrm) {
+  return orm.User.orderBy([
     (user) => user.kind.asc(),
     (user) => user.createdAt.desc(),
     (user) => user.id.asc(),

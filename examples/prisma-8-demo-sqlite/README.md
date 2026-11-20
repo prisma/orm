@@ -12,6 +12,8 @@ semantics) lives in `test/e2e/framework/test/sqlite/` and the
 `@prisma/orm-sqlite/orm-client` / `@prisma/orm-sqlite/builder` integration
 suites — this example deliberately doesn't duplicate it.
 
+The `Event` model uses the convenience date and time types: `startsAt DateTime` reads a JavaScript `Date`, and `day Date` and `opensAt Time` read the ISO 8601 text SQLite stores (`2024-02-29`, `09:30:00.000`). `bookedOn` defaults to the current date in the database. `pnpm test` creates a database of its own, writes events and reads them back.
+
 ## Setup
 
 ```bash
@@ -63,7 +65,7 @@ SQLITE_PATH=./demo.db pnpm start -- aggregate-precision
 | `disconnect-post-tags` | ORM | `db.Post.update({ tags: (t) => t.disconnect([…]) })` — junction DELETE |
 | `create-post-with-tags` | ORM | `db.Post.create({ …, tags: (t) => t.create([…]) })` — insert targets + links |
 | `create-post-connect-tags` | ORM | `db.Post.create({ …, tags: (t) => t.connect([…]) })` — connect in the create flow |
-| `integer-representations` | ORM | `db.Post.select('viewCount', 'impressionCount')` — `BigIntNumber` beside `BigInt` |
+| `integer-representations` | ORM | `db.Post.select('viewCount', 'impressionCount')` — `BigInt(as: number)` beside `BigInt` |
 | `aggregate-precision` | ORM | `count`/`sum`/`avg` beside `countBigInt`/`sumBigInt`, including the `sum` that raises |
 
 The `add-posts` command demonstrates why an interactive transaction is necessary: the count (SQL
@@ -80,7 +82,7 @@ representation.
 
 | Column | Type | Codec | Reads as |
 | --- | --- | --- | --- |
-| `viewCount` | `BigIntNumber` | `sqlite/bigintnumber@1` | `number`, throwing outside ±(2^53 − 1) |
+| `viewCount` | `BigInt(as: number)` | `sqlite/integer@1` | `number`, throwing outside ±(2^53 − 1) |
 | `impressionCount` | `BigInt` | `sqlite/bigint@1` | `bigint` |
 
 SQLite declares no `UnboundedInt`: that type needs lossless unbounded integer
@@ -94,7 +96,7 @@ raises rather than rounding:
 ```text
 impressionCount — BigInt, and the total is 2^53 + 1000:
   sum('impressionCount')        refused — this is the guard working:
-    RUNTIME.DECODE_FAILED: sqlite/bigintnumber@1 value must be an integer within the safe integer range, got 9007199254741992
+    RUNTIME.DECODE_FAILED: A sqlite/bigintnumber@1 value is "9007199254741992", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.
   sumBigInt('impressionCount')  9007199254741992n (bigint)
 ```
 

@@ -81,4 +81,39 @@ describe('resolveStatements, delete statements', () => {
     });
     expect(expectValue(result)).toEqual([]);
   });
+
+  it('refuses a delete of a namespace the same run renames', () => {
+    const failure = expectFailure(
+      resolveStatements({
+        statements: [rename('finance:billing'), remove('finance')],
+        origin: {
+          kind: 'contract',
+          contract: contractOf({
+            app: { models: { User: {} } },
+            finance: { models: { Bill: {} } },
+          }),
+        },
+        destination: contractOf({
+          app: { models: { User: {} } },
+          billing: { models: { Bill: {} } },
+        }),
+      }),
+      'MIGRATION.STATEMENT_INVALID',
+    );
+    expect({ why: failure.why, fix: failure.fix }).toEqual({
+      why: '--delete finance names what --rename finance:billing renames in the same run, so it cannot also be deleted.',
+      fix: 'Leave out --delete finance to keep the data under its new name, or leave out --rename finance:billing to delete it.',
+    });
+  });
+
+  it('refuses a delete of a model the same run renames', () => {
+    expectFailure(
+      resolveStatements({
+        statements: [remove('Profile'), rename('Profile:User')],
+        origin: { kind: 'contract', contract: origin },
+        destination,
+      }),
+      'MIGRATION.STATEMENT_INVALID',
+    );
+  });
 });

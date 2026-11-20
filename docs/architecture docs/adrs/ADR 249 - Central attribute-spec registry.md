@@ -1,6 +1,6 @@
 # ADR 249 — Central attribute-spec registry
 
-**Status:** Accepted
+**Status:** Accepted. Amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md): the construction context gains `generatorFunctions`, the stack's generator function registry. `@default` pins one `funcCall` arm per database default function (`autoincrement()`, `now()`). The new `onCreate` and `onUpdate` field specs pin one arm per generator function bound to the field's codec, which they read from `typeConstructor`, and refuse a function that does not apply before trying the arms.
 **Date:** 2026-09-09
 **Builds on:** [ADR 231 — Declarative attribute specifications](ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 236 — Target-contributed model attributes](ADR%20236%20-%20Target-contributed%20model%20attributes.md)
 
@@ -8,7 +8,7 @@
 
 ## At a glance
 
-Every model-level and field-level PSL attribute a family accepts is registered in one namespace, keyed by level and by attribute name. Block-level attributes are declared on the block descriptor that owns them, not in this namespace. A family declares its built-ins as a single `const` object (abridged here from `packages/2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts`):
+Every model-level and field-level PSL attribute a family accepts is registered in one namespace, keyed by level and by attribute name. Block-level attributes are declared on the block descriptor that owns them, not in this namespace. A family declares its built-ins as a single `const` object (abridged here from `packages/2-sql-family/2-authoring/contract-psl/src/sql-attribute-specs.ts`):
 
 ```ts
 export const sqlAttributeSpecs = {
@@ -156,7 +156,7 @@ Both factory types return `AttributeSpec<never, …>`, and the bottom type is de
 readonly refine?: (parsed: Out, ctx: Ctx, attributeNode: AstNode) => readonly PslDiagnostic[];
 ```
 
-A parameter position makes `Out` contravariant. A concrete spec — the one `modelAttribute('index', …)` builds, whose `refine` receives `{ fields?: string[]; expression?: string; … }` — is assignable to `AttributeSpec<Out, ModelAttributeCtx>` only when `Out` is assignable to that concrete output type. `never` is assignable to every type, so every real spec fits. `unknown` is assignable to none of them, so `AttributeSpec<unknown, …>` would reject every spec that declares a `refine` — `@@index`, `@@check`, `@noCheck`, `@relation` — and the registry would be able to hold only the specs with no cross-argument validation. The same reasoning fixes `AuthoringModelAttributeDescriptor<Out = never>` and leaves `InferAttr<S>`'s parameter unconstrained.
+A parameter position makes `Out` contravariant. A concrete spec — the one `modelAttribute('index', …)` builds, whose `refine` receives `{ fields?: string[]; expression?: string; … }` — is assignable to `AttributeSpec<Out, ModelAttributeCtx>` only when `Out` is assignable to that concrete output type. `never` is assignable to every type, so every real spec fits. `unknown` is assignable to none of them, so `AttributeSpec<unknown, …>` would reject every spec that declares a `refine` — `@@index`, `@@check`, `@relation` — and the registry would be able to hold only the specs with no cross-argument validation. The same reasoning fixes `AuthoringModelAttributeDescriptor<Out = never>` and leaves `InferAttr<S>`'s parameter unconstrained.
 
 ---
 

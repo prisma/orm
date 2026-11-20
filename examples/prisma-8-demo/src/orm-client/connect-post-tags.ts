@@ -1,8 +1,7 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import type { DefaultModelRow } from '@prisma/orm-postgres/orm-client';
 import { blindCast } from '@prisma/orm-postgres/utils/casts';
 import type { Contract } from '../prisma/contract.d';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 type PostId = DefaultModelRow<Contract, 'Post'>['id'];
 type TagId = DefaultModelRow<Contract, 'Tag'>['id'];
@@ -15,10 +14,9 @@ type TagId = DefaultModelRow<Contract, 'Tag'>['id'];
 export async function ormClientConnectPostTags(
   postId: string,
   tagIds: readonly string[],
-  runtime: Runtime,
+  orm: DemoOrm,
 ) {
-  const db = createOrmClient(runtime);
-  return db.Post.where({ id: toPostId(postId) })
+  return orm.Post.where({ id: toPostId(postId) })
     .select('id', 'title')
     .include('tags', (tag) => tag.select('id', 'label').orderBy((t) => t.label.asc()))
     .update({

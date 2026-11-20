@@ -1,15 +1,17 @@
-import { InternalError } from '@internal/utils/internal-error';
 import { brandedAnnotations } from '../annotations';
 import {
   type ActivityChild,
+  ActivityChildren,
+  type ActivityChildSlot,
   type ActivityParent,
   type ActivityRecord,
   createActivityRecord,
+  endActivity,
+  notAcceptingChildrenError,
 } from './activity-lifecycle';
 import type {
   ActivityContext,
   ActivityContextFields,
-  ActivityEndedResult,
   ActivityFinalizedResult,
   ActivityObserver,
   TransactionActivity,
@@ -18,6 +20,7 @@ import type {
 /** How a transaction's `commit()` or `rollback()` settled. */
 export type TransactionSettlement =
   | { readonly by: 'commit'; readonly outcome: 'succeeded' | 'failed' }
+  | { readonly by: 'release'; readonly outcome: 'succeeded' | 'failed' }
   | {
       readonly by: 'rollback';
       readonly outcome: 'succeeded' | 'failed';
@@ -30,8 +33,10 @@ export interface TransactionActivityRun<TContext extends ActivityContext = Activ
   extends ActivityParent {
   readonly activity: TransactionActivity;
   readonly ctx: TContext;
+  /** Stops accepting children: new work beneath the transaction, and beneath the client activities inside it, is refused from now on. `end` does this too. */
+  stopAcceptingChildren(): void;
   /**
-   * Ends the transaction: its `activityEnded` hooks, then the `activityFinalized` hooks of its children that have ended, in the order they started, then its own. Resolves after those hooks have run. A child still open is finalized when it ends, with this transaction's outcome; `end` does not wait for it. A second call does nothing. An `activityEnded` error after a successful settlement is rethrown once finalization has run.
+   * Ends the transaction: its `activityEnded` hooks, then the `activityFinalized` hooks of the activities beneath it that have ended, in post-order (each activity's children in the order they started, depth first, then the activity), then its own. Resolves after those hooks have run. An activity still open is finalized when it ends, with this transaction's outcome; `end` does not wait for it. A second call does nothing. An `activityEnded` error after a successful settlement is rethrown once finalization has run.
    */
   end(settlement: TransactionSettlement): Promise<void>;
 }
@@ -39,12 +44,14 @@ export interface TransactionActivityRun<TContext extends ActivityContext = Activ
 export interface TransactionActivityOptions<TContext extends ActivityContext> {
   readonly middleware: ReadonlyArray<ActivityObserver>;
   readonly context: ActivityContextFields<TContext>;
-  /** Whether the transaction keeps its finished children to finalize them when it ends. A runtime decides this once, when it is created: only when a middleware implements `activityFinalized`. Without it, the transaction keeps nothing but whether a child failed. */
+  /** The open activity the transaction starts beneath, such as a client activity. */
+  readonly parent: ActivityParent | undefined;
+  /** Whether the transaction keeps its finished children to finalize them when it ends. A runtime decides this once, when it is created: only when a middleware implements `activityFinalized`. Without it, the transaction keeps nothing but whether a statement beneath it failed. */
   readonly holdFinishedChildren: boolean;
 }
 
 /**
- * Starts a transaction activity and runs its `activityStarted` hooks. When one of them throws, the transaction ends `failed`, is finalized `rolled-back`, and the error is rethrown.
+ * Starts a transaction activity and runs its `activityStarted` hooks. When one of them throws, the transaction ends `failed`, is finalized `rolled-back`, and the error is rethrown. Rejects at once, running no hook, when `parent` no longer accepts children.
  */
 export async function startTransactionActivity<TContext extends ActivityContext>(
   options: TransactionActivityOptions<TContext>,
@@ -65,11 +72,12 @@ class TransactionActivityRunImpl<TContext extends ActivityContext>
   readonly activity: TransactionActivity;
   readonly ctx: TContext;
   readonly #record: ActivityRecord<TContext>;
-  readonly #children: Array<{ readonly child: ActivityChild; ended: boolean }> = [];
-  #aChildFailed = false;
+  readonly #children: ActivityChildren;
+  readonly #slot: ActivityChildSlot | undefined;
+  readonly #isSavepoint: boolean;
+  #aStatementFailed = false;
   #ended = false;
-  #finalized: ActivityFinalizedResult | undefined;
-  readonly #holdFinishedChildren: boolean;
+  #acceptingChildren = true;
 
   constructor(options: TransactionActivityOptions<TContext>) {
     this.activity = {
@@ -81,58 +89,74 @@ class TransactionActivityRunImpl<TContext extends ActivityContext>
       options.middleware,
       this.activity,
       options.context,
-      undefined,
+      options.parent,
     );
     this.ctx = this.#record.ctx;
-    this.#holdFinishedChildren = options.holdFinishedChildren;
+    this.#isSavepoint = this.ctx.inTransaction();
+    this.#children = new ActivityChildren({
+      inTransaction: true,
+      holdFinishedChildren: options.holdFinishedChildren,
+      statementFailed: () => {
+        this.#aStatementFailed = true;
+      },
+      transactionAcceptsChildren: () => this.#acceptingChildren,
+      childFinalized: () => {},
+    });
+    this.#slot = options.parent?.adopt(this);
   }
 
   start(): Promise<void> {
     return this.#record.started();
   }
 
-  adopt(child: ActivityChild): (outcome: ActivityEndedResult['outcome']) => Promise<void> {
-    if (this.#ended) {
-      throw new InternalError('An activity was started beneath a transaction that has ended');
-    }
-    if (!this.#holdFinishedChildren) {
-      return async (outcome) => {
-        if (outcome === 'failed') this.#aChildFailed = true;
-      };
-    }
-    const entry = { child, ended: false };
-    this.#children.push(entry);
-    return async (outcome) => {
-      entry.ended = true;
-      if (outcome === 'failed') this.#aChildFailed = true;
-      if (this.#finalized !== undefined) await child.finalize(this.#finalized);
-    };
+  acceptsChildren(): boolean {
+    return this.#acceptingChildren;
+  }
+
+  adopt(child: ActivityChild): ActivityChildSlot {
+    if (!this.#acceptingChildren) throw notAcceptingChildrenError(this.activity, 'parent');
+    return this.#children.add(child);
+  }
+
+  stopAcceptingChildren(): void {
+    this.#acceptingChildren = false;
   }
 
   async end(settlement: TransactionSettlement): Promise<void> {
     if (this.#ended) return;
     this.#ended = true;
-    let endedError: { readonly error: unknown } | undefined;
-    try {
-      await this.#record.ended({ kind: 'transaction', outcome: settlement.outcome });
-    } catch (error) {
-      endedError = { error };
+    this.#acceptingChildren = false;
+    const ended = { kind: 'transaction', outcome: settlement.outcome } as const;
+    const own = this.#finalizedResult(settlement);
+    if (this.#isSavepoint && settlement.by === 'rollback') {
+      await endActivity(this.#record, ended, own, undefined, (result) =>
+        this.#finalizeThenReportEnd(result),
+      );
+      return;
     }
-    const finalized = this.#finalizedResult(settlement);
-    this.#finalized = finalized;
-    for (const { child, ended } of this.#children.splice(0)) {
-      if (ended) await child.finalize(finalized);
-    }
-    await this.#record.finalize(finalized);
-    if (endedError !== undefined) throw endedError.error;
+    if (this.#isSavepoint && this.#aStatementFailed) this.#slot?.statementFailed();
+    await endActivity(this.#record, ended, own, this.#slot, (result) => this.finalize(result));
+  }
+
+  async finalize(result: ActivityFinalizedResult): Promise<void> {
+    await this.#children.finalize(result);
+    await this.#record.finalize(result);
+  }
+
+  async #finalizeThenReportEnd(result: ActivityFinalizedResult): Promise<void> {
+    await this.finalize(result);
+    await this.#slot?.ended(result);
   }
 
   #finalizedResult(settlement: TransactionSettlement): ActivityFinalizedResult {
     if (settlement.by === 'rollback') {
-      return { outcome: settlement.commitAttempted ? 'unknown' : 'rolled-back' };
+      return {
+        outcome: settlement.commitAttempted && !this.#isSavepoint ? 'unknown' : 'rolled-back',
+      };
     }
     return {
-      outcome: settlement.outcome === 'succeeded' && !this.#aChildFailed ? 'committed' : 'unknown',
+      outcome:
+        settlement.outcome === 'succeeded' && !this.#aStatementFailed ? 'committed' : 'unknown',
     };
   }
 }

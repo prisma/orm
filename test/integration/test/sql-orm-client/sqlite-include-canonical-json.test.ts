@@ -2,17 +2,17 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import {
-  bigintColumn,
   blobColumn,
-  integerColumn,
-  jsonColumn,
+  integerBigIntColumn,
+  integerNumberColumn,
+  plainJsonColumn,
   textColumn,
 } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { type AggregateSpec, Collection } from '@internal/sql-orm-client';
+import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import { defineContract, field, model, rel } from '@internal/sqlite/contract-builder';
 import { SqliteRuntimeImpl } from '@internal/sqlite/runtime';
@@ -45,21 +45,21 @@ const STRING_CONTAINING_JSON = '{"not":"a document"}';
 
 const Reading = model('Reading', {
   fields: {
-    id: field.column(integerColumn).id(),
-    counter: field.column(bigintColumn).optional(),
+    id: field.column(integerNumberColumn).id(),
+    counter: field.column(integerBigIntColumn).optional(),
     payload: field.column(blobColumn).optional(),
-    document: field.column(jsonColumn).optional(),
+    document: field.column(plainJsonColumn).optional(),
     label: field.column(textColumn).optional(),
   },
 }).sql({ table: 'canon_readings' });
 
 const Station = model('Station', {
   fields: {
-    id: field.column(integerColumn).id(),
-    readingId: field.column(integerColumn).column('reading_id'),
+    id: field.column(integerNumberColumn).id(),
+    readingId: field.column(integerNumberColumn).column('reading_id'),
     // A per-station tally past a double's integers, so an aggregate over it has
     // something to lose.
-    weight: field.column(bigintColumn).optional(),
+    weight: field.column(integerBigIntColumn).optional(),
   },
   relations: {
     reading: rel.belongsTo(Reading, { from: 'readingId', to: 'id' }).sql({ fk: {} }),
@@ -203,7 +203,7 @@ describe('integration/sqlite include canonical JSON', () => {
     });
   });
 
-  // An empty blob and an absent one both hex to `''`, and `decodeJson` accepts
+  // An empty blob and an absent one both hex to `''`, and `fromDataTypeValue` accepts
   // `''` as a valid zero-length blob — so this is the pair the NULL guard on the
   // hex projection exists to keep apart, asserted where a user would see it.
   it('keeps an empty blob apart from an absent one', async () => {
@@ -229,15 +229,10 @@ describe('integration/sqlite include canonical JSON', () => {
   it('carries an include aggregate past 2^53 through the JSON envelope', async () => {
     seedStation(100, 1, WIDE_BIGINT.toString());
 
-    // Same cardinality-inference gap as the PostgreSQL suite: the reducers are
-    // typed away on a contract declared in this file, though the relation is
-    // to-many and the shape below is what the query returns.
-    const reduceToMax = (related: unknown): unknown =>
-      (related as { max: (field: string) => unknown }).max('weight');
     const withStations = await readings!
       .where((reading) => reading.id.eq(1))
       .select('id')
-      .include('stations', (related) => reduceToMax(related) as never)
+      .include('stations', (related) => related.max('weight'))
       .all();
 
     expect(withStations).toEqual([{ id: 1, stations: WIDE_BIGINT }]);
@@ -254,18 +249,12 @@ describe('integration/sqlite include canonical JSON', () => {
     seedStation(200, 200, '3');
     seedStation(201, 200, '4');
 
-    const reduceToTotals = (related: unknown): unknown => {
-      const reducers = related as {
-        combine: (branches: Record<string, unknown>) => unknown;
-        count: () => unknown;
-        sum: (column: string) => unknown;
-      };
-      return reducers.combine({ tally: reducers.count(), weight: reducers.sum('weight') });
-    };
     const rows = await readings!
       .where((reading) => reading.id.eq(200))
       .select('id')
-      .include('stations', (related) => reduceToTotals(related) as never)
+      .include('stations', (related) =>
+        related.combine({ tally: related.count(), weight: related.sum('weight') }),
+      )
       .all();
 
     expect(rows).toEqual([{ id: 200, stations: { tally: 2, weight: 7 } }]);
@@ -279,46 +268,38 @@ describe('integration/sqlite include canonical JSON', () => {
     seedStation(300, 300, WIDE_BIGINT.toString());
     seedStation(301, 300, '2');
 
-    const reduceToSum = (related: unknown): unknown =>
-      (related as { sum: (column: string) => unknown }).sum('weight');
     const shape = await rejectionShape(
       readings!
         .where((reading) => reading.id.eq(300))
         .select('id')
-        .include('stations', (related) => reduceToSum(related) as never)
+        .include('stations', (related) => related.sum('weight'))
         .all(),
     );
 
     const exactTotal = (WIDE_BIGINT + 2n).toString();
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991`,
+      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': A sqlite/bigintnumber@1 value is "${exactTotal}", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
       details: { table: 'canon_stations', column: 'stations', codec: 'sqlite/bigintnumber@1' },
       cause: {
         name: 'StructuredError',
-        message:
-          'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
+        message: `A sqlite/bigintnumber@1 value is "${exactTotal}", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
         code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/bigintnumber@1', received: JSON.stringify(exactTotal) },
+        meta: { codecId: 'sqlite/bigintnumber@1', received: exactTotal },
       },
     });
   });
 
   // A sum is a value SQLite computes, so it leaves the database as an INTEGER
-  // rather than the text a bigint column stores — and `node:sqlite` refuses an
-  // integer a JS number cannot hold. The target's descriptor answers with the
-  // cast that makes the wire form text, which is what the bigint codec reads.
+  // rather than the text a bigint column stores. The target's descriptor answers
+  // with the cast that makes the wire form text, which the bigint codec reads.
   it('carries a top-level sumBigInt past 2^53 through the ORM', async () => {
-    // The contract is authored in this file, so its static aggregate map is
-    // unknown and the typed builder surface is empty; dispatch dynamically,
-    // as the include reducer above already does.
-    const stats = await readings!.aggregate((aggregate) => {
-      const dynamic = aggregate as Record<string, (field?: string) => AggregateSpec[string]>;
-      return { total: dynamic['sumBigInt']!('counter') };
-    });
+    const stats = await readings!.aggregate((aggregate) => ({
+      total: aggregate.sumBigInt('counter'),
+    }));
 
     expect(stats).toEqual({ total: WIDE_BIGINT });
     expect(BigInt(Number(stats.total))).not.toBe(stats.total);
@@ -329,15 +310,12 @@ describe('integration/sqlite include canonical JSON', () => {
   // the answer a caller reads.
   it('refuses a top-level bare sum past 2^53 rather than rounding it', async () => {
     const shape = await rejectionShape(
-      readings!.aggregate((aggregate) => {
-        const dynamic = aggregate as Record<string, (field?: string) => AggregateSpec[string]>;
-        return { total: dynamic['sum']!('counter') };
-      }),
+      readings!.aggregate((aggregate) => ({ total: aggregate.sum('counter') })),
     );
 
     expect(shape).toEqual({
       name: 'StructuredError',
-      message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${WIDE_BIGINT}`,
+      message: `A sqlite/bigintnumber@1 value is "${WIDE_BIGINT}", which is not an integer within the safe integer range. sqlite/bigintnumber@1 reads integers from -9007199254740991 to 9007199254740991.`,
       code: 'RUNTIME.DECODE_FAILED',
       meta: { codecId: 'sqlite/bigintnumber@1', received: WIDE_BIGINT.toString() },
     });

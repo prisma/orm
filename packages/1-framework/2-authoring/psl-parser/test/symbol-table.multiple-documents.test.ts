@@ -12,7 +12,7 @@ function build(...texts: string[]) {
     ),
   );
   return {
-    ...buildSymbolTable({ documents, sources }),
+    ...buildSymbolTable({ documents, sources, defaultNamespaceId: 'public' }),
     documents,
     sources,
   };
@@ -25,15 +25,20 @@ describe('multiple-document symbol tables', () => {
       'type Address { street String }\nmodel Post { author User }\nnamespace app { model Item { id Int } }\nenum Role { ADMIN }',
     );
     expect(diagnostics).toEqual([]);
-    expect(Object.keys(symbolTable.topLevel.models)).toEqual(['User', 'Post']);
-    expect(Object.keys(symbolTable.topLevel.compositeTypes)).toEqual(['Address']);
-    expect(Object.keys(symbolTable.topLevel.namedTypes)).toEqual(['Email']);
-    expect(Object.keys(symbolTable.topLevel.namespaces)).toEqual(['app']);
-    expect(Object.keys(symbolTable.topLevel.blocks)).toEqual(['Role']);
-    expect(symbolTable.topLevel.models['Post']?.node.syntax.root()).toBe(documents[1]?.syntax);
-    expect(symbolTable.topLevel.models['User']?.fields['address']?.typeName).toBe('Address');
+    expect(Object.keys(symbolTable.defaultNamespace.models)).toEqual(['User', 'Post']);
+    expect(Object.keys(symbolTable.defaultNamespace.compositeTypes)).toEqual(['Address']);
+    expect(Object.keys(symbolTable.namedTypes)).toEqual(['Email']);
+    expect(Object.keys(symbolTable.namespaces)).toEqual(['public', 'app']);
+    expect(Object.keys(symbolTable.defaultNamespace.blocks)).toEqual(['Role']);
+    expect(symbolTable.defaultNamespace.models['Post']?.node.syntax.root()).toBe(
+      documents[1]?.syntax,
+    );
+    expect(symbolTable.defaultNamespace.models['User']?.fields['address']?.typeName).toBe(
+      'Address',
+    );
     expect(
-      sources.sourceFileFor(symbolTable.topLevel.compositeTypes['Address']!.node.syntax).filename,
+      sources.sourceFileFor(symbolTable.defaultNamespace.compositeTypes['Address']!.node.syntax)
+        .filename,
     ).toBe('1.psl');
   });
 
@@ -43,7 +48,9 @@ describe('multiple-document symbol tables', () => {
       'model User { id Int }',
       'model User { id Int }',
     );
-    expect(symbolTable.topLevel.models['User']?.node.syntax.root()).toBe(documents[0]?.syntax);
+    expect(symbolTable.defaultNamespace.models['User']?.node.syntax.root()).toBe(
+      documents[0]?.syntax,
+    );
     expect(diagnostics).toEqual([
       {
         filename: '1.psl',
@@ -61,8 +68,9 @@ describe('multiple-document symbol tables', () => {
     const reversed = buildSymbolTable({
       documents: [...documents].reverse(),
       sources,
+      defaultNamespaceId: 'public',
     });
-    expect(reversed.symbolTable.topLevel.models['User']?.node.syntax.root()).toBe(
+    expect(reversed.symbolTable.defaultNamespace.models['User']?.node.syntax.root()).toBe(
       documents[2]?.syntax,
     );
     expect(reversed.diagnostics.map(({ filename }) => filename)).toEqual(['1.psl', '0.psl']);
@@ -83,7 +91,7 @@ describe('multiple-document symbol tables', () => {
       { code: 'PSL_DUPLICATE_DECLARATION', line: 2, filename: '0.psl' },
       { code: 'PSL_INVALID_QUALIFIED_TYPE', line: 1, filename: '1.psl' },
     ]);
-    const namespace = symbolTable.topLevel.namespaces['app']!;
+    const namespace = symbolTable.namespaces['app']!;
     expect(Object.keys(namespace.models)).toEqual(['First', 'Second']);
     expect(
       namespace.declarations.map(({ node }) => sources.sourceFileFor(node.syntax).filename),
@@ -91,16 +99,27 @@ describe('multiple-document symbol tables', () => {
   });
 
   it('accepts no documents as an empty scope', () => {
-    expect(buildSymbolTable({ documents: [], sources: new PslSources([]) })).toEqual({
+    const emptyDefaultNamespace = {
+      kind: 'namespace',
+      id: 'public',
+      name: 'public',
+      declarations: [],
+      models: {},
+      compositeTypes: {},
+      blocks: {},
+      mixins: {},
+    };
+    expect(
+      buildSymbolTable({
+        documents: [],
+        sources: new PslSources([]),
+        defaultNamespaceId: 'public',
+      }),
+    ).toEqual({
       symbolTable: {
-        topLevel: {
-          namespaces: {},
-          namedTypes: {},
-          blocks: {},
-          models: {},
-          compositeTypes: {},
-          mixins: {},
-        },
+        defaultNamespace: emptyDefaultNamespace,
+        namespaces: { public: emptyDefaultNamespace },
+        namedTypes: {},
       },
       diagnostics: [],
     });
@@ -115,6 +134,7 @@ describe('multiple-document symbol tables', () => {
         buildSymbolTable({
           documents: [foreign.document],
           sources: registered.sources,
+          defaultNamespaceId: 'public',
         }),
       ).toThrow(/No SourceFile registered/);
     },

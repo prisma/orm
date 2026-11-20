@@ -4,6 +4,10 @@
 
 Accepted (TML-2397). Supersedes the schema-contribution half of [ADR 154 — Component-owned database dependencies](./ADR%20154%20-%20Component-owned%20database%20dependencies.md). The `databaseDependencies` mechanism described there is removed from the framework as part of this work.
 
+## The CipherStash example is historical
+
+This ADR's worked example is CipherStash as it was on version 2 of its Encrypt Query Language (EQL v2): a contract space that declares the `eql_v2_configuration` table and installs the EQL bundle in one migration operation. The CipherStash extension was built in this repository and later handed over to CipherStash, who maintain it in their own repository. Its current version, `@cipherstash/stack-prisma`, uses EQL v3. Its contract declares nothing, it has no configuration table, and each upgrade reruns the whole bundle as a plain migration under a new invariant. The example still shows why contract spaces exist; it no longer describes CipherStash.
+
 ## At a glance
 
 A Prisma Next application's database is the integration point for many parties: the application itself, plus every schema-contributing extension installed in `prisma.config.ts`. This ADR makes each of those parties a **contract space** — a disjoint `(contract.json, migration-graph, head-ref)` tuple — and runs the same per-space planner, runner, and verifier across all of them. The user's repo holds a pinned mirror of every space the database depends on, so apply-time and verify-time flows never need to read an extension package from `node_modules`.
@@ -39,7 +43,7 @@ Before this work, the framework had two parallel mental models for "schema":
 
 Two band-aids accumulated. `strictVerification: false` globally relaxed the verifier so extension-installed objects no longer failed it — at the cost of also hiding hand-edited drift the user *did* want flagged. A per-extension allowlist on `ComponentDatabaseDependency.installs.{tables,schemas}` let extensions declare *what tables they install* but not *what shape those tables have*, so the verifier could only check existence, not structure. Both papered over the underlying gap: the contract layer had no seam through which a non-application party could say "I own these structures; manage them with the same machinery you manage the application's."
 
-The cipherstash extension forced the conversation. It contributes ~5,750 lines of SQL: 1 schema, 1 table, several composite types and domains user `Encrypted<String>` columns reference via `nativeType`, plus 169 functions, 46 operators, 4 casts, and 9 operator classes. None of it was describable in any artifact the framework consumed; all of it was visible to the verifier. Monorepo aggregator packages (multiple internal contract owners composed by an aggregator) exhibit the same shape independently.
+The cipherstash extension forced the conversation. On EQL v2 it contributed ~5,750 lines of SQL: 1 schema, 1 table, several composite types and domains user `Encrypted<String>` columns reference via `nativeType`, plus 169 functions, 46 operators, 4 casts, and 9 operator classes. None of it was describable in any artifact the framework consumed; all of it was visible to the verifier. Monorepo aggregator packages (multiple internal contract owners composed by an aggregator) exhibit the same shape independently.
 
 ## Decision
 
@@ -74,7 +78,7 @@ export interface ContractSpace<TContract extends Contract = Contract> {
   readonly headRef: ContractSpaceHeadRef;
 }
 
-// packages/2-sql/9-family/src/core/migrations/types.ts
+// packages/2-sql-family/9-family/src/core/migrations/types.ts
 export interface SqlControlExtensionDescriptor<TTargetId extends string>
   extends ControlExtensionDescriptor<'sql', TTargetId> {
   readonly contractSpace?: ContractSpace<Contract<SqlStorage>>;
@@ -150,7 +154,7 @@ The build pipeline emits the contract artefacts under `src/contract.{json,d.ts}`
 
 #### Two authoring paths: planner-emitted (A) vs hand-scaffolded (B)
 
-Most extensions use **Path A**: `prisma-next migration plan` scaffolds the migration directory from the contract diff (cipherstash + the audit / feature-flags monorepo packages all follow this), and the resulting `migration.ts` is hand-edited to carry the extension's stable invariantIds and any non-derivable ops (e.g. cipherstash's `installEqlBundle` op + structural `cipherstash:create-*-v1` no-ops). `pnpm tsx migrations/<dirName>/migration.ts` then re-emits `ops.json` + `migration.json` deterministically.
+Most extensions use **Path A**: `prisma-next migration plan` scaffolds the migration directory from the contract diff (cipherstash on EQL v2 and the audit / feature-flags monorepo packages all followed this), and the resulting `migration.ts` is hand-edited to carry the extension's stable invariantIds and any non-derivable ops (e.g. cipherstash's `installEqlBundle` op + structural `cipherstash:create-*-v1` no-ops). `pnpm tsx migrations/<dirName>/migration.ts` then re-emits `ops.json` + `migration.json` deterministically.
 
 A handful of extensions need **Path B** — hand-scaffolding the migration directory — when the contract declares only `storage.types` (no tables / models). For such contracts the planner returns no operations and `migration plan` refuses with `MIGRATION.PLANNING_FAILED`: "This contract describes nothing migration plan can create, so there is no first migration to plan." The author instead:
 
@@ -205,7 +209,7 @@ Three properties hold:
 
 1. **The marker is the truth-of-record** for the live database's per-space applied state.
 2. **The set of marker rows must equal the set of loaded spaces** (`'app'` plus every entry in `extensions`). Mismatches surface as verifier errors with clear remediation.
-3. **Marker writes are atomic with the migrations that produced them.** Multi-space `db apply` opens one outer transaction; either every marker advances or none does.
+3. **A marker never records migrations that did not apply.** On a target whose DDL is transactional, a multi-space apply runs in one outer transaction, so either every marker advances or none does. On a target whose DDL is not, a space's marker advances only after its operations ran and its schema verified.
 
 ### Per-space planner, runner, verifier
 
@@ -219,11 +223,14 @@ The producer-side helpers (`planAllSpaces`, `concatenateSpaceApplyInputs`, `veri
 
 ### Apply-time atomicity and ordering
 
-Every multi-space apply runs inside a **single outer transaction**. The SQL family's `SqlMigrationRunner` was restructured to support this:
+> **Changed 2026-10-22, for the MySQL target.** This section used to say that every multi-space apply runs in one outer transaction, so a failure rolls back every space. MySQL commits each DDL statement as it runs, and MongoDB DDL bypasses transactions, so neither can keep that promise. Each failed apply now states what it left, in the failure's `failingSpace` and `databaseUnchanged`.
 
-- `execute(options)` — single-space entry point. Opens its own transaction (today's behaviour preserved).
-- `executeOnConnection(options)` — runner body without `BEGIN`/`COMMIT`. Caller owns the transaction lifecycle.
-- `executeAcrossSpaces({ driver, perSpaceOptions })` — multi-space entry point. Opens **one** outer transaction and calls `executeOnConnection` per space inside it. Failure on any space rolls back every space's writes.
+The runner's `execute({ driver, perSpaceOptions })` takes every space's plan in one call.
+
+- **Targets whose DDL is transactional** (Postgres, SQLite). `execute` opens **one** outer transaction and calls `executeOnConnection`, the runner body without `BEGIN`/`COMMIT`, for each space inside it. A failure on any space rolls back every space's writes and reports `databaseUnchanged: true`.
+- **Targets whose DDL is not** (MySQL, MongoDB). The runner applies one space at a time, verifies its schema, and only then writes its marker. A failure reports whether the database changed. The operations that already ran stay applied, including those of the failing space, and the spaces before it keep their advanced markers. Running the apply again skips what already holds and finishes the rest.
+
+Either way the failure's payload names the space that failed (`failingSpace`) and says whether the database changed (`databaseUnchanged`). The CLI's `why` names the space when it is not the application's own.
 
 **Cross-space ordering**: extension spaces alphabetical-by-spaceId first, app-space last. The convention is sufficient for v1 (a formal cross-space dependency graph is deferred), and matches the implicit dependency direction — application schema may reference extension-provided types (`Encrypted<String>` → `eql_v2_encrypted`), so extension types must exist before the app's `CREATE TABLE` runs.
 
@@ -244,7 +251,7 @@ Both flows reduce to the same per-space recipe (per [ADR 208 — Invariant-aware
    - extension-space: read the pinned `migrations/<space-id>/refs/head.json`.
 2. Compute `effectiveRequired = ref.invariants − marker.invariants`.
 3. Run `findPathWithDecision(currentMarker, ref.hash, effectiveRequired)`.
-4. Concatenate all per-space results in the cross-space ordering convention; apply in a single transaction.
+4. Concatenate all per-space results in the cross-space ordering convention and apply them in that order.
 
 For app-space, the existing greenfield synthesis is preserved: when no app-space migrations are on disk, the framework synthesises a `∅ → head` edge from the contract IR. For extension-space, synthesis from the contract alone is impossible (the IR vocabulary doesn't admit functions / operators / etc., which are the body of opaque DDL ops), so the runner walks the explicit migration graph emitted under `migrations/<space-id>/`.
 
@@ -265,7 +272,9 @@ $ prisma-next migrate     # ✗ MIGRATION.EXTENSION_DESCRIPTOR_NOT_FOUND
                           #   isn't installed. Run: pnpm install
 ```
 
-`migrate` (authoring-time) needs the descriptor to read the extension's *current* state for diffing. Apply-time (`db init` / `db update`) and verify-time (`db verify`) do not.
+`migrate` (authoring-time) needs the descriptor to read the extension's *current* state for diffing. Apply-time (`db init` / `db update`) and verify-time (`db verify`) do not. `contract emit` also writes the pinned files from the descriptors ([ADR 312](ADR%20312%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md)), so a project that never runs `migrate` can still sign and verify.
+
+**A declared atomicity.** A target does not declare whether an apply is atomic across spaces; each failed apply reports what it left in `databaseUnchanged`, so code that read a field such as `applyAtomicity: 'all-spaces' | 'per-space'` would only repeat that report. And "per space" would wrongly suggest that each space applies all or nothing, when only its marker write is atomic and the operations that ran stay applied.
 
 ### Verifier integrity checks
 
@@ -290,7 +299,7 @@ The contract IR continues to admit only what a column or field can name as its t
 
 The same boundary applies across all spaces. Cipherstash's space declares `eql_v2_configuration` (table), `eql_v2_configuration_state` (enum), `eql_v2_encrypted` (composite), and the `eql_v2.{bloom_filter,hmac_256,blake3}` domains in its `contract.json` (~3-5 KB). The remaining ~5,750 lines of bundle SQL — functions, operators, casts, op classes — live as the body of one migration op (`installEqlBundle`) inside cipherstash's migration graph, with its own `invariantId`. The verifier is symmetrically blind to those objects on both sides — `verifySqlSchema` doesn't enumerate them, and the IR doesn't declare them — so strict mode is preserved without rejecting them.
 
-Pgvector's `vector` type is in its IR; `CREATE EXTENSION vector` is the body of one migration op. Same shape.
+Pgvector's `vector` type is in its IR, and so is the `vector` extension itself: [ADR 312](ADR%20312%20-%20A%20Postgres%20extension%20is%20a%20contract%20entity%2C%20and%20db%20sign%20refuses%20a%20space%20with%20unmet%20invariants.md) makes a Postgres extension a contract entity, so the planner creates it from the contract and `db sign` can check it is installed.
 
 ## Migration JSON shape
 
@@ -353,20 +362,20 @@ The asymmetry between `migrate` (authoring) and the apply/verify path is what ma
 - **Extensions are uniformly observable and verifiable.** Strict-mode `dbInit` no longer rejects extension-installed schema objects — they are declared in the extension's contract and aggregated into the verifier's expected schema.
 - **One mental model for schema ownership.** The planner, runner, and verifier no longer need a separate "extension" code path; the same primitives serve app-space, extension-space, and (in future) monorepo composition.
 - **WYSIWYG-runnable repos.** Every artefact required to apply, hash, verify, or audit the database's expected schema is on disk in the user's repo. CI / production paths never load extension descriptors.
-- **Multi-space transactional apply.** `executeAcrossSpaces` is reusable for any future "compose multiple migration sources into one apply" use case (not just extensions).
+- **Multi-space apply.** The runner's `execute` takes every space's plan in one call, which serves any future "compose multiple migration sources into one apply" use case (not just extensions).
 - **Richer drift detection.** Bumping an extension's package version produces a clear PR diff (updated pinned `contract.json` / `contract.d.ts` / `refs/head.json`, plus any new migration directories). The legacy `databaseDependencies.init` mechanism produced no diff at all.
 
 ### Trade-offs
 
-- **Extension authors must ship a contract + migration graph**, not just an init-SQL string. The contract-space package layout convention reuses the same CLI pipeline app authors use, so the authoring story is symmetrical: write a TS or PSL schema, run `prisma-next contract emit` + `prisma-next migration plan`, and the descriptor module JSON-imports the resulting artefacts. The framework helpers `emitContractSpaceArtifacts` / `materialiseExtensionMigrationPackageIfMissing` cover the consuming application's repo half; cipherstash, pgvector, and paradedb all ship this convention.
+- **Extension authors must ship a contract + migration graph**, not just an init-SQL string. The contract-space package layout convention reuses the same CLI pipeline app authors use, so the authoring story is symmetrical: write a TS or PSL schema, run `prisma-next contract emit` + `prisma-next migration plan`, and the descriptor module JSON-imports the resulting artefacts. The framework helpers `emitContractSpaceArtifacts` / `materialiseExtensionMigrationPackageIfMissing` cover the consuming application's repo half; pgvector, PostGIS, ParadeDB and citext ship this convention.
 - **`migrate` becomes the canonical way to materialise extension bumps.** Bumping an extension in `node_modules` without running `migrate` produces stale pinned artefacts; the drift-detection helper surfaces a non-fatal warning at the next `migrate` invocation.
-- **One outer transaction across spaces** is a stronger correctness guarantee than the per-extension `databaseDependencies.init` path provided. The framework inherits the constraint that all SQL across all spaces in a single emit must be transactionally compatible (which is already true of the existing single-space path).
+- **One outer transaction across spaces**, on a target whose DDL is transactional, is a stronger correctness guarantee than the per-extension `databaseDependencies.init` path provided. Such a target inherits the constraint that all SQL across all spaces in a single emit must be transactionally compatible (which is already true of the existing single-space path). A target whose DDL is not transactional gives a resumable apply instead.
 
 ### Non-goals (deferred)
 
 - **Extension removal semantics.** Removing an extension from `extensions` while user schema still depends on extension-installed types (e.g. `Encrypted<String>` columns referencing `eql_v2_encrypted`). Until addressed, removal is unsupported and the verifier reports orphan marker rows as errors.
 - **Codec-id-changed lifecycle event.** When a user upgrades an extension in a way that changes a codec ID (`cipherstash:string@1` → `@2`), the codec needs a way to emit a "rotate" migration op. Cleanly extends the existing event vocabulary; deferred until needed.
-- **Cross-space dependencies as a first-class concept.** Convention-based ordering (extensions first, app-space second) is sufficient for v1 given the single-transaction property.
+- **Cross-space dependencies as a first-class concept.** Convention-based ordering (extensions first, app-space second) is sufficient for v1 given the fixed apply order.
 - **Cross-space codec hooks.** Codec-emitted ops are app-space-bound by API shape — the hook signature has no parameter for cross-space context. See [ADR 213](./ADR%20213%20-%20Codec%20lifecycle%20hooks.md).
 - **`migrations/refs/head.json` ergonomics.** Today the extension author hand-pins `migrations/refs/head.json` after running `migration plan` (copy `to` from the latest migration's metadata; copy `providedInvariants` from the same). Adding a `prisma-next refs update` (or equivalent) command that emits/refreshes head pins from the latest migration is a small follow-up.
 

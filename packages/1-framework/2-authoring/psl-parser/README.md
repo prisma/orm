@@ -48,7 +48,7 @@ flowchart LR
 
 `parse(source, filename, options)` returns a lossless syntax tree, a `PslSources` registry that maps any node back to its file, and syntax diagnostics. The tree keeps every token, including comments and whitespace, so the formatter and the language server work on the same tree as the interpreters. Unsupported syntax is an error; there is no best-effort mode.
 
-The parser reads structure only. Attributes, their arguments and block entries are parsed generically, whether or not anything defines them. Deciding what `@default(uuid(7))` or `@vendor.option` means belongs to later steps.
+The parser reads structure only. Attributes, their arguments and block entries are parsed generically, whether or not anything defines them. Deciding what `@onCreate(uuid(7))` or `@vendor.option` means belongs to later steps.
 
 `options.grammar` selects the grammar a file is written in: `prisma-8` by default, or `prisma-7` for Prisma 7 and Prisma 6 schemas.
 
@@ -56,7 +56,9 @@ Strongly typed AST classes wrap the tree for convenient reading. See [ADR 253](.
 
 ### Symbol table
 
-`buildSymbolTable({ documents, sources })` collects the declarations of a schema's files: namespaces, models, composite types, named types, generic blocks and their fields. It reports duplicate declarations. It does not resolve references and does not interpret blocks.
+`buildSymbolTable({ documents, sources, defaultNamespaceId })` collects the declarations of a schema's files: namespaces, models, composite types, named types, generic blocks and their fields. It reports duplicate declarations. It does not resolve references and does not interpret blocks.
+
+The default namespace's members, the named types and the names of the namespaces share one set of names, and the default namespace's own name is taken there whether or not a block is written. A top-level declaration therefore cannot be named `public` where that is the default, or `unbound` or `__unbound__` where the late-bound namespace is.
 
 Each symbol carries the members of its declaration. A model or composite type symbol has its fields and attributes; a generic block symbol has its entries and its attributes, both in source order, and a repeated entry key appears once per occurrence. Consumers read a declaration's members from its symbol, not from the symbol's syntax node.
 
@@ -67,16 +69,16 @@ Each symbol carries the members of its declaration. A model or composite type sy
 An unqualified name is looked up in this order:
 
 1. the namespace the referring declaration is in;
-2. the top level;
-3. the types the configured target and its extensions contribute (scalars, type constructors, field presets).
+2. the document level: the members of the default namespace, the named types and the namespaces;
+3. the types the configured target and its extensions contribute (scalars, type constructors, type aliases).
 
-Sibling namespaces are never searched. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it. The base of a named type is looked up without the named types in scope, so `Uuid = Uuid` in a `types` block refines the contributed `Uuid`.
+Other namespaces are never searched, apart from the default one, whose members are the document level. A nearer declaration hides an outer one of the same name. For `ns.Name`, `ns` must resolve to a namespace, and `Name` is looked up only inside it; the default namespace's name works as a qualifier even when no block is written for it. A resolved model, composite type or generic block always carries its namespace. The base of a named type is looked up without the named types in scope, so `Uuid = Uuid` in a `types` block refines the contributed `Uuid`.
 
 The binder also resolves what attribute and block specifications describe: attribute names, argument keys, function names, fixed identifier values, and the references inside argument values. Where a specification offers alternatives, the binder picks the first alternative the written value fits by its syntactic shape. Checking the value itself, such as a number range or an allowed string, is left to interpretation.
 
 A binder belongs to one snapshot of a schema. After an edit, the caller builds a new tree, symbol table and binder.
 
-The binder only resolves names. Whether a resolved name is used correctly is checked by interpretation: a field preset or a type constructor written without a call, or a type the family cannot store. The binder's diagnostics are reported as they are, by whoever built the binder; an interpreter neither repeats nor filters them. Each family supplies the wording for an unsupported attribute and for an unresolved type.
+The binder only resolves names. Whether a resolved name is used correctly is checked by interpretation: a type constructor written without a call that needs arguments, or a type the family cannot store. The binder's diagnostics are reported as they are, by whoever built the binder; an interpreter neither repeats nor filters them. Each family supplies the wording for an unsupported attribute and for an unresolved type.
 
 ### Attribute and block specifications
 

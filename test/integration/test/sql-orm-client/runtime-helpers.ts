@@ -13,13 +13,22 @@ import type { RuntimeQueryable } from '@internal/sql-orm-client';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import {
+  type ActivitySource,
+  activitySource,
   createExecutionContext,
   createSqlExecutionStack,
+  findActivitySource,
+  type PreparedStatement,
   type RuntimeConnection,
+  type RuntimeTransactionOptions,
   type SqlMiddleware,
   type SqlRuntimeExtensionDescriptor,
   type RuntimeQueryable as SqlRuntimeQueryable,
 } from '@internal/sql-runtime';
+import {
+  preparedStatementExecute,
+  preparedStatementQuery,
+} from '@internal/sql-runtime/internal/prepared-query';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { Client } from 'pg';
@@ -149,7 +158,7 @@ export async function createPgIntegrationRuntime(
       if (!driver) {
         throw new Error('Driver descriptor missing from execution stack');
       }
-      await driver.connect({ kind: 'pgClient', client });
+      await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
       const realRuntime = new PostgresRuntimeImpl({
         closeRefusal: undefined,
@@ -192,24 +201,8 @@ export async function createPgIntegrationRuntime(
     executions.push(toLoweredPlan(plan));
   };
 
-  function createRecordingQuery(target: SqlRuntimeQueryable): SqlRuntimeQueryable['query'] {
-    return function query<Row>(
-      plan: (SqlExecutionPlan | SqlQueryPlan) & { readonly _row?: Row },
-      options?: RuntimeExecuteOptions,
-    ): AsyncIterableResult<Row> {
-      record(plan);
-      return target.query<Row>(plan, options);
-    };
-  }
-
-  function createRecordingExecute(target: SqlRuntimeQueryable): SqlRuntimeQueryable['execute'] {
-    return async function execute(
-      plan: SqlExecutionPlan | SqlQueryPlan,
-      options?: RuntimeExecuteOptions,
-    ): Promise<SqlStatementStats> {
-      record(plan);
-      return await target.execute(plan, options);
-    };
+  function withRecording<T extends SqlRuntimeQueryable>(target: T): T {
+    return withPlanRecording(target, record);
   }
 
   function query<Row>(
@@ -243,14 +236,22 @@ export async function createPgIntegrationRuntime(
     );
   }
 
+  const realSource = findActivitySource(realRuntime);
   const runtime: PgIntegrationRuntime = {
+    ...(realSource === undefined
+      ? {}
+      : { [activitySource]: recordingActivitySource(realSource, record) }),
     executions,
     query,
     resetExecutions() {
       executions.length = 0;
     },
     async close() {
-      await realRuntime.close();
+      try {
+        await realRuntime.close();
+      } finally {
+        await client.end();
+      }
     },
     async execute(
       plan: SqlExecutionPlan | SqlQueryPlan,
@@ -270,24 +271,138 @@ export async function createPgIntegrationRuntime(
       type PgTransaction = Awaited<ReturnType<PgConnection['transaction']>>;
 
       const recordingConnection: PgConnection = {
-        ...conn,
-        query: createRecordingQuery(conn),
-        execute: createRecordingExecute(conn),
-        transaction: async (): Promise<PgTransaction> => {
-          const tx = await conn.transaction();
-          const recordingTransaction: PgTransaction = {
-            ...tx,
-            query: createRecordingQuery(tx),
-            execute: createRecordingExecute(tx),
-          };
-          return recordingTransaction;
-        },
+        ...withRecording(conn),
+        transaction: async (): Promise<PgTransaction> => withRecording(await conn.transaction()),
       };
       return recordingConnection;
     },
   };
 
   return runtime;
+}
+
+function recordingActivitySource(
+  source: ActivitySource,
+  record: (plan: SqlExecutionPlan | SqlQueryPlan) => void,
+): ActivitySource {
+  return {
+    async startActivity(activity) {
+      return withPlanRecording(await source.startActivity(activity), record);
+    },
+    planContentHash: (plan) => source.planContentHash(plan),
+  };
+}
+
+/** A copy of `target` that passes each plan it sends to `record`, including the plans an ORM call sends through its activity handle, the transaction it opens there and the prepared statements it executes there. */
+export function withPlanRecording<T extends SqlRuntimeQueryable>(
+  target: T,
+  record: (plan: SqlExecutionPlan | SqlQueryPlan) => void,
+): T {
+  const source = findActivitySource(target);
+  const transaction: unknown = Reflect.get(target, 'transaction');
+  const preparedQuery: unknown = Reflect.get(target, preparedStatementQuery);
+  const preparedExecute: unknown = Reflect.get(target, preparedStatementExecute);
+  const commit: unknown = Reflect.get(target, 'commit');
+  const recording = {
+    query<Row>(
+      plan: (SqlExecutionPlan | SqlQueryPlan) & { readonly _row?: Row },
+      options?: RuntimeExecuteOptions,
+    ): AsyncIterableResult<Row> {
+      record(plan);
+      return target.query<Row>(plan, options);
+    },
+    async execute(
+      plan: SqlExecutionPlan | SqlQueryPlan,
+      options?: RuntimeExecuteOptions,
+    ): Promise<SqlStatementStats> {
+      record(plan);
+      return await target.execute(plan, options);
+    },
+    ...(typeof transaction !== 'function'
+      ? {}
+      : typeof commit === 'function'
+        ? {
+            transaction: async () =>
+              withPlanRecording((await transaction.call(target)) as SqlRuntimeQueryable, record),
+          }
+        : {
+            transaction: (
+              fn: (tx: SqlRuntimeQueryable) => PromiseLike<unknown>,
+              options?: RuntimeTransactionOptions,
+            ) =>
+              transaction.call(
+                target,
+                (tx: SqlRuntimeQueryable) => fn(withPlanRecording(tx, record)),
+                options,
+              ),
+          }),
+    ...(typeof preparedQuery === 'function'
+      ? {
+          [preparedStatementQuery]: (
+            statement: PreparedStatement<unknown, unknown>,
+            params: unknown,
+            options?: RuntimeExecuteOptions,
+          ) => {
+            record(preparedExecution(statement, params));
+            return preparedQuery.call(target, statement, params, options);
+          },
+        }
+      : {}),
+    ...(typeof preparedExecute === 'function'
+      ? {
+          [preparedStatementExecute]: (
+            statement: PreparedStatement<unknown, unknown>,
+            params: unknown,
+            options?: RuntimeExecuteOptions,
+          ) => {
+            record(preparedExecution(statement, params));
+            return preparedExecute.call(target, statement, params, options);
+          },
+        }
+      : {}),
+    ...(source === undefined ? {} : { [activitySource]: recordingActivitySource(source, record) }),
+  };
+  return blindCast<T, 'the copy forwards every member of target and overrides the recorded ones'>(
+    Object.assign(forwardingCopy(target, recording), recording),
+  );
+}
+
+function forwardingCopy(target: object, overrides: object): object {
+  const copy = {};
+  for (
+    let source: object | null = target;
+    source !== null && source !== Object.prototype;
+    source = Reflect.getPrototypeOf(source)
+  ) {
+    for (const key of Reflect.ownKeys(source)) {
+      if (key === 'constructor' || Object.hasOwn(overrides, key) || Object.hasOwn(copy, key)) {
+        continue;
+      }
+      Object.defineProperty(copy, key, {
+        enumerable: true,
+        get() {
+          const value: unknown = Reflect.get(target, key);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    }
+  }
+  return copy;
+}
+
+function preparedExecution(
+  statement: PreparedStatement<unknown, unknown>,
+  params: unknown,
+): SqlExecutionPlan {
+  const values = typeof params === 'object' && params !== null ? params : {};
+  return {
+    sql: statement.sql,
+    ast: statement.ast,
+    meta: statement.meta,
+    params: statement.slots.map((slot) =>
+      slot.kind === 'literal' ? slot.value : Reflect.get(values, slot.name),
+    ),
+  };
 }
 
 export async function setupTestSchema(runtime: PgIntegrationRuntime): Promise<void> {

@@ -54,22 +54,20 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
       ctx?.project?.cleanup();
     }, timeouts.spinUpDbServer);
 
-    it('step 1 (init): scaffolds the expected project skeleton', () => {
+    it('step 1 (install): pnpm install succeeds with isolated linker', () => {
+      const install = ctx.project.installResult;
+      expect(install.exitCode, formatInstallDiagnostic(ctx.project, install)).toBe(0);
+
+      expectFacadeIsResolvable(ctx.project);
+    });
+
+    it('step 2 (init): scaffolds the expected project skeleton from the installed target package', () => {
       expect(ctx.project.initResult.exitCode, formatInitDiagnostic(ctx.project)).toBe(0);
 
       expectScaffoldedFiles(ctx.project);
       expectSchemaFile(ctx.project, cell);
       expectConfigFile(ctx.project, cell);
       expectPackageJsonIsEsm(ctx.project);
-    });
-
-    it('step 2 (install): pnpm install succeeds with isolated linker', () => {
-      const install = ctx.project.installResult;
-      expect(install, 'install was skipped — harness option mismatch').not.toBeNull();
-      if (install === null) return;
-      expect(install.exitCode, formatInstallDiagnostic(ctx.project, install)).toBe(0);
-
-      expectFacadeIsResolvable(ctx.project);
     });
 
     it('step 3 (emit): produces contract.json + contract.d.ts next to the input', () => {
@@ -164,6 +162,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
           [
             "import { createPostgresControlClient } from '@prisma/orm-postgres/control';",
             "import postgres from '@prisma/orm-postgres/runtime';",
+            "import { contractFromJson } from '@prisma/orm-postgres/static';",
             "import type { Contract } from './src/prisma/contract.d';",
             "import contractJson from './src/prisma/contract.json' with { type: 'json' };",
             '',
@@ -173,7 +172,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
             '  process.exit(2);',
             '}',
             '',
-            'const db = postgres<Contract>({ contractJson, url });',
+            'const db = postgres({ contract: contractFromJson<Contract>(contractJson), url });',
             // String concatenation (not a template literal) to avoid
             // biome's `noTemplateCurlyInString` rule in this fixture
             // string — the generated user code is functionally
@@ -215,7 +214,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
 
 async function runFullJourney(cell: CellId): Promise<JourneyContext> {
   const project = await createJourneyProject(cell);
-  if (project.initResult.exitCode !== 0 || project.installResult?.exitCode !== 0) {
+  if (project.initResult.exitCode !== 0 || project.installResult.exitCode !== 0) {
     return {
       project,
       database: null,

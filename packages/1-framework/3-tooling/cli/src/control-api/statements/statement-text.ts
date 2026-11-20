@@ -46,3 +46,14 @@ export function convertAndDelete(statements: readonly StatementText[]): string |
   );
   return statements.find(({ verb, text }) => verb === 'convert' && deleted.has(text))?.text;
 }
+
+/** Each kind of thing a statement or a question can name, as messages write it. */
+export const ENTITY_WORDS: Readonly<
+  Record<'model' | 'field' | 'enumValue' | 'valueObjectField' | 'storage', string>
+> = {
+  model: 'model',
+  field: 'field',
+  enumValue: 'enum value',
+  valueObjectField: 'value object field',
+  storage: 'storage',
+};

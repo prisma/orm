@@ -1,5 +1,4 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { createOrmClient } from './client';
+import type { DemoOrm } from '../prisma/db';
 
 /**
  * Release roadmap: each user with the `Feature` tasks slated for one release.
@@ -13,10 +12,9 @@ import { createOrmClient } from './client';
 export async function ormClientGetFeatureRoadmap(
   targetRelease: string,
   limit: number,
-  runtime: Runtime,
+  orm: DemoOrm,
 ) {
-  const db = createOrmClient(runtime);
-  return db.User.select('id', 'displayName')
+  return orm.User.select('id', 'displayName')
     .include('tasks', (tasks) =>
       tasks
         .variant('feature')

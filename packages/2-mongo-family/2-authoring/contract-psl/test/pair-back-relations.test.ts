@@ -24,12 +24,13 @@ model Profile {
 
 const { document, sources } = parse(schema, 'schema.prisma');
 const { symbolTable } = buildSymbolTable({
+  defaultNamespaceId: '__unbound__',
   documents: [document],
   sources,
 });
 
 function fieldOf(modelName: string, fieldName: string): FieldSymbol {
-  const field = symbolTable.topLevel.models[modelName]?.fields[fieldName];
+  const field = symbolTable.defaultNamespace.models[modelName]?.fields[fieldName];
   if (field === undefined) throw new Error(`no field ${modelName}.${fieldName}`);
   return field;
 }
@@ -56,6 +57,7 @@ describe('pairMongoBackRelations', () => {
         foreignKeys: [authorFk],
         candidates: [postsCandidate],
         invalidFkPairings: [],
+        namespaceId: '__unbound__',
       }),
     ).toEqual({
       relations: [
@@ -78,6 +80,7 @@ describe('pairMongoBackRelations', () => {
       foreignKeys: [],
       candidates: [postsCandidate],
       invalidFkPairings: [],
+      namespaceId: '__unbound__',
     });
     expect(result.relations).toEqual([]);
     expect(result.diagnostics).toEqual([
@@ -91,6 +94,7 @@ describe('pairMongoBackRelations', () => {
         foreignKeys: [],
         candidates: [postsCandidate],
         invalidFkPairings: [{ pairKey: fkRelationPairKey('Post', 'User') }],
+        namespaceId: '__unbound__',
       }),
     ).toEqual({ relations: [], diagnostics: [] });
   });
@@ -100,6 +104,7 @@ describe('pairMongoBackRelations', () => {
       foreignKeys: [authorFk, { ...authorFk, relationName: 'pinned' }],
       candidates: [postsCandidate],
       invalidFkPairings: [],
+      namespaceId: '__unbound__',
     });
     expect(result.diagnostics).toEqual([
       expect.objectContaining({ code: 'PSL_AMBIGUOUS_BACKRELATION' }),
@@ -111,6 +116,7 @@ describe('pairMongoBackRelations', () => {
       foreignKeys: [authorFk, { ...authorFk, relationName: 'pinned', localFields: ['pinnedById'] }],
       candidates: [{ ...postsCandidate, field: fieldOf('User', 'pinned'), relationName: 'pinned' }],
       invalidFkPairings: [],
+      namespaceId: '__unbound__',
     });
     expect(result.relations).toEqual([
       expect.objectContaining({
@@ -142,6 +148,7 @@ describe('pairMongoBackRelations', () => {
         },
       ],
       invalidFkPairings: [],
+      namespaceId: '__unbound__',
     });
     expect(result).toEqual({
       relations: [

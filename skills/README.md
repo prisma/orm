@@ -4,7 +4,7 @@ Agent skills for [Prisma 8](https://github.com/prisma/prisma) (Prisma 8) — `SK
 
 > **Edit your data contract. Prisma handles the rest.**
 >
-> **You get the skill by installing the packages.** `prisma-8` ships inside the `@prisma/orm-postgres`, `@prisma/orm-sqlite` and `@prisma/orm-mongo` tarballs, so the skill in your project always describes the version you installed.
+> **You get the skill by installing the packages.** `prisma-8` ships inside the `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb` and `@prisma/orm-mongo` tarballs, so the skill in your project always describes the version you installed.
 
 ## What's in the box
 
@@ -38,7 +38,7 @@ pnpm dlx skills add prisma/prisma/skills#v<your-prisma-8-version> --skill prisma
 
 This is interoperability, not the recommended path: nothing keeps a copy installed this way up to date.
 
-The skills are always installed at the **project level** — there is no host-wide / global install path. The skill's surface (commands it references, exit codes it expects, capability claims it makes) tracks the project's `@internal/*` version, and a global install would have to pick a single version for every project on the host. Per-project keeps the skill, CLI, runtime, and extension packs coherent on every project the user works in.
+The skills are always installed at the **project level** — there is no host-wide / global install path. The skill's surface (commands it references, exit codes it expects, capability claims it makes) tracks the project's `@prisma/orm-*` version, and a global install would have to pick a single version for every project on the host. Per-project keeps the skill, CLI, runtime, and extension packs coherent on every project the user works in.
 
 To limit a `skills add` install to one agent runtime, add `-a <agent>` (e.g. `-a claude-code`, `-a cursor`, `-a codex`). The `skills` CLI's `--help` lists the supported agent ids.
 

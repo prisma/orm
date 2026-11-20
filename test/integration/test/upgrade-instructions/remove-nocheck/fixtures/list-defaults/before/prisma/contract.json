@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "",
+  "roots": {},
+  "domain": {
+    "namespaces": {}
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "sample": {
+              "columns": {
+                "manyTrue": {
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  },
+                  "many": true,
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "1.5",
+                      null
+                    ]
+                  }
+                },
+                "manyEmpty": {
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  },
+                  "many": {},
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "2.5"
+                    ]
+                  }
+                },
+                "manyFalse": {
+                  "dataType": "pg/numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  },
+                  "many": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "3.5"
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": []
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public",
+        "kind": "postgres-schema"
+      }
+    },
+    "storageHash": "82aa673cd62e2fe4bbfb747515d646b8b215d35fb6345871f79a969fa60db95a"
+  },
+  "extensions": {},
+  "capabilities": {},
+  "meta": {}
+}

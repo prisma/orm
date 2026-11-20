@@ -7,10 +7,12 @@ Thanks for your interest in Prisma 8. This document is the entry point for exter
 Prisma 8 ships as a release candidate (`8.0.0-rc.N`), and `8.0.0` final is expected within four to eight weeks. While we are on the release-candidate line:
 
 - **Expect breaking changes between release candidates.** APIs, contract schemas, on-disk formats, and CLI flags can shift without a deprecation cycle. Every release ships an upgrade recipe under [`skills/prisma-8/upgrading/`](./skills/prisma-8/upgrading/) that the `prisma-8` skill applies, and the churn settles as we approach final.
-- **Only the latest Prisma 8 release receives security fixes.** Older Prisma 8 releases are not backported. Prisma 7 is the exception: it receives security updates for eighteen months after `8.0.0` final, on the `v7` branch. See [`SECURITY.md`](./SECURITY.md).
-- **New projects should start on Prisma 8.** The release candidate is a complete implementation; the gap you are most likely to hit is a feature that is not built yet, and the [feature scoreboard](./scorecard.md) names each one. Existing [Prisma 7](https://www.prisma.io/docs/orm) applications should migrate incrementally. Prisma 7 continues on the [`v7` branch](https://github.com/prisma/orm/tree/v7) and receives bug fixes and security updates for eighteen months after `8.0.0` final.
+- **Only the latest Prisma 8 release receives security fixes.** Older Prisma 8 releases are not backported. Prisma 7 is the exception: it is maintained on the `v7` branch for eighteen months after `8.0.0` final. See [`SECURITY.md`](./SECURITY.md#supported-versions).
+- **New projects should start on Prisma 8.** The release candidate is a complete implementation; the gap you are most likely to hit is a feature that is not built yet, and the [feature scoreboard](./scorecard.md) names each one. Existing [Prisma 7](https://www.prisma.io/docs/orm) applications should migrate incrementally. Prisma 7 continues on the [`v7` branch](https://github.com/prisma/orm/tree/v7), maintained for eighteen months after `8.0.0` final.
 
 ## Before you start a substantive change
+
+Target `main` for Prisma 8 and `v7` for Prisma 7. Prisma 7 takes fixes, and features from the community that fit its design; [supported versions](./docs/oss/versioning.md#supported-versions) says what each version receives.
 
 For typo fixes, doc nits, small bug fixes, and obvious improvements: **just open a PR**.
 
@@ -110,16 +112,29 @@ When you open a PR, the [pull request template](./.github/PULL_REQUEST_TEMPLATE.
 
 A few conventions that will save review round-trips:
 
-- **One logical change per PR.** If you find an unrelated bug while working, file a separate issue or open a separate PR.
+- **One logical change per PR.** If you find an unrelated bug while working, file a separate issue or open a separate PR. The same bug in another place is not unrelated: see [Fix the cause, everywhere it occurs](#fix-the-cause-everywhere-it-occurs).
 - **Conventional commit titles.** PR titles drive the auto-generated GitHub Release notes, so `feat(sql-orm-client): support computed includes` is more useful than `update sql-orm-client`. Common prefixes: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`.
 - **Update tests in the same PR.** A behavioural change without a test usually triggers a review comment asking for one.
 - **No backward-compat shims.** Prisma 8 is still on the release-candidate line; if you change an API, update the call sites instead of leaving an alias behind.
+
+### Fix the cause, everywhere it occurs
+
+An issue reports one place a bug shows up. Before you open a PR for it:
+
+1. **Find the cause, not only the line that throws.** If the reported error is a symptom of a wrong assumption elsewhere, fix that.
+2. **Search for the same mistake in the rest of the codebase.** Look in the other database targets, in the other family (SQL and MongoDB), and along the other code paths the same value passes through.
+3. **Fix every occurrence in the same PR, with a test for each.** If one is out of your reach, list it in the description.
+4. **Say in the description where you looked and what you found.**
+
+A PR that fixes one occurrence and leaves the others will be sent back, or extended by a maintainer.
+
+An example. An issue reported that the Postgres date codec refused a `Date` created in a Jest test file, because the codec checked `value instanceof Date` and Jest runs each test file in its own JavaScript realm. The same check existed in four more places a user's value reaches. On MongoDB it did not throw: it wrote the date as `{}` and lost the data, which is worse than the bug the issue reported. The fix changed all of them, with a test for each.
 
 We do not ask whether a PR was AI-assisted. We do verify the result. If you used an LLM-based agent to author the change, see [Working with agents](#working-with-agents) below.
 
 ## Working with agents
 
-If you use an LLM-based agent (Claude, Cursor, Codex, etc.) to author or review your contribution, the [`contrib-pr` skill](./.agents/skills/contrib-pr/SKILL.md) encodes the contribution flow as an agent-runnable workflow: scope the change, write tests, run the right suites, sign off the commit, fill the PR template, link the issue. Pointing your agent at this skill is the easiest way to keep the contribution shape consistent without you having to coach the agent through this document. (For Claude users, the same file is also reachable as `.claude/skills/contrib-pr/SKILL.md` via a workspace symlink.)
+If you use an LLM-based agent (Claude, Cursor, Codex, etc.) to author or review your contribution, the [`contrib-pr` skill](./skills-contrib/contrib-pr/SKILL.md) encodes the contribution flow as an agent-runnable workflow: scope the change, write tests, run the right suites, sign off the commit, fill the PR template, link the issue. Pointing your agent at this skill is the easiest way to keep the contribution shape consistent without you having to coach the agent through this document. (For Claude users, the same file is also reachable as `.claude/skills/contrib-pr/SKILL.md` via a workspace symlink.)
 
 The skill is intentionally a "pit of success", not a gate — there is no enforcement in CI that you used it. We rely on the result (passing tests, scoped change, well-formed PR) to do the verification.
 

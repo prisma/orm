@@ -1,6 +1,10 @@
 import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
-import { type Diagnostic, isStructuredError } from '@internal/utils/structured-error';
+import {
+  type Diagnostic,
+  isStructuredError,
+  type StructuredError,
+} from '@internal/utils/structured-error';
 import { CliStructuredError, errorUnexpected } from '../../utils/cli-errors';
 import {
   metaWithoutConnectionString,
@@ -24,6 +28,21 @@ export function errorFromCaught(
     : withoutConnectionString(reported, options.connection);
 }
 
+/** A structured error a library raised, reported under its own code, message and fields. */
+export function cliErrorFromStructured(error: StructuredError): CliStructuredError {
+  if (CliStructuredError.is(error)) return error;
+  return new CliStructuredError(error.code, error.message, {
+    ...ifDefined('severity', error.severity),
+    ...ifDefined('why', error.why),
+    ...ifDefined('fix', error.fix),
+    ...ifDefined('nextActions', error.nextActions),
+    ...ifDefined('where', error.where),
+    ...ifDefined('meta', error.meta),
+    ...ifDefined('docsUrl', error.docsUrl),
+    cause: error,
+  });
+}
+
 function reportedError(error: unknown, why: (message: string) => string): CliStructuredError {
   if (isInternalError(error)) {
     throw error;
@@ -32,16 +51,7 @@ function reportedError(error: unknown, why: (message: string) => string): CliStr
     return error;
   }
   if (isStructuredError(error)) {
-    return new CliStructuredError(error.code, error.message, {
-      ...ifDefined('severity', error.severity),
-      ...ifDefined('why', error.why),
-      ...ifDefined('fix', error.fix),
-      ...ifDefined('nextActions', error.nextActions),
-      ...ifDefined('where', error.where),
-      ...ifDefined('meta', error.meta),
-      ...ifDefined('docsUrl', error.docsUrl),
-      cause: error,
-    });
+    return cliErrorFromStructured(error);
   }
   const message = error instanceof Error ? error.message : String(error);
   const driverCode = error instanceof Error ? Reflect.get(error, 'code') : undefined;

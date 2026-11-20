@@ -386,7 +386,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/new/regressions/prisma_27452.rs
 
-- [ ] `new::regressions::prisma_27452::comment_like_upsert_with_nested_comments` — issue #27452: comment-like upsert with nested comments [connectors: exclude(MongoDb,SqlServer)]
+- [x] `new::regressions::prisma_27452::comment_like_upsert_with_nested_comments` — issue #27452: comment-like upsert with nested comments [connectors: exclude(MongoDb,SqlServer)] → non-ported `test/integration/test/ports/engines/non-ported/new/regressions/prisma_27452/prisma_27452.md`
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/new/regressions/prisma_5952.rs
 
@@ -420,7 +420,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/new/regressions/prisma_8265.rs
 
-- [ ] `new::regressions::prisma_8265::nested_update_many_timestamps` — issue #8265: nested updateMany sets @updatedAt timestamps [connectors: all]
+- [x] `new::regressions::prisma_8265::nested_update_many_timestamps` — issue #8265: nested updateMany sets @updatedAt timestamps [connectors: all] → PASS `test/integration/test/ports/engines/new/regressions/prisma_8265/prisma_8265.test.ts` › `nested updateMany changes the updated-at timestamp of the rows it updates (nested_update_many_timestamps)` (the MongoDB variant is not applicable: the Mongo ORM has no nested relation writes)
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/new/regressions/prisma_engines_4286.rs
 

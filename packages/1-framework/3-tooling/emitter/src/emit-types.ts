@@ -6,10 +6,7 @@ import type {
 import type { Contract } from '@internal/contract/types';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import type { AggregateDescriptor } from '@internal/framework-components/components';
-import type {
-  ImportSpecifierResolver,
-  TypesImportSpec,
-} from '@internal/framework-components/emission';
+import type { TypesImportSpec } from '@internal/framework-components/emission';
 
 /**
  * The subset of ControlStack that emit() reads.
@@ -19,6 +16,7 @@ import type {
 export interface EmitStackInput {
   readonly codecTypeImports?: ReadonlyArray<TypesImportSpec>;
   readonly queryOperationTypeImports?: ReadonlyArray<TypesImportSpec>;
+  readonly parameterizedOutputTypeImports?: ReadonlyArray<TypesImportSpec>;
   readonly extensionIds?: ReadonlyArray<string>;
   readonly codecLookup?: CodecLookup;
   readonly codecDescriptors?: ReadonlyArray<AnyCodecDescriptor>;
@@ -47,13 +45,8 @@ export interface EmitOptions {
    * `descriptor.contractSerializer.sortStorage` when present.
    */
   readonly sortStorage?: StorageSort;
-  /**
-   * Rewrites the package names the generated `contract.d.ts` imports from, for
-   * the import root the consuming application installed. Defaults to leaving
-   * every specifier as authored, which is what the repository itself needs
-   * while its own code still imports workspace names.
-   */
-  readonly resolveImportSpecifier?: ImportSpecifierResolver;
+  /** The module the generated `contract.d.ts` imports the framework's and family's contract types from: the config's `contract.typesModule`. */
+  readonly typesModule: string;
   /**
    * Threaded from `descriptor.supportsNamespaces`. `false` drops the namespace segment from emitted `Models` member names and the `models` constant.
    */

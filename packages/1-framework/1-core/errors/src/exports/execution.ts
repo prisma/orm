@@ -1,12 +1,11 @@
 export {
   errorHashMismatch,
   errorMarkerMissing,
+  errorMarkerPoliciesCorrupt,
   errorMarkerReadFailed,
   errorMarkerRequired,
   errorMarkerRowCorrupt,
-  errorRunnerFailed,
   errorRuntime,
-  errorSchemaVerificationFailed,
   errorTargetMismatch,
   parseMarkerRowSafely,
   rethrowMarkerReadError,

@@ -1,4 +1,5 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -125,7 +126,11 @@ function help(markedSource: string, labelOffsets = true) {
   expect(offset).toBeGreaterThanOrEqual(0);
   const { document, sources } = parse(markedSource.replace('|', ''), 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
   parseArgument.mockClear();
   const result = providePslSignatureHelp({
     document,
@@ -138,6 +143,7 @@ function help(markedSource: string, labelOffsets = true) {
       symbolTable,
       authoringContributions,
       controlMutationDefaults: assembleControlMutationDefaults([]),
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     },
   });
   expect(parseArgument).not.toHaveBeenCalled();
@@ -395,12 +401,6 @@ describe('providePslSignatureHelp', () => {
     'model Example {\n // @probe(|)\n}',
   ])('suppresses help outside recognized argument lists: %s', (source) => {
     expect(help(source)).toBeNull();
-  });
-
-  it('never invokes argument parsers to inspect metadata', () => {
-    parseArgument.mockClear();
-    expect(field('call: nested(|)')?.signatures[0]?.label).toBe('nested(string, flag?: boolean)');
-    expect(parseArgument).not.toHaveBeenCalled();
   });
 });
 

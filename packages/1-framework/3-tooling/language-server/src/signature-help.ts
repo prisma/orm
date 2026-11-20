@@ -1,4 +1,4 @@
-import type { Param, PositionalParam } from '@internal/psl-parser';
+import { groupedTypeLabel, type Param, type PositionalParam } from '@internal/psl-parser';
 import {
   MarkupKind,
   type ParameterInformation,
@@ -70,7 +70,7 @@ function signatureHelp(
   const matched = signatures.findIndex(
     ({ signature, index }) => index >= 0 && index < (signature.parameters?.length ?? 0),
   );
-  const activeSignature = matched < 0 ? 0 : matched;
+  const activeSignature = Math.max(matched, 0);
   const activeParameter = signatures[activeSignature]?.index;
   return {
     signatures: signatures.map(({ signature }) => signature),
@@ -144,8 +144,7 @@ export function renderSignatureLabel(
     if (index > 0) label += ', ';
     const positional = index < (signature.positional?.length ?? 0);
     const optional = 'optional' in param.type && param.type.optional === true;
-    const typeLabel =
-      optional && param.type.label.includes(' | ') ? `(${param.type.label})` : param.type.label;
+    const typeLabel = optional ? groupedTypeLabel(param.type) : param.type.label;
     const text = positional
       ? `${typeLabel}${optional ? '?' : ''}`
       : namedParameterText(param.key, param.type);

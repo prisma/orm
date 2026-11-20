@@ -16,7 +16,8 @@ class PostCollection extends Collection<Contract, 'Post'> {
   newestFirst()           { return this.orderBy((p) => p.createdAt.desc()); }
 }
 
-const db = orm({ runtime, context, collections: { Post: PostCollection } }).public;
+const client = postgres({ contract, url, collections: { Post: PostCollection } });
+const db = client.orm.public;
 ```
 
 The methods are available on every collection of posts, whatever came before in the chain:
@@ -64,6 +65,7 @@ Each fact has three names. The flag `hasWhere` in the type state is set to `true
 | `forUpdate`, `forNoKeyUpdate`, `forShare`, `forKeyShare` | `Self` | yes | nothing; the contract's capabilities decide which arguments each accepts |
 | `include` | `Including<Self, { [K in Rel]: ... }>` | yes | each row has the included relation |
 | `with(fn)` | whatever `fn(this)` returns | as the function | as the function |
+| `using.<method>(...args)` | `Self` with `Filtered` and `Ordered` as the method declares | yes | the filter and order the method declares have been applied; a package contributes the method ([ADR 272](ADR%20272%20-%20Packages%20contribute%20collection%20methods%20computed%20from%20a%20model.md)) |
 | `select` | `Collection<Contract, Model, NarrowedRow, State>` | no | a different row |
 | `variant` | `Collection<Contract, Model, VariantRow, VariantState>` | no | a different row and a different type argument |
 
@@ -206,7 +208,7 @@ A conditional makes TypeScript compare the two branch types. It caches the compa
 
 ## Later decisions
 
-**The class of a related model inside an include refinement.** In `db.User.include('posts', (posts) => posts.withTitle('orm'))`, the collection given to the callback is the base `Collection` type, not `PostCollection`. Giving it the class needs the parent's type to know which class is registered for `Post`. That is known once, at `orm({ collections })`, and would have to reach every collection type: as a type argument threaded through `Collection` and the refinement types, or as a declared property the client attaches to each root collection and the `this`-typed methods pass on. It cannot work inside a class body, because a class cannot name a registry that contains itself. It changes the shared collection interface for every family and is a decision of its own.
+**The class of a related model inside an include refinement.** In `db.User.include('posts', (posts) => posts.withTitle('orm'))`, the collection given to the callback is the base `Collection` type, not `PostCollection`. Giving it the class needs the parent's type to know which class is registered for `Post`. That is known once, where the application registers its classes with the client's `collections` option, and would have to reach every collection type: as a type argument threaded through `Collection` and the refinement types, or as a declared property the client attaches to each root collection and the `this`-typed methods pass on. It cannot work inside a class body, because a class cannot name a registry that contains itself. It changes the shared collection interface for every family and is a decision of its own.
 
 **The class through `variant`.** Keeping the class after `variant` needs `variantValue` and `nsId` to move from the class's type argument into the declared type state, so that `where`, `orderBy` and the other methods read them from the receiver.
 

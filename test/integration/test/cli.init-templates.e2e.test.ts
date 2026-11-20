@@ -1,25 +1,32 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import type { InitContribution } from '@internal/cli/init-contribution';
+import type { ContractSourceFormat } from '@internal/config/config-types';
+import mongoContribution from '@internal/mongo/init';
+import postgresContribution from '@internal/postgres/init';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  type AuthoringId,
-  configFile,
-  dbFile,
-  starterSchema,
-  type TargetId,
-} from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
 import {
   defaultTsConfig,
+  mergeTsConfig,
   REQUIRED_COMPILER_OPTIONS,
 } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/tsconfig';
 import { createIntegrationTestDir } from './utils/cli-test-helpers';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const execFileAsync = promisify(execFile);
+
+type TargetId = 'postgres' | 'mongo';
+type AuthoringId = ContractSourceFormat;
+
+const CONTRIBUTIONS: Record<TargetId, InitContribution> = {
+  postgres: postgresContribution,
+  mongo: mongoContribution,
+};
 const tscPath = resolve(__dirname, '../node_modules/.bin/tsc');
 
 /**
@@ -36,19 +43,21 @@ function writeInitFiles(
   testDir: string,
   target: TargetId,
   authoring: AuthoringId,
+  tsconfig: string,
 ): { schemaPath: string; configPath: string } {
   const ext = authoring === 'typescript' ? 'ts' : 'prisma';
   const schemaPath = `prisma/contract.${ext}`;
   const schemaDir = dirname(schemaPath);
 
   mkdirSync(join(testDir, schemaDir), { recursive: true });
-  writeFileSync(join(testDir, schemaPath), starterSchema(target, authoring), 'utf-8');
+  const contribution = CONTRIBUTIONS[target];
+  writeFileSync(join(testDir, schemaPath), contribution.starterContract(authoring), 'utf-8');
 
   const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(configPath, configFile(target, `./${schemaPath}`), 'utf-8');
+  writeFileSync(configPath, configFile(`./${schemaPath}`, contribution.configModule), 'utf-8');
 
-  writeFileSync(join(testDir, schemaDir, 'db.ts'), dbFile(target), 'utf-8');
-  writeFileSync(join(testDir, 'tsconfig.json'), defaultTsConfig(), 'utf-8');
+  writeFileSync(join(testDir, schemaDir, 'db.ts'), contribution.databaseFile(), 'utf-8');
+  writeFileSync(join(testDir, 'tsconfig.json'), tsconfig, 'utf-8');
 
   return { schemaPath, configPath };
 }
@@ -75,7 +84,6 @@ async function emitContract(testDir: string, configPath: string): Promise<void> 
     await executeContractEmit({
       config: loaded.value,
       cwd: testDir,
-      projectDir: dirname(configPath),
     });
   } finally {
     process.chdir(originalCwd);
@@ -101,12 +109,71 @@ async function typecheck(testDir: string): Promise<void> {
 
 const TYPECHECK_TIMEOUT = timeouts.typeScriptCompilation;
 
-const CELLS: ReadonlyArray<{ readonly target: TargetId; readonly authoring: AuthoringId }> = [
-  { target: 'postgres', authoring: 'psl' },
-  { target: 'postgres', authoring: 'typescript' },
-  { target: 'mongo', authoring: 'psl' },
-  { target: 'mongo', authoring: 'typescript' },
+interface ContractHashes {
+  readonly storageHash: string;
+  readonly executionHash?: string;
+  readonly profileHash: string;
+}
+
+const POSTGRES_PROFILE_HASH = '3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2';
+const MONGO_PROFILE_HASH = '251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3';
+
+/** The hashes of each starter's contract. A template change that changes a starter's contract changes them. */
+const CELLS: ReadonlyArray<{
+  readonly target: TargetId;
+  readonly authoring: AuthoringId;
+  readonly hashes: ContractHashes;
+}> = [
+  {
+    target: 'postgres',
+    authoring: 'psl',
+    hashes: {
+      storageHash: '920a87b50729a867e21706dd0fa5c3739e273a84ed89eb2f3525633b2d6ef85c',
+      executionHash: '0ff7f5c55037616d53a67c7c581c1178658b41c7a674a85dd59fc3b8f9dd8a49',
+      profileHash: POSTGRES_PROFILE_HASH,
+    },
+  },
+  {
+    target: 'postgres',
+    authoring: 'typescript',
+    hashes: {
+      storageHash: 'd901307c194c817cfa0a28ababa391bd1b2342a2ebb5f8ac3280534f2295f96f',
+      executionHash: 'c478b201602051bfaeddbe71eb44664a34764bf959a3d00c206e7dcf71393533',
+      profileHash: POSTGRES_PROFILE_HASH,
+    },
+  },
+  {
+    target: 'mongo',
+    authoring: 'psl',
+    hashes: {
+      storageHash: 'bdf84c83adcc796638599553a64e4fc95ddda80ce50f4cc0d34c348404705ac3',
+      profileHash: MONGO_PROFILE_HASH,
+    },
+  },
+  {
+    target: 'mongo',
+    authoring: 'typescript',
+    hashes: {
+      storageHash: '530517580da72a6b8c5800c90776cbbe73272007bcfac6c8418c202a6f6ea5b4',
+      profileHash: MONGO_PROFILE_HASH,
+    },
+  },
 ];
+
+function emittedHashes(testDir: string): ContractHashes {
+  const contract = JSON.parse(readFileSync(join(testDir, 'prisma', 'contract.json'), 'utf-8')) as {
+    readonly profileHash: string;
+    readonly storage: { readonly storageHash: string };
+    readonly execution?: { readonly executionHash: string };
+  };
+  return {
+    storageHash: contract.storage.storageHash,
+    ...(contract.execution === undefined
+      ? {}
+      : { executionHash: contract.execution.executionHash }),
+    profileHash: contract.profileHash,
+  };
+}
 
 describe('init generates a typecheckable project', () => {
   let testDir: string;
@@ -134,19 +201,48 @@ describe('init generates a typecheckable project', () => {
   // (target × authoring) cells. Each cell is the full chain `init` users
   // see: scaffolded contract source + `prisma.config.ts` (with the
   // `import 'dotenv/config'` and `process.env['DATABASE_URL']!` shape that
-  // requires `@types/node`) + `prisma/db.ts` (which imports `./contract.d`
+  // requires `@types/node`) + `prisma/db.ts` (which imports `./contract.d.js`
   // and `./contract.json`) + emitted contract artefacts.
-  for (const { target, authoring } of CELLS) {
+  for (const { target, authoring, hashes } of CELLS) {
     it(
-      `${target} + ${authoring}: full project typechecks after emit`,
+      `${target} + ${authoring}: emits the starter contract's hashes and typechecks`,
       async () => {
-        const { configPath } = writeInitFiles(testDir, target, authoring);
+        const { configPath } = writeInitFiles(testDir, target, authoring, defaultTsConfig());
         await emitContract(testDir, configPath);
 
         expect({
           contractJson: existsSync(join(testDir, 'prisma', 'contract.json')),
           contractDts: existsSync(join(testDir, 'prisma', 'contract.d.ts')),
         }).toMatchObject({ contractJson: true, contractDts: true });
+        expect(emittedHashes(testDir)).toEqual(hashes);
+
+        await typecheck(testDir);
+      },
+      TYPECHECK_TIMEOUT,
+    );
+  }
+
+  const NODENEXT_TSCONFIG = JSON.stringify({
+    compilerOptions: {
+      target: 'ES2022',
+      module: 'nodenext',
+      moduleResolution: 'nodenext',
+      strict: true,
+      skipLibCheck: true,
+    },
+  });
+
+  for (const { target, authoring } of CELLS) {
+    it(
+      `${target} + ${authoring}: an ES module project on nodenext keeps it and typechecks`,
+      async () => {
+        const tsconfig = mergeTsConfig(NODENEXT_TSCONFIG, 'module');
+        expect(JSON.parse(tsconfig).compilerOptions).toMatchObject({
+          module: 'nodenext',
+          moduleResolution: 'nodenext',
+        });
+        const { configPath } = writeInitFiles(testDir, target, authoring, tsconfig);
+        await emitContract(testDir, configPath);
 
         await typecheck(testDir);
       },

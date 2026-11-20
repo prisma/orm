@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 
-const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
+const scalarTypes: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
   ['ObjectId', 'mongo/objectId@1'],
   ['Date', 'mongo/date@1'],
@@ -9,7 +9,7 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
 
 function contractOf(schema: string) {
   const result = interpretMongoContract(schema, {
-    scalarTypeCodecIds,
+    scalarTypes,
     defaultFunctionRegistry: new Map(),
   });
   if (!result.ok) {

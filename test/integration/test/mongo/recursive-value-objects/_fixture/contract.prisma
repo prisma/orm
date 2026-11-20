@@ -1,0 +1,14 @@
+// use prisma-8
+
+type NavItem {
+  label    String
+  children NavItem[]
+}
+
+model Menu {
+  id    ObjectId @id @map("_id")
+  name  String
+  items NavItem[]
+
+  @@map("menus")
+}

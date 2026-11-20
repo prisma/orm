@@ -12,7 +12,7 @@ upgrade-instructions/pending/<descriptive-name>/<app|extension>/
 
 Choose a descriptive name that avoids collisions with other pending contributions; no random suffix, shared index, counter, or global registry is required. A name can recur in a different release. Never overwrite another contribution at a pending, archive, or output destination; resolve actual collisions when encountered.
 
-Relevant changes to `examples/` require an `app` declaration; changes to `packages/3-extensions/` require an `extension` declaration, subject to the existing coverage-check exclusions. Each PR must **add its own declaration relative to its actual target branch**, including stacked PRs. Inherited fragments do not count. Both audiences need separate declarations when both are affected.
+Relevant changes to `examples/` require an `app` declaration; changes to `packages/3-extensions/` or to any target facade, matched by the patterns `packages/3-targets/*/9-facade/` and `packages/3-targets/*/*/9-facade/`, require an `extension` declaration, subject to the existing coverage-check exclusions. Each PR must **add its own declaration relative to its actual target branch**, including stacked PRs. Inherited fragments do not count. Both audiences need separate declarations when both are affected. Facades count as extension code because they consume the framework's extension interfaces the way a third-party target would; a new database's facade is covered as soon as its folder exists.
 
 Keep the existing YAML frontmatter `changes[]` and Markdown prose, with optional `detection` and relative `script` references. A no-op declaration is `changes: []` with no consumer prose. Scripts/assets must stay within their audience directory. Follow [record-upgrade-instructions](../skills-contrib/record-upgrade-instructions/SKILL.md) for authoring and the unchanged per-PR validation by execution. A script's tests and fixtures live outside the fragment, in `test/integration/test/upgrade-instructions/<fragment-name>/`; the skill's step 4 says how.
 
@@ -34,6 +34,8 @@ Resume interrupted preparation by inspecting ordinary Git status/diffs, pending 
 Published guides and historical chain discovery remain intact. Corrections to published guidance continue through normal reviewed PRs; they are not new feature declarations.
 
 ## Checks
+
+**Name only published packages in prose.** An app guide is read by an application's agent, and an extension guide by an extension author outside this repository; neither can import the repository's `@internal/*` workspace packages. In the prose of a pending fragment, and of every published guide for a release after `8.0.0-rc.24`, name the published `@prisma/orm-*` entry instead; `packages/0-shared/publish-surface/src/shells.ts` maps each workspace package to it. `pnpm lint:consumer-internal-imports` fails on a prose line that names an `@internal/*` package. It does not check that an `@prisma/orm-*` entry still exists, because a guide has to name the entries a release removed. Two things are not prose and are not checked, because they must match what extension code contains, workspace names included: the patterns of a change's `detection` block, and codemod scripts. Guides up to `8.0.0-rc.24` stay as they shipped.
 
 `pnpm check:upgrade-coverage` checks committed Git trees. Explicit `--prev` and `--head` take committed refs; commit working changes before relying on these checks.
 

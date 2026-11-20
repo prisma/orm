@@ -261,8 +261,6 @@ function fieldToPrinterField(field: PslField): PrinterField {
 
   const isRelation = field.attributes.some((a) => a.name === 'relation' && a.target === 'field');
 
-  const isUnsupported = typeName.startsWith('Unsupported(');
-
   const isId = field.attributes.some((a) => a.name === 'id' && a.target === 'field');
 
   return {
@@ -275,7 +273,6 @@ function fieldToPrinterField(field: PslField): PrinterField {
     mapName,
     isId,
     isRelation,
-    isUnsupported,
     comment: undefined,
   };
 }

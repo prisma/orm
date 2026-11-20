@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@prisma/orm-sqlite/adapter/column-types';
+import { integerNumberColumn, textColumn } from '@prisma/orm-sqlite/adapter/column-types';
 import sqliteAdapterDescriptor, {
   createSqliteBuiltinCodecLookup,
   SqliteControlAdapter,
@@ -23,6 +23,7 @@ import type { SqlStorage } from '@prisma/orm-sqlite/family-contract/types';
 import { buildFabricatedMigrationEdge } from '@prisma/orm-sqlite/migration-tools/aggregate';
 import { SqlSchemaIR } from '@prisma/orm-sqlite/schema-ir/types';
 import sqliteTargetDescriptor from '@prisma/orm-sqlite/target/control';
+import { sqliteDataTypes } from '@prisma/orm-sqlite/target/data-types';
 
 const controlStack = createControlStack({
   family: sqlFamilyDescriptor,
@@ -36,9 +37,9 @@ const controlAdapter = sqliteAdapterDescriptor.create(controlStack);
 
 const fw = [sqliteTargetDescriptor, sqliteAdapterDescriptor, sqliteDriverDescriptor] as const;
 
-export const int = field.column(integerColumn);
+export const int = field.column(integerNumberColumn);
 export const text = field.column(textColumn);
-export { integerColumn, textColumn };
+export { integerNumberColumn, textColumn };
 
 export type Driver = {
   readonly familyId: 'sql';
@@ -111,10 +112,9 @@ export interface MigrationResult {
 }
 
 function formatFailure(f: MigrationRunnerFailure): string {
-  const parts = [`[${f.code}] ${f.summary}`];
+  const parts = [`[${f.code}] ${f.message}`];
   if (f.why) parts.push(`  why: ${f.why}`);
-  const issues = f.meta?.['issues'];
-  if (Array.isArray(issues)) for (const i of issues) parts.push(`  - ${JSON.stringify(i)}`);
+  for (const i of f.meta.schemaIssues ?? []) parts.push(`  - ${JSON.stringify(i)}`);
   return parts.join('\n');
 }
 
@@ -163,7 +163,7 @@ async function runMigration(
   try {
     const planner = sqliteTargetDescriptor.createPlanner(controlAdapter);
     const runner = sqliteTargetDescriptor.createRunner(familyInstance);
-    const adapter = new SqliteControlAdapter(createSqliteBuiltinCodecLookup());
+    const adapter = new SqliteControlAdapter(createSqliteBuiltinCodecLookup(), sqliteDataTypes);
     const policy = options.policy ?? INIT_ADDITIVE_POLICY;
 
     let currentSchema: SqlSchemaIR = emptySchema;
@@ -196,7 +196,7 @@ async function runMigration(
         ],
       });
       if (!run.ok) throw new Error(`Origin runner failed: ${formatFailure(run.failure)}`);
-      currentSchema = await adapter.introspect(driver);
+      currentSchema = await adapter.introspect(driver, options.destination);
     }
     if (options.seed) await options.seed(driver);
 
@@ -236,7 +236,7 @@ async function runMigration(
       return;
     }
 
-    const freshSchema = await adapter.introspect(driver);
+    const freshSchema = await adapter.introspect(driver, options.destination);
     const vr = familyInstance.verifySchema({
       contract: options.destination,
       schema: freshSchema,

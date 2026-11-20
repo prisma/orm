@@ -1,16 +1,14 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
-import { Collection, orm } from '@prisma/orm-postgres/orm-client';
-import type { ExecutionContext } from '@prisma/orm-postgres/relational-core/query-lane-context';
+import { Collection } from '@prisma/orm-postgres/orm-client';
+import type { PostgresClient } from '@prisma/orm-postgres/runtime';
 import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
 import { expectTypeOf, test } from 'vitest';
-import { createOrmClient } from '../src/orm-client/client';
 import type { Contract } from '../src/prisma/contract.d';
+import { db as demoDb } from '../src/prisma/db';
 
-declare const runtime: Runtime;
-declare const context: ExecutionContext<Contract>;
+declare const plainDb: PostgresClient<Contract>;
 
-const db = createOrmClient(runtime);
-const plain = orm({ runtime, context }).public;
+const db = demoDb.orm.public;
+const plain = plainDb.orm.public;
 const q = websearchToTsquery('zebra');
 
 export class SearchPosts extends Collection<Contract, 'Post'> {

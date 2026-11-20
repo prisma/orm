@@ -325,21 +325,66 @@ withTempDir(({ createTempDir }) => {
 
           await runDbInit(testSetup, ['--config', configPath, '--no-color']);
 
-          // Swap primary key: drop FK first, then drop PK on id, add PK on email
           await withClient(connectionString, async (client) => {
+            await client.query('DROP INDEX "public"."project_accountId_idx_cbfb3085"');
             await client.query(
-              'ALTER TABLE "public"."project" DROP CONSTRAINT IF EXISTS "project_accountId_fkey"',
+              'CREATE INDEX "project_accountId_idx_cbfb3085" ON "public"."project" ("accountId", "name")',
             );
-            await client.query(
-              'ALTER TABLE "public"."account" DROP CONSTRAINT IF EXISTS "account_pkey"',
-            );
-            await client.query('ALTER TABLE "public"."account" ADD PRIMARY KEY ("email")');
           });
 
           const run = await runDbUpdateAllowFailure(testSetup, ['--config', configPath]);
 
           expect(run.exitCode).not.toBe(0);
           expect(stripAnsi(run.stderr)).toMatch(/conflict|PLANNING_FAILED/i);
+          expect(stripAnsi(run.stderr)).toContain('project_accountId_idx_cbfb3085');
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'restores a primary key swapped by hand, dropping and re-adding the foreign key that references it',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          const { testSetup, configPath } = await setupDbUpdateFixture(
+            connectionString,
+            createTempDir,
+            scenarioFixtureSubdir,
+          );
+
+          await runDbInit(testSetup, ['--config', configPath, '--no-color']);
+
+          await withClient(connectionString, async (client) => {
+            await client.query(
+              'ALTER TABLE "public"."project" DROP CONSTRAINT "project_accountId_fkey"',
+            );
+            await client.query('ALTER TABLE "public"."account" DROP CONSTRAINT "account_pkey"');
+            await client.query(
+              'ALTER TABLE "public"."account" ADD CONSTRAINT "account_pkey" PRIMARY KEY ("email")',
+            );
+            await client.query(
+              'ALTER TABLE "public"."project" ADD CONSTRAINT "project_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "public"."account" ("email")',
+            );
+          });
+
+          const run = await runDbUpdate(testSetup, ['--config', configPath]);
+
+          expect(run.exitCode, stripAnsi(run.stderr)).toBe(0);
+          await withClient(connectionString, async (client) => {
+            const constraints = await client.query(`
+              SELECT conname, pg_get_constraintdef(oid) AS definition
+              FROM pg_constraint
+              WHERE conname IN ('account_pkey', 'project_accountId_fkey')
+              ORDER BY conname
+            `);
+            expect(constraints.rows).toEqual([
+              { conname: 'account_pkey', definition: 'PRIMARY KEY (id)' },
+              {
+                conname: 'project_accountId_fkey',
+                definition: 'FOREIGN KEY ("accountId") REFERENCES account(id)',
+              },
+            ]);
+          });
         });
       },
       timeouts.spinUpPpgDev,

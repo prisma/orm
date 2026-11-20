@@ -20,6 +20,13 @@ runs:
       shell: bash
       run: echo "TURBO_CACHE_DIR=${{ github.workspace }}/.turbo/cache" >> "$GITHUB_ENV"
 
+    # mongodb-memory-server's install script would download mongod during
+    # `pnpm install`, with no retry and no cache. The mongod-binary action
+    # downloads it instead.
+    - name: Turn off the mongod download in pnpm install
+      shell: bash
+      run: echo "MONGOMS_DISABLE_POSTINSTALL=1" >> "$GITHUB_ENV"
+
     - name: Resolve pnpm store directory
       id: pnpm-store
       shell: bash

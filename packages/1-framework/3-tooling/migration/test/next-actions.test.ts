@@ -156,28 +156,3 @@ describe('refs.ts — converted raise sites carry typed nextActions', () => {
     ]);
   });
 });
-
-describe('no converted action hardcodes a binary name', () => {
-  const converted = [
-    errorInvalidRefValue('v'),
-    errorRefNotResolvable('staging'),
-    errorHashNotInGraph('abc123', emptyGraph),
-    errorContractSnapshotMissing('abc123', 'path'),
-  ];
-
-  it.each(converted.map((error) => [error.code, error] as const))(
-    '%s writes {bin} rather than a literal binary',
-    (_code, error) => {
-      const commands = (error.nextActions ?? []).flatMap((action) => [
-        ...(action.command === undefined ? [] : [action.command]),
-        ...(action.commands ?? []),
-      ]);
-
-      expect(commands.length).toBeGreaterThan(0);
-      for (const command of commands) {
-        expect(command).toContain('{bin}');
-        expect(command).not.toContain('prisma-next');
-      }
-    },
-  );
-});

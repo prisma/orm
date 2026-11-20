@@ -20,13 +20,14 @@ In addition to the canonical slice DoR:
 ### Tracker / branch / linkage items
 
 - [ ] Linear issue created and linked from the slice spec (issue description carries a link back to `projects/<x>/slices/<s>/`).
-- [ ] Slice's PR-to-be will carry a `Refs: <issue-id>` line (or the ticket ID in the title).
+- [ ] Slice's PR-to-be will carry a `Fixes <issue-id>` line in its description (`Part of <issue-id>` if it does not complete the issue).
 - [ ] Slice's parent branch is the project's working branch (or `main` for orphan slices).
 
 ### Plan-side items
 
 - [ ] Slice plan references the relevant entries from [`failure-modes.md`](./failure-modes.md) that apply to this slice's shape (so dispatch briefs can thread them in).
 - [ ] Slice plan references the relevant entries from [`grep-library.md`](./grep-library.md) that apply to this slice's shape.
+- [ ] If the slice's design comes from a handover or an earlier session, it is checked before building against the code and against each earlier ruling of the operator's on the topic, read in the original conversations and not only in the handover. Example: a ruling that packages may read any part of a model never reached a handover, and a design limited to one index was built and then rejected.
 
 ## Dispatch-DoR overlay
 

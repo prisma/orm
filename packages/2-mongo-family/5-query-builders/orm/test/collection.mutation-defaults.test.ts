@@ -7,16 +7,15 @@ import {
   type MutationDefaults,
   type MutationDefaultsOptions,
 } from '@internal/framework-components/runtime';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type { MongoQueryExecutor, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
 import ormContractJson from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.json';
 import { createMongoCollection } from '../src/collection';
-import type { MongoQueryExecutor } from '../src/executor';
 import { mongoOrm } from '../src/mongo-orm';
-import { noEnums } from './no-enums';
+import { collectionContext, contextOf } from './collection-context';
 
 const contract = ormContractJson as unknown as Contract;
 
@@ -105,7 +104,7 @@ function commandOf(plans: readonly MongoQueryPlan[], kind: string) {
 }
 
 function users(executor: MongoQueryExecutor, defaults: MutationDefaults) {
-  return createMongoCollection(contract, 'User', executor, noEnums, defaults);
+  return createMongoCollection(collectionContext(contract, executor, defaults), 'User');
 }
 
 const byEmail = MongoFieldFilter.eq('email', 'a@b.c');
@@ -188,6 +187,11 @@ describe('ORM create paths apply onCreate defaults', () => {
   });
 });
 
+/** The payload a JavaScript caller passes with `field` set to `undefined`, which the typed input refuses. */
+function withUndefinedField<Payload extends object>(payload: Payload, field: string): Payload {
+  return Object.assign(payload, { [field]: undefined });
+}
+
 describe('ORM update paths apply onUpdate defaults', () => {
   it('update adds the generated value to $set', async () => {
     const defaults = fakeMutationDefaults();
@@ -203,7 +207,7 @@ describe('ORM update paths apply onUpdate defaults', () => {
   it('update whose only field is undefined adds nothing', async () => {
     const defaults = fakeMutationDefaults();
     const { executor, plans } = recordingExecutor([]);
-    await users(executor, defaults).where(byEmail).update({ name: undefined });
+    await users(executor, defaults).where(byEmail).update(withUndefinedField({}, 'name'));
     expect(unwrap(commandOf(plans, 'findOneAndUpdate')['update'])).toEqual({ $set: {} });
     expect(defaults.calls[0]?.values).toEqual({});
   });
@@ -300,44 +304,13 @@ describe('ORM upsert applies both halves', () => {
 });
 
 describe('mongoOrm', () => {
-  it('refuses a contract with execution defaults when mutationDefaults is missing', () => {
-    const { executor } = recordingExecutor();
-    const withDefaults = {
-      ...contract,
-      execution: {
-        executionHash: 'test',
-        mutations: {
-          defaults: [
-            {
-              ref: { namespace: '__unbound__', entry: 'users', field: 'loginCount' },
-              onCreate: { kind: 'generator', id: 'timestampNow' },
-            },
-          ],
-        },
-      },
-    } as unknown as Contract;
-    expect(() => mongoOrm({ contract: withDefaults, executor, enums: noEnums })).toThrow(
-      expect.objectContaining({
-        code: 'ORM.MUTATION_DEFAULTS_MISSING',
-        message: expect.stringContaining('mutationDefaults: context'),
-      }),
-    );
-  });
-
-  it('builds a contract without execution defaults without mutationDefaults', () => {
-    const { executor } = recordingExecutor();
-    expect(() => mongoOrm({ contract, executor, enums: noEnums })).not.toThrow();
-  });
-
-  it('passes mutationDefaults to every root collection', async () => {
+  it('fills writes from the execution context it is given', async () => {
     const { executor, plans } = recordingExecutor([
       { insertedId: 'id-1', document: { _id: 'id-1' } },
     ]);
     const orm = mongoOrm({
-      contract,
-      executor,
-      enums: noEnums,
-      mutationDefaults: fakeMutationDefaults(),
+      context: contextOf(contract, fakeMutationDefaults()),
+      runtime: executor,
     });
     await orm.users.create(input(userData));
     expect(unwrap(commandOf(plans, 'insertOne')['document'])).toMatchObject({ loginCount: 7 });

@@ -70,7 +70,7 @@ describe('Mongo list fields', () => {
         });
 
         const rows = await db.series.all();
-        expect(rows.map(({ _id: _, ...row }) => row)).toEqual([empty, filled]);
+        expect(rows.map(({ id: _, ...row }) => row)).toEqual([empty, filled]);
       }),
     timeouts.spinUpMongoMemoryServer,
   );

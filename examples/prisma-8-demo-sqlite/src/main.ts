@@ -22,7 +22,7 @@
  *                                          on success; prints the rollback reason and the unchanged
  *                                          count on quota violation.
  * - integer-representations [limit]        The two Post engagement counters side by side:
- *                                          `BigIntNumber` reads as a JS number, `BigInt` as a
+ *                                          `BigInt(as: number)` reads as a JS number, `BigInt` as a
  *                                          bigint. SQLite offers no `UnboundedInt`.
  * - aggregate-precision                    count/sum/avg beside countBigInt/sumBigInt, including a
  *                                          bare sum() whose total passes 2^53 and raises rather
@@ -79,6 +79,15 @@ function describe(value: unknown): string {
   return `${String(value)} (${typeof value})`;
 }
 
+/** JSON text of a result, with each `bigint`, such as a `BigInt` field, written as its digits. */
+function jsonText(value: unknown): string {
+  return JSON.stringify(
+    value,
+    (_key, field: unknown) => (typeof field === 'bigint' ? field.toString() : field),
+    2,
+  );
+}
+
 async function main() {
   const { databasePath } = loadAppConfig();
   const runtime = await db.connect({ path: databasePath });
@@ -87,7 +96,7 @@ async function main() {
     if (cmd === 'users') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
       const users = await getUsers(limit);
-      console.log(JSON.stringify(users, null, 2));
+      console.log(jsonText(users));
     } else if (cmd === 'repo-user') {
       const [id] = args;
       if (!id) {
@@ -95,8 +104,8 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const user = await ormClientFindUserById(id, runtime);
-      console.log(JSON.stringify(user, null, 2));
+      const user = await ormClientFindUserById(id);
+      console.log(jsonText(user));
     } else if (cmd === 'repo-user-posts') {
       const [id, limitStr] = args;
       if (!id) {
@@ -105,8 +114,8 @@ async function main() {
         return;
       }
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
-      const result = await ormClientGetUserPosts(id, limit, runtime);
-      console.log(JSON.stringify(result, null, 2));
+      const result = await ormClientGetUserPosts(id, limit);
+      console.log(jsonText(result));
     } else if (cmd === 'repo-create-user') {
       const [id, email, displayName] = args;
       if (!id || !email || !displayName) {
@@ -114,11 +123,8 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const user = await ormClientCreateUser(
-        { id, email, displayName, createdAt: new Date() },
-        runtime,
-      );
-      console.log(JSON.stringify(user, null, 2));
+      const user = await ormClientCreateUser({ id, email, displayName, createdAt: new Date() });
+      console.log(jsonText(user));
     } else if (cmd === 'insert-user') {
       const [email, displayName] = args;
       if (!email || !displayName) {
@@ -127,7 +133,7 @@ async function main() {
         return;
       }
       const user = await insertUser(email, displayName);
-      console.log(JSON.stringify(user, null, 2));
+      console.log(jsonText(user));
     } else if (cmd === 'user-by-email-prepared') {
       if (args.length === 0) {
         console.error('Usage: pnpm start -- user-by-email-prepared <email> [<email> ...]');
@@ -135,7 +141,7 @@ async function main() {
         return;
       }
       const results = await getUserByEmailPrepared(args);
-      console.log(JSON.stringify(results, null, 2));
+      console.log(jsonText(results));
     } else if (cmd === 'add-posts') {
       const [userId, ...titles] = args;
       if (!userId || titles.length === 0) {
@@ -145,7 +151,7 @@ async function main() {
       }
       try {
         const result = await addPostsWithinQuota({ userId, titles });
-        console.log(JSON.stringify(result, null, 2));
+        console.log(jsonText(result));
       } catch (txError) {
         if (txError instanceof QuotaExceededError) {
           console.error('Transaction rolled back:', txError.message);
@@ -168,8 +174,8 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientGetPostTags(postId, runtime);
-      console.log(JSON.stringify(result, null, 2));
+      const result = await ormClientGetPostTags(postId);
+      console.log(jsonText(result));
     } else if (cmd === 'tag-posts') {
       const [tagId] = args;
       if (!tagId) {
@@ -177,8 +183,8 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientGetTagPosts(tagId, runtime);
-      console.log(JSON.stringify(result, null, 2));
+      const result = await ormClientGetTagPosts(tagId);
+      console.log(jsonText(result));
     } else if (
       cmd === 'posts-with-tag-some' ||
       cmd === 'posts-with-tag-none' ||
@@ -192,8 +198,8 @@ async function main() {
       }
       const mode =
         cmd === 'posts-with-tag-some' ? 'some' : cmd === 'posts-with-tag-none' ? 'none' : 'every';
-      const results = await ormClientGetPostsByTagFilter(mode, label, runtime);
-      console.log(JSON.stringify(results, null, 2));
+      const results = await ormClientGetPostsByTagFilter(mode, label);
+      console.log(jsonText(results));
     } else if (cmd === 'connect-post-tags') {
       const [postId, ...tagIds] = args;
       if (!postId || tagIds.length === 0) {
@@ -201,8 +207,8 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientConnectPostTags(postId, tagIds, runtime);
-      console.log(JSON.stringify(result, null, 2));
+      const result = await ormClientConnectPostTags(postId, tagIds);
+      console.log(jsonText(result));
     } else if (cmd === 'disconnect-post-tags') {
       const [postId, ...tagIds] = args;
       if (!postId || tagIds.length === 0) {
@@ -210,8 +216,8 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientDisconnectPostTags(postId, tagIds, runtime);
-      console.log(JSON.stringify(result, null, 2));
+      const result = await ormClientDisconnectPostTags(postId, tagIds);
+      console.log(jsonText(result));
     } else if (cmd === 'create-post-with-tags') {
       const [id, userId, title, ...labels] = args;
       if (!id || !userId || !title || labels.length === 0) {
@@ -221,11 +227,13 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientCreatePostWithTags(
-        { id, userId, title, tags: labels.map((label) => ({ label })) },
-        runtime,
-      );
-      console.log(JSON.stringify(result, null, 2));
+      const result = await ormClientCreatePostWithTags({
+        id,
+        userId,
+        title,
+        tags: labels.map((label) => ({ label })),
+      });
+      console.log(jsonText(result));
     } else if (cmd === 'create-post-connect-tags') {
       const [id, userId, title, ...tagIds] = args;
       if (!id || !userId || !title || tagIds.length === 0) {
@@ -235,15 +243,15 @@ async function main() {
         process.exitCode = 1;
         return;
       }
-      const result = await ormClientCreatePostConnectTags({ id, userId, title, tagIds }, runtime);
-      console.log(JSON.stringify(result, null, 2));
+      const result = await ormClientCreatePostConnectTags({ id, userId, title, tagIds });
+      console.log(jsonText(result));
     } else if (cmd === 'integer-representations') {
       const limit = args[0] ? Number.parseInt(args[0], 10) : 10;
-      const posts = await ormClientGetPostEngagement(limit, runtime);
+      const posts = await ormClientGetPostEngagement(limit);
 
       console.log('Post engagement counters, one column per integer representation:\n');
-      console.log('  viewCount        BigIntNumber   sqlite/bigintnumber@1   read as a number');
-      console.log('  impressionCount  BigInt         sqlite/bigint@1         read as a bigint\n');
+      console.log('  viewCount        BigInt(as: number)   sqlite/integer@1   read as a number');
+      console.log('  impressionCount  BigInt               sqlite/bigint@1    read as a bigint\n');
       for (const post of posts) {
         console.log(post.title);
         console.log(`  viewCount        ${describe(post.viewCount)}`);
@@ -254,13 +262,13 @@ async function main() {
       );
       console.log('so the type is simply not on offer. See examples/prisma-8-demo for all three.');
     } else if (cmd === 'aggregate-precision') {
-      const report = await ormClientGetEngagementPrecision(runtime);
+      const report = await ormClientGetEngagementPrecision();
 
       console.log('Counting posts:');
       console.log(`  count()                       ${describe(report.posts.count)}`);
       console.log(`  countBigInt()                 ${describe(report.posts.countBigInt)}\n`);
 
-      console.log('viewCount — BigIntNumber, and the total stays inside the safe range:');
+      console.log('viewCount — BigInt(as: number), and the total stays inside the safe range:');
       console.log(`  sum('viewCount')              ${describe(report.views.sum)}`);
       console.log(`  sumBigInt('viewCount')        ${describe(report.views.sumBigInt)}`);
       console.log(`  avg('viewCount')              ${describe(report.views.avg)}\n`);

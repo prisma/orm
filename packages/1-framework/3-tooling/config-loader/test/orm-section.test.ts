@@ -1,10 +1,6 @@
 import type { SectionProvenance } from '@prisma/cli-engine';
 import { describe, expect, it } from 'vitest';
-import {
-  descriptorRelationshipProblems,
-  ormConfigSection,
-  validateOrmSection,
-} from '../src/orm-section';
+import { descriptorRelationshipProblems, validateOrmSection } from '../src/orm-section';
 
 const FILE = '/project/prisma.config.ts';
 
@@ -43,10 +39,6 @@ function fields(raw: Record<string, unknown>): readonly string[] {
 }
 
 describe('the orm section', () => {
-  it('is the section the commands declare', () => {
-    expect(ormConfigSection.name).toBe('orm');
-  });
-
   it('supplies the default contract output next to the default source directory', () => {
     const raw = validRaw({ contract: { source: { format: 'typescript', load: () => ({}) } } });
 
@@ -112,6 +104,34 @@ describe('the orm section', () => {
     const result = validateOrmSection(raw, provenanceFor(raw));
 
     expect(result.ok && result.value.migrations?.dir).toBe('/elsewhere/db');
+  });
+
+  it('keeps the module names generated files import from as written', () => {
+    const raw = validRaw({
+      contract: {
+        source: { format: 'psl', load: () => ({}) },
+        typesModule: '@acme/orm-db/contract-types',
+      },
+      migrations: { module: '@acme/orm-db/migration' },
+    });
+
+    const result = validateOrmSection(raw, provenanceFor(raw));
+
+    expect(result.ok && result.value).toMatchObject({
+      contract: { typesModule: '@acme/orm-db/contract-types' },
+      migrations: { dir: '/project/migrations', module: '@acme/orm-db/migration' },
+    });
+  });
+
+  it('reports module names that are not strings', () => {
+    expect(
+      fields(
+        validRaw({
+          contract: { source: { format: 'psl', load: () => ({}) }, typesModule: 1 },
+          migrations: { module: false },
+        }),
+      ),
+    ).toEqual(['migrations.module', 'contract.typesModule']);
   });
 
   it('reports each missing descriptor under its own field', () => {
@@ -272,6 +292,59 @@ describe('the orm section', () => {
       family: { manifest: { note: 1 } },
       contract: { source: { dialect: 'sql' } },
     });
+  });
+
+  describe('a generated file module named by a path', () => {
+    const source = { format: 'typescript', load: () => ({}) };
+    const withModules = (module: string) =>
+      validRaw({ contract: { source, typesModule: module }, migrations: { module } });
+
+    it.each([
+      './contract-types',
+      '../contract-types',
+      '/project/contract-types',
+      '.',
+      '..',
+      '.\\contract-types',
+      '..\\contract-types',
+      '\\project\\contract-types',
+      'C:\\project\\contract-types',
+      'C:/project/contract-types',
+      'file:///project/contract-types.ts',
+      'https://example.com/contract-types.js',
+      'node:module',
+    ])('refuses %s for both modules, saying why and what to name instead', (module) => {
+      const raw = withModules(module);
+      const result = validateOrmSection(raw, provenanceFor(raw));
+
+      expect(result.ok ? [] : result.diagnostics.map((d) => d.meta?.['field'])).toEqual([
+        'contract.typesModule',
+        'migrations.module',
+      ]);
+      expect(result.ok ? '' : (result.diagnostics[0]?.summary ?? '')).toMatch(
+        /names the path or URL .*generated files are written into more than one folder.*`#`/,
+      );
+    });
+
+    it('refuses an empty name for both modules', () => {
+      const raw = withModules('');
+      const result = validateOrmSection(raw, provenanceFor(raw));
+
+      expect(result.ok ? [] : result.diagnostics.map((d) => d.meta?.['field'])).toEqual([
+        'contract.typesModule',
+        'migrations.module',
+      ]);
+      expect(result.ok ? '' : (result.diagnostics[0]?.summary ?? '')).toMatch(
+        /Config\.contract\.typesModule is empty.*`#`/,
+      );
+    });
+
+    it.each(['#contract-types', '@acme/orm-db/contract-types', 'orm-db/migration', 'orm-db'])(
+      'accepts %s',
+      (module) => {
+        expect(fields(withModules(module))).toEqual([]);
+      },
+    );
   });
 
   it('never throws on hostile input', () => {

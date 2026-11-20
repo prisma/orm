@@ -115,12 +115,8 @@ jobs:
         run: pnpm lint:workflows
       - name: Test scripts/
         run: pnpm test:scripts
-      - name: Lint casts
-        run: pnpm lint:casts
-      - name: Lint throws
-        run: pnpm lint:throws
-      - name: Lint framework vocabulary
-        run: pnpm lint:framework-vocabulary
+      - name: Lint ratchets (casts, throws, framework vocabulary)
+        run: pnpm lint:ratchets
       - name: Lint consumer internal imports
         run: pnpm lint:consumer-internal-imports
       - name: Lint the legacy product name
@@ -175,6 +171,8 @@ jobs:
         index: [1, 2, 3, 4]
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
+      MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql?allowPublicKeyRetrieval=true
+      MARIADB_URL: mysql://root:root@127.0.0.1:3308/mysql
     services:
       postgres:
         image: postgres:15
@@ -189,6 +187,28 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3308:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -200,6 +220,8 @@ jobs:
         run: pnpm build
       - name: Link bins
         run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/mongod-binary
+        timeout-minutes: 10
       - name: Run package tests with coverage
         id: package-tests
         continue-on-error: true
@@ -208,7 +230,7 @@ jobs:
         run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=${{ matrix.index }}/4
       - name: Upload package coverage shard
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package-coverage-${{ matrix.index }}
           path: .vitest/blob/blob-${{ matrix.index }}-4.json
@@ -232,6 +254,8 @@ jobs:
       # container, because GitHub Actions service containers can't override
       # the postgres CMD to enable shared_preload_libraries=pg_stat_statements).
       WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgres://postgres:postgres@127.0.0.1:5433/prisma_8_cloudflare_worker
+      MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql?allowPublicKeyRetrieval=true
+      MARIADB_URL: mysql://root:root@127.0.0.1:3308/mysql
     services:
       postgres:
         image: postgres:15
@@ -246,6 +270,28 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3308:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -258,13 +304,20 @@ jobs:
       - name: Link bins
         run: pnpm install --frozen-lockfile
       - name: Start cloudflare-worker Postgres (5433, pg_stat_statements)
-        run: pnpm --filter prisma-8-cloudflare-worker db:up
+        run: >-
+          node scripts/retry-command.mjs
+          --before-retry 'docker compose --project-directory examples/prisma-8-cloudflare-worker down --volumes'
+          -- pnpm --filter prisma-8-cloudflare-worker db:up
       # Fetch Prisma 7's schema engine, which the install does not download,
-      # so a slow or unreachable binary host fails this step within 5 minutes
+      # so a slow or unreachable binary host fails this step within 10 minutes
       # instead of timing out inside the example test.
       - name: Fetch the Prisma 7 schema engine (prisma7-adoption)
-        timeout-minutes: 5
-        run: pnpm --filter prisma7-adoption exec prisma7 --version --config prisma7.config.ts
+        timeout-minutes: 10
+        run: >-
+          node scripts/retry-command.mjs
+          -- pnpm --filter prisma7-adoption exec prisma7 --version --config prisma7.config.ts
+      - uses: ./.github/actions/mongod-binary
+        timeout-minutes: 10
       - name: Test examples
         run: pnpm test:examples
       - name: Check working tree is clean
@@ -285,7 +338,7 @@ jobs:
       - name: Build packages (restored from Turbo cache)
         run: pnpm build
       - name: Download package coverage shards
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: package-coverage-*
           path: .vitest/blob
@@ -307,12 +360,12 @@ jobs:
 
   test:
     name: Test
-    needs: [build, changes, test-packages, test-examples, coverage, test-integration]
+    needs: [build, changes, test-packages, test-examples, test-telemetry-backend, coverage, test-integration]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Propagate test failures
-        if: ${{ needs.build.result != 'success' || needs.changes.result != 'success' || (needs.changes.outputs.inert != 'true' && (needs.test-packages.result != 'success' || needs.test-examples.result != 'success' || needs.coverage.result != 'success')) }}
+        if: ${{ needs.build.result != 'success' || needs.changes.result != 'success' || (needs.changes.outputs.inert != 'true' && (needs.test-packages.result != 'success' || needs.test-examples.result != 'success' || needs.test-telemetry-backend.result != 'success' || needs.coverage.result != 'success')) }}
         run: exit 1
       - name: Require integration tests in the merge queue
         if: ${{ github.event_name == 'merge_group' && needs.changes.outputs.inert != 'true' && needs.test-integration.result != 'success' }}
@@ -356,6 +409,28 @@ jobs:
         if: needs.changes.outputs.inert != 'true'
         run: pnpm check:clean-tree
 
+  test-telemetry-backend:
+    name: Telemetry Backend Tests
+    needs: [build, changes]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install dependencies
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Build (restored from Turbo cache)
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm build
+      - name: Link bins
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Run telemetry backend tests
+        if: needs.changes.outputs.inert != 'true'
+        run: pnpm --filter telemetry-backend test
+
   test-integration:
     name: Integration Tests (${{ matrix.shard }})
     needs: [build, changes]
@@ -370,6 +445,20 @@ jobs:
         shard: ['1/4', '2/4', '3/4', '4/4']
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
+      MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql?allowPublicKeyRetrieval=true
+    # For the MySQL tests in test/integration, which fail in CI when MYSQL_URL is not set.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -407,7 +496,7 @@ jobs:
       - name: Restore Supabase Docker images
         id: supabase-images
         if: needs.changes.outputs.inert != 'true'
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ steps.supabase-cli.outputs.images-archive }}
           key: ${{ steps.supabase-cli.outputs.images-cache-key }}
@@ -428,7 +517,7 @@ jobs:
       - name: Start local Supabase stack
         if: needs.changes.outputs.inert != 'true'
         working-directory: examples/supabase
-        run: supabase start
+        run: node ../../scripts/retry-command.mjs --before-retry 'supabase stop --no-backup' -- supabase start
       - name: Export stack credentials for the acceptance harness
         if: needs.changes.outputs.inert != 'true'
         working-directory: examples/supabase

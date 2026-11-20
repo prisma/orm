@@ -1,4 +1,5 @@
 import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import {
   makePslNamespace,
@@ -58,6 +59,7 @@ interface ParsedPolicySelect {
 function parsePolicySelect(schema: string): ParsedPolicySelect {
   const { document, sources } = parse(schema, 'declarative-policy-select.round-trip.test.psl');
   const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
+    defaultNamespaceId: 'public',
     documents: [document],
     sources,
   });
@@ -74,6 +76,7 @@ function parsePolicySelect(schema: string): ParsedPolicySelect {
         pslBlockDescriptors: assembled.pslBlockDescriptors,
       },
       controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       dataTypes: EMPTY_DATA_TYPES,
     },
   });
@@ -85,7 +88,7 @@ function parsePolicySelect(schema: string): ParsedPolicySelect {
     dataTypes: EMPTY_DATA_TYPES,
   });
   const diagnostics = [...collectionDiagnostics, ...binderDiagnostics, ...blockDiagnostics];
-  const blockSymbols = Object.values(symbolTable.topLevel.blocks).filter(
+  const blockSymbols = Object.values(symbolTable.defaultNamespace.blocks).filter(
     (block) => block.keyword === POLICY_SELECT_KEYWORD,
   );
   return { symbolTable, diagnostics, parsedBlocks, blockSymbols };
@@ -110,13 +113,15 @@ function documentForPrinting(
   symbolTable: SymbolTable,
   extensionBlock: PslExtensionBlock,
 ): PslDocumentAst {
-  const modelStubs: PslModel[] = Object.values(symbolTable.topLevel.models).map((model) => ({
-    kind: 'model',
-    name: model.name,
-    fields: [],
-    attributes: [],
-    span: ZERO_SPAN,
-  }));
+  const modelStubs: PslModel[] = Object.values(symbolTable.defaultNamespace.models).map(
+    (model) => ({
+      kind: 'model',
+      name: model.name,
+      fields: [],
+      attributes: [],
+      span: ZERO_SPAN,
+    }),
+  );
   return {
     kind: 'document',
     sourceId: 'print',

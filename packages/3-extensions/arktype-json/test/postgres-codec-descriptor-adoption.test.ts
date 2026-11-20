@@ -1,6 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
-import { ColumnRef } from '@internal/sql-relational-core/ast';
+import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,6 +11,7 @@ import {
 import { arktypeJsonCodecRegistry } from '../src/core/registry';
 import { arktypeJsonExtensionDescriptor } from '../src/exports/control';
 import { arktypeJsonRuntimeDescriptor } from '../src/exports/runtime';
+import { fromContractJson, toContractJson } from './contract-json';
 
 describe('arktype-json PostgreSQL codec descriptor adoption', () => {
   it('uses one target descriptor instance across canonical, registry, runtime, and control contributions', () => {
@@ -28,7 +29,7 @@ describe('arktype-json PostgreSQL codec descriptor adoption', () => {
     );
   });
 
-  it('preserves the jsonb data type, identity projection, and structured JSON behavior', () => {
+  it('preserves the jsonb data type, projects the JSON text of the document, and keeps structured JSON behavior', () => {
     const schema = type({ name: 'string', price: 'number' });
     const column = arktypeJsonColumn(schema);
     const ref: CodecRef = {
@@ -41,11 +42,13 @@ describe('arktype-json PostgreSQL codec descriptor adoption', () => {
     const expression = ColumnRef.of('products', 'details');
 
     expect(arktypeJsonDescriptor.dataType).toBe('pg/jsonb');
-    expect(arktypeJsonDescriptor.projectJson(expression, ref)).toBe(expression);
+    expect(arktypeJsonDescriptor.projectJson(expression, ref)).toEqual(
+      CastExpr.as(expression, 'text'),
+    );
 
     const codec = column.codecFactory({ name: 'details' });
     const value = { name: 'Widget', price: 9.99 };
-    expect(codec.encodeJson(value)).toEqual(value);
-    expect(codec.decodeJson(value)).toEqual(value);
+    expect(toContractJson(codec, value)).toEqual(value);
+    expect(fromContractJson(codec, value, ref.typeParams)).toEqual(value);
   });
 });

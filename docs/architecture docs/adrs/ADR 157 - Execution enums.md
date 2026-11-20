@@ -2,6 +2,8 @@
 
 **Status: Partially superseded.** The idea stands: an enum is a set of allowed values plus an explicit enforcement mechanism, and execution derives the allowed values from the contract. How the contract realizes it is superseded by the [October 12, 2026 amendment](#amendment-october-12-2026--how-enums-are-realized). The contract has no `storage.sets` and no structured `inSet` checks, and a native enum is not a `storage.types` entry with `typeParams.values`. The sections it replaces carry a note and are kept as a record.
 
+> **Retrospective note — the codec's JSON methods are renamed.** [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md#codecs) replaces `decodeJson` with `fromDataTypeValue`: `db.enums` reads each member's stored value with `fromDataTypeValue`.
+
 We want enum-like behavior that is explicit in storage and reusable in execution.
 
 ## Summary
@@ -297,13 +299,41 @@ A client resolves every enum's codec when it builds `db.enums`, so a client refu
 
 The idea of this ADR stands: an enum is a set of allowed values plus an explicit enforcement mechanism. The contract realizes it as follows, and this replaces the sections marked above.
 
-**A domain enum.** PSL writes `enum Name { Member = <value> }` with an optional `@@type("<codec id>")`. Without `@@type`, the codec is inferred from the members: text members take the target's text codec, integer members take its integer codec, and any other members are the error `PSL_ENUM_CANNOT_INFER_TYPE`. TypeScript writes `enumType(name, codec, member(...))`. The contract holds the enum at `domain.namespaces.<ns>.enum.<Name>`, where `<ns>` is the target's default namespace (`public` on Postgres), whatever namespace the model that uses it is in. It holds the `codecId` and the ordered `members`, each a `{ name, value }` pair. The value is in the form the codec stores it, so a `pg/int4@1` member is the number `1` and a `pg/int8@1` member is the string `"1"`.
+**A domain enum.** PSL writes `enum Name { Member = <value> }` with an optional `@@type("<codec id>")`. Without `@@type`, the codec is inferred from the members: text members take the target's text codec, integer members take its integer codec, and any other members are the error `PSL_ENUM_CANNOT_INFER_TYPE`. TypeScript writes `enumType(name, codec, member(...))`. The contract holds the enum at `domain.namespaces.<ns>.enum.<Name>`, where `<ns>` is the target's default namespace (`public` on Postgres), whatever namespace the model that uses it is in. It holds the `codecId` and the ordered `members`, each a `{ name, value }` pair. The value is in the form the codec stores it, so a `pg/int4@1` member is the number `1` and a `pg/int8@1` member is the string `"1"`. A PSL member is a written value, read by the cast rule of [ADR 254](<./ADR 254 - Data types and casts.md>) as a column default is: a `pg/int8@1` member is written `Low = 1`, and `Low = "1"` is refused with `PSL_VALUE_TYPE_INCOMPATIBLE` because `pg/int8` has no cast from text. MongoDB PSL does not read members by that rule yet; it reads each member as JSON through the codec.
 
 **A value set.** The contract build also writes `storage.namespaces.<ns>.entries.valueSet.<Name>` in the same namespace: the ordered stored values. Both the SQL and the Mongo family write it. A field typed by the enum carries a `valueSet` reference to the domain enum, and on SQL its column carries a `valueSet` reference to the value set. A reference names the plane, the entity kind, the namespace and the name.
 
 **Why an enum has two representations.** The domain enum is the application's concept: the member names, the values and the codec. The emitted domain types and `db.enums` read it. The value set is its storage projection: the stored values a column references, which a reader of the storage plane can resolve without the domain plane. Both are written from the one declaration. A native enum has no domain enum. Besides its `native_enum` entry, it gets a value set with the same members, because `valueSet` is a core SQL entity kind: the emitter writes value sets into the contract types, where `db.nativeEnums` and the column types read them, and it does not emit pack kinds such as `native_enum`.
 
-**The derived check.** On a `managed` table, the SQL contract build derives a check from the column and the enum's members, and stores it as an opaque wire-named expression ([ADR 244](<./ADR 244 - Check constraints are opaque wire-named expressions.md>)). This ADR calls it the derived check. A scalar column gets `"col" IN (...)`. A list column gets `array_remove("col", NULL) <@ '{...}'`, and a second derived check, `array_position("col", NULL) IS NULL`, when its elements are not nullable. `@noCheck` waives derived checks on one column: bare, it waives every kind; `@noCheck(membership)` or `@noCheck(elementNotNull)` waives one kind. SQLite has no check renderer, so it derives no checks (ADR 244). Mongo enforces membership with the `enum` keyword of the collection's `$jsonSchema` validator.
+**The derived check.** On a `managed` table, the SQL contract build derives a check from the column and the enum's members, and stores it as an opaque wire-named expression ([ADR 244](<./ADR 244 - Check constraints are opaque wire-named expressions.md>)). This ADR calls it the derived check. A scalar column gets `"col" IN (...)`. A list column gets `array_remove("col", NULL) <@ '{...}'`, and a second derived check, `array_position("col", NULL) IS NULL`, when its elements are not nullable. SQLite has no check renderer, so it derives no checks (ADR 244). Mongo enforces membership with the `enum` keyword of the collection's `$jsonSchema` validator.
+
+**A domain enum on MySQL and MariaDB.** These targets store a domain enum in a native `enum('A','B')` column type and derive no check. A column typed by the enum has the data type `mysql/enum`. The target's namespace factory (`packages/3-targets/mysql/1-mysql/1-target/src/core/mysql-database.ts`) writes the members of the value set the column names into the column's `typeParams.values`, in declared order, and refuses a column whose own members differ. So PSL, `defineContract` and a loaded `contract.json` all produce the same column. For this schema:
+
+```prisma
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id   Int  @id @default(autoincrement())
+  role Role
+}
+```
+
+the `role` column is:
+
+```json
+{
+  "codecId": "mysql/enum@1",
+  "dataType": "mysql/enum",
+  "nullable": false,
+  "typeParams": { "values": ["USER", "ADMIN"] },
+  "valueSet": { "entityKind": "valueSet", "entityName": "Role", "namespaceId": "__unbound__", "plane": "storage" }
+}
+```
+
+The data type `mysql/enum` is named by the text the catalog prints, `enum('USER','ADMIN')`, so `db verify` compares the members and their order, and a change to the members is a change of the column's type. The database enforces membership when its SQL mode is strict, which is the default on MySQL 8.4 and MariaDB 10.11. The MySQL driver's session setup removes `NO_BACKSLASH_ESCAPES`, `ANSI_QUOTES` and `ANSI` from the session's `sql_mode` and adds `NO_AUTO_VALUE_ON_ZERO`; it leaves `STRICT_TRANS_TABLES` and `STRICT_ALL_TABLES` as the server has them. Without strict mode, or under `INSERT IGNORE`, the server stores a value that is not a member as the empty string, with only a warning; the MySQL renderer never writes `INSERT IGNORE`. A native column type is used rather than a `varchar` with a derived check because it is what MySQL schemas already use, so an existing database can be adopted unchanged. MySQL has no `CREATE TYPE`, so a separate named enum entity, as with a native Postgres enum, does not apply.
 
 **A native Postgres enum.** PSL writes a `native_enum` block and types a column `pg.enum(Name)`. TypeScript writes `nativeEnum(name, ...values)`, with `.map(typeName)` for the Postgres type name, and types a column `pg.enum(handle)`:
 
@@ -327,9 +357,9 @@ const contract = defineContract({
 
 The contract holds a `native_enum` storage entry keyed by the Postgres type name (`aal_level`), a value set derived from it keyed by the entity name (`AalLevel`), and columns with `dataType: "pg/enum"`, `typeParams.typeName` and a `valueSet` reference to that value set. A native enum has no domain entity. Its domain field has `typeParams.typeName` and no `valueSet` reference, and its emitted type comes from the storage value set. PSL member names such as `OPEN` do not reach the contract: the entry and the value set hold the values only, and `db.nativeEnums` names each member by its value. The database type enforces membership, so no check is derived.
 
-**Execution.** No runtime code reads a column's `valueSet` reference. The client exposes accessors. `db.enums` holds each domain enum, built from the domain plane, with members decoded as the October 7 amendment describes. On Postgres it is `db.enums.<ns>.<Name>`; SQLite and Mongo expose `db.enums.<Name>`, from the unbound namespace. On Postgres, `db.nativeEnums.<ns>.<Name>` holds the native enums: the namespace's value sets, minus each one a domain enum names. On SQL targets the database enforces membership, through the derived check or the native type, and query lanes do not check it. The Mongo ORM checks a written value against `db.enums`. The emitted types narrow a field's read and write types to the members.
+**Execution.** No runtime code reads a column's `valueSet` reference. The client exposes accessors. `db.enums` holds each domain enum, built from the domain plane, with members decoded as the October 7 amendment describes. On Postgres it is `db.enums.<ns>.<Name>`; SQLite, MySQL, MariaDB and Mongo expose `db.enums.<Name>`, from the unbound namespace. On Postgres, `db.nativeEnums.<ns>.<Name>` holds the native enums: the namespace's value sets, minus each one a domain enum names. On SQL targets the database enforces membership, through the derived check or the native type (on MySQL and MariaDB, only in strict SQL mode), and query lanes do not check it. The Mongo ORM checks a written value against `db.enums`. `has()`, `nameOf()` and `ordinalOf()` also find a value that the enum's data type holds equal to a member in another stored form, such as `0.50` for the `pg/numeric` member `0.5` (ADR 254, `equalityKey`). The emitted types narrow a field's read and write types to the members, except when the enum's codec sets `keepsWrittenForm`: then a read can return a member in another form, so the field keeps the codec's type.
 
-**Which codecs can type an enum.** A codec without the `equality` trait, or one that sets `enumRefusal`, cannot type an enum ([ADR 254](<./ADR 254 - Data types and casts.md>), amendment of October 7, 2026). On a `managed` table of a target that derives checks (Postgres today), each member of an enum column must be stored as a string or a finite number. The rule applies even when `@noCheck` waives the derived check, because the build reads the members before it applies `@noCheck`. Both refusals are `CONTRACT.ENUM_INVALID`.
+**Which codecs can type an enum.** A codec without the `equality` trait, or one that sets `enumRefusal`, cannot type an enum ([ADR 254](<./ADR 254 - Data types and casts.md>), amendment of October 7, 2026). On a `managed` table of a target that derives checks (Postgres today), each member of an enum column must be stored as a string or a finite number. On a `managed` MongoDB collection, an enum whose codec stores a BSON type that a collection validator cannot list, such as `long`, is refused; MongoDB PSL treats every collection as managed. In TypeScript these refusals are `CONTRACT.ENUM_INVALID`. PSL reports a refused codec, and the MongoDB refusal, as `PSL_EXTENSION_INVALID_VALUE`. For a SQL member that is neither a string nor a finite number, PSL throws `CONTRACT.ENUM_INVALID` as an error with no source position.
 
 **Example.** This schema declares one domain enum and one native enum:
 
@@ -342,8 +372,8 @@ native_enum TicketStatus {
 
 enum Priority {
   @@type("pg/int8@1")
-  Low  = "1"
-  High = "10"
+  Low  = 1
+  High = 10
 }
 
 model Ticket {

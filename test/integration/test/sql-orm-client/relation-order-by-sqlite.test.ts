@@ -1,6 +1,5 @@
-// Runs a filtered relation-count order on SQLite, where parameters bind by
-// position: the WHERE parameter and the count predicate parameter must reach
-// their own `?` placeholders.
+// Runs a filtered relation-count order on SQLite: the WHERE parameter and the
+// count predicate parameter must reach their own numbered `?N` placeholders.
 //
 // Seed data (filtered = posts with more than 10 views):
 //
@@ -12,7 +11,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -28,13 +27,13 @@ import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 
 const User = model('User', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn) },
 }).sql({ table: 'users' });
 const Post = model('Post', {
   fields: {
-    id: field.column(integerColumn).id(),
-    userId: field.column(integerColumn).column('user_id'),
-    views: field.column(integerColumn),
+    id: field.column(integerNumberColumn).id(),
+    userId: field.column(integerNumberColumn).column('user_id'),
+    views: field.column(integerNumberColumn),
   },
   relations: { author: rel.belongsTo(User, { from: 'userId', to: 'id' }).sql({ fk: {} }) },
 }).sql({ table: 'posts' });

@@ -94,7 +94,7 @@ The CLI calls `targetDescriptor.migrations.formatOperationStatements(ops)` when 
 
 ## What doesn't change
 
-- The runner loop (precheck → execute → postcheck) — same semantics, same three-phase flow.
+- The runner loop (precheck → execute → postcheck, after a first postcheck pass that skips an applied operation; see [ADR 038](ADR%20038%20-%20Operation%20idempotency%20classification%20&%20enforcement.md)) — same semantics, same three-phase flow.
 - The `ops.json` plan file format — same JSON structure, same fields.
 - The rehydration model described in [ADR 188](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md) — the deserializer still reconstructs live AST objects from `kind` discriminants.
 - The composability property — users and extension packs can still assemble operations from primitives.

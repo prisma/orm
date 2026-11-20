@@ -1,0 +1,53 @@
+import { ColumnRef, IdentifierRef } from '@internal/sql-relational-core/ast';
+import { ExpressionImpl } from '@internal/sql-relational-core/expression';
+import { blindCast } from '@internal/utils/casts';
+import type { FieldProxy } from '../expression';
+import type { Scope, ScopeTable } from '../scope';
+
+export function createFieldProxy<S extends Scope>(scope: S): FieldProxy<S> {
+  return new Proxy(
+    blindCast<FieldProxy<S>, 'proxy populates field expressions dynamically from scope'>({}),
+    {
+      get(_target, prop: string) {
+        if (Object.hasOwn(scope.topLevel, prop)) {
+          const topField = scope.topLevel[prop];
+          if (topField) {
+            const owningNamespace = Object.entries(scope.namespaces).find(
+              ([, fields]) => fields[prop] === topField,
+            )?.[0];
+            const ref =
+              owningNamespace !== undefined
+                ? ColumnRef.of(owningNamespace, prop)
+                : IdentifierRef.of(prop);
+            return new ExpressionImpl(ref, topField);
+          }
+        }
+
+        if (Object.hasOwn(scope.namespaces, prop)) {
+          const nsFields = scope.namespaces[prop];
+          if (nsFields) return createNamespaceProxy(prop, nsFields);
+        }
+
+        return undefined;
+      },
+    },
+  );
+}
+
+function createNamespaceProxy(
+  namespaceName: string,
+  fields: ScopeTable,
+): Record<string, ExpressionImpl> {
+  return new Proxy<Record<string, ExpressionImpl>>(
+    {},
+    {
+      get(_target, prop: string) {
+        if (Object.hasOwn(fields, prop)) {
+          const field = fields[prop];
+          if (field) return new ExpressionImpl(ColumnRef.of(namespaceName, prop), field);
+        }
+        return undefined;
+      },
+    },
+  );
+}

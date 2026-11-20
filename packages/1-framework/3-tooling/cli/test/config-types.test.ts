@@ -1,8 +1,6 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { PrismaConfig } from '@internal/config/config-types';
 import { defineConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
-import { typescriptContract } from '@internal/sql-contract-ts/config-types';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 
@@ -17,14 +15,14 @@ describe('defineConfig', () => {
     id: 'sql',
     generateStorageType: () => '{}',
     generateModelStorageType: () => '{}',
-    getFamilyImports: () => [] as string[],
+    getFamilyImports: () => [],
     getFamilyTypeAliases: () => '',
     getTypeMapsExpression: () => 'never',
     getContractWrapper: (base: string, tm: string) =>
       `export type Contract = ${base} & { typeMaps: ${tm} };`,
   };
 
-  const baseConfig: PrismaNextConfig = {
+  const baseConfig: PrismaConfig = {
     family: {
       kind: 'family',
       id: 'sql',
@@ -33,8 +31,10 @@ describe('defineConfig', () => {
       emission: mockHook,
       create: () => ({
         familyId: 'sql',
+        markerLocation: 'prisma_contract.marker',
         deserializeContract: (contract: unknown) => contract as Contract,
         storageNameOf: (operation) => operation.id,
+        accessChangesOf: () => [],
         verify: async () => ({
           ok: true,
           summary: 'test',
@@ -63,6 +63,7 @@ describe('defineConfig', () => {
       kind: 'target',
       familyId: 'sql',
       targetId: 'postgres',
+      defaultNamespaceId: 'public',
       id: 'postgres',
       version: '0.0.1',
       contractSerializer: {
@@ -95,42 +96,8 @@ describe('defineConfig', () => {
     extensions: [],
   };
 
-  it('returns the config object unchanged when no contract', () => {
-    const result = defineConfig(baseConfig);
-    expect(result).toBe(baseConfig);
-    expect(result.family.familyId).toBe('sql');
-    expect(result.target.id).toBe('postgres');
-    expect(result.adapter.id).toBe('postgres');
-  });
-
-  it('normalizes contract config with default output', () => {
-    const config: PrismaNextConfig = {
-      ...baseConfig,
-      contract: {
-        source: createSourceProvider(),
-      },
-    };
-
-    const result = defineConfig(config);
-    expect(result.contract?.output).toBe('src/prisma/contract.json');
-  });
-
-  it('normalizes contract config with custom output', () => {
-    const config: PrismaNextConfig = {
-      ...baseConfig,
-      contract: {
-        source: createSourceProvider(['./schema.prisma']),
-        output: 'custom/contract.json',
-      },
-    };
-
-    const result = defineConfig(config);
-    expect(result.contract?.output).toBe('custom/contract.json');
-    expect(result.contract?.source.inputs).toEqual(['./schema.prisma']);
-  });
-
   it('preserves omitted contract inputs', () => {
-    const config: PrismaNextConfig = {
+    const config: PrismaConfig = {
       ...baseConfig,
       contract: {
         source: createSourceProvider(),
@@ -143,7 +110,7 @@ describe('defineConfig', () => {
 
   it('validates contract source accepts provider objects', () => {
     const sourceProvider = createSourceProvider();
-    const config: PrismaNextConfig = {
+    const config: PrismaConfig = {
       ...baseConfig,
       contract: {
         source: sourceProvider,
@@ -152,48 +119,5 @@ describe('defineConfig', () => {
 
     const result = defineConfig(config);
     expect(result.contract?.source).toBe(sourceProvider);
-  });
-
-  it('does not validate structure — the config loader reports section diagnostics instead', () => {
-    const invalidConfig = {
-      family: null,
-    } as unknown as PrismaNextConfig;
-
-    expect(() => defineConfig(invalidConfig)).not.toThrow();
-  });
-
-  it('builds TypeScript contract config via helper utility', async () => {
-    const contract = { targetFamily: 'sql' } as Contract;
-    const config = typescriptContract(contract, 'output/contract.json');
-    const result = await config.source.load({
-      composedExtensions: [],
-      composedExtensionContracts: new Map(),
-      authoringContributions: {
-        dataTypes: {},
-        field: {},
-        type: {},
-        entityTypes: {},
-        pslBlockDescriptors: {},
-        modelAttributes: {},
-        attributeSpecs: { model: {}, field: {} },
-      },
-      dataTypes: { entries: {}, lookup: createDataTypeLookup([]) },
-      codecLookup: {
-        get: () => undefined,
-        renderOutputTypeFor: () => undefined,
-        descriptorFor: () => undefined,
-      },
-      controlMutationDefaults: {
-        defaultFunctionRegistry: new Map(),
-        generatorDescriptors: [],
-      },
-      resolvedInputs: [],
-      capabilities: {},
-    });
-
-    expect(config.output).toBe('output/contract.json');
-    expect(config.source.inputs).toBeUndefined();
-    expect(result.ok).toBe(true);
-    expect(result.assertOk()).toBe(contract);
   });
 });

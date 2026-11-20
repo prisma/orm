@@ -101,7 +101,7 @@ describe('SupabaseRuntimeImpl', () => {
       await session.query(stubPlan()).toArray();
       await session.release();
 
-      expect(sessionControlOnConn).toHaveLength(3);
+      expect(sessionControlOnConn).toHaveLength(4);
       expect(queriedOnConn).toHaveLength(1);
       expect(sessionControlOnConn[0]).toBe(queriedOnConn[0]);
     });
@@ -201,13 +201,13 @@ describe('SupabaseRuntimeImpl', () => {
   });
 
   describe('openRoleSession — release', () => {
-    it('release() sends RESET ALL then releases the connection to the pool', async () => {
+    it('release() sends RESET ALL and RESET ROLE, since RESET ALL leaves the role, then releases the connection to the pool', async () => {
       const { runtime, driver } = createTestSetup();
       const resetCalls: string[] = [];
 
       driver.connection.execute = vi.fn().mockImplementation(async (request: SqlExecuteRequest) => {
         driver.connection.executeCalls.push({ sql: request.sql, params: request.params });
-        if (request.sql === 'RESET ALL') {
+        if (request.sql.startsWith('RESET')) {
           resetCalls.push(request.sql);
         }
         return { affectedRows: 0 };
@@ -216,29 +216,34 @@ describe('SupabaseRuntimeImpl', () => {
       const session = await runtime.openRoleSession({ role: 'anon' });
       await session.release();
 
-      expect(resetCalls).toHaveLength(1);
+      expect(resetCalls).toEqual(['RESET ALL', 'RESET ROLE']);
       expect(driver.connection.release).toHaveBeenCalledOnce();
       expect(driver.connection.destroy).not.toHaveBeenCalled();
     });
 
-    it('when RESET ALL fails, destroys the connection instead of releasing', async () => {
-      const { runtime, driver } = createTestSetup();
-      const resetError = new Error('RESET ALL failed');
+    it.each(['RESET ALL', 'RESET ROLE'])(
+      'when %s fails, destroys the connection instead of releasing',
+      async (failing) => {
+        const { runtime, driver } = createTestSetup();
+        const resetError = new Error(`${failing} failed`);
 
-      driver.connection.execute = vi.fn().mockImplementation(async (request: SqlExecuteRequest) => {
-        driver.connection.executeCalls.push({ sql: request.sql, params: request.params });
-        if (request.sql === 'RESET ALL') {
-          throw resetError;
-        }
-        return { affectedRows: 0 };
-      });
+        driver.connection.execute = vi
+          .fn()
+          .mockImplementation(async (request: SqlExecuteRequest) => {
+            driver.connection.executeCalls.push({ sql: request.sql, params: request.params });
+            if (request.sql === failing) {
+              throw resetError;
+            }
+            return { affectedRows: 0 };
+          });
 
-      const session = await runtime.openRoleSession({ role: 'anon' });
-      await session.release();
+        const session = await runtime.openRoleSession({ role: 'anon' });
+        await session.release();
 
-      expect(driver.connection.destroy).toHaveBeenCalledOnce();
-      expect(driver.connection.release).not.toHaveBeenCalled();
-    });
+        expect(driver.connection.destroy).toHaveBeenCalledOnce();
+        expect(driver.connection.release).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('openRoleSession — bind-failure', () => {
@@ -261,7 +266,7 @@ describe('SupabaseRuntimeImpl', () => {
     });
   });
 
-  describe('queryWithRole — stream cleanup', () => {
+  describe('forRole(binding).query — stream cleanup', () => {
     it('resets then releases the session after the stream drains', async () => {
       const { runtime, driver } = createTestSetup();
       const cleanupEvents: string[] = [];
@@ -274,7 +279,7 @@ describe('SupabaseRuntimeImpl', () => {
         cleanupEvents.push('release');
       });
 
-      const rows = runtime.queryWithRole(stubPlan(), { role: 'anon' });
+      const rows = runtime.forRole({ role: 'anon' }).query(stubPlan());
       expect(driver.acquireConnectionSpy).not.toHaveBeenCalled();
 
       const iterator = rows[Symbol.asyncIterator]();
@@ -300,7 +305,7 @@ describe('SupabaseRuntimeImpl', () => {
         },
       });
 
-      await expect(runtime.queryWithRole(stubPlan(), { role: 'anon' }).toArray()).rejects.toBe(
+      await expect(runtime.forRole({ role: 'anon' }).query(stubPlan()).toArray()).rejects.toBe(
         streamError,
       );
 
@@ -309,7 +314,7 @@ describe('SupabaseRuntimeImpl', () => {
     });
   });
 
-  describe('executeWithRole — eager cleanup', () => {
+  describe('forRole(binding).execute — eager cleanup', () => {
     it('returns connection statistics then resets and releases', async () => {
       const observedSqls: string[] = [];
       const observer: SqlMiddleware = {
@@ -337,7 +342,7 @@ describe('SupabaseRuntimeImpl', () => {
         cleanupEvents.push('release');
       });
 
-      const stats = await runtime.executeWithRole(stubPlan(), { role: 'service_role' });
+      const stats = await runtime.forRole({ role: 'service_role' }).execute(stubPlan());
 
       expect(stats).toBe(statementStats);
       expect(cleanupEvents).toEqual(['reset', 'release']);
@@ -356,7 +361,7 @@ describe('SupabaseRuntimeImpl', () => {
         return await execute(request);
       });
 
-      await expect(runtime.executeWithRole(stubPlan(), { role: 'anon' })).rejects.toBe(
+      await expect(runtime.forRole({ role: 'anon' }).execute(stubPlan())).rejects.toBe(
         executeError,
       );
 

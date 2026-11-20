@@ -9,7 +9,7 @@
 // idForProvider(postgresql) = String @id
 
 model Round {
-  id       String @id @default(cuid(2))
+  id       String @id @onCreate(cuid(2))
   teamName String
   points   Int
   @@map("round")

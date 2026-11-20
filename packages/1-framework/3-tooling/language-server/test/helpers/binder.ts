@@ -1,4 +1,5 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { type Binder, createBinder, type SymbolTable } from '@internal/psl-parser';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import { binderContextFromStack, type LspControlStack } from '../../src/lsp-control-stack';
@@ -16,7 +17,13 @@ export function testBinder(
   },
 ): Binder {
   const pslBlockDescriptors = input.pslBlockDescriptors ?? {};
-  const context = binderContextFromStack({ ...input, scalarTypes: [], pslBlockDescriptors });
+  const context = binderContextFromStack({
+    ...input,
+    scalarTypes: [],
+    defaultNamespaceId: input.symbolTable.defaultNamespace.id,
+    pslBlockDescriptors,
+    generatorFunctions: input.generatorFunctions ?? EMPTY_GENERATOR_FUNCTIONS,
+  });
   const contributions = context.authoringContributions;
   return createBinder({
     sources: input.sources,

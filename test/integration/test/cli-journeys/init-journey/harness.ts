@@ -34,10 +34,22 @@ const execFileAsync = promisify(execFile);
 /**
  * Path to the workspace-built CLI binary. The integration package's
  * `pretest` hook runs `pnpm -w build`, so `dist/bin.mjs` exists when these
- * tests run.
+ * tests run. Only `orm init` runs it: the project has nothing installed yet,
+ * so the CLI is the only framework copy loaded.
  */
 const WORKSPACE_ROOT = resolve(import.meta.dirname, '../../../../..');
-const CLI_BIN = join(WORKSPACE_ROOT, 'packages/1-framework/3-tooling/cli/dist/bin.mjs');
+const WORKSPACE_CLI_BIN = join(WORKSPACE_ROOT, 'packages/1-framework/3-tooling/cli/dist/bin.mjs');
+
+/**
+ * The project's own `prisma` command, written after install. It runs the CLI
+ * from the project's installed `@prisma/orm-toolchain`, so the CLI and the
+ * project's `@prisma/orm-*` packages load one framework copy, as a user's do.
+ */
+const PROJECT_CLI_FILE = 'prisma-cli.mjs';
+const PROJECT_CLI_SOURCE = `import { runOrmBin } from '@prisma/orm-toolchain/cli';
+
+await runOrmBin();
+`;
 
 /**
  * Shared cache root for the journey runs. Lives outside the repo (under
@@ -95,8 +107,8 @@ export interface JourneyProject {
   readonly cell: CellId;
   /** Result of the `prisma orm init` invocation that materialised the project. */
   readonly initResult: CommandRun;
-  /** Result of the `pnpm install` invocation, or `null` when install was skipped. */
-  readonly installResult: CommandRun | null;
+  /** Result of the `pnpm install` invocation that ran before `init`. */
+  readonly installResult: CommandRun;
   /** Tear down the tmpdir (idempotent). */
   cleanup(): void;
 }
@@ -107,36 +119,26 @@ export interface StepResult extends CommandRun {
   readonly command: string;
 }
 
-interface CreateJourneyProjectOptions {
-  /**
-   * Whether to run `pnpm install` after the scaffold lands. The install
-   * resolves every `@internal/*` dep against the workspace tarballs at
-   * {@link TARBALL_CACHE_DIR} and uses `node-linker=isolated` so transitive
-   * workspace packages are not hoisted into the tmpdir's top-level
-   * `node_modules` — the exact pnpm layout that TML-2485 broke under.
-   * Defaults to `true`.
-   */
-  readonly install?: boolean;
-}
-
 /**
  * Materialises a fresh project tmpdir, writes a minimal `package.json` (init
- * requires one to attach to), runs `prisma orm init --target <t> --authoring
- * <a> --yes --skip-install` via the workspace-built CLI binary as a real
- * subprocess, then optionally runs `pnpm install` against the workspace's
- * pre-packed tarballs with `node-linker=isolated`.
+ * requires one to attach to), runs `pnpm install` against the workspace's
+ * pre-packed tarballs with `node-linker=isolated`, then runs `prisma orm init
+ * --target <t> --authoring <a> --yes --skip-install` via the workspace-built
+ * CLI binary as a real subprocess.
+ *
+ * The install comes first because `init` writes the project from the target
+ * package's init contribution, so the package must be installed before it
+ * runs; under `--skip-install` init refuses a project without it. The install
+ * resolves every `@internal/*` dep against the workspace tarballs at
+ * {@link TARBALL_CACHE_DIR}, so `init`'s own install, which would reach the
+ * registry, is skipped.
  *
  * The install step is what keeps TML-2485-class bugs (pnpm's isolated linker
  * hiding transitive workspace packages from the user's top-level
  * `node_modules`) in the failure surface. A shortcut using the workspace's
  * hoisted `node_modules` would silently mask them.
  */
-export async function createJourneyProject(
-  cell: CellId,
-  options: CreateJourneyProjectOptions = {},
-): Promise<JourneyProject> {
-  const { install = true } = options;
-
+export async function createJourneyProject(cell: CellId): Promise<JourneyProject> {
   const dir = mkdtempSync(join(tmpdir(), `pn-journey-${cell.target}-${cell.authoring}-`));
   // Once the tmpdir exists, any thrown setup step (package.json
   // rewrite, tarball prep, install) would otherwise leak `dir` because
@@ -145,10 +147,16 @@ export async function createJourneyProject(
   try {
     writeMinimalPackageJson(dir);
 
+    const tarballs = await prepareWorkspaceTarballs();
+    rewritePackageJsonForTarballs(dir, cell, tarballs);
+    writeIsolatedNpmrc(dir);
+    const installResult = await runPnpm(['install', '--no-frozen-lockfile'], dir);
+    writeFileSync(join(dir, PROJECT_CLI_FILE), PROJECT_CLI_SOURCE, 'utf-8');
+
     const target = cell.target === 'mongo' ? 'mongodb' : 'postgres';
     const initResult = await runNode(
       [
-        CLI_BIN,
+        WORKSPACE_CLI_BIN,
         'orm',
         'init',
         '--target',
@@ -160,14 +168,6 @@ export async function createJourneyProject(
       ],
       dir,
     );
-
-    let installResult: CommandRun | null = null;
-    if (install && initResult.exitCode === 0) {
-      const tarballs = await prepareWorkspaceTarballs();
-      rewritePackageJsonForTarballs(dir, cell, tarballs);
-      writeIsolatedNpmrc(dir);
-      installResult = await runPnpm(['install', '--no-frozen-lockfile'], dir);
-    }
 
     return {
       dir,
@@ -481,15 +481,15 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
     ...migrationDepEntries,
     dotenv: '^16.4.5',
   };
-  // No standalone-CLI devDependency: journey steps invoke the
-  // workspace-built engine bin.
-  // `@prisma/cli-engine` is the scaffolded prisma.config.ts's
-  // definePrismaConfig import, installed from the registry exactly as
+  // `@prisma/orm-toolchain` is what the project's `prisma` command
+  // (`PROJECT_CLI_FILE`) runs the CLI from. `@prisma/cli-engine` is the
+  // scaffolded prisma.config.ts's definePrismaConfig import, installed from the registry exactly as
   // `init`'s own install would. Must be an engine that has that export
   // (0.2.0+), and should track what the workspace pins.
   pkg.devDependencies = {
     ...(pkg.devDependencies ?? {}),
-    '@prisma/cli-engine': '0.2.3',
+    '@prisma/cli-engine': '0.9.0',
+    '@prisma/orm-toolchain': `file:${requireTarball(tarballs, '@prisma/orm-toolchain')}`,
     '@types/node': '^24.10.4',
     typescript: '^5.9.3',
   };
@@ -567,12 +567,11 @@ export function attachDatabase(project: JourneyProject, connectionString: string
 
 /**
  * Emits the contract. The user-facing bin is the unified `prisma` CLI
- * (published from the prisma-cli repo), so journey steps invoke the
- * workspace-built engine bin in the project directory instead of
- * `pnpm exec prisma`.
+ * (published from the prisma-cli repo), so journey steps run the project's
+ * `PROJECT_CLI_FILE`, which loads the CLI from the installed toolchain.
  */
 export async function emitContract(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'contract', 'emit']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'contract', 'emit']);
 }
 
 /**
@@ -581,7 +580,7 @@ export async function emitContract(project: JourneyProject): Promise<StepResult>
  * the schema in via `migrationPlan` + `migrationApply`.
  */
 export async function dbInit(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'db', 'init']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'db', 'init']);
 }
 
 /**
@@ -592,7 +591,7 @@ export async function dbInit(project: JourneyProject): Promise<StepResult> {
  * `selfEmitLatestMigration`) and then running `migrationApply`.
  */
 export async function migrationPlan(project: JourneyProject, name: string): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'migration', 'plan', '--name', name]);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'migration', 'plan', '--name', name]);
 }
 
 /**
@@ -630,12 +629,12 @@ export async function selfEmitLatestMigration(project: JourneyProject): Promise<
 }
 
 /**
- * Runs `prisma migrate`. Applies every pending migration
+ * Runs `prisma db migrate`. Applies every pending migration
  * to the live database — the mongo planner's missing-`createCollection`
  * seam (TML-2486) surfaces here when the bug is present.
  */
 export async function migrationApply(project: JourneyProject): Promise<StepResult> {
-  return runStep(project, ['node', CLI_BIN, 'migrate']);
+  return runStep(project, ['node', PROJECT_CLI_FILE, 'db', 'migrate']);
 }
 
 /**

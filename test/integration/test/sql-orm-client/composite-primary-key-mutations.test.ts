@@ -1,5 +1,4 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
 import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -8,6 +7,7 @@ import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-r
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { authorSqlContractFromPsl } from '../scalar-lists/psl-list-authoring';
+import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -41,21 +41,31 @@ const Account = AccountBase.relations({
 }).sql({ table: 'cpk_accounts' });
 
 const accountsContract = defineContract({ models: { Account, Note } });
-const accountsContext = createExecutionContext({
-  contract: accountsContract,
-  stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
-});
+function accountsContext(strategy: IncludeStrategy) {
+  return createExecutionContext({
+    contract: accountsContract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapterFor(strategy),
+    }),
+  });
+}
 
 type Accounts = Collection<typeof accountsContract, 'Account'>;
 
-async function withAccounts(fn: (accounts: Accounts) => Promise<void>): Promise<void> {
+async function withAccounts(
+  strategy: IncludeStrategy,
+  fn: (accounts: Accounts) => Promise<void>,
+): Promise<void> {
   await withPushedContractRuntime(accountsContract, async (runtime) => {
     await runtime.query(`
       insert into cpk_accounts (tenant_id, id, name)
       values (1, 1, 'Ada'), (1, 2, 'Grace'), (2, 2, 'Barbara')
     `);
     await fn(
-      new Collection({ runtime, context: accountsContext }, 'Account', { namespaceId: 'public' }),
+      new Collection({ runtime, context: accountsContext(strategy) }, 'Account', {
+        namespaceId: 'public',
+      }),
     );
   });
 }
@@ -103,7 +113,7 @@ async function withVehicles(
   const contract = await authorVehiclesContract();
   const context = createExecutionContext({
     contract,
-    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),
+    stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapterFor('join') }),
   });
   await withPushedContractRuntime(contract, async (runtime) => {
     await fn(new Collection({ runtime, context }, 'Vehicle', { namespaceId: 'public' }), runtime);
@@ -129,151 +139,160 @@ async function readTrucks(vehicles: Collection<Contract<SqlStorage>, string>) {
     .all();
 }
 
-describe('integration/mutations on a composite primary key', () => {
-  it(
-    'a nested update changes and returns only the matched row',
-    async () => {
-      await withAccounts(async (accounts) => {
-        const updated = await accounts
-          .select('tenantId', 'id', 'name')
-          .where({ tenantId: 1, id: 2 })
-          .update({
-            name: 'Grace Hopper',
-            notes: (notes) => notes.create([{ id: 20, body: 'compiler' }]),
+describe.each(includeStrategies)(
+  'integration/mutations on a composite primary key (%s)',
+  (strategy) => {
+    it(
+      'a nested update changes and returns only the matched row',
+      async () => {
+        await withAccounts(strategy, async (accounts) => {
+          const updated = await accounts
+            .select('tenantId', 'id', 'name')
+            .where({ tenantId: 1, id: 2 })
+            .update({
+              name: 'Grace Hopper',
+              notes: (notes) => notes.create([{ id: 20, body: 'compiler' }]),
+            });
+
+          expect(updated).toEqual({ tenantId: 1, id: 2, name: 'Grace Hopper' });
+          expect(await readAccounts(accounts)).toEqual([
+            { tenantId: 1, id: 1, name: 'Ada', notes: [] },
+            { tenantId: 1, id: 2, name: 'Grace Hopper', notes: [{ id: 20, body: 'compiler' }] },
+            { tenantId: 2, id: 2, name: 'Barbara', notes: [] },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'a nested update of a relation only reloads the matched row',
+      async () => {
+        await withAccounts(strategy, async (accounts) => {
+          const updated = await accounts
+            .select('tenantId', 'id', 'name')
+            .where({ tenantId: 1, id: 2 })
+            .update({ notes: (notes) => notes.create([{ id: 21, body: 'cobol' }]) });
+
+          expect(updated).toEqual({ tenantId: 1, id: 2, name: 'Grace' });
+          expect(await readAccounts(accounts)).toEqual([
+            { tenantId: 1, id: 1, name: 'Ada', notes: [] },
+            { tenantId: 1, id: 2, name: 'Grace', notes: [{ id: 21, body: 'cobol' }] },
+            { tenantId: 2, id: 2, name: 'Barbara', notes: [] },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'a nested create reloads the created row',
+      async () => {
+        await withAccounts(strategy, async (accounts) => {
+          const created = await accounts.select('tenantId', 'id', 'name').create({
+            tenantId: 1,
+            id: 3,
+            name: 'Edsger',
+            notes: (notes) => notes.create([{ id: 22, body: 'goto' }]),
           });
 
-        expect(updated).toEqual({ tenantId: 1, id: 2, name: 'Grace Hopper' });
-        expect(await readAccounts(accounts)).toEqual([
-          { tenantId: 1, id: 1, name: 'Ada', notes: [] },
-          { tenantId: 1, id: 2, name: 'Grace Hopper', notes: [{ id: 20, body: 'compiler' }] },
-          { tenantId: 2, id: 2, name: 'Barbara', notes: [] },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'a nested update of a relation only reloads the matched row',
-    async () => {
-      await withAccounts(async (accounts) => {
-        const updated = await accounts
-          .select('tenantId', 'id', 'name')
-          .where({ tenantId: 1, id: 2 })
-          .update({ notes: (notes) => notes.create([{ id: 21, body: 'cobol' }]) });
-
-        expect(updated).toEqual({ tenantId: 1, id: 2, name: 'Grace' });
-        expect(await readAccounts(accounts)).toEqual([
-          { tenantId: 1, id: 1, name: 'Ada', notes: [] },
-          { tenantId: 1, id: 2, name: 'Grace', notes: [{ id: 21, body: 'cobol' }] },
-          { tenantId: 2, id: 2, name: 'Barbara', notes: [] },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
-    'a nested create reloads the created row',
-    async () => {
-      await withAccounts(async (accounts) => {
-        const created = await accounts.select('tenantId', 'id', 'name').create({
-          tenantId: 1,
-          id: 3,
-          name: 'Edsger',
-          notes: (notes) => notes.create([{ id: 22, body: 'goto' }]),
+          expect(created).toEqual({ tenantId: 1, id: 3, name: 'Edsger' });
+          expect(await readAccounts(accounts)).toEqual([
+            { tenantId: 1, id: 1, name: 'Ada', notes: [] },
+            { tenantId: 1, id: 2, name: 'Grace', notes: [] },
+            { tenantId: 1, id: 3, name: 'Edsger', notes: [{ id: 22, body: 'goto' }] },
+            { tenantId: 2, id: 2, name: 'Barbara', notes: [] },
+          ]);
         });
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-        expect(created).toEqual({ tenantId: 1, id: 3, name: 'Edsger' });
-        expect(await readAccounts(accounts)).toEqual([
-          { tenantId: 1, id: 1, name: 'Ada', notes: [] },
-          { tenantId: 1, id: 2, name: 'Grace', notes: [] },
-          { tenantId: 1, id: 3, name: 'Edsger', notes: [{ id: 22, body: 'goto' }] },
-          { tenantId: 2, id: 2, name: 'Barbara', notes: [] },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
+    it(
+      'an MTI variant read joins its table on every primary-key column',
+      async () => {
+        await withVehicles(async (vehicles, runtime) => {
+          await seedTrucks(runtime);
 
-  it(
-    'an MTI variant read joins its table on every primary-key column',
-    async () => {
-      await withVehicles(async (vehicles, runtime) => {
-        await seedTrucks(runtime);
+          expect(await readTrucks(vehicles)).toEqual([
+            { tenantId: 1, id: 1, name: 'Hauler', payload: 5 },
+            { tenantId: 1, id: 2, name: 'Tipper', payload: 9 },
+            { tenantId: 2, id: 1, name: 'Mover', payload: 5 },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-        expect(await readTrucks(vehicles)).toEqual([
-          { tenantId: 1, id: 1, name: 'Hauler', payload: 5 },
-          { tenantId: 1, id: 2, name: 'Tipper', payload: 9 },
-          { tenantId: 2, id: 1, name: 'Mover', payload: 5 },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
+    it(
+      'an MTI variant create writes every primary-key column to the variant table',
+      async () => {
+        await withVehicles(async (vehicles, runtime) => {
+          await seedTrucks(runtime);
 
-  it(
-    'an MTI variant create writes every primary-key column to the variant table',
-    async () => {
-      await withVehicles(async (vehicles, runtime) => {
-        await seedTrucks(runtime);
+          const created = await vehicles
+            .variant('truck' as never)
+            .create({ tenantId: 1, id: 3, name: 'Loader', payload: 7 } as never);
 
-        const created = await vehicles
-          .variant('truck' as never)
-          .create({ tenantId: 1, id: 3, name: 'Loader', payload: 7 } as never);
+          expect(created).toEqual({
+            tenantId: 1,
+            id: 3,
+            kind: 'truck',
+            name: 'Loader',
+            payload: 7,
+          });
+          expect(await readTrucks(vehicles)).toEqual([
+            { tenantId: 1, id: 1, name: 'Hauler', payload: 5 },
+            { tenantId: 1, id: 2, name: 'Tipper', payload: 9 },
+            { tenantId: 1, id: 3, name: 'Loader', payload: 7 },
+            { tenantId: 2, id: 1, name: 'Mover', payload: 5 },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-        expect(created).toEqual({ tenantId: 1, id: 3, kind: 'truck', name: 'Loader', payload: 7 });
-        expect(await readTrucks(vehicles)).toEqual([
-          { tenantId: 1, id: 1, name: 'Hauler', payload: 5 },
-          { tenantId: 1, id: 2, name: 'Tipper', payload: 9 },
-          { tenantId: 1, id: 3, name: 'Loader', payload: 7 },
-          { tenantId: 2, id: 1, name: 'Mover', payload: 5 },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
+    it(
+      'updateAndCount() on an MTI variant changes only the matching rows',
+      async () => {
+        await withVehicles(async (vehicles, runtime) => {
+          await seedTrucks(runtime);
 
-  it(
-    'updateAndCount() on an MTI variant changes only the matching rows',
-    async () => {
-      await withVehicles(async (vehicles, runtime) => {
-        await seedTrucks(runtime);
+          const count = await vehicles
+            .variant('truck' as never)
+            .where((v) => v['payload']!.eq(9))
+            .updateAndCount({ name: 'Renamed' } as never);
 
-        const count = await vehicles
-          .variant('truck' as never)
-          .where((v) => v['payload']!.eq(9))
-          .updateAndCount({ name: 'Renamed' } as never);
+          expect(count).toBe(1);
+          expect(await readTrucks(vehicles)).toEqual([
+            { tenantId: 1, id: 1, name: 'Hauler', payload: 5 },
+            { tenantId: 1, id: 2, name: 'Renamed', payload: 9 },
+            { tenantId: 2, id: 1, name: 'Mover', payload: 5 },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
 
-        expect(count).toBe(1);
-        expect(await readTrucks(vehicles)).toEqual([
-          { tenantId: 1, id: 1, name: 'Hauler', payload: 5 },
-          { tenantId: 1, id: 2, name: 'Renamed', payload: 9 },
-          { tenantId: 2, id: 1, name: 'Mover', payload: 5 },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
+    it(
+      'deleteAndCount() on an MTI variant deletes only the matching rows',
+      async () => {
+        await withVehicles(async (vehicles, runtime) => {
+          await seedTrucks(runtime);
 
-  it(
-    'deleteAndCount() on an MTI variant deletes only the matching rows',
-    async () => {
-      await withVehicles(async (vehicles, runtime) => {
-        await seedTrucks(runtime);
+          const count = await vehicles
+            .variant('truck' as never)
+            .where((v) => v['payload']!.eq(9))
+            .deleteAndCount();
 
-        const count = await vehicles
-          .variant('truck' as never)
-          .where((v) => v['payload']!.eq(9))
-          .deleteAndCount();
-
-        expect(count).toBe(1);
-        expect(await readTrucks(vehicles)).toEqual([
-          { tenantId: 1, id: 1, name: 'Hauler', payload: 5 },
-          { tenantId: 2, id: 1, name: 'Mover', payload: 5 },
-        ]);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-});
+          expect(count).toBe(1);
+          expect(await readTrucks(vehicles)).toEqual([
+            { tenantId: 1, id: 1, name: 'Hauler', payload: 5 },
+            { tenantId: 2, id: 1, name: 'Mover', payload: 5 },
+          ]);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  },
+);

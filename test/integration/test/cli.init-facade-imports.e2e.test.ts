@@ -1,14 +1,23 @@
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { InitContribution } from '@internal/cli/init-contribution';
+import type { ContractSourceFormat } from '@internal/config/config-types';
+import mongoContribution from '@internal/mongo/init';
+import postgresContribution from '@internal/postgres/init';
+import { normalize as portablePath, relative as portableRelative } from 'pathe';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import {
-  type AuthoringId,
-  configFile,
-  dbFile,
-  starterSchema,
-  type TargetId,
-} from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+
+type TargetId = 'postgres' | 'mongo';
+type AuthoringId = ContractSourceFormat;
+
+const CONTRIBUTIONS: Record<TargetId, InitContribution> = {
+  postgres: postgresContribution,
+  mongo: mongoContribution,
+};
 
 /**
  * Regression guard for TML-2485.
@@ -39,11 +48,11 @@ interface FacadeInfo {
 const FACADE_FOR_TARGET: Record<TargetId, FacadeInfo> = {
   postgres: {
     packageName: '@internal/postgres',
-    packageJsonPath: resolve(REPO_ROOT, 'packages/3-extensions/postgres/package.json'),
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/postgres/9-facade/package.json'),
   },
   mongo: {
     packageName: '@internal/mongo',
-    packageJsonPath: resolve(REPO_ROOT, 'packages/3-extensions/mongo/package.json'),
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/mongo/9-facade/package.json'),
   },
 };
 
@@ -69,26 +78,31 @@ function readFacadeExports(packageJsonPath: string): FacadeExports {
   };
 }
 
-function extractPrismaNextImports(source: string): readonly string[] {
+function extractInternalImports(source: string): readonly string[] {
   const matches = source.matchAll(/(?:\bfrom\s+|\bimport\s+)['"](@internal\/[^'"]+)['"]/g);
   return Array.from(new Set(Array.from(matches, (m) => m[1] as string)));
 }
 
 function templateSources(target: TargetId, authoring: AuthoringId): readonly string[] {
   const schemaPath = authoring === 'typescript' ? 'prisma/contract.ts' : 'prisma/contract.prisma';
-  return [starterSchema(target, authoring), dbFile(target), configFile(target, `./${schemaPath}`)];
+  const contribution = CONTRIBUTIONS[target];
+  return [
+    contribution.starterContract(authoring),
+    contribution.databaseFile(),
+    configFile(`./${schemaPath}`, contribution.configModule),
+  ];
 }
 
 describe('init templates only depend on the facade package (TML-2485)', () => {
-  describe('extractPrismaNextImports', () => {
+  describe('extractInternalImports', () => {
     it('captures `import x from "pkg"` (named-binding form)', () => {
       const source = "import postgres from '@internal/postgres/runtime';\n";
-      expect(extractPrismaNextImports(source)).toEqual(['@internal/postgres/runtime']);
+      expect(extractInternalImports(source)).toEqual(['@internal/postgres/runtime']);
     });
 
     it('captures `import "pkg"` (side-effect form)', () => {
       const source = "import '@internal/postgres/runtime';\n";
-      expect(extractPrismaNextImports(source)).toEqual(['@internal/postgres/runtime']);
+      expect(extractInternalImports(source)).toEqual(['@internal/postgres/runtime']);
     });
 
     it('deduplicates repeated specifiers', () => {
@@ -96,7 +110,7 @@ describe('init templates only depend on the facade package (TML-2485)', () => {
         "import postgres from '@internal/postgres/runtime';",
         "import type { Foo } from '@internal/postgres/runtime';",
       ].join('\n');
-      expect(extractPrismaNextImports(source)).toEqual(['@internal/postgres/runtime']);
+      expect(extractInternalImports(source)).toEqual(['@internal/postgres/runtime']);
     });
   });
 
@@ -104,7 +118,7 @@ describe('init templates only depend on the facade package (TML-2485)', () => {
     const facade = FACADE_FOR_TARGET[target];
 
     describe(`${target} + ${authoring}`, () => {
-      const allImports = templateSources(target, authoring).flatMap(extractPrismaNextImports);
+      const allImports = templateSources(target, authoring).flatMap(extractInternalImports);
 
       it('every @internal/* import targets the facade package', () => {
         expect(allImports.length).toBeGreaterThan(0);
@@ -128,6 +142,119 @@ describe('init templates only depend on the facade package (TML-2485)', () => {
           ).toBe(true);
         }
       });
+    });
+  }
+});
+
+const FRAMEWORK_LOCATIONS = [
+  'packages/1-framework/',
+  'packages/9-public/@prisma/orm-framework/',
+  'packages/9-public/@prisma/orm-toolchain/',
+];
+
+/**
+ * The modules a built file imports, statically, dynamically or through a re-export, including
+ * `export * as name from`; text inside its strings is not an import.
+ */
+function moduleSpecifiers(source: string): readonly string[] {
+  const file = ts.createSourceFile(
+    'built.mjs',
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    ts.ScriptKind.JS,
+  );
+  const found: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      found.push(node.moduleSpecifier.text);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments[0] !== undefined &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      found.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return found;
+}
+
+function isOurs(specifier: string): boolean {
+  return (
+    specifier.startsWith('.') ||
+    specifier.startsWith('@internal/') ||
+    specifier.startsWith('@prisma/orm-')
+  );
+}
+
+/**
+ * Every workspace file a built entrypoint loads, following its own and its workspace
+ * dependencies' imports, as repository-relative paths. Third-party and Node modules are leaves.
+ */
+function workspaceModulesLoadedBy(entry: string): { files: string[]; specifiers: string[] } {
+  const files: string[] = [];
+  const specifiers: string[] = [];
+  const pending = [realpathSync(entry)];
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (file === undefined || files.includes(portableRelative(REPO_ROOT, file))) continue;
+    files.push(portableRelative(REPO_ROOT, file));
+    for (const specifier of moduleSpecifiers(readFileSync(file, 'utf-8'))) {
+      specifiers.push(specifier);
+      if (!isOurs(specifier)) continue;
+      const resolved = realpathSync(createRequire(file).resolve(specifier));
+      if (!portablePath(resolved).includes('/node_modules/')) pending.push(resolved);
+    }
+  }
+  return { files, specifiers };
+}
+
+describe('the init entrypoints import no framework code that runs', () => {
+  const entrypoints = [
+    { name: '@internal/postgres/init', dir: 'packages/3-targets/postgres/9-facade' },
+    { name: '@internal/mongo/init', dir: 'packages/3-targets/mongo/9-facade' },
+    { name: '@prisma/orm-postgres/init', dir: 'packages/9-public/@prisma/orm-postgres' },
+    { name: '@prisma/orm-mongo/init', dir: 'packages/9-public/@prisma/orm-mongo' },
+  ];
+
+  it('finds a framework module that a built file imports', () => {
+    const dir = mkdtempSync(join(__dirname, 'test-init-imports-'));
+    try {
+      const entry = join(dir, 'init.mjs');
+      writeFileSync(
+        entry,
+        'const text = `import "./not-an-import.js"`;\nexport * as casts from "@internal/utils/casts";\n',
+      );
+
+      const { files, specifiers } = workspaceModulesLoadedBy(entry);
+
+      expect(specifiers[0]).toBe('@internal/utils/casts');
+      expect(specifiers).not.toContain('./not-an-import.js');
+      expect(files.some((file) => file.startsWith('packages/1-framework/'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  for (const { name, dir } of entrypoints) {
+    it(`${name} loads only target and third-party modules`, () => {
+      const { files, specifiers } = workspaceModulesLoadedBy(
+        resolve(REPO_ROOT, dir, 'dist/init.mjs'),
+      );
+
+      expect(specifiers).toContain('pathe');
+      expect(specifiers.some((specifier) => specifier.endsWith('/server-version'))).toBe(true);
+      expect(
+        files.filter((file) => FRAMEWORK_LOCATIONS.some((location) => file.startsWith(location))),
+      ).toEqual([]);
     });
   }
 });

@@ -1,12 +1,12 @@
 # Prisma 8 — Queries (Mongo)
 
-> Load this guide when `db.ts` imports from `@internal/mongo/runtime`.
+> Load this guide when `db.ts` imports from `@prisma/orm-mongo/runtime`.
 
 Shared concepts (result consumption, script teardown, cross-target pitfalls, capability gaps) live in [`queries.md`](./queries.md).
 
 ## Key Concepts
 
-**Mongo** (`mongo<Contract>(...)` from `@internal/mongo/runtime`):
+**Mongo** (`mongo({ contract, ... })` from `@prisma/orm-mongo/runtime`):
 
 - **`db.orm.<root>`** — ORM, lowercased plural contract root (`db.orm.users`, `db.orm.posts`). Same fluent chaining; `.where({ field: value })` object equality is the idiomatic filter form.
 - **`db.query`** — typed aggregation-pipeline builder. Start with `db.query.from('<root>')`, chain `.match(...)` / `.project(...)` / `.group(...)` / `.lookup(...)`, terminal with `.build()`. Run via `(await db.runtime()).query(plan)` for anything that returns documents; `execute(plan)` is only for a write you want an affected count from, and it throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED` on a find or aggregate.
@@ -47,6 +47,8 @@ const recent = await db.orm.posts
   .all();
 ```
 
+**Field names, not stored names.** The ORM names a field by its name in the contract, never by the key its documents store it under. A field declared `id ObjectId @id @map("_id")` is `id` in every ORM call and row, and documents store it as `_id`; passing `_id` to the ORM fails with `ORM.FIELD_UNKNOWN`, whose message names the field to use. The pipeline builder (`db.query`) works on documents, so it names stored names: `_id` there. A raw filter expression passed to the ORM's `.where(...)`, such as `MongoFieldFilter.eq('displayName', 'Ada')` or a `MongoExprFilter`, names fields too and is translated; one built for `db.query` names stored names, so do not pass it to the ORM.
+
 **`.where(...)`** accepts a plain object whose keys are model field names and values are compared with equality (codec-aware — `ObjectId` fields accept string ids from the contract). Chain multiple `.where({ ... })` calls to AND-compose filters.
 
 For operators the object form doesn't cover (`.in([...])`, range comparisons, nested logic), pass a `MongoFilterExpr` — today that means importing filter helpers from `@prisma/orm-mongo/query-ast/execution` (a façade-completeness gap; see *What Prisma 8 doesn't do yet* in [`queries.md`](./queries.md)). Prefer the object form whenever equality suffices.
@@ -60,7 +62,7 @@ const tutorials = await db.orm.posts.variant('tutorial').where({ authorId }).all
 
 **Sorting and pagination.** `.orderBy({ field: 1 | -1 })` (Mongo sort directions). `.limit(n)` maps to `$limit`; `.offset(n)` maps to `$skip`.
 
-**`.first()` vs `.all()`.** `.first()` issues a limit-1 read; `.all()` returns every matching document. There is no `.first({ pk })` shorthand on Mongo — filter on `_id` explicitly: `.where({ _id: id }).first()`.
+**`.first()` vs `.all()`.** `.first()` issues a limit-1 read; `.all()` returns every matching document. There is no `.first({ pk })` shorthand on Mongo — filter on the id field explicitly: `.where({ id }).first()`.
 
 Mongo `.all()` returns the same `AsyncIterableResult` shape as Postgres — `await db.orm.users.all()` yields an array; see *Consuming the result* in [`queries.md`](./queries.md).
 
@@ -76,14 +78,14 @@ const posts = await db.orm.posts
 // → Array<{ title, authorId, createdAt, author: { name, email, ... } }>
 ```
 
-Relation names match the contract's `@relation` field names. Nested includes follow the same chaining rules as the parent collection.
+Relation names match the contract's `@relation` field names. `.include(...)` takes only the relation name: there is no refinement callback, so the included documents cannot be filtered, ordered or limited, and their own relations are not loaded. Only a reference relation on a single field can be included; an embedded relation is already part of the document, and naming one in `.include(...)` is a type error.
 
 ## Workflow — ORM writes
 
 Mongo mutations require a preceding `.where(...)` filter (except `.create` / `.createAll`). Updates accept either a partial document or a field-accessor callback for Mongo operators:
 
 ```typescript
-// Create — returns the row with server-assigned `_id`.
+// Create — returns the row with the server-assigned `id` (stored as `_id`).
 const user = await db.orm.users.create({
   name: 'Alice',
   email: 'alice@example.com',
@@ -92,11 +94,11 @@ const user = await db.orm.users.create({
 });
 
 // Update one — plain object replaces top-level fields.
-await db.orm.users.where({ _id: user._id }).update({ bio: 'Writer' });
+await db.orm.users.where({ id: user.id }).update({ bio: 'Writer' });
 
 // Update one — field operations ($push, $inc, dot-path $set).
 await db.orm.users
-  .where({ _id: user._id })
+  .where({ id: user.id })
   .update((u) => [u.tags.push('admin'), u.loginCount.inc(1)]);
 
 // Update many / delete many — iterate or count.
@@ -105,7 +107,7 @@ const updated = await db.orm.users
   .updateAll({ bio: 'filled' });
 for await (const row of updated) { /* each modified doc */ }
 
-await db.orm.users.where({ _id: user._id }).delete();
+await db.orm.users.where({ id: user.id }).delete();
 
 // Upsert — filter via .where(), split create vs update branches.
 await db.orm.users.where({ email: 'alice@example.com' }).upsert({
@@ -144,7 +146,7 @@ Import `acc` and expression helpers (`fn`) from `@prisma/orm-mongo/query-builder
 
 ## Workflow — Query builder (`db.query`)
 
-The concept: `db.query.from('<root>')` starts a typed aggregation-pipeline chain. Terminal methods produce a `MongoQueryPlan`; run it through the runtime with `query(plan)` (an `AsyncIterableResult` of documents — `await` it for an array):
+The concept: `db.query.from('<root>')` starts a typed aggregation-pipeline chain over documents, so it names each field by its stored name (`_id` for a field declared `id … @map("_id")`). Terminal methods produce a `MongoQueryPlan`; run it through the runtime with `query(plan)` (an `AsyncIterableResult` of documents — `await` it for an array):
 
 ```typescript
 // src/queries/analytics.ts
@@ -206,6 +208,39 @@ Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.p
 
 **Plans vs ORM.** The ORM's `.create` / `.update` / `.all` issue queries directly. Don't pass ORM collections to `runtime.query` / `runtime.execute` — those entry points are for `db.query` plans (and migration/runtime internals).
 
+## Workflow — Prepared statements (`db.prepare`)
+
+The concept: `db.prepare(declaration, (p) => plan)` builds a query-builder plan or an ORM read once and runs it many times with different values. The declaration names each parameter's codec (`{ email: 'mongo/string@1' }`, or `{ codecId: 'mongo/string@1', nullable: true }` to allow `null`); unknown codec ids fail to compile. The callback receives one placeholder per name and puts it where a value goes: filter operators (`eq`, `in`, …), update operators (`set`, `push`, …), insert documents, `fn.literal(p.x)`, and `limit` / `skip` (with a codec whose input is a number, such as `mongo/int32@1`). Each run encodes the value with the declared codec. Preparing opens no connection; run the handle against `await db.runtime()`:
+
+```typescript
+const byAuthor = await db.prepare(
+  { authorId: 'mongo/objectId@1', take: 'mongo/int32@1' },
+  (p) =>
+    db.query
+      .from('posts')
+      .match((f) => f.authorId.eq(p.authorId))
+      .sort({ createdAt: -1 })
+      .limit(p.take)
+      .build(),
+);
+
+const runtime = await db.runtime();
+const recent = await byAuthor.query(runtime, { authorId: someHexId, take: 10 }).toArray();
+```
+
+An `updateOne`, `updateMany`, `deleteOne` or `deleteMany` plan gives a handle with `execute(runtime, params)` as well as `query`, resolving `{ affectedRows }`. `runtime.prepare(...)` on a `MongoRuntime` takes query-builder and raw plans only, not ORM reads. A declared name the plan never uses throws `RUNTIME.PREPARE_UNUSED_PARAM`; a placeholder in a `db.raw` command throws `RUNTIME.PREPARE_RAW_PLACEHOLDER`; a placeholder whose name, codec id or nullability the declaration does not give throws `RUNTIME.PREPARE_UNDECLARED_PARAM`; a missing value at run time throws `RUNTIME.PREPARE_MISSING_PARAM`. A `db.raw` command with no placeholders can be prepared and is sent as written on each run.
+
+ORM reads are prepared through `.prepared.all()`, `.prepared.first()` and `.prepared.firstOrThrow()`. The handle's `query(runtime, params)` returns what the ad-hoc read returns: a row stream, `Row | null`, or `Row` (rejecting with `RUNTIME.NO_ROWS` when nothing matches). It has no `execute`.
+
+```typescript
+const byEmail = await db.prepare({ email: 'mongo/string@1', take: 'mongo/int32@1' }, (p) =>
+  db.orm.users.where({ email: p.email }).include('posts').limit(p.take).prepared.all(),
+);
+const users = await byEmail.query(await db.runtime(), { email: 'alice@example.com', take: 5 }).toArray();
+```
+
+In an ORM read, a placeholder goes in `limit`, `offset`, a scalar field's value in an object-form `where`, or the operand of a comparison (`$eq`, `$ne`, `$gt`, …) or an item of `$in` / `$nin` on a scalar field in a filter-expression `where`. Its codec must be the field's codec (the element codec on a list field, where it matches one item), and it may be nullable only on a nullable field that is not a list. Anything else (another operator, `$expr`, a value object, a whole list) throws `ORM.ARGUMENT_INVALID` when the `where` is built. ORM writes cannot be prepared; a write on a collection whose `where` holds a placeholder throws `ORM.ARGUMENT_INVALID`. `first()` and `firstOrThrow()` set the limit to 1, so a declared `limit` placeholder there throws `RUNTIME.PREPARE_UNUSED_PARAM`. Design: [ADR 318](../../../docs/architecture%20docs/adrs/ADR%20318%20-%20MongoDB%20prepared%20statements.md).
+
 ## Common Pitfalls (Mongo)
 
 1. **Reaching for the lower-level lane when the ORM would have done.** Default to the ORM; drop to `db.query` only for shapes the ORM can't express.
@@ -231,6 +266,7 @@ Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.p
 - [ ] Chose the right lane (ORM by default; `db.query` for shapes the ORM doesn't express).
 - [ ] Used `.where({ ... }).first()` for single-row reads — not `.all()`.
 - [ ] Ran query-builder plans via `(await db.runtime()).query(plan)`; used `execute(plan)` only for an affected count on a write.
+- [ ] For a query run many times with different values, used `db.prepare(...)` and ran the handle against `await db.runtime()`.
 - [ ] For aggregations, used `db.query.from(...).group(...)` rather than a non-existent ORM `.aggregate(...)`.
 - [ ] Did NOT confabulate `db.transaction`, `db.sql`, or ORM `.aggregate(...)` — routed to *What Prisma 8 doesn't do yet* / `references/feedback.md` instead.
 - [ ] Did NOT use the lower-level builder for something the ORM cleanly expresses.

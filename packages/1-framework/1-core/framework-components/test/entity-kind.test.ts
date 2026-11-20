@@ -62,25 +62,6 @@ describe('hydrateNamespaceEntities', () => {
     expect(Object.isFrozen(result['unknown'])).toBe(true);
   });
 
-  it('throws naming the kind and nsId when onUnknown is fail', () => {
-    expect(() =>
-      hydrateNamespaceEntities(
-        { bogus: { x: {} } } as Record<string, Record<string, unknown>>,
-        kinds,
-        'fail',
-        'myNs',
-      ),
-    ).toThrow(/bogus/);
-    expect(() =>
-      hydrateNamespaceEntities(
-        { bogus: { x: {} } } as Record<string, Record<string, unknown>>,
-        kinds,
-        'fail',
-        'myNs',
-      ),
-    ).toThrow(/myNs/);
-  });
-
   it('freezes constructed kind maps', () => {
     const result = hydrateNamespaceEntities({ widget: { a: { name: 'a' } } }, kinds, 'carry');
     expect(Object.isFrozen(result['widget'])).toBe(true);

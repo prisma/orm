@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import pgvector from '@internal/extension-pgvector/runtime';
 import type { AsyncIterableResult } from '@internal/framework-components/runtime';
@@ -18,6 +18,7 @@ import type {
 } from '@internal/sql-runtime';
 import { defineContract, field, model, rel } from '@internal/sqlite/contract-builder';
 import sqlite from '@internal/sqlite/runtime';
+import { contractFromJson } from '@internal/sqlite/static';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { Client } from 'pg';
@@ -236,7 +237,7 @@ async function postgresEnvironment(name: string): Promise<Environment> {
 const contract = defineContract({
   models: {
     User: model('User', {
-      fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+      fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn) },
     }).sql({ table: 'users' }),
   },
 });
@@ -249,8 +250,8 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
   );
   database.prepare('insert into users values (1, ?)').run(name);
   const db = sqlite({ contract, path, verifyMarker: false });
-  const aggregateDb = sqlite<AggregateContract>({
-    contractJson: aggregateContractJson,
+  const aggregateDb = sqlite({
+    contract: contractFromJson<AggregateContract>(aggregateContractJson),
     path,
     verifyMarker: false,
   });
@@ -368,11 +369,11 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
 }
 
 it('binds included columns inside the db.prepare callback and retains them across executions', async () => {
-  const User = model('User', { fields: { id: field.column(integerColumn).id() } });
+  const User = model('User', { fields: { id: field.column(integerNumberColumn).id() } });
   const Post = model('Post', {
     fields: {
-      id: field.column(integerColumn).id(),
-      userId: field.column(integerColumn).column('user_id'),
+      id: field.column(integerNumberColumn).id(),
+      userId: field.column(integerNumberColumn).column('user_id'),
     },
     relations: { author: rel.belongsTo(User, { from: 'userId', to: 'id' }) },
   });
@@ -624,9 +625,11 @@ for (const [name, setup] of [
           expect(await sql.query(target.runtime, { id: 99 })).toEqual([]);
           expect(sqlCallback).toHaveBeenCalledOnce();
           expect(lowerings[name].mock.calls.length - beforeSql).toBe(1);
-          expect(await (await authoring.stats()).execute(target.runtime, {})).toEqual({
-            affectedRows: 1,
-          });
+          expect(await (await authoring.stats()).execute(target.runtime, {})).toEqual(
+            name === 'sqlite'
+              ? { affectedRows: 1, insertId: expect.any(String) }
+              : { affectedRows: 1 },
+          );
           expect(await (await authoring.shapedRows()).query(target.runtime, {})).toEqual([
             { affectedRows: 7 },
           ]);

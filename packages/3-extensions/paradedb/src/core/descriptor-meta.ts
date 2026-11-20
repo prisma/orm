@@ -1,9 +1,10 @@
 import { LiteralExpr } from '@internal/sql-relational-core/ast';
 import { buildOperation, toExpr } from '@internal/sql-relational-core/expression';
 import { paradedbIndexTypes } from '../types/index-types';
-import type { QueryOperationTypes } from '../types/operation-types';
+import type { QueryOperationTypes, QueryOperationTypesForCodecs } from '../types/operation-types';
 import { PARADEDB_EXTENSION_ID } from './constants';
 import { paradeDbError } from './errors';
+import { moduleBase } from './module-base';
 import { ParadeDbProximityChain } from './proximity-chain';
 
 type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
@@ -196,7 +197,7 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
   };
 }
 
-export const paradedbPackMeta = {
+const paradedbPackMetaBase = {
   kind: 'extension',
   id: PARADEDB_EXTENSION_ID,
   familyId: 'sql',
@@ -211,10 +212,14 @@ export const paradedbPackMeta = {
   types: {
     queryOperationTypes: {
       import: {
-        package: '@internal/extension-paradedb/operation-types',
+        package: `${moduleBase}/operation-types`,
         named: 'QueryOperationTypes',
         alias: 'ParadeDbQueryOperationTypes',
       },
     },
   },
 } as const;
+
+export const paradedbPackMeta: typeof paradedbPackMetaBase & {
+  readonly __queryOperationTypes?: QueryOperationTypesForCodecs;
+} = paradedbPackMetaBase;

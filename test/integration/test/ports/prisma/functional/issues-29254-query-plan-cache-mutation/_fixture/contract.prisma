@@ -12,7 +12,7 @@
 //   }
 
 model Item {
-  id    String @id @default(cuid(2))
+  id    String @id @onCreate(cuid(2))
   price Float?
   @@map("item")
 }

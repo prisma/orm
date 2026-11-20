@@ -5,10 +5,12 @@ export type ContractCode = `CONTRACT.${ContractSubcode}`;
 
 type ContractSubcode =
   | 'ARGUMENT_INVALID'
+  | 'CODEC_DESCRIPTOR_MISSING'
   | 'COLLECTION_INVALID'
   | 'DEFAULT_INVALID'
   | 'ENUM_INVALID'
   | 'ENUM_UNKNOWN'
+  | 'FIELD_HELPER_UNKNOWN'
   | 'FIELD_UNKNOWN'
   | 'INDEX_INVALID'
   | 'MODULE_EXPORT_MISSING'

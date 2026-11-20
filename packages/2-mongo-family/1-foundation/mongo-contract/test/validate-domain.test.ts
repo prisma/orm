@@ -51,6 +51,7 @@ function makeValidContract(overrides: Record<string, unknown> = {}): DomainContr
       domainOverride !== undefined
         ? (domainOverride as DomainContractShape['domain'])
         : applicationDomainOf({ models }),
+    storage: { namespaces: {} },
     ...rest,
   } as DomainContractShape;
 }

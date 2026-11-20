@@ -21,17 +21,21 @@ import { binderContext, nullLiteral } from './support';
 const scalarTypes = {
   Int: {
     kind: 'typeConstructor' as const,
-    output: { codecId: 'fixture/int@1', nativeType: 'int' },
+    output: { codecId: 'fixture/int@1' },
   },
   String: {
     kind: 'typeConstructor' as const,
-    output: { codecId: 'fixture/string@1', nativeType: 'string' },
+    output: { codecId: 'fixture/string@1' },
   },
 };
 
 function bind(source: string, context: ReturnType<typeof binderContext>) {
   const { document, sources } = parse(source, 'binder.psl');
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
   return { symbolTable, ...createBinder({ sources, symbolTable, context }) };
 }
 
@@ -50,7 +54,7 @@ describe('createBinder — attribute-argument parameters', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['author']!;
     const attribute = [...field.node.attributes()][0]!;
     const keyNode = [...attribute.argList()!.args()][0]!.name()!.syntax;
     expect(binder.symbolForNode(keyNode)).toEqual({
@@ -73,7 +77,7 @@ describe('createBinder — attribute-argument parameters', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['author']!;
     const attribute = [...field.node.attributes()][0]!;
     const keyNode = [...attribute.argList()!.args()][0]!.name()!.syntax;
     expect(binder.symbolForNode(keyNode)).toEqual({
@@ -102,7 +106,7 @@ describe('createBinder — function calls', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['mode']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['mode']!;
     const attribute = [...field.node.attributes()][0]!;
     const callArg = [...attribute.argList()!.args()][0]!;
     const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
@@ -134,7 +138,7 @@ describe('createBinder — function calls', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['mode']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['mode']!;
     const attribute = [...field.node.attributes()][0]!;
     const callArg = [...attribute.argList()!.args()][0]!;
     const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
@@ -166,7 +170,7 @@ describe('createBinder — function calls', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['id']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['id']!;
     const attribute = [...field.node.attributes()][0]!;
     const callArg = [...attribute.argList()!.args()][0]!;
     const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
@@ -202,7 +206,7 @@ describe('createBinder — function calls', () => {
           attributeSpecs: { field: { attr: () => attributeSpec }, model: {} },
         }),
       );
-      const field = symbolTable.topLevel.models['User']!.fields['id']!;
+      const field = symbolTable.defaultNamespace.models['User']!.fields['id']!;
       const attribute = [...field.node.attributes()][0]!;
       const callArg = [...attribute.argList()!.args()][0]!;
       const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
@@ -239,7 +243,7 @@ describe('createBinder — function calls', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['id']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['id']!;
     const attribute = [...field.node.attributes()][0]!;
     const callArg = [...attribute.argList()!.args()][0]!;
     const call = FunctionCallAst.cast(callArg.value()!.syntax)!;
@@ -270,7 +274,7 @@ describe('createBinder — constants', () => {
       binderContext({ attributeSpecs: { field: { relation: () => onDeleteSpec }, model: {} } }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['author']!;
     const attribute = [...field.node.attributes()][0]!;
     const valueNode = [...attribute.argList()!.args()][0]!.value()!.syntax;
     expect(binder.symbolForNode(valueNode)).toEqual({
@@ -297,7 +301,7 @@ describe('createBinder — constants', () => {
       binderContext({ attributeSpecs: { field: { relation: () => onDeleteSpec }, model: {} } }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['author']!;
     const attribute = [...field.node.attributes()][0]!;
     const valueNode = [...attribute.argList()!.args()][0]!.value()!.syntax;
     expect(binder.symbolForNode(valueNode)).toEqual({
@@ -324,7 +328,7 @@ describe('createBinder — constants', () => {
       binderContext({ attributeSpecs: { field: { relation: () => onDeleteSpec }, model: {} } }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['author']!;
     const attribute = [...field.node.attributes()][0]!;
     const valueNode = [...attribute.argList()!.args()][0]!.value()!.syntax;
     expect(binder.symbolForNode(valueNode)).toEqual({
@@ -354,7 +358,7 @@ describe('createBinder — constants', () => {
       binderContext({ attributeSpecs: { field: { relation: () => onDeleteSpec }, model: {} } }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['author']!;
     const attribute = [...field.node.attributes()][0]!;
     const valueNode = [...attribute.argList()!.args()][0]!.value()!.syntax;
     expect(binder.symbolForNode(valueNode)).toEqual({
@@ -378,7 +382,7 @@ describe('createBinder — constants', () => {
       binderContext({ attributeSpecs: { field: { relation: () => onDeleteSpec }, model: {} } }),
     );
     expect(diagnostics).toEqual([]);
-    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const field = symbolTable.defaultNamespace.models['User']!.fields['author']!;
     const attribute = [...field.node.attributes()][0]!;
     const valueNode = [...attribute.argList()!.args()][0]!.value()!.syntax;
     expect(binder.symbolForNode(valueNode)).toBeUndefined();
@@ -403,7 +407,7 @@ describe('createBinder — block parameters and attributes', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const block = symbolTable.topLevel.blocks['ReadOwn']!;
+    const block = symbolTable.defaultNamespace.blocks['ReadOwn']!;
     const entry = [...block.node.entries()][0]!;
     expect(binder.symbolForNode(entry.key()!.syntax)).toEqual({
       kind: 'parameter',
@@ -428,7 +432,7 @@ describe('createBinder — block parameters and attributes', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const block = symbolTable.topLevel.blocks['ReadOwn']!;
+    const block = symbolTable.defaultNamespace.blocks['ReadOwn']!;
     const entry = [...block.node.entries()][0]!;
     expect(binder.symbolForNode(entry.key()!.syntax)).toEqual({
       kind: 'parameter',
@@ -452,7 +456,7 @@ describe('createBinder — block parameters and attributes', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const block = symbolTable.topLevel.blocks['Summary']!;
+    const block = symbolTable.defaultNamespace.blocks['Summary']!;
     const entry = [...block.node.entries()][0]!;
     expect(binder.symbolForNode(entry.key()!.syntax)).toBeUndefined();
   });
@@ -479,7 +483,7 @@ describe('createBinder — block parameters and attributes', () => {
       }),
     );
     expect(diagnostics).toEqual([]);
-    const block = symbolTable.topLevel.blocks['ReadOwn']!;
+    const block = symbolTable.defaultNamespace.blocks['ReadOwn']!;
     const attribute = [...block.node.attributes()][0]!;
     const nameNode = attribute.name()!.syntax;
     const attributeSymbol = {

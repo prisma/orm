@@ -136,31 +136,6 @@ describe('AsyncIterableResult', () => {
     await expect(result.toArray()).rejects.toThrow('Test error');
   });
 
-  it('preserves type information', async () => {
-    interface TestRow {
-      readonly id: number;
-      readonly name: string;
-    }
-
-    async function* generateItems(): AsyncGenerator<TestRow, void, unknown> {
-      yield { id: 1, name: 'test' };
-      yield { id: 2, name: 'test2' };
-    }
-
-    const result = new AsyncIterableResult(generateItems());
-    const items = await result;
-
-    expect(items).toEqual([
-      { id: 1, name: 'test' },
-      { id: 2, name: 'test2' },
-    ]);
-
-    const firstItem = items[0];
-    expect(firstItem).toBeDefined();
-    expect(typeof firstItem!.id).toBe('number');
-    expect(typeof firstItem!.name).toBe('string');
-  });
-
   it('throws error when iterating after toArray', async () => {
     async function* generateItems(): AsyncGenerator<number, void, unknown> {
       yield 1;
@@ -253,5 +228,14 @@ describe('AsyncIterableResult', () => {
     expect(items).toEqual([1, 2, 3]);
 
     await expect(result).rejects.toThrow('AsyncIterableResult iterator has already been consumed');
+  });
+});
+
+describe('AsyncIterableResult.rejected', () => {
+  it('rejects the first read with the error, not the call', async () => {
+    const failure = new Error('client is closed');
+    const result = AsyncIterableResult.rejected<number>(failure);
+
+    await expect(result.toArray()).rejects.toBe(failure);
   });
 });

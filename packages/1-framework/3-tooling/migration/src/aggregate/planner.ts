@@ -114,6 +114,7 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
         space,
         currentMarker,
         storageNameOf: input.storageNameOf,
+        accessChangesOf: input.accessChangesOf,
       });
       if (resolved.kind === 'ok') {
         perSpace.set(space.spaceId, resolved.result);
@@ -176,7 +177,7 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
       strategy: 'declared-state',
       appliedStatements: [],
       dataLoss: [],
-      accessWidening: [],
+      accessChanges: [],
       temporaryValues: [],
       migrationEdges: [
         buildFabricatedMigrationEdge({

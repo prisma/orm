@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { findAuthoringTypeConstructorCall } from '../src/shared/authoring-type-constructor-call';
+import {
+  authoringTypeConstructorArguments,
+  authoringTypeConstructors,
+  findAuthoringTypeConstructorCall,
+} from '../src/shared/authoring-type-constructor-call';
 import type { AuthoringTypeNamespace } from '../src/shared/framework-authoring';
 
 const namespace = {
@@ -10,8 +14,8 @@ const namespace = {
   Decimal: {
     kind: 'typeConstructor',
     args: [
-      { kind: 'number', name: 'precision', integer: true, optional: true },
-      { kind: 'number', name: 'scale', integer: true, optional: true },
+      { kind: 'value', dataType: 'test/int', name: 'precision', optional: true },
+      { kind: 'value', dataType: 'test/int', name: 'scale', optional: true },
     ],
     output: {
       codecId: 'test/numeric@1',
@@ -24,7 +28,7 @@ const namespace = {
   vector: {
     Vector: {
       kind: 'typeConstructor',
-      args: [{ kind: 'number', name: 'length', integer: true }],
+      args: [{ kind: 'value', dataType: 'test/int', name: 'length' }],
       output: {
         codecId: 'test/vector@1',
         typeParams: { length: { kind: 'arg', index: 0 } },
@@ -118,5 +122,33 @@ describe('findAuthoringTypeConstructorCall', () => {
       path: ['First'],
       args: [],
     });
+  });
+});
+
+describe('authoringTypeConstructors', () => {
+  it('lists every constructor with its path, nested ones included', () => {
+    expect([...authoringTypeConstructors(namespace)].map(({ path }) => path)).toEqual([
+      ['Text'],
+      ['Decimal'],
+      ['vector', 'Vector'],
+      ['Ref'],
+    ]);
+  });
+});
+
+describe('authoringTypeConstructorArguments', () => {
+  it('gives the arguments that make one constructor produce the output', () => {
+    expect(
+      authoringTypeConstructorArguments(namespace.Decimal, {
+        codecId: 'test/numeric@1',
+        typeParams: { precision: 10, scale: 2 },
+      }),
+    ).toEqual([10, 2]);
+  });
+
+  it('gives nothing when the constructor cannot produce the output', () => {
+    expect(
+      authoringTypeConstructorArguments(namespace.Decimal, { codecId: 'test/text@1' }),
+    ).toBeUndefined();
   });
 });

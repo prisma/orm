@@ -1,4 +1,5 @@
 import {
+  AndExpr,
   type AnyExpression,
   BinaryExpr,
   ColumnRef,
@@ -8,16 +9,18 @@ import {
   ParamRef,
   type SelectAst,
 } from '@internal/sql-relational-core/ast';
+import { activitySource } from '@internal/sql-runtime';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it, vi } from 'vitest';
 import { Collection } from '../src/collection';
-import { withReturningCapability } from './collection-fixtures';
+import { withoutCapabilityKeys, withReturningCapability } from './collection-fixtures';
 import {
   buildMixedPolyContract,
   buildStiPolyContract,
   createMockRuntime,
   getTestContext,
   isSelectAst,
+  stubActivitySource,
 } from './helpers';
 
 function collectColumnRefs(expr: AnyExpression | undefined): ColumnRef[] {
@@ -514,7 +517,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
 
   it('deleteAll with includes after variant("feature") scopes MTI predicates through the write subquery', async () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
-    runtime.setNextResults([[], []]);
+    runtime.setNextResults([[{ id: 1 }], []]);
 
     const mixedPoly = blindCast<
       MixedPolyCountCollection,
@@ -527,7 +530,7 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
       .deleteAll()
       .toArray();
 
-    expect(rows).toEqual([]);
+    expect(rows).toEqual([{ id: 1, assignee: null }]);
     expect(runtime.executions).toHaveLength(2);
     expectSelectWithFeatureJoin(runtime.executions[0]!.plan.ast);
 
@@ -536,12 +539,16 @@ describe('Mixed STI+MTI polymorphic query pipeline', () => {
     if (writeAst.kind !== 'delete') {
       throw new Error('Expected a DELETE plan');
     }
-    const exists = expectExistsWithFeatureJoin(writeAst.where);
+    const { where } = writeAst;
+    expect(where).toBeInstanceOf(AndExpr);
+    const [condition, keys] = where instanceof AndExpr ? where.exprs : [];
+    const exists = expectExistsWithFeatureJoin(condition);
     expect(
       collectColumnRefs(exists.subquery.where).filter(
         (ref) => ref.table === 'features' && ref.column === 'priority',
       ),
     ).toHaveLength(1);
+    expect(keys).toBeDefined();
   });
 });
 
@@ -607,6 +614,27 @@ describe('MTI variant mutation guards', () => {
     );
   });
 
+  it('create() and createAll() of a variant stored in its own table name themselves without returning', async () => {
+    const contract = withoutCapabilityKeys(buildMixedPolyContract(), ['returning']);
+    const context = { ...getTestContext(), contract };
+    const features = new Collection({ runtime: createMockRuntime(), context }, 'Task', {
+      namespaceId: 'public',
+    }).variant('feature' as never);
+
+    await expect(features.create({ title: 'X', priority: 1 } as never)).rejects.toMatchObject({
+      code: 'ORM.CAPABILITY_MISSING',
+      message: 'create() requires contract capability "returning"',
+      meta: { capability: 'returning', action: 'create()' },
+    });
+    expect(() => features.createAll([{ title: 'X', priority: 1 } as never])).toThrow(
+      expect.objectContaining({
+        code: 'ORM.CAPABILITY_MISSING',
+        message: 'createAll() requires contract capability "returning"',
+        meta: { capability: 'returning', action: 'createAll()' },
+      }),
+    );
+  });
+
   it('createAll() with the skip option throws for MTI variants', async () => {
     const { collection } = createReturningMixedPolyCollection();
     const narrowed = collection.variant('feature' as never) as typeof collection;
@@ -616,7 +644,7 @@ describe('MTI variant mutation guards', () => {
       expect.objectContaining({
         code: 'ORM.OPERATION_UNSUPPORTED',
         message:
-          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.',
+          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Leave the option out; a duplicate row then makes the call fail.',
       }),
     );
   });
@@ -743,7 +771,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
     runtime.setNextResults([
       [{ id: 10, title: 'Dark mode', type: 'feature' }],
-      [{ id: 10, priority: 99 }],
+      [{ features__priority: 99 }],
     ]);
 
     const narrowed = collection.variant('feature' as never) as typeof collection;
@@ -763,17 +791,16 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
       [{ id: 10, priority: 1 }],
     ]);
 
-    const commit = vi.fn().mockResolvedValue(undefined);
-    const rollback = vi.fn().mockResolvedValue(undefined);
-    const txRuntime = {
+    const settled: string[] = [];
+    const withTransaction = {
       ...baseRuntime,
-      transaction: vi.fn().mockResolvedValue({
-        query: baseRuntime.query.bind(baseRuntime),
-        execute: baseRuntime.execute.bind(baseRuntime),
-        commit,
-        rollback,
-      }),
+      async transaction<R>(fn: (tx: typeof baseRuntime) => PromiseLike<R>): Promise<R> {
+        const result = await fn(baseRuntime);
+        settled.push('committed');
+        return result;
+      },
     };
+    const txRuntime = { ...withTransaction, [activitySource]: stubActivitySource(withTransaction) };
 
     const collection = new Collection({ runtime: txRuntime, context }, 'Task', {
       namespaceId: 'public',
@@ -781,9 +808,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
     const narrowed = collection.variant('feature' as never) as typeof collection;
     await narrowed.createAll([{ title: 'Dark mode', priority: 1 } as never]).toArray();
 
-    expect(txRuntime.transaction).toHaveBeenCalledOnce();
-    expect(commit).toHaveBeenCalledOnce();
-    expect(rollback).not.toHaveBeenCalled();
+    expect(settled).toEqual(['committed']);
     expect(baseRuntime.executions).toHaveLength(2);
   });
 });

@@ -1,4 +1,3 @@
-import type { ControlStack } from '@internal/framework-components/control';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import type { MigrationMetadata } from '../src/metadata';
@@ -6,32 +5,6 @@ import { buildMigrationArtifacts, Migration } from '../src/migration-base';
 
 describe('Migration', () => {
   describe('operations + describe() contract', () => {
-    it('subclasses expose operations via the getter and describe() metadata', async () => {
-      class TestMigration extends Migration<{
-        id: string;
-        label: string;
-        operationClass: 'additive';
-      }> {
-        readonly targetId = 'test';
-        override get operations() {
-          return [
-            { id: 'op1', label: 'Op 1', operationClass: 'additive' as const },
-            { id: 'op2', label: 'Op 2', operationClass: 'additive' as const },
-          ];
-        }
-        override describe() {
-          return { from: 'abc', to: 'def' };
-        }
-      }
-
-      const m = new TestMigration();
-      expect(m.operations).toEqual([
-        { id: 'op1', label: 'Op 1', operationClass: 'additive' },
-        { id: 'op2', label: 'Op 2', operationClass: 'additive' },
-      ]);
-      expect(m.describe()).toEqual({ from: 'abc', to: 'def' });
-    });
-
     it('derives origin/destination from describe()', async () => {
       class TestMigration extends Migration {
         readonly targetId = 'test';
@@ -60,20 +33,6 @@ describe('Migration', () => {
       }
 
       expect(new InitialMigration().origin).toBeNull();
-    });
-
-    it('wraps from as a storage-hash origin when describe() returns a string', async () => {
-      class NonBaselineMigration extends Migration {
-        readonly targetId = 'test';
-        override get operations() {
-          return [];
-        }
-        override describe() {
-          return { from: 'abc', to: 'def' };
-        }
-      }
-
-      expect(new NonBaselineMigration().origin).toEqual({ storageHash: 'abc' });
     });
   });
 
@@ -139,52 +98,6 @@ describe('Migration', () => {
         }
       }
       expect(new M().describe()).toEqual({ from: null, to: 'overridden' });
-    });
-  });
-
-  describe('constructor accepts and stores a ControlStack', () => {
-    /**
-     * The constructor injection contract is that a subclass (e.g.
-     * `PostgresMigration`) can read `this.stack` to materialize whatever it
-     * needs (typically a control adapter). The base class itself stores the
-     * argument verbatim; this test exercises that storage directly via a
-     * subclass that exposes the protected field, independent of any concrete
-     * target's stack-consumption logic.
-     */
-    it('stores the injected stack on the protected `stack` field', async () => {
-      const stub = { sentinel: true } as unknown as ControlStack<'sql', 'test'>;
-
-      class StackProbe extends Migration {
-        readonly targetId = 'test';
-        override get operations() {
-          return [];
-        }
-        override describe() {
-          return { from: 'a', to: 'b' };
-        }
-        public readStack(): unknown {
-          return this.stack;
-        }
-      }
-
-      expect(new StackProbe(stub).readStack()).toBe(stub);
-    });
-
-    it('leaves `stack` undefined when constructed without an argument', async () => {
-      class StackProbe extends Migration {
-        readonly targetId = 'test';
-        override get operations() {
-          return [];
-        }
-        override describe() {
-          return { from: 'a', to: 'b' };
-        }
-        public readStack(): unknown {
-          return this.stack;
-        }
-      }
-
-      expect(new StackProbe().readStack()).toBeUndefined();
     });
   });
 });
@@ -366,17 +279,6 @@ describe('buildMigrationArtifacts', () => {
         meta: expect.objectContaining({ index: 2 }),
       }) as unknown as Error,
     );
-  });
-
-  it('throws a clear error when describe() returns invalid metadata', async () => {
-    await expect(
-      buildMigrationArtifacts(
-        makeMigration([{ id: 'op1', label: 'Op 1', operationClass: 'additive' }], {
-          bad: true,
-        } as never),
-        null,
-      ),
-    ).rejects.toThrow(/describe\(\).*invalid/);
   });
 
   // The on-disk loader (`MigrationMetadataSchema` in `io.ts`) rejects

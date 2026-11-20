@@ -9,7 +9,7 @@ import type {
 } from '@internal/framework-components/control';
 import { ok } from '@internal/utils/result';
 import { expectTypeOf, test } from 'vitest';
-import { defineConfig, type FormatterConfig, type PrismaNextConfig } from '../src/config-types';
+import { defineConfig, type PrismaConfig } from '../src/config-types';
 import type {
   ContractSourceDiagnostic,
   ContractSourceFormat,
@@ -22,7 +22,7 @@ const mockHook = {
   id: 'sql',
   generateStorageType: () => '{}',
   generateModelStorageType: () => '{}',
-  getFamilyImports: () => [] as string[],
+  getFamilyImports: () => [],
   getFamilyTypeAliases: () => '',
   getTypeMapsExpression: () => 'never',
   getContractWrapper: (base: string, tm: string) =>
@@ -47,6 +47,7 @@ const postgresTargetDescriptor: ControlTargetDescriptor<'sql', 'postgres'> = {
   id: 'postgres',
   familyId: 'sql',
   targetId: 'postgres',
+  defaultNamespaceId: 'public',
   contractSerializer: {
     deserializeContract: (json) => json as never,
     serializeContract: (contract) => contract as never,
@@ -97,7 +98,7 @@ const postgresExtensionDescriptor: ControlExtensionDescriptor<'sql', 'postgres'>
 };
 
 test('accepts compatible control descriptors', () => {
-  const config: PrismaNextConfig<'sql', 'postgres'> = {
+  const config: PrismaConfig<'sql', 'postgres'> = {
     family: sqlFamilyDescriptor,
     target: postgresTargetDescriptor,
     adapter: postgresAdapterDescriptor,
@@ -106,11 +107,11 @@ test('accepts compatible control descriptors', () => {
   };
 
   const result = defineConfig(config);
-  expectTypeOf(result).toExtend<PrismaNextConfig<'sql', 'postgres'>>();
+  expectTypeOf(result).toExtend<PrismaConfig<'sql', 'postgres'>>();
 });
 
 test('accepts contract source providers with declared inputs', () => {
-  const config: PrismaNextConfig<'sql', 'postgres'> = {
+  const config: PrismaConfig<'sql', 'postgres'> = {
     family: sqlFamilyDescriptor,
     target: postgresTargetDescriptor,
     adapter: postgresAdapterDescriptor,
@@ -160,32 +161,8 @@ test('a contract source is PSL or TypeScript, and nothing else', () => {
   void other;
 });
 
-test('carries an optional formatter section', () => {
-  const config: PrismaNextConfig<'sql', 'postgres'> = {
-    family: sqlFamilyDescriptor,
-    target: postgresTargetDescriptor,
-    adapter: postgresAdapterDescriptor,
-    formatter: { indent: 'tab', newline: 'CRLF' },
-  };
-
-  const result = defineConfig(config);
-  expectTypeOf(result.formatter).toEqualTypeOf<FormatterConfig | undefined>();
-  expectTypeOf<FormatterConfig['indent']>().toEqualTypeOf<number | 'tab' | undefined>();
-  expectTypeOf<FormatterConfig['newline']>().toEqualTypeOf<'LF' | 'CRLF' | undefined>();
-});
-
-test('omits the formatter section when absent', () => {
-  const config: PrismaNextConfig<'sql', 'postgres'> = {
-    family: sqlFamilyDescriptor,
-    target: postgresTargetDescriptor,
-    adapter: postgresAdapterDescriptor,
-  };
-
-  expectTypeOf(config.formatter).toEqualTypeOf<FormatterConfig | undefined>();
-});
-
 test('rejects an invalid newline literal in the formatter section', () => {
-  const config: PrismaNextConfig<'sql', 'postgres'> = {
+  const config: PrismaConfig<'sql', 'postgres'> = {
     family: sqlFamilyDescriptor,
     target: postgresTargetDescriptor,
     adapter: postgresAdapterDescriptor,
@@ -203,6 +180,7 @@ test('rejects mismatched target in target descriptor', () => {
     id: 'mysql',
     familyId: 'sql',
     targetId: 'mysql',
+    defaultNamespaceId: 'public',
     contractSerializer: {
       deserializeContract: (json) => json as never,
       serializeContract: (contract) => contract as never,
@@ -213,7 +191,7 @@ test('rejects mismatched target in target descriptor', () => {
     }),
   };
 
-  const config: PrismaNextConfig<'sql', 'postgres'> = {
+  const config: PrismaConfig<'sql', 'postgres'> = {
     family: sqlFamilyDescriptor,
     // @ts-expect-error targetId mismatch
     target: mysqlTargetDescriptor,
@@ -236,7 +214,7 @@ test('rejects mismatched target in adapter descriptor', () => {
     }),
   };
 
-  const config: PrismaNextConfig<'sql', 'postgres'> = {
+  const config: PrismaConfig<'sql', 'postgres'> = {
     family: sqlFamilyDescriptor,
     target: postgresTargetDescriptor,
     // @ts-expect-error targetId mismatch

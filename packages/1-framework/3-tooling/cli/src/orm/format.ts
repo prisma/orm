@@ -4,6 +4,7 @@ import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
 import type { FormatOperationResult } from '../control-api/operations/format';
 import { executeFormat } from '../control-api/operations/format';
+import { valueLines } from './data-lines';
 import { defineOrmCommand } from './define-command';
 import { normalizeError } from './normalize-error';
 
@@ -19,7 +20,8 @@ function formattedBlock(path: string, cwd: string): Block {
 
 function formatPresentations(document: FormatOperationResult, cwd: string): Presentations {
   return {
-    stdout: () => [],
+    stdout: () =>
+      document.formatted ? valueLines(document.paths.map((path) => relative(cwd, path))) : [],
     next: () => [],
     human: (): readonly Block[] =>
       document.formatted

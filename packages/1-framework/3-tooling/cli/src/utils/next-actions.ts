@@ -9,7 +9,12 @@ export function runCommandAction(label: string, command: string): NextAction {
   return { kind: 'run-command', label, command };
 }
 
-/** Advice the user acts on themselves — there is no command to run. */
+/** Advice the user carries out or decides on themselves, such as changing data in the database or choosing between plans; it has no command to run and edits no file. */
 export function chooseAction(label: string): NextAction {
   return { kind: 'user-choice', label };
+}
+
+/** Advice that changes a file before anything runs again. */
+export function editFileAction(label: string): NextAction {
+  return { kind: 'edit-file', label };
 }

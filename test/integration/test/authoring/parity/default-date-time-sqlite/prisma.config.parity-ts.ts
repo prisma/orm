@@ -5,6 +5,7 @@ import sql from '@internal/family-sql/control';
 import { typescriptContract } from '@internal/sql-contract-ts/config-types';
 import sqlite from '@internal/target-sqlite/control';
 import { definePrismaConfig } from '@prisma/cli-engine';
+import { workspaceTypesModule } from '@repo/test-utils';
 import { contract } from './contract';
 import { extensions } from './packs';
 
@@ -15,6 +16,9 @@ export default definePrismaConfig({
     adapter: sqliteAdapter,
     driver: sqliteDriver,
     extensions,
-    contract: typescriptContract(contract, 'output/contract.json'),
+    contract: {
+      ...typescriptContract(contract, 'output/contract.json'),
+      typesModule: workspaceTypesModule.sqlite,
+    },
   }),
 });

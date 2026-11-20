@@ -1,7 +1,7 @@
 import { normalize } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { expandContractInputs } from '@internal/config-loader';
-import { isPrismaNextSchema } from '@internal/psl-parser';
+import { isPrisma8Schema } from '@internal/psl-parser';
 
 export interface SchemaInputConfig {
   readonly contract?: {
@@ -40,7 +40,7 @@ export async function resolveSchemaInputs(
       return false;
     }
     const text = readText(uri);
-    return text !== undefined && isPrismaNextSchema(text);
+    return text !== undefined && isPrisma8Schema(text);
   }
 
   return {

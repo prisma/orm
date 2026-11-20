@@ -443,17 +443,17 @@ function findOffendingFlag(input: readonly string[]): string {
 }
 
 /**
- * Write a `CliStructuredError` envelope to the given stream. Format
- * matches the legacy hand-rolled writer (`message: why`) so the rest of
- * the project's error rendering stays consistent across surfaces. The
+ * Write a `CliStructuredError` envelope to the given stream: the code and
+ * summary, then the why when it says more than the summary, then the fix. The
  * full PN code (`PN-<domain>-<code>`) is included so consumers can
  * grep for stable identifiers.
  */
 function writeStructuredError(stream: MigrationCliWritable, err: CliStructuredError): void {
   const envelope = err.toEnvelope();
-  const why = envelope.why ?? envelope.summary;
+  const why =
+    envelope.why === undefined || envelope.why === envelope.summary ? '' : `\n${envelope.why}`;
   const fix = envelope.fix ? `\n${envelope.fix}` : '';
-  stream.write(`${envelope.code}: ${envelope.summary}\n${why}${fix}\n`);
+  stream.write(`${envelope.code}: ${envelope.summary}${why}${fix}\n`);
 }
 
 /**

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, realColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, realColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -19,7 +19,7 @@ const sqlFloat = { codecId: 'sql/float@1' } as const;
 
 const Point = model('Point', {
   fields: {
-    id: field.column(integerColumn).id(),
+    id: field.column(integerNumberColumn).id(),
     real: field.column(realColumn).optional(),
     sqlFloat: field.column(sqlFloat).column('sql_float').optional(),
   },

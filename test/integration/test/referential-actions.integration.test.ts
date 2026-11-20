@@ -406,7 +406,6 @@ describe('referential actions integration', () => {
             indexes: [constraints.index([cols.userId])],
             foreignKeys: [
               constraints.foreignKey(cols.userId, User.refs.id, {
-                onDelete: 'cascade',
                 onUpdate: 'restrict',
               }),
             ],
@@ -444,11 +443,13 @@ describe('referential actions integration', () => {
             });
 
             expect(result.ok).toBe(false);
-            expect(result.schema.issues).toContainEqual(
+            expect(result.schema.issues).toEqual([
               expect.objectContaining({
                 path: ['database', 'public', 'post', 'foreign-key:userId->public.user(id)'],
+                expected: expect.objectContaining({ onUpdate: 'restrict' }),
+                actual: expect.objectContaining({ onUpdate: 'cascade' }),
               }),
-            );
+            ]);
           } finally {
             await driver.close();
           }

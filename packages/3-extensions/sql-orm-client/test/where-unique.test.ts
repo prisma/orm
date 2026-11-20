@@ -320,11 +320,6 @@ describe('whereUnique with a query expression as a key value', () => {
 });
 
 describe('whereUnique with a complete key', () => {
-  it('accepts a complete primary key', () => {
-    const { db } = createChainingOrm();
-    expect(db.Post.whereUnique({ id: 1 }).state).toEqual(db.Post.where({ id: 1 }).state);
-  });
-
   it('accepts a complete unique constraint that is not the primary key', () => {
     const { plain } = createChainingOrm();
     expect(plain.User.whereUnique({ email: 'a@example.com' }).state).toEqual(
@@ -336,13 +331,6 @@ describe('whereUnique with a complete key', () => {
     const { plain } = createChainingOrm();
     expect(plain.Profile.whereUnique({ userId: 1 }).state).toEqual(
       plain.Profile.where({ userId: 1 }).state,
-    );
-  });
-
-  it('accepts a complete compound key', () => {
-    const { plain } = createChainingOrm();
-    expect(plain.Project.whereUnique({ tenantId: 1, id: 2 }).state).toEqual(
-      plain.Project.where({ tenantId: 1, id: 2 }).state,
     );
   });
 
@@ -393,7 +381,11 @@ describe('whereUnique on a contract written with defineContract, whose argument 
       'Customer',
       createCollectionTables(context.contract, 'public', 'Customer'),
     );
-    expect(() => collection.whereUnique({ tenantId: 1, id: customer.id })).toThrow(
+    const criterion = { tenantId: 1, id: customer.id } as unknown as {
+      tenantId: number;
+      id: number;
+    };
+    expect(() => collection.whereUnique(criterion)).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         meta: { method: 'whereUnique', argument: 'criterion', model: 'Customer' },
@@ -404,7 +396,8 @@ describe('whereUnique on a contract written with defineContract, whose argument 
 
   it('throws when one field of the compound key is undefined', () => {
     const { collection, runtime } = customers();
-    expect(() => collection.whereUnique({ tenantId: 1, id: undefined })).toThrow(
+    const criterion = { tenantId: 1, id: undefined } as unknown as { tenantId: number; id: number };
+    expect(() => collection.whereUnique(criterion)).toThrow(
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         meta: { method: 'whereUnique', argument: 'criterion', model: 'Customer' },

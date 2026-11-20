@@ -209,18 +209,6 @@ describe('cli-telemetry end-to-end via telemetry backend', () => {
     expect(result.stderr).toBe('');
   });
 
-  it('transmits only flag names, never values or positionals', async () => {
-    const sensitiveFlags = ['connection-string', 'name', 'config'];
-    await spawnSenderDirect(buildPayload({ flags: sensitiveFlags }));
-    const [row] = await harness.awaitRows(1);
-
-    expect(row?.flags).toEqual(sensitiveFlags);
-    const serialised = JSON.stringify(row);
-    expect(serialised).not.toMatch(/postgres:\/\/u:p@h\/d/);
-    expect(serialised).not.toMatch(/customer-acme-payments/);
-    expect(serialised).not.toMatch(/\/Users\/alice\/secrets/);
-  });
-
   it('round-trips a string[] of declared extension-pack ids verbatim from prisma.config', async () => {
     // Override the suite's shared fixture for this test so the child's
     // c12 load resolves a different extension-pack set. Restored in

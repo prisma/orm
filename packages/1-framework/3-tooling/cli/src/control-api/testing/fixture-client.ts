@@ -126,7 +126,7 @@ export function defaultControlClientFixtures(): ControlClientFixtures {
     mode: 'apply' as const,
     appliedStatements: [],
     dataLoss: [],
-    accessWidening: [],
+    accessChanges: [],
     temporaryValues: [],
     plan: { operations: [fixtureOperation] },
     destination: contract,
@@ -333,7 +333,7 @@ class FixtureControlClientImpl implements FixtureControlClient {
     return this.record('toSchemaView', schemaIR, this.fixtures.toSchemaView);
   }
 
-  inferPslContract(schemaIR: unknown): PslDocumentAst | undefined {
+  async inferPslContract(schemaIR: unknown): Promise<PslDocumentAst | undefined> {
     return this.record('inferPslContract', schemaIR, this.fixtures.inferPslContract);
   }
 

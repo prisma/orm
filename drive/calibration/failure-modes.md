@@ -315,7 +315,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 - Reviewers grep their diff for self-acknowledgment vocabulary as part of the review pass. Any hit is a must-fix finding regardless of the rest of the diff.
 - Briefs that authorise "Option A: add field X to layer Y" must reference the architectural pattern the addition is consistent with (or admit it isn't). If the implementer needs to acknowledge a violation to comply, the brief picked the wrong option.
 
-**Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D1. Implementer added `TableSource.schema?: string` to the generic SQL core (`packages/2-sql/4-lanes/relational-core/src/ast/types.ts`) with an inline comment explaining the addition was a Postgres-only concept living on a shared base. Both implementer and reviewer (subagent) shipped it green. Operator caught at PR #712 review with *"You even added a comment explaining the layering violation."* Brief root cause is F17 (Option A was authorised at orchestrator level because Slice 1 had `PostgresCreateTable.schema` — but Slice 1's shape was a *target-contributed subclass*, the parallel was wrong).
+**Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D1. Implementer added `TableSource.schema?: string` to the generic SQL core (`packages/2-sql-family/4-lanes/relational-core/src/ast/types.ts`) with an inline comment explaining the addition was a Postgres-only concept living on a shared base. Both implementer and reviewer (subagent) shipped it green. Operator caught at PR #712 review with *"You even added a comment explaining the layering violation."* Brief root cause is F17 (Option A was authorised at orchestrator level because Slice 1 had `PostgresCreateTable.schema` — but Slice 1's shape was a *target-contributed subclass*, the parallel was wrong).
 
 ### F17. Dispatch brief frames the win as mechanics; implementer + reviewer ship wrong-shape work that satisfies it
 
@@ -355,7 +355,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 - 10–20 lines of "duplicated" orchestration between two adapters is the right kind of duplication: it's the cost of giving each adapter end-to-end control, which is what the adapter pattern exists for.
 - Symmetry check: if the *write* side of the same family owns its operations end-to-end, the *read* side must too. Cross-family symmetry (SQL ↔ Mongo) is also a check — if Mongo owns `readMarker` end-to-end and SQL routes through a shared orchestrator, the SQL side is wrong-shaped.
 
-**Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D3. `readMarkerResult(queryable, shape)` lived in `packages/2-sql/9-family/src/core/verify.ts`; each adapter exported a `MarkerReadShape` (`tableProbe`, `selectRow`, optional `decodeRow`) of type `MarkerStatement` (`{sql, params}`). The write-side SPI in the same slice (D1/D2) correctly owned `initMarker`/`updateMarker`/`writeLedgerEntry` end-to-end in each adapter — the asymmetry was the giveaway. Brief-framing root cause is F17 (the D3 brief said *"one read home + one parser"*).
+**Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D3. `readMarkerResult(queryable, shape)` lived in `packages/2-sql-family/9-family/src/core/verify.ts`; each adapter exported a `MarkerReadShape` (`tableProbe`, `selectRow`, optional `decodeRow`) of type `MarkerStatement` (`{sql, params}`). The write-side SPI in the same slice (D1/D2) correctly owned `initMarker`/`updateMarker`/`writeLedgerEntry` end-to-end in each adapter — the asymmetry was the giveaway. Brief-framing root cause is F17 (the D3 brief said *"one read home + one parser"*).
 
 ### F19. Single-primitive collapse changes semantics for some callers but not others
 
@@ -436,6 +436,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 - Reviewer DoR for any dispatch that involves verifying behaviour against a different ref ("is this failure pre-existing on `origin/main`?", "does this regression reproduce at the merge-base?"): use **`git worktree add ../tmp-<dispatch>-verify <ref>`** to create a sibling tree, run there, then `git worktree remove ../tmp-<dispatch>-verify`. Never `git stash` to swap working states.
 - Reviewer briefs MUST include the rule: *"Do NOT run `git stash` / `git stash pop` in this worktree or any other. Stash is global to the repository."* Add to the boilerplate of every review brief that involves an integration / e2e gate. The rule is in `drive/calibration/failure-modes.md` § F22; briefs link there rather than restating the full rationale.
 - If the reviewer has already popped a stash before this is caught: do not revert blindly. Capture the popped diff (`git diff` from a clean tree post-pop) and surface it to the operator with the message "I popped stash@{0} which appears to be unrelated to this worktree — diff attached, dangling-commit-recoverable via `git fsck --no-reflogs --unreachable` in <suspected-worktree>". Recovery is operator-led, not reviewer-led.
+- The same holds for `git checkout` or `git switch` to another commit in a worktree another agent is using: the working tree is shared, so the implementer or orchestrator then builds and tests the wrong code. A reviewer that needs another commit uses `git worktree add`, or reads files with `git show <ref>:<path>`. (2026-10-20, raw-columns: a reviewer checked out another commit in the shared worktree during a review.)
 - Implementer / orchestrator preflight: if you're about to dispatch a reviewer whose checks may include "verify against base", mention `git worktree add` as the prescribed mechanism in the brief. Do not assume the reviewer remembers F22.
 
 **Reference incident.** 2026-06-03, slice `sql-marker-ops-through-adapter` (TML-2753), D8 R1 review. Reviewer (`claude-opus-4-7-thinking-high`) hit a stale-`dist` typecheck red post-`origin/main`-merge, ran `git stash` (no-op — tree was clean) then `git stash pop`, which popped `stash@{0}` from the unrelated `tml-2812-render-polish-and-ledger-tests` worktree (message: `d5-wip-2`). The pop applied cleanly because changes were textually conflict-free; reviewer reverted what they saw in the D8 tree (`git checkout --` + `rm -rf` on new untracked dirs), but the original `d5-wip-2` stash entry was permanently removed from the operator's `git stash list`. Recovery path: `git fsck --no-reflogs --unreachable | rg 'dangling commit'` in the `tml-2812-…` worktree. Subsequent reviewer (D9 R1) honored the new rule via `git worktree add ../tmp-d9-verify <merge-base>` for the pre-existing-flake verification; no incident.
@@ -510,7 +511,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 - Response protocol is class-first: name the class → sweep the entire PR diff for it (grep + reading, including fields added to pre-existing types) → fix every instance in one round → the reply states the sweep (searched what, fixed what, excluded what and why). See [`.agents/rules/fix-the-class-not-the-instance.mdc`](../../.agents/rules/fix-the-class-not-the-instance.mdc).
 - Grandfathering never covers new surface: a type/field/hook the PR authored must be clean even when its pre-existing neighbors are not.
 - Reviewer side: findings should name the class explicitly so the responder can sweep; review-pass briefs must not frame the design as settled (a comment invalidating a design decision invalidates every consequence of it — chase them).
-- Mechanical backstop where the class is vocabulary-shaped: `pnpm lint:framework-vocabulary` (committed high-water-mark threshold; PR #918).
+- Mechanical backstop where the class is vocabulary-shaped: the vocabulary check in `pnpm lint:ratchets`, which compares against a committed threshold (PR #918).
 
 **Reference incident.** 2026-07-02→06, native-postgres-enums (PR #906). Round 1: `CodecRef.nativeType` flagged ("SQL-specific, cannot live in the framework domain") — fixed by moving the cast to a codec hook placed on the *framework* `CodecDescriptor`. Round 2: the hook flagged ("NATIVETYPE CANNOT BE REFERENCED IN THE FRAMEWORK DOMAIN") — relocated, but a new framework type (`AuthoringEntityRefResolution`) kept `nativeType` + a `valueSetEnforcement` strategy string-enum under a grandfathering argument. Round 3: both flagged, plus derivation logic (`deriveValueSet`) in framework core. Three rounds, one class. Operator intervention produced the class-sweep rule, the vocabulary ratchet, and this entry.
 
@@ -745,7 +746,7 @@ Per-repo stop conditions beyond the canonical ones:
 - A self-consistent comparison such as `db verify` after infer is not evidence that a value is correct. It shows only that the parser agrees with itself.
 - Sibling of F34: that entry covers SQL the code writes; this one covers text the database writes and the code reads.
 
-**Reference incident.** prisma/orm#30436 (2026-09-28, brace-form Postgres array defaults infer as literal lists). `parseArrayLiteralBody` in `packages/3-targets/3-targets/postgres/src/core/default-normalizer.ts` gained a reading rule per element type for unquoted elements. The Drive loop ran one implementer and one reviewer; two rounds closed SATISFIED after the reviewer read the diff and tests and ran the package suite. A `drive-code-review` pass after PR-open, with the principal-engineer reviewer allowed to run node scripts against the built dist and to create tables on PGlite, found three wrong-value defects: the SQL `''` escape was never undone on the array body, so a text element `a'b`, stored by Postgres as `'{a''b}'::text[]`, read back as `a''b`, infer printed it, `db verify` passed because both sides read the same wrong value, and a database created from the emitted contract would store the wrong string; `'{(3,4),(1,2)}'::box[]` was split on commas, because `box` is the one core type whose array delimiter is `;`; and `'{a\,b}'::text[]` read as two elements. Fixed in `3912519a86`, `d6bf888a37` and `8a89d6d3c7`.
+**Reference incident.** prisma/orm#30436 (2026-09-28, brace-form Postgres array defaults infer as literal lists). `parseArrayLiteralBody` in `packages/3-targets/postgres/1-target/src/core/default-normalizer.ts` gained a reading rule per element type for unquoted elements. The Drive loop ran one implementer and one reviewer; two rounds closed SATISFIED after the reviewer read the diff and tests and ran the package suite. A `drive-code-review` pass after PR-open, with the principal-engineer reviewer allowed to run node scripts against the built dist and to create tables on PGlite, found three wrong-value defects: the SQL `''` escape was never undone on the array body, so a text element `a'b`, stored by Postgres as `'{a''b}'::text[]`, read back as `a''b`, infer printed it, `db verify` passed because both sides read the same wrong value, and a database created from the emitted contract would store the wrong string; `'{(3,4),(1,2)}'::box[]` was split on commas, because `box` is the one core type whose array delimiter is `;`; and `'{a\,b}'::text[]` read as two elements. Fixed in `3912519a86`, `d6bf888a37` and `8a89d6d3c7`.
 
 ### F37. Stacked PRs that ship in one release each write an upgrade entry relative to the previous slice, so the release guide describes states users never had
 
@@ -854,7 +855,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Root cause.** Each stacked branch merges its base's branch history, and every review round and `main` merge adds commits. The squash merge of the base hides that shared history from git, and the DCO app reads at most 250 commits through the REST API.
 
-**Mitigation.** Build each slice from `main` after the previous slice merges, not on the previous slice's branch. When a stacked PR must catch up with a squash-merged base, merge the base branch's final commit first (shared history, few conflicts), then `main`. If a PR passes 250 commits anyway, ask the operator before reducing it: the fix is a rebase onto `main` as one commit and a force-push, which only the operator can authorize.
+**Mitigation.** Build each slice from `main` after the previous slice merges, not on the previous slice's branch. When a stacked PR must catch up with a squash-merged base, merge the base branch's final commit first (shared history, few conflicts), then `main`. For each file that still conflicts with `main`, check whether `main` changed it after the base's squash merge (`git diff <base's final commit> <main> -- <file>`). If not, the stacked branch's side is right, because it already holds the base's final version; resolve by hand only the files `main` changed since. (Added 2026-11, convenience types on other targets: 43 conflicts after a squash merge, only one of which `main` had changed.) If a PR passes 250 commits anyway, ask the operator before reducing it: the fix is a rebase onto `main` as one commit and a force-push, which only the operator can authorize.
 
 **Reference incident.** 2026-10-08 and 09, SQL expression literals slice 3 (prisma/orm#30558): stacked on 2b, it conflicted in 154 files after 2b's squash merge and reached 300 commits. DCO failed on every push until the operator had the branch rebased onto `main` as one commit.
 
@@ -867,6 +868,8 @@ Per-repo stop conditions beyond the canonical ones:
 **Mitigation.** A slice that adds or changes a committed contract fixture runs `PLANNER_GOLDEN_WRITE=1 pnpm --filter integration-tests test test/planner-golden` before queueing, reads the recorded DDL for the changed fixture (written in full to `wip/planner-golden/`), and commits every file the write changed under `test/integration/test/planner-golden/`: always `manifest.json`, and the fixture recordings in `fixtures/<target>/planned.golden.json` when the planner's output for those two fixture contracts changed.
 
 **Reference incident.** 2026-10-09, SQL expression literals slice 3 (prisma/orm#30558): review round 3 extended the PSL/TypeScript parity fixture, and the first queue run failed on its missing golden entry.
+
+**Retired 2026-10-19.** The data types completion project deleted the planner golden test and its `manifest.json`. Journeys now check that `db verify` is clean after a planned migration and names a column whose type changes, so a new contract fixture needs no recording. The two `planned.golden.json` files stay as fixtures that upgrade-instruction tests read; nothing rewrites them.
 
 ### F49. Guards, helpers and tests are written for inputs the public API cannot produce, then removed
 
@@ -886,3 +889,128 @@ Per-repo stop conditions beyond the canonical ones:
 - The orchestrator applies the same test to each review finding before accepting it.
 
 **Reference incident.** Cross-namespace inheritance, table-scope slice (prisma/orm#30646, 2026-10): four additions were written and then removed at the operator's direction: a check that `merge()` rejects a scope the package did not create; a planner helper that checked derived-table aliases against every `combine` branch scope; a rename pass for hand-built `where()` expressions in an aliased child; and a rejection of an include refinement that returns a collection it was not handed. The third slice (prisma/orm#30696) put the rule in the plan's standing rules and in the reviewer prompt, and the pattern did not recur.
+
+### F50. Rules are moved into one place, and an invariant that a derived artefact relies on was never a rule
+
+**Symptom.** A refactor gathers every existing check into one builder and proves each source applies them the same way. Review then finds inputs that build without error and produce a broken artefact, because the artefact assumes something no check ever enforced. The defect is usually on `main` too.
+
+**Root cause.** The spec inventoried the rules that existed. It did not list the artefacts the builder derives (a collection validator, an index set, a storage hash) and the input shapes each one assumes. So the parity suite proved the sources agree, not that what they agree on is valid.
+
+**Detection signal.**
+
+- An artefact is derived from part of the input, such as a MongoDB collection validator written from the base model while variants share the collection.
+- A review finding says "this builds, but the database refuses it at run time".
+
+**Mitigation.**
+
+- When a spec moves rules into one place, it also lists each derived artefact and the assumptions it makes about the input, and names the rule or test that enforces each assumption.
+- The parity suite gets a case per assumption, accepted and refused, not only a case per existing rule.
+
+**Reference incident.** One MongoDB definition and builder (prisma/orm#30846, 2026-10): the principal-engineer review found, in two rounds, that a variant field could be stored under a name its base used, and that a variant could restate a base field with another type or stored name. Both built, and MongoDB then refused the variant's documents, because the validator is written from the base. Both were on `main` before the refactor.
+
+### F51. A merge of `main` that resolves a large overlapping change goes to review as if it were not new work
+
+**Symptom.** A branch that review has already passed merges `main`, and `main` has a change that rewrote the same code. The merge resolves dozens of conflicts with design choices of its own, such as which side's concept survives. The branch is then handed to the operator for review with no review round on the merge, and the next round finds many defects in it.
+
+**Root cause.** The slice DoD treats review as done once a round has passed, and a merge of `main` reads as routine upkeep. A conflict resolution that keeps one side's concept, rewrites the other side's new code to new names, or edits docs both sides changed is implementation work, and nothing in the DoD asks for it to be reviewed.
+
+**Detection signal.**
+
+- The merge commit touches more than a handful of conflicted files, or `git diff <main commit> <merge commit>` shows the branch editing code `main` just added.
+- The resolver's report contains decisions ("kept X only for Y", "moved Z into W").
+
+**Mitigation.** After a merge of `main` like this, run a review round on what the branch adds on top of `main` (`git diff <main commit> <merge commit>`) before asking the operator to review, and fix its findings first.
+
+**Reference incident.** Convenience date and time types (prisma/orm#30847, 2026-10): the merge of the field-presets removal resolved 42 conflicted files and kept the `option` argument kind for type choices only. The operator had to ask whether it had been reviewed; the round that followed found twelve defects, including refusal messages that did not parse and upgrade text written into a released guide.
+
+### F52. A release bump archives pending upgrade instructions, and the branch's later edits land in the released copy
+
+**Symptom.** A branch edits a pending upgrade instruction that another change created. A release then moves the pending instructions into `upgrade-instructions/releases/<from>-to-<to>/sources/`. Merging `main` carries the branch's edits into the released sources, which now describe a later release and disagree with the assembled guide that shipped.
+
+**Root cause.** Git follows the rename, so the branch's edit applies cleanly to the moved file. Nothing checks that released sources stay as they shipped.
+
+**Detection signal.** After merging a release bump, `git diff <release commit> HEAD -- upgrade-instructions/releases/` is not empty.
+
+**Mitigation.** After merging a release bump, run that diff. Restore any released file the branch changed (`git checkout <release commit> -- <path>`) and put the branch's guidance in its own pending instruction, with a sentence for readers who followed the released guide.
+
+**Reference incident.** Convenience date and time types (prisma/orm#30847, 2026-10): the 8.0.0-rc.21 bump archived `remove-field-presets` and `prisma7-now-default-on-create` while the branch was rewriting them; the code review found the released sources describing rc.22 behaviour.
+
+### F53. A name changes meaning, and a hand-written source that `fixtures:check` does not emit keeps the old meaning
+
+**Symptom.** A change gives an existing type name a new meaning (here `DateTime`, from a Temporal value to a JavaScript `Date`) and rewrites every emitted fixture so no contract changes. `pnpm fixtures:check` passes. The merge queue then fails a test whose own PSL or TypeScript source is written inside a test fixture directory and emitted only by that test.
+
+**Root cause.** The rewrite was driven by the emitted fixtures `fixtures:check` knows about. Sources that a test emits at run time are not in that list, and PR CI skips the integration tests that read them.
+
+**Detection signal.** `git grep -n "<Name>" -- 'test/**/*.psl' 'test/**/*.prisma' 'test/**/*.ts' 'examples/**/*.prisma' 'examples/**/*.ts'` lists files the branch did not change.
+
+**Mitigation.** When a name changes meaning, grep every PSL and TypeScript source under `test/` and `examples/` for the name, rewrite each one that relied on the old meaning, and run the integration file that emits it before enabling auto-merge.
+
+**Reference incident.** Convenience date and time types (prisma/orm#30847, 2026-10): `cli.emit-command.test.ts` emits `fixtures/emit-command/schema.parity.psl`, which still wrote bare `DateTime` beside a TypeScript side written with the Temporal type; the queue dropped the PR on the hash mismatch.
+
+### F54. Auto-merge is on and the PR never enters the merge queue
+
+**Symptom.** An approved PR with auto-merge on sits for hours or days. `mergeQueueEntry` stays empty and nothing reports a failure.
+
+**Root cause.** Two states hold a PR out of the queue without failing anything. (1) A commit pushed while the PR is in the queue starts no PR CI; after the queue drops the PR, its head has no required checks, so `mergeStateStatus` is `BLOCKED` and auto-merge waits for checks that never start. (2) `main` moves and the PR conflicts (`mergeStateStatus: DIRTY`). A watch that waits only for "queued", "merged" or "failed" stays silent in both.
+
+**Detection signal.** `gh pr view <n> --json mergeStateStatus,statusCheckRollup` shows `BLOCKED` with no pending checks and no `CI (PR)` run on the head, or shows `DIRTY`.
+
+**Mitigation.** After turning auto-merge on, confirm within minutes that the head's `CI (PR)` run exists and is running, and later that `mergeQueueEntry` is set. A watch on an approved PR ends on `DIRTY`, `CONFLICTING`, and `BLOCKED` with no pending checks, as well as on queued, merged and failed. If the PR is `DIRTY`, merge `main` and resolve the conflict first: GitHub runs no PR workflows while a conflict exists. Push an empty signed commit only if the head still has no PR CI run after that. Do not push to a PR while it is queued; wait for it to merge or leave the queue.
+
+**Reference incident.** Convenience types on other targets, 2026-11: prisma/orm#30959 sat four days at `BLOCKED` after a fix pushed while queued, holding back the fix for a test that broke `main`; prisma/orm#30989 sat a day at `DIRTY` while a watch looked only for queued, merged or failed.
+
+### F55. A test reads every entry of a file other PRs change, and breaks `main` when one adds an entry of a kind it does not handle
+
+**Symptom.** After an unrelated PR or a release merges, a test in a folder your branch never touched fails in the merge queue for every PR, on `main` itself. Here: `Change temporal-polyfill-is-a-peer-dependency-of-mysql has no detection pattern`.
+
+**Root cause.** A test iterated every change in the compiled release upgrade guide and assumed each one used regular-expression detection (`matches`). The guide is written by many PRs and by the release; a MySQL change that detects with `contains` reached it only when the release compiled the pending notes. PR CI skips integration tests, so neither PR saw it.
+
+**Mitigation.** A test that reads every entry of a shared or generated file filters to the entries it is about, by the property it needs, instead of assuming every entry has it. When writing an entry of a new kind into such a file, grep the tests that read the whole file.
+
+**Reference incident.** Convenience types on other targets, 2026-11-06: the 8.0.0-rc.23 release compiled the guides, and `mongo-checks-required-extensions/detection.test.ts` failed on `main` for four days until prisma/orm#30959 filtered to changes with `matches`.
+
+### F56. A review finding removes a public type that the sibling family keeps, and the two families' interfaces drift apart
+
+**Symptom.** A system-design review calls a type an unneeded name and asks for its removal. The fix deletes it. Later someone asks whether the family's interface matches its sibling's, and it does not: the sibling's clients extend a type of the same role.
+
+**Root cause.** The reviewer judged the type inside one family. The repo copies the Postgres facade pattern on every family, so a public type that looks redundant in one family can be the counterpart of a type the other family's clients extend. Neither the review brief nor the fix compared the two.
+
+**Detection signal.** A finding or a fix deletes, renames or changes the meaning of an exported type in one family. `grep -rn "<TypeNameWithoutFamilyPrefix>" packages/2-sql-family packages/2-mongo-family packages/3-targets/postgres packages/3-targets/mongo --include='*.ts'` finds a type of the same role in the sibling, whichever family the change is in.
+
+**Mitigation.** Before accepting such a finding, find the sibling family's counterpart and what uses it. If the sibling's clients or runtime use the counterpart, keep the type and give it the sibling's role. Put the comparison in the review brief when the slice adds or changes a facade interface.
+
+**Reference incident.** MongoDB `prepare()`, 2026-11: the system-design review of prisma/orm#31054 asked to delete `MongoPrepareMember`, and the fix did. SQL clients extend `PrepareMember<TContract>`. The operator's question "is our API consistent with the SQL runtime's?" found the gap, and the type was restored in the client package before merge.
+
+### F57. A row in a project's register of open findings is marked "decided by a test" and no slice owns it
+
+**Symptom.** At close-out, a row of the project's list of findings reads "decided by test" or "to be checked on a live server". No slice ran that test. Running it shows a user-facing call that fails.
+
+**Root cause.** The row was written when the finding was noticed, as a question for later. The plan's slices were cut from the spec, not from the register, so the question had no owner. Each slice's review looked at its own diff and never at the register.
+
+**Detection signal.** `grep -n -i "decided by\|to be checked\|to confirm\|open:" projects/<project>/<register>.md` returns a row whose state names no pull request, no commit and no issue.
+
+**Mitigation.** When a row is added to a project's register with a question in it, add the test that answers it to a named slice's plan in the same edit. At each slice's close, read the register and answer every open question that slice's code can answer.
+
+**Reference incident.** MySQL proof of concept, 2026-11: the coupling register's row on an `UPDATE` or `DELETE` whose filter reads the written table said "decided by test". Nobody ran it until close-out, where it showed that MySQL refuses every bulk write on a variant stored in its own table and every write filtered through a relation from a model to itself. The fix in the ORM client is a separate issue; MySQL refuses these writes with an error that says what to do.
+
+### F58. A rewrite that makes a write statement run passes every single-connection test and deadlocks under concurrent writes
+
+**Symptom.** A renderer rewrites a write so the database accepts it, for example by wrapping a table in a derived table. Golden SQL tests and live tests pass. Sixteen concurrent single-row writes through the ORM on a table of ten thousand rows fail with a deadlock on every run.
+
+**Root cause.** The rewrite changed what the statement locks: MySQL copies a derived table and takes shared locks on every row it copies. Every test ran one statement on one connection, where locks never conflict.
+
+**Mitigation.** When a dispatch changes the form of a write statement (adds a subquery, a derived table, a join or a lock clause), the reviewer brief grants an execution budget and names a concurrency probe: many concurrent single-row writes through the ORM, on a table large enough that the plan matters, at the isolation level the ORM really uses for that call, on each database the change reaches. Read how the ORM opens transactions for the call before choosing the level.
+
+**Reference incident.** MySQL proof of concept, 2026-11: a derived-table rewrite for writes that read their own table was built, passed its tests, and was withdrawn after a principal-engineer review ran the probe. It deadlocked for `DELETE` at READ COMMITTED too.
+
+### F59. A user-facing message describes the problem through our function names or internals
+
+**Symptom.** An error reads "this defineConfig is for target "mysql"", "its defineContract came from another target's contract-builder entry", or "MySQL lowering: a parameter carries codecId …". The user has a config file and a contract file; they have no "defineConfig" and have never heard of lowering.
+
+**Root cause.** The message was written from inside the code that raises it, using the names in scope there. Reviews checked that the message was true and tested, not whether a user could act on it. Six review rounds and an automated reviewer passed the first example; the operator caught it after approving.
+
+**Detection signal.** In the diff's user-facing strings (`summary`, `why`, `fix`, diagnostics, and docs that quote them): a function name used as a noun the user owns ("this X", "its X", "the X of"), or an internal noun (lowering, adapter, component, provider, registry, descriptor, an internal id such as `__unbound__`).
+
+**Mitigation.** Every implementer and reviewer brief for a dispatch that adds or changes a user-facing message says: read each message as a user who has never seen our source; it must say what the user has, what is wrong with it, and what to change. Naming an API inside an instruction ("Import defineContract from X") is fine. If no user action reaches a message, it is an internal error and needs no rewording.
+
+**Reference incident.** MySQL proof of concept, 2026-11: after the operator rejected one message on prisma/orm#31091, a scan found the same fault in fourteen more, five from that pull request and nine from the project's earlier ones.

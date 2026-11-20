@@ -60,7 +60,7 @@ The cache key is `${codecId}:${canonicalizeJson(typeParams)}`, where `canonicali
 
 ### `forColumn` survives as a build-time helper
 
-`descriptors.codecRefForColumn(table, column)` derives the canonical `CodecRef` from contract storage (resolving `typeRef` entries to their `storage.types` `typeParams`). The existing `forColumn(table, column): Codec` wrapper is retained as a convenience API; internally it calls `forCodecRef(codecRefForColumn(table, column))`. The runtime encode/decode hot path reads `node.codec` directly and never calls `forColumn`.
+`descriptors.codecRefForColumn(table, column)` derives the canonical `CodecRef` from contract storage (resolving `typeRef` entries to their `storage.types` `typeParams`; amended by [ADR 275](ADR%20275%20-%20Client%20generators%20are%20field%20attributes%2C%20and%20a%20type%20alias%20is%20expanded%20into%20each%20column.md) on 2026-10-21: contracts store no `typeRef`, so it reads the column's own `codecId`, `typeParams` and list-ness). The existing `forColumn(table, column): Codec` wrapper is retained as a convenience API; internally it calls `forCodecRef(codecRefForColumn(table, column))`. The runtime encode/decode hot path reads `node.codec` directly and never calls `forColumn`.
 
 ### `CodecRef` is a build-time concept; never appears in `ops.json`
 
@@ -72,7 +72,7 @@ By the time anything reaches `ops.json`, all codec resolution has already happen
 
 ### Honest descriptor signatures
 
-With the triangulation removed, descriptors no longer need to accept `undefined` params as a proxy for "no params known". `PgVectorDescriptor.factory(params: VectorParams)` reads `params.length` directly; the defensive `(params as VectorParams | undefined)?.length` cast is deleted. `PgVectorCodec.length` narrows from `number | undefined` to `number`. The undimensioned `vectorColumn` helper (which relied on the representative-codec hack) is retired; users use `vector(N)` exclusively.
+With the triangulation removed, descriptors no longer need to accept `undefined` params as a proxy for "no params known". `PgVectorDescriptor.factory(params: VectorParams)` reads `params.length` directly; the defensive `(params as VectorParams | undefined)?.length` cast is deleted. `VectorParams` is `{ length?: number }`: `vector(N)` declares `{ length: N }`, and `vector()` declares `{}`, which `paramsSchema` accepts as a vector of any length. A contract stores no type parameters for a `vector()` column, so its `CodecRef` carries none; the resolver validates the absent parameters as `{}` and calls `factory({})`. Every factory call receives parameters `paramsSchema` has validated. A `vector(N)` codec accepts exactly N finite numbers and a `vector()` codec 1 to 16,000, both on the wire and in contract JSON values.
 
 ## Consequences
 
@@ -88,7 +88,7 @@ With the triangulation removed, descriptors no longer need to accept `undefined`
 
 - **Builder construction sites must stamp `codec`.** Every column-bound `ParamRef` and `ProjectionItem` construction site calls `codecRefForColumn` at build time. This is a one-time cost per node (previously the builder was already calling `forColumn` to derive `refs`), but the call is now explicit and required rather than optional.
 - **Refs-less raw SQL paths require explicit codec.** `sql.value(42)` without an explicit codec argument fails at build time. Default-codec ergonomics (e.g. `defaultCodecForJsType` on the family adapter) are out of scope; tracked separately.
-- **Breaking: `vectorColumn` retired.** The undimensioned vector column helper is removed. Users migrate to `vector(N)`. This is acceptable because the undimensioned form only worked due to the representative-codec hack, and any future parameterized codec whose wire format depends on its params would have silently produced malformed output.
+- **An undimensioned vector checks only the range of its length.** A `vector()` column (PostgreSQL `vector`, TypeScript `number[]`) and a `vector(N)` column (`vector(N)`, `Vector<N>`) resolve to separate codecs, so a query that uses both binds each value to its own column's codec. Rows of a `vector()` column can differ in length, and PostgreSQL's distance operators still require two vectors of equal length.
 
 ## References
 

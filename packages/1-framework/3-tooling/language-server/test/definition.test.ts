@@ -148,7 +148,7 @@ function project(files: Readonly<Record<string, string>>) {
   if (first === undefined) throw new Error('no files');
   const sources = first.sources.merge(...rest.map((file) => file.sources));
   const documents = parsed.map((file) => file.document);
-  const { symbolTable } = buildSymbolTable({ documents, sources });
+  const { symbolTable } = buildSymbolTable({ documents, sources, defaultNamespaceId: 'public' });
   const binder = testBinder({
     sources,
     symbolTable,

@@ -5,6 +5,7 @@ import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
+  expectStrictVerifyIssues,
   type JourneyContext,
   parseJsonOutput,
   runContractEmit,
@@ -14,7 +15,7 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
-import { expectVerifiesCleanAfterPull, readContractPsl } from './infer-roundtrip-fidelity/harness';
+import { readContractPsl } from './infer-roundtrip-fidelity/harness';
 
 withTempDir(({ createTempDir }) => {
   describe('Journey: contract infer and the backing index of each foreign key', () => {
@@ -164,7 +165,7 @@ withTempDir(({ createTempDir }) => {
           post_tags: [{ primaryKey: true }, undefined],
         });
 
-        await expectVerifiesCleanAfterPull(ctx, 'foreign key backing indexes');
+        await expectStrictVerifyIssues(ctx, 'foreign key backing indexes');
 
         const dryRun = await runDbUpdate(ctx, ['--dry-run', '--json']);
         expect(dryRun.exitCode, `db update --dry-run\n${stripAnsi(dryRun.stderr)}`).toBe(0);

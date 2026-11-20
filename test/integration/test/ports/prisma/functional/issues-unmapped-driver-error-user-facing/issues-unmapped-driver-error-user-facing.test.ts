@@ -129,7 +129,7 @@ describe('ports/prisma/functional/issues-unmapped-driver-error-user-facing', () 
           capabilities: { ...base.capabilities, returning: { enabled: true } },
         } as PortContract;
 
-        const db = postgres<PortContract>({ contract, url: connectionString, verifyMarker: false });
+        const db = postgres({ contract, url: connectionString, verifyMarker: false });
         const runtime = await db.connect();
         try {
           const error = await db.orm.public.User.upsert({

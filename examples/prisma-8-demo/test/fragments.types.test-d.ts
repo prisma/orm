@@ -1,5 +1,4 @@
-import { field } from '@prisma/orm-postgres/contract-builder';
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
+import { field, type } from '@prisma/orm-postgres/contract-builder';
 import {
   type CodecField,
   type CollectionRowOf,
@@ -8,19 +7,19 @@ import {
   orderByField,
 } from '@prisma/orm-postgres/orm-client';
 import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
+import type { Temporal } from 'temporal-spec';
 import { describe, expectTypeOf, test } from 'vitest';
-import { createOrmClient } from '../src/orm-client/client';
-import { createdSince, ownedBy, postSummary } from '../src/orm-client/fragments';
+import { createdBefore, createdSince, ownedBy, postSummary } from '../src/orm-client/fragments';
+import type { ormClientGetFilteredPosts } from '../src/orm-client/get-filtered-posts';
 import type { ormClientGetRecentPosts } from '../src/orm-client/get-recent-posts';
 import type { ormClientGetRecentUsers } from '../src/orm-client/get-recent-users';
 import type { Contract } from '../src/prisma/contract.d';
 import { db as dbFacade } from '../src/prisma/db';
 
-declare const runtime: Runtime;
 declare const since: Temporal.Instant;
 declare const orderBy: string;
 
-const db = createOrmClient(runtime);
+const db = dbFacade.orm.public;
 
 type TimestampCodec = 'pg/timestamptz-temporal@1';
 type CreatedAt = CodecField<Contract, TimestampCodec>;
@@ -59,6 +58,13 @@ describe('CodecField', () => {
     // @ts-expect-error Tag has no createdAt
     db.Tag.where(created);
   });
+
+  test('createdBefore fits every model with a createdAt timestamp', () => {
+    db.User.where(createdBefore(since));
+    db.Post.where(createdBefore(since));
+    // @ts-expect-error Tag has no createdAt
+    db.Tag.where(createdBefore(since));
+  });
 });
 
 describe('db.orm.fragment', () => {
@@ -80,12 +86,13 @@ describe('db.orm.fragment', () => {
     db.Task.with(ownedBy('u'));
     // @ts-expect-error User has no userId
     db.User.with(ownedBy('u'));
-    const titled = dbFacade.orm.fragment({ title: field.text() }, (rows) =>
+    const titled = dbFacade.orm.fragment({ title: field.column(type.String()) }, (rows) =>
       rows.where((r) => r.title.eq('x')),
     );
     db.Post.with(titled);
-    const nullableTitle = dbFacade.orm.fragment({ title: field.text().optional() }, (rows) =>
-      rows.limit(1),
+    const nullableTitle = dbFacade.orm.fragment(
+      { title: field.column(type.String()).optional() },
+      (rows) => rows.limit(1),
     );
     // @ts-expect-error Post.title is not nullable
     db.Post.with(nullableTitle);
@@ -128,5 +135,8 @@ describe('the demo queries', () => {
     type RecentUser = Awaited<ReturnType<typeof ormClientGetRecentUsers>>[number];
     expectTypeOf<RecentUser['posts']>().toEqualTypeOf<PostSummary[]>();
     expectTypeOf<RecentUser['email']>().toEqualTypeOf<string>();
+    expectTypeOf<Awaited<ReturnType<typeof ormClientGetFilteredPosts>>>().toEqualTypeOf<
+      PostSummary[]
+    >();
   });
 });

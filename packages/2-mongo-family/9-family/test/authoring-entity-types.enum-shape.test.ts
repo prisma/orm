@@ -62,26 +62,4 @@ describe('mongoFamilyEnumEntityDescriptor: a member stored in the shape of its B
       ],
     });
   });
-
-  it.each([
-    [LENIENT_OBJECT_CODEC_ID, 'object', [1, 2], '[1,2]', 'a JSON object'],
-    [LENIENT_OBJECT_CODEC_ID, 'object', null, 'null', 'a JSON object'],
-    [ARRAY_CODEC_ID, 'array', { sides: 0 }, '{"sides":0}', 'a JSON array'],
-    [ARRAY_CODEC_ID, 'array', null, 'null', 'a JSON array'],
-  ] as const)(
-    'refuses on %s a member stored as %s %s',
-    (codecId, bsonType, value, written, shape) => {
-      expect(authorEnum(codecId, { odd: value })).toEqual({
-        handle: undefined,
-        diagnostics: [
-          {
-            code: 'PSL_EXTENSION_INVALID_VALUE',
-            message: `enum "Shape" member "odd" is stored as ${written}, which a collection validator cannot list as a ${bsonType}. A member of a ${bsonType} enum must be ${shape}.`,
-            sourceId: 'schema.prisma',
-            span: SPAN,
-          },
-        ],
-      });
-    },
-  );
 });

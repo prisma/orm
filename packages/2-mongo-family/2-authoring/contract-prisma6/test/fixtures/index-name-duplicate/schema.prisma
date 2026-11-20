@@ -1,0 +1,22 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  email String
+  name  String
+
+  @@index([name(sort: Asc)])
+  @@index([name])
+  @@index([email], map: "by_contact")
+}
+
+model Contact {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  phone String
+
+  @@index([phone], map: "by_contact")
+  @@map("User")
+}

@@ -18,14 +18,7 @@ import {
 
 const pgText = { codecId: 'pg/text@1' } as const;
 
-const types = {
-  Email: {
-    kind: 'codec-instance',
-    codecId: 'pg/text@1',
-    dataType: 'pg/text',
-    typeParams: {},
-  },
-} as const;
+const Email = field.column(textColumn);
 
 const enums = {
   Role: enumType('Role', pgText, member('USER', 'USER'), member('ADMIN', 'ADMIN')),
@@ -34,7 +27,7 @@ const enums = {
 const User = model('User', {
   fields: {
     id: field.column(int4Column).default(autoincrement()).id(),
-    email: field.namedType(types.Email).unique(),
+    email: Email.unique(),
     role: field.namedType(enums.Role),
     createdAt: field.column(timestamptzTemporalColumn).default(now()),
     isActive: field.column(boolColumn).default(true),
@@ -65,7 +58,6 @@ const Post = model('Post', {
   }));
 
 export const contract = defineContract({
-  types,
   enums,
   models: {
     User,

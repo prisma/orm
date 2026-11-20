@@ -1,0 +1,7 @@
+// use prisma-8
+
+model Event {
+  id     Int     @id
+  seenAt TimeTemporal(3) @onUpdate(now())
+  @@map("event")
+}

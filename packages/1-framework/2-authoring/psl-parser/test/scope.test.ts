@@ -22,9 +22,10 @@ function scopesFor(schema: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   const contributed = contributedScope(contributedTypeScope(TYPE_CONSTRUCTORS));
-  const top = documentScope(symbolTable.topLevel, contributed);
+  const top = documentScope(symbolTable, contributed);
   return { symbolTable, contributed, top };
 }
 
@@ -50,7 +51,7 @@ const SCHEMA = [
 describe('a scope searches itself, then delegates to its parent', () => {
   it('answers from the namespace before the document', () => {
     const { symbolTable, top } = scopesFor(SCHEMA);
-    const app = symbolTable.topLevel.namespaces['app']!;
+    const app = symbolTable.namespaces['app']!;
     const scope = namespaceScope(app, top);
 
     expect(scope.lookup('Shared')).toEqual({
@@ -62,21 +63,20 @@ describe('a scope searches itself, then delegates to its parent', () => {
 
   it('reaches the document scope for a name the namespace does not declare', () => {
     const { symbolTable, top } = scopesFor(SCHEMA);
-    const app = symbolTable.topLevel.namespaces['app']!;
+    const app = symbolTable.namespaces['app']!;
     const scope = namespaceScope(app, top);
 
     expect(scope.lookup('Shared')?.kind).toBe('model');
-    expect(namespaceScope(symbolTable.topLevel.namespaces['other']!, top).lookup('Shared')).toEqual(
-      {
-        kind: 'model',
-        symbol: symbolTable.topLevel.models['Shared'],
-      },
-    );
+    expect(namespaceScope(symbolTable.namespaces['other']!, top).lookup('Shared')).toEqual({
+      kind: 'model',
+      symbol: symbolTable.defaultNamespace.models['Shared'],
+      namespace: symbolTable.defaultNamespace,
+    });
   });
 
   it('reaches the contributed root through the document scope', () => {
     const { symbolTable, top } = scopesFor(SCHEMA);
-    const scope = namespaceScope(symbolTable.topLevel.namespaces['app']!, top);
+    const scope = namespaceScope(symbolTable.namespaces['app']!, top);
 
     expect(scope.lookup('String')).toMatchObject({
       kind: 'contributedType',
@@ -86,7 +86,7 @@ describe('a scope searches itself, then delegates to its parent', () => {
 
   it('never reaches a sibling namespace', () => {
     const { symbolTable, top } = scopesFor(SCHEMA);
-    const scope = namespaceScope(symbolTable.topLevel.namespaces['app']!, top);
+    const scope = namespaceScope(symbolTable.namespaces['app']!, top);
 
     expect(scope.lookup('Hidden')).toBeUndefined();
   });
@@ -110,7 +110,7 @@ describe('scope entries', () => {
         'namespace other {\n model Hidden {\n id String\n}\n}',
       ].join('\n'),
     );
-    const scope = namespaceScope(symbolTable.topLevel.namespaces['app']!, top);
+    const scope = namespaceScope(symbolTable.namespaces['app']!, top);
     const entries = [...scope.entries()];
     expect(
       Object.fromEntries(entries.map(([name, resolution]) => [name, resolution.kind])),
@@ -120,6 +120,7 @@ describe('scope entries', () => {
       Address: 'compositeType',
       Alias: 'namedType',
       Role: 'block',
+      public: 'namespace',
       app: 'namespace',
       other: 'namespace',
       pgvector: 'contributedNamespace',
@@ -131,9 +132,15 @@ describe('scope entries', () => {
     ).toEqual(['String']);
     expect([...contributed.entries()].map(([name]) => name)).toEqual(['String', 'pgvector']);
     for (const [name, resolution] of top.entries()) expect(resolution).toEqual(top.lookup(name));
-    expect(
-      [...documentScope(symbolTable.topLevel, undefined).entries()].map(([name]) => name),
-    ).toEqual(['Shared', 'Address', 'Alias', 'Role', 'app', 'other']);
+    expect([...documentScope(symbolTable, undefined).entries()].map(([name]) => name)).toEqual([
+      'Shared',
+      'Address',
+      'Alias',
+      'Role',
+      'public',
+      'app',
+      'other',
+    ]);
   });
 
   it('enumerates only qualified members, never lexical parents or siblings', () => {
@@ -155,7 +162,7 @@ describe('scope entries', () => {
 
   it('does not mistake inherited record properties for visible symbols', () => {
     const { symbolTable, top } = scopesFor('namespace app {\n type toString {\n id String\n}\n}');
-    const scope = namespaceScope(symbolTable.topLevel.namespaces['app']!, top);
+    const scope = namespaceScope(symbolTable.namespaces['app']!, top);
     expect(scope.lookup('toString')).toEqual(new Map(scope.entries()).get('toString'));
     expect(scope.lookup('toString')?.kind).toBe('compositeType');
     expect(scope.lookup('constructor')).toBeUndefined();
@@ -173,13 +180,13 @@ describe('a qualified reference is two steps', () => {
 
     expect(qualifier).toEqual({
       kind: 'namespace',
-      symbol: symbolTable.topLevel.namespaces['app'],
+      symbol: symbolTable.namespaces['app'],
     });
     if (qualifier === undefined || !isNamespaceLike(qualifier)) throw new Error('not a namespace');
     expect(lookupMember(qualifier, 'Item')).toEqual({
       kind: 'model',
-      symbol: symbolTable.topLevel.namespaces['app']!.models['Item'],
-      namespace: symbolTable.topLevel.namespaces['app'],
+      symbol: symbolTable.namespaces['app']!.models['Item'],
+      namespace: symbolTable.namespaces['app'],
     });
     expect(lookupMember(qualifier, 'Missing')).toBeUndefined();
   });

@@ -16,7 +16,7 @@ import {
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it, vi } from 'vitest';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
 import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import { compileAggregate, compileGroupedAggregate } from '../src/query-plan-aggregate';

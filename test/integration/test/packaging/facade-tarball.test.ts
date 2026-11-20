@@ -60,6 +60,7 @@ describe('an application that installs only the Postgres facade', () => {
         './relational-core',
         './family-runtime',
         './family/control',
+        './contract-types',
         './utils/casts',
         './vite-plugin-contract-emit',
       ]),
@@ -72,6 +73,18 @@ describe('an application that installs only the Postgres facade', () => {
       `console.log('resolved ' + subpaths.length);`,
     ].join('\n');
     expect(runInScratch(scratch, script)).toContain(`resolved ${subpaths.length}`);
+  });
+
+  it('names its own published modules in the config its defineConfig returns', () => {
+    const script = [
+      `const { defineConfig } = await import('${facade}/config');`,
+      "const config = defineConfig({ contract: './prisma/contract.prisma' });",
+      'console.log(JSON.stringify([config.contract.typesModule, config.migrations.module]));',
+    ].join('\n');
+    expect(JSON.parse(runInScratch(scratch, script))).toEqual([
+      '@prisma/orm-postgres/contract-types',
+      '@prisma/orm-postgres/migration',
+    ]);
   });
 
   it('pulls every platform shell in transitively', () => {
@@ -111,7 +124,7 @@ describe('an application that installs only the Postgres facade', () => {
     const sources = bundledSources(installedDir);
     expect(sources.length).toBeGreaterThan(0);
     for (const source of sources) {
-      expect(source).toMatch(/^3-extensions\/postgres\//);
+      expect(source).toMatch(/^3-targets\/postgres\/9-facade\//);
     }
   });
 

@@ -52,7 +52,11 @@ it('passes the block being parsed to its values and attributes through the parse
     'tagged First {\n  owner = x\n  @@mark(y)\n}\ntagged Second {\n  owner = x\n}',
     'self-block.psl',
   );
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
 
   const { parsedBlocks, diagnostics } = interpretExtensionBlocks({
     symbolTable,
@@ -62,8 +66,8 @@ it('passes the block being parsed to its values and attributes through the parse
     dataTypes: EMPTY_DATA_TYPES,
   });
 
-  const first = symbolTable.topLevel.blocks['First']!;
-  const second = symbolTable.topLevel.blocks['Second']!;
+  const first = symbolTable.defaultNamespace.blocks['First']!;
+  const second = symbolTable.defaultNamespace.blocks['Second']!;
   expect(diagnostics).toEqual([]);
   expect(parsedBlocks.get(first)).toMatchObject({
     values: { owner: 'First' },

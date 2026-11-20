@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, realColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, realColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -19,19 +19,26 @@ const sqlFloat = { codecId: 'sql/float@1' } as const;
 
 const PointBase = model('Point', {
   fields: {
-    id: field.column(integerColumn).id(),
-    seriesId: field.column(integerColumn).column('series_id'),
+    id: field.column(integerNumberColumn).id(),
+    seriesId: field.column(integerNumberColumn).column('series_id'),
     real: field.column(realColumn),
     sqlFloat: field.column(sqlFloat).column('sql_float'),
   },
 }).sql({ table: 'float_points' });
 
 const Series = model('Series', {
-  fields: { id: field.column(integerColumn).id() },
+  fields: { id: field.column(integerNumberColumn).id() },
   relations: { points: rel.hasMany(() => PointBase, { by: 'seriesId' }) },
 }).sql({ table: 'float_series' });
 
 const contract = defineContract({ models: { Series, Point: PointBase } });
+
+const REAL_REFUSAL = {
+  code: 'RUNTIME.DECODE_FAILED',
+  message: expect.stringContaining(
+    'holds "abc", which is not a number. sqlite/real@1 reads a number, or the text Infinity or -Infinity.',
+  ),
+};
 const stack = createSqlExecutionStack({
   target: sqliteTarget,
   adapter: sqliteAdapter,
@@ -121,17 +128,20 @@ describe('a SQLite REAL column holding an infinity, read through a relation incl
     });
   });
 
-  // Outside a STRICT table, SQLite keeps text and a blob in a REAL column as they are.
-  it('refuses text in a REAL column through an include rather than reading it as a number', async () => {
-    expect(await readPoints([4])).toEqual([{ id: 4, real: 'abc', sqlFloat: 'abc' }]);
-    await expect(includePoints(2)).rejects.toThrow(
-      expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' }),
-    );
+  // Outside a STRICT table, SQLite keeps text and a blob in a REAL column as they are. An include
+  // reads its values with the codec's fromWire, as a flat read does, so both refuse them.
+  it('refuses text in a REAL column, through a flat read and through an include', async () => {
+    await expect(readPoints([4])).rejects.toMatchObject(REAL_REFUSAL);
+    await expect(includePoints(2)).rejects.toMatchObject(REAL_REFUSAL);
   });
 
-  it('refuses a blob in a REAL column through an include rather than reading it as a number', async () => {
-    const [flat] = await readPoints([5]);
-    expect(flat?.real).toEqual(new Uint8Array([0x00, 0xff]));
-    await expect(includePoints(3)).rejects.toThrow('JSON cannot hold BLOB values');
+  it('refuses a blob in a REAL column, naming the column, through a flat read and through an include', async () => {
+    const message =
+      'Column "float_points"."real" holds bytes x\'00FF\', which is not a number. sqlite/real@1 reads a number, or the text Infinity or -Infinity.';
+    await expect(readPoints([5])).rejects.toMatchObject({ code: 'RUNTIME.DECODE_FAILED', message });
+    await expect(includePoints(3)).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      cause: { code: 'RUNTIME.DECODE_FAILED', message },
+    });
   });
 });

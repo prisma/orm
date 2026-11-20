@@ -42,6 +42,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import supabasePack from '../src/exports/pack';
 import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mock-schema';
 
+const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
+
 /**
  * Minimal app contract: a single `public` schema with a `profile` table.
  * No `defaultControlPolicy` — all tables are managed (the default).
@@ -143,6 +145,7 @@ describe('supabase external-schema classification (db init + db verify)', () => 
         await client.connect(connectionString);
 
         const planResult = await client.dbInit({
+          invocation: TEST_INVOCATION,
           contract: appContract,
           mode: 'plan',
           migrationsDir,
@@ -194,6 +197,7 @@ describe('supabase external-schema classification (db init + db verify)', () => 
 
         // 4. db init — apply mode.
         const applyResult = await client.dbInit({
+          invocation: TEST_INVOCATION,
           contract: appContract,
           mode: 'apply',
           migrationsDir,

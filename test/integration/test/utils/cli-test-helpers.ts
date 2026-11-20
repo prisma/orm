@@ -38,7 +38,7 @@ export interface EngineRunResult {
 }
 
 export interface RunOnEngineOptions {
-  /** Simulate piped stdout (isTTY=false) to exercise the engine's json auto-selection. */
+  /** Simulate piped stdout (isTTY=false), which receives the command's data lines. */
   readonly isTTY?: boolean;
 }
 

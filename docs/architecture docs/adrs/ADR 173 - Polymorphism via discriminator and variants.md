@@ -177,6 +177,8 @@ These are independent properties. This composability is why we rejected labeled 
 
 ### Value objects use the same mechanism
 
+> **Note:** value objects are now storage entities, at `storage.namespaces.<ns>.entries.valueObject`, not a domain `valueObjects` section ([ADR 309](ADR%20309%20-%20Value%20objects%20are%20storage%20entities%2C%20and%20a%20discriminator%20column%20names%20a%20value%20set.md)). On SQL, a base model's discriminator column also refers to a value set of its variants' values.
+
 The `discriminator`/`variants`/`base` pattern applies identically to value objects in the `valueObjects` section ([ADR 178](ADR%20178%20-%20Value%20objects%20in%20the%20contract.md)). A base value object declares a discriminator and variants; each variant declares its base and adds type-specific fields:
 
 ```json

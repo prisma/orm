@@ -1,0 +1,287 @@
+import mariadbAdapter from '@internal/adapter-mariadb/control';
+import type { Contract } from '@internal/contract/types';
+import mariadbDriver from '@internal/driver-mariadb/control';
+import sql, { type SqlControlFamilyInstance } from '@internal/family-sql/control';
+import {
+  createControlStack,
+  type MigrationOperationPolicy,
+  type MigrationPlan,
+  type MigrationRunnerResult,
+} from '@internal/framework-components/control';
+import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
+import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
+import mariadb from '@internal/target-mariadb/control';
+import { timeouts } from '@repo/test-utils';
+import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
+import { describe, expect, it } from 'vitest';
+import { defineContract } from '../src/exports/contract-builder';
+import { emitFixture } from './emit';
+
+/** A table with one key on a `Bytes`, a `Json` or a `String(storage: text)` field, as `key` says. */
+function contractWithKeyOn(key: 'bytes' | 'json' | 'text', kind: 'id' | 'unique') {
+  return defineContract({}, ({ field, model, type }) => {
+    const column = {
+      bytes: () => field.column(type.Bytes()),
+      json: () => field.column(type.Json()),
+      text: () => field.column(type.String({ storage: 'text' })),
+    }[key]();
+    return {
+      models: {
+        Keyed: model('Keyed', {
+          fields:
+            kind === 'id'
+              ? { key: column.id() }
+              : { id: field.column(type.Int()).id(), key: column.unique() },
+        }),
+      },
+    };
+  });
+}
+
+const SERVER = 'MARIADB_URL';
+const frameworkComponents = [mariadb, mariadbAdapter];
+const controlStack = createControlStack({
+  family: sql,
+  target: mariadb,
+  adapter: mariadbAdapter,
+  driver: mariadbDriver,
+});
+const EVERY_CLASS: MigrationOperationPolicy = {
+  allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
+};
+
+async function withDriver<T>(
+  url: string,
+  fn: (driver: SqlControlDriverInstance<'mariadb'>, family: SqlControlFamilyInstance) => Promise<T>,
+): Promise<T> {
+  const driver = await mariadbDriver.create(url, {
+    sessionSettings: mariadb.sessionSettings ?? {},
+  });
+  try {
+    return await fn(driver, sql.create(controlStack));
+  } finally {
+    await driver.close();
+  }
+}
+
+async function plan(
+  driver: SqlControlDriverInstance<'mariadb'>,
+  family: SqlControlFamilyInstance,
+  contract: Contract<SqlStorage>,
+): Promise<MigrationPlan> {
+  const result = mariadb.migrations.createPlanner(mariadbAdapter.create(controlStack)).plan({
+    contract,
+    schema: await family.introspect({ driver, contract }),
+    policy: EVERY_CLASS,
+    fromContract: null,
+    origin: null,
+    statements: [],
+    frameworkComponents,
+    spaceId: 'app',
+    snapshotsImportPath: '../../snapshots',
+  });
+  if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
+  return result.plan;
+}
+
+function apply(
+  family: SqlControlFamilyInstance,
+  driver: SqlControlDriverInstance<'mariadb'>,
+  migration: MigrationPlan,
+  contract: Contract<SqlStorage>,
+): Promise<MigrationRunnerResult> {
+  return mariadb.migrations.createRunner(family).execute({
+    driver,
+    perSpaceOptions: [
+      {
+        space: 'app',
+        plan: migration,
+        driver,
+        destinationContract: contract,
+        policy: EVERY_CLASS,
+        frameworkComponents,
+        strictVerification: false,
+        migrationEdges: [
+          buildFabricatedMigrationEdge({
+            currentMarkerStorageHash: undefined,
+            destinationStorageHash: migration.destination.storageHash,
+            operationCount: migration.operations.length,
+          }),
+        ],
+      },
+    ],
+  });
+}
+
+async function markerHashes(
+  family: SqlControlFamilyInstance,
+  driver: SqlControlDriverInstance<'mariadb'>,
+) {
+  const markers = await family.readAllMarkers({ driver });
+  return Object.fromEntries([...markers].map(([space, marker]) => [space, marker.storageHash]));
+}
+
+describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }, () => {
+  it.for([
+    ['the example contract', 'example'],
+    ['a contract with literal and function defaults', 'defaults'],
+    ['a column of each scalar convenience type with its default', 'scalar-types'],
+    ['the empty and edge defaults of bytes, text and JSON', 'edge-defaults'],
+  ] as const)(
+    'applies %s, which then verifies strictly, plans nothing more and signs as unchanged',
+    async ([, fixture], test) => {
+      const { contract } = await emitFixture(fixture);
+      await withMysqlDatabase(
+        test,
+        ({ url }) =>
+          withDriver(url, async (driver, family) => {
+            const applied = await apply(
+              family,
+              driver,
+              await plan(driver, family, contract),
+              contract,
+            );
+            if (!applied.ok) throw applied.failure;
+            const verified = family.verifySchema({
+              contract,
+              schema: await family.introspect({ driver, contract }),
+              strict: true,
+              frameworkComponents,
+            });
+            const again = await plan(driver, family, contract);
+            const signed = await family.signSpaces({
+              driver,
+              spaces: [
+                {
+                  space: 'app',
+                  contract,
+                  expected: {
+                    storageHash: contract.storage.storageHash,
+                    profileHash: contract.profileHash ?? contract.storage.storageHash,
+                  },
+                },
+              ],
+            });
+            expect({
+              verified: verified.ok ? true : verified,
+              planAgain: again.operations.length,
+              markers: await markerHashes(family, driver),
+              signed: signed.map(({ status }) => status),
+            }).toEqual({
+              verified: true,
+              planAgain: 0,
+              markers: { app: contract.storage.storageHash },
+              signed: ['unchanged'],
+            });
+          }),
+        SERVER,
+      );
+    },
+  );
+
+  it('applies the empty and edge defaults, whose reading a row inserted with only its key then holds', async (test) => {
+    const { contract } = await emitFixture('edge-defaults');
+    await withMysqlDatabase(
+      test,
+      ({ url }) =>
+        withDriver(url, async (driver, family) => {
+          const applied = await apply(
+            family,
+            driver,
+            await plan(driver, family, contract),
+            contract,
+          );
+          if (!applied.ok) throw applied.failure;
+          await driver.query('INSERT INTO `Edge` (`id`) VALUES (1)');
+          const { rows } = await driver.query<Record<string, unknown>>(
+            'SELECT HEX(`noBytes`) AS noBytes, HEX(`bytes`) AS bytes, `blank`, `accented`, `jsonNull`, `jsonString`, `jsonArray`, `jsonObject`, `jsonAccented`, CAST(`zero` AS CHAR) AS zero, CAST(`whole` AS CHAR) AS whole, CAST(`wholeText` AS CHAR) AS wholeText, CAST(`wholeNumber` AS CHAR) AS wholeNumber, CAST(`zeroText` AS CHAR) AS zeroText, `off` FROM `Edge`',
+          );
+          expect(rows[0]).toEqual({
+            noBytes: '',
+            bytes: 'C3A900FF',
+            blank: '',
+            accented: 'é€',
+            jsonNull: 'null',
+            jsonString: '""',
+            jsonArray: '[]',
+            jsonObject: '{}',
+            jsonAccented: '{"k":"é€"}',
+            zero: '0.00',
+            whole: '-12',
+            wholeText: '12',
+            wholeNumber: '12',
+            zeroText: '0',
+            off: '0',
+          });
+        }),
+      SERVER,
+    );
+  });
+
+  it.for([
+    ['bytes', 'id', false],
+    ['bytes', 'unique', true],
+    ['text', 'id', false],
+    ['text', 'unique', true],
+    ['json', 'id', false],
+    ['json', 'unique', true],
+  ] as const)(
+    'applies a key on a %s field, @%s, only where the scalar type reference says MariaDB accepts it (%s)',
+    async ([key, kind, accepted], test) => {
+      const contract = contractWithKeyOn(key, kind);
+      await withMysqlDatabase(
+        test,
+        ({ url }) =>
+          withDriver(url, async (driver, family) => {
+            const applied = await apply(
+              family,
+              driver,
+              await plan(driver, family, contract),
+              contract,
+            );
+            expect(applied.ok ? 'applied' : applied.failure).toEqual(
+              accepted
+                ? 'applied'
+                : expect.objectContaining({
+                    code: 'MIGRATION.EXECUTION_FAILED',
+                    why: expect.stringContaining(
+                      "BLOB/TEXT column 'key' used in key specification without a key length",
+                    ),
+                  }),
+            );
+          }),
+        SERVER,
+      );
+    },
+  );
+
+  it('signs a database made by hand, creating the marker table first', async (test) => {
+    const { contract } = await emitFixture('defaults');
+    await withMysqlDatabase(
+      test,
+      ({ url }) =>
+        withDriver(url, async (driver, family) => {
+          await driver.query(`CREATE TABLE \`Item\` (
+            \`id\` int(11) NOT NULL,
+            \`label\` varchar(191) NOT NULL DEFAULT 'it''s',
+            \`count\` int(11) NOT NULL DEFAULT 0,
+            \`total\` bigint(20) NOT NULL DEFAULT 10,
+            \`role\` enum('USER','ADMIN') NOT NULL DEFAULT 'USER',
+            \`nickname\` varchar(191) DEFAULT NULL,
+            \`createdAt\` datetime(3) NOT NULL DEFAULT current_timestamp(3),
+            \`day\` date NOT NULL DEFAULT curdate(),
+            PRIMARY KEY (\`id\`)
+          )`);
+          const signed = await family.signSpaces({
+            driver,
+            spaces: [{ space: 'app', contract, expected: null }],
+          });
+          expect({
+            signed: signed.map(({ status }) => status),
+            markers: await markerHashes(family, driver),
+          }).toEqual({ signed: ['created'], markers: { app: contract.storage.storageHash } });
+        }),
+      SERVER,
+    );
+  });
+});

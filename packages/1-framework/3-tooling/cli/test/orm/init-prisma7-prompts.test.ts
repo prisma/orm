@@ -83,7 +83,15 @@ describe('init on a Prisma 7 project', () => {
         writePrisma7Project();
 
         const run = await harness().run(
-          ['orm', 'init', ...FROM_PRISMA7, '--schema-path', 'db/x.prisma', ...NO_PACKAGE_WORK],
+          [
+            'orm',
+            'init',
+            ...FROM_PRISMA7,
+            '--schema-path',
+            'db/x.prisma',
+            ...NO_PACKAGE_WORK,
+            '--json',
+          ],
           { cwd: projectDir },
         );
 
@@ -113,7 +121,7 @@ describe('init on a Prisma 7 project', () => {
         writePrisma7Project(provider);
 
         const run = await harness().run(
-          ['orm', 'init', ...FROM_PRISMA7, ...extraArgs, ...NO_PACKAGE_WORK],
+          ['orm', 'init', ...FROM_PRISMA7, ...extraArgs, ...NO_PACKAGE_WORK, '--json'],
           { cwd: projectDir },
         );
 
@@ -129,9 +137,12 @@ describe('init on a Prisma 7 project', () => {
       async () => {
         writeProjectFile('prisma/schema.prisma', 'model User {\n  id String @id\n}\n');
 
-        const run = await harness().run(['orm', 'init', ...FROM_PRISMA7, ...NO_PACKAGE_WORK], {
-          cwd: projectDir,
-        });
+        const run = await harness().run(
+          ['orm', 'init', ...FROM_PRISMA7, ...NO_PACKAGE_WORK, '--json'],
+          {
+            cwd: projectDir,
+          },
+        );
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({
@@ -150,9 +161,12 @@ describe('init on a Prisma 7 project', () => {
         writeProjectFile('prisma.config.ts', PRISMA7_CONFIG);
         writeProjectFile('prisma7.config.ts', PRISMA7_CONFIG);
 
-        const run = await harness().run(['orm', 'init', ...FROM_PRISMA7, ...NO_PACKAGE_WORK], {
-          cwd: projectDir,
-        });
+        const run = await harness().run(
+          ['orm', 'init', ...FROM_PRISMA7, ...NO_PACKAGE_WORK, '--json'],
+          {
+            cwd: projectDir,
+          },
+        );
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({
@@ -215,7 +229,7 @@ describe('init on a Prisma 7 project', () => {
         writePrisma7Project();
 
         const run = await harness().run(
-          ['orm', 'init', '--yes', '--target', 'postgres', ...NO_PACKAGE_WORK],
+          ['orm', 'init', '--yes', '--target', 'postgres', ...NO_PACKAGE_WORK, '--json'],
           { cwd: projectDir, isTty: { stdin: true } },
         );
 
@@ -242,9 +256,12 @@ describe('init on a Prisma 7 project', () => {
     it(
       'names the token a non-interactive run must pass, and writes nothing',
       async () => {
-        const run = await harness().run(['orm', 'init', ...FROM_PRISMA7, ...NO_PACKAGE_WORK], {
-          cwd: projectDir,
-        });
+        const run = await harness().run(
+          ['orm', 'init', ...FROM_PRISMA7, ...NO_PACKAGE_WORK, '--json'],
+          {
+            cwd: projectDir,
+          },
+        );
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({

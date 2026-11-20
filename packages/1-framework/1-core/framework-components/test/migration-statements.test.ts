@@ -2,6 +2,9 @@ import { asNamespaceId, type ContractWithDomain } from '@internal/contract/types
 import { describe, expect, it } from 'vitest';
 import {
   describeMigrationStatement,
+  enumValueCoordinateFromJson,
+  enumValueCoordinateJson,
+  enumValueStatementText,
   fieldStatementText,
   isRenameStatement,
   migrationStatementJson,
@@ -10,6 +13,7 @@ import {
   modelDisplayName,
   modelStatementText,
   type ResolvedMigrationStatement,
+  valueObjectFieldStatementText,
 } from '../src/control/migration-statements';
 import { UNBOUND_NAMESPACE_ID } from '../src/ir/namespace';
 
@@ -27,6 +31,7 @@ function contractWith(models: Readonly<Record<string, readonly string[]>>): Cont
         ]),
       ),
     },
+    storage: { namespaces: {} },
   };
 }
 
@@ -89,6 +94,40 @@ describe('describeMigrationStatement', () => {
         contractWith({ app: ['User'], billing: ['Bill'] }),
       ),
     ).toBe('rename model "app.Profile" to "app.User"');
+  });
+
+  it('names a model moved to another namespace as moved, with both namespaces', () => {
+    const move: ResolvedMigrationStatement = {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: asNamespaceId('billing'), model: 'Invoice' },
+      to: { namespaceId: asNamespaceId('public'), model: 'Invoice' },
+    };
+
+    expect(
+      describeMigrationStatement(
+        move,
+        contractWith({ billing: ['Invoice'] }),
+        contractWith({ public: ['Invoice'] }),
+      ),
+    ).toBe('move model "billing.Invoice" to namespace "public"');
+  });
+
+  it('names both namespaces when a model is moved and renamed', () => {
+    const moveAndRename: ResolvedMigrationStatement = {
+      kind: 'rename',
+      entity: 'model',
+      from: { namespaceId: asNamespaceId('billing'), model: 'Invoice' },
+      to: { namespaceId: asNamespaceId('finance'), model: 'Bill' },
+    };
+
+    expect(
+      describeMigrationStatement(
+        moveAndRename,
+        contractWith({ billing: ['Invoice'] }),
+        contractWith({ finance: ['Bill'] }),
+      ),
+    ).toBe('rename model "billing.Invoice" to "finance.Bill"');
   });
 
   it('names the old field through the model as the destination names it', () => {
@@ -160,6 +199,22 @@ describe('modelDisplayName', () => {
 });
 
 describe('migrationStatementJson', () => {
+  it('writes a namespace rename with coordinates, as it writes a model rename', () => {
+    expect(
+      migrationStatementJson({
+        kind: 'rename',
+        entity: 'namespace',
+        from: asNamespaceId('billing'),
+        to: asNamespaceId('finance'),
+      }),
+    ).toEqual({
+      kind: 'rename',
+      entity: 'namespace',
+      from: { namespaceId: 'billing' },
+      to: { namespaceId: 'finance' },
+    });
+  });
+
   it('leaves namespaceId out for the unbound namespace and keeps it otherwise', () => {
     const unbound = asNamespaceId(UNBOUND_NAMESPACE_ID);
     expect([
@@ -240,5 +295,249 @@ describe('migrationSubjectKey', () => {
       migrationSubjectKey({ kind: 'storage', name: 'User' }),
     ]);
     expect(keys.size).toBe(3);
+  });
+});
+
+describe('a namespace rename', () => {
+  const statement: ResolvedMigrationStatement = {
+    kind: 'rename',
+    entity: 'namespace',
+    from: asNamespaceId('billing'),
+    to: asNamespaceId('finance'),
+  };
+
+  it('is described by its namespace names', () => {
+    const contract = contractWith({ billing: ['Invoice'], app: ['User'] });
+    expect(describeMigrationStatement(statement, contract, contract)).toBe(
+      'rename namespace "billing" to "finance"',
+    );
+  });
+
+  it('is a rename statement', () => {
+    expect(isRenameStatement(statement)).toBe(true);
+  });
+});
+
+describe('an enum value rename', () => {
+  const statement: ResolvedMigrationStatement = {
+    kind: 'rename',
+    entity: 'enumValue',
+    from: { namespaceId: app, enum: 'Status', member: 'ARCHIVED' },
+    to: { namespaceId: app, enum: 'Status', member: 'RETIRED' },
+  };
+
+  it('is described through its enum, with the namespace only when the contract has several', () => {
+    expect(
+      describeMigrationStatement(statement, contractWith({ app: [] }), contractWith({ app: [] })),
+    ).toBe('rename enum value "Status.ARCHIVED" to "Status.RETIRED"');
+    expect(
+      describeMigrationStatement(
+        statement,
+        contractWith({ app: [], billing: [] }),
+        contractWith({ app: [], billing: [] }),
+      ),
+    ).toBe('rename enum value "app.Status.ARCHIVED" to "app.Status.RETIRED"');
+  });
+
+  it('is written to JSON with a coordinate on each side', () => {
+    expect(migrationStatementJson(statement)).toEqual({
+      kind: 'rename',
+      entity: 'enumValue',
+      from: { namespaceId: 'app', enum: 'Status', member: 'ARCHIVED' },
+      to: { namespaceId: 'app', enum: 'Status', member: 'RETIRED' },
+    });
+  });
+
+  it('is a rename statement', () => {
+    expect(isRenameStatement(statement)).toBe(true);
+  });
+});
+
+describe('an enum value subject', () => {
+  const subject = {
+    kind: 'enumValue',
+    namespaceId: app,
+    enum: 'Status',
+    member: 'ARCHIVED',
+  } as const;
+
+  it('has a key of its own and a JSON coordinate', () => {
+    expect(migrationSubjectKey(subject)).not.toBe(
+      migrationSubjectKey({ kind: 'field', namespaceId: app, model: 'Status', field: 'ARCHIVED' }),
+    );
+    expect(migrationSubjectJson(subject)).toEqual({
+      kind: 'enumValue',
+      namespaceId: 'app',
+      enum: 'Status',
+      member: 'ARCHIVED',
+    });
+    expect(
+      migrationSubjectJson({ ...subject, namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID) }),
+    ).toEqual({ kind: 'enumValue', enum: 'Status', member: 'ARCHIVED' });
+  });
+
+  it('is named through its enum in statements', () => {
+    expect(enumValueStatementText(contractWith({ app: [] }), subject)).toBe('Status.ARCHIVED');
+    expect(enumValueStatementText(contractWith({ app: [], billing: [] }), subject)).toBe(
+      'app.Status.ARCHIVED',
+    );
+  });
+});
+
+describe('enum value coordinates in JSON', () => {
+  it('leave out the unbound namespace, and read it back', () => {
+    const unbound = {
+      namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID),
+      enum: 'Status',
+      member: 'A',
+    };
+    const named = { namespaceId: asNamespaceId('app'), enum: 'Status', member: 'A' };
+
+    expect(enumValueCoordinateJson(unbound)).toEqual({ enum: 'Status', member: 'A' });
+    expect(enumValueCoordinateJson(named)).toEqual(named);
+    expect(enumValueCoordinateFromJson(enumValueCoordinateJson(unbound))).toEqual(unbound);
+    expect(enumValueCoordinateFromJson(named)).toEqual(named);
+  });
+});
+
+describe('a value object field rename', () => {
+  const statement: ResolvedMigrationStatement = {
+    kind: 'rename',
+    entity: 'valueObjectField',
+    from: { namespaceId: app, valueObject: 'GeoPoint', field: 'lat' },
+    to: { namespaceId: app, valueObject: 'GeoPoint', field: 'latitude' },
+  };
+
+  it('is described through its value object, with the namespace only when the contract has several', () => {
+    expect([
+      describeMigrationStatement(statement, contractWith({ app: [] }), contractWith({ app: [] })),
+      describeMigrationStatement(
+        statement,
+        contractWith({ app: [], billing: [] }),
+        contractWith({ app: [], billing: [] }),
+      ),
+    ]).toEqual([
+      'rename value object field "GeoPoint.lat" to "GeoPoint.latitude"',
+      'rename value object field "app.GeoPoint.lat" to "app.GeoPoint.latitude"',
+    ]);
+  });
+
+  it('is written to JSON with a coordinate on each side, without the unbound namespace', () => {
+    const unbound = asNamespaceId(UNBOUND_NAMESPACE_ID);
+    expect([
+      migrationStatementJson(statement),
+      migrationStatementJson({
+        kind: 'rename',
+        entity: 'valueObjectField',
+        from: { namespaceId: unbound, valueObject: 'GeoPoint', field: 'lat' },
+        to: { namespaceId: unbound, valueObject: 'GeoPoint', field: 'latitude' },
+      }),
+    ]).toEqual([
+      {
+        kind: 'rename',
+        entity: 'valueObjectField',
+        from: { namespaceId: 'app', valueObject: 'GeoPoint', field: 'lat' },
+        to: { namespaceId: 'app', valueObject: 'GeoPoint', field: 'latitude' },
+      },
+      {
+        kind: 'rename',
+        entity: 'valueObjectField',
+        from: { valueObject: 'GeoPoint', field: 'lat' },
+        to: { valueObject: 'GeoPoint', field: 'latitude' },
+      },
+    ]);
+  });
+
+  it('is a rename statement', () => {
+    expect(isRenameStatement(statement)).toBe(true);
+  });
+});
+
+describe('a value object field backfill', () => {
+  const statement: ResolvedMigrationStatement = {
+    kind: 'backfill',
+    entity: 'valueObjectField',
+    field: { namespaceId: app, valueObject: 'GeoPoint', field: 'country' },
+  };
+
+  it('is described and written to JSON through its value object', () => {
+    const contract = contractWith({ app: [] });
+    expect([
+      describeMigrationStatement(statement, contract, contract),
+      migrationStatementJson(statement),
+      isRenameStatement(statement),
+    ]).toEqual([
+      'backfill value object field "GeoPoint.country"',
+      {
+        kind: 'backfill',
+        entity: 'valueObjectField',
+        field: { namespaceId: 'app', valueObject: 'GeoPoint', field: 'country' },
+      },
+      false,
+    ]);
+  });
+});
+
+describe('a variant convert', () => {
+  const statement: ResolvedMigrationStatement = {
+    kind: 'convert',
+    entity: 'model',
+    model: { namespaceId: app, model: 'Bug' },
+  };
+
+  it('is described as a variant and written to JSON through its model', () => {
+    expect([
+      describeMigrationStatement(
+        statement,
+        contractWith({ app: ['Bug'] }),
+        contractWith({ app: ['Bug'] }),
+      ),
+      describeMigrationStatement(
+        statement,
+        contractWith({ app: ['Bug'], billing: [] }),
+        contractWith({ app: ['Bug'], billing: [] }),
+      ),
+      migrationStatementJson(statement),
+      migrationStatementJson({
+        ...statement,
+        model: { namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID), model: 'Bug' },
+      }),
+      isRenameStatement(statement),
+    ]).toEqual([
+      'convert variant "Bug"',
+      'convert variant "app.Bug"',
+      { kind: 'convert', entity: 'model', model: { namespaceId: 'app', model: 'Bug' } },
+      { kind: 'convert', entity: 'model', model: { model: 'Bug' } },
+      false,
+    ]);
+  });
+});
+
+describe('a value object field subject', () => {
+  const subject = {
+    kind: 'valueObjectField',
+    namespaceId: app,
+    valueObject: 'GeoPoint',
+    field: 'lat',
+  } as const;
+
+  it('has a key of its own and a JSON coordinate', () => {
+    expect(migrationSubjectKey(subject)).not.toBe(
+      migrationSubjectKey({ kind: 'field', namespaceId: app, model: 'GeoPoint', field: 'lat' }),
+    );
+    expect([
+      migrationSubjectJson(subject),
+      migrationSubjectJson({ ...subject, namespaceId: asNamespaceId(UNBOUND_NAMESPACE_ID) }),
+    ]).toEqual([
+      { kind: 'valueObjectField', namespaceId: 'app', valueObject: 'GeoPoint', field: 'lat' },
+      { kind: 'valueObjectField', valueObject: 'GeoPoint', field: 'lat' },
+    ]);
+  });
+
+  it('is named through its value object in statements', () => {
+    expect([
+      valueObjectFieldStatementText(contractWith({ app: [] }), subject),
+      valueObjectFieldStatementText(contractWith({ app: [], billing: [] }), subject),
+    ]).toEqual(['GeoPoint.lat', 'app.GeoPoint.lat']);
   });
 });

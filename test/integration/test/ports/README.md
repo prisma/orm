@@ -11,6 +11,13 @@ Every in-scope upstream test lands in exactly one bucket (the accounting invaria
 2. **Ported & failing** — a faithful port that hits a real Prisma 8 gap: `test.fails` + an entry in the corpus `failing.md`.
 3. **Non-portable** — an individual line in the suite's `non-ported/functional/<suite>/<suite>.md` (source location + what it tests + the specific reason it cannot be expressed).
 
+A non-portable entry can go stale when Prisma 8 gains what it said was missing. Such an entry stays in its `non-ported/` file, so the test is still accounted for exactly once, and carries one of two statuses at the start of its reason:
+
+- **Not yet ported** — the test can now be expressed; the entry names the API that expresses it. It waits to be ported into bucket 1 or 2, and its line is then deleted.
+- **Needs re-examination** — the reason first given no longer holds, and whether the test can be expressed has not been settled. It waits for someone to port it or to write the reason that still holds.
+
+Both count as non-portable until they are moved. Their ledger lines in `projects/port-all-tests/checklists/` are unchecked, because the reason that justified the check no longer holds.
+
 The per-test ledger is the checklist corpus at [`projects/port-all-tests/checklists/`](../../../../projects/port-all-tests/checklists/README.md); the reviewer checks a box only once its disposition is verified.
 
 ## Layout
@@ -46,6 +53,10 @@ Commit the generated `contract.json` + `contract.d.ts`. `pnpm fixtures:emit` (vi
 
 Notes: Prisma 8 PSL lowercases table names (model `User` → table `user`) but keeps column names verbatim; scalar lists (`String[]`, `Int[]`) are supported and emit native pg arrays. MongoDB suites port against Prisma 8's dedicated mongo ORM (`mongoOrm()`) with a `mongodb-memory-server` harness — not marked non-ported.
 
+## Exceptions
+
+- `relation_link_test` matrices of `writes/nested_mutations/already_converted/nested_update_many_inside_update.rs` and `nested_delete_many_inside_update.rs`: by owner decision (2026-11-12), an exception to the matrix rule in [`projects/port-all-tests/spec.md`](../../../../projects/port-all-tests/spec.md), each test is ported against one representative variant of its relation shape (parent id simple, child id simple, child references the parent's id; the junction for many-to-many), with the parent found by its id. Nested filtered writes do not depend on the key's shape, and composite keys are covered by the many-to-many integration tests in `test/sql-orm-client/`. The other variants are listed in the suites' `non-ported/` files. The four representative schemas live in `engines/writes/nested_mutations/_fixture/` and are shared by the suites under `nested_mutations/`.
+
 ## Roll-up
 
 _Totals are finalised at project close-out. Live progress is tracked in the checklist corpus._
@@ -54,3 +65,11 @@ _Totals are finalised at project close-out. Live progress is tracked in the chec
 | --- | --- | --- | --- |
 | prisma/prisma | in progress | in progress | in progress |
 | prisma-engines | in progress | in progress | in progress |
+
+The non-portable entries carrying a status are not typed into this table, because every port or re-examination would make a typed number wrong. Count them from the records, one line per test, with:
+
+```bash
+grep -rhE '^- `.*— (Not yet ported|Needs re-examination)' test/integration/test/ports/{prisma,engines}/non-ported | grep -oE '— (Not yet ported|Needs re-examination)' | sort | uniq -c
+```
+
+The checklist ledger marks the same tests `- [ ] … → non-ported (not yet ported)` or `(needs re-examination)`; change the ledger line in the same commit as the record.

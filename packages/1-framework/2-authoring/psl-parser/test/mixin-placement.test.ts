@@ -28,7 +28,11 @@ function build(...texts: string[]) {
       ({ document, sources }) => [document.syntax, sources.sourceFileFor(document.syntax)] as const,
     ),
   );
-  const table = buildSymbolTable({ documents: parsed.map(({ document }) => document), sources });
+  const table = buildSymbolTable({
+    documents: parsed.map(({ document }) => document),
+    sources,
+    defaultNamespaceId: 'public',
+  });
   const bound = createBinder({
     sources,
     symbolTable: table.symbolTable,
@@ -36,7 +40,7 @@ function build(...texts: string[]) {
   });
   return {
     binder: bound.binder,
-    topLevel: table.symbolTable.topLevel,
+    symbolTable: table.symbolTable,
     diagnostics: [...table.diagnostics, ...bound.diagnostics],
     parseDiagnostics: parsed.flatMap(({ diagnostics }) => diagnostics),
   };
@@ -90,8 +94,8 @@ describe('createBinder() placing an inclusion in a model', () => {
   ])(
     'places the fields and attributes of an inclusion written %s',
     (_position, body, fields, attributes) => {
-      const { topLevel, diagnostics } = build(lines(mixin, 'model User {', ...body, '}'));
-      const user = topLevel.models['User'];
+      const { symbolTable, diagnostics } = build(lines(mixin, 'model User {', ...body, '}'));
+      const user = symbolTable.defaultNamespace.models['User'];
 
       expect(diagnostics).toEqual([]);
       expect(Object.keys(user?.fields ?? {})).toEqual(fields);
@@ -100,7 +104,7 @@ describe('createBinder() placing an inclusion in a model', () => {
   );
 
   it('shares the field symbols and resolved attributes of the mixin with every including model', () => {
-    const { topLevel } = build(
+    const { symbolTable } = build(
       lines(
         mixin,
         'model User {',
@@ -112,9 +116,9 @@ describe('createBinder() placing an inclusion in a model', () => {
         '}',
       ),
     );
-    const timestamps = topLevel.mixins['Timestamps'];
-    const user = topLevel.models['User'];
-    const post = topLevel.models['Post'];
+    const timestamps = symbolTable.defaultNamespace.mixins['Timestamps'];
+    const user = symbolTable.defaultNamespace.models['User'];
+    const post = symbolTable.defaultNamespace.models['Post'];
 
     expect(user?.fields['createdAt']).toBe(timestamps?.fields['createdAt']);
     expect(post?.fields['createdAt']).toBe(timestamps?.fields['createdAt']);
@@ -125,19 +129,21 @@ describe('createBinder() placing an inclusion in a model', () => {
   });
 
   it('keeps the node and the own members of the including model as they were', () => {
-    const { topLevel } = build(lines(mixin, 'model User {', '  id Int @id', '  +Timestamps', '}'));
-    const user = topLevel.models['User'];
+    const { symbolTable } = build(
+      lines(mixin, 'model User {', '  id Int @id', '  +Timestamps', '}'),
+    );
+    const user = symbolTable.defaultNamespace.models['User'];
 
     expect(user?.kind).toBe('model');
     expect(user?.node.name()?.name()).toBe('User');
     expect(user?.fields['id']?.node.syntax.parent).toBe(user?.node.syntax);
     expect(user?.fields['createdAt']?.node.syntax.parent).toBe(
-      topLevel.mixins['Timestamps']?.node.syntax,
+      symbolTable.defaultNamespace.mixins['Timestamps']?.node.syntax,
     );
   });
 
   it('places several inclusions in the order they are written', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       lines(
         mixin,
         'model mixin Tenant {',
@@ -152,7 +158,7 @@ describe('createBinder() placing an inclusion in a model', () => {
     );
 
     expect(diagnostics).toEqual([]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual([
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual([
       'tenantId',
       'id',
       'createdAt',
@@ -163,7 +169,7 @@ describe('createBinder() placing an inclusion in a model', () => {
 
 describe('createBinder() placing an inclusion in other blocks', () => {
   it('places the fields and attributes of a type mixin in a composite type', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       lines(
         'type mixin Geo {',
         '  lat Float',
@@ -177,12 +183,12 @@ describe('createBinder() placing an inclusion in other blocks', () => {
         '}',
       ),
     );
-    const address = topLevel.compositeTypes['Address'];
+    const address = symbolTable.defaultNamespace.compositeTypes['Address'];
 
     expect(diagnostics).toEqual([]);
     expect(Object.keys(address?.fields ?? {})).toEqual(['street', 'lat', 'lng', 'city']);
     expect(address?.attributes.map((attribute) => attribute.name)).toEqual(['map']);
-    expect(address?.fields['lat']).toBe(topLevel.mixins['Geo']?.fields['lat']);
+    expect(address?.fields['lat']).toBe(symbolTable.defaultNamespace.mixins['Geo']?.fields['lat']);
   });
 
   it.each([
@@ -190,7 +196,7 @@ describe('createBinder() placing an inclusion in other blocks', () => {
     ['in the middle', ['  GUEST', '  +BaseRoles', '  OWNER'], ['GUEST', 'ADMIN', 'USER', 'OWNER']],
     ['last', ['  GUEST', '  OWNER', '  +BaseRoles'], ['GUEST', 'OWNER', 'ADMIN', 'USER']],
   ])('places the members of an enum mixin included %s', (_position, body, members) => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       lines(
         'enum mixin BaseRoles {',
         '  ADMIN @map("admin")',
@@ -201,19 +207,19 @@ describe('createBinder() placing an inclusion in other blocks', () => {
         '}',
       ),
     );
-    const role = topLevel.blocks['Role'];
+    const role = symbolTable.defaultNamespace.blocks['Role'];
     const admin = role?.entries.find((entry) => entry.key()?.name() === 'ADMIN');
 
     expect(diagnostics).toEqual([]);
     expect(role?.entries.map((entry) => entry.key()?.name())).toEqual(members);
-    expect(admin).toBe(topLevel.mixins['BaseRoles']?.entries[0]);
+    expect(admin).toBe(symbolTable.defaultNamespace.mixins['BaseRoles']?.entries[0]);
     expect(Array.from(admin?.attributes() ?? [], (attribute) => attribute.name()?.path())).toEqual([
       ['map'],
     ]);
   });
 
   it('places the entries and attributes of a key = value mixin', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       lines(
         'policy_select mixin OwnerRead {',
         '  roles = [authenticated]',
@@ -226,45 +232,44 @@ describe('createBinder() placing an inclusion in other blocks', () => {
         '}',
       ),
     );
-    const block = topLevel.blocks['ReadPosts'];
+    const block = symbolTable.defaultNamespace.blocks['ReadPosts'];
 
     expect(diagnostics).toEqual([]);
     expect(block?.entries.map((entry) => entry.key()?.name())).toEqual(['roles', 'using']);
     expect(block?.attributes.map((attribute) => attribute.name)).toEqual(['map', 'schema']);
-    expect(block?.entries[0]).toBe(topLevel.mixins['OwnerRead']?.entries[0]);
-    expect(block?.attributes[1]).toBe(topLevel.mixins['OwnerRead']?.attributes[0]);
+    expect(block?.entries[0]).toBe(symbolTable.defaultNamespace.mixins['OwnerRead']?.entries[0]);
+    expect(block?.attributes[1]).toBe(
+      symbolTable.defaultNamespace.mixins['OwnerRead']?.attributes[0],
+    );
     expect(block?.keyword).toBe('policy_select');
   });
 
   it('passes a key repeated inside the mixin on, once per occurrence', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       'hooks mixin Shared {\n  on = "a"\n  on = "b"\n}\nhooks Lifecycle {\n  +Shared\n}',
     );
 
     expect(diagnostics).toEqual([]);
-    expect(topLevel.blocks['Lifecycle']?.entries.map((entry) => entry.key()?.name())).toEqual([
-      'on',
-      'on',
-    ]);
+    expect(
+      symbolTable.defaultNamespace.blocks['Lifecycle']?.entries.map((entry) => entry.key()?.name()),
+    ).toEqual(['on', 'on']);
   });
 
   it('keeps a key the block repeats after an inclusion that provided it', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       'hooks mixin Shared {\n  on = "a"\n}\nhooks Lifecycle {\n  +Shared\n  on = "b"\n  on = "c"\n}',
     );
 
     expect(diagnostics).toEqual([]);
-    expect(topLevel.blocks['Lifecycle']?.entries.map((entry) => entry.key()?.name())).toEqual([
-      'on',
-      'on',
-      'on',
-    ]);
+    expect(
+      symbolTable.defaultNamespace.blocks['Lifecycle']?.entries.map((entry) => entry.key()?.name()),
+    ).toEqual(['on', 'on', 'on']);
   });
 });
 
 describe('createBinder() looking up the name of an inclusion', () => {
   it('finds a mixin of the same namespace by its unqualified name', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       lines(
         'model mixin Timestamps {',
         '  topLevel DateTime',
@@ -281,13 +286,13 @@ describe('createBinder() looking up the name of an inclusion', () => {
     );
 
     expect(diagnostics).toEqual([]);
-    expect(Object.keys(topLevel.namespaces['auth']?.models['User']?.fields ?? {})).toEqual([
+    expect(Object.keys(symbolTable.namespaces['auth']?.models['User']?.fields ?? {})).toEqual([
       'createdAt',
     ]);
   });
 
   it('finds a top-level mixin by its unqualified name from inside a namespace', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       lines(
         'model mixin Timestamps {',
         '  createdAt DateTime',
@@ -301,8 +306,8 @@ describe('createBinder() looking up the name of an inclusion', () => {
     );
 
     expect(diagnostics).toEqual([]);
-    expect(topLevel.namespaces['auth']?.models['User']?.fields['createdAt']).toBe(
-      topLevel.mixins['Timestamps']?.fields['createdAt'],
+    expect(symbolTable.namespaces['auth']?.models['User']?.fields['createdAt']).toBe(
+      symbolTable.defaultNamespace.mixins['Timestamps']?.fields['createdAt'],
     );
   });
 
@@ -364,7 +369,7 @@ describe('createBinder() looking up the name of an inclusion', () => {
   ])(
     'does not find a top-level mixin hidden by a declaration of its name in the namespace, %s',
     (_where, sources) => {
-      const { topLevel, diagnostics } = build(...sources);
+      const { symbolTable, diagnostics } = build(...sources);
 
       expect(diagnostics).toEqual([
         {
@@ -374,7 +379,9 @@ describe('createBinder() looking up the name of an inclusion', () => {
           range: rangeOf(sources[0] ?? '', '+Timestamps'),
         },
       ]);
-      expect(Object.keys(topLevel.namespaces['app']?.models['User']?.fields ?? {})).toEqual(['id']);
+      expect(Object.keys(symbolTable.namespaces['app']?.models['User']?.fields ?? {})).toEqual([
+        'id',
+      ]);
     },
   );
 
@@ -392,7 +399,7 @@ describe('createBinder() looking up the name of an inclusion', () => {
   });
 
   it('finds a mixin of another namespace by its qualified name', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       lines(
         'namespace auth {',
         '  model mixin Timestamps {',
@@ -415,14 +422,18 @@ describe('createBinder() looking up the name of an inclusion', () => {
         '}',
       ),
     );
-    const timestamps = topLevel.namespaces['auth']?.mixins['Timestamps'];
+    const timestamps = symbolTable.namespaces['auth']?.mixins['Timestamps'];
 
     expect(diagnostics).toEqual([]);
-    expect(topLevel.namespaces['billing']?.models['Invoice']?.fields['createdAt']).toBe(
+    expect(symbolTable.namespaces['billing']?.models['Invoice']?.fields['createdAt']).toBe(
       timestamps?.fields['createdAt'],
     );
-    expect(topLevel.models['User']?.fields['createdAt']).toBe(timestamps?.fields['createdAt']);
-    expect(topLevel.blocks['Role']?.entries.map((entry) => entry.key()?.name())).toEqual(['ADMIN']);
+    expect(symbolTable.defaultNamespace.models['User']?.fields['createdAt']).toBe(
+      timestamps?.fields['createdAt'],
+    );
+    expect(
+      symbolTable.defaultNamespace.blocks['Role']?.entries.map((entry) => entry.key()?.name()),
+    ).toEqual(['ADMIN']);
   });
 
   it('does not find a mixin of another namespace by its unqualified name', () => {
@@ -450,28 +461,33 @@ describe('createBinder() looking up the name of an inclusion', () => {
   });
 
   it('finds a mixin declared in a later document and one declared in an earlier document', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       'model User {\n  id Int\n  +Timestamps\n}',
       'model mixin Timestamps {\n  createdAt DateTime\n}',
       'model Post {\n  +Timestamps\n}\nnamespace app {\n  model Item {\n    +Timestamps\n  }\n}',
     );
 
     expect(diagnostics).toEqual([]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['id', 'createdAt']);
-    expect(Object.keys(topLevel.models['Post']?.fields ?? {})).toEqual(['createdAt']);
-    expect(Object.keys(topLevel.namespaces['app']?.models['Item']?.fields ?? {})).toEqual([
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual([
+      'id',
+      'createdAt',
+    ]);
+    expect(Object.keys(symbolTable.defaultNamespace.models['Post']?.fields ?? {})).toEqual([
+      'createdAt',
+    ]);
+    expect(Object.keys(symbolTable.namespaces['app']?.models['Item']?.fields ?? {})).toEqual([
       'createdAt',
     ]);
   });
 
   it('finds a mixin through a namespace reopened in another document', () => {
-    const { topLevel, diagnostics } = build(
+    const { symbolTable, diagnostics } = build(
       'namespace auth {\n  model User {\n    +Timestamps\n  }\n}',
       'namespace auth {\n  model mixin Timestamps {\n    createdAt DateTime\n  }\n}',
     );
 
     expect(diagnostics).toEqual([]);
-    expect(Object.keys(topLevel.namespaces['auth']?.models['User']?.fields ?? {})).toEqual([
+    expect(Object.keys(symbolTable.namespaces['auth']?.models['User']?.fields ?? {})).toEqual([
       'createdAt',
     ]);
   });
@@ -480,7 +496,7 @@ describe('createBinder() looking up the name of an inclusion', () => {
 describe('createBinder() reporting an inclusion', () => {
   it('reports a name that resolves to nothing, in the file of the inclusion', () => {
     const including = 'model User {\n  id Int\n  +Missing\n  +auth.Missing\n  +nowhere.Thing\n}';
-    const { diagnostics, topLevel } = build('namespace auth {\n}', including);
+    const { diagnostics, symbolTable } = build('namespace auth {\n}', including);
 
     expect(diagnostics).toEqual([
       {
@@ -502,20 +518,20 @@ describe('createBinder() reporting an inclusion', () => {
         range: rangeOf(including, '+nowhere.Thing'),
       },
     ]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['id']);
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual(['id']);
   });
 
   it.each([
     ['a model', 'model Target {\n}', 'Target'],
     ['a composite type', 'type Target {\n}', 'Target'],
-    ['a named type', 'types {\n  Target = String\n}', 'Target'],
+    ['a type alias', 'types {\n  Target = String\n}', 'Target'],
     ['an enum', 'enum Target {\n}', 'Target'],
     ['another block', 'policy Target {\n}', 'Target'],
     ['a namespace', 'namespace Target {\n}', 'Target'],
     ['a qualified model', 'namespace ns {\n  model Target {\n  }\n}', 'ns.Target'],
   ])('reports the name of %s as a mixin that cannot be found', (_kind, declaration, written) => {
     const source = `${declaration}\nmodel User {\n  +${written}\n  id Int\n}`;
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -525,7 +541,7 @@ describe('createBinder() reporting an inclusion', () => {
         range: rangeOf(source, `+${written}`),
       },
     ]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['id']);
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual(['id']);
   });
 
   it('reports a name with a contract-space qualifier as a mixin that cannot be found', () => {
@@ -543,7 +559,7 @@ describe('createBinder() reporting an inclusion', () => {
       '  +other:ns.T',
       '}',
     );
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -559,7 +575,7 @@ describe('createBinder() reporting an inclusion', () => {
         range: rangeOf(source, '+other:ns.T'),
       },
     ]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual([]);
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual([]);
   });
 
   it.each([
@@ -593,14 +609,14 @@ describe('createBinder() reporting an inclusion', () => {
     ],
   ])('reports a mixin for another keyword included in %s', (_kind, mixin, block, code, message) => {
     const source = `${mixin}\n${block}`;
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       { code, message, filename: '0.psl', range: rangeOf(source, '+M') },
     ]);
-    expect(Object.keys(topLevel.models['B']?.fields ?? {})).toEqual([]);
-    expect(Object.keys(topLevel.compositeTypes['B']?.fields ?? {})).toEqual([]);
-    expect(topLevel.blocks['B']?.entries ?? []).toEqual([]);
+    expect(Object.keys(symbolTable.defaultNamespace.models['B']?.fields ?? {})).toEqual([]);
+    expect(Object.keys(symbolTable.defaultNamespace.compositeTypes['B']?.fields ?? {})).toEqual([]);
+    expect(symbolTable.defaultNamespace.blocks['B']?.entries ?? []).toEqual([]);
   });
 
   it('reports the second inclusion of the same mixin in a model, which contributes nothing', () => {
@@ -615,7 +631,7 @@ describe('createBinder() reporting an inclusion', () => {
       '  +T',
       '}',
     );
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -625,10 +641,13 @@ describe('createBinder() reporting an inclusion', () => {
         range: rangeOf(source, '+T', 1),
       },
     ]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['a', 'id']);
-    expect(topLevel.models['User']?.attributes.map((attribute) => attribute.name)).toEqual([
-      'index',
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual([
+      'a',
+      'id',
     ]);
+    expect(
+      symbolTable.defaultNamespace.models['User']?.attributes.map((attribute) => attribute.name),
+    ).toEqual(['index']);
   });
 
   it('reports the second inclusion of the same mixin in an enum, by either spelling of its name', () => {
@@ -643,7 +662,7 @@ describe('createBinder() reporting an inclusion', () => {
       '  }',
       '}',
     );
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -654,7 +673,7 @@ describe('createBinder() reporting an inclusion', () => {
       },
     ]);
     expect(
-      topLevel.namespaces['auth']?.blocks['Role']?.entries.map((entry) => entry.key()?.name()),
+      symbolTable.namespaces['auth']?.blocks['Role']?.entries.map((entry) => entry.key()?.name()),
     ).toEqual(['ADMIN']);
   });
 
@@ -670,8 +689,8 @@ describe('createBinder() reporting an inclusion', () => {
       '  +T',
       '}',
     );
-    const { diagnostics, topLevel } = build(source);
-    const user = topLevel.models['User'];
+    const { diagnostics, symbolTable } = build(source);
+    const user = symbolTable.defaultNamespace.models['User'];
 
     expect(diagnostics).toEqual([
       {
@@ -689,7 +708,7 @@ describe('createBinder() reporting an inclusion', () => {
   it('reports a field two mixins provide at the later inclusion', () => {
     const source =
       'model mixin A {\n  x Int\n}\nmodel mixin B {\n  x String\n  y Int\n}\nmodel User {\n  +A\n  +B\n}';
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -699,14 +718,19 @@ describe('createBinder() reporting an inclusion', () => {
         range: rangeOf(source, '+B'),
       },
     ]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['x', 'y']);
-    expect(topLevel.models['User']?.fields['x']).toBe(topLevel.mixins['A']?.fields['x']);
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual([
+      'x',
+      'y',
+    ]);
+    expect(symbolTable.defaultNamespace.models['User']?.fields['x']).toBe(
+      symbolTable.defaultNamespace.mixins['A']?.fields['x'],
+    );
   });
 
   it('reports the model field that comes after the inclusion that provided its name', () => {
     const source =
       'model mixin T {\n  createdAt DateTime\n}\nmodel User {\n  +T\n  createdAt Int\n}';
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -716,14 +740,14 @@ describe('createBinder() reporting an inclusion', () => {
         range: rangeOf(source, 'createdAt', 1),
       },
     ]);
-    expect(topLevel.models['User']?.fields['createdAt']).toBe(
-      topLevel.mixins['T']?.fields['createdAt'],
+    expect(symbolTable.defaultNamespace.models['User']?.fields['createdAt']).toBe(
+      symbolTable.defaultNamespace.mixins['T']?.fields['createdAt'],
     );
   });
 
   it('reports a field the model declares twice once, with an inclusion in between', () => {
     const source = 'model mixin T {\n  b Int\n}\nmodel User {\n  a Int\n  +T\n  a String\n}';
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -733,8 +757,11 @@ describe('createBinder() reporting an inclusion', () => {
         range: rangeOf(source, 'a', 1),
       },
     ]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['a', 'b']);
-    expect(topLevel.models['User']?.fields['a']?.typeName).toBe('Int');
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(symbolTable.defaultNamespace.models['User']?.fields['a']?.typeName).toBe('Int');
   });
 
   it('reports an entry key the block already has when the inclusion is reached, and includes the rest', () => {
@@ -748,8 +775,8 @@ describe('createBinder() reporting an inclusion', () => {
       '  +R',
       '}',
     );
-    const { diagnostics, topLevel } = build(source);
-    const role = topLevel.blocks['Role'];
+    const { diagnostics, symbolTable } = build(source);
+    const role = symbolTable.defaultNamespace.blocks['Role'];
 
     expect(diagnostics).toEqual([
       {
@@ -779,7 +806,7 @@ describe('createBinder() reporting an inclusion', () => {
       '  +B',
       '}',
     );
-    const { diagnostics, topLevel } = build(source);
+    const { diagnostics, symbolTable } = build(source);
 
     expect(diagnostics).toEqual([
       {
@@ -795,16 +822,16 @@ describe('createBinder() reporting an inclusion', () => {
         range: rangeOf(source, '+Missing'),
       },
     ]);
-    expect(Object.keys(topLevel.mixins['B']?.fields ?? {})).toEqual(['b']);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['b']);
+    expect(Object.keys(symbolTable.defaultNamespace.mixins['B']?.fields ?? {})).toEqual(['b']);
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual(['b']);
   });
 
   it('reports nothing here for an inclusion the parser left without a name', () => {
-    const { diagnostics, parseDiagnostics, topLevel } = build('model User {\n  +\n  id Int\n}');
+    const { diagnostics, parseDiagnostics, symbolTable } = build('model User {\n  +\n  id Int\n}');
 
     expect(parseDiagnostics).toHaveLength(1);
     expect(diagnostics).toEqual([]);
-    expect(Object.keys(topLevel.models['User']?.fields ?? {})).toEqual(['id']);
+    expect(Object.keys(symbolTable.defaultNamespace.models['User']?.fields ?? {})).toEqual(['id']);
   });
 
   it('reports diagnostics for inclusions in several blocks in the order of the blocks', () => {
@@ -822,7 +849,7 @@ describe('createBinder() reporting an inclusion', () => {
 
 describe('createBinder() changing the symbols it is given', () => {
   it('shows the placed fields on a model symbol the binder resolved before placement', () => {
-    const { binder, topLevel } = build(
+    const { binder, symbolTable } = build(
       lines(
         'model Post {',
         '  author User',
@@ -836,16 +863,18 @@ describe('createBinder() changing the symbols it is given', () => {
         '}',
       ),
     );
-    const author = topLevel.models['Post']?.fields['author'];
+    const author = symbolTable.defaultNamespace.models['Post']?.fields['author'];
     const type = author === undefined ? undefined : typeReferenceNode(author);
     const resolution = type === undefined ? undefined : binder.symbolForNode(type);
     const user = resolution?.kind === 'model' ? resolution.symbol : undefined;
 
-    expect(user).toBe(topLevel.models['User']);
+    expect(user).toBe(symbolTable.defaultNamespace.models['User']);
     expect(Object.keys(user?.fields ?? {})).toEqual(['id', 'createdAt']);
-    expect(binder.declaredSymbol(topLevel.models['User']?.node.syntax ?? author!.node.syntax)).toBe(
-      user,
-    );
+    expect(
+      binder.declaredSymbol(
+        symbolTable.defaultNamespace.models['User']?.node.syntax ?? author!.node.syntax,
+      ),
+    ).toBe(user);
   });
 
   it('leaves a block with no inclusion as the same object with the same member records', () => {
@@ -870,9 +899,10 @@ describe('createBinder() changing the symbols it is given', () => {
     const { symbolTable } = buildSymbolTable({
       documents: [parsed.document],
       sources: parsed.sources,
+      defaultNamespaceId: 'public',
     });
-    const post = symbolTable.topLevel.models['Post'];
-    const role = symbolTable.topLevel.blocks['Role'];
+    const post = symbolTable.defaultNamespace.models['Post'];
+    const role = symbolTable.defaultNamespace.blocks['Role'];
     const before = {
       postFields: post?.fields,
       postFieldSymbols: Object.values(post?.fields ?? {}),
@@ -889,8 +919,8 @@ describe('createBinder() changing the symbols it is given', () => {
       context: binderContext({ contributedTypes }),
     });
 
-    expect(symbolTable.topLevel.models['Post']).toBe(post);
-    expect(symbolTable.topLevel.blocks['Role']).toBe(role);
+    expect(symbolTable.defaultNamespace.models['Post']).toBe(post);
+    expect(symbolTable.defaultNamespace.blocks['Role']).toBe(role);
     expect(post?.fields).toBe(before.postFields);
     expect(Object.values(post?.fields ?? {})).toEqual(before.postFieldSymbols);
     expect(post?.attributes).toBe(before.postAttributes);

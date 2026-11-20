@@ -1,0 +1,86 @@
+import mysqlAdapter from '@internal/adapter-mysql/control';
+import mysqlDriver from '@internal/driver-mysql/control';
+import sql from '@internal/family-sql/control';
+import mysql from '@internal/target-mysql/control';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
+import { describe, expect, it } from 'vitest';
+import { defineConfig } from '../../src/config/define-config';
+
+describe('defineConfig for MySQL', () => {
+  it('wires the MySQL target, adapter and driver', () => {
+    const config = defineConfig({
+      contract: './prisma/contract.prisma',
+      db: { connection: 'mysql://root@localhost:3306/app' },
+      migrations: { dir: './migrations' },
+    });
+    expect({
+      family: config.family,
+      target: config.target,
+      adapter: config.adapter,
+      driver: config.driver,
+      extensions: config.extensions,
+      output: config.contract?.output,
+      inputs: config.contract?.source.inputs,
+      db: config.db,
+    }).toEqual({
+      family: sql,
+      target: mysql,
+      adapter: restateTypeDeclarations(mysqlAdapter, '@internal/mysql/contract-types'),
+      driver: mysqlDriver,
+      extensions: [],
+      output: './prisma/contract.json',
+      inputs: ['./prisma/contract.prisma'],
+      db: { connection: 'mysql://root@localhost:3306/app' },
+    });
+  });
+
+  it('reads a TypeScript contract with the TypeScript provider', () => {
+    const config = defineConfig({ contract: './prisma/contract.ts', output: 'generated' });
+    expect({
+      format: config.contract?.source.format,
+      output: config.contract?.output,
+      inputs: config.contract?.source.inputs,
+    }).toEqual({
+      format: 'typescript',
+      output: 'generated/contract.json',
+      inputs: ['./prisma/contract.ts'],
+    });
+  });
+
+  it.each([
+    ['a glob', './prisma/**', './prisma/contract.json'],
+    ['a folder', './prisma', './prisma.json'],
+  ])('builds %s contract path through the Prisma schema provider', (_kind, contract, output) => {
+    const config = defineConfig({ contract });
+    expect({ output: config.contract?.output, inputs: config.contract?.source.inputs }).toEqual({
+      output,
+      inputs: [contract],
+    });
+  });
+
+  it('passes formatter config through', () => {
+    const config = defineConfig({
+      contract: './prisma/contract.prisma',
+      formatter: { indent: 'tab', newline: 'CRLF' },
+    });
+
+    expect(config.formatter).toEqual({ indent: 'tab', newline: 'CRLF' });
+  });
+
+  it('leaves formatter out when it is not given', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect(Object.hasOwn(config, 'formatter')).toBe(false);
+  });
+});
+
+describe('the modules generated files import from', () => {
+  it('names its own contract-types and migration modules', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect([config.contract?.typesModule, config.migrations]).toEqual([
+      '@internal/mysql/contract-types',
+      { module: '@internal/mysql/migration' },
+    ]);
+  });
+});

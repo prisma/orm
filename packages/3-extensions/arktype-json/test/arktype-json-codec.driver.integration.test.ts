@@ -55,7 +55,7 @@ describe('arktype-json decoding of values read through the Postgres runtime driv
       sql: 'select v from payloads order by id',
       params: [],
     })) {
-      decoded.push(await codec.decode(row.v, {}));
+      decoded.push(await codec.fromWire(row.v, {}));
     }
     return decoded;
   }

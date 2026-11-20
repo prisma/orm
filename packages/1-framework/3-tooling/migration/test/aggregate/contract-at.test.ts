@@ -1,5 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import type { Contract } from '@internal/contract/types';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -205,6 +206,31 @@ describe('AggregateContractSpace.contractAt', () => {
 
     await expect(space.contractAt(HASH_B)).rejects.toMatchObject({
       code: 'MIGRATION.CONTRACT_DESERIALIZATION_FAILED',
+    });
+  });
+
+  it('keeps the refused defaults of a snapshot the family refuses to load', async () => {
+    const refusedDefaults = [
+      {
+        namespaceId: 'public',
+        table: 'users',
+        column: 'id',
+        dataType: 'pg/int4',
+        value: 'x',
+        message: 'not an integer',
+        reason: 'type-refused-default',
+      },
+    ];
+    const space = spaceWithPackages(
+      [createAttestedPackage('20260101T0000_init', { from: null, to: HASH_B })],
+      () => {
+        throw new ContractValidationError('refused', 'storage', { refusedDefaults });
+      },
+    );
+
+    await expect(space.contractAt(HASH_B)).rejects.toMatchObject({
+      code: 'MIGRATION.CONTRACT_DESERIALIZATION_FAILED',
+      meta: { refusedDefaults },
     });
   });
 

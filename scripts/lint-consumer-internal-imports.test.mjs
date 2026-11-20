@@ -10,8 +10,12 @@ import { fileURLToPath } from 'node:url';
 import {
   CONSUMER_SCOPES,
   findMatchingLines,
+  findProseNames,
   internalSpecifiersOnLine,
   isScannableFile,
+  isTransitionChecked,
+  publishedEntries,
+  publishedNamesOnLine,
   scanManifests,
 } from './lint-consumer-internal-imports.mjs';
 
@@ -301,5 +305,313 @@ describe('lint-consumer-internal-imports', () => {
     const result = runScript('--list');
     assert.equal(result.status, 1, `expected exit 1; stdout=${result.stdout}`);
     assert.match(result.stdout, /examples\/app\/src\/main\.ts:2: @internal\/sql-orm-client/);
+  });
+});
+
+describe('isTransitionChecked', () => {
+  it('holds guides for releases after 8.0.0-rc.24 to the prose rule', () => {
+    assert.equal(isTransitionChecked('8.0.0-rc.24-to-8.0.0-rc.25'), true);
+    assert.equal(isTransitionChecked('8.0.0-rc.24-to-8.0'), true);
+    assert.equal(isTransitionChecked('8.0-to-8.1'), true);
+  });
+
+  it('leaves guides up to 8.0.0-rc.24 as they shipped', () => {
+    assert.equal(isTransitionChecked('8.0.0-rc.23-to-8.0.0-rc.24'), false);
+    assert.equal(isTransitionChecked('8.0.0-rc.9-to-8.0.0-rc.10'), false);
+    assert.equal(isTransitionChecked('0.17-to-8.0.0-rc.1'), false);
+    assert.equal(isTransitionChecked('0.9-to-0.10'), false);
+  });
+});
+
+describe('findProseNames', () => {
+  const entries = new Map([['@prisma/orm-postgres', new Set(['@prisma/orm-postgres/runtime'])]]);
+  const entriesOf = (name) => entries.get(name);
+
+  it('names the internal package and the missing export it found', () => {
+    const records = findProseNames(
+      'Use `@internal/postgres/runtime`.\nOr `@prisma/orm-postgres/middleware`.\n',
+      entriesOf,
+    );
+    assert.deepEqual(records, [
+      { line: 1, internal: ['@internal/postgres/runtime'], unpublished: [] },
+      { line: 2, internal: [], unpublished: ['@prisma/orm-postgres/middleware'] },
+    ]);
+  });
+
+  it('accepts a published entry, a bare package name and a placeholder', () => {
+    const content =
+      '`@prisma/orm-postgres/runtime`, `@prisma/orm-postgres`, `@prisma/orm-<target>/runtime`, `@prisma/orm-family-*`\n';
+    assert.deepEqual(findProseNames(content, entriesOf), []);
+  });
+
+  it('exempts detection patterns, and the exemption ends at the next key', () => {
+    const content = [
+      '---',
+      'changes:',
+      '  - id: first',
+      '    detection:',
+      '      glob: "**/*.ts"',
+      '      matches:',
+      "        - 'from [''\"]@internal/adapter-postgres/column-types'",
+      '  - id: second',
+      '    summary: |',
+      '      Import it from `@internal/adapter-postgres/column-types`.',
+      '---',
+      '',
+      'Prose naming `@internal/postgres/runtime`.',
+      '',
+    ].join('\n');
+    assert.deepEqual(
+      findProseNames(content, entriesOf).map((record) => record.line),
+      [10, 13],
+    );
+  });
+
+  it('reads a summary line as prose even when it repeats a detection pattern', () => {
+    const content = [
+      '---',
+      'changes:',
+      '  - id: first',
+      '    summary: |',
+      '      @internal/adapter-postgres/column-types',
+      '    detection:',
+      '      matches:',
+      '        - "@internal/adapter-postgres/column-types"',
+      '---',
+      '',
+    ].join('\n');
+    assert.deepEqual(
+      findProseNames(content, entriesOf).map((record) => record.line),
+      [5],
+    );
+  });
+
+  it('exempts detection patterns in a file with CRLF line endings', () => {
+    const content = [
+      '---',
+      'changes:',
+      '  - id: first',
+      '    detection:',
+      '      matches:',
+      '        - "@internal/adapter-postgres/column-types"',
+      '---',
+      '',
+      'Prose naming `@internal/postgres/runtime`.',
+      '',
+    ].join('\r\n');
+    assert.deepEqual(
+      findProseNames(content, entriesOf).map((record) => record.line),
+      [9],
+    );
+  });
+
+  it('exempts every line of a multi-line detection value', () => {
+    const content = [
+      '---',
+      'changes:',
+      '  - id: first',
+      '    detection:',
+      '      matches:',
+      '        - >-',
+      "          from '@internal/adapter-postgres/column-types'",
+      "          |from '@internal/postgres/runtime'",
+      '    summary: Import it from `@internal/postgres/runtime`.',
+      '---',
+      '',
+    ].join('\n');
+    assert.deepEqual(
+      findProseNames(content, entriesOf).map((record) => record.line),
+      [9],
+    );
+  });
+});
+
+describe('prose scopes', () => {
+  const guide = 'Import it from `@internal/postgres/runtime`.\n';
+
+  it('reads the skill, pending fragments and newer guides, and skips older guides and codemods', () => {
+    writeRepoFile('skills/prisma-8/references/runtime.md', guide);
+    writeRepoFile('upgrade-instructions/pending/renamed/app/instructions.md', guide);
+    writeRepoFile(
+      'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
+      guide,
+    );
+    writeRepoFile(
+      'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/scripts/fix/fix.ts',
+      "const from = '@internal/postgres/runtime';\n",
+    );
+    writeRepoFile(
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.23-to-8.0.0-rc.24/instructions.md',
+      guide,
+    );
+    commitAll('fixture');
+
+    const result = runScript('--list');
+    assert.equal(result.status, 1);
+    const listed = result.stdout
+      .trim()
+      .split('\n')
+      .map((line) => line.trim().split(':')[0]);
+    assert.deepEqual(listed.sort(), [
+      'skills/prisma-8/references/runtime.md',
+      'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
+      'upgrade-instructions/pending/renamed/app/instructions.md',
+    ]);
+    assert.match(result.stderr, /@internal\/postgres\/runtime \(not published\)/);
+  });
+
+  it('lets an upgrade guide name an entry a release removed, and the skill not', () => {
+    writeRepoFile(
+      'packages/9-public/@prisma/orm-x/package.json',
+      JSON.stringify({ name: '@prisma/orm-x', exports: { '.': './i.mjs' } }),
+    );
+    const removed = '`@prisma/orm-x/removed` is removed. Nothing replaces it.\n';
+    writeRepoFile('upgrade-instructions/pending/removed/app/instructions.md', removed);
+    writeRepoFile('skills/prisma-8/references/runtime.md', removed);
+    commitAll('fixture');
+
+    const result = runScript('--list');
+    assert.equal(result.status, 1);
+    assert.deepEqual(
+      result.stdout
+        .trim()
+        .split('\n')
+        .map((line) => line.trim().split(':')[0]),
+      ['skills/prisma-8/references/runtime.md'],
+    );
+  });
+
+  it('refuses file arguments rather than skipping the check', () => {
+    const result = runScript('skills/prisma-8/SKILL.md');
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /takes no file arguments/);
+  });
+});
+
+describe('publishedNamesOnLine', () => {
+  it('keeps a name with a character an entry cannot have, so it is resolved and fails', () => {
+    assert.deepEqual(publishedNamesOnLine('Import `@prisma/orm-postgres/Runtime`.'), [
+      '@prisma/orm-postgres/Runtime',
+    ]);
+    assert.deepEqual(publishedNamesOnLine('Import `@prisma/orm-postgres/control-api/`.'), [
+      '@prisma/orm-postgres/control-api/',
+    ]);
+  });
+
+  it('reads package.json as a subpath, drops a version, and trims sentence punctuation', () => {
+    assert.deepEqual(publishedNamesOnLine('Read `@prisma/orm-postgres/package.json`.'), [
+      '@prisma/orm-postgres/package.json',
+    ]);
+    assert.deepEqual(publishedNamesOnLine('<e.g. @prisma/orm-postgres@8.0.0-rc.24>'), [
+      '@prisma/orm-postgres',
+    ]);
+    assert.deepEqual(publishedNamesOnLine('Install @prisma/orm-postgres.'), [
+      '@prisma/orm-postgres',
+    ]);
+  });
+
+  it('keeps only the package of a name inside a URL path', () => {
+    assert.deepEqual(
+      publishedNamesOnLine('See https://www.npmjs.com/package/@prisma/orm-postgres/v/8.0.0'),
+      ['@prisma/orm-postgres'],
+    );
+  });
+
+  it('drops Markdown emphasis and an autolink bracket, so the name is still resolved', () => {
+    assert.deepEqual(publishedNamesOnLine('Use **@prisma/orm-postgres/missing**.'), [
+      '@prisma/orm-postgres/missing',
+    ]);
+    assert.deepEqual(publishedNamesOnLine('Use _@prisma/orm-postgres/missing_.'), [
+      '@prisma/orm-postgres/missing',
+    ]);
+    assert.deepEqual(
+      publishedNamesOnLine('See <https://www.npmjs.com/package/@prisma/orm-postgres>.'),
+      ['@prisma/orm-postgres'],
+    );
+    assert.deepEqual(publishedNamesOnLine('Never `@prisma/orm-family-*`.'), []);
+    assert.deepEqual(publishedNamesOnLine('Import `@prisma/orm-postgres/config_`.'), [
+      '@prisma/orm-postgres/config_',
+    ]);
+  });
+
+  it('skips placeholders and prefixes', () => {
+    assert.deepEqual(
+      publishedNamesOnLine(
+        '`@prisma/orm-<target>/runtime`, `@prisma/orm-family-*`, `@prisma/orm-{postgres,mongo}`, n.startsWith("@prisma/orm-extension-")',
+      ),
+      [],
+    );
+  });
+});
+
+describe('publishedEntries', () => {
+  it('maps exports to specifiers, including package.json and a wildcard export', () => {
+    writeRepoFile(
+      'packages/9-public/@prisma/orm-x/package.json',
+      JSON.stringify({
+        name: '@prisma/orm-x',
+        exports: {
+          '.': './dist/index.mjs',
+          './runtime': './dist/runtime.mjs',
+          './package.json': './package.json',
+          './codecs/*': './dist/codecs/*.mjs',
+        },
+      }),
+    );
+    const entries = publishedEntries(repo, '@prisma/orm-x');
+    assert.equal(entries.has('@prisma/orm-x'), true);
+    assert.equal(entries.has('@prisma/orm-x/runtime'), true);
+    assert.equal(entries.has('@prisma/orm-x/package.json'), true);
+    assert.equal(entries.has('@prisma/orm-x/codecs/int4'), true);
+    assert.equal(entries.has('@prisma/orm-x/codecs/'), false);
+    assert.equal(entries.has('@prisma/orm-x/Runtime'), false);
+    assert.equal(entries.has('@prisma/orm-x/runtime/'), false);
+    assert.equal(publishedEntries(repo, '@prisma/orm-y'), undefined);
+  });
+
+  it('reads a null target as an exclusion, and the most specific wildcard wins', () => {
+    writeRepoFile(
+      'packages/9-public/@prisma/orm-x/package.json',
+      JSON.stringify({
+        name: '@prisma/orm-x',
+        exports: {
+          '.': './i.mjs',
+          './runtime': null,
+          './features/*': './f/*.mjs',
+          './features/internal/*': null,
+          './features/*.private': null,
+          './conditional': { import: './c.mjs', default: null },
+          './excluded': { import: null, default: null },
+        },
+      }),
+    );
+    const entries = publishedEntries(repo, '@prisma/orm-x');
+    assert.equal(entries.has('@prisma/orm-x'), true);
+    assert.equal(entries.has('@prisma/orm-x/runtime'), false);
+    assert.equal(entries.has('@prisma/orm-x/features/a'), true);
+    assert.equal(entries.has('@prisma/orm-x/features/internal/a'), false);
+    assert.equal(entries.has('@prisma/orm-x/features/a.private'), false);
+    assert.equal(entries.has('@prisma/orm-x/conditional'), true);
+    assert.equal(entries.has('@prisma/orm-x/excluded'), false);
+  });
+
+  it('resolves prose against real manifests: a real export passes, a made-up one and an unknown package fail', () => {
+    writeRepoFile(
+      'packages/9-public/@prisma/orm-x/package.json',
+      JSON.stringify({
+        name: '@prisma/orm-x',
+        exports: { '.': './i.mjs', './runtime': './r.mjs' },
+      }),
+    );
+    writeRepoFile(
+      'skills/prisma-8/references/runtime.md',
+      'Use `@prisma/orm-x/runtime`, not `@prisma/orm-x/missing` or `@prisma/orm-y`.\n',
+    );
+    commitAll('fixture');
+    const result = runScript();
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /@prisma\/orm-x\/missing \(no such export\)/);
+    assert.match(result.stderr, /@prisma\/orm-y \(no such export\)/);
+    assert.doesNotMatch(result.stderr, /@prisma\/orm-x\/runtime/);
   });
 });

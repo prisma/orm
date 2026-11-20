@@ -4,6 +4,10 @@
   "target": "sqlite",
   "profileHash": "260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53",
   "roots": {
+    "event": {
+      "model": "Event",
+      "namespace": "__unbound__"
+    },
     "post": {
       "model": "Post",
       "namespace": "__unbound__"
@@ -25,6 +29,80 @@
     "namespaces": {
       "__unbound__": {
         "models": {
+          "Event": {
+            "fields": {
+              "bookedOn": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/date-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "day": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/date-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/char@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 36
+                  }
+                }
+              },
+              "opensAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/time-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "startsAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "bookedOn": {
+                  "column": "bookedOn"
+                },
+                "day": {
+                  "column": "day"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "opensAt": {
+                  "column": "opensAt"
+                },
+                "startsAt": {
+                  "column": "startsAt"
+                },
+                "title": {
+                  "column": "title"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "event"
+            }
+          },
           "Post": {
             "fields": {
               "createdAt": {
@@ -71,7 +149,7 @@
               "viewCount": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "kind": "scalar"
                 }
               }
@@ -326,11 +404,60 @@
       "__unbound__": {
         "entries": {
           "table": {
+            "event": {
+              "columns": {
+                "bookedOn": {
+                  "codecId": "sqlite/date-string@1",
+                  "dataType": "sqlite/date",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "day": {
+                  "codecId": "sqlite/date-string@1",
+                  "dataType": "sqlite/date",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sql/char@1",
+                  "dataType": "sqlite/character",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 36
+                  }
+                },
+                "opensAt": {
+                  "codecId": "sqlite/time-string@1",
+                  "dataType": "sqlite/time",
+                  "nullable": false
+                },
+                "startsAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                },
+                "title": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "post": {
               "columns": {
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -364,10 +491,9 @@
                   }
                 },
                 "viewCount": {
-                  "codecId": "sqlite/bigintnumber@1",
+                  "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
-                  "nullable": true,
-                  "typeRef": "BigIntNumber"
+                  "nullable": true
                 }
               },
               "foreignKeys": [
@@ -526,7 +652,7 @@
               "columns": {
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/text",
+                  "dataType": "sqlite/datetime",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -566,19 +692,23 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "c05a77e8c5dd486ddf723889af22c7e63f374689edce17c326101688d5d6d02a",
-    "types": {
-      "BigIntNumber": {
-        "codecId": "sqlite/bigintnumber@1",
-        "dataType": "sqlite/integer",
-        "kind": "codec-instance"
-      }
-    }
+    "storageHash": "58f983997d83814809882ae60784356aa5db298701ad75502b09f01bafe83971"
   },
   "execution": {
-    "executionHash": "a6bd95c41e717d2a7dd3d556af8befa35950b61ccf39569e36ab3a357b40457e",
+    "executionHash": "711ee7a9f9952ece816afa0be8a7beb696460439dd0added45acb86d7072b8fe",
     "mutations": {
       "defaults": [
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "event",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
         {
           "onCreate": {
             "id": "uuidv4",
@@ -619,10 +749,13 @@
     "sql": {
       "foreignKeys": true,
       "insertOnConflictSkip": true,
+      "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
+      "jsonAggWithoutTruncation": true,
       "limit": true,
       "orderBy": true,
+      "outerReferencesInDerivedTables": true,
       "returning": true
     }
   },

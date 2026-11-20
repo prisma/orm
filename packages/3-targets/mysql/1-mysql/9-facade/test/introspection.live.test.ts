@@ -1,0 +1,394 @@
+import mysqlAdapter from '@internal/adapter-mysql/control';
+import type { MysqlControlDriver } from '@internal/driver-mysql/control';
+import mysqlDriver from '@internal/driver-mysql/control';
+import sql from '@internal/family-sql/control';
+import { createControlStack, diffSchemas } from '@internal/framework-components/control';
+import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import mysql from '@internal/target-mysql/control';
+import { timeouts } from '@repo/test-utils';
+import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
+import { describe, expect, it } from 'vitest';
+import { defineContract } from '../src/exports/contract-builder';
+import {
+  exampleContractSchema,
+  exampleTablesDdl,
+  frameworkComponents,
+  loadExampleContract,
+} from './example-contract';
+import { contractWithScalarTypes } from './migrations/contracts';
+
+const autoincrement = { kind: 'function', expression: 'autoincrement()' } as const;
+
+async function introspect(driver: MysqlControlDriver, contract?: unknown): Promise<SqlSchemaIR> {
+  const adapter = mysqlAdapter.create(
+    createControlStack({ family: sql, target: mysql, adapter: mysqlAdapter, driver: mysqlDriver }),
+  );
+  return (await adapter.introspect(driver, contract)) as SqlSchemaIR;
+}
+
+function contractWithBothKindsOfUniqueness() {
+  return defineContract({}, ({ field, model, type }) => ({
+    models: {
+      Account: model('Account', {
+        fields: {
+          id: field.column(type.Int()).id(),
+          email: field.column(type.String()).unique(),
+          handle: field.column(type.String()),
+        },
+      }).sql(({ cols, constraints }) => ({
+        indexes: [constraints.index([cols.handle], { unique: true })],
+      })),
+    },
+  }));
+}
+
+function contractWithTextDefault() {
+  return defineContract({}, ({ field, model, type }) => ({
+    models: {
+      Note: model('Note', {
+        fields: {
+          id: field.column(type.Int()).id(),
+          body: field.column({ codecId: 'mysql/text@1' }).default("it's a \\ b"),
+        },
+      }),
+    },
+  }));
+}
+
+function contractWithIndexNamedLikeItsForeignKey() {
+  return defineContract({}, ({ field, model, type }) => {
+    const User = model('User', { fields: { id: field.column(type.Int()).id() } });
+    const Post = model('Post', {
+      fields: { id: field.column(type.Int()).id(), authorId: field.column(type.Int()) },
+    });
+    return {
+      models: {
+        User,
+        Post: Post.sql(({ cols, constraints }) => ({
+          foreignKeys: [constraints.foreignKey(cols.authorId, User.refs.id, { index: false })],
+          indexes: [constraints.index([cols.authorId], { map: 'fk_x' })],
+        })),
+      },
+    };
+  });
+}
+
+const tablesWithIndexNamedLikeItsForeignKey = [
+  'CREATE TABLE `User` (`id` int NOT NULL, PRIMARY KEY (`id`))',
+  `CREATE TABLE \`Post\` (
+    \`id\` int NOT NULL,
+    \`authorId\` int NOT NULL,
+    PRIMARY KEY (\`id\`),
+    KEY \`fk_x\` (\`authorId\`),
+    CONSTRAINT \`fk_x\` FOREIGN KEY (\`authorId\`) REFERENCES \`User\` (\`id\`)
+  )`,
+];
+
+async function withExampleTables<T>(
+  url: string,
+  ddl: readonly string[],
+  fn: (driver: MysqlControlDriver) => Promise<T>,
+): Promise<T> {
+  const driver = await mysqlDriver.create(url);
+  try {
+    for (const statement of ddl) await driver.query(statement);
+    return await fn(driver);
+  } finally {
+    await driver.close();
+  }
+}
+
+describe('introspecting a MySQL database made by hand', {
+  timeout: timeouts.databaseOperation,
+}, () => {
+  it('yields the schema IR the example contract describes', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, exampleTablesDdl, async (driver) => {
+        const actual = await introspect(driver, loadExampleContract());
+
+        expect(diffSchemas(exampleContractSchema(), actual)).toEqual([]);
+        expect(
+          mysql.diffSchema({
+            contract: loadExampleContract(),
+            schema: actual,
+            frameworkComponents,
+          }).issues,
+        ).toEqual([]);
+        expect(actual).toEqual(
+          new SqlSchemaIR({
+            tables: {
+              Post: {
+                name: 'Post',
+                columns: {
+                  id: {
+                    name: 'id',
+                    typeText: 'int',
+                    nullable: false,
+                    resolvedDefault: autoincrement,
+                  },
+                  title: { name: 'title', typeText: 'varchar(191)', nullable: false },
+                  authorId: { name: 'authorId', typeText: 'int', nullable: false },
+                },
+                primaryKey: { columns: ['id'] },
+                foreignKeys: [
+                  {
+                    columns: ['authorId'],
+                    referencedTable: 'User',
+                    referencedColumns: ['id'],
+                    name: 'Post_authorId_fkey',
+                  },
+                ],
+                uniques: [],
+                indexes: [
+                  {
+                    naming: { kind: 'exact', name: 'Post_authorId_idx_e47547ed' },
+                    columns: ['authorId'],
+                    unique: false,
+                    where: undefined,
+                    partial: false,
+                    type: undefined,
+                    options: undefined,
+                    annotations: undefined,
+                    dependsOn: undefined,
+                  },
+                ],
+              },
+              User: {
+                name: 'User',
+                columns: {
+                  id: {
+                    name: 'id',
+                    typeText: 'int',
+                    nullable: false,
+                    resolvedDefault: autoincrement,
+                  },
+                  email: { name: 'email', typeText: 'varchar(191)', nullable: false },
+                  role: { name: 'role', typeText: "enum('USER','ADMIN')", nullable: false },
+                },
+                primaryKey: { columns: ['id'] },
+                foreignKeys: [],
+                uniques: [{ columns: ['email'], name: 'User_email_key' }],
+                indexes: [],
+              },
+            },
+          }),
+        );
+      }),
+    );
+  });
+
+  it('verifies a table made by hand with a column of each scalar convenience type and its default', async (test) => {
+    const contract = contractWithScalarTypes();
+    const measureDdl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`count\` bigint NOT NULL DEFAULT 7,
+      \`ratio\` double NOT NULL DEFAULT 0.25,
+      \`amount\` decimal(65,30) NOT NULL DEFAULT 1.5,
+      \`price\` decimal(10,2) NOT NULL DEFAULT '-0.5',
+      \`label\` text NULL,
+      \`name\` varchar(40) NOT NULL DEFAULT 'it''s',
+      \`on\` tinyint(1) NOT NULL DEFAULT TRUE,
+      \`data\` longblob NOT NULL DEFAULT (X'00FF'),
+      \`doc\` json NOT NULL DEFAULT ('{"a": "it''s", "b": [1, null]}'),
+      \`extra\` json NULL,
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [measureDdl], async (driver) => {
+        const actual = await introspect(driver, contract);
+        const measure = actual.tables['Measure']?.columns ?? {};
+        expect({
+          amount: measure['amount']?.resolvedDefault,
+          price: measure['price']?.resolvedDefault,
+          ratio: measure['ratio']?.resolvedDefault,
+          on: measure['on']?.resolvedDefault,
+          data: measure['data']?.resolvedDefault,
+          doc: measure['doc']?.resolvedDefault,
+          issues: mysql.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
+        }).toEqual({
+          amount: { kind: 'literal', value: `1.5${'0'.repeat(29)}` },
+          price: { kind: 'literal', value: '-0.50' },
+          ratio: { kind: 'literal', value: 0.25 },
+          on: { kind: 'literal', value: true },
+          data: { kind: 'literal', value: '00FF' },
+          doc: { kind: 'literal', value: { a: "it's", b: [1, null] } },
+          issues: [],
+        });
+      }),
+    );
+  });
+
+  it.for([
+    ["('abcd')", '61626364'],
+    ["('é€😀')", 'C3A9E282ACF09F9880'],
+    ["('')", ''],
+    ["(_binary X'FF00')", 'FF00'],
+  ])(
+    'reads the default %s on a longblob column as the bytes a row of it holds',
+    async ([written, rowHex], test) => {
+      const contract = contractWithScalarTypes();
+      const ddl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`data\` longblob NOT NULL DEFAULT ${written},
+      PRIMARY KEY (\`id\`)
+    )`;
+      await withMysqlDatabase(test, ({ url }) =>
+        withExampleTables(url, [ddl], async (driver) => {
+          const data = (await introspect(driver, contract)).tables['Measure']?.columns['data'];
+          await driver.query('INSERT INTO `Measure` (`id`) VALUES (1)');
+          const { rows } = await driver.query<{ hex: string }>(
+            'SELECT HEX(`data`) AS hex FROM `Measure`',
+          );
+          expect({
+            row: rows[0]?.hex,
+            resolvedDefault: data?.resolvedDefault,
+            unreadable: data?.defaultUnreadable,
+          }).toEqual({
+            row: rowHex,
+            resolvedDefault: { kind: 'literal', value: rowHex },
+            unreadable: undefined,
+          });
+        }),
+      );
+    },
+  );
+
+  it('keeps a literal binary and varbinary default as reported, since MySQL cuts it at its first zero byte, though it reports an expression default whole', async (test) => {
+    const ddl = `CREATE TABLE \`Fixed\` (
+      \`id\` int NOT NULL,
+      \`cut\` binary(4) NOT NULL DEFAULT 'a\\0b',
+      \`gone\` varbinary(8) NOT NULL DEFAULT 0x00ff,
+      \`whole\` varbinary(8) NOT NULL DEFAULT (0x00ff),
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [ddl], async (driver) => {
+        const columns = (await introspect(driver)).tables['Fixed']?.columns ?? {};
+        await driver.query('INSERT INTO `Fixed` (`id`) VALUES (1)');
+        const { rows } = await driver.query<Record<string, string>>(
+          'SELECT HEX(`cut`) AS cut, HEX(`gone`) AS gone, HEX(`whole`) AS whole FROM `Fixed`',
+        );
+        expect({
+          row: rows[0],
+          reported: [columns['cut']?.default, columns['gone']?.default, columns['whole']?.default],
+          cut: columns['cut']?.resolvedDefault,
+          gone: columns['gone']?.resolvedDefault,
+        }).toEqual({
+          row: { cut: '61006200', gone: '00FF', whole: '00FF' },
+          reported: ['0x61', '0x', '0x00ff'],
+          cut: { kind: 'function', expression: '0x61' },
+          gone: { kind: 'function', expression: '0x' },
+        });
+      }),
+    );
+  });
+
+  it('verifies a unique constraint and a unique index the contract declares without drift', async (test) => {
+    const contract = contractWithBothKindsOfUniqueness();
+    const account = contract.storage.namespaces['__unbound__']?.entries.table?.['Account'];
+    const uniqueIndexName = account?.indexes[0]?.name ?? '';
+    const accountDdl = `CREATE TABLE \`Account\` (
+      \`id\` int NOT NULL,
+      \`email\` varchar(191) NOT NULL,
+      \`handle\` varchar(191) NOT NULL,
+      PRIMARY KEY (\`id\`),
+      UNIQUE KEY \`Account_email_key\` (\`email\`),
+      UNIQUE KEY \`${uniqueIndexName}\` (\`handle\`)
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [accountDdl], async (driver) => {
+        const actual = await introspect(driver, contract);
+        expect({
+          uniqueIndexName,
+          issues: mysql.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
+        }).toEqual({ uniqueIndexName: expect.stringMatching(/^Account_handle_/), issues: [] });
+      }),
+    );
+  });
+
+  it('reads a literal default on a text column as the literal', async (test) => {
+    const contract = contractWithTextDefault();
+    const noteDdl = `CREATE TABLE \`Note\` (
+      \`id\` int NOT NULL,
+      \`body\` text NOT NULL DEFAULT ('it''s a \\\\ b'),
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [noteDdl], async (driver) => {
+        const actual = await introspect(driver, contract);
+        expect({
+          resolvedDefault: actual.tables['Note']?.columns['body']?.resolvedDefault,
+          issues: mysql.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
+        }).toEqual({ resolvedDefault: { kind: 'literal', value: "it's a \\ b" }, issues: [] });
+      }),
+    );
+  });
+
+  it('leaves out the index InnoDB creates for a foreign key with no index of its own', async (test) => {
+    const [userTable] = exampleTablesDdl;
+    const postWithoutIndex = `CREATE TABLE \`Post\` (
+      \`id\` int NOT NULL AUTO_INCREMENT,
+      \`authorId\` int NOT NULL,
+      PRIMARY KEY (\`id\`),
+      CONSTRAINT \`Post_authorId_fkey\` FOREIGN KEY (\`authorId\`) REFERENCES \`User\` (\`id\`) ON DELETE CASCADE
+    )`;
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [userTable, postWithoutIndex], async (driver) => {
+        const post = (await introspect(driver)).tables['Post'];
+        expect({ indexes: post?.indexes, foreignKeys: post?.foreignKeys }).toEqual({
+          indexes: [],
+          foreignKeys: [
+            expect.objectContaining({
+              columns: ['authorId'],
+              name: 'Post_authorId_fkey',
+              onDelete: 'cascade',
+            }),
+          ],
+        });
+      }),
+    );
+  });
+
+  it('keeps an index the contract declares under the name and columns of a foreign key', async (test) => {
+    const contract = contractWithIndexNamedLikeItsForeignKey();
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, tablesWithIndexNamedLikeItsForeignKey, async (driver) => {
+        const actual = await introspect(driver, contract);
+        expect({
+          indexes: actual.tables['Post']?.indexes.map(({ name, columns }) => ({ name, columns })),
+          issues: mysql.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
+        }).toEqual({ indexes: [{ name: 'fk_x', columns: ['authorId'] }], issues: [] });
+      }),
+    );
+  });
+
+  it('leaves out an index named like a foreign key when the contract does not declare it', async (test) => {
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, tablesWithIndexNamedLikeItsForeignKey, async (driver) => {
+        const post = (await introspect(driver)).tables['Post'];
+        expect({
+          indexes: post?.indexes,
+          foreignKeys: post?.foreignKeys.map(({ name }) => name),
+        }).toEqual({ indexes: [], foreignKeys: ['fk_x'] });
+      }),
+    );
+  });
+
+  it('reports a changed enum member as a different column type', async (test) => {
+    const [, postTable] = exampleTablesDdl;
+    const userWithOtherMembers = exampleTablesDdl[0].replace(
+      "enum('USER','ADMIN')",
+      "enum('USER','OWNER')",
+    );
+    await withMysqlDatabase(test, ({ url }) =>
+      withExampleTables(url, [userWithOtherMembers, postTable], async (driver) => {
+        const actual = await introspect(driver, loadExampleContract());
+        expect(
+          mysql
+            .diffSchema({ contract: loadExampleContract(), schema: actual, frameworkComponents })
+            .issues.map((issue) => issue.path.join('/')),
+        ).toEqual([expect.stringContaining('role')]);
+      }),
+    );
+  });
+});

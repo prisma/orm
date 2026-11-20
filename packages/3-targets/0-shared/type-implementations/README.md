@@ -1,0 +1,28 @@
+# @internal/type-implementations
+
+> **Internal package.** This package is an implementation detail of Prisma 8 and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
+
+Value logic that more than one target's codecs, data types and `now()` generators use, and that depends on no database and no family.
+
+## Package Classification
+
+- **Domain**: targets
+- **Layer**: shared
+- **Plane**: shared
+
+The target packs (domain `extensions`) and the adapters (domain `targets`) can both import it. Its only dependency is `temporal-spec`, for types; `isDate` uses Node's `node:util`.
+
+## What belongs here
+
+Code goes here when more than one target uses it and it depends on no database and no family. Logic that one target uses today stays here when it is part of a concept every target implements, such as the local date and time of PostgreSQL's `timestamp`, which MySQL's `datetime` will use. Nothing that builds SQL or BSON, no codec classes, no error envelopes and no generator descriptors: those stay in each target. A function that finds a failure returns it as data, and the target raises its own error.
+
+## Responsibilities
+
+- **Finding `Temporal`** (`./temporal`): `findTemporal()` returns the runtime's global `Temporal`, else the fallback `setFallbackTemporal` set once per process, else `undefined`. A target's control entry sets the fallback; the target raises its own error when there is no `Temporal`.
+- **`now()` values** (`./now`): the generator ids contracts store, each named for the value and not for a database type, and the value each produces in UTC through `Date.now()`: `instantNow`, `plainDateTimeNow`, `plainDateNow`, `plainTimeNow`, and the ISO 8601 text forms `instantStringNow`, `dateStringNow` and `timeStringNow`. `dateTimeStringNow` writes the text of a date and time with no offset; no shared id produces it, and PostgreSQL's `timestampStringNow` calls it. The Temporal values take the implementation to construct with. Each value with a time rounds down to the fraction digits it is given, and a text value writes its fraction trimmed of trailing zeros or with every digit, as the target stores it; `fractionDigitsOf(params, max)` reads the digits from a generator's `precision` param, with the target's maximum as the default. A target keeps an id named after one of its own types, such as PostgreSQL's `timestamptzStringNow`.
+- **Temporal values and ISO text** (`./temporal-text`): `temporalFromText` reads text with a parser and returns the value or why it was refused. `temporalToText` writes a value of the expected kind, checked by `Symbol.toStringTag` so any implementation's values are accepted, and refuses a value of another kind or a calendar other than ISO 8601. `withoutUtcDesignator` drops a trailing `Z`, and `describeValue` names a value of the wrong type in an error message.
+- **`Date` checks** (`./date`): `isDate`, which holds for a `Date` from any realm, such as a `vm` context or a Jest test file, where `instanceof Date` is false; `isValidDate`, which also refuses an Invalid Date; `hasDigitsBelowAMillisecond` for ISO text a `Date` cannot hold exactly, and `utcIsoTextOf`, the `Date.toISOString` text of a `Date` on or after a target's earliest instant.
+- **Booleans stored as integers** (`./boolean`): `booleanFromInteger` reads `false` from 0 and `true` from 1, given as a number, a bigint or decimal text, and returns `undefined` for any other value; `integerFromBoolean` writes 1 for `true` and 0 for `false`. SQLite's `sqlite/boolean` and MySQL's `mysql/boolean` codecs use them, and each target raises its own error for a value that names no boolean.
+- **Decimal text** (`./decimal`): `isDecimalText` holds for a decimal numeral without an exponent, such as `-12.50`. `printedDecimalText` writes one as a database prints it, with no leading zeros and no minus sign on zero; trailing zeros stay, because they are the scale it was written with. `decimalTextWithoutLeadingZeros` does the first of those steps on its own, and `decimalTextWithoutExponent` writes text such as `1.5E-3` without its exponent and returns `NaN`, `Infinity` and `-Infinity` unchanged, which MongoDB's `Decimal128` holds. PostgreSQL's `numeric`, SQLite's `sqlite/decimal`, MySQL's `mysql/decimal` and MongoDB's `Decimal128` codecs and data types use them. Which values a target accepts beyond decimal text, such as `NaN` or a precision, is the target's decision.
+- **Plain JSON** (`./json`): `findNonJsonValue` returns the first value inside a document that plain JSON cannot hold, such as `undefined`, a `bigint`, `NaN`, a class instance, a circular reference or a sparse array hole, with what it is and its path, or `undefined` for a plain JSON document. A caller can name a driver's wrapper objects by a tag it reads. MongoDB's and MySQL's JSON codecs use it, and each raises its own error.
+- **ISO 8601 durations** (`./duration`): `ISO_DURATION`, a duration with a sign on each component and no weeks, and `ISO_DURATION_AS_WRITTEN`, which also matches what `Temporal.Duration#toString()` writes: one sign before `P`, and weeks.

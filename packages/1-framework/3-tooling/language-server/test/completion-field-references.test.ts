@@ -1,3 +1,4 @@
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
@@ -60,6 +61,7 @@ function complete(markedSource: string, siblings: readonly string[] = []) {
   const { symbolTable } = buildSymbolTable({
     documents: [...others.map((other) => other.document), document],
     sources,
+    defaultNamespaceId: 'public',
   });
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({
@@ -75,6 +77,7 @@ function complete(markedSource: string, siblings: readonly string[] = []) {
       pslBlockDescriptors: {},
       authoringContributions,
       controlMutationDefaults: assembleControlMutationDefaults([]),
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
     },
     clientSupportsSnippets: false,
   });

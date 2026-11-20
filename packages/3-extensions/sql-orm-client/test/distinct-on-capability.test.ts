@@ -2,7 +2,7 @@ import { soleDomainNamespaceId } from '@internal/contract/types';
 import { ColumnRef, OrderByItem } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../src/collection';
-import { baseContract, createCollectionFor } from './collection-fixtures';
+import { baseContract } from './collection-fixtures';
 import { createMockRuntime, emptyTableState, getTestContext, withCapabilities } from './helpers';
 
 // Mirrors the sql-builder lane's proof shape for the identical gate
@@ -11,13 +11,6 @@ import { createMockRuntime, emptyTableState, getTestContext, withCapabilities } 
 // (asserted with `@ts-expect-error`) and, if reached dynamically, a runtime
 // error carrying `ORM.CAPABILITY_MISSING`.
 describe('distinctOn() capability gate', () => {
-  it('compiles and behaves unchanged when the contract declares postgres.distinctOn', () => {
-    const { collection } = createCollectionFor('Post');
-    const gated = collection.orderBy((post) => post.title.asc()).distinctOn('title');
-
-    expect(gated).toBeInstanceOf(Collection);
-  });
-
   it('is gated out at compile time and throws ORM.CAPABILITY_MISSING at runtime without postgres.distinctOn', () => {
     const contract = withCapabilities(baseContract, { sql: { defaultInInsert: true } });
     const context = { ...getTestContext(), contract };

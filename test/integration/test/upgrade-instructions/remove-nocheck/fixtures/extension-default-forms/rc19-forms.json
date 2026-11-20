@@ -1,0 +1,242 @@
+{
+  "recordedWith": "the data types of @prisma/orm-extension-postgis and @prisma/orm-extension-pgvector 8.0.0-rc.19: toContract(valueFrom(value, params))",
+  "columns": [
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {
+        "srid": 4326
+      },
+      "value": "0101000020E6100000000000000000F03F0000000000000040",
+      "stored": "0101000020E6100000000000000000F03F0000000000000040"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {
+        "srid": 4326
+      },
+      "value": "0101000020e6100000000000000000f03f0000000000000040",
+      "stored": "0101000020E6100000000000000000F03F0000000000000040"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {
+        "srid": 4326
+      },
+      "value": "0020000001000010e63ff00000000000004000000000000000",
+      "stored": "0101000020E6100000000000000000F03F0000000000000040"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "0101000000a4703d0ad7c351c0ae47e17a142e4540",
+      "stored": "0101000000A4703D0AD7C351C0AE47E17A142E4540"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "0000000001c051c3d70a3d70a440452e147ae147ae",
+      "stored": "0101000000A4703D0AD7C351C0AE47E17A142E4540"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "0020000002000010e600000002000000000000000000000000000000003ff80000000000004002000000000000",
+      "stored": "0102000020E61000000200000000000000000000000000000000000000000000000000F83F0000000000000240"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "00000000030000000100000004000000000000000000000000000000003ff000000000000000000000000000003ff00000000000003ff000000000000000000000000000000000000000000000",
+      "stored": "0103000000010000000400000000000000000000000000000000000000000000000000F03F0000000000000000000000000000F03F000000000000F03F00000000000000000000000000000000"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "0020000004000010e6000000020020000001000010e63ff00000000000004000000000000000010100000000000000000008400000000000001040",
+      "stored": "0104000020E6100000020000000101000000000000000000F03F0000000000000040010100000000000000000008400000000000001040"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "000000000500000001000000000200000002000000000000000000000000000000003ff00000000000003ff0000000000000",
+      "stored": "01050000000100000001020000000200000000000000000000000000000000000000000000000000F03F000000000000F03F"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "0000000006000000010103000000010000000400000000000000000000000000000000000000000000000000f03f0000000000000000000000000000f03f000000000000f03f00000000000000000000000000000000",
+      "stored": "0106000000010000000103000000010000000400000000000000000000000000000000000000000000000000F03F0000000000000000000000000000F03F000000000000F03F00000000000000000000000000000000"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "010100002000000000000000000000f03f0000000000000040",
+      "stored": "010100002000000000000000000000F03F0000000000000040"
+    },
+    {
+      "dataType": "pgvector/vector",
+      "typeParams": {
+        "length": 3
+      },
+      "value": [
+        1,
+        2.5,
+        3
+      ],
+      "stored": [
+        1,
+        2.5,
+        3
+      ]
+    },
+    {
+      "dataType": "pgvector/vector",
+      "typeParams": {
+        "length": 3
+      },
+      "value": [
+        0,
+        0.5,
+        -2
+      ],
+      "stored": [
+        0,
+        0.5,
+        -2
+      ]
+    },
+    {
+      "dataType": "pgvector/vector",
+      "typeParams": {
+        "length": 3
+      },
+      "value": [
+        0.1,
+        0.2,
+        0.3
+      ],
+      "stored": [
+        0.1,
+        0.2,
+        0.3
+      ]
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {
+        "srid": 4326
+      },
+      "value": "0101000020110f0000000000000000f03f0000000000000040",
+      "refused": "postgis/geometry JSON value must be a HEXEWKB string of a geometry with SRID 4326"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {
+        "srid": 4326
+      },
+      "value": "0101000000000000000000f03f0000000000000040",
+      "refused": "postgis/geometry JSON value must be a HEXEWKB string of a geometry with SRID 4326"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "0101000080000000000000f03f00000000000000400000000000000840",
+      "refused": "postgis/geometry JSON value must be a HEXEWKB string"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "0101000000000000000000f03f000000000000004000",
+      "refused": "postgis/geometry JSON value must be a HEXEWKB string"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "zz",
+      "refused": "postgis/geometry JSON value must be a HEXEWKB string"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "",
+      "refused": "postgis/geometry JSON value must be a HEXEWKB string"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": 5,
+      "refused": "postgis/geometry JSON value must be a HEXEWKB string"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "0101000000000000000000f87f000000000000f87f",
+      "refused": "Geometry encode: coordinates must be finite numbers"
+    },
+    {
+      "dataType": "postgis/geometry",
+      "typeParams": {},
+      "value": "01040000000100000001020000000200000000000000000000000000000000000000000000000000f03f000000000000f03f",
+      "refused": "postgis/geometry JSON value must be a HEXEWKB string"
+    },
+    {
+      "dataType": "pgvector/vector",
+      "typeParams": {
+        "length": 3
+      },
+      "value": [
+        0.123456789,
+        1,
+        2
+      ],
+      "refused": "pgvector/vector JSON value must be an array of numbers real holds exactly; element 1, 0.123456789, would be stored as 0.12345679"
+    },
+    {
+      "dataType": "pgvector/vector",
+      "typeParams": {
+        "length": 3
+      },
+      "value": [
+        1e+39,
+        1,
+        2
+      ],
+      "refused": "pgvector/vector JSON value must be an array of numbers real holds exactly; element 1, 1e+39, is outside the range real holds, which PostgreSQL refuses"
+    },
+    {
+      "dataType": "pgvector/vector",
+      "typeParams": {
+        "length": 3
+      },
+      "value": [
+        1,
+        2
+      ],
+      "refused": "pgvector/vector JSON value must be an array of 3 finite numbers"
+    },
+    {
+      "dataType": "pgvector/vector",
+      "typeParams": {
+        "length": 3
+      },
+      "value": [
+        "1",
+        2,
+        3
+      ],
+      "refused": "pgvector/vector JSON value must be an array of 3 finite numbers"
+    },
+    {
+      "dataType": "pgvector/vector",
+      "typeParams": {
+        "length": 3
+      },
+      "value": [
+        1,
+        2,
+        null
+      ],
+      "refused": "pgvector/vector JSON value must be an array of 3 finite numbers"
+    }
+  ]
+}

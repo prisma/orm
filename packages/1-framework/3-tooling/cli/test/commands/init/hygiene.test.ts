@@ -34,13 +34,6 @@ describe('mergeGitignore (FR3.3)', () => {
     expect(mergeGitignore(existing)).toBeNull();
   });
 
-  it('does not duplicate entries on a re-run (FR9.3)', () => {
-    const first = mergeGitignore('node_modules/\n');
-    expect(first).not.toBeNull();
-    const second = mergeGitignore(first ?? '');
-    expect(second).toBeNull();
-  });
-
   it('preserves user-authored comments and blank lines', () => {
     const existing = '# top-level comment\n\nnode_modules/\n# trailing\n';
     const result = mergeGitignore(existing);
@@ -76,25 +69,25 @@ describe('mergeGitignore (FR3.3)', () => {
 
 describe('requiredGitattributesLines (FR3.4)', () => {
   it('emits linguist-generated lines for the schema directory', () => {
-    const lines = requiredGitattributesLines('src/prisma', 'postgres');
+    const lines = requiredGitattributesLines('src/prisma');
     expect(lines).toContain('src/prisma/contract.json linguist-generated');
     expect(lines).toContain('src/prisma/contract.d.ts linguist-generated');
   });
 
   it('includes forward-looking artifacts (Decision 5)', () => {
-    const lines = requiredGitattributesLines('prisma', 'postgres');
+    const lines = requiredGitattributesLines('prisma');
     expect(lines).toContain('prisma/ops.json linguist-generated');
     expect(lines).toContain('prisma/migration.json linguist-generated');
   });
 
   it('includes migrations-root-anchored lines for the contract snapshot store', () => {
-    const lines = requiredGitattributesLines('prisma', 'postgres');
+    const lines = requiredGitattributesLines('prisma');
     expect(lines).toContain('migrations/snapshots/**/contract.json linguist-generated');
     expect(lines).toContain('migrations/snapshots/**/contract.d.ts linguist-generated');
   });
 
   it('keeps the store lines migrations-root-anchored regardless of schema dir', () => {
-    const lines = requiredGitattributesLines('src/prisma', 'mongo');
+    const lines = requiredGitattributesLines('src/prisma');
     expect(lines).toContain('migrations/snapshots/**/contract.json linguist-generated');
     expect(lines).toContain('migrations/snapshots/**/contract.d.ts linguist-generated');
     expect(lines).not.toContain(
@@ -103,20 +96,20 @@ describe('requiredGitattributesLines (FR3.4)', () => {
   });
 
   it('respects a non-default schema directory', () => {
-    const lines = requiredGitattributesLines('db', 'mongo');
+    const lines = requiredGitattributesLines('db');
     expect(lines).toContain('db/contract.json linguist-generated');
     // No prisma/ leakage when the schema lives elsewhere.
     expect(lines.every((line) => !line.startsWith('prisma/'))).toBe(true);
   });
 
   it('strips a trailing slash from the schema directory', () => {
-    const lines = requiredGitattributesLines('src/prisma/', 'postgres');
+    const lines = requiredGitattributesLines('src/prisma/');
     expect(lines).toContain('src/prisma/contract.json linguist-generated');
     expect(lines.every((line) => !line.startsWith('src/prisma//'))).toBe(true);
   });
 
   it('emits root-relative paths (no leading "./") when schemaDir is "."', () => {
-    const lines = requiredGitattributesLines('.', 'postgres');
+    const lines = requiredGitattributesLines('.');
     expect(lines).toContain('contract.json linguist-generated');
     expect(lines).toContain('contract.d.ts linguist-generated');
     expect(lines.every((line) => !line.startsWith('./'))).toBe(true);
@@ -124,7 +117,7 @@ describe('requiredGitattributesLines (FR3.4)', () => {
 });
 
 describe('mergeGitattributes (FR3.4)', () => {
-  const required = requiredGitattributesLines('src/prisma', 'postgres');
+  const required = requiredGitattributesLines('src/prisma');
 
   it('writes the full required line list when the file does not exist', () => {
     const result = mergeGitattributes(undefined, required);

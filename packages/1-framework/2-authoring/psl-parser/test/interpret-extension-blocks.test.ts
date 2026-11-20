@@ -81,6 +81,7 @@ function build(source: string) {
   const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
+    defaultNamespaceId: 'public',
   });
   const { binder, diagnostics: binderDiagnostics } = createBinder({
     sources,
@@ -118,8 +119,8 @@ function blockNamed(
 ): BlockSymbol {
   const scope =
     namespace === undefined
-      ? result.symbolTable.topLevel
-      : result.symbolTable.topLevel.namespaces[namespace];
+      ? result.symbolTable.defaultNamespace
+      : result.symbolTable.namespaces[namespace];
   const block = scope?.blocks[name];
   if (block === undefined) throw new Error(`expected block "${name}" in the symbol table`);
   return block;
@@ -132,8 +133,8 @@ function modelNamed(
 ): ModelSymbol {
   const scope =
     namespace === undefined
-      ? result.symbolTable.topLevel
-      : result.symbolTable.topLevel.namespaces[namespace];
+      ? result.symbolTable.defaultNamespace
+      : result.symbolTable.namespaces[namespace];
   const model = scope?.models[name];
   if (model === undefined) throw new Error(`expected model "${name}" in the symbol table`);
   return model;

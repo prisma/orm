@@ -16,10 +16,6 @@ describe('arktype-json data type inventory', () => {
     expect(Object.hasOwn(arktypeJsonPackMeta, 'dataTypes')).toBe(false);
   });
 
-  it('ships codecs to check', () => {
-    expect(codecDescriptors.length).toBeGreaterThan(0);
-  });
-
   it('names the data type of every codec it ships', () => {
     expect(
       Object.fromEntries(

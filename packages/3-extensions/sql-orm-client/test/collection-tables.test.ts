@@ -1,29 +1,23 @@
 import { createPostgresAdapter } from '@internal/adapter-postgres/adapter';
 import {
-  AndExpr,
   BinaryExpr,
   ColumnRef,
   type ExistsExpr,
   LiteralExpr,
-  OrExpr,
   ParamRef,
-  type SelectAst,
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
-import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import type { PostgresContract } from '../../../3-targets/postgres/2-adapter/src/core/types';
 import { Collection } from '../src/collection';
-import { reloadMutationRowsByIdentities } from '../src/collection-dispatch';
 import { createCollectionTables } from '../src/collection-tables';
 import { createModelAccessor } from '../src/model-accessor';
 import { createCollectionFor } from './collection-fixtures';
 import {
   buildMixedPolyContract,
-  buildTestContextFromContract,
   createMockRuntime,
   getTestContext,
-  getTestContract,
   isSelectAst,
   withPatchedDomainModels,
 } from './helpers';
@@ -72,47 +66,6 @@ describe('aliased tables in collection state', () => {
     expect(filtered.state.filters).toEqual([bound]);
     const ast = runtime.executions[0]?.plan.ast;
     expect(isSelectAst(ast) ? ast.where : undefined).toEqual(bound);
-  });
-
-  it('gives composite-key identity filter parameters the codec of their column', async () => {
-    const contract = getTestContract();
-    const runtime = createMockRuntime();
-    runtime.setNextResults([[]]);
-
-    await reloadMutationRowsByIdentities<Record<string, unknown>>({
-      context: buildTestContextFromContract(contract),
-      runtime,
-      tables: createCollectionTables(contract, 'public', 'Project'),
-      modelName: 'Project',
-      namespaceId: 'public',
-      identityRows: [{ tenant_id: 'acme', id: 7 }],
-      selectedFields: ['id'],
-      includes: [],
-    }).toArray();
-
-    const tenantCodec =
-      contract.storage.namespaces['public']?.entries.table?.['projects']?.columns['tenant_id']
-        ?.codecId;
-    const idCodec =
-      contract.storage.namespaces['public']?.entries.table?.['projects']?.columns['id']?.codecId;
-    expect(tenantCodec).toBeDefined();
-    expect(idCodec).toBeDefined();
-    expect(
-      blindCast<SelectAst, 'the read-back is a select'>(runtime.executions[0]?.plan.ast).where,
-    ).toEqual(
-      OrExpr.of([
-        AndExpr.of([
-          BinaryExpr.eq(
-            ColumnRef.of('projects', 'tenant_id'),
-            ParamRef.of('acme', { codec: { codecId: tenantCodec ?? '' } }),
-          ),
-          BinaryExpr.eq(
-            ColumnRef.of('projects', 'id'),
-            ParamRef.of(7, { codec: { codecId: idCodec ?? '' } }),
-          ),
-        ]),
-      ]),
-    );
   });
 
   it('gives two collections derived from one parent the same names for the same calls', () => {

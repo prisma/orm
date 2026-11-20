@@ -1,3 +1,4 @@
+import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { expect } from 'vitest';
@@ -20,7 +21,11 @@ export function completeBlockValueSource(
   const source = `${markedSource.slice(0, cursorOffset)}${markedSource.slice(cursorOffset + 1)}`;
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    defaultNamespaceId: 'public',
+  });
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({
       document,
@@ -32,6 +37,7 @@ export function completeBlockValueSource(
       binder: testBinder({ sources, symbolTable, pslBlockDescriptors: blockValueDescriptors }),
       scalarTypes: [],
       pslBlockDescriptors: blockValueDescriptors,
+      generatorFunctions: EMPTY_GENERATOR_FUNCTIONS,
       symbolTable,
     },
     clientSupportsSnippets: options.clientSupportsSnippets === true,

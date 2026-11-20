@@ -1,6 +1,5 @@
 import postgresAdapterDescriptor, {
   createPostgresBuiltinCodecLookup,
-  PostgresControlAdapter,
 } from '@internal/adapter-postgres/control';
 import {
   asNamespaceId,
@@ -11,14 +10,18 @@ import {
 } from '@internal/contract/types';
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import { type CodecControlHooks, INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
-import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
+import type { AnyCodecDescriptor, DataType } from '@internal/framework-components/codec';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { sqlDataType } from '@internal/sql-contract/data-type';
 import { SqlStorage, type SqlStorageInput, type StorageTable } from '@internal/sql-contract/types';
+import type { SqlColumnIRInput } from '@internal/sql-schema-ir/types';
 import postgresTargetDescriptor from '@internal/target-postgres/control';
-import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
+import {
+  createPostgresBuiltinDataTypeLookup,
+  postgresDataTypes,
+} from '@internal/target-postgres/data-types';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import { buildBuiltinIdentityValue } from '@internal/target-postgres/planner-identity-values';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
@@ -30,9 +33,16 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { introspectedColumn as introspectedColumnOver } from '../../../../2-sql-family/1-core/contract/test/introspected-column';
+import { createTestPostgresControlAdapter } from '../../../../3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
 import pgvectorDescriptor from '../../src/exports/control';
 
-const testAdapter = new PostgresControlAdapter(
+const introspectedColumn = (
+  column: SqlColumnIRInput,
+  dataTypes: readonly DataType[] = postgresDataTypes,
+) => introspectedColumnOver(column, dataTypes);
+
+const testAdapter = createTestPostgresControlAdapter(
   createPostgresBuiltinCodecLookup(),
   createPostgresBuiltinDataTypeLookup(),
 );
@@ -50,7 +60,10 @@ const testTsvectorComponent = {
   version: '0.0.0-test',
   create: () => ({ familyId: 'sql', targetId: 'postgres' }) as never,
   dataTypes: [
-    sqlDataType('test/tsvector', { texts: [{ text: 'tsvector', written: true, catalog: true }] }),
+    sqlDataType('test/tsvector', {
+      read: (json) => json,
+      texts: [{ text: 'tsvector', written: true, catalog: true }],
+    }),
   ],
   types: {
     codecTypes: {
@@ -73,6 +86,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('returns empty plan when schema already satisfies contract (superset)', () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -82,7 +96,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
             extra: new PostgresTableSchemaNode({
               name: 'extra',
               columns: {
-                id: { name: 'id', nativeType: 'uuid', nullable: false },
+                id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -118,6 +132,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('plans additive operations for subset schema (missing column/index/fk)', async () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -125,7 +140,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
             user: new PostgresTableSchemaNode({
               name: 'user',
               columns: {
-                id: { name: 'id', nativeType: 'uuid', nullable: false },
+                id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -170,6 +185,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
 
   it('fails with conflicts when schema has incompatible column types', () => {
     const schema = new PostgresDatabaseSchemaNode({
+      extensions: undefined,
       namespaces: {
         public: new PostgresNamespaceSchemaNode({
           schemaName: 'public',
@@ -177,8 +193,8 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
             user: new PostgresTableSchemaNode({
               name: 'user',
               columns: {
-                id: { name: 'id', nativeType: 'uuid', nullable: false },
-                email: { name: 'email', nativeType: 'uuid', nullable: false },
+                id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
+                email: introspectedColumn({ name: 'email', typeText: 'uuid', nullable: false }),
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -362,35 +378,18 @@ describe('NOT NULL column without default uses temporary default', () => {
     ]);
   });
 
-  it('uses codec hook temporary defaults for parameterized pgvector storage type refs', async () => {
+  it('uses the empty-table fallback for pgvector columns without a dimension', async () => {
     const addCol = await planAddColumn(
       'embedding',
-      {
-        many: false,
-        dataType: 'pgvector/vector',
-        codecId: 'pg/vector@1',
-        nullable: false,
-        typeRef: 'Embedding3',
-      },
-      {
-        frameworkComponents: [pgvectorDescriptor],
-        extraStorageTypes: {
-          Embedding3: {
-            kind: 'codec-instance',
-            codecId: 'pg/vector@1',
-            dataType: 'pgvector/vector',
-            typeParams: { length: 3 },
-          },
-        },
-      },
+      { many: false, dataType: 'pgvector/vector', codecId: 'pg/vector@1', nullable: false },
+      { frameworkComponents: [pgvectorDescriptor] },
     );
 
-    expect(addCol.precheck.map((p) => p.sql)).not.toContain(
+    expect(addCol.precheck.map((p) => p.sql)).toContain(
       `SELECT NOT EXISTS (SELECT 1 AS "one" FROM ${qualifiedUserTable} LIMIT 1) AS "result"`,
     );
     expect(addCol.execute.map((step) => step.sql)).toEqual([
-      `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "embedding" vector(3) DEFAULT ('[0,0,0]'::vector) NOT NULL`,
-      `ALTER TABLE ${qualifiedUserTable} ALTER COLUMN "embedding" DROP DEFAULT`,
+      `ALTER TABLE ${qualifiedUserTable} ADD COLUMN "embedding" vector NOT NULL`,
     ]);
   });
 
@@ -429,7 +428,7 @@ describe('NOT NULL column without default uses temporary default', () => {
       },
       new PostgresTableSchemaNode({
         name: 'user',
-        columns: { id: { name: 'id', nativeType: 'uuid', nullable: false } },
+        columns: { id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }) },
         uniques: [],
         foreignKeys: [],
         indexes: [],
@@ -516,7 +515,7 @@ describe('NOT NULL column without default uses temporary default', () => {
           org: new PostgresTableSchemaNode({
             name: 'org',
             columns: {
-              id: { name: 'id', nativeType: 'uuid', nullable: false },
+              id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -683,8 +682,8 @@ function buildUserTableSchema(): PostgresTableSchemaNode {
   return new PostgresTableSchemaNode({
     name: 'user',
     columns: {
-      id: { name: 'id', nativeType: 'uuid', nullable: false },
-      email: { name: 'email', nativeType: 'text', nullable: false },
+      id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
+      email: introspectedColumn({ name: 'email', typeText: 'text', nullable: false }),
     },
     primaryKey: { columns: ['id'] },
     uniques: [{ columns: ['email'], name: 'user_email_key' }],
@@ -718,12 +717,10 @@ function planAddColumn(
     codecId: string;
     nullable: boolean;
     typeParams?: Record<string, unknown>;
-    typeRef?: string;
     default?: { kind: 'literal'; value: ColumnDefaultLiteralInputValue };
   },
   options?: {
     frameworkComponents?: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>>;
-    extraStorageTypes?: Contract<SqlStorage>['storage']['types'];
   },
 ) {
   const operationsPromise = planUserTableOperations(
@@ -774,7 +771,6 @@ async function planUserTableOperations(
   schemaUserTable: PostgresTableSchemaNode,
   options?: {
     frameworkComponents?: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>>;
-    extraStorageTypes?: Contract<SqlStorage>['storage']['types'];
     extraContractTables?: Record<string, StorageTable>;
     extraSchemaTables?: Record<string, PostgresTableSchemaNode>;
   },
@@ -793,10 +789,10 @@ async function planUserTableOperations(
           },
         }),
       },
-      ...(options?.extraStorageTypes ? { types: options.extraStorageTypes } : {}),
     },
   });
   const schema = new PostgresDatabaseSchemaNode({
+    extensions: undefined,
     namespaces: {
       public: new PostgresNamespaceSchemaNode({
         schemaName: 'public',
@@ -842,7 +838,7 @@ async function getRequiredOperation(
 function buildUserTableSchemaWithoutEmail(): PostgresTableSchemaNode {
   return new PostgresTableSchemaNode({
     name: 'user',
-    columns: { id: { name: 'id', nativeType: 'uuid', nullable: false } },
+    columns: { id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }) },
     primaryKey: { columns: ['id'] },
     uniques: [],
     foreignKeys: [],
@@ -855,9 +851,9 @@ function buildPostTableSchema(): PostgresTableSchemaNode {
   return new PostgresTableSchemaNode({
     name: 'post',
     columns: {
-      id: { name: 'id', nativeType: 'uuid', nullable: false },
-      userId: { name: 'userId', nativeType: 'uuid', nullable: false },
-      title: { name: 'title', nativeType: 'text', nullable: false },
+      id: introspectedColumn({ name: 'id', typeText: 'uuid', nullable: false }),
+      userId: introspectedColumn({ name: 'userId', typeText: 'uuid', nullable: false }),
+      title: introspectedColumn({ name: 'title', typeText: 'text', nullable: false }),
     },
     primaryKey: { columns: ['id'] },
     uniques: [],

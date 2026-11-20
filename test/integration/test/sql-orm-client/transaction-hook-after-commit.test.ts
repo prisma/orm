@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest';
 
 const User = model('User', {
   fields: {
-    id: field.column(integerColumn).id(),
+    id: field.column(integerNumberColumn).id(),
     name: field.column(textColumn),
     email: field.column(textColumn),
   },
@@ -89,7 +89,9 @@ describe('an ORM write whose transaction activityEnded hook throws after COMMIT'
         namespaceId,
       });
 
-      await expect(users.where({ id: 1 }).update({ name: 'Updated' })).rejects.toBe(hookError);
+      await expect(users.where({ name: 'Stale' }).update({ name: 'Updated' })).rejects.toBe(
+        hookError,
+      );
 
       expect(transactionStatements.length).toBeGreaterThan(0);
       const check = new DatabaseSync(path);

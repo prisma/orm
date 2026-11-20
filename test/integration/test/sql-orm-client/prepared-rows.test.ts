@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { integerNumberColumn, textColumn } from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/runtime';
@@ -29,7 +29,7 @@ import { Client } from 'pg';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { getTestContract } from './helpers';
 
-type Row = { name: string; posts: { title: unknown }[] };
+type Row = { name: string; posts: { title: string }[] };
 interface Environment {
   runtime: Runtime;
   all(): Preparable<Record<string, unknown>, AsyncIterableResult<Row>>;
@@ -71,7 +71,7 @@ async function postgresEnvironment(name: string): Promise<Environment> {
   const instance = instantiateExecutionStack(stack);
   const driver = instance.driver;
   if (!driver) throw new Error('driver missing');
-  await driver.connect({ kind: 'pgClient', client });
+  await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
   const lower = vi.fn(instance.adapter.lower.bind(instance.adapter));
   const driverQuery = vi.spyOn(driver, 'query');
   const runtime = new PostgresRuntimeImpl({
@@ -112,13 +112,13 @@ async function postgresEnvironment(name: string): Promise<Environment> {
 }
 
 const User = model('User', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn) },
 }).sql({ table: 'users' });
 const Post = model('Post', {
   fields: {
-    id: field.column(integerColumn).id(),
+    id: field.column(integerNumberColumn).id(),
     title: field.column(textColumn),
-    userId: field.column(integerColumn).column('user_id'),
+    userId: field.column(integerNumberColumn).column('user_id'),
   },
   relations: { author: rel.belongsTo(User, { from: 'userId', to: 'id' }).sql({ fk: {} }) },
 }).sql({ table: 'posts' });

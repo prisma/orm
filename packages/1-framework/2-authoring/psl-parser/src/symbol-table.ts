@@ -1,4 +1,9 @@
 import type { PslSpan } from '@internal/framework-components/psl-ast';
+import {
+  namespaceIdOfPslName,
+  pslNameOfNamespaceId,
+  pslNamesOfNamespaceId,
+} from './namespace-names';
 import type { ParseDiagnostic } from './parse';
 import {
   nodePslSpan,
@@ -32,16 +37,9 @@ export type {
 } from './resolve';
 
 export interface SymbolTable {
-  readonly topLevel: TopLevelScope;
-}
-
-export interface TopLevelScope {
+  readonly defaultNamespace: NamespaceSymbol;
   readonly namespaces: Record<string, NamespaceSymbol>;
   readonly namedTypes: Record<string, NamedTypeSymbol>;
-  readonly blocks: Record<string, BlockSymbol>;
-  readonly models: Record<string, ModelSymbol>;
-  readonly compositeTypes: Record<string, CompositeTypeSymbol>;
-  readonly mixins: Record<string, MixinSymbol>;
 }
 
 interface NamespaceDeclaration {
@@ -49,10 +47,16 @@ interface NamespaceDeclaration {
   readonly span: PslSpan;
 }
 
+/** `NamespaceSymbol` with a writable `declarations` array: `buildSymbolTable` appends each `namespace` block it reads, and returns the namespace as the read-only `NamespaceSymbol`. */
+interface MutableNamespaceSymbol extends NamespaceSymbol {
+  readonly declarations: NamespaceDeclaration[];
+}
+
 export interface NamespaceSymbol {
   readonly kind: 'namespace';
+  readonly id: string;
   readonly name: string;
-  readonly declarations: [NamespaceDeclaration, ...NamespaceDeclaration[]];
+  readonly declarations: readonly NamespaceDeclaration[];
   readonly models: Record<string, ModelSymbol>;
   readonly compositeTypes: Record<string, CompositeTypeSymbol>;
   readonly blocks: Record<string, BlockSymbol>;
@@ -138,6 +142,7 @@ export interface FieldSymbol {
 export interface BuildSymbolTableOptions {
   readonly documents: readonly DocumentAst[];
   readonly sources: PslSources;
+  readonly defaultNamespaceId: string;
 }
 
 export interface SymbolTableResult {
@@ -150,16 +155,27 @@ export interface SymbolTableResult {
  * should consume first-wins symbols rather than re-emitting duplicate diagnostics.
  */
 export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableResult {
-  const { documents, sources } = options;
+  const { documents, sources, defaultNamespaceId } = options;
   const diagnostics: ParseDiagnostic[] = [];
 
-  const namespaces: Record<string, NamespaceSymbol> = Object.create(null);
+  const namespaces: Record<string, MutableNamespaceSymbol> = Object.create(null);
   const namedTypes: Record<string, NamedTypeSymbol> = Object.create(null);
   const blocks: Record<string, BlockSymbol> = Object.create(null);
   const models: Record<string, ModelSymbol> = Object.create(null);
   const compositeTypes: Record<string, CompositeTypeSymbol> = Object.create(null);
   const mixins: Record<string, MixinSymbol> = Object.create(null);
-  const topLevelNames = new Set<string>();
+  const topLevelNames = new Set<string>(pslNamesOfNamespaceId(defaultNamespaceId));
+  const defaultNamespace: MutableNamespaceSymbol = {
+    kind: 'namespace',
+    id: defaultNamespaceId,
+    name: pslNameOfNamespaceId(defaultNamespaceId),
+    declarations: [],
+    models,
+    compositeTypes,
+    blocks,
+    mixins,
+  };
+  namespaces[defaultNamespaceId] = defaultNamespace;
 
   for (const document of documents) {
     const sourceFile = sources.sourceFileFor(document.syntax);
@@ -204,27 +220,39 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
       } else if (declaration instanceof NamespaceDeclarationAst) {
         const declaredName = declaration.name()?.name();
         if (declaredName === undefined) continue;
-        let namespace = namespaces[declaredName];
+        const id = namespaceIdOfPslName(declaredName);
+        let namespace = namespaces[id];
         if (namespace === undefined) {
-          const name = claim(topLevelNames, declaration.name());
-          if (name === undefined) continue;
+          const names = pslNamesOfNamespaceId(id);
+          const taken = names.some((name) => topLevelNames.has(name))
+            ? new Set(names)
+            : topLevelNames;
+          if (claim(taken, declaration.name()) === undefined) continue;
+          for (const name of names) topLevelNames.add(name);
           namespace = {
             kind: 'namespace',
-            name,
+            id,
+            name: pslNameOfNamespaceId(id),
             declarations: [{ node: declaration, span: nodePslSpan(declaration.syntax, sources) }],
             models: Object.create(null),
             compositeTypes: Object.create(null),
             blocks: Object.create(null),
             mixins: Object.create(null),
           };
-          namespaces[name] = namespace;
+          namespaces[id] = namespace;
         } else {
           namespace.declarations.push({
             node: declaration,
             span: nodePslSpan(declaration.syntax, sources),
           });
         }
-        extendNamespace(namespace, declaration, diagnostics, sources);
+        extendNamespace(
+          namespace,
+          declaration,
+          diagnostics,
+          sources,
+          namespace === defaultNamespace ? topLevelNames : new Set(),
+        );
       } else if (declaration instanceof TypesBlockAst) {
         for (const binding of declaration.declarations()) {
           const name = claim(topLevelNames, binding.name());
@@ -238,7 +266,7 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   }
 
   return {
-    symbolTable: { topLevel: { namespaces, namedTypes, blocks, models, compositeTypes, mixins } },
+    symbolTable: { defaultNamespace, namespaces, namedTypes },
     diagnostics,
   };
 }
@@ -320,6 +348,7 @@ function extendNamespace(
   node: NamespaceDeclarationAst,
   diagnostics: ParseDiagnostic[],
   sources: PslSources,
+  documentNames: Set<string>,
 ): void {
   const { models, compositeTypes, blocks, mixins } = namespace;
 
@@ -330,7 +359,8 @@ function extendNamespace(
       Object.hasOwn(models, memberName) ||
       Object.hasOwn(compositeTypes, memberName) ||
       Object.hasOwn(blocks, memberName) ||
-      Object.hasOwn(mixins, memberName)
+      Object.hasOwn(mixins, memberName) ||
+      documentNames.has(memberName)
     ) {
       const range = nameRange(member.name(), sources);
       if (range) {
@@ -343,6 +373,7 @@ function extendNamespace(
       }
       continue;
     }
+    documentNames.add(memberName);
     if (member instanceof ModelDeclarationAst) {
       models[memberName] = buildModel(memberName, member, sources, diagnostics);
     } else if (member instanceof CompositeTypeDeclarationAst) {
@@ -362,9 +393,8 @@ export interface PlaceMixinMembersInput {
 }
 
 export function placeMixinMembers(input: PlaceMixinMembersInput): readonly ParseDiagnostic[] {
-  const { topLevel } = input.symbolTable;
   const diagnostics: ParseDiagnostic[] = [];
-  for (const records of [topLevel, ...Object.values(topLevel.namespaces)]) {
+  for (const records of Object.values(input.symbolTable.namespaces)) {
     for (const symbol of Object.values(records.models)) placeFields(symbol, input, diagnostics);
     for (const symbol of Object.values(records.compositeTypes)) {
       placeFields(symbol, input, diagnostics);

@@ -14,9 +14,11 @@
 //   4     Bob    Alice        2 (60, 70)           —
 
 import { describe, expect, it } from 'vitest';
+import { includeStrategies } from './helpers';
 import {
   createPostsCollection,
   createUsersCollection,
+  expectPerRelationStatements,
   timeouts,
   withCollectionRuntime,
 } from './integration-helpers';
@@ -58,7 +60,7 @@ async function seed(runtime: PgIntegrationRuntime): Promise<void> {
   ]);
 }
 
-describe('integration/relation-order-by', () => {
+describe.each(includeStrategies)('integration/relation-order-by (%s)', (strategy) => {
   // Proves a to-many count orders parents by how many related rows each has,
   // in both directions, with id as the tie-break.
   it(
@@ -66,7 +68,7 @@ describe('integration/relation-order-by', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seed(runtime);
-        const users = createUsersCollection(runtime).select('id', 'name');
+        const users = createUsersCollection(runtime, strategy).select('id', 'name');
 
         const ascending = await users
           .orderBy([(u) => u.posts.count().asc(), (u) => u.id.asc()])
@@ -89,7 +91,7 @@ describe('integration/relation-order-by', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seed(runtime);
-        const users = createUsersCollection(runtime).select('id', 'name');
+        const users = createUsersCollection(runtime, strategy).select('id', 'name');
 
         const rows = await users
           .orderBy([(u) => u.posts.count((p) => p.views.gt(50)).desc(), (u) => u.id.asc()])
@@ -109,7 +111,7 @@ describe('integration/relation-order-by', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seed(runtime);
-        const users = createUsersCollection(runtime).select('id', 'name');
+        const users = createUsersCollection(runtime, strategy).select('id', 'name');
 
         const ascending = await users
           .orderBy([(u) => u.invitedBy.name.asc(), (u) => u.id.asc()])
@@ -132,7 +134,7 @@ describe('integration/relation-order-by', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seed(runtime);
-        const users = createUsersCollection(runtime).select('id', 'name');
+        const users = createUsersCollection(runtime, strategy).select('id', 'name');
 
         const ascending = await users
           .orderBy([(u) => u.invitedBy.name.asc({ nulls: 'last' }), (u) => u.id.asc()])
@@ -155,7 +157,7 @@ describe('integration/relation-order-by', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seed(runtime);
-        const users = createUsersCollection(runtime).select('id', 'name');
+        const users = createUsersCollection(runtime, strategy).select('id', 'name');
 
         const byTagCount = await users
           .orderBy([(u) => u.tags.count().desc(), (u) => u.id.asc()])
@@ -177,7 +179,7 @@ describe('integration/relation-order-by', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seed(runtime);
-        const users = createUsersCollection(runtime).select('id', 'name');
+        const users = createUsersCollection(runtime, strategy).select('id', 'name');
 
         const rows = await users
           .orderBy([(u) => u.posts.count().desc(), (u) => u.id.asc()])
@@ -198,7 +200,7 @@ describe('integration/relation-order-by', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seed(runtime);
-        const users = createUsersCollection(runtime).select('id', 'name');
+        const users = createUsersCollection(runtime, strategy).select('id', 'name');
 
         const rows = await users
           .orderBy([(u) => u.invitedById.asc({ nulls: 'first' }), (u) => u.id.asc()])
@@ -230,7 +232,7 @@ describe('integration/relation-order-by', () => {
           { id: 3, title: 'y', userId: CARA.id, views: 5 },
           { id: 4, title: 'y', userId: BOB.id, views: 60 },
         ]);
-        const posts = createPostsCollection(runtime);
+        const posts = createPostsCollection(runtime, strategy);
 
         const all = await posts
           .orderBy((p) => p.author.name.asc())
@@ -259,14 +261,17 @@ describe('integration/relation-order-by', () => {
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seed(runtime);
-        const users = createUsersCollection(runtime).select('id', 'name');
+        const users = createUsersCollection(runtime, strategy).select('id', 'name');
 
+        runtime.resetExecutions();
         const byPostCount = await users
           .where((u) => u.id.eq(ALICE.id))
           .include('invitedUsers', (invited) =>
             invited.select('id', 'name').orderBy([(u) => u.posts.count().asc(), (u) => u.id.asc()]),
           )
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
+        runtime.resetExecutions();
         const byInviterName = await users
           .where((u) => u.id.eq(ALICE.id))
           .include('invitedUsers', (invited) =>
@@ -275,6 +280,7 @@ describe('integration/relation-order-by', () => {
               .orderBy([(u) => u.invitedBy.name.asc(), (u) => u.id.desc()]),
           )
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(byPostCount).toEqual([{ ...ALICE, invitedUsers: [BOB, ZOE] }]);
         expect(byInviterName).toEqual([{ ...ALICE, invitedUsers: [BOB, ZOE] }]);
@@ -299,8 +305,9 @@ describe('integration/relation-order-by', () => {
           { id: 5, body: 'spam', postId: 3 },
           { id: 6, body: 'ok', postId: 4 },
         ]);
-        const users = createUsersCollection(runtime).select('id', 'name');
+        const users = createUsersCollection(runtime, strategy).select('id', 'name');
 
+        runtime.resetExecutions();
         const rows = await users
           .where((u) => u.id.eq(ZOE.id))
           .include('posts', (posts) =>
@@ -309,6 +316,7 @@ describe('integration/relation-order-by', () => {
               .orderBy([(p) => p.comments.count((c) => c.body.eq('ok')).desc(), (p) => p.id.asc()]),
           )
           .all();
+        expectPerRelationStatements(runtime, strategy, 2);
 
         expect(rows).toEqual([{ ...ZOE, posts: [{ id: 2 }, { id: 4 }, { id: 3 }] }]);
       });

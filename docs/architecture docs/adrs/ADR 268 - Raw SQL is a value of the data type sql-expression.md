@@ -2,6 +2,7 @@
 
 **Status:** Accepted. Built: the data type, the `sql` tag, the six PSL places, the TypeScript builder's `sql` values and `sql` values in generated migration files.
 **Date:** 2026-09-30
+**Amended:** 2026-10-20 — ``Raw(sql`...`)``'s argument is one of the places (see "Amendment 2026-10-20").
 **Builds on:** [ADR 129 — Tagged literals write values of data types](ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md), [ADR 231 — Declarative attribute specifications](ADR%20231%20-%20Declarative%20attribute%20specifications.md), [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md), [ADR 262 — Block specs bind top-level block values](ADR%20262%20-%20Block%20specs%20bind%20top-level%20block%20values.md)
 
 ---
@@ -153,6 +154,10 @@ Multi-line `sql` literals make line comments likely. The content hash behind ind
 ## One set of codes for the cast rule
 
 `@default` and the six places report refusals of the shared read and cast functions with the same codes: `PSL_VALUE_TYPE_INCOMPATIBLE` (no cast from the written value's type), `PSL_INVALID_LITERAL` (an entry or a cast refused the value) and `PSL_UNKNOWN_LITERAL_TAG`. The framework's `describeRefusal` words them. A refusal starts with what to write, the forms the type admits: ``Expected sql`...` ``. A quoted string also gets the exact rewrite, ``Expected sql`...`; write sql`(archived_at IS NULL)` ``, when that literal reads back as the same text. Default-only refusals keep default-only codes. ADR 254 says defaults and other positions are admitted by one rule, so users and tools see it under one name.
+
+## Amendment 2026-10-20: `Raw`'s argument
+
+A type constructor's argument that is a value names a data type and is read as an attribute argument is ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md), amendment 2026-10-20). The SQL family's `Raw` type constructor, which declares a column of a type no data type claims ([ADR 273](ADR%20273%20-%20A%20column%20of%20a%20type%20no%20data%20type%20claims%20is%20a%20raw%20column.md)), takes a value of `sql/expression`, so its argument is one more place that holds raw SQL. It takes a `sql` literal and only a `sql` literal: ``Raw(sql`ltree`)``, ``Raw(sql`"MyType"[]`)``. `Raw("ltree")` is refused with ``Expected sql`...`; write sql`ltree` ``. In TypeScript, `type.Raw(...)` and the adapters' `rawColumn(...)` take a `SqlExpression`, as every other raw-SQL field does.
 
 ## Consequences
 

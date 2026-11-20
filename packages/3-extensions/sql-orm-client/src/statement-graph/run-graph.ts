@@ -1,0 +1,220 @@
+import type { Contract } from '@internal/contract/types';
+import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import type { SqlStorage } from '@internal/sql-contract/types';
+import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
+import type { RuntimeScope } from '@internal/sql-relational-core/types';
+import { blindCast } from '@internal/utils/casts';
+import { getColumnsReadOnTable } from '../collection-contract';
+import {
+  consumeCollectionRows,
+  consumeRowsWithAttachedIncludes,
+  type DescribeCollectionRowsOptions,
+} from '../collection-dispatch';
+import { mapResultRows, stripHiddenMappedFields } from '../collection-runtime';
+import { loadsIncludesPerRelation } from '../include-strategy';
+import { returningProjection } from '../mutation-statements';
+import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
+import { queryPlanRows } from '../query-plan-rows';
+import type { CallContext } from '../types';
+import type { Edge, NodeId, StorageRow } from './edge';
+import type { Graph } from './graph';
+import { hiddenColumnsOf } from './include-nodes';
+import type { Executed, Node, OutputsOf, Run, Slots, StatementAst } from './node';
+import { StatementNode } from './statement-node';
+
+type Context = CallContext<Contract<SqlStorage>>;
+type Collected = readonly (readonly StorageRow[] | SqlStatementStats)[];
+
+interface Outcome<Row> {
+  readonly rows: readonly Row[];
+  readonly count: number;
+}
+
+export function queryGraph<Row>(
+  graph: Graph,
+  ctx: Context,
+  callerRows: DescribeCollectionRowsOptions,
+): AsyncIterableResult<Row> {
+  graph.removeUnreadFinds();
+  returnCallerColumns(graph, callerRows);
+  const [only] = statementNodes(graph);
+  if (only !== undefined && statementCount(graph) === 1 && only[0] === graph.result) {
+    const [id, node] = only;
+    const run = runOn(ctx, ctx.runtime);
+    const storageRows = afterChecks(graph, ctx, () =>
+      rowStream(node.execute(outputsOf(graph.inputsOf(id), []), run)),
+    );
+    return shapeRows<Row>(graph, id, storageRows, callerRows);
+  }
+  const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+    const outcome = await runAllNodes<Row>(graph, ctx, callerRows);
+    yield* outcome.rows;
+  };
+  return new AsyncIterableResult(generator());
+}
+
+export async function executeGraph(graph: Graph, ctx: Context): Promise<SqlStatementStats> {
+  graph.removeUnreadFinds();
+  const outcome = await runAllNodes(graph, ctx, undefined);
+  return { affectedRows: outcome.count };
+}
+
+function returnCallerColumns(graph: Graph, callerRows: DescribeCollectionRowsOptions): void {
+  const { context, modelName, state } = callerRows;
+  const columns = returningProjection(
+    context.contract,
+    modelName,
+    state.tables.root,
+    state.selectedFields,
+  );
+  for (const [id, node] of graph.nodes()) {
+    if (id === graph.result && node instanceof StatementNode) {
+      graph.replace(id, node.withReturning(columns));
+    }
+  }
+}
+
+async function runAllNodes<Row>(
+  graph: Graph,
+  ctx: Context,
+  callerRows: DescribeCollectionRowsOptions | undefined,
+): Promise<Outcome<Row>> {
+  checkNodes(graph, ctx);
+  const { runtime } = ctx;
+  if (statementCount(graph) > 1 && graph.writesAnyTable && runtime.transaction !== undefined) {
+    return runtime.transaction(
+      (tx) => runNodesInOrder<Row>(graph, ctx, tx, callerRows),
+      ctx.implicitTransactionOptions,
+    );
+  }
+  return runNodesInOrder<Row>(graph, ctx, runtime, callerRows);
+}
+
+async function runNodesInOrder<Row>(
+  graph: Graph,
+  ctx: Context,
+  scope: RuntimeScope,
+  callerRows: DescribeCollectionRowsOptions | undefined,
+): Promise<Outcome<Row>> {
+  const run = runOn(ctx, scope);
+  const collected: (readonly StorageRow[] | SqlStatementStats)[] = [];
+  let rows: readonly Row[] = [];
+  let count = 0;
+
+  for (const { id, node, inputs } of graph.entries()) {
+    const executed = await node.execute(outputsOf(inputs, collected), run);
+    collected[id] = executed;
+    if (id !== graph.result) {
+      continue;
+    }
+    const storageRows = rowsOf(executed);
+    count = Array.isArray(executed) ? storageRows.length : executed.affectedRows;
+    if (callerRows !== undefined) {
+      rows = await shapeRows<Row>(graph, id, streamOf(storageRows), callerRows).toArray();
+    }
+  }
+
+  return { rows, count };
+}
+
+function outputsOf(inputs: Slots, collected: Collected): OutputsOf<Slots> {
+  const outputs: Record<string, OutputsOf<Slots>[string]> = {};
+  const outputOf = (edge: Edge<unknown>) =>
+    rowsOf(collected[edge.from]).map((row) => edge.output(row));
+  for (const [name, slot] of Object.entries(inputs)) {
+    if (!Array.isArray(slot)) {
+      outputs[name] = outputOf(slot);
+    } else {
+      outputs[name] = slot.length === 0 ? null : slot.map(outputOf);
+    }
+  }
+  return outputs;
+}
+
+function checkNodes(graph: Graph, ctx: Context): void {
+  for (const [id, node] of graph.nodes()) {
+    node.checkIfCanRun(graph, id, ctx.context);
+  }
+}
+
+function afterChecks(
+  graph: Graph,
+  ctx: Context,
+  rows: () => AsyncIterableResult<StorageRow>,
+): AsyncIterableResult<StorageRow> {
+  const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
+    checkNodes(graph, ctx);
+    yield* rows();
+  };
+  return new AsyncIterableResult(generator());
+}
+
+function runOn(ctx: Context, scope: RuntimeScope): Run {
+  const { context } = ctx;
+  const planOf = (ast: StatementAst) =>
+    buildOrmQueryPlan<StorageRow>(context.contract, ast, deriveParamsFromAst(ast).params);
+  return {
+    context,
+    query: (ast) => queryPlanRows(scope, planOf(ast)),
+    execute: (ast) => scope.execute(planOf(ast)),
+  };
+}
+
+function shapeRows<Row>(
+  graph: Graph,
+  id: NodeId,
+  storageRows: AsyncIterableResult<StorageRow>,
+  callerRows: DescribeCollectionRowsOptions,
+): AsyncIterableResult<Row> {
+  const { context, namespaceId, modelName, state } = callerRows;
+  const { contract } = context;
+  if (loadsIncludesPerRelation(contract, state.includes)) {
+    return consumeRowsWithAttachedIncludes<Row>(
+      callerRows,
+      storageRows,
+      hiddenColumnsOf(graph, id, state),
+    );
+  }
+  const { tableName } = state.tables.root.storage;
+  const selected =
+    state.selectedFields ?? getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
+  const hiddenColumns = graph
+    .columnsReadFrom(id)
+    .map((column) => column.alias)
+    .filter((column) => !selected.includes(column));
+
+  return mapResultRows(consumeCollectionRows<StorageRow>(callerRows, storageRows), (row) => {
+    stripHiddenMappedFields(contract, namespaceId, modelName, row, hiddenColumns);
+    return blindCast<Row, 'the row the read code shaped is the row the caller selected'>(row);
+  });
+}
+
+function statementNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {
+  return graph.nodes().filter(([, node]) => node instanceof StatementNode);
+}
+
+function statementCount(graph: Graph): number {
+  return graph
+    .nodes()
+    .reduce(
+      (count, [, node]) => count + (node instanceof StatementNode ? node.statements.length : 0),
+      0,
+    );
+}
+
+function rowsOf(
+  executed: readonly StorageRow[] | SqlStatementStats | undefined,
+): readonly StorageRow[] {
+  return Array.isArray(executed) ? executed : [];
+}
+
+function rowStream(executed: Executed): AsyncIterableResult<StorageRow> {
+  return executed instanceof AsyncIterableResult ? executed : streamOf([]);
+}
+
+function streamOf(rows: readonly StorageRow[]): AsyncIterableResult<StorageRow> {
+  const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
+    yield* rows;
+  };
+  return new AsyncIterableResult(generator());
+}
