@@ -23,7 +23,7 @@
     "@internal/target-mysql": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "arktype": "^2.2.2",
-    "mariadb": "3.5.4"
+    "mariadb": "3.5.5"
   },
   "devDependencies": {
     "@repo/test-utils": "workspace:8.0.0-rc.24",

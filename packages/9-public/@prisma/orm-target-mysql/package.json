@@ -20,7 +20,7 @@
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "1.1.0",
     "arktype": "^2.2.2",
-    "mariadb": "3.5.4",
+    "mariadb": "3.5.5",
     "temporal-spec": "1.0.1"
   },
   "devDependencies": {

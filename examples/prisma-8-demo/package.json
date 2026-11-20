@@ -28,8 +28,8 @@
     "arktype": "^2.2.2",
     "dotenv": "^17.4.2",
     "pg": "catalog:",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.10.0",
@@ -41,11 +41,11 @@
     "@testing-library/react": "^16.3.3",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react-swc": "^4.3.2",
     "jsdom": "^29.0.2",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "temporal-spec": "1.0.1",
     "tsx": "catalog:",
     "typescript": "catalog:",
