@@ -1012,7 +1012,6 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
         node: ['20.19.0']
-        shard: ['1/2', '2/2']
     if: |
       contains(inputs.jobsToRun, '-all-') ||
       contains(inputs.jobsToRun, '-client-')
@@ -1043,7 +1042,7 @@ jobs:
           skip-tsc: true
 
       - name: Test packages/client
-        run: pnpm run test:functional:code ${{ env.FUNCTIONAL_TEST_OPTIONS }} --silent --shard ${{ matrix.shard }}
+        run: pnpm run test:functional:code ${{ env.FUNCTIONAL_TEST_OPTIONS }} --silent
         working-directory: packages/client
         env:
           # allow Node.js to allocate at most 14GB of heap on macOS and 7GB on Windows
