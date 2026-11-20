@@ -100,7 +100,7 @@ Rules:
 
 ## Package rules
 
-- Name the package `prisma-orm-<name>`, under your scope if you have one, and add the keyword `prisma-orm-extension`.
+- Name the package `prisma-orm-<name>`, under your scope if you have one, and add the keyword `prisma-orm-extension`. `prisma orm init --target` takes an unscoped name only when it begins `prisma-orm-`.
 - Depend on the Prisma packages your code imports at run time (`@prisma/orm-framework`, your family's package), each pinned to one exact version; see [`upgrade-extension.md`](upgrade-extension.md) § *Exact-pin rule*.
 - `/init` imports only the `InitContribution` type from `@prisma/orm-toolchain`. If that is your package's only use of it, make it a development dependency: as a pinned dependency it gives the application a second copy of the toolchain whenever its `prisma` is another version.
 - Import or name no module beginning `@internal/`. Those are Prisma's private workspace names.

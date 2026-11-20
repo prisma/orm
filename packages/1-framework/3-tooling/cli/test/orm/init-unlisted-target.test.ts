@@ -13,6 +13,7 @@ import { fixtureContribution } from '../utils/fixture-contribution';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const UNLISTED = 'prisma-orm-somedb';
+const NO_INIT = 'prisma-orm-noinit';
 
 let projectDir: string;
 let installs: (readonly string[])[];
@@ -252,33 +253,33 @@ describe('init with a target package that is in no list', () => {
   );
 });
 
-describe('a value that is not a short name but is a valid package name', () => {
+describe('an unlisted package that cannot be used', () => {
   it(
     'installs the package of that name, then says it was taken as a package name',
     async () => {
-      const run = await harness(packageWithoutInit('sqlite')).run(starter('sqlite'), {
+      const run = await harness(packageWithoutInit(NO_INIT)).run(starter(NO_INIT), {
         cwd: projectDir,
       });
 
       expect(run.exitCode).toBe(2);
-      expect(installs).toEqual([['add', 'sqlite', 'dotenv']]);
-      expect(loaded).toEqual(['sqlite/init']);
+      expect(installs).toEqual([['add', NO_INIT, 'dotenv']]);
+      expect(loaded).toEqual(['prisma-orm-noinit/init']);
       expect(envelopeOf(run)).toMatchObject({
         ok: false,
         error: {
           code: 'CLI.INIT_CONTRIBUTION_UNAVAILABLE',
-          why: '`sqlite` is not one of the short names (postgres, mongodb), so init took it as a package name. sqlite has no `sqlite/init` entrypoint, so it does not support `prisma orm init`. sqlite is installed; no scaffold file was written.',
+          why: '`prisma-orm-noinit` is not one of the short names (postgres, mongodb), so init took it as a package name. prisma-orm-noinit has no `prisma-orm-noinit/init` entrypoint, so it does not support `prisma orm init`. prisma-orm-noinit is installed; no scaffold file was written.',
           nextActions: expect.arrayContaining([
             expect.objectContaining({
               label:
-                'Write prisma.config.ts by hand, with the defineConfig import the README of sqlite shows. To use a target package from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.',
+                'Write prisma.config.ts by hand, with the defineConfig import the README of prisma-orm-noinit shows. To use a target package from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.',
             }),
           ]),
           meta: {
-            packageName: 'sqlite',
+            packageName: NO_INIT,
             reason: 'no-entrypoint',
             takenAsPackageName: true,
-            packagesAdded: ['sqlite', 'dotenv'],
+            packagesAdded: [NO_INIT, 'dotenv'],
           },
         },
       });
@@ -289,7 +290,7 @@ describe('a value that is not a short name but is a valid package name', () => {
   it(
     'says it was taken as a package name when --skip-install finds no such package',
     async () => {
-      const run = await harness().run([...starter('sqlite'), '--skip-install'], {
+      const run = await harness().run([...starter(NO_INIT), '--skip-install'], {
         cwd: projectDir,
       });
 
@@ -300,9 +301,31 @@ describe('a value that is not a short name but is a valid package name', () => {
         error: {
           code: 'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
           why: expect.stringMatching(
-            /^`sqlite` is not one of the short names \(postgres, mongodb\), so init took it as a package name\. /,
+            /^`prisma-orm-noinit` is not one of the short names \(postgres, mongodb\), so init took it as a package name\. /,
           ),
-          meta: { packageName: 'sqlite', takenAsPackageName: true },
+          meta: { packageName: NO_INIT, takenAsPackageName: true },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+});
+
+describe('an unscoped value that is not a short name', () => {
+  it.each(['sqlite', 'mysql', 'postgre'])(
+    'refuses --target %s without installing anything',
+    async (value) => {
+      const run = await harness().run(starter(value), { cwd: projectDir });
+
+      expect(run.exitCode).toBe(2);
+      expect(installs).toEqual([]);
+      expect(loaded).toEqual([]);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_INVALID_FLAG_VALUE',
+          why: `\`--target ${value}\` is not one of the short names (postgres, mongodb), and init does not take it as a package name: an unscoped package name is accepted only when it begins \`prisma-orm-\`.`,
+          meta: { flag: 'target', value, allowed: ['postgres', 'mongodb'] },
         },
       });
     },

@@ -50,7 +50,7 @@ A package that provides only a driver for a database Prisma 8 already supports i
 
 - A listing site or search tool finds community packages by the `prisma-orm-extension` keyword. It cannot tell a database package from middleware or data types without reading the package itself.
 - Prisma's own extension packages, `@prisma/orm-extension-<name>`, list the keyword too, so the search finds them beside the community ones. Prisma's database packages, such as `@prisma/orm-postgres`, do not, and neither does `@prisma/orm-extension-paradedb`, which is a proof of concept.
-- The convention is guidance in the docs, not a check anywhere in Prisma 8. A package that ignores it still works.
+- The convention is guidance in the docs. A package that ignores it still works. One command reads the name: `prisma orm init --target` takes an unscoped value as a package name only when it begins `prisma-orm-` ([ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)), so an unscoped target package that ignores the convention is set up with a `prisma.config.ts` written by hand.
 - No revisit-if condition is recorded.
 
 ## Alternatives considered

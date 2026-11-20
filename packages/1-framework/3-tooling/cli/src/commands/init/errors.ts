@@ -80,7 +80,7 @@ const SHORT_NAME_FLAGS = TARGET_SHORT_NAMES.map((name) => `--target ${name}`).jo
  */
 export function errorInitInvalidTarget(options: {
   readonly value: string;
-  /** Why the value is not a valid package name. */
+  /** Why the value is not taken as a package name. */
   readonly problems: readonly string[];
   readonly answeredIn: 'flag' | 'prompt';
 }): CliStructuredError {
@@ -89,12 +89,12 @@ export function errorInitInvalidTarget(options: {
     options.answeredIn === 'flag'
       ? {
           summary: 'Invalid value for --target',
-          why: `\`--target ${options.value}\` is not one of the short names (${SHORT_NAME_LIST}), and it is not a valid package name: ${problems}.`,
-          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the name of a target package (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`).`,
+          why: `\`--target ${options.value}\` is not one of the short names (${SHORT_NAME_LIST}), and init does not take it as a package name: ${problems}.`,
+          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the name of a target package (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`): a scoped name such as \`@prisma/orm-sqlite\`, or an unscoped one that begins \`prisma-orm-\`.`,
         }
       : {
           summary: 'Invalid target package name',
-          why: `\`${options.value}\`, typed as the name of the target package, is not a valid package name: ${problems}. Nothing was changed.`,
+          why: `\`${options.value}\`, typed as the name of the target package, is not taken as a package name: ${problems}. Nothing was changed.`,
           fix: `Run \`prisma orm init\` again and type the target package's name as it is published, or pass it as \`--target ${PACKAGE_NAME_PLACEHOLDER}\`.`,
         };
   return new CliStructuredError('CLI.INIT_INVALID_FLAG_VALUE', wording.summary, {

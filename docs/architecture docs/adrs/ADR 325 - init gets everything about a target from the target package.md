@@ -112,7 +112,7 @@ prisma orm init --target postgres                 # a short name
 prisma orm init --target prisma-orm-cockroachdb   # a package name
 ```
 
-`--target` is looked up in the CLI's list of known target packages, by short name, alias or package name. A value that is not in the list is taken as a package name. A value that is neither in the list nor a name npm accepts for a new package is refused before anything changes. Naming a listed package by its package name is the same as naming it by its short name: `--target @prisma/orm-postgres` is `--target postgres`.
+`--target` is looked up in the CLI's list of known target packages, by short name, alias or package name. A value that is not in the list is taken as a package name when it is scoped (`@scope/name`) or begins `prisma-orm-`, the name [ADR 308](ADR%20308%20-%20Community%20packages%20are%20named%20prisma-orm-name.md) gives an unscoped community package. Any other value is refused before anything changes: a name npm does not accept for a new package, and an unscoped word such as `sqlite` or `postgre`. Such a word is far likelier a mistyped short name than a target package, and installing it would bring an unrelated package from the registry into the project. Naming a listed package by its package name is the same as naming it by its short name: `--target @prisma/orm-postgres` is `--target postgres`.
 
 | Short name | Aliases | Package | Name in this repository | Label | Provider in an earlier Prisma schema | Drivers it requires |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -148,7 +148,7 @@ The `--json` result reports `package`, the name of the target package, and `targ
 - A target package without a runtime client cannot provide a contribution, because there is no `db.ts` to write.
 - `init` cannot write a project for a target package that is not installed. `--skip-install` in a project without it is refused.
 - `init` runs code from the package the user names. It is the same package the config loads a moment later.
-- Any valid package name is installed. A mistyped short name, or a guess such as `--target sqlite`, names some package on the registry, and `init` installs it as the package manager's own `add sqlite` would. When that package has no `init` entrypoint, the error says the value was not a short name and was taken as a package name, and how to remove what was installed. `init` keeps no list of names to refuse, because that would put target names into the CLI, and it asks no confirmation, for the reason given under the alternatives.
+- An unscoped target package whose name does not begin `prisma-orm-` cannot be named to `init`. It still works with a `prisma.config.ts` written by hand. `init` keeps no list of database names to refuse, because that would put target names into the CLI; the naming rule refuses `--target sqlite` without one. A mistyped scoped name is left to the package manager, which reports that it cannot find it.
 - `init` does not know an unlisted package's drivers before installing it, and it does not read the registry to find out. Its first install is the package and `dotenv`, and the package manager handles the package's required peers its own way; the contribution's `peerPackages` are declared in the later install. Where the package manager's configuration refuses a package without its peers, the install fails and `init` reports it.
 - The minimum server version has one source, the target package's code. The CLI keeps no copy of it.
 

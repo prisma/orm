@@ -47,7 +47,7 @@ describe('resolveTarget', () => {
       expect.objectContaining({
         message: 'Invalid value for --target',
         why: expect.stringContaining('is not one of the short names (postgres, mongodb)'),
-        fix: 'Pass a short name (--target postgres, --target mongodb) or the name of a target package (`--target <package>`).',
+        fix: 'Pass a short name (--target postgres, --target mongodb) or the name of a target package (`--target <package>`): a scoped name such as `@prisma/orm-sqlite`, or an unscoped one that begins `prisma-orm-`.',
       }),
     );
   });
@@ -58,7 +58,7 @@ describe('resolveTarget', () => {
         code: 'CLI.INIT_INVALID_FLAG_VALUE',
         message: 'Invalid target package name',
         why: expect.stringMatching(
-          /^`\.\.\/outside`, typed as the name of the target package, is not a valid package name: /,
+          /^`\.\.\/outside`, typed as the name of the target package, is not taken as a package name: /,
         ),
         fix: expect.stringContaining('type the target package'),
       }),

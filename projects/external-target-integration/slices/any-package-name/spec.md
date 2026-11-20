@@ -13,7 +13,7 @@ installs `@prisma/orm-sqlite`, loads `@prisma/orm-sqlite/init`, and writes the p
 
 ## Chosen design
 
-1. **Resolving `--target`.** The value is looked up in the list of known target packages by short name and alias. A value that is not in the list is taken as a package name. A value that is neither a known name nor a valid npm package name is refused before anything changes.
+1. **Resolving `--target`.** The value is looked up in the list of known target packages by short name and alias. A value that is not in the list is taken as a package name when it is a valid npm package name that is scoped or begins `prisma-orm-`. Any other value is refused before anything changes.
 2. **The first install of an unlisted package.** `init` does not know an unlisted package's drivers before installing it, and it does not read the registry itself. So the first install is the package and `dotenv` (whichever the project does not already declare), and the package manager handles the package's required peers its own way. The contribution's `peerPackages` are then declared in the later install. If the package manager refuses the first install, `init` reports the failure, as ADR 323 requires. A listed package keeps its drivers in the first install.
 3. **The picker** lists the known packages and an entry for typing another package name.
 4. **Output.** The `--json` success document gains `package`, the name of the target package. `target` is the short name for a listed package and the package name otherwise.

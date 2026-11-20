@@ -137,7 +137,7 @@ During `prisma orm init`, dependency installation failed. The first install, of 
 
 ### CLI.INIT_INVALID_FLAG_VALUE
 
-A flag passed to `prisma orm init` has a value outside its allowed set (for example `--target` with a value that is neither a short name in the list of known target packages, such as `postgres` or `mongodb`, nor a valid npm package name). A name typed into the picker's "Another target package" entry is checked the same way and refused with this code, worded as the typed answer rather than as a flag. Maps to init exit code 2 (PRECONDITION). Payload: `flag`, `value`, `allowed` (only values a caller can pass back: for `--target`, the short names), and, for `--target`, `acceptsPackageName: true` and `problems`: why the value is not a valid package name, as `validate-npm-package-name` reports it.
+A flag passed to `prisma orm init` has a value outside its allowed set (for example `--target` with a value that is neither a short name in the list of known target packages, such as `postgres` or `mongodb`, nor a package name init accepts: a valid npm package name that is scoped or begins `prisma-orm-`, so `--target sqlite` is refused). A name typed into the picker's "Another target package" entry is checked the same way and refused with this code, worded as the typed answer rather than as a flag. Maps to init exit code 2 (PRECONDITION). Payload: `flag`, `value`, `allowed` (only values a caller can pass back: for `--target`, the short names), and, for `--target`, `acceptsPackageName: true` and `problems`: why the value is not a valid package name, as `validate-npm-package-name` reports it.
 
 ### CLI.INIT_INVALID_MANIFEST
 
