@@ -56,41 +56,6 @@ test('fullTextMatches returns a non-nullable boolean expression', () => {
   });
 });
 
-test('ilike and fullTextMatches select as nullable when the one column they read is', () => {
-  const query = tsquery`${'ali'}:*`;
-  const overColumns = db.public.users
-    .outerLeftJoin(db.public.profiles, (f, fns) => fns.eq(f.users.id, f.profiles.user_id))
-    .select('likeName', (f, fns) => fns.ilike(f.name, '%ali%'))
-    .select('likeBio', (f, fns) => fns.ilike(f.profiles.bio, '%ali%'))
-    .select('matchesName', (f, fns) => fns.fullTextMatches(f.name, query))
-    .select('matchesBio', (f, fns) => fns.fullTextMatches(f.profiles.bio, query))
-    .where((f, fns) => fns.ilike(f.profiles.bio, '%ali%'))
-    .where((f, fns) => fns.fullTextMatches(f.profiles.bio, query))
-    .build();
-
-  expectTypeOf(overColumns).toEqualTypeOf<
-    SqlQueryPlan<{
-      likeName: boolean;
-      likeBio: boolean | null;
-      matchesName: boolean;
-      matchesBio: boolean | null;
-    }>
-  >();
-
-  const documents = db.public.documents;
-  const overDocuments = documents
-    .select('oneNullable', (f, fns) => fns.fullTextMatches(fullTextDocument([f.subtitle]), query))
-    .select('several', (f, fns) =>
-      fns.fullTextMatches(fullTextDocument([[f.title, f.subtitle], [f.body]]), query),
-    )
-    .select('index', (_f, fns) => fns.fullTextMatches(documents.indexes.documents_search, query))
-    .build();
-
-  expectTypeOf(overDocuments).toEqualTypeOf<
-    SqlQueryPlan<{ oneNullable: boolean | null; several: boolean; index: boolean }>
-  >();
-});
-
 test('the parsers are fns returning a non-nullable tsquery expression', () => {
   db.public.users.select('id').where((f, fns) => {
     type Tsquery = Expression<{ codecId: 'pg/tsquery@1'; nullable: false }>;

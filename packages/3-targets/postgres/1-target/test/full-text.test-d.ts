@@ -108,37 +108,6 @@ test('ilike and fullTextMatches take a nullable textual column, rank and headlin
   expectTypeOf<NullableTextColumn>().not.toExtend<SelfOf<'fullTextHeadline'>>();
 });
 
-test('ilike and fullTextMatches are null when the one column they read is', () => {
-  type Ops = QueryOperationTypes<CodecTypes>;
-  type Bool = Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
-  type NullableBool = Expression<{ codecId: 'pg/bool@1'; nullable: true }>;
-  const ilike = null as unknown as Ops['ilike']['impl'];
-  const matches = null as unknown as Ops['fullTextMatches']['impl'];
-  const query = websearchToTsquery('zebra');
-  const title = null as unknown as TextColumn;
-  const subtitle = null as unknown as Expression<{ codecId: 'pg/text@1'; nullable: true }>;
-  const fullTextIndexOver = <Columns extends Record<string, unknown>>(columns: Columns) =>
-    ({
-      columns,
-      type: 'fullText',
-      options: { weightGroups: [Object.keys(columns)], language: 'english' },
-    }) as const;
-
-  expectTypeOf(ilike(title, '%zeb%')).toEqualTypeOf<Bool>();
-  expectTypeOf(ilike(subtitle, '%zeb%')).toEqualTypeOf<NullableBool>();
-
-  expectTypeOf(matches(title, query)).toEqualTypeOf<Bool>();
-  expectTypeOf(matches(subtitle, query)).toEqualTypeOf<NullableBool>();
-  expectTypeOf(matches(fullTextDocument([subtitle]), query)).toEqualTypeOf<NullableBool>();
-  expectTypeOf(matches(fullTextDocument([[subtitle]]), query)).toEqualTypeOf<NullableBool>();
-  expectTypeOf(matches(fullTextDocument([title]), query)).toEqualTypeOf<Bool>();
-  expectTypeOf(matches(fullTextDocument([[title, subtitle]]), query)).toEqualTypeOf<Bool>();
-  expectTypeOf(matches(fullTextDocument([subtitle, subtitle]), query)).toEqualTypeOf<Bool>();
-  expectTypeOf(matches(fullTextIndexOver({ subtitle }), query)).toEqualTypeOf<NullableBool>();
-  expectTypeOf(matches(fullTextIndexOver({ title }), query)).toEqualTypeOf<Bool>();
-  expectTypeOf(matches(fullTextIndexOver({ title, subtitle }), query)).toEqualTypeOf<Bool>();
-});
-
 test('ilike and fullTextMatches refuse a bare null, which has no column to read', () => {
   type Ops = QueryOperationTypes<CodecTypes>;
   type SelfOf<Name extends 'ilike' | 'fullTextMatches'> = Parameters<Ops[Name]['impl']>[0];

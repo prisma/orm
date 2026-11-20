@@ -56,41 +56,6 @@ describe('postgres target query operations', () => {
     expect(ast.returns).toEqual({ codecId: 'pg/bool@1', nullable: false });
   });
 
-  describe('a condition over one nullable column is nullable', () => {
-    const column = (name: string, nullable: boolean) => {
-      const ast = ParamRef.of(name, { codec: { codecId: 'pg/text@1' } });
-      return { returnType: { codecId: 'pg/text@1', nullable }, buildAst: () => ast };
-    };
-    const title = column('title', false);
-    const subtitle = column('subtitle', true);
-    const indexOver = (columns: Record<string, unknown>) => ({
-      type: 'fullText',
-      options: { weightGroups: [Object.keys(columns)], language: 'english' },
-      columns,
-    });
-    const returnsOf = (method: string, ...args: unknown[]) => buildOpAst(method, ...args).returns;
-    const bool = (nullable: boolean) => ({ codecId: 'pg/bool@1', nullable });
-    const documentOf = (groups: unknown) => fullTextDocument(groups as FullTextDocumentGroups);
-
-    it('ilike', () => {
-      expect(returnsOf('ilike', title, '%zeb%')).toEqual(bool(false));
-      expect(returnsOf('ilike', subtitle, '%zeb%')).toEqual(bool(true));
-    });
-
-    it('fullTextMatches over a column, a document or an index', () => {
-      expect(returnsOf('fullTextMatches', title, TSQUERY)).toEqual(bool(false));
-      expect(returnsOf('fullTextMatches', subtitle, TSQUERY)).toEqual(bool(true));
-      expect(returnsOf('fullTextMatches', documentOf([subtitle]), TSQUERY)).toEqual(bool(true));
-      expect(returnsOf('fullTextMatches', documentOf([[title, subtitle]]), TSQUERY)).toEqual(
-        bool(false),
-      );
-      expect(returnsOf('fullTextMatches', indexOver({ subtitle }), TSQUERY)).toEqual(bool(true));
-      expect(returnsOf('fullTextMatches', indexOver({ title, subtitle }), TSQUERY)).toEqual(
-        bool(false),
-      );
-    });
-  });
-
   const fullTextOps: ReadonlyArray<readonly [string, string, string]> = [
     ['fullTextMatches', 'pg/bool@1', 'to_tsvector({{arg1}}, {{self}}) @@ {{arg0}}'],
     ['fullTextRank', 'pg/float4@1', 'ts_rank(to_tsvector({{arg1}}, {{self}}), {{arg0}})'],

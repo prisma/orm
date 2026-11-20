@@ -1,7 +1,6 @@
 import type { AnyExpression } from '@internal/sql-relational-core/ast';
 import { buildOperation, isExpression, toExpr } from '@internal/sql-relational-core/expression';
 import { assertDefined } from '@internal/utils/assertions';
-import { blindCast } from '@internal/utils/casts';
 import { type } from 'arktype';
 import type { QueryOperationTypes } from '../types/operation-types';
 import {
@@ -11,7 +10,7 @@ import {
   PG_TSQUERY_CODEC_ID,
 } from './codec-ids';
 import { postgresError } from './errors';
-import { documentIsNullable, FullTextDocument } from './full-text-document';
+import { FullTextDocument } from './full-text-document';
 import { FULL_TEXT_INDEX_TYPE, fullTextIndexOptions } from './full-text-index-definition';
 import {
   type FullTextHeadlineOptions,
@@ -165,48 +164,32 @@ function searchDocument(
   });
   const [self, ...rest] = weightGroups.flat().map((column): AnyExpression => toExpr(column));
   assertDefined(self, `${method}: a checked document has a first column`);
-  return {
-    self,
-    rest,
-    template,
-    language: languageLiteral(method, language),
-    nullable: documentIsNullable(weightGroups),
-  };
+  return { self, rest, template, language: languageLiteral(method, language) };
 }
 
 export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOperationTypes<CT> {
   return {
     ilike: {
       self: { traits: ['textual'] },
-      impl: blindCast<
-        QueryOperationTypes<CT>['ilike']['impl'],
-        'the result is nullable exactly when the column is, which only the column read here knows'
-      >((self: unknown, pattern: unknown) =>
+      impl: (self, pattern) =>
         buildOperation({
           method: 'ilike',
           args: [toExpr(self), toExpr(pattern, TEXT_REF)],
-          returns: {
-            codecId: PG_BOOL_CODEC_ID,
-            nullable: isExpression(self) && self.returnType.nullable,
-          },
+          returns: { codecId: PG_BOOL_CODEC_ID, nullable: false },
           lowering: { targetFamily: 'sql', template: '{{self}} ILIKE {{arg0}}' },
         }),
-      ),
     },
     fullTextMatches: {
       self: { traits: ['textual'] },
-      impl: blindCast<
-        QueryOperationTypes<CT>['fullTextMatches']['impl'],
-        'the result is nullable exactly when the document is, which only the document read here knows'
-      >((document: unknown, query: unknown, options: FullTextMatchesOptions = {}) => {
+      impl: (document: unknown, query: unknown, options: FullTextMatchesOptions = {}) => {
         const searched = searchDocument('fullTextMatches', document, options, 2);
         return buildOperation({
           method: 'fullTextMatches',
           args: [searched.self, toExpr(query, TSQUERY_REF), searched.language, ...searched.rest],
-          returns: { codecId: PG_BOOL_CODEC_ID, nullable: searched.nullable },
+          returns: { codecId: PG_BOOL_CODEC_ID, nullable: false },
           lowering: { targetFamily: 'sql', template: `${searched.template} @@ {{arg0}}` },
         });
-      }),
+      },
     },
     fullTextRank: {
       self: { traits: ['textual'] },

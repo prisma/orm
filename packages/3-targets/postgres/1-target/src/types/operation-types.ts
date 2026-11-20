@@ -24,32 +24,7 @@ type TextualSelfSpec = { readonly traits: readonly ['textual'] };
 
 type TextualSelf<CT extends CodecTypesBase> = TraitExpression<readonly ['textual'], false, CT>;
 
-/** A textual column whose nullability the operation's result follows. */
-type TextualColumn<Nullable extends boolean, CT extends CodecTypesBase> = TraitExpression<
-  readonly ['textual'],
-  Nullable,
-  CT
-> & { buildAst(): unknown };
-
-type NullableTextualSelf<Nullable extends boolean, CT extends CodecTypesBase> =
-  | TextualSelf<CT>
-  | TextualColumn<Nullable, CT>;
-
-type Condition<Nullable extends boolean> = Expression<{ codecId: 'pg/bool@1'; nullable: Nullable }>;
-
-/**
- * Whether the search document of an index can be null. A document of one column is null where that
- * column is; with more columns each is wrapped in `coalesce`, so it never is.
- */
-type IndexDocumentNullable<Columns> = {
-  [Name in keyof Columns]: [Exclude<keyof Columns, Name>] extends [never]
-    ? Columns[Name] extends {
-        readonly returnType: { readonly nullable: infer Nullable extends boolean };
-      }
-      ? Nullable
-      : false
-    : false;
-}[keyof Columns];
+type NullableTextualSelf<CT extends CodecTypesBase> = TextualSelf<CT> | FullTextColumn<CT>;
 
 type TextOperand<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', false, CT>;
 
@@ -63,18 +38,13 @@ type FullTextColumn<CT extends CodecTypesBase> = Extract<
  * A full-text index of a table, as the SQL builder's `table.indexes.<name>` gives it. The
  * operation searches the document the index was built over: its weight groups and its language.
  */
-export interface FullTextIndexReference<
-  CT extends CodecTypesBase,
-  Columns extends Readonly<Record<string, FullTextColumn<CT>>> = Readonly<
-    Record<string, FullTextColumn<CT>>
-  >,
-> {
+export interface FullTextIndexReference<CT extends CodecTypesBase> {
   readonly type: typeof FULL_TEXT_INDEX_TYPE;
   readonly options: {
     readonly weightGroups: FullTextWeightGroups<string>;
     readonly language: FullTextSearchLanguage;
   };
-  readonly columns: Columns;
+  readonly columns: Readonly<Record<string, FullTextColumn<CT>>>;
 }
 
 /** The options of a full-text operation given an index, which states the language itself. */
@@ -94,10 +64,10 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
   {
     readonly ilike: {
       readonly self: TextualSelfSpec;
-      readonly impl: <Nullable extends boolean = false>(
-        self: NullableTextualSelf<Nullable, CT>,
+      readonly impl: (
+        self: NullableTextualSelf<CT>,
         pattern: TextOperand<CT>,
-      ) => Condition<Nullable>;
+      ) => Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
     };
     /**
      * The document is a full-text index from a table's `indexes`, a textual column, or a
@@ -107,16 +77,16 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
     readonly fullTextMatches: {
       readonly self: TextualSelfSpec;
       readonly impl: {
-        <Columns extends Readonly<Record<string, FullTextColumn<CT>>>>(
-          index: FullTextIndexReference<CT, Columns>,
+        (
+          index: FullTextIndexReference<CT>,
           query: TsqueryArgument<CT>,
           options?: WithoutLanguage<FullTextMatchesOptions>,
-        ): Condition<IndexDocumentNullable<Columns>>;
-        <Nullable extends boolean = false>(
-          document: NullableTextualSelf<Nullable, CT> | FullTextDocument<Nullable>,
+        ): Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
+        (
+          document: NullableTextualSelf<CT> | FullTextDocument,
           query: TsqueryArgument<CT>,
           options?: FullTextMatchesOptions,
-        ): Condition<Nullable>;
+        ): Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
       };
     };
     /**
