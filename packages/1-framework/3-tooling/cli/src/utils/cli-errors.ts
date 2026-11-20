@@ -979,7 +979,7 @@ export interface PathUnreachable {
   readonly meta: PathUnreachableMeta;
 }
 
-/** The advice for a `PATH_UNREACHABLE` the caller knows better than a plan-then-apply of the app space. */
+/** What a `PATH_UNREACHABLE` advises: {@link planThenApply} for the app space, or the caller's own. */
 export interface PathUnreachableAdvice {
   readonly fix: string;
   readonly nextActions: readonly NextAction[];
@@ -989,13 +989,13 @@ export interface PathUnreachableAdvice {
  * The advice to plan the missing migration in the app space and apply it. `toArgument` is what
  * `--to` takes to name the target, or `undefined` for the emitted contract: `migration plan` and
  * `db migrate` target it without `--to`, and `migration plan --to` resolves only a contract that a
- * migration or a ref names. A space with no migrations has no such contract, so its commands never
- * carry `--to`.
+ * migration or a ref names. A space with no migrations has no such contract, so its plan command
+ * never carries `--to`. The apply step is the `db migrate` the user ran, when its flags are known.
  */
 export function planThenApply(
   meta: PathUnreachableMeta,
   toArgument: string | undefined,
-  invocation: CliInvocation | undefined,
+  invocation: CliInvocation,
 ): PathUnreachableAdvice {
   const from =
     meta.kind === 'neverPlanned' || meta.fromHash === EMPTY_CONTRACT_HASH
@@ -1003,7 +1003,7 @@ export function planThenApply(
       : meta.fromHash;
   const to = meta.kind === 'neverPlanned' || toArgument === undefined ? [] : ['--to', toArgument];
   const planCommand = printedPlanCommand(invocation, from, [...to, '--name', '<slug>']);
-  const applyCommand = cliCommand(invocation, 'db migrate', to);
+  const applyCommand = cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? to);
   const listCommand = cliCommand(invocation, 'migration list');
   const showCommand = cliCommand(invocation, 'migration show', ['<bundle>']);
   return {

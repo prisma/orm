@@ -17,6 +17,7 @@ import {
   type PathUnreachable,
   planThenApply,
 } from '../src/utils/cli-errors';
+import type { CliInvocation } from '../src/utils/printed-command';
 
 describe('CliStructuredError.toEnvelope()', () => {
   it('converts driver required error to envelope with CONFIG.DRIVER_REQUIRED', () => {
@@ -44,6 +45,8 @@ describe('CliStructuredError.toEnvelope()', () => {
   });
 });
 
+const INVOCATION: CliInvocation = { cwd: '/project', configPath: undefined, dbGiven: false };
+
 describe('errorPathUnreachable', () => {
   const targetHash = `${'a'.repeat(64)}`;
   const fromHash = `${'b'.repeat(64)}`;
@@ -56,7 +59,7 @@ describe('errorPathUnreachable', () => {
     };
     const envelope = errorPathUnreachable(
       failure,
-      planThenApply(failure.meta, targetHash, undefined),
+      planThenApply(failure.meta, targetHash, INVOCATION),
     ).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.PATH_UNREACHABLE');
     expect(envelope.fix).toContain(
@@ -77,7 +80,7 @@ describe('errorPathUnreachable', () => {
     };
     const envelope = errorPathUnreachable(
       failure,
-      planThenApply(failure.meta, targetHash, undefined),
+      planThenApply(failure.meta, targetHash, INVOCATION),
     ).toEnvelope();
     // A never-planned space has an EMPTY graph, and `--to <hash>` only
     // resolves against graph nodes — the remediation must run verbatim.
@@ -96,7 +99,7 @@ describe('errorPathUnreachable', () => {
       { storageHash: fromHash, invariants: [] },
       targetHash,
       targetHash,
-      undefined,
+      INVOCATION,
     );
     const envelope = failure.toEnvelope();
 
@@ -122,7 +125,7 @@ describe('errorPathUnreachable', () => {
       null,
       targetHash,
       targetHash,
-      undefined,
+      INVOCATION,
     ).toEnvelope();
 
     expect(envelope.why).toContain('No migration edge connects the empty contract to the target');
@@ -137,7 +140,7 @@ describe('errorPathUnreachable', () => {
       { storageHash: fromHash, invariants: [] },
       targetHash,
       undefined,
-      undefined,
+      INVOCATION,
     );
 
     expect(error.nextActions?.slice(0, 2)).toEqual([
@@ -169,7 +172,7 @@ describe('errorPathUnreachable', () => {
       { storageHash: fromHash, invariants: [] },
       targetHash,
       'production',
-      undefined,
+      INVOCATION,
     );
 
     expect(error.nextActions?.slice(0, 2)).toEqual([
@@ -183,7 +186,7 @@ describe('errorPathUnreachable', () => {
   });
 
   it('leaves out --from and --to when the space has no marker and the target is the emitted contract', () => {
-    const error = buildPathNotFoundFailure('app', null, targetHash, undefined, undefined);
+    const error = buildPathNotFoundFailure('app', null, targetHash, undefined, INVOCATION);
 
     expect(error.nextActions?.slice(0, 2)).toEqual([
       {
@@ -216,12 +219,35 @@ describe('errorPathUnreachable', () => {
     ]);
   });
 
+  it('applies with the db migrate the user ran, flags included', () => {
+    const error = buildPathNotFoundFailure(
+      'app',
+      { storageHash: fromHash, invariants: [] },
+      targetHash,
+      'production',
+      { ...INVOCATION, rerunArgs: ['--to', 'production', '--permit-policy-change'] },
+    );
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: `{bin} migration plan --from ${fromHash} --to production --name <slug>`,
+      },
+      {
+        kind: 'run-command',
+        label: 'Apply it',
+        command: '{bin} db migrate --to production --permit-policy-change',
+      },
+    ]);
+  });
+
   it('composes buildNeverPlannedFailure why with the fix into one plan-then-apply sequence', () => {
     const envelope = buildNeverPlannedFailure(
       'app',
       targetHash,
       'migrations-postgres',
-      undefined,
+      INVOCATION,
     ).toEnvelope();
 
     expect(envelope.why).toContain(targetHash);
@@ -312,7 +338,7 @@ describe('typed next actions on the CLI factories', () => {
 
     const actions = errorPathUnreachable(
       failure,
-      planThenApply(failure.meta, targetHash, undefined),
+      planThenApply(failure.meta, targetHash, INVOCATION),
     ).nextActions;
 
     expect(actions.slice(0, 2)).toEqual([

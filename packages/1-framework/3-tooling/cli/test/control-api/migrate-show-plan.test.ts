@@ -222,6 +222,24 @@ describe('executeMigrateShowPlan', () => {
     ]);
   });
 
+  it('advises no --to when the target is given as @contract', async () => {
+    const emitted = 'c'.repeat(64);
+    await writeFile(join(tempDir, 'contract.json'), JSON.stringify(contractJsonForHash(emitted)));
+
+    const result = await executeMigrateShowPlan({
+      config,
+      cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
+      from: HASH_B,
+      to: '@contract',
+    });
+
+    expect(planThenApplyCommands(result)).toEqual([
+      `{bin} migration plan --from ${HASH_B} --name <slug>`,
+      '{bin} db migrate',
+    ]);
+  });
+
   it('fires onPreflightComplete exactly once, before any client construction', async () => {
     const onPreflightComplete = vi.fn();
     const result = await executeMigrateShowPlan({

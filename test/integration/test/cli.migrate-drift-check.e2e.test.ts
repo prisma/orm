@@ -23,7 +23,7 @@ function remediation(error: MigrateErrorJson): string {
     .join('\n');
 }
 
-/** The arguments a next action's command gives `command`, with `<slug>` filled in, to run it as printed. */
+/** The arguments a next action's command gives `command`, as a shell would pass them, with `<slug>` filled in. */
 function printedArgs(error: MigrateErrorJson, label: string, command: string): string[] {
   const printed = error.nextActions?.find((action) => action.label === label)?.command ?? '';
   const start = printed.indexOf(command);
@@ -32,7 +32,7 @@ function printedArgs(error: MigrateErrorJson, label: string, command: string): s
     .slice(start + command.length)
     .split(/\s+/)
     .filter((arg) => arg !== '')
-    .map((arg) => (arg === '<slug>' ? 'planned-as-advised' : arg));
+    .map((arg) => (arg === '<slug>' ? 'planned-as-advised' : arg.replace(/^'(.*)'$/, '$1')));
 }
 
 interface MigrateErrorJson {

@@ -24,7 +24,6 @@ import {
   planThenApply,
 } from '../../utils/cli-errors';
 import { closeQuietly, resolveMigrationPaths } from '../../utils/command-helpers';
-import { errorExtensionPathUnreachable } from '../../utils/extension-path-failure';
 import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import { createControlClient } from '../client';
@@ -32,7 +31,12 @@ import type { CreateControlClient, MigrateTarget } from '../types';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 import { checkRunPolicies, databasePoliciesInForce } from './database-policies';
-import { planEverySpace, planSpaces, type SpacePathOutcome, toArgumentFor } from './migrate';
+import {
+  planEverySpace,
+  planSpaces,
+  type SpacePathOutcome,
+  unreachableSpaceFailure,
+} from './migrate';
 import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
@@ -282,7 +286,7 @@ export async function executeMigrateShowPlan(
   // An offline --from is not a database marker, so a --from outside the graph is a path that does
   // not exist rather than MIGRATION.MARKER_MISMATCH.
   const planned = outcomes ?? planSpaces(planInputs());
-  const appTarget: MigrateTarget | undefined = targetsEmittedContract
+  const requestedTarget: MigrateTarget | undefined = targetsEmittedContract
     ? undefined
     : namedRef === undefined
       ? { kind: 'hash', hash: targetHash }
@@ -316,35 +320,21 @@ export async function executeMigrateShowPlan(
       );
     }
     if (outcome.kind === 'unreachable' || outcome.kind === 'marker-outside-graph') {
-      const fromHash =
-        outcome.kind === 'marker-outside-graph'
-          ? outcome.markerHash
-          : (outcome.liveMarker?.storageHash ?? EMPTY_CONTRACT_HASH);
-      if (outcome.spaceId !== aggregate.app.spaceId) {
-        return notOk(
-          errorExtensionPathUnreachable({
-            spaceId: outcome.spaceId,
-            fromHash,
-            targetHash: outcome.targetHash,
-            command: 'db migrate',
-            invocation: options.invocation,
-          }),
-        );
-      }
-      const meta: PathUnreachableMeta = {
-        spaceId: outcome.spaceId,
-        fromHash,
-        targetHash: outcome.targetHash,
-        kind: 'pathUnreachable',
-      };
       return notOk(
-        errorPathUnreachable(
+        unreachableSpaceFailure(
           {
-            summary: `No migration path from ${fromHash.slice(0, 14)} to ${outcome.targetHash.slice(0, 14)} in space "${outcome.spaceId}".`,
-            why: `The migration graph has no path from the from-state to the target in space "${outcome.spaceId}".`,
-            meta,
+            spaceId: outcome.spaceId,
+            marker:
+              outcome.kind === 'marker-outside-graph'
+                ? { storageHash: outcome.markerHash, invariants: [] }
+                : outcome.liveMarker,
+            targetHash: outcome.targetHash,
           },
-          planThenApply(meta, toArgumentFor(appTarget), options.invocation),
+          {
+            appSpaceId: aggregate.app.spaceId,
+            target: requestedTarget,
+            invocation: options.invocation,
+          },
         ),
       );
     }

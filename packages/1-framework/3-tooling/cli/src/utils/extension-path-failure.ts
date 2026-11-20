@@ -33,7 +33,7 @@ const INSTALL_MATCHING =
 
 /** The way out for an extension space: only another version of the extension changes its migrations. */
 function extensionAdvice(space: UnplannableExtensionSpace): PathUnreachableAdvice {
-  const rerun = cliCommand(space.invocation, space.command);
+  const rerun = cliCommand(space.invocation, space.command, space.invocation.rerunArgs ?? []);
   const list = cliCommand(space.invocation, 'migration list', ['--space', space.spaceId]);
   return {
     fix: `The migrations of extension space "${space.spaceId}" come with the extension. ${INSTALL_MATCHING}, then run \`${rerun}\` again. List the space's migrations with \`${list}\`.`,

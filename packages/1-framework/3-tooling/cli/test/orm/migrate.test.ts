@@ -427,7 +427,13 @@ describe('migrate', () => {
   it('maps an unreachable path to its migration code', async () => {
     const cwd = await buildProject();
     mocks.migrate.mockResolvedValue(
-      notOk(buildPathNotFoundFailure('app', null, C2, C2, undefined)),
+      notOk(
+        buildPathNotFoundFailure('app', null, C2, C2, {
+          cwd,
+          configPath: undefined,
+          dbGiven: false,
+        }),
+      ),
     );
 
     const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });

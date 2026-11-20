@@ -249,11 +249,14 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     }
     if (outcome.kind === 'unreachable') {
       return notOk(
-        unreachableSpaceFailure(outcome, {
-          appSpaceId: aggregate.app.spaceId,
-          target,
-          invocation: options.invocation,
-        }),
+        unreachableSpaceFailure(
+          {
+            spaceId: outcome.spaceId,
+            marker: outcome.liveMarker,
+            targetHash: outcome.targetHash,
+          },
+          { appSpaceId: aggregate.app.spaceId, target, invocation: options.invocation },
+        ),
       );
     }
     if (outcome.kind === 'unsatisfiable') {
@@ -872,31 +875,35 @@ function buildSuccess(args: BuildSuccessArgs): MigrateSuccess {
 }
 
 /**
- * `MIGRATION.PATH_UNREACHABLE` for a space `db migrate` has no path for. The application space is
- * advised to plan the missing migration; an extension space's migrations come with the extension,
- * so its advice is to install a version that has them.
+ * `MIGRATION.PATH_UNREACHABLE` for a space with no path from its marker to its target. The
+ * application space is advised to plan the missing migration; an extension space's migrations come
+ * with the extension, so its advice is to install a version that has them.
  */
 export function unreachableSpaceFailure(
-  outcome: Extract<SpacePathOutcome, { readonly kind: 'unreachable' }>,
+  space: {
+    readonly spaceId: string;
+    readonly marker: ContractMarkerRecordLike | null;
+    readonly targetHash: string;
+  },
   run: {
     readonly appSpaceId: string;
     readonly target: MigrateTarget | undefined;
     readonly invocation: CliInvocation;
   },
 ): CliStructuredError {
-  if (outcome.spaceId === run.appSpaceId) {
+  if (space.spaceId === run.appSpaceId) {
     return buildPathNotFoundFailure(
-      outcome.spaceId,
-      outcome.liveMarker,
-      outcome.targetHash,
+      space.spaceId,
+      space.marker,
+      space.targetHash,
       toArgumentFor(run.target),
       run.invocation,
     );
   }
   return errorExtensionPathUnreachable({
-    spaceId: outcome.spaceId,
-    fromHash: outcome.liveMarker?.storageHash ?? EMPTY_CONTRACT_HASH,
-    targetHash: outcome.targetHash,
+    spaceId: space.spaceId,
+    fromHash: space.marker?.storageHash ?? EMPTY_CONTRACT_HASH,
+    targetHash: space.targetHash,
     command: 'db migrate',
     invocation: run.invocation,
   });
@@ -914,7 +921,7 @@ export function toArgumentFor(target: MigrateTarget | undefined): string | undef
  * migrate was asked to reach a target hash. All-external spaces never reach
  * this: they resolve declaratively (marker advances to the head ref with
  * zero operations). The `why` states only the condition; the recovery
- * sequence is composed by `errorPathUnreachable`'s `fix`.
+ * sequence is `planThenApply`'s.
  *
  * @internal Exported for testing only.
  */
@@ -922,7 +929,7 @@ export function buildNeverPlannedFailure(
   spaceId: string,
   targetHash: string,
   migrationsDir: string,
-  invocation: CliInvocation | undefined,
+  invocation: CliInvocation,
 ): CliStructuredError {
   const meta: PathUnreachableMeta = { spaceId, targetHash, kind: 'neverPlanned' };
   return errorPathUnreachable(
@@ -940,7 +947,7 @@ export function buildNeverPlannedFailure(
  * on-disk migration edge from the current marker to the target. The `why`
  * states only the condition (no edge between the two named states, and migrate
  * replays edges rather than inventing them); the recovery sequence — plan the
- * edge, then re-apply — is composed by `errorPathUnreachable`'s `fix`, so the
+ * edge, then re-apply — is `planThenApply`'s, so the
  * two read as one non-redundant plan-then-apply story.
  *
  * @internal Exported for testing only.
@@ -950,7 +957,7 @@ export function buildPathNotFoundFailure(
   marker: ContractMarkerRecordLike | null,
   targetHash: string,
   toArgument: string | undefined,
-  invocation: CliInvocation | undefined,
+  invocation: CliInvocation,
 ): CliStructuredError {
   const fromHash = marker?.storageHash ?? EMPTY_CONTRACT_HASH;
   const fromText = marker === null ? 'the empty contract' : `the current state "${fromHash}"`;

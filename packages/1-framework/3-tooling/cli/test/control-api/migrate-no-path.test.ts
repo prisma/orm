@@ -300,13 +300,15 @@ describe('executeMigrate with no path to the target', () => {
 
   it('advises installing another version of the extension when an extension space has no path', () => {
     const failure = unreachableSpaceFailure(
+      { spaceId: 'pgvector', marker: markerAt(DELETED), targetHash: ELSEWHERE },
       {
-        kind: 'unreachable',
-        spaceId: 'pgvector',
-        liveMarker: markerAt(DELETED),
-        targetHash: ELSEWHERE,
+        appSpaceId: 'app',
+        target: { kind: 'ref', ref: { name: 'production', hash: APP_HEAD, invariants: [] } },
+        invocation: {
+          ...invocationIn('/project'),
+          rerunArgs: ['--to', 'production', '--advance-ref', 'production'],
+        },
       },
-      { appSpaceId: 'app', target: undefined, invocation: invocationIn('/project') },
     );
 
     expect(failure.toEnvelope()).toMatchObject({
@@ -325,7 +327,7 @@ describe('executeMigrate with no path to the target', () => {
         {
           kind: 'run-command',
           label: 'Run db migrate again',
-          command: '{bin} db migrate --db <url>',
+          command: '{bin} db migrate --to production --advance-ref production --db <url>',
         },
       ],
       meta: {
