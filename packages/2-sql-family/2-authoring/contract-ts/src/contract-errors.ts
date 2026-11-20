@@ -6,6 +6,7 @@ export type ContractCode = `CONTRACT.${ContractSubcode}`;
 type ContractSubcode =
   | 'VALIDATION_FAILED'
   | 'NAME_DUPLICATE'
+  | 'NAME_PROTO'
   | 'MODEL_UNKNOWN'
   | 'PACK_CONTRIBUTION_INVALID'
   | 'PACK_FAMILY_MISMATCH'

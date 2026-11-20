@@ -67,6 +67,7 @@ import {
   mergeColumnAndAttachedEntities,
   mergeNamespaceValueSets,
 } from './pack-entities';
+import { refuseProtoNames } from './refuse-proto-names';
 import { refuseTypesKey } from './refuse-types-key';
 import { tableKey } from './storage-description';
 import {
@@ -74,6 +75,16 @@ import {
   resolveColumnTypeQualifier,
 } from './target-authoring-hooks';
 import { requiredUnmappedColumnWarnings } from './unmapped-column-warnings';
+
+/**
+ * The own entry of `record` for `key`, or `undefined` when the record holds
+ * none. A plain-object read returns the inherited value for names every
+ * object inherits — `constructor`, `toString` and the rest — which a
+ * `?? {}` fallback would then keep instead of the empty group.
+ */
+function ownedEntry<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(record, key) ? record[key] : undefined;
+}
 
 function assertStorageSemantics(
   contract: Contract<SqlStorage>,
@@ -197,7 +208,7 @@ function storageOf(
         {
           id,
           entries: {
-            valueSet: storageValueSetsByNs[id] ?? {},
+            valueSet: ownedEntry(storageValueSetsByNs, id) ?? {},
             ...(id === defaultNamespaceId ? { valueObject: valueObjects ?? {} } : {}),
           },
         },
@@ -220,11 +231,14 @@ function writeDiscriminatorValueSets(
     const { discriminator, variants } = model;
     if (discriminator === undefined || variants === undefined) continue;
     const namespaceId = modelNamespaceId(model, defaultNamespaceId);
-    const table = tablesByNamespace[namespaceId]?.[model.tableName];
+    const table = ownedEntry(ownedEntry(tablesByNamespace, namespaceId) ?? {}, model.tableName);
     const columnName = model.fields.find(
       (field) => field.fieldName === discriminator.field,
     )?.columnName;
-    const column = columnName === undefined ? undefined : table?.columns[columnName];
+    const column =
+      columnName === undefined || table === undefined
+        ? undefined
+        : ownedEntry(table.columns, columnName);
     if (table === undefined || columnName === undefined || column === undefined) continue;
     if (column.valueSet !== undefined) continue;
     const { name: valueSetName, values } = discriminatorValueSet(
@@ -232,7 +246,7 @@ function writeDiscriminatorValueSets(
       discriminator.field,
       Object.keys(variants),
     );
-    const namespaceValueSets = storageValueSetsByNs[namespaceId] ?? {};
+    const namespaceValueSets = ownedEntry(storageValueSetsByNs, namespaceId) ?? {};
     if (Object.hasOwn(namespaceValueSets, valueSetName)) {
       throw contractError(
         'CONTRACT.ENUM_INVALID',
@@ -263,7 +277,7 @@ function writeDiscriminatorValueSets(
               valueObject: undefined,
             }),
           );
-    const namespaceTables = tablesByNamespace[namespaceId] ?? {};
+    const namespaceTables = ownedEntry(tablesByNamespace, namespaceId) ?? {};
     namespaceTables[model.tableName] = {
       ...table,
       ...(derivedChecks.length > 0
@@ -297,6 +311,7 @@ export function buildSqlContractFromDefinition(
   dataTypeLookup: DataTypeLookup,
 ): Contract<SqlStorage> {
   refuseTypesKey(definition, 'buildSqlContractFromDefinition');
+  refuseProtoNames(definition);
   const lookups: TypeLookups<CodecLookupWithDescriptors> = { codecLookup, dataTypeLookup };
   const target = definition.target.targetId;
   const defaultNamespaceId = definition.target.defaultNamespaceId;
@@ -327,7 +342,7 @@ export function buildSqlContractFromDefinition(
       );
     }
     const nsId = defaultNamespaceId;
-    let domainSlot = domainEnumsByNs[nsId];
+    let domainSlot = ownedEntry(domainEnumsByNs, nsId);
     if (domainSlot === undefined) {
       domainSlot = {};
       domainEnumsByNs[nsId] = domainSlot;
@@ -338,7 +353,7 @@ export function buildSqlContractFromDefinition(
       members: storedMembers,
     };
 
-    let storageSlot = storageValueSetsByNs[nsId];
+    let storageSlot = ownedEntry(storageValueSetsByNs, nsId);
     if (storageSlot === undefined) {
       storageSlot = {};
       storageValueSetsByNs[nsId] = storageSlot;
@@ -384,7 +399,7 @@ export function buildSqlContractFromDefinition(
   const tables = mergeTables(modelStorages, tableNodes);
   authoringWarnings.push(...requiredUnmappedColumnWarnings(modelStorages, tables));
   for (const table of tables) {
-    const namespaceTables = tablesByNamespace[table.namespaceId] ?? {};
+    const namespaceTables = ownedEntry(tablesByNamespace, table.namespaceId) ?? {};
     namespaceTables[table.tableName] = lowerTable(table, tableLoweringContext);
     tablesByNamespace[table.namespaceId] = namespaceTables;
   }
@@ -400,7 +415,7 @@ export function buildSqlContractFromDefinition(
   );
   const modelsByNamespace: Record<string, Record<string, ContractModel>> = {};
   for (const { domain } of components) {
-    const namespaceModels = modelsByNamespace[domain.namespaceId] ?? {};
+    const namespaceModels = ownedEntry(modelsByNamespace, domain.namespaceId) ?? {};
     namespaceModels[domain.modelName] = domain.model;
     modelsByNamespace[domain.namespaceId] = namespaceModels;
   }
@@ -429,12 +444,12 @@ export function buildSqlContractFromDefinition(
     [...namespaceCoordinateIds].sort().map((id) => {
       const entitiesForNs = mergeColumnAndAttachedEntities(
         id,
-        definition.attachedEntities?.[id],
-        collectedColumnEntities[id],
+        ownedEntry(definition.attachedEntities ?? {}, id),
+        ownedEntry(collectedColumnEntities, id),
       );
       assertNoManagedEntityKinds(id, entitiesForNs);
 
-      const enumValueSetEntries = storageValueSetsByNs[id];
+      const enumValueSetEntries = ownedEntry(storageValueSetsByNs, id);
       const packValueSetEntries = deriveEntityValueSets(entitiesForNs, entityTypesByDiscriminator);
       const valueSetEntries =
         enumValueSetEntries !== undefined || packValueSetEntries !== undefined
@@ -444,7 +459,7 @@ export function buildSqlContractFromDefinition(
       const nsInput: SqlNamespaceInput = {
         id,
         entries: {
-          table: tablesByNamespace[id] ?? {},
+          table: ownedEntry(tablesByNamespace, id) ?? {},
           ...entitiesForNs,
           ...(valueSetEntries !== undefined && Object.keys(valueSetEntries).length > 0
             ? { valueSet: valueSetEntries }
@@ -522,8 +537,8 @@ export function buildSqlContractFromDefinition(
   }
   const domainNamespaces = Object.fromEntries(
     [...domainNamespaceIds].sort().map((namespaceId) => {
-      const modelsInNs = modelsByNamespace[namespaceId] ?? {};
-      const enumsInNs = domainEnumsByNs[namespaceId];
+      const modelsInNs = ownedEntry(modelsByNamespace, namespaceId) ?? {};
+      const enumsInNs = ownedEntry(domainEnumsByNs, namespaceId);
       const namespaceSlice = {
         models: modelsInNs,
         ...(enumsInNs !== undefined && Object.keys(enumsInNs).length > 0
