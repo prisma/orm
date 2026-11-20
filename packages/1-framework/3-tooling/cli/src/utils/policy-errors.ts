@@ -150,8 +150,6 @@ function doItAnyway(source: PolicySource): string {
     : 'To do it anyway, whoever owns the database must first change its data protection policy.';
 }
 
-const REMOVE_AND_REEMIT = 'remove the operation from its migration.ts and run that file with node.';
-
 function quotedList(names: readonly string[]): string {
   const quoted = names.map((name) => `"${name}"`);
   return quoted.length === 1
@@ -159,18 +157,11 @@ function quotedList(names: readonly string[]): string {
     : `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
 }
 
-/** The extensions' contract spaces own their migrations: the user cannot change them, only which version of each extension is installed. */
-function extensionsOwnMigrations(
-  spaceIds: readonly string[],
-  invocation: CliInvocation | undefined,
-): string {
-  const emit = cliCommand(
-    invocation === undefined ? undefined : { ...invocation, dbGiven: false },
-    'contract emit',
-  );
+/** The extensions' contract spaces own their migrations: only the extensions' authors can change them. */
+function extensionsOwnMigrations(spaceIds: readonly string[]): string {
   return spaceIds.length === 1
-    ? `Contract space ${quotedList(spaceIds)} belongs to an extension, so do not edit or delete its migrations. Use a version of the extension without the operation, such as the one this database already runs, and run ${emit}; or ask the extension's author for one.`
-    : `Contract spaces ${quotedList(spaceIds)} belong to extensions, so do not edit or delete their migrations. Use versions of the extensions without the operations, such as the ones this database already runs, and run ${emit}; or ask the extensions' authors for them.`;
+    ? `Contract space ${quotedList(spaceIds)} belongs to an extension, so do not edit or delete its migrations; ask the extension's author for a version without the operation.`
+    : `Contract spaces ${quotedList(spaceIds)} belong to extensions, so do not edit or delete their migrations; ask the extensions' authors for versions without the operations.`;
 }
 
 /** What a user can do about refused operations in the application's contract space, for the command that refused them. */
@@ -181,23 +172,29 @@ function keepAppProtected(
   alongsideExtensions: boolean,
   invocation: CliInvocation | undefined,
 ): readonly string[] {
-  const unapplied = alongsideExtensions
-    ? 'For an application migration no database has applied'
-    : 'For a migration no database has applied';
-  if (setting === 'accessWidening') {
-    return command === 'db migrate'
-      ? [KEEP_APPLIED_MIGRATION, `${unapplied}, ${REMOVE_AND_REEMIT}`]
-      : ["Keep the contract's access rules as they are."];
-  }
   if (command === 'db migrate') {
+    const unapplied = alongsideExtensions
+      ? 'For an application migration no database has applied'
+      : 'For a migration no database has applied';
     return [
       KEEP_APPLIED_MIGRATION,
-      `${unapplied}: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise ${REMOVE_AND_REEMIT}`,
+      setting === 'accessWidening'
+        ? `${unapplied}, delete the migration, put the contract's access rules back as they were, and plan it again.`
+        : `${unapplied}, delete the migration and plan it again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting the model or field back in the contract.`,
+    ];
+  }
+  if (setting === 'accessWidening') {
+    return [
+      alongsideExtensions
+        ? "For the application's operations, keep the contract's access rules as they are."
+        : "Keep the contract's access rules as they are.",
     ];
   }
   const changesType = operations.some(({ loss }) => loss === 'typeChange');
   return [
-    'If a model or field was only renamed, state the rename with --rename <old>:<new>.',
+    alongsideExtensions
+      ? "For the application's operations: if a model or field was only renamed, state the rename with --rename <old>:<new>."
+      : 'If a model or field was only renamed, state the rename with --rename <old>:<new>.',
     ...(changesType
       ? [
           `For a type change, write the conversion with ${cliCommand(
@@ -232,7 +229,7 @@ function keepProtected(
     ...(inApp.length === 0
       ? []
       : keepAppProtected(refusal.setting, command, inApp, extensionSpaces.length > 0, invocation)),
-    ...(extensionSpaces.length === 0 ? [] : [extensionsOwnMigrations(extensionSpaces, invocation)]),
+    ...(extensionSpaces.length === 0 ? [] : [extensionsOwnMigrations(extensionSpaces)]),
     doItAnyway(refusal.source),
   ].join(' ');
 }

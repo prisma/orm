@@ -210,7 +210,7 @@ describe("executeDbUpdate, an extension space's recorded migration", () => {
       const envelope = result.ok ? undefined : result.failure.toEnvelope();
 
       expect({ fix: envelope?.fix, operations: envelope?.meta?.['operations'], asked }).toEqual({
-        fix: `This database's data protection policy forbids ${forbids}, so these operations cannot run on it. Contract space "${AUDIT_SPACE}" belongs to an extension, so do not edit or delete its migrations. Use a version of the extension without the operation, such as the one this database already runs, and run {bin} contract emit; or ask the extension's author for one. To do it anyway, whoever owns the database must first change its data protection policy.`,
+        fix: `This database's data protection policy forbids ${forbids}, so these operations cannot run on it. Contract space "${AUDIT_SPACE}" belongs to an extension, so do not edit or delete its migrations; ask the extension's author for a version without the operation. To do it anyway, whoever owns the database must first change its data protection policy.`,
         operations: [
           {
             setting,

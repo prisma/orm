@@ -25,7 +25,7 @@ describe('errorDataProtectionForbids', () => {
     'To do it anyway, whoever owns that database must first change the data protection policy production declares.';
   const lossForbidden =
     "This database's data protection policy forbids losing data, so these operations cannot run on it.";
-  const keepData = `${lossForbidden} If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise remove the operation from its migration.ts and run that file with node. ${markerCloses}`;
+  const keepData = `${lossForbidden} If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, delete the migration and plan it again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting the model or field back in the contract. ${markerCloses}`;
   const keepAccess = `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. Keep the contract's access rules as they are. ${refCloses}`;
   const keepDataPlanned = `${lossForbidden} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${markerCloses}`;
 
@@ -98,7 +98,7 @@ describe('errorDataProtectionForbids', () => {
         invocation,
       }).toEnvelope().fix,
     ).toBe(
-      `This database's data protection policy forbids changing who can read or write data, so these operations cannot run on it. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, remove the operation from its migration.ts and run that file with node. ${markerCloses}`,
+      `This database's data protection policy forbids changing who can read or write data, so these operations cannot run on it. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, delete the migration, put the contract's access rules back as they were, and plan it again. ${markerCloses}`,
     );
   });
 
@@ -106,12 +106,12 @@ describe('errorDataProtectionForbids', () => {
     [
       'dataLoss',
       dropColumn,
-      `production declares a data protection policy that forbids losing data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise remove the operation from its migration.ts and run that file with node. ${refCloses}`,
+      `production declares a data protection policy that forbids losing data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, delete the migration and plan it again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting the model or field back in the contract. ${refCloses}`,
     ],
     [
       'accessWidening',
       disableRls,
-      `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, remove the operation from its migration.ts and run that file with node. ${refCloses}`,
+      `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, delete the migration, put the contract's access rules back as they were, and plan it again. ${refCloses}`,
     ],
   ] as const)(
     'tells a db migrate user what to do when a ref forbids %s',
@@ -131,12 +131,11 @@ describe('errorDataProtectionForbids', () => {
 
   describe('an operation in an extension contract space', () => {
     const extensionOwns =
-      'Contract space "audit" belongs to an extension, so do not edit or delete its migrations. Use a version of the extension without the operation, such as the one this database already runs, and run {bin} contract emit; or ask the extension\'s author for one.';
+      'Contract space "audit" belongs to an extension, so do not edit or delete its migrations; ask the extension\'s author for a version without the operation.';
     const accessForbidden =
       "This database's data protection policy forbids changing who can read or write data, so these operations cannot run on it.";
     const keptApplied =
       'If another database has already applied a migration listed here, keep it as it is.';
-    const reemit = 'remove the operation from its migration.ts and run that file with node.';
     const dropAuditColumn = {
       ...dropColumn,
       spaceId: 'audit',
@@ -201,28 +200,28 @@ describe('errorDataProtectionForbids', () => {
         'dataLoss',
         dropColumn,
         dropAuditColumn,
-        `${lossForbidden} ${keptApplied} For an application migration no database has applied: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise ${reemit} ${extensionOwns} ${markerCloses}`,
+        `${lossForbidden} ${keptApplied} For an application migration no database has applied, delete the migration and plan it again: with --rename if a model or field was only renamed, with --convert if its type changed, or after putting the model or field back in the contract. ${extensionOwns} ${markerCloses}`,
       ],
       [
         'db migrate',
         'accessWidening',
         disableRls,
         disableAuditRls,
-        `${accessForbidden} ${keptApplied} For an application migration no database has applied, ${reemit} ${extensionOwns} ${markerCloses}`,
+        `${accessForbidden} ${keptApplied} For an application migration no database has applied, delete the migration, put the contract's access rules back as they were, and plan it again. ${extensionOwns} ${markerCloses}`,
       ],
       [
         'db update',
         'dataLoss',
         dropColumn,
         dropAuditColumn,
-        `${lossForbidden} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${extensionOwns} ${markerCloses}`,
+        `${lossForbidden} For the application's operations: if a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${extensionOwns} ${markerCloses}`,
       ],
       [
         'db update',
         'accessWidening',
         disableRls,
         disableAuditRls,
-        `${accessForbidden} Keep the contract's access rules as they are. ${extensionOwns} ${markerCloses}`,
+        `${accessForbidden} For the application's operations, keep the contract's access rules as they are. ${extensionOwns} ${markerCloses}`,
       ],
     ] as const)(
       'gives a %s user advice for the application and for the extension when one setting refuses both, under %s',
@@ -245,7 +244,7 @@ describe('errorDataProtectionForbids', () => {
           },
         ]),
       ).toBe(
-        `${lossForbidden} Contract spaces "audit" and "geo" belong to extensions, so do not edit or delete their migrations. Use versions of the extensions without the operations, such as the ones this database already runs, and run {bin} contract emit; or ask the extensions' authors for them. ${markerCloses}`,
+        `${lossForbidden} Contract spaces "audit" and "geo" belong to extensions, so do not edit or delete their migrations; ask the extensions' authors for versions without the operations. ${markerCloses}`,
       );
     });
 
