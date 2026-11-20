@@ -87,6 +87,7 @@ interface OutputSettings {
   readonly dateStyle: string;
   readonly intervalStyle: string;
   readonly byteaOutput: string;
+  readonly lcMonetary: string;
 }
 
 async function outputSettings(driver: PostgresControlDriver): Promise<OutputSettings | undefined> {
@@ -94,7 +95,8 @@ async function outputSettings(driver: PostgresControlDriver): Promise<OutputSett
     `SELECT current_setting('TimeZone') AS "timeZone",
             current_setting('DateStyle') AS "dateStyle",
             current_setting('IntervalStyle') AS "intervalStyle",
-            current_setting('bytea_output') AS "byteaOutput"`,
+            current_setting('bytea_output') AS "byteaOutput",
+            current_setting('lc_monetary') AS "lcMonetary"`,
   );
   return rows[0];
 }
@@ -104,6 +106,7 @@ const callerSettings: OutputSettings = {
   dateStyle: 'SQL, DMY',
   intervalStyle: 'sql_standard',
   byteaOutput: 'escape',
+  lcMonetary: 'POSIX',
 };
 
 const localSettings: OutputSettings = {
@@ -111,6 +114,7 @@ const localSettings: OutputSettings = {
   dateStyle: 'German, DMY',
   intervalStyle: 'iso_8601',
   byteaOutput: 'escape',
+  lcMonetary: '',
 };
 
 async function setLocalSettings(driver: PostgresControlDriver): Promise<void> {
@@ -118,6 +122,38 @@ async function setLocalSettings(driver: PostgresControlDriver): Promise<void> {
   await driver.query(`SET LOCAL DateStyle = '${localSettings.dateStyle}'`);
   await driver.query(`SET LOCAL IntervalStyle = '${localSettings.intervalStyle}'`);
   await driver.query(`SET LOCAL bytea_output = '${localSettings.byteaOutput}'`);
+  await driver.query(`SET LOCAL lc_monetary = '${localSettings.lcMonetary}'`);
+}
+
+async function transactionStart(driver: PostgresControlDriver): Promise<string | undefined> {
+  const { rows } = await driver.query<{ transactionStart: string }>(
+    'SELECT extract(epoch FROM now())::text AS "transactionStart"',
+  );
+  return rows[0]?.transactionStart;
+}
+
+/** A driver that reads the output settings and the transaction start time before each introspection query. */
+function observing(
+  inner: PostgresControlDriver,
+  observed: { settings: OutputSettings | undefined; transactionStart: string }[],
+): PostgresControlDriver {
+  return {
+    familyId: inner.familyId,
+    targetId: inner.targetId,
+    query: async (sql: string, params?: readonly unknown[]) => {
+      if (sql.includes('information_schema') || sql.includes('pg_catalog')) {
+        const { rows } = await inner.query<{ transactionStart: string }>(
+          'SELECT extract(epoch FROM now())::text AS "transactionStart"',
+        );
+        observed.push({
+          settings: await outputSettings(inner),
+          transactionStart: rows[0]?.transactionStart ?? '',
+        });
+      }
+      return inner.query(sql, params);
+    },
+    close: async () => {},
+  } as unknown as PostgresControlDriver;
 }
 
 const driverFailure = 'the driver failed while introspection read check constraints';
@@ -169,6 +205,7 @@ describe('introspection in a session with its own output settings', { concurrent
     await driver.query("SET DateStyle = 'SQL, DMY'");
     await driver.query("SET IntervalStyle = 'sql_standard'");
     await driver.query("SET bytea_output = 'escape'");
+    await driver.query("SET lc_monetary = 'POSIX'");
   }, testTimeout);
 
   afterEach(async () => {
@@ -207,6 +244,56 @@ describe('introspection in a session with its own output settings', { concurrent
       frameworkComponents,
     });
     expect(result.schema.issues.map((issue) => issue.path.join('/'))).toEqual([]);
+  });
+
+  it('reads every query in one transaction, with the output settings and lc_monetary pinned, when the caller has none', {
+    timeout: testTimeout,
+  }, async () => {
+    const observed: { settings: OutputSettings | undefined; transactionStart: string }[] = [];
+
+    await familyInstance.introspect({
+      driver: observing(driver!, observed),
+      contract: stampsContract(),
+    });
+
+    expect(observed.length).toBeGreaterThan(1);
+    expect(new Set(observed.map(({ transactionStart }) => transactionStart)).size).toBe(1);
+    expect(new Set(observed.map(({ settings }) => JSON.stringify(settings)))).toEqual(
+      new Set([
+        JSON.stringify({
+          timeZone: 'UTC',
+          dateStyle: 'ISO, MDY',
+          intervalStyle: 'postgres',
+          byteaOutput: 'hex',
+          lcMonetary: 'C',
+        }),
+      ]),
+    );
+    await expect(driver!.query('SAVEPOINT after_introspection')).rejects.toThrow(
+      'can only be used in transaction blocks',
+    );
+  });
+
+  it('reads in the caller transaction, with lc_monetary pinned, and leaves that transaction open', {
+    timeout: testTimeout,
+  }, async () => {
+    const observed: { settings: OutputSettings | undefined; transactionStart: string }[] = [];
+    await driver!.query('BEGIN');
+    await setLocalSettings(driver!);
+    const before = await transactionStart(driver!);
+
+    await familyInstance.introspect({
+      driver: observing(driver!, observed),
+      contract: stampsContract(),
+    });
+
+    const after = await transactionStart(driver!);
+    await driver!.query('ROLLBACK');
+    expect({
+      lcMonetary: [...new Set(observed.map(({ settings }) => settings?.lcMonetary))],
+      transactionStarts: [...new Set(observed.map(({ transactionStart }) => transactionStart))],
+      after,
+    }).toEqual({ lcMonetary: ['C'], transactionStarts: [before], after: before });
   });
 
   it('leaves the settings the caller set on the session', {
