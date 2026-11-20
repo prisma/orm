@@ -602,18 +602,31 @@ describe('migration plan', () => {
       }).run(['migration', 'plan', '--json'], { cwd: project.dir });
 
       expect(run.exitCode).toBe(2);
-      const envelope = envelopeOf(run) as {
-        readonly error: { readonly code: string; readonly nextActions: readonly unknown[] };
-      };
-      expect(envelope.error.code).toBe('CLI.CONSENT_REQUIRED');
-      const actions = JSON.stringify(envelope.error.nextActions);
-      expect(actions).toContain('--delete Legacy');
-      expect(actions).toContain("--rename 'Legacy:<new name>'");
-      expect(actions).toContain('--delete audit_log');
-      expect(actions).not.toContain('--rename audit_log');
-      expect(JSON.stringify(envelope)).toContain(
-        'Drop table \\"legacy\\" would lose the data of model \\"Legacy\\".',
-      );
+      expect((envelopeOf(run) as { readonly error: unknown }).error).toEqual({
+        code: 'CLI.CONSENT_REQUIRED',
+        severity: 'error',
+        summary: 'This change needs 2 answers: "Legacy", "audit_log".',
+        why: [
+          'Removing model "Legacy" would delete its data.',
+          'The plan would run: Drop table "legacy".',
+          'This change would delete the data in "audit_log", which no model of the origin contract stores.',
+          'The plan would run: Drop table "audit_log".',
+        ].join('\n'),
+        nextActions: [
+          {
+            kind: 'user-choice',
+            label: `If model "Legacy" was renamed, keep its data: --rename 'Legacy:<new name>'`,
+          },
+          { kind: 'user-choice', label: 'If the data of model "Legacy" can go: --delete Legacy' },
+          { kind: 'user-choice', label: 'If the data in "audit_log" can go: --delete audit_log' },
+        ],
+        meta: {
+          unanswered: [
+            { subject: 'Legacy', verbs: ['rename', 'delete'] },
+            { subject: 'audit_log', verbs: ['delete'] },
+          ],
+        },
+      });
       expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
     });
 
@@ -916,7 +929,24 @@ describe('migration plan', () => {
         },
       }).run(['migration', 'plan', '--json'], { cwd: project.dir });
 
-      expect(JSON.stringify(envelopeOf(refused))).toContain('Drop table \\"legacy\\" would lose');
+      expect((envelopeOf(refused) as { readonly error: unknown }).error).toEqual({
+        code: 'CLI.CONSENT_REQUIRED',
+        severity: 'error',
+        summary: 'Removing model "Legacy" would delete its data.',
+        why: 'The plan would run: Drop table "legacy".',
+        nextActions: [
+          {
+            kind: 'user-choice',
+            label: `If the model was renamed, keep its data: --rename 'Legacy:<new name>'`,
+          },
+          { kind: 'user-choice', label: 'If its data can go: --delete Legacy' },
+        ],
+        meta: {
+          subject: 'Legacy',
+          verbs: ['rename', 'delete'],
+          unanswered: [{ subject: 'Legacy', verbs: ['rename', 'delete'] }],
+        },
+      });
     });
 
     it('asks a question a re-plan brings up in a second batch', async () => {

@@ -320,12 +320,28 @@ describe('Journeys (MongoDB): --rename and --delete', {
     expect(refused.exitCode, 'R3.04: the removed field needs a statement').toBe(2);
     const printed = printedFlags(refused, 'delete');
     expect(printed, 'R3.04: named by its collection').toEqual(['--delete', 'profiles.nickname']);
-    expect(
-      String(engineError(refused)?.why)
-        .split('\n')
-        .map((line) => line.slice(0, 3)),
-      'R3.04: the question, then each way to keep the data on a line of its own',
-    ).toEqual(['Rem', 'If ', '1. ', '2. ', '3. ']);
+    expect(engineError(refused), 'R3.04: the refusal, then each way to keep the data').toEqual({
+      code: 'CLI.CONSENT_REQUIRED',
+      severity: 'error',
+      summary:
+        'This change would delete the data in "profiles.nickname", named by its storage name because the origin contract is unknown.',
+      why: [
+        'The plan would run: Remove field nickname from collection profiles.',
+        'If it was renamed, keep its data instead: store the snapshot of the contract the database is at, then run this command again and answer with --rename.',
+        '1. Put the contract source back to the version the database is at, and run `prisma contract emit`.',
+        '2. Run `prisma db update --advance-ref <name> --dry-run`, with the same `--db` as this command if it has one, and check that it plans no operations. Then run it again without `--dry-run`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.',
+        '3. Put the new contract source back, run `prisma contract emit`, and run this command again with `--advance-ref <name>`.',
+      ].join('\n'),
+      nextActions: [
+        { kind: 'user-choice', label: 'If the data can go: --delete profiles.nickname' },
+      ],
+      meta: {
+        subject: 'profiles.nickname',
+        verbs: ['delete'],
+        unanswered: [{ subject: 'profiles.nickname', verbs: ['delete'] }],
+      },
+      docsUrl: 'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+    });
 
     const updated = await runDbUpdate(ctx, ['--no-interactive', ...printed]);
     expect(updated.exitCode, `R3.05: db update with the printed flag: ${updated.stderr}`).toBe(0);
@@ -352,10 +368,24 @@ describe('Journeys (MongoDB): --rename and --delete', {
 
     const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
     expect(refused.exitCode, 'R4.04: the removed field needs a statement').toBe(2);
-    const question = JSON.stringify(engineError(refused));
-    expect(question, 'R4.04: says to rename the model first').toContain(
-      'also pass --rename Profile:<new model name>',
-    );
+    expect(engineError(refused), 'R4.04: says to rename the model first').toEqual({
+      code: 'CLI.CONSENT_REQUIRED',
+      severity: 'error',
+      summary: 'Removing field "Profile.nickname" would delete its values.',
+      why: [
+        'The plan would run: Remove field nickname from collection profiles.',
+        `The destination contract has no model "Profile". If it was renamed, keep the values: run the command again with --rename 'Profile:<new model name>', naming the model that stores them now, and the field can then be renamed too.`,
+      ].join('\n'),
+      nextActions: [
+        { kind: 'user-choice', label: 'If the values can go: --delete Profile.nickname' },
+      ],
+      meta: {
+        subject: 'Profile.nickname',
+        verbs: ['delete'],
+        unanswered: [{ subject: 'Profile.nickname', verbs: ['delete'] }],
+      },
+      docsUrl: 'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+    });
 
     const modelFirst = await runDbUpdate(ctx, [
       '--no-interactive',

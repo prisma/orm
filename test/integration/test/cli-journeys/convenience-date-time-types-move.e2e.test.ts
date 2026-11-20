@@ -129,7 +129,20 @@ withTempDir(({ createTempDir }) => {
           await emit(ctx, PRECISION);
           const unconsented = await runDbUpdate(ctx);
           expect(unconsented.exitCode).toBe(2);
-          expect(output(unconsented)).toContain('Run the command again with --delete Event.at');
+          expect(output(unconsented)).toBe(
+            [
+              '▸ Introspecting database schema',
+              '✔ Introspecting database schema',
+              '▸ Planning migration',
+              '✔ Planning migration',
+              '✘ [CLI.CONSENT_REQUIRED] Changing the type of field "Event.at" can change or lose its values.',
+              '  why: The plan would run: Alter type of "event"."at" to timestamptz(3).',
+              '→ To let the database cast the values, which can change or lose some: --delete Event.at',
+              '  docs: https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+              '',
+              '',
+            ].join('\n'),
+          );
           const precision = await runDbUpdate(ctx, ['--delete', 'Event.at']);
           expect(precision.exitCode, output(precision)).toBe(0);
           expect(output(precision)).toContain('Alter type of "event"."at" to timestamptz(3)');

@@ -117,12 +117,12 @@ withTempDir(({ createTempDir }) => {
           expect(asked, 'J1.03: the question names Bug.severity').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"Bug.severity" needs a statement, and the session is not interactive.',
-            why: 'Drop column "severity" from "task" would lose the values of field "Bug.severity".',
+            summary: 'This change would delete the values of field "Bug.severity".',
+            why: 'The plan would run: Drop column "severity" from "task".',
             nextActions: [
               {
                 kind: 'user-choice',
-                label: 'Run the command again with --delete Bug.severity',
+                label: 'If the values can go: --delete Bug.severity',
               },
             ],
             meta: {
@@ -168,12 +168,12 @@ withTempDir(({ createTempDir }) => {
           expect(askedBack, 'J1.07: the question names Bug').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"Bug" needs a statement, and the session is not interactive.',
-            why: 'Drop table "bug" would lose the data of model "Bug".',
+            summary: 'This change would delete the data of model "Bug".',
+            why: 'The plan would run: Drop table "bug".',
             nextActions: [
               {
                 kind: 'user-choice',
-                label: 'Run the command again with --delete Bug',
+                label: 'If its data can go: --delete Bug',
               },
             ],
             meta: {
@@ -235,16 +235,16 @@ withTempDir(({ createTempDir }) => {
           ).toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"Bug" needs a statement, and the session is not interactive.',
-            why: 'These operations would lose the data of model "Bug":\n- Drop column "severity" from "task"\n- Delete the rows of "task" that hold value "bug" in column "type"',
+            summary: 'Removing model "Bug" would delete its data.',
+            why: 'The plan would run:\n- Drop column "severity" from "task"\n- Delete the rows of "task" that hold value "bug" in column "type"',
             nextActions: [
               {
                 kind: 'user-choice',
-                label: 'Run the command again with --rename Bug:Defect',
+                label: 'If the model was renamed to "Defect", keep its data: --rename Bug:Defect',
               },
               {
                 kind: 'user-choice',
-                label: 'Run the command again with --delete Bug',
+                label: 'If its data can go: --delete Bug',
               },
             ],
             meta: {

@@ -1,7 +1,6 @@
 import { asNamespaceId } from '@internal/contract/types';
 import { ok } from '@internal/utils/result';
 import type { PromptSurface, StatementSurface } from '@prisma/cli-engine';
-import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import {
   askPlanQuestions,
@@ -10,27 +9,7 @@ import {
 } from '../../src/control-api/statements/plan-questions';
 import { promptPlanQuestions } from '../../src/orm/plan-question-prompt';
 import { contractOf } from '../control-api/statements/statement-fixtures';
-
-function question(subject: string, namespace?: string): PlanQuestion {
-  return {
-    question: `Drop ${subject}?`,
-    subject,
-    ...(namespace === undefined
-      ? {}
-      : {
-          removedNamespace: namespace,
-          namespaceAnswer: (verb: string, text: string) =>
-            verb === 'delete' && text === namespace
-              ? ('delete' as const)
-              : verb === 'rename' && text.startsWith(`${namespace}:`)
-                ? ('rename' as const)
-                : undefined,
-        }),
-    verbs: ['delete'],
-    forms: {},
-    validate: () => undefined,
-  };
-}
+import { question } from './fixtures/plan-question';
 
 function surfaces(deletes: readonly string[]) {
   let remaining = deletes.map((text) => ({ verb: 'delete', text, values: [text] }));
@@ -178,7 +157,7 @@ describe('a namespace answer typed at the prompt', () => {
     const prompt = {
       statements: vi.fn(async (questions: readonly { readonly subject: string }[]) => {
         asked.push(questions.map(({ subject }) => subject));
-        throw Object.assign(new Error('needs a statement'), {
+        throw Object.assign(new Error('refused'), {
           code: 'CLI.CONSENT_REQUIRED',
           unanswered: questions.map(({ subject }) => subject),
         });
@@ -367,43 +346,6 @@ describe('a namespace rename typed at the prompt, then planned again', () => {
       'billing.Invoice:finance.Bill',
     ]);
     expect(asked).toEqual(['billing.Invoice', 'billing.Invoice']);
-  });
-});
-
-describe('a refusal to answer a question that names ways to keep the data', () => {
-  it('leads its next actions with those ways, and names them once', async () => {
-    const way = 'To keep it, plan the change with `prisma migration plan`.';
-    const kept: PlanQuestion = {
-      ...question('Status.DONE'),
-      question: `Remove value "done" would lose enum value "Status.DONE". ${way}`,
-      keepDataWays: [way],
-    };
-    const prompt = {
-      statements: vi.fn(async () => {
-        throw new CliStructuredError('CLI.CONSENT_REQUIRED', '"Status.DONE" needs a statement.', {
-          why: kept.question,
-          nextActions: [
-            { kind: 'user-choice', label: 'Run the command again with --delete Status.DONE' },
-          ],
-          meta: { unanswered: [{ subject: 'Status.DONE', verbs: ['delete'] }] },
-        });
-      }),
-    } as unknown as PromptSurface;
-    const statements: StatementSurface = {
-      take: vi.fn(() => []) as StatementSurface['take'],
-      values: () => [],
-    };
-
-    await expect(promptPlanQuestions(prompt, statements)([kept])).rejects.toMatchObject({
-      code: 'CLI.CONSENT_REQUIRED',
-      message: '"Status.DONE" needs a statement.',
-      why: 'Remove value "done" would lose enum value "Status.DONE".',
-      nextActions: [
-        { kind: 'user-choice', label: way },
-        { kind: 'user-choice', label: 'Run the command again with --delete Status.DONE' },
-      ],
-      meta: { unanswered: [{ subject: 'Status.DONE', verbs: ['delete'] }] },
-    });
   });
 });
 

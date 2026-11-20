@@ -75,16 +75,17 @@ withTempDir(({ createTempDir }) => {
         expect(asked, 'D1.03: the question names User.nick').toEqual({
           code: 'CLI.CONSENT_REQUIRED',
           severity: 'error',
-          summary: '"User.nick" needs a statement, and the session is not interactive.',
-          why: 'Drop column "nick" from "people" would lose the values of field "User.nick".',
+          summary: 'Removing field "User.nick" would delete its values.',
+          why: 'The plan would run: Drop column "nick" from "people".',
           nextActions: [
             {
               kind: 'user-choice',
-              label: "Run the command again with --rename 'User.nick:User.<new name>'",
+              label:
+                "If the field was renamed, keep its values: --rename 'User.nick:User.<new name>'",
             },
             {
               kind: 'user-choice',
-              label: 'Run the command again with --delete User.nick',
+              label: 'If the values can go: --delete User.nick',
             },
           ],
           meta: {

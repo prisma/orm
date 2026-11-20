@@ -89,19 +89,26 @@ withTempDir(({ createTempDir }) => {
 
           const asked = await refusal(journey, [], 'M2.03');
           const verbs = command === 'migration plan' ? ['convert', 'delete'] : ['delete'];
-          const convert =
-            command === 'migration plan'
-              ? ' --convert writes a conversion for you to fill in;'
-              : '';
           expect(asked, 'M2.03: the question names User.score').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"User.score" needs a statement, and the session is not interactive.',
-            why: `Recreate table people would change the type of field "User.score" and can change or lose its values.${convert} --delete keeps the field and lets the database cast its values, which can change or lose some.`,
-            nextActions: verbs.map((verb) => ({
-              kind: 'user-choice',
-              label: `Run the command again with --${verb} User.score`,
-            })),
+            summary: 'Changing the type of field "User.score" can change or lose its values.',
+            why: 'The plan would run: Recreate table people.',
+            nextActions: [
+              ...(command === 'migration plan'
+                ? [
+                    {
+                      kind: 'user-choice',
+                      label: 'To write the conversion yourself: --convert User.score',
+                    },
+                  ]
+                : []),
+              {
+                kind: 'user-choice',
+                label:
+                  'To let the database cast the values, which can change or lose some: --delete User.score',
+              },
+            ],
             meta: { subject: 'User.score', verbs, unanswered: [{ subject: 'User.score', verbs }] },
             docsUrl:
               'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
@@ -167,14 +174,15 @@ withTempDir(({ createTempDir }) => {
           expect(asked, 'M4.03: the question names User.nick').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"User.nick" needs a statement, and the session is not interactive.',
-            why: 'Drop column "nick" from "people" would lose the values of field "User.nick".',
+            summary: 'Removing field "User.nick" would delete its values.',
+            why: 'The plan would run: Drop column "nick" from "people".',
             nextActions: [
               {
                 kind: 'user-choice',
-                label: "Run the command again with --rename 'User.nick:User.<new name>'",
+                label:
+                  "If the field was renamed, keep its values: --rename 'User.nick:User.<new name>'",
               },
-              { kind: 'user-choice', label: 'Run the command again with --delete User.nick' },
+              { kind: 'user-choice', label: 'If the values can go: --delete User.nick' },
             ],
             meta: {
               subject: 'User.nick',

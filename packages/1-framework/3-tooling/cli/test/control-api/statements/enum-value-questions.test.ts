@@ -62,7 +62,7 @@ describe('a question about an enum value', () => {
     expect(question).toMatchObject({
       subject: 'Status.ARCHIVED',
       question:
-        'Change values in "Task"."status" would lose enum value "Status.ARCHIVED" from the data that holds it.',
+        'Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.\nThe plan would run: Change values in "Task"."status".\nrename keeps it in the data under the new name; delete removes it from the data.',
       verbs: ['rename', 'delete'],
       forms: { rename: 'Status.ARCHIVED:Status.RETIRED' },
     });
@@ -117,7 +117,7 @@ describe('a question about an enum value', () => {
       {
         subject: 'Status.ARCHIVED',
         question:
-          'These operations would lose enum value "Status.ARCHIVED" from the data that holds it:\n- Remove value "archived" from column "status" of "task"\n- Remove value "archived" from column "tags" of "note"\n- Remove value "archived" at path "$[*].meta.status" in column "visits" of "ticket"',
+          'Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.\nThe plan would run:\n- Remove value "archived" from column "status" of "task"\n- Remove value "archived" from column "tags" of "note"\n- Remove value "archived" at path "$[*].meta.status" in column "visits" of "ticket"\nrename keeps it in the data under the new name; delete removes it from the data.',
       },
     ]);
   });
@@ -177,7 +177,7 @@ describe('a question about an enum value', () => {
       {
         verbs: ['delete'],
         question:
-          'Remove value "archived" would lose enum value "Status.ARCHIVED" from the data that holds it. Delete loses it. Keep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).',
+          'This change would remove the stored value of enum value "Status.ARCHIVED" from the data that holds it.\nThe plan would run: Remove value "archived".\nDelete loses it.\nKeep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).\ndelete removes it from the data.',
         keepDataWays: [
           'Keep Status.ARCHIVED: this.removeStoredValue({ column: "status" }) -> this.replaceStoredValue({ column: "status" }); this.removeStoredValue({ column: "tags" }) -> this.replaceStoredValue({ column: "tags" }).',
         ],

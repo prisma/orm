@@ -103,8 +103,8 @@ describe('--delete with a namespace of the origin contract', () => {
     });
 
     expect(questions).toEqual([
-      'Drop table "invoice" would lose the data of model "billing.Invoice".\n--delete billing answers this question and every other about a model or field of namespace "billing", which the destination contract no longer has.',
-      'Drop table "receipt" would lose the data of model "billing.Receipt".',
+      'Removing model "billing.Invoice" would delete its data.\nThe plan would run: Drop table "invoice".\nThe destination contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go.',
+      'Removing model "billing.Receipt" would delete its data.\nThe plan would run: Drop table "receipt".\nrename keeps its data under the new name; delete lets its data go.',
     ]);
   });
 
@@ -140,7 +140,7 @@ describe('--delete with a namespace of the origin contract', () => {
     });
 
     expect(await firstQuestion(renamed, ['finance'])).toBe(
-      'Drop table "invoice" would lose the data of model "billing.Invoice".\n--delete billing answers this question and every other about a model or field of namespace "billing", which the destination contract no longer has.\nIf namespace "billing" was renamed, --rename billing:finance renames it instead.',
+      'Removing model "billing.Invoice" would delete its data.\nThe plan would run: Drop table "invoice".\nThe destination contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:finance keeps the data of namespace "billing" under namespace "finance".',
     );
   });
 
@@ -152,7 +152,7 @@ describe('--delete with a namespace of the origin contract', () => {
     });
 
     expect(await firstQuestion(renamed, ['finance', 'ledger'])).toBe(
-      'Drop table "invoice" would lose the data of model "billing.Invoice".\n--delete billing answers this question and every other about a model or field of namespace "billing", which the destination contract no longer has.\nIf namespace "billing" was renamed, --rename billing:<new namespace> renames it instead, where <new namespace> is finance or ledger.',
+      'Removing model "billing.Invoice" would delete its data.\nThe plan would run: Drop table "invoice".\nThe destination contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:<new namespace> keeps the data of namespace "billing" under namespace "finance" or "ledger".',
     );
   });
 

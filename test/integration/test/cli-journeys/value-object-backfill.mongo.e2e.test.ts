@@ -376,14 +376,14 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
     }).toEqual({
       code: 'CLI.CONSENT_REQUIRED',
       why: [
-        'These operations would lose the values of value object field "Address.zip":',
+        'The plan would run:',
         '- Remove key "zip" at path "$" in field home of collection users',
         '- Remove key "zip" at path "$[*]" in field addresses of collection users',
-        'If you answer delete, the existing objects get a temporary value in the new required field "Address.country".',
+        'If the values go, the existing objects get a temporary value in the new required field "Address.country".',
       ].join('\n'),
       answers: [
-        'Run the command again with --rename Address.zip:Address.country',
-        'Run the command again with --delete Address.zip',
+        'If the value object field was renamed to "country", keep its values: --rename Address.zip:Address.country',
+        'If the values can go: --delete Address.zip',
       ],
     });
     expect(latestMigrationDirName(ctx), 'B3.05: nothing written').toBe(origin);
@@ -428,9 +428,31 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
         '--json',
       ]),
     );
-    expect(seen?.why, 'B3.11: a field with no temporary value still needs --backfill').toContain(
-      'If you answer delete, the new required field "Address.seen" still needs a value: add --backfill Address.seen to write it in migration.ts.',
-    );
+    expect(seen, 'B3.11: a field with no temporary value still needs --backfill').toEqual({
+      code: 'CLI.CONSENT_REQUIRED',
+      severity: 'error',
+      summary: 'Removing value object field "Address.country" would delete its values.',
+      why: [
+        'The plan would run:',
+        '- Remove key "country" at path "$" in field home of collection users',
+        '- Remove key "country" at path "$[*]" in field addresses of collection users',
+        'If the values go, the new required field "Address.seen" still needs a value: add --backfill Address.seen to write it in migration.ts.',
+      ].join('\n'),
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'If the value object field was renamed to "seen", keep its values: --rename Address.country:Address.seen',
+        },
+        { kind: 'user-choice', label: 'If the values can go: --delete Address.country' },
+      ],
+      meta: {
+        subject: 'Address.country',
+        verbs: ['rename', 'delete'],
+        unanswered: [{ subject: 'Address.country', verbs: ['rename', 'delete'] }],
+      },
+      docsUrl: 'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+    });
   });
 
   it('B4: a required field new in an embedded model takes --backfill with migration plan and a temporary value with db update', async () => {

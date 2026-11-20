@@ -475,7 +475,8 @@ describe('Journeys (MongoDB): enum value statements', {
     const nextActions = (engineError(refused)?.nextActions ?? []).map(({ label }) => label);
     const lost = (member: string, value: string) =>
       [
-        `These operations would lose enum value "Status.${member}" from the data that holds it:`,
+        `This change would remove the stored value of enum value "Status.${member}" from the data that holds it.`,
+        'The plan would run:',
         `- Remove value "${value}" from field status of collection users`,
         `- Remove value "${value}" from field tags of collection users`,
         `- Remove value "${value}" at path "$.kind" in field home of collection users`,
@@ -564,7 +565,7 @@ describe('Journeys (MongoDB): enum value statements', {
         .filter((label) => label.startsWith('To keep it with db update')),
     }).toEqual({
       why: [
-        'These operations would lose enum value "Status.ACTIVE" from the data that holds it:',
+        'The plan would run:',
         '- Remove value "active" from field status of collection users',
         '- Remove value "active" from field tags of collection users',
         '- Remove value "active" at path "$.kind" in field home of collection users',

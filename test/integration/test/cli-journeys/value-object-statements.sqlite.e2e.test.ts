@@ -203,12 +203,33 @@ withTempDir(({ createTempDir }) => {
 
         const asked = await refusal(ctx, via, 'O1.04');
         if (via === 'db update') {
-          expect(asked, 'O1.04: one question, the rename offered').toContain(
-            '\\"GeoPoint.lat\\" needs a statement',
-          );
-          expect(asked, 'O1.04: what --delete leaves in the new field').toContain(
-            'the existing objects get a temporary value in the new required field \\"GeoPoint.latitude\\"',
-          );
+          expect(JSON.parse(asked), 'O1.04: one question, the rename offered').toEqual({
+            code: 'CLI.CONSENT_REQUIRED',
+            severity: 'error',
+            summary: 'Removing value object field "GeoPoint.lat" would delete its values.',
+            why: [
+              'The plan would run:',
+              '- Remove key "lat" at path "$" in column "location" of "site"',
+              '- Remove key "lat" at path "$[*]" in column "history" of "site"',
+              '- Remove key "lat" at path "$.point" in column "place" of "site"',
+              'If the values go, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
+            ].join('\n'),
+            nextActions: [
+              {
+                kind: 'user-choice',
+                label:
+                  'If the value object field was renamed to "latitude", keep its values: --rename GeoPoint.lat:GeoPoint.latitude',
+              },
+              { kind: 'user-choice', label: 'If the values can go: --delete GeoPoint.lat' },
+            ],
+            meta: {
+              subject: 'GeoPoint.lat',
+              verbs: ['rename', 'delete'],
+              unanswered: [{ subject: 'GeoPoint.lat', verbs: ['rename', 'delete'] }],
+            },
+            docsUrl:
+              'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+          });
         } else {
           expect(asked, 'O1.04: the new required field refused at once').toContain(
             'Value object field \\"GeoPoint.latitude\\" is required',

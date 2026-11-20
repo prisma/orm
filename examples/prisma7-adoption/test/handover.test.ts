@@ -242,7 +242,7 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             error: {
               code: 'CLI.CONSENT_REQUIRED',
               nextActions: expect.arrayContaining([
-                expect.objectContaining({ label: 'Run the command again with --delete User.bio' }),
+                expect.objectContaining({ label: 'If the values can go: --delete User.bio' }),
               ]),
             },
           });

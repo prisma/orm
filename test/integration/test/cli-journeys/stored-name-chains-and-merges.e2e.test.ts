@@ -221,11 +221,14 @@ withTempDir(({ createTempDir }) => {
           ).toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"Bug" needs a statement, and the session is not interactive.',
-            why: 'These operations would lose the data of model "Bug":\n- Drop table "bug"\n- Delete the rows of "task" that hold value "bug" in column "type"',
+            summary: 'Removing model "Bug" would delete its data.',
+            why: 'The plan would run:\n- Drop table "bug"\n- Delete the rows of "task" that hold value "bug" in column "type"',
             nextActions: [
-              { kind: 'user-choice', label: 'Run the command again with --rename Bug:Defect' },
-              { kind: 'user-choice', label: 'Run the command again with --delete Bug' },
+              {
+                kind: 'user-choice',
+                label: 'If the model was renamed to "Defect", keep its data: --rename Bug:Defect',
+              },
+              { kind: 'user-choice', label: 'If its data can go: --delete Bug' },
             ],
             meta: {
               subject: 'Bug',
@@ -271,12 +274,11 @@ withTempDir(({ createTempDir }) => {
           expect(await refusal(journey, [], 'G2.03'), 'G2.03: the questions').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary:
-              '2 subjects need a statement, and the session is not interactive: "Bug", "Task".',
-            why: `Drop table "bug" would lose the data of model "Bug". ${MERGE_ADVICE}\nDrop table "task" would lose the data of model "Task". ${MERGE_ADVICE}`,
+            summary: 'This change needs 2 answers: "Bug", "Task".',
+            why: `This change would delete the data of model "Bug".\nThe plan would run: Drop table "bug".\n${MERGE_ADVICE}\nThis change would delete the data of model "Task".\nThe plan would run: Drop table "task".\n${MERGE_ADVICE}`,
             nextActions: [
-              { kind: 'user-choice', label: 'Run the command again with --delete Bug' },
-              { kind: 'user-choice', label: 'Run the command again with --delete Task' },
+              { kind: 'user-choice', label: 'If the data of model "Bug" can go: --delete Bug' },
+              { kind: 'user-choice', label: 'If the data of model "Task" can go: --delete Task' },
             ],
             meta: {
               unanswered: [

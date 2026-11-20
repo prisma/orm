@@ -1,216 +1,117 @@
-import { rmSync, writeFileSync } from 'node:fs';
 import { asNamespaceId } from '@internal/contract/types';
-import { ok } from '@internal/utils/result';
-import type { StreamEvent } from '@prisma/cli-engine';
-import { join } from 'pathe';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   accessChangeQuestion,
   dataLossQuestion,
-  type PlanAnswer,
-  type PlanQuestion,
 } from '../../src/control-api/statements/plan-questions';
-import type { ControlClient, DbUpdateOptions } from '../../src/control-api/types';
-import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
-import { createOrmTestCli } from '../helpers/orm-test-cli';
-import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
+import {
+  answers,
+  askThenApply,
+  contracts,
+  envelopeOf,
+  harness,
+  mocks,
+  ormConfig,
+  project,
+  removeProjects,
+  setUpProject,
+} from './fixtures/db-update-consent-project';
 
-const mocks = {
-  connect: vi.fn(),
-  readMarker: vi.fn(),
-  dbUpdate: vi.fn(),
-  renderContractDts: vi.fn(),
-  close: vi.fn(),
-};
-
-/** The command tree mounted over a control-client double instead of the real client. */
-const commands = createBinCommands(
-  () =>
-    ({
-      connect: mocks.connect,
-      readMarker: mocks.readMarker,
-      dbUpdate: mocks.dbUpdate,
-      renderContractDts: mocks.renderContractDts,
-      close: mocks.close,
-    }) as unknown as ControlClient,
-);
-const groups = BIN_GROUPS;
-
-afterAll(() => {
-  for (const dir of projectDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-const DESCRIPTOR = { familyId: 'sql', targetId: 'postgres', version: '1.0.0', create: () => ({}) };
-
-const DEST_HASH = 'd'.repeat(64);
-const MARKER_HASH = 'a'.repeat(64);
-const CONNECTION = 'postgres://user:secret@localhost:5432/appdb';
-
-let projectDir: string;
-const projectDirs: string[] = [];
-
-/** The contracts the questions name subjects in: the origin has Legacy and User, the destination User. */
-const origin = {
-  domain: {
-    namespaces: {
-      app: {
-        models: {
-          Legacy: { fields: {}, relations: {}, storage: {} },
-          User: { fields: {}, relations: {}, storage: {} },
-        },
-      },
-    },
-  },
-  storage: { namespaces: {} },
-};
-const destination = {
-  domain: { namespaces: { app: { models: { User: { fields: {}, relations: {}, storage: {} } } } } },
-  storage: { namespaces: {} },
-};
-const contracts = {
-  origin,
-  destination,
-  statements: [],
-  canConvert: false,
-  originKnown: true,
-  temporaryValues: [],
-};
-
-/** One question of each kind, across two spaces: an extension's recorded drop is a storage subject. */
-function planQuestions(): readonly PlanQuestion[] {
-  return [
-    dataLossQuestion(
-      {
-        operationIndex: 0,
-        label: 'Drop table "audit_old"',
-        subject: { kind: 'storage', name: 'audit_old' },
-        loss: 'drop',
-      },
-      contracts,
-    ),
-    dataLossQuestion(
-      {
-        operationIndex: 1,
-        label: 'Drop table "Legacy"',
-        subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'Legacy' },
-        loss: 'drop',
-      },
-      contracts,
-    ),
-    accessChangeQuestion(
-      {
-        operationIndex: 2,
-        label: 'Disable row-level security on "User"',
-        subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'User' },
-        widens: true,
-      },
-      contracts,
-    ),
-  ];
-}
-
-/** The control API's shape: an apply asks its questions, then applies; a dry run asks nothing. */
-function askThenApply(questions: () => readonly PlanQuestion[]) {
-  return async (options: DbUpdateOptions) => {
-    if (options.mode === 'apply') {
-      answers.push(...(await options.answerQuestions(questions())));
-    }
-    return ok(applySuccess(options.mode));
-  };
-}
-
-const answers: (PlanAnswer | undefined)[] = [];
-
-beforeEach(() => {
-  projectDir = createTestProjectDir('orm-db-update-consent');
-  projectDirs.push(projectDir);
-  writeProjectManifest(projectDir);
-  writeFileSync(
-    join(projectDir, 'contract.json'),
-    JSON.stringify({ storage: { storageHash: MARKER_HASH } }),
-  );
-  writeFileSync(join(projectDir, 'contract.d.ts'), 'export type Contract = never;\n');
-  answers.splice(0);
-  mocks.connect.mockReset().mockResolvedValue(undefined);
-  mocks.readMarker.mockReset().mockResolvedValue(null);
-  mocks.close.mockReset().mockResolvedValue(undefined);
-  mocks.dbUpdate.mockReset().mockImplementation(askThenApply(planQuestions));
-  mocks.renderContractDts
-    .mockReset()
-    .mockResolvedValue(ok({ contractDts: 'export type Contract = never;\n' }));
-});
-
-function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    family: {
-      kind: 'family',
-      id: 'sql',
-      familyId: 'sql',
-      version: '1.0.0',
-      emission: {},
-      create: () => ({}),
-    },
-    target: { ...DESCRIPTOR, kind: 'target', id: 'postgres', migrations: {} },
-    adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
-    driver: { ...DESCRIPTOR, kind: 'driver', id: 'pg-driver' },
-    db: { connection: CONNECTION },
-    contract: {
-      source: { format: 'typescript', inputs: [], load: async () => ({}) },
-      output: join(projectDir, 'contract.json'),
-      typesModule: '@acme/orm-db/contract-types',
-    },
-    ...overrides,
-  };
-}
-
-function applySuccess(mode: 'plan' | 'apply'): Record<string, unknown> {
-  return {
-    mode,
-    destination: { storageHash: DEST_HASH },
-    plan: {
-      operations: [{ id: 'op-2', label: 'Drop table "Legacy"', operationClass: 'destructive' }],
-    },
-    ...(mode === 'apply' ? { execution: { operationsPlanned: 1, operationsExecuted: 1 } } : {}),
-    marker: { storageHash: MARKER_HASH },
-    appliedStatements: [],
-    dataLoss: [],
-    accessChanges: [],
-    temporaryValues: [],
-    summary: 'Database updated',
-  };
-}
-
-function harness(config: Record<string, unknown> = ormConfig()) {
-  return createOrmTestCli({ commands, groups, orm: config });
-}
-
-function envelopeOf(json: readonly StreamEvent[]): unknown {
-  const terminal = json.at(-1);
-  return terminal?.kind === 'result' ? terminal.envelope : undefined;
-}
+beforeEach(setUpProject);
+afterAll(removeProjects);
 
 describe('db update questions', () => {
   it('refuses where nobody can answer, listing every question across spaces with its flags', async () => {
-    const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
+    const run = await harness().run(['db', 'update', '--json'], { cwd: project.dir });
 
     expect(run.exitCode).toBe(2);
-    const envelope = envelopeOf(run.json) as {
-      readonly error: { readonly code: string; readonly nextActions: unknown };
-    };
-    expect(envelope.error.code).toBe('CLI.CONSENT_REQUIRED');
-    const actions = JSON.stringify(envelope.error.nextActions);
-    for (const flag of [
-      '--delete audit_old',
-      '--delete Legacy',
-      "--rename 'Legacy:<new name>'",
-      '--allow User',
-    ]) {
-      expect(actions).toContain(flag);
-    }
-    expect(actions).not.toContain('--rename audit_old');
-    expect(actions).not.toContain('--delete User');
+    expect((envelopeOf(run.json) as { readonly error: unknown }).error).toEqual({
+      code: 'CLI.CONSENT_REQUIRED',
+      severity: 'error',
+      summary: 'This change needs 3 answers: "audit_old", "Legacy", "User".',
+      why: [
+        'This change would delete the data in "audit_old", which no model of the origin contract stores.',
+        'The plan would run: Drop table "audit_old".',
+        'Removing model "Legacy" would delete its data.',
+        'The plan would run: Drop table "Legacy".',
+        'This change would widen who can read and write the data of "User".',
+        'The plan would run: Disable row-level security on "User".',
+      ].join('\n'),
+      nextActions: [
+        { kind: 'user-choice', label: 'If the data in "audit_old" can go: --delete audit_old' },
+        {
+          kind: 'user-choice',
+          label: `If model "Legacy" was renamed, keep its data: --rename 'Legacy:<new name>'`,
+        },
+        { kind: 'user-choice', label: 'If the data of model "Legacy" can go: --delete Legacy' },
+        { kind: 'user-choice', label: 'To allow the change to "User": --allow User' },
+      ],
+      meta: {
+        unanswered: [
+          { subject: 'audit_old', verbs: ['delete'] },
+          { subject: 'Legacy', verbs: ['rename', 'delete'] },
+          { subject: 'User', verbs: ['allow'] },
+        ],
+      },
+    });
+  });
+
+  it('gives the --allow once for each access change of a model, and following it applies', async () => {
+    const userAccess = (operationIndex: number, label: string) =>
+      accessChangeQuestion(
+        {
+          operationIndex,
+          label,
+          subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'User' },
+          widens: true,
+        },
+        contracts,
+      );
+    mocks.dbUpdate.mockImplementation(
+      askThenApply(() => [
+        userAccess(0, 'Disable row-level security on "User"'),
+        userAccess(1, 'Drop policy "readers" on "User"'),
+      ]),
+    );
+
+    const refused = await harness().run(['db', 'update', '--json'], { cwd: project.dir });
+    const applied = await harness().run(
+      ['db', 'update', '--allow', 'User', '--allow', 'User', '--json'],
+      {
+        cwd: project.dir,
+      },
+    );
+
+    expect((envelopeOf(refused.json) as { readonly error: unknown }).error).toEqual({
+      code: 'CLI.CONSENT_REQUIRED',
+      severity: 'error',
+      summary: 'This change needs 2 answers about "User".',
+      why: [
+        'This change would widen who can read and write the data of "User".',
+        'The plan would run: Disable row-level security on "User".',
+        'This change would widen who can read and write the data of "User".',
+        'The plan would run: Drop policy "readers" on "User".',
+      ].join('\n'),
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label: 'To allow both changes to "User", one flag each: --allow User --allow User',
+        },
+      ],
+      meta: {
+        unanswered: [
+          { subject: 'User', verbs: ['allow'] },
+          { subject: 'User', verbs: ['allow'] },
+        ],
+      },
+    });
+    expect({ exitCode: applied.exitCode, answers }).toEqual({
+      exitCode: 0,
+      answers: [
+        { verb: 'allow', text: 'User' },
+        { verb: 'allow', text: 'User' },
+      ],
+    });
   });
 
   it('gives a value the subject it equals when another subject is its prefix', async () => {
@@ -239,7 +140,7 @@ describe('db update questions', () => {
 
     const run = await harness().run(
       ['db', 'update', '--delete', 'Legacy:x', '--delete', 'Legacy', '--json'],
-      { cwd: projectDir },
+      { cwd: project.dir },
     );
 
     expect(run.exitCode).toBe(0);
@@ -252,7 +153,7 @@ describe('db update questions', () => {
   it('applies once every question is answered with flags', async () => {
     const run = await harness().run(
       ['db', 'update', '--delete', 'audit_old', '--delete', 'Legacy', '--allow', 'User', '--json'],
-      { cwd: projectDir },
+      { cwd: project.dir },
     );
 
     expect(run.exitCode).toBe(0);
@@ -266,7 +167,7 @@ describe('db update questions', () => {
   it('refuses an apply that widens access without --allow', async () => {
     const run = await harness().run(
       ['db', 'update', '--delete', 'audit_old', '--delete', 'Legacy', '--json'],
-      { cwd: projectDir },
+      { cwd: project.dir },
     );
 
     expect(envelopeOf(run.json)).toMatchObject({
@@ -279,7 +180,7 @@ describe('db update questions', () => {
 
   it('takes typed answers', async () => {
     const run = await harness().run(['db', 'update', '--json'], {
-      cwd: projectDir,
+      cwd: project.dir,
       isTty: { stdin: true },
       answers: ['delete', 'delete', 'allow'],
     });
@@ -290,10 +191,10 @@ describe('db update questions', () => {
 
   it('does not take --confirm or --yes as an answer', async () => {
     const confirmed = await harness().run(['db', 'update', '--confirm', 'appdb', '--json'], {
-      cwd: projectDir,
+      cwd: project.dir,
     });
     const yes = await harness().run(['db', 'update', '--yes', '--json'], {
-      cwd: projectDir,
+      cwd: project.dir,
       isTty: { stdin: true },
     });
 
@@ -314,7 +215,7 @@ describe('db update questions', () => {
         'Status.ARCHIVED',
         '--json',
       ],
-      { cwd: projectDir },
+      { cwd: project.dir },
     );
 
     expect(run.exitCode).not.toBe(0);
@@ -343,7 +244,7 @@ describe('db update questions', () => {
         'User.email',
         '--json',
       ],
-      { cwd: projectDir },
+      { cwd: project.dir },
     );
 
     expect(run.exitCode).not.toBe(0);
@@ -367,7 +268,7 @@ describe('db update questions', () => {
     mocks.connect.mockReturnValueOnce(new Promise(() => {}));
     const started = Date.now();
     const run = await harness().run(['db', 'update', '--backfill', 'User.email', '--json'], {
-      cwd: projectDir,
+      cwd: project.dir,
     });
 
     expect(Date.now() - started).toBeLessThan(5000);
@@ -385,7 +286,7 @@ describe('db update questions', () => {
   it('refuses --convert and --backfill when the database cannot be reached, opening only an existing database', async () => {
     mocks.connect.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:1'));
     const run = await harness().run(['db', 'update', '--backfill', 'User.email', '--json'], {
-      cwd: projectDir,
+      cwd: project.dir,
     });
 
     expect(envelopeOf(run.json)).toMatchObject({
@@ -408,7 +309,7 @@ describe('db update questions', () => {
     mocks.dbUpdate.mockReset().mockImplementation(askThenApply(() => []));
 
     const run = await harness().run(['db', 'update', '--delete', 'Nope', '--json'], {
-      cwd: projectDir,
+      cwd: project.dir,
     });
 
     expect(envelopeOf(run.json)).toMatchObject({ error: { code: 'CLI.CONSENT_UNUSED' } });
@@ -417,7 +318,7 @@ describe('db update questions', () => {
   it('hands a --convert with one or two names to the control API, which tells a variant from a field', async () => {
     const run = await harness().run(
       ['db', 'update', '--dry-run', '--convert', 'Bug', '--convert', 'app.Epic', '--json'],
-      { cwd: projectDir },
+      { cwd: project.dir },
     );
 
     expect(run.exitCode).toBe(0);
@@ -433,7 +334,7 @@ describe('db update questions', () => {
 
   it('refuses a --convert with three names before it plans anything, since it names a field', async () => {
     const run = await harness().run(['db', 'update', '--convert', 'app.User.age', '--json'], {
-      cwd: projectDir,
+      cwd: project.dir,
     });
 
     expect(envelopeOf(run.json)).toMatchObject({
@@ -448,7 +349,7 @@ describe('db update questions', () => {
   it('asks nothing on a dry run, and hands it the delete and allow flags to check', async () => {
     const run = await harness().run(
       ['db', 'update', '--dry-run', '--delete', 'Legacy', '--allow', 'User', '--json'],
-      { cwd: projectDir },
+      { cwd: project.dir },
     );
 
     expect(run.exitCode).toBe(0);
@@ -477,7 +378,7 @@ describe('db update questions', () => {
         'User',
         '--json',
       ],
-      { cwd: projectDir },
+      { cwd: project.dir },
     );
 
     expect(envelopeOf(run.json)).toMatchObject({

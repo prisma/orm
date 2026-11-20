@@ -36,7 +36,7 @@ describe('dataLossQuestion for data no model names', () => {
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({
       question:
-        'Cast field age in collection users from string to int would change the type of "users.age", named by its storage name because the origin contract is unknown, and can change or lose its values. --delete keeps the field and lets the database cast its values, which can change or lose some.',
+        'Changing the type of "users.age", named by its storage name because the origin contract is unknown, can change or lose its values.\nThe plan would run: Cast field age in collection users from string to int.\ndelete lets the database cast its values, which can change or lose some.',
       verbs: ['delete'],
     });
   });
@@ -53,7 +53,7 @@ describe('dataLossQuestion for data no model names', () => {
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({
       question:
-        'Drop column age from user would lose the data in "public.user.age", which no model of the origin contract stores.',
+        'This change would delete the data in "public.user.age", which no model of the origin contract stores.\nThe plan would run: Drop column age from user.\ndelete lets the data go.',
       verbs: ['delete'],
     });
   });
@@ -69,7 +69,7 @@ describe('dataLossQuestion for data no model names', () => {
     });
 
     expect(question.question).toBe(
-      'Drop column age from user would lose the data in "public.user.age", named by its storage name because the origin contract is unknown; --delete loses that data.',
+      'This change would delete the data in "public.user.age", named by its storage name because the origin contract is unknown.\nThe plan would run: Drop column age from user.\ndelete lets the data go.',
     );
   });
 });
@@ -200,7 +200,7 @@ describe('dataLossQuestion for a type change', () => {
       },
     );
     expect(rebuild.question).toBe(
-      'Recreate table User would change the type of field "User.age" and can change or lose its values. --convert writes a conversion for you to fill in; --delete keeps the field and lets the database cast its values, which can change or lose some.',
+      'Changing the type of field "User.age" can change or lose its values.\nThe plan would run: Recreate table User.\nconvert writes a conversion for you to fill in; delete keeps the field and lets the database cast its values, which can change or lose some.',
     );
   });
 
@@ -248,7 +248,7 @@ describe('dataLossQuestion for a field whose model the destination names differe
     expect({ verbs: question.verbs, question: question.question }).toEqual({
       verbs: ['delete'],
       question:
-        'Remove field nickname from collection profiles would lose the values of field "Profile.nickname". The destination contract has no model "Profile"; to keep the values instead, also pass --rename Profile:<new model name>, naming the model that stores them now, and the question then offers to rename the field.',
+        'Removing field "Profile.nickname" would delete its values.\nThe plan would run: Remove field nickname from collection profiles.\nThe destination contract has no model "Profile". If it was renamed, keep the values: run the command again with --rename \'Profile:<new model name>\', naming the model that stores them now, and the field can then be renamed too.\ndelete lets them go.',
     });
   });
 
@@ -315,7 +315,7 @@ describe('dataLossQuestion with advice from the target', () => {
 
     expect({ question: question.question, verbs: question.verbs }).toEqual({
       question:
-        'Drop storage users would lose the data of model "User". To keep its data, move it by hand.',
+        'This change would delete the data of model "User".\nThe plan would run: Drop storage users.\nTo keep its data, move it by hand.\ndelete lets its data go.',
       verbs: ['delete'],
     });
   });

@@ -27,6 +27,7 @@ import {
   type UnusedConsent,
 } from '../../utils/cli-errors';
 import type { ConsentVerb } from './parse-consent';
+import { type QuestionAnswer, type QuestionParts, questionText } from './plan-question-text';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
@@ -36,10 +37,11 @@ import { newVariantsOfBase, variantValue, variantValueChanged } from './variants
 export type PlanQuestionVerb = 'rename' | 'convert' | ConsentVerb;
 
 /**
- * What a command asks about one operation of a plan: the question, its subject written as the
- * statement names it, and the verbs that answer it. A command hands it to its prompt.
+ * What a command asks about one operation of a plan: the parts its prompt and its refusal are built
+ * from, the prompt's text, its subject written as a flag names it, and the verbs that answer it. A
+ * command hands it to its prompt.
  */
-export interface PlanQuestion {
+export interface PlanQuestion extends QuestionParts {
   readonly question: string;
   readonly subject: string;
   /** The namespace of a data-loss question's model or field when the destination removed it: a `delete` of it answers the question too. */
@@ -52,8 +54,11 @@ export interface PlanQuestion {
    * which answers its other questions too; `undefined` for any other answer.
    */
   readonly namespaceAnswer?: (verb: PlanQuestionVerb, text: string) => NamespaceAnswer | undefined;
-  /** The ways to keep the subject's data the question names, which a refusal to answer leads with. */
-  readonly keepDataWays?: readonly string[];
+}
+
+/** A question with its prompt text built from its parts. */
+export function planQuestion(parts: Omit<PlanQuestion, 'question'>): PlanQuestion {
+  return { ...parts, question: questionText(parts) };
 }
 
 /** How an answer answers a removed namespace as a whole. */
@@ -311,46 +316,127 @@ export function consentDescription(
     : `${verb} ${kind} "${text}"`;
 }
 
-const DELETE_CASTS =
-  '--delete keeps the field and lets the database cast its values, which can change or lose some.';
-
-/** What each answer to a type change does: `--convert`, where the command writes a migration to fill in, and `--delete`. */
-function typeChangeNote(loss: PlannedDataLoss, canConvert: boolean): readonly string[] {
-  if (loss.loss !== 'typeChange') return [];
-  return loss.subject.kind === 'field' && canConvert
-    ? [`--convert writes a conversion for you to fill in; ${DELETE_CASTS}`]
-    : [DELETE_CASTS];
+function castsValues(loss: PlannedDataLoss): boolean {
+  return (
+    loss.loss === 'typeChange' && (loss.subject.kind === 'field' || loss.subject.kind === 'storage')
+  );
 }
 
-function lossText(
-  subject: MigrationSubject,
-  text: string,
-  originKnown: boolean,
-  loss: MigrationDataLossKind | undefined,
-): string {
+/**
+ * What the change would do to the subject's data, in the words of the user's contract. It says
+ * "Removing" only when the destination has no such subject under its name or a name a rename of the
+ * plan gives it, and no rename of the plan names it.
+ */
+function lossHeadline(loss: PlannedDataLoss, text: string, contracts: DataLossContracts): string {
+  const { subject } = loss;
+  const removed = !inDestination(subject, contracts) && !renamedByPlan(subject, contracts);
   switch (subject.kind) {
     case 'model':
-      return `would lose the data of model "${text}"`;
+      return removed
+        ? `Removing model "${text}" would delete its data.`
+        : `This change would delete the data of model "${text}".`;
     case 'field':
-      return loss === 'typeChange'
-        ? `would change the type of field "${text}" and can change or lose its values`
-        : `would lose the values of field "${text}"`;
+      if (loss.loss === 'typeChange') {
+        return `Changing the type of field "${text}" can change or lose its values.`;
+      }
+      return removed
+        ? `Removing field "${text}" would delete its values.`
+        : `This change would delete the values of field "${text}".`;
     case 'enumValue':
-      return `would lose enum value "${text}" from the data that holds it`;
+      return removed
+        ? `Removing enum value "${text}" would remove it from the data that holds it.`
+        : `This change would remove the stored value of enum value "${text}" from the data that holds it.`;
     case 'valueObjectField':
-      return `would lose the values of value object field "${text}"`;
+      return removed
+        ? `Removing value object field "${text}" would delete its values.`
+        : `This change would delete the values of value object field "${text}".`;
     case 'storage': {
-      const named = originKnown
+      const named = contracts.originKnown
         ? 'which no model of the origin contract stores'
         : 'named by its storage name because the origin contract is unknown';
-      if (loss === 'typeChange') {
-        return `would change the type of "${text}", ${named}, and can change or lose its values`;
-      }
-      return originKnown
-        ? `would lose the data in "${text}", ${named}`
-        : `would lose the data in "${text}", ${named}; --delete loses that data`;
+      return loss.loss === 'typeChange'
+        ? `Changing the type of "${text}", ${named}, can change or lose its values.`
+        : `This change would delete the data in "${text}", ${named}.`;
     }
   }
+}
+
+/** The subject as the answers name it beside other questions: `field "User.age"`, or `"public.user.age"` for storage. */
+function namedSubject(subject: MigrationSubject, text: string): string {
+  return subject.kind === 'storage' ? `"${text}"` : `${ENTITY_WORDS[subject.kind]} "${text}"`;
+}
+
+function deleteAnswer(loss: PlannedDataLoss, text: string): QuestionAnswer {
+  const flag = { verb: 'delete', text } as const;
+  const named = namedSubject(loss.subject, text);
+  if (castsValues(loss)) {
+    return {
+      flag,
+      ifOnly: 'To let the database cast the values, which can change or lose some',
+      ifNamed: `To let the database cast the values of ${named}, which can change or lose some`,
+      typed:
+        loss.subject.kind === 'field'
+          ? 'delete keeps the field and lets the database cast its values, which can change or lose some'
+          : 'delete lets the database cast its values, which can change or lose some',
+    };
+  }
+  switch (loss.subject.kind) {
+    case 'model':
+      return {
+        flag,
+        ifOnly: 'If its data can go',
+        ifNamed: `If the data of ${named} can go`,
+        typed: 'delete lets its data go',
+      };
+    case 'enumValue':
+      return {
+        flag,
+        ifOnly: 'If it can go from the data',
+        ifNamed: `If ${named} can go from the data`,
+        typed: 'delete removes it from the data',
+      };
+    case 'storage':
+      return {
+        flag,
+        ifOnly: 'If the data can go',
+        ifNamed: `If the data in ${named} can go`,
+        typed: 'delete lets the data go',
+      };
+    default:
+      return {
+        flag,
+        ifOnly: 'If the values can go',
+        ifNamed: `If the values of ${named} can go`,
+        typed: 'delete lets them go',
+      };
+  }
+}
+
+function renameAnswer(
+  subject: MigrationSubject,
+  text: string,
+  rename: { readonly form: string; readonly newName: string | undefined },
+): QuestionAnswer {
+  const kind = subject.kind === 'storage' ? 'data' : ENTITY_WORDS[subject.kind];
+  const to = rename.newName === undefined ? '' : ` to "${rename.newName}"`;
+  const keep =
+    subject.kind === 'model' || subject.kind === 'storage'
+      ? 'keep its data'
+      : subject.kind === 'enumValue'
+        ? 'keep it in the data'
+        : 'keep its values';
+  const typed =
+    subject.kind === 'model' || subject.kind === 'storage'
+      ? 'rename keeps its data under the new name'
+      : subject.kind === 'enumValue'
+        ? 'rename keeps it in the data under the new name'
+        : 'rename keeps the values under the new name';
+  return {
+    flag: { verb: 'rename', text: rename.form },
+    ifOnly: `If the ${kind} was renamed${to}, ${keep}`,
+    ifNamed: `If ${namedSubject(subject, text)} was renamed${to}, ${keep}`,
+    typed,
+  };
 }
 
 /**
@@ -399,10 +485,9 @@ function namesSubject(verb: ConsentVerb, subject: string) {
 
 function modelRenameAdvice(model: ModelCoordinate, contracts: StatementContracts): string {
   const name = modelStatementText(contracts.origin, model);
-  return `The destination contract has no model "${name}"; to keep the values instead, also pass --rename ${name}:<new model name>, naming the model that stores them now, and the question then offers to rename the field.`;
+  return `The destination contract has no model "${name}". If it was renamed, keep the values: run the command again with ${statementFlag({ verb: 'rename', text: `${name}:<new model name>` })}, naming the model that stores them now, and the field can then be renamed too.`;
 }
 
-/** A rename as a statement is written: a field's new name keeps the model, `User.nickname:User.<new name>`. */
 /**
  * The member an enum value can only have been renamed to: the one member of the destination enum
  * that the origin enum does not have and no rename of the plan names.
@@ -503,28 +588,53 @@ function onlyNewModelField(
   return added.length === 1 ? added[0] : undefined;
 }
 
+/** The name the subject can only have been renamed to, when the destination gives exactly one. */
+function onlyNewName(
+  subject: MigrationSubject,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): string | undefined {
+  switch (subject.kind) {
+    case 'storage':
+      return undefined;
+    case 'model': {
+      const renamedTo = resolvedRenames(contracts).flatMap((statement) =>
+        statement.kind === 'rename' && statement.entity === 'model' ? [statement.to] : [],
+      );
+      const added = newVariantsOfBase(contracts.origin, contracts.destination, subject, renamedTo);
+      const [only] = added;
+      return only !== undefined && added.length === 1
+        ? modelStatementText(contracts.destination, only)
+        : undefined;
+    }
+    case 'enumValue':
+      return onlyNewMember(subject, contracts);
+    case 'valueObjectField':
+      return onlyNewValueObjectField(subject, contracts);
+    case 'field':
+      return onlyNewModelField(subject, contracts);
+  }
+}
+
+/** A rename as a flag writes it, with the new name when only one fits: a field's new name keeps the model, `User.nickname:User.<new name>`. */
+function renameTarget(
+  subject: MigrationSubject,
+  text: string,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): { readonly form: string; readonly newName: string | undefined } {
+  const newName = onlyNewName(subject, contracts);
+  const parent =
+    subject.kind === 'model' || subject.kind === 'storage'
+      ? ''
+      : `${text.slice(0, text.lastIndexOf('.'))}.`;
+  return { form: `${text}:${parent}${newName ?? '<new name>'}`, newName };
+}
+
 function renameForm(
   subject: MigrationSubject,
   text: string,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
 ): string {
-  if (subject.kind === 'storage') return `${text}:<new name>`;
-  if (subject.kind === 'model') {
-    const renamedTo = resolvedRenames(contracts).flatMap((statement) =>
-      statement.kind === 'rename' && statement.entity === 'model' ? [statement.to] : [],
-    );
-    const added = newVariantsOfBase(contracts.origin, contracts.destination, subject, renamedTo);
-    const [only] = added;
-    return `${text}:${only !== undefined && added.length === 1 ? modelStatementText(contracts.destination, only) : '<new name>'}`;
-  }
-  const parent = text.slice(0, text.lastIndexOf('.'));
-  const only =
-    subject.kind === 'enumValue'
-      ? onlyNewMember(subject, contracts)
-      : subject.kind === 'valueObjectField'
-        ? onlyNewValueObjectField(subject, contracts)
-        : onlyNewModelField(subject, contracts);
-  return `${text}:${parent}.${only ?? '<new name>'}`;
+  return renameTarget(subject, text, contracts).form;
 }
 
 /** The labels of the operations a question is about, as one phrase. */
@@ -699,22 +809,21 @@ function missingFieldModel(
     : undefined;
 }
 
-/** What changed for a variant whose discriminator value changed, and what `--convert` does about it. */
-function changedVariantNote(
-  subject: MigrationSubject,
+/** The `--convert` that rewrites the stored discriminator value of a variant whose value changed, and keeps its data. */
+function variantConvertAnswer(
+  subject: ModelCoordinate,
+  variant: ModelCoordinate,
+  text: string,
   contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): readonly string[] {
-  const variant = changedVariant(subject, contracts);
-  if (variant === undefined || subject.kind !== 'model') return [];
-  const from = variantValue(contracts.origin, subject);
-  const to = variantValue(contracts.destination, variant);
-  const convert = statementFlag({
-    verb: 'convert',
-    text: modelStatementText(contracts.destination, variant),
-  });
-  return [
-    `Its discriminator value changes from ${JSON.stringify(from)} to ${JSON.stringify(to)}: ${convert} rewrites the stored value to ${JSON.stringify(to)} and keeps the data.`,
-  ];
+): QuestionAnswer {
+  const from = JSON.stringify(variantValue(contracts.origin, subject));
+  const to = JSON.stringify(variantValue(contracts.destination, variant));
+  return {
+    flag: { verb: 'convert', text: modelStatementText(contracts.destination, variant) },
+    ifOnly: `To rewrite its discriminator value from ${from} to ${to} and keep its data`,
+    ifNamed: `To rewrite the discriminator value of model "${text}" from ${from} to ${to} and keep its data`,
+    typed: `convert rewrites the discriminator value from ${from} to ${to} and keeps the data`,
+  };
 }
 
 /**
@@ -826,20 +935,20 @@ function newRequiredFieldNote(
     ...(temporary.length === 0
       ? []
       : [
-          `If you answer delete, the existing objects get a temporary value in the new required ${named(temporary)}.`,
+          `If the values go, the existing objects get a temporary value in the new required ${named(temporary)}.`,
         ]),
     ...(needed.length === 0
       ? []
       : !contracts.canConvert
         ? [
-            `If you answer delete, the new required ${named(needed)} ${needed.length === 1 ? 'gets' : 'get'} no temporary value: plan the change with migration plan ${backfills} to write ${needed.length === 1 ? 'its value' : 'their values'} in migration.ts.`,
+            `If the values go, the new required ${named(needed)} ${needed.length === 1 ? 'gets' : 'get'} no temporary value: plan the change with migration plan ${backfills} to write ${needed.length === 1 ? 'its value' : 'their values'} in migration.ts.`,
           ]
         : needed.length === 1
           ? [
-              `If you answer delete, the new required ${named(needed)} still needs a value: add ${backfills} to write it in migration.ts.`,
+              `If the values go, the new required ${named(needed)} still needs a value: add ${backfills} to write it in migration.ts.`,
             ]
           : [
-              `If you answer delete, the new required ${named(needed)} still need a value: add ${backfills} to write them in migration.ts.`,
+              `If the values go, the new required ${named(needed)} still need a value: add ${backfills} to write them in migration.ts.`,
             ]),
   ];
 }
@@ -884,44 +993,45 @@ export function dataLossQuestion(
     keepData !== undefined &&
     keepData.ways.length > 0 &&
     sharesValueWithKeptMember(loss.subject, contracts);
-  const lost = lossText(loss.subject, subject, contracts.originKnown, loss.loss);
-  const operations = [...new Set(labels)];
-  const advice = [
-    ...typeChangeNote(loss, contracts.canConvert),
-    ...changedVariantNote(loss.subject, contracts),
-    ...(missingModel === undefined ? [] : [modelRenameAdvice(missingModel, contracts)]),
-    ...(loss.keepDataAdvice === undefined || commandRoutesSharedValues
-      ? []
-      : [loss.keepDataAdvice]),
-    ...(keepData?.lead === undefined ? [] : [keepData.lead]),
-    ...(keepData?.ways ?? []),
-    ...newRequiredFieldNote(loss.subject, contracts),
-  ];
-  const question =
-    operations.length > 1
-      ? [
-          `These operations ${lost}:`,
-          ...operations.map((label) => `- ${label}`),
-          ...(advice.length === 0 ? [] : [advice.join(' ')]),
-        ].join('\n')
-      : [`${labelsText(operations)} ${lost}.`, ...advice].join(' ');
+  const parts = {
+    headline: lossHeadline(loss, subject, contracts),
+    operations: [...new Set(labels)],
+    notes: [
+      ...(missingModel === undefined ? [] : [modelRenameAdvice(missingModel, contracts)]),
+      ...(loss.keepDataAdvice === undefined || commandRoutesSharedValues
+        ? []
+        : [loss.keepDataAdvice]),
+      ...(keepData?.lead === undefined ? [] : [keepData.lead]),
+      ...newRequiredFieldNote(loss.subject, contracts),
+    ],
+    ...ifDefined('keepDataWays', keepData?.ways),
+    yesWould: loss.loss === 'typeChange' ? 'change or lose data' : 'delete data',
+    subject,
+  } as const;
+  const deleting = deleteAnswer(loss, subject);
   if (loss.loss === 'typeChange' && loss.subject.kind === 'field') {
     if (!contracts.canConvert) {
-      return {
-        question,
-        ...ifDefined('keepDataWays', keepData?.ways),
-        subject,
+      return planQuestion({
+        ...parts,
+        answers: [deleting],
         verbs: ['delete'],
         forms: {},
         validate: (_verb, text) => deleteNames(text),
-      };
+      });
     }
     const field = destinationField(loss.subject, contracts);
     const convert = fieldStatementText(contracts.destination, field);
-    return {
-      question,
-      ...ifDefined('keepDataWays', keepData?.ways),
-      subject,
+    return planQuestion({
+      ...parts,
+      answers: [
+        {
+          flag: { verb: 'convert', text: convert },
+          ifOnly: 'To write the conversion yourself',
+          ifNamed: `To write the conversion of field "${subject}" yourself`,
+          typed: 'convert writes a conversion for you to fill in',
+        },
+        deleting,
+      ],
       verbs: ['convert', 'delete'],
       forms: { convert },
       validate: (verb, text) => {
@@ -932,15 +1042,14 @@ export function dataLossQuestion(
         const resolved = resolvesWith({ verb: 'convert', text }, contracts);
         return resolved.ok ? undefined : resolved.failure;
       },
-    };
+    });
   }
   const variant = changedVariant(loss.subject, contracts);
-  if (variant !== undefined) {
+  if (variant !== undefined && loss.subject.kind === 'model') {
     const convert = modelStatementText(contracts.destination, variant);
-    return {
-      question,
-      ...ifDefined('keepDataWays', keepData?.ways),
-      subject,
+    return planQuestion({
+      ...parts,
+      answers: [variantConvertAnswer(loss.subject, variant, subject, contracts), deleting],
       verbs: ['convert', 'delete'],
       forms: { convert },
       validate: (verb, text) => {
@@ -951,19 +1060,20 @@ export function dataLossQuestion(
         const resolved = resolvesWith({ verb: 'convert', text }, contracts);
         return resolved.ok ? undefined : resolved.failure;
       },
-    };
+    });
   }
   const renamable =
     missingModel === undefined &&
     loss.subject.kind !== 'storage' &&
     !inDestination(loss.subject, contracts) &&
     !renamedByPlan(loss.subject, contracts);
-  return {
-    question,
-    ...ifDefined('keepDataWays', keepData?.ways),
-    subject,
-    verbs: renamable ? ['rename', 'delete'] : ['delete'],
-    forms: renamable ? { rename: renameForm(loss.subject, subject, contracts) } : {},
+  const rename = renamable ? renameTarget(loss.subject, subject, contracts) : undefined;
+  return planQuestion({
+    ...parts,
+    answers:
+      rename === undefined ? [deleting] : [renameAnswer(loss.subject, subject, rename), deleting],
+    verbs: rename === undefined ? ['delete'] : ['rename', 'delete'],
+    forms: rename === undefined ? {} : { rename: rename.form },
     validate: (verb, text) => {
       if (verb !== 'rename') return deleteNames(text);
       if (!text.includes(':')) {
@@ -975,7 +1085,7 @@ export function dataLossQuestion(
         ? undefined
         : `The rename's old name is not "${subject}". Write it as ${renameForm(loss.subject, subject, contracts)}.`;
     },
-  };
+  });
 }
 
 /**
@@ -988,13 +1098,26 @@ export function accessChangeQuestion(
   contracts: StatementContracts,
 ): PlanQuestion {
   const subject = subjectText(change.subject, contracts);
-  return {
-    question: `${change.label} would ${change.widens ? 'widen' : 'change'} who can read and write its data.`,
+  return planQuestion({
+    headline: `This change would ${change.widens ? 'widen' : 'alter'} who can read and write the data of "${subject}".`,
+    operations: [change.label],
+    notes: [],
+    answers: [
+      {
+        flag: { verb: 'allow', text: subject },
+        ifOnly: 'To allow it',
+        ifNamed: `To allow the change to "${subject}"`,
+        typed: 'allow lets the plan make this change',
+        ifEach: (count) =>
+          `To allow ${count === 2 ? 'both' : `all ${count}`} changes to "${subject}", one flag each`,
+      },
+    ],
+    yesWould: 'change access',
     subject,
     verbs: ['allow'],
     forms: {},
     validate: (_verb, text) => namesSubject('allow', subject)(text),
-  };
+  });
 }
 
 /** A subject the user consented to, with the statement's text as its question wrote it. */
@@ -1045,10 +1168,10 @@ function checkAnswers(
   const plansAgain = answers.some(
     (answer) => answer?.verb === 'rename' || answer?.verb === 'convert',
   );
-  const open = answers.findIndex((answer) => answer === undefined);
+  const open = answers.indexOf(undefined);
   if (open !== -1 && !plansAgain) {
     throw new InternalError(
-      `answerQuestions left "${questions[open]?.question}" open, which it may do only beside a rename or convert answer that plans again.`,
+      `answerQuestions left "${questions[open]?.headline}" open, which it may do only beside a rename or convert answer that plans again.`,
       { cause: { questions: questions.map(({ subject }) => subject), answers } },
     );
   }
@@ -1065,33 +1188,57 @@ function checkAnswers(
     const cause = { cause: { question: question.subject, verbs: question.verbs, answer } };
     if (!question.verbs.includes(answer.verb)) {
       throw new InternalError(
-        `answerQuestions answered "${question.question}" with ${answer.verb}, which it does not accept; it accepts ${question.verbs.join(' or ')}.`,
+        `answerQuestions answered "${question.headline}" with ${answer.verb}, which it does not accept; it accepts ${question.verbs.join(' or ')}.`,
         cause,
       );
     }
     const rejected = question.validate(answer.verb, answer.text);
     if (rejected !== undefined) {
       throw new InternalError(
-        `answerQuestions answered "${question.question}" wrongly: ${rejected}`,
+        `answerQuestions answered "${question.headline}" wrongly: ${rejected}`,
         cause,
       );
     }
   });
 }
 
-function namespaceRenameAdvice(removed: string, added: readonly string[]): string | undefined {
+function namespaceAnswers(
+  question: PlanQuestion,
+  removed: string,
+  added: readonly string[],
+): readonly QuestionAnswer[] {
+  const deleting: QuestionAnswer = {
+    flag: { verb: 'delete', text: removed },
+    ifOnly: `If the data of everything in namespace "${removed}" can go`,
+    ifNamed: `If the data of everything in namespace "${removed}" can go`,
+    typed: `delete ${removed} lets the data of every model and field of namespace "${removed}" go`,
+  };
   const [only] = added;
-  if (only === undefined) return undefined;
-  const lead = `If namespace "${removed}" was renamed, --rename ${removed}:`;
-  if (added.length === 1) return `${lead}${only} renames it instead.`;
-  const choices = `${added.slice(0, -1).join(', ')} or ${added.at(-1)}`;
-  return `${lead}<new namespace> renames it instead, where <new namespace> is ${choices}.`;
+  if (only === undefined || !question.verbs.includes('rename')) return [deleting];
+  const to =
+    added.length === 1
+      ? `"${only}"`
+      : `${added
+          .slice(0, -1)
+          .map((each) => `"${each}"`)
+          .join(', ')} or "${added.at(-1)}"`;
+  const form = `${removed}:${added.length === 1 ? only : '<new namespace>'}`;
+  const ifRenamed = `If namespace "${removed}" was renamed to ${to}, keep its data`;
+  return [
+    deleting,
+    {
+      flag: { verb: 'rename', text: form },
+      ifOnly: ifRenamed,
+      ifNamed: ifRenamed,
+      typed: `rename ${form} keeps the data of namespace "${removed}" under namespace ${to}`,
+    },
+  ];
 }
 
 /**
  * The first question about a model or field of a namespace the destination contract no longer has
- * says that a `delete` of the namespace answers every question about it, and, when the destination
- * adds a namespace, how to rename the namespace instead.
+ * says so, and offers the answers for the whole namespace: a `delete` of it, and, when the
+ * destination adds a namespace, a `rename` of it.
  */
 function withNamespaceDeleteOnFirstQuestion(
   questions: readonly PlanQuestion[],
@@ -1102,12 +1249,14 @@ function withNamespaceDeleteOnFirstQuestion(
     const { removedNamespace } = question;
     if (removedNamespace === undefined || told.has(removedNamespace)) return question;
     told.add(removedNamespace);
-    const lines = [
-      question.question,
-      `--delete ${removedNamespace} answers this question and every other about a model or field of namespace "${removedNamespace}", which the destination contract no longer has.`,
-      namespaceRenameAdvice(removedNamespace, added),
-    ];
-    return { ...question, question: lines.filter((line) => line !== undefined).join('\n') };
+    return planQuestion({
+      ...question,
+      notes: [
+        ...question.notes,
+        `The destination contract no longer has namespace "${removedNamespace}".`,
+      ],
+      answers: [...question.answers, ...namespaceAnswers(question, removedNamespace, added)],
+    });
   });
 }
 
@@ -1150,7 +1299,7 @@ function withRecoveryOnFirstStorageQuestion(
     : -1;
   return asked.map(({ question }, index) =>
     index === first
-      ? { ...question, question: `${question.question}\n${ORIGIN_SNAPSHOT_RECOVERY}` }
+      ? planQuestion({ ...question, notes: [...question.notes, ORIGIN_SNAPSHOT_RECOVERY] })
       : question,
   );
 }

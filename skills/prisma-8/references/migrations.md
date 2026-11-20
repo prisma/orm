@@ -74,7 +74,7 @@ Treat the rendered import lines as framework-managed on both targets:
 | `MIGRATION.INVALID_DEFAULT_EXPORT` | Loading `migration.ts` | The file's default export is not a `Migration` subclass or factory function. Restore the planner-emitted scaffold from version control or re-run `migration plan` for a clean package. |
 | `MIGRATION.DATA_TRANSFORM_CONTRACT_MISMATCH` | Building a data-transform query plan | The query builder was built over a different contract than the one passed to `this.dataTransform(...)`. Pass the `contract` that `postgres({ contract: contractFromJson<End>(endContract) })` returns to `this.dataTransform`, and build the queries with that client's `sql`. |
 | `MIGRATION.HASH_MISMATCH` *Migration package is corrupt* | `db migrate` (or any read of the package) | `ops.json` / `migration.json` were edited without self-emitting. Run `node <package dir>/migration.ts` to re-emit, then re-run `db migrate`. |
-| `CLI.CONSENT_REQUIRED` | `migration plan` / `db update` run with nobody to answer (`--no-interactive`, CI, `--yes`) | The plan would lose data or (on `db update`) widen access. `meta.unanswered` and `nextActions` list each question with the flags that answer it: `--delete <subject>`, `--rename <subject>:<new name>`, `--allow <Model>`. Re-run with the ones you mean. `--confirm` and `--yes` answer none of them. |
+| `CLI.CONSENT_REQUIRED` | `migration plan` / `db update` run with nobody to answer (`--no-interactive`, CI, `--yes`) | The plan would lose data or (on `db update`) change access. The summary says what the change would do, `why` what the plan would run, and each next action gives a flag with what it means, such as `If the values can go: --delete Shop.legacy`. `meta.unanswered` lists each open question's `subject` and `verbs`: `--delete <subject>`, `--rename <subject>:<new name>`, `--convert <field>`, `--allow <Model>`. Re-run with the ones you mean. `--confirm` and `--yes` answer none of them. |
 | `CLI.CONSENT_UNUSED` | `migration plan` / `db update` | Every question was answered, and a `--delete` or `--allow` was left over: a typo, a subject the plan does not touch, or a `--confirm` (which consents to nothing). Fix or drop the flag. A typo next to a question nobody answered is reported as `CLI.CONSENT_REQUIRED` instead, which names the flag that matched nothing. On `db update --dry-run` the same mistake is `MIGRATION.STATEMENT_ANSWERS_NO_QUESTION`. |
 | `MIGRATION.STATEMENT_DID_NOT_RESOLVE_LOSS` | A rename typed at the data-loss prompt | The plan was made again with the rename and still loses the subject's data. Answer with `delete`, or give a rename whose old name is the subject. |
 | `CONTRACT.MARKER_MISMATCH` | `db verify` (finding, exit 4) | The marker disagrees with the contract hash (**Postgres:** `prisma_contract.marker`; **Mongo:** `_prisma_migrations`). The DB is at a different contract version than the code thinks. Either run a migration forward, or — if the DB is correct and the marker is stale after a manual fix-up — run `db sign`. |
@@ -657,7 +657,16 @@ pnpm prisma migration plan --name tidy_points --rename GeoPoint.lat:GeoPoint.lat
 pnpm prisma db update --db $DATABASE_URL --convert Bug
 ```
 
-In a terminal the command asks each question in turn; type `delete`, `allow`, or `rename <subject>:<new name>`. Where nobody can answer (CI, `--no-interactive`, `--yes`), it fails with `CLI.CONSENT_REQUIRED`; read `meta.unanswered[]` or the `nextActions`, decide what each subject means, and re-run with those flags. `--confirm` and `--yes` answer none of these questions. Don't reach for `--delete` by reflex: if the model or field was renamed, `--rename` keeps its rows.
+In a terminal the command asks each question in turn; type `delete`, `allow`, or `rename <subject>:<new name>`. Where nobody can answer (CI, `--no-interactive`, `--yes`), it fails with `CLI.CONSENT_REQUIRED`; its summary says what the change would do and each next action says what a flag means, for example:
+
+```text
+✘ [CLI.CONSENT_REQUIRED] Removing field "Shop.legacy" would delete its values.
+  why: The plan would run: Drop column "legacy" from "Store Front".
+→ If the field was renamed to "rating", keep its values: --rename Shop.legacy:Shop.rating
+→ If the values can go: --delete Shop.legacy
+```
+
+Read `meta.unanswered[]` or the `nextActions`, decide what each subject means, and re-run with those flags. `--confirm` and `--yes` answer none of these questions. Don't reach for `--delete` by reflex: if the model or field was renamed, `--rename` keeps its rows.
 
 `db migrate` does *not* ask: whatever the package contains runs, so review the plan or call `migration show` before `db migrate`.
 

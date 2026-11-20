@@ -354,11 +354,11 @@ describe('Journeys (MongoDB): renames and removals inside value objects and embe
     }).toEqual({
       exitCode: 'failed',
       code: 'CLI.CONSENT_REQUIRED',
-      summary: '"Address.zip" needs a statement, and the session is not interactive.',
-      why: 'Remove key "zip" at path "$" in field home of collection users would lose the values of value object field "Address.zip".',
+      summary: 'Removing value object field "Address.zip" would delete its values.',
+      why: 'The plan would run: Remove key "zip" at path "$" in field home of collection users.',
       answers: [
-        "Run the command again with --rename 'Address.zip:Address.<new name>'",
-        'Run the command again with --delete Address.zip',
+        "If the value object field was renamed, keep its values: --rename 'Address.zip:Address.<new name>'",
+        'If the values can go: --delete Address.zip',
       ],
     });
 

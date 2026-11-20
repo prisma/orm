@@ -79,9 +79,11 @@ describe('a rename typed at the prompt', () => {
 
     expect((await result).ok).toBe(true);
     expect(asked).toEqual([
-      ['Drop column "ratio" from "T" would lose the values of field "T.ratio".'],
       [
-        'Alter type of "T"."ratio2" to int4 would change the type of field "T.ratio" and can change or lose its values. --convert writes a conversion for you to fill in; --delete keeps the field and lets the database cast its values, which can change or lose some.',
+        'Removing field "T.ratio" would delete its values.\nThe plan would run: Drop column "ratio" from "T".\nrename keeps the values under the new name; delete lets them go.',
+      ],
+      [
+        'Changing the type of field "T.ratio" can change or lose its values.\nThe plan would run: Alter type of "T"."ratio2" to int4.\nconvert writes a conversion for you to fill in; delete keeps the field and lets the database cast its values, which can change or lose some.',
       ],
     ]);
   });
@@ -128,8 +130,8 @@ describe('questions about storage when the origin contract is unknown', () => {
     });
 
     expect(asked).toEqual([
-      `Drop table Legacy would lose the data in "Legacy", named by its storage name because the origin contract is unknown; --delete loses that data.\n${ORIGIN_SNAPSHOT_RECOVERY}`,
-      'Drop table Profile would lose the data in "Profile", named by its storage name because the origin contract is unknown; --delete loses that data.',
+      `This change would delete the data in "Legacy", named by its storage name because the origin contract is unknown.\nThe plan would run: Drop table Legacy.\n${ORIGIN_SNAPSHOT_RECOVERY}\ndelete lets the data go.`,
+      'This change would delete the data in "Profile", named by its storage name because the origin contract is unknown.\nThe plan would run: Drop table Profile.\ndelete lets the data go.',
     ]);
     expect(ORIGIN_SNAPSHOT_RECOVERY.split('\n').map((line) => line.slice(0, 2))).toEqual([
       'If',
@@ -241,8 +243,8 @@ describe('questions about access', () => {
     });
 
     expect(asked).toEqual([
-      'Drop RLS policy "readers" on "T" would change who can read and write its data.',
-      'Disable row-level security on "T" would widen who can read and write its data.',
+      'This change would alter who can read and write the data of "T".\nThe plan would run: Drop RLS policy "readers" on "T".\nallow lets the plan make this change.',
+      'This change would widen who can read and write the data of "T".\nThe plan would run: Disable row-level security on "T".\nallow lets the plan make this change.',
     ]);
     expect(
       result.ok &&
@@ -294,7 +296,7 @@ describe('allow statements given as pre-answers', () => {
 
     expect((await result).ok).toBe(true);
     expect(asked).toEqual([
-      'Disable row-level security on "T" would widen who can read and write its data.',
+      'This change would widen who can read and write the data of "T".\nThe plan would run: Disable row-level security on "T".\nallow lets the plan make this change.',
     ]);
   });
 

@@ -296,16 +296,48 @@ withTempDir(({ createTempDir }) => {
 
         const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
         expect(engineError(refused)?.code, 'N3.04: nobody to answer').toBe('CLI.CONSENT_REQUIRED');
-        expect(nextActionsOf(refused), 'N3.04: one flag per model').toContain(
-          '--delete billing.Invoice',
-        );
-        expect(nextActionsOf(refused)).toContain('--delete billing.Receipt');
-        expect(
-          engineError(refused)?.why,
-          'N3.04: says --delete billing answers them all',
-        ).toContain(
-          '--delete billing answers this question and every other about a model or field of namespace "billing", which the destination contract no longer has.',
-        );
+        expect(engineError(refused), 'N3.04: the flags that answer').toEqual({
+          code: 'CLI.CONSENT_REQUIRED',
+          severity: 'error',
+          summary: 'This change needs 2 answers: "billing.Receipt", "billing.Invoice".',
+          why: [
+            'Removing model "billing.Receipt" would delete its data.',
+            'The plan would run: Drop table "Receipt".',
+            'The destination contract no longer has namespace "billing".',
+            'Removing model "billing.Invoice" would delete its data.',
+            'The plan would run: Drop table "Invoice".',
+          ].join('\n'),
+          nextActions: [
+            {
+              kind: 'user-choice',
+              label: `If model "billing.Receipt" was renamed, keep its data: --rename 'billing.Receipt:<new name>'`,
+            },
+            {
+              kind: 'user-choice',
+              label: 'If the data of model "billing.Receipt" can go: --delete billing.Receipt',
+            },
+            {
+              kind: 'user-choice',
+              label: 'If the data of everything in namespace "billing" can go: --delete billing',
+            },
+            {
+              kind: 'user-choice',
+              label: `If model "billing.Invoice" was renamed, keep its data: --rename 'billing.Invoice:<new name>'`,
+            },
+            {
+              kind: 'user-choice',
+              label: 'If the data of model "billing.Invoice" can go: --delete billing.Invoice',
+            },
+          ],
+          meta: {
+            unanswered: [
+              { subject: 'billing.Receipt', verbs: ['rename', 'delete'] },
+              { subject: 'billing.Invoice', verbs: ['rename', 'delete'] },
+            ],
+          },
+          docsUrl:
+            'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+        });
         expect(await schemas(db.connectionString), 'N3.04: nothing dropped').toEqual(['billing']);
 
         const update = await runDbUpdate(ctx, [

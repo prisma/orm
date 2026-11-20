@@ -1,6 +1,7 @@
 import { ifDefined } from '@internal/utils/defined';
 import type { PromptSurface, StatementSurface } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
+import { refusalText } from '../control-api/statements/plan-question-text';
 import {
   type AnsweredWithoutAsking,
   type AnswerPlanQuestions,
@@ -61,7 +62,7 @@ function engineQuestion(question: PlanQuestion) {
   };
 }
 
-/** Whether an answer is the namespace's own: a `delete` of it, or a `rename` of it. */
+/** Whether the engine refused because nobody can answer. */
 function isConsentRequired(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -120,43 +121,61 @@ async function askOneAtATime(
   return answered;
 }
 
-function unansweredSubjects(error: CliStructuredError): ReadonlySet<string> | undefined {
-  const unanswered = error.meta?.['unanswered'];
-  if (!Array.isArray(unanswered)) return undefined;
-  return new Set(
-    unanswered.flatMap((entry: unknown) =>
-      typeof entry === 'object' && entry !== null && 'subject' in entry
-        ? [String(entry.subject)]
-        : [],
-    ),
-  );
+function records(value: unknown): readonly Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.flatMap((entry: unknown) =>
+        typeof entry === 'object' && entry !== null && !Array.isArray(entry)
+          ? [Object.fromEntries(Object.entries(entry))]
+          : [],
+      )
+    : [];
+}
+
+function strings(value: unknown): readonly string[] {
+  return Array.isArray(value) ? value.map(String) : [];
 }
 
 /**
- * The engine's refusal to answer, led by the ways to keep the data that the unanswered questions
- * name: the next actions give them first, so they are not repeated in why.
+ * The open questions the engine's refusal lists in `meta.unanswered`, in order. The engine answers
+ * questions that share a subject in order, so the unanswered ones of a subject are its last ones.
  */
-function ledByKeepDataWays(error: unknown, questions: readonly PlanQuestion[]): unknown {
+function openQuestions(
+  error: CliStructuredError,
+  questions: readonly PlanQuestion[],
+): readonly PlanQuestion[] {
+  const listed = records(error.meta?.['unanswered']).map(({ subject }) => String(subject));
+  if (listed.length === 0) return questions;
+  const open = new Set<PlanQuestion>();
+  for (const subject of new Set(listed)) {
+    const count = listed.filter((each) => each === subject).length;
+    for (const question of questions.filter((each) => each.subject === subject).slice(-count)) {
+      open.add(question);
+    }
+  }
+  return questions.filter((question) => open.has(question));
+}
+
+/**
+ * The engine's refusal to answer, rebuilt from the open questions: what the change would do, what
+ * the plan would run, the flags that answered nothing, and each answer with what it means. Its code,
+ * severity, docs link and meta stay the engine's.
+ */
+function refusalFrom(error: unknown, questions: readonly PlanQuestion[]): unknown {
   if (!isConsentRequired(error) || !CliStructuredError.is(error)) return error;
-  const subjects = unansweredSubjects(error);
-  const ways = [
-    ...new Set(
-      questions
-        .filter(({ subject }) => subjects === undefined || subjects.has(subject))
-        .flatMap(({ keepDataWays }) => keepDataWays ?? []),
-    ),
-  ];
-  if (ways.length === 0) return error;
-  return new CliStructuredError(error.code, error.message, {
+  const open = openQuestions(error, questions);
+  if (open.length === 0) return error;
+  const refusal = refusalText(open, {
+    unmatched: records(error.meta?.['unmatched']).map(({ verb, values }) => ({
+      verb: String(verb),
+      values: strings(values),
+    })),
+    confirm: strings(error.meta?.['confirm']),
+    yes: error.message.includes('--yes'),
+  });
+  return new CliStructuredError(error.code, refusal.summary, {
     severity: error.severity,
-    ...ifDefined(
-      'why',
-      ways.reduce(
-        (why, way) => why?.replaceAll(` ${way}`, '').replaceAll(`\n${way}`, ''),
-        error.why,
-      ),
-    ),
-    nextActions: [...ways.map(chooseAction), ...error.nextActions],
+    ...ifDefined('why', refusal.why),
+    nextActions: refusal.nextActions.map(chooseAction),
     diagnostics: error.diagnostics,
     ...ifDefined('where', error.where),
     ...ifDefined('meta', error.meta),
@@ -180,7 +199,7 @@ export function promptPlanQuestions(
   return async (questions, answeredWithoutAsking = []) => {
     takeConsentsAnsweredWithoutAsking(questions, answeredWithoutAsking, statements);
     return answer(questions).catch((error: unknown) => {
-      throw ledByKeepDataWays(error, questions);
+      throw refusalFrom(error, questions);
     });
   };
 }
