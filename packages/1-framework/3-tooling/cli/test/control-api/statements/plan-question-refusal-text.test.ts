@@ -112,6 +112,25 @@ describe('the ways to keep the data when several are open', () => {
   });
 });
 
+describe('a way to keep the data that several open questions give alike', () => {
+  it('is given once, naming every subject it is for', async () => {
+    const advice = 'The destination stores both in one table; write the merge by hand.';
+    const asked = await askedAbout({
+      origin: contractOf({ app: { models: { Bug: {}, Task: {} } } }),
+      destination: contractOf({ app: { models: {} } }),
+      losses: ['Bug', 'Task'].map((model) => ({
+        label: `Drop table "${model.toLowerCase()}"`,
+        subject: { kind: 'model' as const, namespaceId: app, model },
+        keepDataAdvice: advice,
+      })),
+    });
+
+    expect(refusalText(asked, NO_FLAGS).nextActions[0]).toBe(
+      'For model "Bug" and model "Task": the destination stores both in one table; write the merge by hand.',
+    );
+  });
+});
+
 describe('the fact of a removed namespace', () => {
   const origin = contractOf({
     app: { models: { User: {} } },

@@ -328,9 +328,9 @@ describe('Journeys (MongoDB): --rename and --delete', {
       why: 'The operation of the plan that does this: Remove field nickname from collection profiles.',
       nextActions: [
         'If it was renamed, keep its data: store a snapshot of the contract before this change, which is the contract the database was last updated to, then run this command again, and it gives the --rename to use.',
-        '1. Put the contract source back to the version the database is at, and run `prisma contract emit`.',
-        '2. Run `prisma db update --advance-ref <name> --dry-run`, with the same `--db` as this command if it has one, and check that it plans no operations. Then run it again without `--dry-run`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.',
-        '3. Put the new contract source back, run `prisma contract emit`, and run this command again with `--advance-ref <name>`.',
+        '1. Put the contract source back to the version the database is at, and run `prisma-test contract emit`.',
+        '2. Run `prisma-test db update --advance-ref <name> --dry-run`, with the same `--db` as this command if it has one, and check that it plans no operations. Then run it again without `--dry-run`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.',
+        '3. Put the new contract source back, run `prisma-test contract emit`, and run this command again with `--advance-ref <name>`.',
         'If the data can go: --delete profiles.nickname',
       ].map((label) => ({ kind: 'user-choice', label })),
       meta: {
@@ -375,7 +375,7 @@ describe('Journeys (MongoDB): --rename and --delete', {
         {
           kind: 'user-choice',
           label:
-            'If model "Profile" was renamed to "Person", keep the values of field "Profile.nickname": --rename Profile:Person',
+            'If model "Profile" was renamed to "Person", say so first: --rename Profile:Person',
         },
         { kind: 'user-choice', label: 'If the values can go: --delete Profile.nickname' },
       ],

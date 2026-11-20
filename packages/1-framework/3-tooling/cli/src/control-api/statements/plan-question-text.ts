@@ -44,6 +44,11 @@ export interface QuestionParts {
   readonly removedNamespaceParts?: RemovedNamespaceParts;
 }
 
+/** A way to keep the data, as a refusal with several questions open gives it: naming the subjects it is for. */
+export function wayFor(subjectsInList: readonly string[], way: string): string {
+  return `For ${joinedWithAnd(subjectsInList)}: ${way.charAt(0).toLowerCase()}${way.slice(1)}`;
+}
+
 function operationLines(operations: readonly string[]): readonly string[] {
   const unique = [...new Set(operations)];
   return unique.length === 1
@@ -183,6 +188,30 @@ function removedNamespaces(open: readonly QuestionParts[]): readonly RemovedName
 }
 
 /**
+ * The ways to keep the data of several open questions, each naming its subject; a way that several
+ * questions give alike is given once, naming all of them.
+ */
+function waysNamingSubjects(open: readonly QuestionParts[]): readonly string[] {
+  const ways = new Map<string, { naming: string; subjects: string[] }>();
+  for (const question of open) {
+    question.keepDataWays.forEach((way, index) => {
+      const naming = question.keepDataWaysNamingSubject[index] ?? way;
+      const seen = ways.get(way);
+      if (seen === undefined) {
+        ways.set(way, { naming, subjects: [question.subjectInList] });
+      } else if (!seen.subjects.includes(question.subjectInList)) {
+        seen.subjects.push(question.subjectInList);
+      }
+    });
+  }
+  return [...ways].map(([way, { naming, subjects }]) =>
+    subjects.length > 1 && naming === wayFor(subjects.slice(0, 1), way)
+      ? wayFor(subjects, way)
+      : naming,
+  );
+}
+
+/**
  * The paragraphs of `why`, one per open question: its headline when several are open, the fact of
  * its removed namespace on the first question of that namespace, the operations and the notes.
  */
@@ -225,11 +254,9 @@ export function refusalText(
         : paragraphs.map((lines) => lines.join('\n')).join('\n\n'),
     nextActions: [
       ...removeFlagLines(flags),
-      ...new Set(
-        open.flatMap((question) =>
-          several ? question.keepDataWaysNamingSubject : question.keepDataWays,
-        ),
-      ),
+      ...(several
+        ? waysNamingSubjects(open)
+        : new Set(open.flatMap(({ keepDataWays }) => keepDataWays))),
       ...answerLines(
         removedNamespaces(open).flatMap(({ answers }) => answers),
         ({ meaning: each }) => each,

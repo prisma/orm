@@ -357,7 +357,7 @@ describe('Journeys (MongoDB): renames and removals inside value objects and embe
       summary: 'Removing value object field "Address.zip" would delete its values.',
       why: 'The operation of the plan that does this: Remove key "zip" at path "$" in field home of collection users.',
       answers: [
-        "If the value object field was renamed, first add it to the contract under its new name; then keep its values: --rename 'Address.zip:Address.<new name>'",
+        "If the value object field was renamed, add it to the contract under its new name and run `prisma-test contract emit`; then keep its values: --rename 'Address.zip:Address.<new name>'",
         'If the values can go: --delete Address.zip',
       ],
     });

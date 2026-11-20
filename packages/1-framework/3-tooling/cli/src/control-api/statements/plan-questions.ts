@@ -28,7 +28,12 @@ import {
 } from '../../utils/cli-errors';
 import { EMIT_COMMAND, missingNameReason, nameHadBeforeReason } from './missing-new-name';
 import type { ConsentVerb } from './parse-consent';
-import type { QuestionAnswer, QuestionParts, RemovedNamespaceParts } from './plan-question-text';
+import {
+  type QuestionAnswer,
+  type QuestionParts,
+  type RemovedNamespaceParts,
+  wayFor,
+} from './plan-question-text';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
@@ -512,10 +517,6 @@ function deleteAnswer(
         promptMeaning: 'delete lets them go',
       };
   }
-}
-
-function lowerFirst(text: string): string {
-  return `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
 }
 
 /** `"a"`, `"a" or "b"`, `"a", "b" or "c"`. */
@@ -1270,7 +1271,7 @@ export function dataLossQuestion(
     keepDataWays: [...modelWay, ...otherWays, ...(recovers ? ORIGIN_SNAPSHOT_RECOVERY : [])],
     keepDataWaysNamingSubject: [
       ...modelWay,
-      ...otherWays.map((way) => `For ${subjectInList}: ${lowerFirst(way)}`),
+      ...otherWays.map((way) => wayFor([subjectInList], way)),
       ...(recovers ? originSnapshotRecoveryNaming(recoveryFor) : []),
     ],
     alsoGiveWhenDeleted: required.alsoGiveWhenDeleted,

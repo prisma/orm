@@ -119,7 +119,7 @@ withTempDir(({ createTempDir }) => {
         const lines = linesOf(await refusal(journey, [], 'L1.03'));
         const rename = lineWith(lines, '--rename');
         expect(rename, 'L1.03: the contract must have the field first').toBe(
-          `If the field was renamed, first add it to the contract under its new name; then keep its values: --rename 'Shop.legacy:Shop.<new name>'`,
+          `If the field was renamed, add it to the contract under its new name and run \`prisma-test contract emit\`; then keep its values: --rename 'Shop.legacy:Shop.<new name>'`,
         );
 
         await emit(journey, contract({ legacy: 'rating' }), 'L1.04');
@@ -188,7 +188,7 @@ withTempDir(({ createTempDir }) => {
         const lines = linesOf(await refusal(kept, [], 'L3.03'));
         const rename = lineWith(lines, '--rename');
         expect(rename, 'L3.03: the contract must have the model first').toBe(
-          `If the model was renamed, first add it to the contract under its new name; then keep its data: --rename 'Bug:<new name>'`,
+          `If the model was renamed, add it to the contract under its new name and run \`prisma-test contract emit\`; then keep its data: --rename 'Bug:<new name>'`,
         );
         await emit(kept, contract({ bug: 'Issue' }), 'L3.04');
         await planAndApply(kept, flagsOf(rename, 'Issue'), 'L3.05');
@@ -214,7 +214,7 @@ withTempDir(({ createTempDir }) => {
         const lines = linesOf(await refusal(kept, [], 'L4.03'));
         const rename = lineWith(lines, '--rename');
         expect(rename, 'L4.03: the contract must have the member first').toBe(
-          `If the enum value was renamed, first add it to the contract under its new name; then keep it in the data: --rename 'Status.ARCHIVED:Status.<new name>'`,
+          `If the enum value was renamed, add it to the contract under its new name and run \`prisma-test contract emit\`; then keep it in the data: --rename 'Status.ARCHIVED:Status.<new name>'`,
         );
         await emit(kept, contract({ archived: false, retired: true }), 'L4.04');
         await planAndApply(kept, flagsOf(rename, 'RETIRED'), 'L4.05');

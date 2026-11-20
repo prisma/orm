@@ -11,15 +11,15 @@ changes:
         - 'Run the command again with --(delete|rename|allow|convert)'
   - id: one-allow-per-model
     summary: |
-      `db update` asks once per model about the operations that change who can read or write its data, so one `--allow User` allows them all, such as disabling row-level security and dropping a policy on Postgres. A second `--allow User` in the same run fails with `CLI.CONSENT_UNUSED`, and `meta.unanswered` lists one entry per model. In the control API, one `allow` statement in `statements` answers every access change of its model, and a second fails with `MIGRATION.STATEMENT_ANSWERS_NO_QUESTION`. The detection matches a flag or statement given twice for one model.
+      `db update` asks once per model about the operations that change who can read or write its data, so one `--allow User` allows them all, such as disabling row-level security and dropping a policy on Postgres. A second `--allow User` in the same run fails with `CLI.CONSENT_UNUSED`, and `meta.unanswered` lists one entry per model. In the control API, one `allow` statement in `statements` answers every access change of its model, and a second fails with `CLI.CONSENT_UNUSED` too. `appliedStatements` has one `allow` entry for the flag, whose `operationIndexes` hold every operation it allowed. The detection matches a flag or statement given twice for one model, with other flags between them or not.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,sh,bash,yml,yaml}"
       matches:
-        - "--allow[ =](\\S+)\\s+--allow[ =]\\1(\\s|$)"
-        - "'--allow',\\s*'([^']+)',\\s*'--allow',\\s*'\\1'"
+        - "--allow[ =](\\S+)\\s(?:.*\\s)?--allow[ =]\\1(\\s|$)"
+        - "'--allow',\\s*'([^']+)',\\s*(?:[^\\]]*,\\s*)?'--allow',\\s*'\\1'"
   - id: plan-question-parts
     summary: |
-      A `PlanQuestion` that the control API hands to `answerQuestions` no longer has `question`, its prompt text. It carries the parts the text is built from (`headline`, `operations`, `notes`, `keepDataWays`, `answers`, `whenDeleted`, `effect`), and `questionText(question)` from `@prisma/orm-toolchain/cli/control-api` builds the text. `verbs`, `forms`, `subject` and `validate` are unchanged.
+      A `PlanQuestion` that the control API hands to `answerQuestions` no longer has `question`, its prompt text. It carries the parts the text is built from (`headline`, `subjectInList`, `operations`, `notes`, `keepDataWays`, `keepDataWaysNamingSubject`, `answers`, `alsoGiveWhenDeleted`, `effect`), and `questionText(question)` from `@prisma/orm-toolchain/cli/control-api` builds the text. `verbs`, `forms`, `subject` and `validate` are unchanged.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:

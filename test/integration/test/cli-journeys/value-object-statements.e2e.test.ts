@@ -294,7 +294,7 @@ withTempDir(({ createTempDir }) => {
             '- Remove key "lng" at path "$.point" in column "place" of "site"',
           ].join('\n'),
           nextActions: [
-            "If the value object field was renamed, first add it to the contract under its new name; then keep its values: --rename 'GeoPoint.lng:GeoPoint.<new name>'",
+            "If the value object field was renamed, add it to the contract under its new name and run `prisma-test contract emit`; then keep its values: --rename 'GeoPoint.lng:GeoPoint.<new name>'",
             'If the values can go: --delete GeoPoint.lng',
           ].map((label) => ({ kind: 'user-choice', label })),
           meta: {

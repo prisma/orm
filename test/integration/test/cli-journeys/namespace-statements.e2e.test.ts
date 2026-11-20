@@ -235,9 +235,8 @@ const REMOVED_NAMESPACE_REFUSAL = {
   severity: 'error',
   summary: 'This change would lose data: model "billing.Receipt", model "billing.Invoice".',
   why: [
-    'The contract no longer has namespace "billing".',
-    '',
     'This change would delete the data of model "billing.Receipt".',
+    'The contract no longer has namespace "billing".',
     'The operation of the plan that does this: Drop table "Receipt".',
     '',
     'This change would delete the data of model "billing.Invoice".',
@@ -250,7 +249,7 @@ const REMOVED_NAMESPACE_REFUSAL = {
     },
     {
       kind: 'user-choice',
-      label: `If model "billing.Receipt" was renamed, first add it to the contract under its new name; then keep its data: --rename 'billing.Receipt:<new name>'`,
+      label: `If model "billing.Receipt" was renamed, add it to the contract under its new name and run \`prisma-test contract emit\`; then keep its data: --rename 'billing.Receipt:<new name>'`,
     },
     {
       kind: 'user-choice',
@@ -258,7 +257,7 @@ const REMOVED_NAMESPACE_REFUSAL = {
     },
     {
       kind: 'user-choice',
-      label: `If model "billing.Invoice" was renamed, first add it to the contract under its new name; then keep its data: --rename 'billing.Invoice:<new name>'`,
+      label: `If model "billing.Invoice" was renamed, add it to the contract under its new name and run \`prisma-test contract emit\`; then keep its data: --rename 'billing.Invoice:<new name>'`,
     },
     {
       kind: 'user-choice',

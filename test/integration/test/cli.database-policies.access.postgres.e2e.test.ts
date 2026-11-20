@@ -193,24 +193,61 @@ withTempDir(({ createTempDir }) => {
             readonly nextActions?: readonly { readonly label: string }[];
           };
           const line = refusal.nextActions?.[0]?.label ?? '';
-          const allowed = await runDbUpdate(project.ctx, [
+          const flags = line.slice(line.lastIndexOf(': --') + 2).split(' ');
+          const twice = await runDbUpdate(project.ctx, [
             '--no-interactive',
-            ...line.slice(line.lastIndexOf(': --') + 2).split(' '),
+            ...flags,
+            ...flags,
             '--json',
           ]);
+          const allowed = await runDbUpdate(project.ctx, ['--no-interactive', ...flags, '--json']);
 
-          expect(refusal).toMatchObject({
+          expect(refusal).toEqual({
             code: 'CLI.CONSENT_REQUIRED',
-            summary: 'Access to the data of "User" would change.',
+            severity: 'error',
+            summary: 'Access to the data of "User" would widen.',
             why: expect.stringMatching(
               /^The operations of the plan that do this:\n- Disable row-level security on "user"\n- Drop RLS policy "tenant_read_[0-9a-f]{8}" on "user"$/,
             ),
             nextActions: [{ kind: 'user-choice', label: 'To allow both changes: --allow User' }],
-            meta: { subject: 'User', unanswered: [{ subject: 'User', verbs: ['allow'] }] },
+            meta: {
+              subject: 'User',
+              verbs: ['allow'],
+              unanswered: [{ subject: 'User', verbs: ['allow'] }],
+            },
+            docsUrl:
+              'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+          });
+          expect(errorOf(twice)).toEqual({
+            code: 'CLI.CONSENT_UNUSED',
+            severity: 'error',
+            summary:
+              '--allow User was given, but the question about User was already answered by --allow User.',
+            why: 'The run asked about User.',
+            nextActions: [{ kind: 'user-choice', label: 'Give one flag per question.' }],
+            meta: { unused: [{ verb: 'allow', values: ['User'] }], asked: ['User'] },
+            docsUrl:
+              'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_UNUSED',
           });
           expect(allowed.exitCode, `db update --allow: ${allowed.stdout}\n${allowed.stderr}`).toBe(
             0,
           );
+          const applied = (
+            parseJsonOutput(allowed) as {
+              readonly appliedStatements: readonly {
+                readonly verb: string;
+                readonly description: string;
+                readonly operationIndexes: readonly number[];
+              }[];
+            }
+          ).appliedStatements.map(({ verb, description, operationIndexes }) => ({
+            verb,
+            description,
+            operations: operationIndexes.length,
+          }));
+          expect(applied).toEqual([
+            { verb: 'allow', description: 'allow model "User"', operations: 2 },
+          ]);
           expect(await policiesOnUser(project)).toBe(0);
         });
       },

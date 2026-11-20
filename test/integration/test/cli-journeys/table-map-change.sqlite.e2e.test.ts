@@ -180,7 +180,7 @@ withTempDir(({ createTempDir }) => {
               {
                 kind: 'user-choice',
                 label:
-                  "If the field was renamed, first add it to the contract under its new name; then keep its values: --rename 'User.nick:User.<new name>'",
+                  "If the field was renamed, add it to the contract under its new name and run `prisma-test contract emit`; then keep its values: --rename 'User.nick:User.<new name>'",
               },
               { kind: 'user-choice', label: 'If the values can go: --delete User.nick' },
             ],
