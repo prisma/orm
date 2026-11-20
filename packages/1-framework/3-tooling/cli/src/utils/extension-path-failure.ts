@@ -10,15 +10,15 @@ import {
   type PathUnreachableAdvice,
 } from './cli-errors';
 import { chooseAction, runCommandAction } from './next-actions';
-import { type CliInvocation, cliCommand } from './printed-command';
+import { type CliInvocation, cliCommand, dbMigrateRerun } from './printed-command';
 
-/** An extension space `db init` or `db update` could not plan, and the command that tried. */
+/** An extension space a command could not bring to its head, and the command that tried. */
 export interface UnplannableExtensionSpace {
   readonly spaceId: string;
   /** The contract the space's marker names, or the empty contract's hash when it has none. */
   readonly fromHash: string;
   readonly targetHash: string;
-  readonly command: 'db init' | 'db update';
+  readonly command: 'db init' | 'db update' | 'db migrate';
   readonly invocation: CliInvocation;
 }
 
@@ -30,15 +30,22 @@ function startText(fromHash: string): string {
 
 const INSTALL_MATCHING =
   'Install a version of the extension whose migrations start from the contract the database is at';
+const INSTALL_WITH_MIGRATIONS = 'Install a version of the extension that ships its migrations';
 
 /** The way out for an extension space: only another version of the extension changes its migrations. */
-function extensionAdvice(space: UnplannableExtensionSpace): PathUnreachableAdvice {
-  const rerun = cliCommand(space.invocation, space.command);
+function extensionAdvice(
+  space: Pick<UnplannableExtensionSpace, 'spaceId' | 'command' | 'invocation'>,
+  install: string = INSTALL_MATCHING,
+): PathUnreachableAdvice {
+  const rerun =
+    space.command === 'db migrate'
+      ? dbMigrateRerun(space.invocation)
+      : cliCommand(space.invocation, space.command);
   const list = cliCommand(space.invocation, 'migration list', ['--space', space.spaceId]);
   return {
-    fix: `The migrations of extension space "${space.spaceId}" come with the extension. ${INSTALL_MATCHING}, then run \`${rerun}\` again. List the space's migrations with \`${list}\`.`,
+    fix: `The migrations of extension space "${space.spaceId}" come with the extension. ${install}, then run \`${rerun}\` again. List the space's migrations with \`${list}\`.`,
     nextActions: [
-      chooseAction(INSTALL_MATCHING),
+      chooseAction(install),
       runCommandAction(`List the migrations of extension space "${space.spaceId}"`, list),
       runCommandAction(`Run ${space.command} again`, rerun),
     ],
@@ -61,6 +68,20 @@ export function errorExtensionPathUnreachable(
       },
     },
     extensionAdvice(space),
+  );
+}
+
+/** `MIGRATION.PATH_UNREACHABLE` for an extension space that declares storage Prisma manages and ships no migrations to create it. */
+export function errorExtensionNeverPlanned(
+  space: Pick<UnplannableExtensionSpace, 'spaceId' | 'targetHash' | 'command' | 'invocation'>,
+): ActionableCliError {
+  return errorPathUnreachable(
+    {
+      summary: `No on-disk migrations for extension space "${space.spaceId}"`,
+      why: `Extension space "${space.spaceId}" declares storage that Prisma manages, but the extension ships no migrations for it, and its head ref targets "${space.targetHash}".`,
+      meta: { kind: 'neverPlanned', spaceId: space.spaceId, targetHash: space.targetHash },
+    },
+    extensionAdvice(space, INSTALL_WITH_MIGRATIONS),
   );
 }
 
