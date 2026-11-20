@@ -56,10 +56,14 @@ export function mapDriverError(error: DriverError): MappedError {
       }
     }
     case 2627: {
-      const index = error.message.split('. ').at(1)?.split(' ').pop()?.split("'").at(1)
+      // e.g. "Violation of UNIQUE KEY constraint 'User_email_key'. Cannot insert
+      // duplicate key in object 'dbo.User'. The duplicate key value is (...)."
+      // The second sentence carries the schema-qualified object (table) name.
+      const object = error.message.split('. ').at(1)?.split(' ').pop()?.split("'").at(1)
       return {
         kind: 'UniqueConstraintViolation',
-        constraint: index ? { index } : undefined,
+        constraint: object ? { index: object } : undefined,
+        table: object?.split('.').pop(),
       }
     }
     case 547: {
@@ -70,17 +74,27 @@ export function mapDriverError(error: DriverError): MappedError {
       }
     }
     case 1505: {
-      const index = error.message.split("'").at(3)
+      // e.g. "The CREATE UNIQUE INDEX statement terminated because a duplicate key
+      // was found for object name 'dbo.Table' and index name 'IX_Table_Col'.
+      // The duplicate key value is (...)."
+      // The object (table) name is the first quoted segment, the index name is the second.
+      const segments = error.message.split("'")
+      const table = segments.at(1)?.split('.').pop()
+      const index = segments.at(3)
       return {
         kind: 'UniqueConstraintViolation',
         constraint: index ? { index } : undefined,
+        table,
       }
     }
     case 2601: {
-      const index = error.message.split(' ').at(11)?.split("'").at(1)
+      const words = error.message.split(' ')
+      const table = words.at(7)?.split("'").at(1)?.split('.').pop()
+      const index = words.at(11)?.split("'").at(1)
       return {
         kind: 'UniqueConstraintViolation',
         constraint: index ? { index } : undefined,
+        table,
       }
     }
     case 2628: {

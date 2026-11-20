@@ -17,6 +17,7 @@ import { Init } from '../Init'
 import { Link, type LinkResult } from '../postgres/link/Link'
 import { isAlreadyLinked } from '../postgres/link/local-setup'
 import { LinkApiError, sanitizeErrorMessage } from '../postgres/link/management-api'
+import { type CliDistributionIdentity, getCliDistributionPackageName } from '../utils/cli-distribution-identity'
 import { type BootstrapStepStatus, formatBootstrapOutput } from './completion-output'
 import { detectProjectState, getModelNames, getSeedCommand } from './project-state'
 import { emitFlowCompleted, emitFlowStarted, emitStepCompleted, emitStepFailed, emitStepSkipped } from './telemetry'
@@ -31,11 +32,16 @@ import {
 } from './template-scaffold'
 
 /**
- * Locates the user's locally installed `prisma` binary in node_modules.
+ * Locates the user's locally installed CLI binary in node_modules.
  * Returns the absolute path if found, null otherwise.
  */
-function findLocalPrismaBin(baseDir: string): string | null {
-  const candidate = path.join(baseDir, 'node_modules', '.bin', 'prisma')
+function findLocalPrismaBin(baseDir: string, identity: CliDistributionIdentity): string | null {
+  const candidate = path.join(
+    baseDir,
+    'node_modules',
+    '.bin',
+    process.platform === 'win32' ? `${identity}.cmd` : identity,
+  )
   return fs.existsSync(candidate) ? candidate : null
 }
 
@@ -54,36 +60,11 @@ function runLocalPrismaCommand(bin: string, args: string[], baseDir: string, ext
 }
 
 export class Bootstrap implements Command {
-  public static new(): Bootstrap {
-    return new Bootstrap()
+  public static new(identity: CliDistributionIdentity): Bootstrap {
+    return new Bootstrap(identity)
   }
 
-  private static help = format(`
-Bootstrap a Prisma Postgres project from scratch or connect an existing one.
-
-${bold('Usage')}
-
-  ${dim('$')} prisma bootstrap [options]
-
-${bold('Options')}
-
-  --api-key      Workspace API key (CI / non-interactive)
-  --database     Database ID to link to (e.g. db_abc123)
-  --template     Starter template name (e.g. nextjs, express)
-  --force        Re-link even if already linked to Prisma Postgres
-  -h, --help     Display this help message
-
-${bold('Examples')}
-
-  Interactive (opens browser, guides you through setup)
-  ${dim('$')} prisma bootstrap
-
-  Non-interactive with explicit credentials
-  ${dim('$')} prisma bootstrap --api-key "<your-api-key>" --database "db_..."
-
-  With a starter template
-  ${dim('$')} prisma bootstrap --template nextjs
-`)
+  constructor(private readonly identity: CliDistributionIdentity) {}
 
   public async parse(argv: string[], config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(argv, {
@@ -111,19 +92,19 @@ ${bold('Examples')}
 
     if (apiKey && !databaseId) {
       return new HelpError(
-        `\n${bold(red('!'))} Missing ${bold('--database')} flag.\n\nWhen using ${bold('--api-key')}, you must also provide ${bold('--database')}.\n${Bootstrap.help}`,
+        `\n${bold(red('!'))} Missing ${bold('--database')} flag.\n\nWhen using ${bold('--api-key')}, you must also provide ${bold('--database')}.\n${createHelp(this.identity)}`,
       )
     }
 
     if (databaseId && !databaseId.startsWith('db_')) {
       return new HelpError(
-        `\n${bold(red('!'))} Invalid database ID "${databaseId}" — expected format: ${bold('db_<id>')}\n${Bootstrap.help}`,
+        `\n${bold(red('!'))} Invalid database ID "${databaseId}" — expected format: ${bold('db_<id>')}\n${createHelp(this.identity)}`,
       )
     }
 
     if (templateName && !isValidTemplateName(templateName)) {
       return new HelpError(
-        `\n${bold(red('!'))} Unknown template "${templateName}". Available templates: nextjs, express, hono, fastify, nuxt, sveltekit, remix, react-router-7, astro, nest\n${Bootstrap.help}`,
+        `\n${bold(red('!'))} Unknown template "${templateName}". Available templates: nextjs, express, hono, fastify, nuxt, sveltekit, remix, react-router-7, astro, nest\n${createHelp(this.identity)}`,
       )
     }
 
@@ -147,6 +128,7 @@ ${bold('Examples')}
     baseDir: string,
   ): Promise<string | HelpError> {
     const flowStart = performance.now()
+    const cliPackage = getCliDistributionPackageName(this.identity)
     const stepsCompleted: string[] = []
     const steps: BootstrapStepStatus = {
       init: 'skipped',
@@ -186,7 +168,7 @@ ${bold('Examples')}
       //   (b) run `prisma init` for a minimal empty setup (requires an existing package.json)
       //
       // Empty directories without a package.json need special handling: prisma init creates
-      // a prisma.config.ts that depends on `dotenv`, which can't be installed without a
+      // a prisma7.config.ts that depends on `dotenv`, which can't be installed without a
       // Node.js project. We surface this clearly and require either a template (which
       // provides its own package.json) or manual project initialization first.
       if (!initialState.hasSchemaFile) {
@@ -204,19 +186,19 @@ ${bold('Examples')}
             templateScaffolded = steps.template === 'completed'
             if (!templateScaffolded) {
               return new HelpError(
-                `\n${bold(red('!'))} Template download failed and no project exists to fall back to.\n\nInitialize a project first, then re-run ${bold('prisma bootstrap')}:\n  ${dim('$')} npm init -y ${dim('  (or pnpm init / yarn init / bun init)')}\n  ${dim('$')} npx prisma bootstrap`,
+                `\n${bold(red('!'))} Template download failed and no project exists to fall back to.\n\nInitialize a project first, then re-run ${bold(`${this.identity} bootstrap`)}:\n  ${dim('$')} npm init -y ${dim('  (or pnpm init / yarn init / bun init)')}\n  ${dim('$')} npx ${getCliDistributionPackageName(this.identity)}@latest bootstrap`,
               )
             }
           } else {
             return new HelpError(
-              `\n${bold(red('!'))} Cannot proceed without a project.\n\nInitialize a project first, then re-run ${bold('prisma bootstrap')}:\n  ${dim('$')} npm init -y ${dim('  (or pnpm init / yarn init / bun init)')}\n  ${dim('$')} npx prisma bootstrap`,
+              `\n${bold(red('!'))} Cannot proceed without a project.\n\nInitialize a project first, then re-run ${bold(`${this.identity} bootstrap`)}:\n  ${dim('$')} npm init -y ${dim('  (or pnpm init / yarn init / bun init)')}\n  ${dim('$')} npx ${getCliDistributionPackageName(this.identity)}@latest bootstrap`,
             )
           }
         } else if (templateName) {
           await this.scaffoldTemplate(templateName, baseDir, steps, stepsCompleted, telemetryCtx)
           templateScaffolded = steps.template === 'completed'
           if (!templateScaffolded) {
-            console.log(`${dim('  Falling back to prisma init...')}`)
+            console.log(dim(`  Falling back to ${this.identity} init...`))
             await this.runInit(steps, stepsCompleted, telemetryCtx, config, await this.askAboutSampleModel())
           }
         } else {
@@ -242,7 +224,7 @@ ${bold('Examples')}
         const linkStart = performance.now()
 
         try {
-          const link = Link.new()
+          const link = Link.new(this.identity)
           const linkResult = await link.link(apiKey, databaseId, baseDir, { force })
 
           steps.link = 'completed'
@@ -274,7 +256,7 @@ ${bold('Examples')}
           installSpinner.fail(`Dependency install failed: ${sanitizeErrorMessage(msg)}`)
           await emitStepFailed(telemetryCtx, 'install_deps', sanitizeErrorMessage(msg))
           return new HelpError(
-            `\n${bold(red('!'))} Dependency installation failed. Please install dependencies manually and re-run ${bold('prisma bootstrap')}.`,
+            `\n${bold(red('!'))} Dependency installation failed. Please install dependencies manually and re-run ${bold(`${this.identity} bootstrap`)}.`,
           )
         }
       }
@@ -300,16 +282,16 @@ ${bold('Examples')}
 
       // --- Deps gate: check if Prisma dependencies are available ---
       //
-      // The generated prisma.config.ts imports dotenv/config, and migrate/generate
+      // The generated prisma7.config.ts imports dotenv/config, and migrate/generate
       // shell out to the local prisma binary when a schema file exists. Both must
       // be installed for subsequent steps to work.
       //
-      // This runs BEFORE config reload — prisma.config.ts imports dotenv/config,
+      // This runs BEFORE config reload — prisma7.config.ts imports dotenv/config,
       // so dotenv must be installed first or the config load will fail.
       const missingDevDeps: string[] = []
       const missingDeps: string[] = []
       if (!templateScaffolded) {
-        for (const pkg of ['dotenv', 'prisma']) {
+        for (const pkg of ['dotenv', cliPackage]) {
           if (!fs.existsSync(path.join(baseDir, 'node_modules', pkg))) {
             missingDevDeps.push(pkg)
           }
@@ -339,7 +321,7 @@ ${bold('Examples')}
                 : `${pm} add -D ${missingDevDeps.join(' ')}`
             console.log(`  ${dim('$')} ${installHint}`)
           }
-          console.log(`  ${dim('$')} npx prisma@latest bootstrap`)
+          console.log(`  ${dim('$')} npx ${getCliDistributionPackageName(this.identity)}@latest bootstrap`)
 
           return formatBootstrapOutput({
             databaseId: telemetryCtx.linkResult?.databaseId ?? databaseId ?? 'unknown',
@@ -347,6 +329,7 @@ ${bold('Examples')}
             steps,
             hasModels: updatedState.hasModels,
             pendingDepsInstall: true,
+            identity: this.identity,
           })
         }
 
@@ -380,7 +363,7 @@ ${bold('Examples')}
         }
       }
 
-      // Reload config after deps are installed — prisma.config.ts imports
+      // Reload config after deps are installed — prisma7.config.ts imports
       // dotenv/config, so this must happen after the deps gate above.
       let activeConfig = config
       if (!initialState.hasPrismaConfig && updatedState.hasPrismaConfig) {
@@ -409,7 +392,7 @@ ${bold('Examples')}
       // migrate/seed run with the user's own Prisma version and configuration. We only fall
       // back to in-process execution for fresh projects where `init` just scaffolded Prisma 7
       // files and no local binary exists yet.
-      const localPrismaBin = findLocalPrismaBin(baseDir)
+      const localPrismaBin = findLocalPrismaBin(baseDir, this.identity)
       const useLocalBin = localPrismaBin !== null && (initialState.hasSchemaFile || templateScaffolded)
 
       if (updatedState.hasModels) {
@@ -418,7 +401,7 @@ ${bold('Examples')}
         const modelSummary =
           modelCount > 0 ? ` ${modelCount} model${modelCount === 1 ? '' : 's'} (${modelNames.join(', ')})` : ' schema'
         const shouldMigrate = await confirm({
-          message: `Apply${modelSummary} to database with prisma migrate dev?`,
+          message: `Apply${modelSummary} to database with ${this.identity} migrate dev?`,
           default: true,
         })
 
@@ -430,7 +413,7 @@ ${bold('Examples')}
             if (useLocalBin && localPrismaBin) {
               runLocalPrismaCommand(localPrismaBin, ['migrate', 'dev', '--name', 'init'], baseDir, subprocessEnv)
             } else {
-              const migrateDev = MigrateDev.new()
+              const migrateDev = MigrateDev.new(this.identity)
               const migrateResult = await migrateDev.parse(['--name', 'init'], activeConfig, baseDir)
 
               if (migrateResult instanceof Error) {
@@ -472,7 +455,7 @@ ${bold('Examples')}
           if (useLocalBin && localPrismaBin) {
             runLocalPrismaCommand(localPrismaBin, ['generate'], baseDir, subprocessEnv)
           } else {
-            const generate = Generate.new()
+            const generate = Generate.new(this.identity)
             const generateResult = await generate.parse([], activeConfig)
 
             if (generateResult instanceof Error) {
@@ -513,7 +496,7 @@ ${bold('Examples')}
             if (useLocalBin && localPrismaBin) {
               runLocalPrismaCommand(localPrismaBin, ['db', 'seed'], baseDir, subprocessEnv)
             } else {
-              const dbSeed = DbSeed.new()
+              const dbSeed = DbSeed.new(this.identity)
               const seedResult = await dbSeed.parse([], activeConfig)
 
               if (seedResult instanceof Error) {
@@ -545,6 +528,7 @@ ${bold('Examples')}
         isNewProject: !initialState.hasPackageJson,
         steps,
         hasModels: finalState.hasModels,
+        identity: this.identity,
       })
     } finally {
       await emitFlowCompleted(telemetryCtx, stepsCompleted, performance.now() - flowStart)
@@ -620,7 +604,7 @@ ${bold('Examples')}
     const stepStart = performance.now()
 
     try {
-      const init = Init.new()
+      const init = Init.new(this.identity)
       const initArgs = ['--datasource-provider', 'postgresql']
       if (withModel) initArgs.push('--with-model')
       const initResult = await init.parse(initArgs, config)
@@ -643,8 +627,37 @@ ${bold('Examples')}
 
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${Bootstrap.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
     }
-    return Bootstrap.help
+    return createHelp(this.identity)
   }
+}
+
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
+Bootstrap a Prisma Postgres project from scratch or connect an existing one.
+
+${bold('Usage')}
+
+  ${dim('$')} ${identity} bootstrap [options]
+
+${bold('Options')}
+
+  --api-key      Workspace API key (CI / non-interactive)
+  --database     Database ID to link to (e.g. db_abc123)
+  --template     Starter template name (e.g. nextjs, express)
+  --force        Re-link even if already linked to Prisma Postgres
+  -h, --help     Display this help message
+
+${bold('Examples')}
+
+  Interactive (opens browser, guides you through setup)
+  ${dim('$')} ${identity} bootstrap
+
+  Non-interactive with explicit credentials
+  ${dim('$')} ${identity} bootstrap --api-key "<your-api-key>" --database "db_..."
+
+  With a starter template
+  ${dim('$')} ${identity} bootstrap --template nextjs
+`)
 }

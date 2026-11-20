@@ -3,9 +3,10 @@ import { blue, bold, dim } from 'kleur/colors'
 import { highlightDatamodel } from '../highlight/highlight'
 import { link } from './link'
 
-export const missingGeneratorMessage = `\n${blue('info')} You don't have any generators defined in your ${bold(
-  'schema.prisma',
-)}, so nothing will be generated.
+export function missingGeneratorMessage(cliCommand: string): string {
+  return `\n${blue('info')} You don't have any generators defined in your ${bold(
+    'schema.prisma',
+  )}, so nothing will be generated.
 Add the Prisma Client generator like this:
 
 ${bold(
@@ -15,17 +16,19 @@ ${bold(
 }`),
 )}
 
+Then run ${dim('$')} ${cliCommand} generate.
+
 More information in our documentation:
 ${link('https://pris.ly/d/prisma-schema')}
 `
+}
 
-export const missingModelMessage = `\nYou don't have any ${bold('models')} defined in your ${bold(
-  'schema.prisma',
-)}, so nothing will be generated.
+export function missingModelMessage(cliCommand: string): string {
+  return `\nYou don't have any ${bold('models')} defined in your ${bold('schema.prisma')}, so nothing will be generated.
 
 Prisma Client is typically generated from models defined in your schema. If you plan to use raw SQL queries only (e.g. ${bold('$queryRaw')}), remove the ${bold('--require-models')} flag to generate the client without models:
 
-  ${dim('$')} prisma generate
+  ${dim('$')} ${cliCommand} generate
 
 Otherwise, you can define a model like this:
 
@@ -40,14 +43,14 @@ ${bold(
 More information in our documentation:
 ${link('https://pris.ly/d/prisma-schema')}
 `
+}
 
-export const missingModelMessageMongoDB = `\nYou don't have any ${bold('models')} defined in your ${bold(
-  'schema.prisma',
-)}, so nothing will be generated.
+export function missingModelMessageMongoDB(cliCommand: string): string {
+  return `\nYou don't have any ${bold('models')} defined in your ${bold('schema.prisma')}, so nothing will be generated.
 
 Prisma Client is typically generated from models defined in your schema. If you plan to use raw queries only, remove the ${bold('--require-models')} flag to generate the client without models:
 
-  ${dim('$')} prisma generate
+  ${dim('$')} ${cliCommand} generate
 
 Otherwise, you can define a model like this:
 
@@ -62,3 +65,4 @@ ${bold(
 More information in our documentation:
 ${link('https://pris.ly/d/prisma-schema')}
 `
+}

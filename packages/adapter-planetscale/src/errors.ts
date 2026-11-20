@@ -13,10 +13,14 @@ export function convertDriverError(error: ParsedDatabaseError): DriverAdapterErr
 export function mapDriverError(error: ParsedDatabaseError): MappedError {
   switch (error.code) {
     case 1062: {
-      const index = error.message.split(' ').pop()?.split("'").at(1)?.split('.').pop()
+      const rawKey = error.message.split(' ').pop()?.split("'").at(1)
+      const keyParts = rawKey?.split('.')
+      const table = keyParts && keyParts.length > 1 ? keyParts.slice(0, -1).join('.') : undefined
+      const index = keyParts?.at(-1)
       return {
         kind: 'UniqueConstraintViolation',
         constraint: index !== undefined ? { index } : undefined,
+        table,
       }
     }
 

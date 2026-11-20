@@ -1,5 +1,5 @@
-import { completionApiKeyHint, completionDatabaseIdHint } from '@prisma/internals/src/cli/completion-values'
-import type { CommandCompletion } from '@prisma/internals/src/cli/types'
+import type { CommandCompletion } from '@prisma/internals'
+import { completionApiKeyHint, completionDatabaseIdHint } from '@prisma/internals'
 
 export const postgresLinkCompletion: CommandCompletion = {
   name: 'postgres link',

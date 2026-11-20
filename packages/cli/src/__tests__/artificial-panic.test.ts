@@ -43,7 +43,7 @@ describe('artificial-panic introspection', () => {
     expect.assertions(4)
     process.env.FORCE_PANIC_SCHEMA_ENGINE = '1'
 
-    const command = new DbPull()
+    const command = DbPull.new('prisma')
     try {
       await command.parse(['--print'], await ctx.config())
     } catch (e) {
@@ -73,7 +73,7 @@ describe('artificial-panic formatter', () => {
     expect.assertions(3)
     process.env.FORCE_PANIC_PRISMA_SCHEMA = '1'
 
-    const command = new Format()
+    const command = new Format('prisma')
     try {
       await command.parse([], await ctx.config())
     } catch (e) {
@@ -99,7 +99,7 @@ describe('artificial-panic get-config', () => {
     expect.assertions(3)
     process.env.FORCE_PANIC_GET_CONFIG = '1'
 
-    const command = new Validate()
+    const command = new Validate('prisma')
     try {
       await command.parse([], await ctx.config())
     } catch (e) {
@@ -125,7 +125,7 @@ describe('artificial-panic validate', () => {
     expect.assertions(3)
     process.env.FORCE_PANIC_GET_DMMF = '1'
 
-    const command = new Validate()
+    const command = new Validate('prisma')
     try {
       await command.parse([], await ctx.config())
     } catch (e) {
@@ -143,7 +143,7 @@ describe('artificial-panic validate', () => {
     expect.assertions(3)
     process.env.FORCE_PANIC_GET_DMMF = '1'
 
-    const command = new Format()
+    const command = new Format('prisma')
     try {
       await command.parse([], await ctx.config())
     } catch (e) {

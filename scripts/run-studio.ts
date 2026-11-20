@@ -27,7 +27,10 @@ async function main(): Promise<void> {
     return
   }
 
-  const result = await Studio.new().parse(['--url', url, '--port', port, '--browser', browser], defaultTestConfig())
+  const result = await Studio.new('prisma').parse(
+    ['--url', url, '--port', port, '--browser', browser],
+    defaultTestConfig(),
+  )
 
   if (result instanceof Error) {
     throw result

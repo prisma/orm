@@ -186,5 +186,27 @@ test('rethrowAsUserFacing still wraps specifically-mapped kinds with their dedic
     const userFacing = e as UserFacingError
     expect(userFacing.code).toBe('P2002')
     expect(userFacing.message).toBe('Unique constraint failed on the fields: (`email`)')
+    // No table reported by the adapter -> no `table` key in the meta.
+    expect(userFacing.meta).not.toHaveProperty('table')
   }
+})
+
+test('rethrowAsUserFacing forwards the violated table for unique constraint violations', () => {
+  // The client maps `meta.table` back to the Prisma model name (taking
+  // `@@map` into account) so that P2002 errors from nested writes report the
+  // model where the violation actually occurred instead of the model of the
+  // top-level operation.
+  const error = makeDriverAdapterError({
+    kind: 'UniqueConstraintViolation',
+    constraint: { fields: ['appId', 'number'] },
+    table: 'app_major_versions',
+  })
+
+  expect(() => rethrowAsUserFacing(error)).toThrow(UserFacingError)
+  expect(() => rethrowAsUserFacing(error)).toThrow(
+    expect.objectContaining({
+      code: 'P2002',
+      meta: expect.objectContaining({ table: 'app_major_versions', driverAdapterError: error }),
+    }),
+  )
 })

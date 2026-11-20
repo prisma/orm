@@ -5,7 +5,7 @@ function captureCompletionOutput(argv: string[]): { result: string | Error; outp
   const consoleLog = jest.spyOn(console, 'log').mockImplementation((value) => output.push(String(value)))
 
   try {
-    return { result: parseCompletionCommand(argv), output }
+    return { result: parseCompletionCommand(argv, 'prisma'), output }
   } finally {
     consoleLog.mockRestore()
   }
@@ -42,12 +42,19 @@ describe('completion command', () => {
     ])
   })
 
+  test('completes the default Prisma 7 config path', () => {
+    const { result, output } = captureCompletionOutput(['--', 'generate', '--config', ''])
+
+    expect(result).toBe('')
+    expect(output).toEqual(['prisma7.config.ts\tDefault config path', ':4'])
+  })
+
   test('generates a shell integration script', () => {
     const { result, output } = captureCompletionOutput(['fish'])
 
     expect(result).toBe('')
     expect(output).toHaveLength(1)
-    expect(output[0]).toContain('set -l requestComp "prisma complete --')
+    expect(output[0]).toContain('prisma complete -- $args[2..-1] "$lastArg"')
     expect(output[0]).toContain('complete -c prisma')
   })
 

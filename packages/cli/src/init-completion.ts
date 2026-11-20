@@ -1,11 +1,11 @@
+import type { CommandCompletion } from '@prisma/internals'
 import {
   completionClientOutputPaths,
   completionDatasourceProviders,
   completionDatasourceUrls,
   completionGeneratorProviders,
   completionPreviewFeatures,
-} from '@prisma/internals/src/cli/completion-values'
-import type { CommandCompletion } from '@prisma/internals/src/cli/types'
+} from '@prisma/internals'
 
 export const initCompletion: CommandCompletion = {
   name: 'init',

@@ -1,8 +1,10 @@
+import { expect, test, vi } from 'vitest'
+
 import { cacheProperties } from './cacheProperties'
 import { createCompositeProxy } from './createCompositeProxy'
 
 test('caches getPropertyValue calls', () => {
-  const getPropertyValue = jest.fn().mockReturnValue(1)
+  const getPropertyValue = vi.fn().mockReturnValue(1)
   const layer = cacheProperties({
     getKeys() {
       return ['prop']
@@ -38,7 +40,7 @@ test('forwards getPropertyDescriptor calls', () => {
 })
 
 test('keeps separate cache entries for separate properties', () => {
-  const getPropertyValue = jest.fn().mockImplementation((key) => {
+  const getPropertyValue = vi.fn().mockImplementation((key) => {
     return key === 'first' ? 1 : 2
   })
 

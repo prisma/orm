@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { applyFieldsProxy } from './applyFieldsProxy'
 
 const fields = applyFieldsProxy('MyModel', {

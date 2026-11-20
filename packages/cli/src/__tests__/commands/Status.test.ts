@@ -90,7 +90,7 @@ describe('status', () => {
   }
 
   it('should show help with --help', async () => {
-    const result = await Status.new().parse(['--help'], defaultTestConfig())
+    const result = await Status.new('prisma').parse(['--help'], defaultTestConfig())
     expect(result).toContain('Show Prisma Data Platform service status')
     expect(result).toContain('--json')
   })
@@ -98,7 +98,7 @@ describe('status', () => {
   it('should display all operational services', async () => {
     mockFetchSuccess(makeSummary())
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toMatchInlineSnapshot(`
       "All Systems Operational
@@ -143,7 +143,7 @@ describe('status', () => {
       }),
     )
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toContain('Major System Outage')
     expect(result).toContain('Degraded')
@@ -176,7 +176,7 @@ describe('status', () => {
       }),
     )
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toContain('monitoring:')
     expect(result).toContain('Fix deployed, monitoring.')
@@ -209,7 +209,7 @@ describe('status', () => {
       }),
     )
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toMatchInlineSnapshot(`
       "All Systems Operational
@@ -246,7 +246,7 @@ describe('status', () => {
       }),
     )
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toMatchInlineSnapshot(`
       "All Systems Operational
@@ -281,7 +281,7 @@ describe('status', () => {
       }),
     )
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toMatchInlineSnapshot(`
       "All Systems Operational
@@ -305,7 +305,7 @@ describe('status', () => {
     const summary = makeSummary()
     mockFetchSuccess(summary)
 
-    const result = (await Status.new().parse(['--json'], defaultTestConfig())) as string
+    const result = (await Status.new('prisma').parse(['--json'], defaultTestConfig())) as string
     const parsed = JSON.parse(result)
 
     expect(parsed.status.indicator).toBe('none')
@@ -315,7 +315,7 @@ describe('status', () => {
   it('should handle network errors gracefully', async () => {
     mockFetchNetworkError('fetch failed')
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toContain('Could not reach status API')
     expect(result).toContain('fetch failed')
@@ -325,7 +325,7 @@ describe('status', () => {
   it('should return JSON error on network failure with --json and set non-zero exit code', async () => {
     mockFetchNetworkError('timeout')
 
-    const result = (await Status.new().parse(['--json'], defaultTestConfig())) as string
+    const result = (await Status.new('prisma').parse(['--json'], defaultTestConfig())) as string
     const parsed = JSON.parse(result)
 
     expect(parsed.error).toBe('timeout')
@@ -335,7 +335,7 @@ describe('status', () => {
   it('should handle HTTP errors gracefully', async () => {
     mockFetchHttpError(503)
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toContain('Status API returned HTTP 503')
     expect(result).toContain('https://www.prisma-status.com')
@@ -344,7 +344,7 @@ describe('status', () => {
   it('should return JSON error on HTTP failure with --json and set non-zero exit code', async () => {
     mockFetchHttpError(500)
 
-    const result = (await Status.new().parse(['--json'], defaultTestConfig())) as string
+    const result = (await Status.new('prisma').parse(['--json'], defaultTestConfig())) as string
     const parsed = JSON.parse(result)
 
     expect(parsed.error).toBe('Status API returned HTTP 500')
@@ -354,7 +354,7 @@ describe('status', () => {
   it('should handle parse errors gracefully', async () => {
     mockFetchParseError()
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toContain('Could not parse status API response')
     expect(result).toContain('unexpected API response')
@@ -364,7 +364,7 @@ describe('status', () => {
   it('should return JSON error on parse failure with --json and set non-zero exit code', async () => {
     mockFetchParseError()
 
-    const result = (await Status.new().parse(['--json'], defaultTestConfig())) as string
+    const result = (await Status.new('prisma').parse(['--json'], defaultTestConfig())) as string
     const parsed = JSON.parse(result)
 
     expect(parsed.error).toContain('unexpected API response')
@@ -397,7 +397,7 @@ describe('status', () => {
       }),
     )
 
-    const result = stripVTControlCharacters((await Status.new().parse([], defaultTestConfig())) as string)
+    const result = stripVTControlCharacters((await Status.new('prisma').parse([], defaultTestConfig())) as string)
 
     expect(result).toMatchInlineSnapshot(`
       "All Systems Operational

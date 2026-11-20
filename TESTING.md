@@ -372,8 +372,8 @@ on CI.
 
 By creating a Pull Request the following pipelines will be triggered
 
-- [GitHub Action `CI`](https://github.com/prisma/prisma/blob/main/.github/workflows/test.yml)
-- [GitHub Action `Benchmark`](https://github.com/prisma/prisma/blob/main/.github/workflows/benchmark.yml)
+- [GitHub Action `CI`](https://github.com/prisma/prisma/blob/v7/.github/workflows/test.yml)
+- [GitHub Action `Benchmark`](https://github.com/prisma/prisma/blob/v7/.github/workflows/benchmark.yml)
 
 `CI` will need to be successful before merging ("flaky" tests might show up and might be ignored).
 
@@ -381,7 +381,7 @@ By default, some tests are tested only during daily builds. If you need to run a
 
 ### Publishing all the packages to npm on the `integration` tag
 
-If a branch name starts with `integration/` like `integration/fix-all-the-things` the [GitHub Actions - npm - release to dev/integration](https://github.com/prisma/prisma/blob/main/.github/workflows/release-ci.yml) pipeline will be triggered.
+If a branch name starts with `integration/` like `integration/fix-all-the-things` the [GitHub Actions - v7 - npm - release](https://github.com/prisma/prisma/blob/v7/.github/workflows/publish.yml) pipeline will be triggered.
 This workflow will directly publish (without running tests) the packages to npm on the `integration` tag with a version like `5.3.0-integration-fix-all-the-things.1` (where `5.3.0-` is the current dev version prefix, `integration-` is statically added, `fix-all-the-things` is from the branch name and `.1` indicates the first version published from this branch)
 
 To make a Pull Request which will release a version to the `integration` tag automatically, the name of the branch of the PR would need to start with `integration/`.
@@ -390,10 +390,10 @@ Alternatively, add `/integration` in the Pull Request description:
 - If this is added before opening the Pull Request, a release will happen automatically.
 - If this is added after the creation of the PR, the `Detect jobs to run` job from the `CI` workflow needs to be re-triggered to get a release.
 
-The [GitHub Actions - npm - release to dev/integration](https://github.com/prisma/prisma/blob/main/.github/workflows/release-ci.yml) workflow can also be manually triggered to run on any branch.
+The [GitHub Actions - v7 - npm - release](https://github.com/prisma/prisma/blob/v7/.github/workflows/publish.yml) workflow can also be manually triggered to run on any branch.
 Example:
 
-- Go to https://github.com/prisma/prisma/actions/workflows/release-ci.yml?query=branch%3Ajoel%2Fdotenv
+- Go to https://github.com/prisma/prisma/actions/workflows/publish.yml?query=branch%3Ajoel%2Fdotenv
 - Click "Run workflow"
 - Change "Use workflow from" to match the branch you want to release, here `joel/dotenv`
 - Check the box for "Check to force an integration release for any given branch name"

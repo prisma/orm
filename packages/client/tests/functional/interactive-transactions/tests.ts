@@ -6,14 +6,19 @@ import testMatrix from './_matrix'
 // @ts-ignore
 import type { Prisma as PrismaNamespace, PrismaClient } from './generated/prisma/client'
 
+// @only-ts-generator
+type QueryLogPrismaClient = PrismaClient<'query'>
+// @only-js-generator
+type QueryLogPrismaClient = PrismaClient<{ log: [{ emit: 'event'; level: 'query' }] }>
+
 declare let prisma: PrismaClient
 declare let Prisma: typeof PrismaNamespace
-declare const newPrismaClient: NewPrismaClient<PrismaClient, typeof PrismaClient>
+declare const newPrismaClient: NewPrismaClient<QueryLogPrismaClient, typeof PrismaClient>
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 testMatrix.setupTestSuite(
-  ({ provider, driverAdapter }, _suiteMeta) => {
+  ({ provider, driverAdapter, clientEngineExecutor }, _suiteMeta) => {
     // TODO: Technically, only "high concurrency" test requires larger timeout
     // but `jest.setTimeout` does not work inside of the test at the moment
     //  https://github.com/facebook/jest/issues/11543
@@ -521,6 +526,29 @@ testMatrix.setupTestSuite(
       expect(users.map((u) => u.email)).toEqual([outerEmail1, outerEmail2].sort())
     })
 
+    testIf(provider !== Providers.MONGODB)('sql: nested transaction does not mutate the options object', async () => {
+      const email1 = `user_${copycat.uuid(251)}@website.com`
+      const email2 = `user_${copycat.uuid(252)}@website.com`
+      const options = { maxWait: 5000, timeout: 5000 }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.$transaction(async (tx2) => {
+          await tx2.user.create({ data: { email: email1 } })
+        }, options)
+      }, options)
+
+      expect(options).toStrictEqual({ maxWait: 5000, timeout: 5000 })
+
+      await prisma.$transaction(async (tx) => {
+        await tx.user.create({ data: { email: email2 } })
+      }, options)
+
+      const users = await prisma.user.findMany({
+        where: { email: { in: [email1, email2] } },
+      })
+      expect(users).toHaveLength(2)
+    })
+
     testIf(provider !== Providers.MONGODB)('sql: enforce order for nested transactions', async () => {
       const result = prisma.$transaction(async (tx) => {
         const nested = tx.$transaction(async (tx2) => {
@@ -803,6 +831,30 @@ testMatrix.setupTestSuite(
       expect(users.length).toBe(0)
     })
 
+    test('batching rejects queries after a failed one within callback', async () => {
+      await prisma.user.create({
+        data: {
+          email: 'user_1@website.com',
+        },
+      })
+
+      const results = await prisma.$transaction(async (tx) => {
+        return await Promise.allSettled([
+          tx.user.create({
+            data: {
+              email: 'user_1@website.com',
+            },
+          }),
+          tx.user.findMany(),
+        ])
+      })
+
+      expect(results).toMatchObject([
+        { status: 'rejected', reason: expect.objectContaining({ code: 'P2002' }) },
+        { status: 'rejected', reason: expect.objectContaining({ code: 'P2002' }) },
+      ])
+    })
+
     test('batching timeout override', async () => {
       const isolatedPrisma = newPrismaClient({
         transactionOptions: {
@@ -863,6 +915,51 @@ testMatrix.setupTestSuite(
 
       expect(users.length).toBe(1)
     })
+
+    testIf(provider !== Providers.MONGODB && clientEngineExecutor !== 'remote')(
+      'rollback rejects the statements an update with nested writes has not sent yet',
+      async () => {
+        await prisma.user.create({ data: { id: '1', email: 'user_1@website.com' } })
+
+        const client = newPrismaClient({ log: [{ emit: 'event', level: 'query' }] })
+        let markUpdateSeen!: () => void
+        const updateSeen = new Promise<void>((resolve) => {
+          markUpdateSeen = resolve
+        })
+        client.$on('query', ({ query }) => {
+          if (/^\s*UPDATE\b/i.test(query)) markUpdateSeen()
+        })
+        let update!: Promise<unknown>
+
+        const result = client.$transaction(
+          async (tx) => {
+            update = tx.user.update({
+              where: { id: '1' },
+              data: {
+                name: 'renamed',
+                posts: {
+                  create: { title: 'late post', published: true },
+                  updateMany: { where: { title: 'late post' }, data: { content: 'late content' } },
+                },
+              },
+            })
+            await Promise.all([
+              update,
+              updateSeen.then(() => {
+                throw new Error('rolled back after the UPDATE')
+              }),
+            ])
+          },
+          { timeout: 30_000, maxWait: 10_000 },
+        )
+
+        await expect(result).rejects.toThrow('rolled back after the UPDATE')
+        const [updateOutcome] = await Promise.allSettled([update])
+        expect(updateOutcome).toMatchObject({ status: 'rejected', reason: { code: 'P2028' } })
+        expect(await client.user.findUnique({ where: { id: '1' }, select: { name: true } })).toEqual({ name: null })
+        expect(await client.post.count({ where: { title: 'late post' } })).toBe(0)
+      },
+    )
 
     /**
      * Two concurrent transactions should work

@@ -24,10 +24,10 @@ export class NoSchemaFoundError extends Error {
 setClassName(NoSchemaFoundError, 'NoSchemaFoundError')
 
 export class DbPushIgnoreWarningsWithFlagError extends Error {
-  constructor() {
+  constructor(cliCommand: string) {
     super(
       `Use the --accept-data-loss flag to ignore the data loss warnings like ${bold(
-        green(getCommandWithExecutor('prisma db push --accept-data-loss')),
+        green(getCommandWithExecutor(`${cliCommand} db push --accept-data-loss`)),
       )}`,
     )
   }
@@ -35,10 +35,10 @@ export class DbPushIgnoreWarningsWithFlagError extends Error {
 setClassName(DbPushIgnoreWarningsWithFlagError, 'DbPushIgnoreWarningsWithFlagError')
 
 export class MigrateNeedsForceError extends Error {
-  constructor(subcommand: string) {
+  constructor(subcommand: string, cliCommand: string) {
     super(
       `Use the --force flag to use the ${subcommand} command in an unattended environment like ${bold(
-        green(getCommandWithExecutor(`prisma migrate ${subcommand} --force`)),
+        green(getCommandWithExecutor(`${cliCommand} migrate ${subcommand} --force`)),
       )}`,
     )
   }
@@ -58,12 +58,12 @@ See ${link('https://pris.ly/d/migrate-reset')}`,
 setClassName(MigrateResetEnvNonInteractiveError, 'MigrateResetEnvNonInteractiveError')
 
 export class MigrateDevEnvNonInteractiveError extends Error {
-  constructor() {
+  constructor(cliCommand: string) {
     super(
       `Prisma Migrate has detected that the environment is non-interactive, which is not supported.
 
-\`prisma migrate dev\` is an interactive command designed to create new migrations and evolve the database in development.
-To apply existing migrations in deployments, use ${bold(green(`prisma migrate deploy`))}.
+\`${cliCommand} migrate dev\` is an interactive command designed to create new migrations and evolve the database in development.
+To apply existing migrations in deployments, use ${bold(green(getCommandWithExecutor(`${cliCommand} migrate deploy`)))}.
 See ${link('https://pris.ly/d/migrate-deploy')}`,
     )
   }
@@ -71,10 +71,10 @@ See ${link('https://pris.ly/d/migrate-deploy')}`,
 setClassName(MigrateDevEnvNonInteractiveError, 'MigrateDevEnvNonInteractiveError')
 
 export class DbDropNeedsForceError extends Error {
-  constructor(subcommand: string) {
+  constructor(subcommand: string, cliCommand: string) {
     super(
       `Use the --force flag to use the ${subcommand} command in an unattended environment like ${bold(
-        green(getCommandWithExecutor(`prisma db ${subcommand} --force --preview-feature`)),
+        green(getCommandWithExecutor(`${cliCommand} db ${subcommand} --force --preview-feature`)),
       )}`,
     )
   }

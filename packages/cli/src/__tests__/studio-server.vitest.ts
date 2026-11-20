@@ -1,7 +1,9 @@
+import { Server } from 'node:http'
+
 import { getPort } from 'get-port-please'
 import { afterEach, expect, test, vi } from 'vitest'
 
-import { startStudioServer, type StudioServer } from '../studio-server'
+import { startStudioServer, STUDIO_SERVER_HOST, type StudioServer } from '../studio-server'
 
 const activeServers: StudioServer[] = []
 
@@ -20,6 +22,23 @@ test('streams GET response bodies from the Node Studio server', async () => {
 
   expect(response.status).toBe(200)
   expect(await response.text()).toBe('hello from studio')
+})
+
+test('binds the listener to the IPv4 loopback address', async () => {
+  const port = await getPort({ host: STUDIO_SERVER_HOST, random: true })
+  const listenSpy = vi.spyOn(Server.prototype, 'listen')
+
+  await new Promise<void>((resolve) => {
+    const server = startStudioServer({
+      handler: () => new Response('hello from studio', { status: 200 }),
+      onListen: resolve,
+      port,
+    })
+
+    activeServers.push(server)
+  })
+
+  expect(listenSpy).toHaveBeenCalledWith(port, STUDIO_SERVER_HOST, expect.any(Function))
 })
 
 test('preserves HEAD semantics without dropping GET bodies', async () => {
@@ -41,7 +60,7 @@ test('logs server errors and returns the error message in the response body', as
   const response = await fetch(`http://127.0.0.1:${port}/`)
 
   expect(response.status).toBe(500)
-  expect(response.headers.get('access-control-allow-origin')).toBe('*')
+  expect(response.headers.has('access-control-allow-origin')).toBe(false)
   expect(await response.text()).toBe('boom')
   expect(consoleErrorSpy).toHaveBeenCalledWith('[Prisma Studio]', error)
 })
@@ -89,7 +108,7 @@ async function startTestServer(
   handler: (request: Request) => Response | Promise<Response>,
   onNodeRequestSettled?: () => void,
 ): Promise<{ port: number }> {
-  const port = await getPort({ host: '127.0.0.1' })
+  const port = await getPort({ host: '127.0.0.1', random: true })
 
   await new Promise<void>((resolve) => {
     const server = startStudioServer({

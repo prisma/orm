@@ -34,7 +34,11 @@ export function rethrowAsUserFacing(error: any): never {
   const code = getErrorCode(error)
   const message = renderErrorMessage(error)
   if (code !== undefined && message !== undefined) {
-    throw new UserFacingError(message, code, { driverAdapterError: error })
+    const meta: Record<string, unknown> = { driverAdapterError: error }
+    if (error.cause.kind === 'UniqueConstraintViolation' && error.cause.table) {
+      meta.table = error.cause.table
+    }
+    throw new UserFacingError(message, code, meta)
   }
 
   // No specific mapping exists for this error kind. For database-specific

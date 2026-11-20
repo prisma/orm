@@ -57,7 +57,7 @@ it('throws error if schema is not found', async () => {
   expect(res).toMatchInlineSnapshot(`
     [Error: Could not find Prisma Schema that is required for this command.
     You can either provide it with \`--schema\` argument,
-    set it in your Prisma Config file (e.g., \`prisma.config.ts\`),
+    set it in your Prisma Config file (e.g., \`prisma7.config.ts\`),
     set it as \`prisma.schema\` in your package.json,
     or put it into the default location (\`./prisma/schema.prisma\`, or \`./schema.prisma\`.
     Checked following paths:
@@ -104,7 +104,7 @@ it('throws error if prisma.config.ts with single file is used but schema file ca
   })
 
   expect(res).toMatchInlineSnapshot(
-    `[Error: Could not load schema from \`./__fixtures__/getSchema/no-schema/db/schema.prisma\` provided by "prisma.config.ts"\`: file or directory not found]`,
+    `[Error: Could not load schema from \`./__fixtures__/getSchema/no-schema/db/schema.prisma\` provided by the Prisma config file: file or directory not found]`,
   )
 })
 
@@ -115,7 +115,7 @@ it('throws error if prisma.config.ts with folder is used but schema files cannot
   })
 
   expect(res).toMatchInlineSnapshot(
-    `[Error: Could not load schema from \`./__fixtures__/getSchema/no-schema/db\` provided by "prisma.config.ts"\`: file or directory not found]`,
+    `[Error: Could not load schema from \`./__fixtures__/getSchema/no-schema/db\` provided by the Prisma config file: file or directory not found]`,
   )
 })
 
@@ -131,7 +131,7 @@ it('fails with no schema in workspaces', async () => {
   expect(res).toMatchInlineSnapshot(`
     [Error: Could not find Prisma Schema that is required for this command.
     You can either provide it with \`--schema\` argument,
-    set it in your Prisma Config file (e.g., \`prisma.config.ts\`),
+    set it in your Prisma Config file (e.g., \`prisma7.config.ts\`),
     set it as \`prisma.schema\` in your package.json,
     or put it into the default location (\`./prisma/schema.prisma\`, or \`./schema.prisma\`.
     Checked following paths:

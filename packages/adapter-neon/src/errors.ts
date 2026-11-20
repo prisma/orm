@@ -38,6 +38,7 @@ function mapDriverError(error: DatabaseError): MappedError {
       return {
         kind: 'UniqueConstraintViolation',
         constraint: fields !== undefined ? { fields } : undefined,
+        table: error.table,
       }
     }
     case '23502': {
@@ -98,6 +99,7 @@ function mapDriverError(error: DatabaseError): MappedError {
         user: error.message.split(' ').pop()?.split('"').at(1),
       }
     case '40001':
+    case '40P01':
       return {
         kind: 'TransactionWriteConflict',
       }

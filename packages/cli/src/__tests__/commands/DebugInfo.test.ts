@@ -85,7 +85,7 @@ describe('debug', () => {
     // as non interactive, locally and in CI
     process.env.TERM = 'dumb'
 
-    const result = await DebugInfo.new().parse([], defaultTestConfig())
+    const result = await DebugInfo.new('prisma').parse([], defaultTestConfig())
 
     expect(cleanSnapshot(result as string)).toMatchInlineSnapshot(`
       "-- Prisma schema --
@@ -159,7 +159,7 @@ describe('debug', () => {
     // as non interactive, locally and in CI
     process.env.TERM = 'dumb'
 
-    const result = await DebugInfo.new().parse([], defaultTestConfig())
+    const result = await DebugInfo.new('prisma').parse([], defaultTestConfig())
 
     expect(cleanSnapshot(result as string)).toMatchInlineSnapshot(`
       "-- Prisma schema --
@@ -230,7 +230,7 @@ describe('debug', () => {
 
     Object.assign(process.env, envVars)
 
-    const result = await DebugInfo.new().parse([], defaultTestConfig())
+    const result = await DebugInfo.new('prisma').parse([], defaultTestConfig())
 
     expect(cleanSnapshot(result as string)).toMatchInlineSnapshot(`
       "-- Prisma schema --
@@ -297,7 +297,7 @@ describe('debug', () => {
   it('should succeed with --schema', async () => {
     ctx.fixture('example-project/prisma')
     const result = stripVTControlCharacters(
-      (await DebugInfo.new().parse(['--schema=schema.prisma'], defaultTestConfig())) as string,
+      (await DebugInfo.new('prisma').parse(['--schema=schema.prisma'], defaultTestConfig())) as string,
     )
 
     expect(result).toContain(`Path: ${path.join(process.cwd(), 'schema.prisma')}`)
@@ -307,14 +307,20 @@ describe('debug', () => {
     ctx.fixture('prisma-config-nested')
     const configDir = path.join(process.cwd(), 'config')
     const result = stripVTControlCharacters(
-      (await DebugInfo.new().parse(['--config=./config/prisma.config.ts'], defaultTestConfig(), configDir)) as string,
+      (await DebugInfo.new('prisma').parse(
+        ['--config=./config/prisma.config.ts'],
+        defaultTestConfig(),
+        configDir,
+      )) as string,
     )
 
     expect(result).toContain(`Path: ${path.join(configDir, 'schema.prisma')}`)
   })
 
   it('should succeed with incorrect --schema path', async () => {
-    await expect(DebugInfo.new().parse(['--schema=does-not-exists.prisma'], defaultTestConfig())).resolves.toContain(
+    await expect(
+      DebugInfo.new('prisma').parse(['--schema=does-not-exists.prisma'], defaultTestConfig()),
+    ).resolves.toContain(
       'Could not load `--schema` from provided path `does-not-exists.prisma`: file or directory not found',
     )
   })

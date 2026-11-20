@@ -21,14 +21,15 @@ export function mapDriverError(error: DriverError): DriverAdapterErrorObject {
   stripped = stripped.split('SqliteError: ').at(1) ?? stripped
 
   if (stripped.startsWith('UNIQUE constraint failed') || stripped.startsWith('PRIMARY KEY constraint failed')) {
-    const fields = stripped
-      .split(': ')
-      .at(1)
-      ?.split(', ')
-      .map((field) => field.split('.').pop()!)
+    const rawFields = stripped.split(': ').at(1)?.split(', ')
+    const fields = rawFields?.map((field) => field.split('.').pop()!)
+    // D1 reports fields as `TableName.column`, so we can recover the table
+    // name from the part of the first field before the last `.`.
+    const table = rawFields?.at(0)?.split('.').slice(0, -1).join('.')
     return {
       kind: 'UniqueConstraintViolation',
       constraint: fields !== undefined ? { fields } : undefined,
+      table: table || undefined,
     }
   } else if (stripped.startsWith('NOT NULL constraint failed')) {
     const fields = stripped

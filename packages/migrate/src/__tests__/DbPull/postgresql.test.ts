@@ -46,7 +46,7 @@ describeMatrix(postgresOnly, 'postgresql', () => {
 
   test('basic introspection', async () => {
     ctx.fixture('introspection/postgresql')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
@@ -88,35 +88,21 @@ describeMatrix(postgresOnly, 'postgresql', () => {
   describe('empty or incomplete schema', () => {
     test('basic introspection config + empty schema', async () => {
       ctx.fixture('empty-schema')
-      const introspect = new DbPull()
+      const introspect = DbPull.new('prisma')
       const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
-      await expect(result).rejects.toMatchInlineSnapshot(`
-        "There is no datasource in the schema.
+      await expect(result).rejects.toMatchInlineSnapshot(`"Schema must contain a datasource block"`)
 
-        "
-      `)
-
-      expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
-        "
-        "
-      `)
+      expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`""`)
       expect(ctx.normalizedCapturedStderr()).toMatchInlineSnapshot(`""`)
     })
 
     test('basic introspection config + schema with no linebreak after generator block', async () => {
       ctx.fixture('generator-only')
-      const introspect = new DbPull()
+      const introspect = DbPull.new('prisma')
       const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
-      await expect(result).rejects.toMatchInlineSnapshot(`
-        "There is no datasource in the schema.
+      await expect(result).rejects.toMatchInlineSnapshot(`"Schema must contain a datasource block"`)
 
-        "
-      `)
-
-      expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
-        "
-        "
-      `)
+      expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`""`)
       expect(ctx.normalizedCapturedStderr()).toMatchInlineSnapshot(`""`)
     })
 
@@ -126,7 +112,8 @@ describeMatrix(postgresOnly, 'postgresql', () => {
       // TODO: this error is not entirely correct: the invalid URL is in the config file,
       // not in the datasource block. The message needs to be updated when removing the
       // `url` property from the PSL.
-      await expect(DbPull.new().parse(['--print'], await ctx.config(), ctx.configDir())).rejects.toMatchInlineSnapshot(`
+      await expect(DbPull.new('prisma').parse(['--print'], await ctx.config(), ctx.configDir())).rejects
+        .toMatchInlineSnapshot(`
         "P1013
 
         The provided database string is invalid. \`datasource.url\` in \`prisma.config.ts\` is invalid: must start with the protocol \`file:\`.

@@ -75,6 +75,7 @@ export type GetGeneratorOptions = {
   allowNoModels?: boolean
   typedSql?: SqlQueryOutput[]
   extensions?: {}
+  cliCommand: string
 }
 /**
  * Makes sure that all generators have the binaries they deserve and returns a
@@ -129,10 +130,10 @@ export async function getGenerators(options: GetGeneratorOptions): Promise<Gener
   if (dmmf.datamodel.models.length === 0 && !allowNoModels) {
     // MongoDB needs extras for @id: @map("_id") @db.ObjectId
     if (schemaContext.primaryDatasource.provider === 'mongodb') {
-      throw new Error(missingModelMessageMongoDB)
+      throw new Error(missingModelMessageMongoDB(options.cliCommand))
     }
 
-    throw new Error(missingModelMessage)
+    throw new Error(missingModelMessage(options.cliCommand))
   }
 
   const generatorConfigs = filterGenerators(overrideGenerators || schemaContext.generators, generatorNames)

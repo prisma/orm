@@ -3,17 +3,13 @@ import type { Command, Commands } from '@prisma/internals'
 import { arg, format, HelpError, isError, unknownCommand } from '@prisma/internals'
 import { bold, dim, red } from 'kleur/colors'
 
-export class DbCommand implements Command {
-  public static new(cmds: Commands): DbCommand {
-    return new DbCommand(cmds)
-  }
-
-  private static help = format(`
+function renderHelp(cliCommand: string): string {
+  return format(`
 ${process.platform === 'win32' ? '' : '🏋️  '}Manage your database schema and lifecycle during development.
 
 ${bold('Usage')}
 
-  ${dim('$')} prisma db [command] [options]
+  ${dim('$')} ${cliCommand} db [command] [options]
 
 ${bold('Options')}
 
@@ -29,20 +25,29 @@ ${bold('Commands')}
 
 ${bold('Examples')}
 
-  Run \`prisma db pull\`
-  ${dim('$')} prisma db pull
+  Run \`${cliCommand} db pull\`
+  ${dim('$')} ${cliCommand} db pull
 
-  Run \`prisma db push\`
-  ${dim('$')} prisma db push
+  Run \`${cliCommand} db push\`
+  ${dim('$')} ${cliCommand} db push
 
-  Run \`prisma db seed\`
-  ${dim('$')} prisma db seed
+  Run \`${cliCommand} db seed\`
+  ${dim('$')} ${cliCommand} db seed
 
-  Run \`prisma db execute\`
-  ${dim('$')} prisma db execute
+  Run \`${cliCommand} db execute\`
+  ${dim('$')} ${cliCommand} db execute
 `)
+}
 
-  private constructor(private readonly cmds: Commands) {}
+export class DbCommand implements Command {
+  public static new(cmds: Commands, cliCommand: string): DbCommand {
+    return new DbCommand(cmds, cliCommand)
+  }
+
+  private constructor(
+    private readonly cmds: Commands,
+    private readonly cliCommand: string,
+  ) {}
 
   public async parse(argv: string[], config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(argv, {
@@ -57,25 +62,25 @@ ${bold('Examples')}
       return this.help(args.message)
     }
 
-    // display help for help flag or no subcommand
     if (args._.length === 0 || args['--help']) {
       return this.help()
     }
 
-    // check if we have that subcommand
     const cmd = this.cmds[args._[0]]
     if (cmd) {
       const argsForCmd = args['--preview-feature'] ? [...args._.slice(1), `--preview-feature`] : args._.slice(1)
       return cmd.parse(argsForCmd, config, baseDir)
     }
 
-    return unknownCommand(DbCommand.help, args._[0])
+    return unknownCommand(renderHelp(this.cliCommand), args._[0])
   }
 
   public help(error?: string): string | HelpError {
+    const help = renderHelp(this.cliCommand)
+
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${DbCommand.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${help}`)
     }
-    return DbCommand.help
+    return help
   }
 }

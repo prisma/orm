@@ -5,6 +5,10 @@ generated/
 /packages/cli/build
 /packages/cli/config.d.ts
 /packages/cli/config.js
+/packages/prisma7/index.d.ts
+/packages/prisma7/index.js
+/packages/prisma7/config.d.ts
+/packages/prisma7/config.js
 /packages/cli/prisma-client
 /packages/cli/preinstall
 /packages/client/runtime

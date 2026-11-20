@@ -1,5 +1,5 @@
-import { completionConfigPaths, completionSqlScriptPaths } from '@prisma/internals/src/cli/completion-values'
-import type { CommandCompletion } from '@prisma/internals/src/cli/types'
+import type { CommandCompletion } from '@prisma/internals'
+import { completionConfigPaths, completionSqlScriptPaths } from '@prisma/internals'
 
 export const dbExecuteCompletion: CommandCompletion = {
   name: 'db execute',

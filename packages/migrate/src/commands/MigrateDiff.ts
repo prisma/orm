@@ -25,10 +25,11 @@ import { listMigrations } from '../utils/listMigrations'
 
 const debug = Debug('prisma:migrate:diff')
 
-const helpOptions = format(
-  `${bold('Usage')}
+function renderHelpOptions(cliCommand: string): string {
+  return format(
+    `${bold('Usage')}
 
-  ${dim('$')} prisma migrate diff [options]
+  ${dim('$')} ${cliCommand} migrate diff [options]
 
 ${bold('Options')}
 
@@ -53,20 +54,17 @@ ${bold('Flags')}
 
   --script                 Render a SQL script to stdout instead of the default human readable summary (not supported on MongoDB)
   --exit-code              Change the exit code behavior to signal if the diff is empty or not (Empty: 0, Error: 1, Not empty: 2). Default behavior is Success: 0, Error: 1.`,
-)
+  )
+}
 
-export class MigrateDiff implements Command {
-  public static new(): MigrateDiff {
-    return new MigrateDiff()
-  }
-
-  private static help = format(`
+function renderHelp(cliCommand: string): string {
+  return format(`
 ${
   process.platform === 'win32' ? '' : '🔍 '
 }Compares the database schema from two arbitrary sources, and outputs the differences either as a human-readable summary (by default) or an executable script.
 
-${green(`prisma migrate diff`)} is a read-only command that does not write to your datasource(s).
-${green(`prisma db execute`)} can be used to execute its ${green(`--script`)} output.
+${green(`${cliCommand} migrate diff`)} is a read-only command that does not write to your datasource(s).
+${green(`${cliCommand} db execute`)} can be used to execute its ${green(`--script`)} output.
 
 The command takes a source ${green(`--from-...`)} and a destination ${green(`--to-...`)}.
 The source and destination must use the same provider,
@@ -78,42 +76,50 @@ The default output is a human readable diff, it can be rendered as SQL using \`-
 
 See the documentation for more information ${link('https://pris.ly/d/migrate-diff')}
 
-${helpOptions}
+${renderHelpOptions(cliCommand)}
 ${bold('Examples')}
 
   From the configured database to a Prisma datamodel
     e.g. roll forward after a migration failed in the middle
-  ${dim('$')} prisma migrate diff \\
+  ${dim('$')} ${cliCommand} migrate diff \\
     --from-config-datasource \\
     --to-schema=next_datamodel.prisma \\
     --script
 
   From a Prisma datamodel to the configured database
     e.g. roll forward after a migration failed in the middle
-  ${dim('$')} prisma migrate diff \\
+  ${dim('$')} ${cliCommand} migrate diff \\
     --from-schema=next_datamodel.prisma \\
     --to-config-datasource \\
     --script
 
   From a Prisma Migrate \`migrations\` directory to the configured database
     e.g. generate a migration for a hotfix already applied on production
-  ${dim('$')} prisma migrate diff \\
+  ${dim('$')} ${cliCommand} migrate diff \\
     --from-migrations ./migrations \\
     --to-config-datasource \\
     --script
 
-  Execute the --script output with \`prisma db execute\` using bash pipe \`|\`
-  ${dim('$')} prisma migrate diff \\
+  Execute the --script output with \`${cliCommand} db execute\` using bash pipe \`|\`
+  ${dim('$')} ${cliCommand} migrate diff \\
     --from-[...] \\
     --to-[...] \\
-    --script | prisma db execute --stdin --url="$DATABASE_URL"
+    --script | ${cliCommand} db execute --stdin --url="$DATABASE_URL"
 
   Detect if both sources are in sync, it will exit with exit code 2 if changes are detected
-  ${dim('$')} prisma migrate diff \\
+  ${dim('$')} ${cliCommand} migrate diff \\
     --exit-code \\
     --from-[...] \\
     --to-[...]
 `)
+}
+
+export class MigrateDiff implements Command {
+  public static new(cliCommand: string): MigrateDiff {
+    return new MigrateDiff(cliCommand)
+  }
+
+  private constructor(private readonly cliCommand: string) {}
 
   public async parse(argv: string[], config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(
@@ -317,9 +323,9 @@ ${bold('Examples')}
 
   public help(error?: string): string | HelpError {
     if (error) {
-      throw new HelpError(`\n${error}\n\n${helpOptions}`)
+      throw new HelpError(`\n${error}\n\n${renderHelpOptions(this.cliCommand)}`)
     }
-    return MigrateDiff.help
+    return renderHelp(this.cliCommand)
   }
 }
 

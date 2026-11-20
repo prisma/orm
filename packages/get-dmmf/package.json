@@ -21,7 +21,7 @@
   "homepage": "https://www.prisma.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/get-dmmf"
   },
   "bugs": "https://github.com/prisma/prisma/issues",
@@ -36,7 +36,7 @@
   "dependencies": {
     "@prisma/debug": "workspace:*",
     "@prisma/dmmf": "workspace:*",
-    "@prisma/prisma-schema-wasm": "7.9.0-1.e922089b7d7502aff4249d5da3420f6fa55fc6ad",
+    "@prisma/prisma-schema-wasm": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@streamparser/json": "0.0.22",
     "pluralize": "8.0.0"
   },

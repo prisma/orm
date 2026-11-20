@@ -1,0 +1,4 @@
+{
+  "extends": "../tsconfig.base.json",
+  "files": ["config-consumer.ts"]
+}

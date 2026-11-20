@@ -46,7 +46,7 @@ describeMatrix(postgresOnly, 'postgresql-multischema', () => {
 
   test('without datasource property `schemas` it should error with P4001, empty database', async () => {
     ctx.fixture('introspection/postgresql-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
 
     const result = introspect.parse(
       ['--print', '--schema', 'without-schemas-in-datasource.prisma'],
@@ -60,7 +60,7 @@ describeMatrix(postgresOnly, 'postgresql-multischema', () => {
 
   test('datasource property `schemas=[]` should error with P1012, array can not be empty', async () => {
     ctx.fixture('introspection/postgresql-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-0-value.prisma'],
       await ctx.config(),
@@ -87,7 +87,7 @@ describeMatrix(postgresOnly, 'postgresql-multischema', () => {
 
   test('datasource property `schemas=["base", "transactional"]` should succeed', async () => {
     ctx.fixture('introspection/postgresql-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-2-values.prisma'],
       await ctx.config(),
@@ -174,7 +174,7 @@ describeMatrix(postgresOnly, 'postgresql-multischema', () => {
 
   test('datasource property `schemas=["base"]` should succeed', async () => {
     ctx.fixture('introspection/postgresql-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-1-value.prisma'],
       await ctx.config(),
@@ -220,7 +220,7 @@ describeMatrix(postgresOnly, 'postgresql-multischema', () => {
 
   test('datasource property `schemas=["does-not-exist"]` should error with P4001, empty database', async () => {
     ctx.fixture('introspection/postgresql-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-1-non-existing-value.prisma'],
       await ctx.config(),
@@ -234,7 +234,7 @@ describeMatrix(postgresOnly, 'postgresql-multischema', () => {
 
   test('datasource property `schemas=["does-not-exist", "base"]` should succeed', async () => {
     ctx.fixture('introspection/postgresql-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-1-existing-1-non-existing-value.prisma'],
       await ctx.config(),

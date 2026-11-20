@@ -1,7 +1,9 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 import { getDMMF } from '@prisma/internals'
-import fs from 'fs'
-import path from 'path'
 import sortKeys from 'sort-keys'
+import { expect, test } from 'vitest'
 
 const blog = `datasource db {
   provider = "postgres"
@@ -35,7 +37,7 @@ const dmmf: DMMF.Document = ${JSON.stringify(sortKeys(dmmf, { deep: true }), nul
   try {
     await import('./__helpers__/dmmf-types')
   } catch (e) {
-    // we need to do this, as jest can't print the errors
+    // we need to do this, as vitest can't print the errors
     // resulting from the dynamic import
     console.error(e)
     throw e

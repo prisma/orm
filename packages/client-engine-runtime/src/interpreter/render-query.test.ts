@@ -531,6 +531,35 @@ test('a SELECT..IN with a large parameterTuple that is not chunkable', () => {
   `)
 })
 
+// Regression test for https://github.com/prisma/prisma/issues/29746: rendering a non-chunkable
+// query whose IN list holds hundreds of thousands of parameters used to blow the call stack
+// because the flattened parameters were pushed onto the array via spread.
+test('renders a non-chunkable IN template with a very large parameter list without overflowing the stack', () => {
+  const listSize = 200_000
+  const rendered = renderQuery(
+    {
+      type: 'templateSql',
+      fragments: [
+        { type: 'stringChunk', chunk: 'SELECT * FROM users WHERE "userId" IN ' },
+        { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
+      ],
+      placeholderFormat: {
+        prefix: '$',
+        hasNumbering: true,
+      } satisfies PlaceholderFormat,
+      args: [Array.from({ length: listSize }, (_, i) => i + 1)],
+      argTypes: [{ arity: 'scalar', scalarType: 'int' }],
+      chunkable: false,
+    } satisfies QueryPlanDbQuery,
+    {} as ScopeBindings,
+    {},
+  )
+
+  expect(rendered).toHaveLength(1)
+  expect(rendered[0].args).toHaveLength(listSize)
+  expect(rendered[0].argTypes).toHaveLength(listSize)
+})
+
 test('executes a generator', () => {
   const generators = new GeneratorRegistry()
   expect(

@@ -4,6 +4,9 @@ import { pipeline } from 'node:stream/promises'
 
 import { runtime } from 'std-env'
 
+/** Must remain the IPv4 loopback host used by Studio's listener and port probing. */
+export const STUDIO_SERVER_HOST = '127.0.0.1'
+
 export type StudioRequestHandler = (request: Request) => Promise<Response> | Response
 
 export interface StudioServer {
@@ -54,14 +57,13 @@ function startNodeStudioServer({
       }
 
       nodeResponse.statusCode = 500
-      nodeResponse.setHeader('Access-Control-Allow-Origin', '*')
       nodeResponse.end(error instanceof Error ? error.message : 'Internal Server Error')
     } finally {
       onNodeRequestSettled?.()
     }
   })
 
-  server.listen(port, onListen)
+  server.listen(port, STUDIO_SERVER_HOST, onListen)
 
   return {
     close() {
@@ -126,7 +128,9 @@ function startBunStudioServer({ handler, onListen, port }: StartStudioServerOpti
   const bun = (
     globalThis as typeof globalThis & {
       Bun?: {
-        serve(options: { fetch: StudioRequestHandler; port: number }): { stop(closeActiveConnections?: boolean): void }
+        serve(options: { fetch: StudioRequestHandler; hostname: string; port: number }): {
+          stop(closeActiveConnections?: boolean): void
+        }
       }
     }
   ).Bun
@@ -137,6 +141,7 @@ function startBunStudioServer({ handler, onListen, port }: StartStudioServerOpti
 
   const server = bun.serve({
     fetch: handler,
+    hostname: STUDIO_SERVER_HOST,
     port,
   })
 
@@ -155,7 +160,7 @@ function startDenoStudioServer({ handler, onListen, port }: StartStudioServerOpt
     globalThis as typeof globalThis & {
       Deno?: {
         serve(
-          options: { port: number; signal: AbortSignal },
+          options: { hostname: string; port: number; signal: AbortSignal },
           handler: StudioRequestHandler,
         ): { shutdown?(): Promise<void> }
       }
@@ -166,7 +171,7 @@ function startDenoStudioServer({ handler, onListen, port }: StartStudioServerOpt
     throw new Error('Deno runtime is not available.')
   }
 
-  deno.serve({ port, signal: abortController.signal }, handler)
+  deno.serve({ hostname: STUDIO_SERVER_HOST, port, signal: abortController.signal }, handler)
   onListen()
 
   return {

@@ -40,7 +40,7 @@ export const configContextContributor =
       ctx.configWithDatasource = async () => {
         const config = await ctx.config()
 
-        return validatePrismaConfigWithDatasource({ config, cmd: 'test' })
+        return validatePrismaConfigWithDatasource({ config, command: 'prisma test' })
       }
 
       ctx.datasource = async () => {

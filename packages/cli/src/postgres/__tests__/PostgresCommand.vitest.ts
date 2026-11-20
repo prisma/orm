@@ -5,14 +5,14 @@ import { PostgresCommand } from '../PostgresCommand'
 
 describe('PostgresCommand', () => {
   test('shows help with no arguments', async () => {
-    const cmd = PostgresCommand.new({})
+    const cmd = PostgresCommand.new({}, 'prisma')
     const result = await cmd.parse([], defaultTestConfig(), '/tmp')
     expect(result).toContain('prisma postgres')
     expect(result).toContain('link')
   })
 
   test('shows help with --help flag', async () => {
-    const cmd = PostgresCommand.new({})
+    const cmd = PostgresCommand.new({}, 'prisma')
     const result = await cmd.parse(['--help'], defaultTestConfig(), '/tmp')
     expect(result).toContain('prisma postgres')
   })
@@ -21,7 +21,7 @@ describe('PostgresCommand', () => {
     const mockLink = {
       parse: vi.fn().mockResolvedValue('link output'),
     }
-    const cmd = PostgresCommand.new({ link: mockLink })
+    const cmd = PostgresCommand.new({ link: mockLink }, 'prisma')
     const config = defaultTestConfig()
     const result = await cmd.parse(['link', '--api-key', 'test_key'], config, '/tmp')
 
@@ -30,7 +30,7 @@ describe('PostgresCommand', () => {
   })
 
   test('returns error for unknown subcommand', async () => {
-    const cmd = PostgresCommand.new({})
+    const cmd = PostgresCommand.new({}, 'prisma')
     const result = await cmd.parse(['unknown'], defaultTestConfig(), '/tmp')
     expect(result).toBeInstanceOf(Error)
   })

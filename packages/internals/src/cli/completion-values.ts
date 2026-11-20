@@ -6,7 +6,7 @@ export const completionSchemaPaths: CompletionValue[] = [
 ]
 
 export const completionConfigPaths: CompletionValue[] = [
-  { value: 'prisma.config.ts', description: 'Default config path' },
+  { value: 'prisma7.config.ts', description: 'Default config path' },
 ]
 
 export const completionDatasourceUrls: CompletionValue[] = [

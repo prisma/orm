@@ -7,7 +7,12 @@ import { PrismaConfigInternal } from 'src/PrismaConfig'
 import { beforeEach, describe, expect, it, test, vi } from 'vitest'
 
 import { defaultConfig } from '../defaultConfig'
-import { loadConfigFromFile, type LoadConfigFromFileError, SUPPORTED_EXTENSIONS } from '../loadConfigFromFile'
+import {
+  findPrismaConfigFile,
+  loadConfigFromFile,
+  type LoadConfigFromFileError,
+  SUPPORTED_EXTENSIONS,
+} from '../loadConfigFromFile'
 
 const ctx = vitestContext.new().assemble()
 
@@ -372,6 +377,268 @@ describe('loadConfigFromFile', () => {
         `)
       })
     })
+  })
+
+  describe('Prisma 7-specific discovery', () => {
+    function writeConfig(configPath: string, config: Record<string, unknown> = {}) {
+      const extension = path.extname(configPath)
+      const serializedConfig = JSON.stringify(config)
+      const source = ['.js', '.cjs'].includes(extension)
+        ? `module.exports = ${serializedConfig}`
+        : `export default ${serializedConfig}`
+
+      ctx.fs.write(configPath, source)
+    }
+
+    describe('non-executing legacy selection', () => {
+      describe.each([
+        { basename: 'prisma.config', description: 'prisma.config' },
+        { basename: path.join('.config', 'prisma'), description: '.config/prisma' },
+        { basename: path.join('.config', 'prisma.config'), description: '.config/prisma.config' },
+      ])('$description', ({ basename }) => {
+        it.each(SUPPORTED_EXTENSIONS)('discovers the flat%s config', (extension) => {
+          ctx.fixture('loadConfigFromFile/default-location/ignore')
+          const configPath = `${basename}${extension}`
+          writeConfig(configPath)
+
+          expect(findPrismaConfigFile(ctx.fs.cwd())).toBe(path.join(ctx.fs.cwd(), configPath))
+        })
+
+        it.each(SUPPORTED_EXTENSIONS)('discovers index%s', (extension) => {
+          ctx.fixture('loadConfigFromFile/default-location/ignore')
+          const configPath = path.join(basename, `index${extension}`)
+          writeConfig(configPath)
+
+          expect(findPrismaConfigFile(ctx.fs.cwd())).toBe(path.join(ctx.fs.cwd(), configPath))
+        })
+      })
+
+      it.each(['.json', '.jsonc', '.json5', '.yaml', '.yml', '.toml'])(
+        'does not select the legacy %s data format',
+        (extension) => {
+          ctx.fixture('loadConfigFromFile/default-location/ignore')
+          writeConfig(`prisma.config${extension}`)
+
+          expect(findPrismaConfigFile(ctx.fs.cwd())).toBeNull()
+        },
+      )
+
+      it.each([
+        {
+          selected: path.join('prisma.config', 'index.cts'),
+          lowerPrecedence: path.join('.config', 'prisma.js'),
+        },
+        {
+          selected: path.join('.config', 'prisma', 'index.cts'),
+          lowerPrecedence: path.join('.config', 'prisma.config.js'),
+        },
+      ])('matches c12 when $selected competes with $lowerPrecedence', async ({ selected, lowerPrecedence }) => {
+        ctx.fixture('loadConfigFromFile/default-location/ignore')
+        writeConfig(selected)
+        writeConfig(lowerPrecedence)
+
+        const { error, resolvedPath } = await loadConfigFromFile({})
+
+        expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), selected))
+        expect(findPrismaConfigFile(ctx.fs.cwd())).toBe(resolvedPath)
+        expect(error).toBeUndefined()
+      })
+
+      it.each([
+        { selected: 'prisma.config.cts', index: path.join('prisma.config', 'index.js') },
+        {
+          selected: path.join('.config', 'prisma.cts'),
+          index: path.join('.config', 'prisma', 'index.js'),
+        },
+        {
+          selected: path.join('.config', 'prisma.config.cts'),
+          index: path.join('.config', 'prisma.config', 'index.js'),
+        },
+      ])('matches c12 flat-before-index precedence for $selected', async ({ selected, index }) => {
+        ctx.fixture('loadConfigFromFile/default-location/ignore')
+        writeConfig(selected)
+        writeConfig(index)
+
+        const { error, resolvedPath } = await loadConfigFromFile({})
+
+        expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), selected))
+        expect(findPrismaConfigFile(ctx.fs.cwd())).toBe(resolvedPath)
+        expect(error).toBeUndefined()
+      })
+    })
+
+    describe.each([
+      { directory: '', basename: 'prisma7.config' },
+      { directory: '.config', basename: 'prisma7' },
+    ])('$directory', ({ directory, basename }) => {
+      describe.each(SUPPORTED_EXTENSIONS)('extension: %s', (extension) => {
+        it('discovers the versioned config before a legacy config', async () => {
+          ctx.fixture('loadConfigFromFile/default-location/ignore')
+          const configPath = path.join(directory, `${basename}${extension}`)
+          writeConfig(configPath)
+          writeConfig('prisma.config.js')
+
+          const { config, error, resolvedPath } = await loadConfigFromFile({})
+
+          expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), configPath))
+          expect(config).toMatchObject({ loadedFromFile: resolvedPath })
+          expect(error).toBeUndefined()
+        })
+      })
+    })
+
+    it.each([
+      { directory: '', basename: 'prisma7.config', location: 'root' },
+      { directory: '.config', basename: 'prisma7', location: '.config' },
+    ])('uses extension precedence within the $location location', async ({ directory, basename }) => {
+      ctx.fixture('loadConfigFromFile/default-location/ignore')
+      for (const extension of SUPPORTED_EXTENSIONS) {
+        writeConfig(path.join(directory, `${basename}${extension}`))
+      }
+
+      const { error, resolvedPath } = await loadConfigFromFile({})
+
+      expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), directory, `${basename}.js`))
+      expect(error).toBeUndefined()
+    })
+
+    it('uses every root candidate before the .config location', async () => {
+      ctx.fixture('loadConfigFromFile/default-location/ignore')
+      writeConfig('prisma7.config.cts')
+      writeConfig(path.join('.config', 'prisma7.js'))
+
+      const { error, resolvedPath } = await loadConfigFromFile({})
+
+      expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), 'prisma7.config.cts'))
+      expect(error).toBeUndefined()
+    })
+
+    it('uses every versioned candidate before legacy discovery', async () => {
+      ctx.fixture('loadConfigFromFile/default-location/ignore')
+      writeConfig(path.join('.config', 'prisma7.cts'))
+      writeConfig('prisma.config.js')
+
+      const { error, resolvedPath } = await loadConfigFromFile({})
+
+      expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), '.config', 'prisma7.cts'))
+      expect(error).toBeUndefined()
+    })
+
+    it('keeps an explicit config path authoritative', async () => {
+      ctx.fixture('loadConfigFromFile/default-location/ignore')
+      writeConfig('prisma7.config.js', { schema: 'versioned/schema.prisma' })
+      writeConfig(path.join('custom', 'selected.ts'), { schema: 'explicit/schema.prisma' })
+
+      const { config, error, resolvedPath } = await loadConfigFromFile({
+        configFile: path.join('custom', 'selected.ts'),
+      })
+
+      expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), 'custom', 'selected.ts'))
+      expect(config).toMatchObject({
+        loadedFromFile: resolvedPath,
+        schema: path.join(ctx.fs.cwd(), 'custom', 'explicit', 'schema.prisma'),
+      })
+      expect(error).toBeUndefined()
+    })
+
+    it.each([
+      { configPath: 'prisma7.config.ts', description: 'Prisma 7-specific' },
+      { configPath: path.join('custom', 'selected.ts'), description: 'custom' },
+    ])('attributes an explicit invalid $description config to its requested path', async ({ configPath }) => {
+      ctx.fixture('loadConfigFromFile/default-location/ignore')
+      ctx.fs.write(configPath, 'export default {')
+      writeConfig(path.join('.config', 'prisma7.js'))
+      writeConfig('prisma.config.js')
+      const expectedResolvedPath = path.resolve(ctx.fs.cwd(), configPath)
+
+      const { config, error, resolvedPath } = await loadConfigFromFile({ configFile: configPath })
+
+      expect(resolvedPath).toBe(expectedResolvedPath)
+      expect(config).toBeUndefined()
+      assertErrorConfigLoadError(error)
+    })
+
+    it('does not fall back when the selected versioned config fails to load', async () => {
+      ctx.fixture('loadConfigFromFile/default-location/ignore')
+      ctx.fs.write('prisma7.config.ts', 'export default {')
+      writeConfig('prisma.config.js')
+
+      const { config, error, resolvedPath } = await loadConfigFromFile({})
+
+      expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), 'prisma7.config.ts'))
+      expect(config).toBeUndefined()
+      assertErrorConfigLoadError(error)
+      expect(error.error.message.replaceAll('\\', '/')).toContain(resolvedPath.replaceAll('\\', '/'))
+    })
+
+    it('does not fall back when the selected versioned config fails validation', async () => {
+      ctx.fixture('loadConfigFromFile/default-location/ignore')
+      writeConfig(path.join('.config', 'prisma7.ts'), { unsupportedProperty: true })
+      writeConfig('prisma.config.js')
+
+      const { config, error, resolvedPath } = await loadConfigFromFile({})
+
+      expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), '.config', 'prisma7.ts'))
+      expect(config).toBeUndefined()
+      assertErrorConfigFileSyntaxError(error)
+      expect(error.error.message).toContain('unsupportedProperty')
+    })
+
+    it.each([
+      { fixture: 'loadConfigFromFile/default-location/ts', configPath: 'prisma.config.ts' },
+      {
+        fixture: 'loadConfigFromFile/default-location/with-config-dir-proposal',
+        configPath: path.join('.config', 'prisma.ts'),
+      },
+    ])('preserves warning-free legacy fallback for $configPath', async ({ fixture, configPath }) => {
+      ctx.fixture(fixture)
+
+      const { config, diagnostics, error, resolvedPath } = await loadConfigFromFile({})
+
+      expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), configPath))
+      expect(config).toMatchObject({ loadedFromFile: resolvedPath })
+      expect(error).toBeUndefined()
+      expect(diagnostics.map(({ _tag }) => _tag)).toEqual(['log'])
+    })
+
+    it('preserves warning-free default config when no config family exists', async () => {
+      ctx.fixture('loadConfigFromFile/default-location/ignore')
+
+      const { config, diagnostics, error, resolvedPath } = await loadConfigFromFile({})
+
+      expect(resolvedPath).toBeNull()
+      expect(config).toMatchObject(defaultConfig())
+      expect(error).toBeUndefined()
+      expect(diagnostics).toEqual([])
+    })
+
+    describe.each([{ configPath: 'prisma7.config.ts' }, { configPath: path.join('.config', 'prisma7.ts') }])(
+      '$configPath',
+      ({ configPath }) => {
+        it('resolves relative paths from the selected config file', async () => {
+          ctx.fixture('loadConfigFromFile/default-location/ignore')
+          writeConfig(configPath, {
+            schema: path.join('custom', 'schema.prisma'),
+            migrations: { path: path.join('custom', 'migrations') },
+            typedSql: { path: path.join('custom', 'typedSql') },
+            views: { path: path.join('custom', 'views') },
+          })
+          const configDirectory = path.dirname(path.join(ctx.fs.cwd(), configPath))
+
+          const { config, error, resolvedPath } = await loadConfigFromFile({})
+
+          expect(resolvedPath).toBe(path.join(ctx.fs.cwd(), configPath))
+          expect(config).toMatchObject({
+            loadedFromFile: resolvedPath,
+            schema: path.join(configDirectory, 'custom', 'schema.prisma'),
+            migrations: { path: path.join(configDirectory, 'custom', 'migrations') },
+            typedSql: { path: path.join(configDirectory, 'custom', 'typedSql') },
+            views: { path: path.join(configDirectory, 'custom', 'views') },
+          })
+          expect(error).toBeUndefined()
+        })
+      },
+    )
   })
 
   describe('precedence', () => {

@@ -3,8 +3,8 @@
 <div align="center">
   <h1>Prisma</h1>
   <a href="https://www.npmjs.com/package/prisma"><img src="https://img.shields.io/npm/v/prisma.svg?style=flat" /></a>
-  <a href="https://github.com/prisma/prisma/blob/main/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" /></a>
-  <a href="https://github.com/prisma/prisma/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-blue" /></a>
+  <a href="https://github.com/prisma/prisma/blob/v7/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" /></a>
+  <a href="https://github.com/prisma/prisma/blob/v7/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-blue" /></a>
   <a href="https://pris.ly/discord"><img alt="Discord" src="https://img.shields.io/discord/937751382725886062?label=Discord"></a>
   <br />
   <br />
@@ -26,6 +26,8 @@
   <br />
   <hr />
 </div>
+
+> **This is the Prisma ORM 7.x line, maintained on the `v7` branch.** The default branch of this repository now hosts [Prisma Next](https://github.com/prisma/prisma/tree/main), a TypeScript rewrite of Prisma ORM. The `prisma` and `@prisma/*` packages on npm are published from here.
 
 ## What is Prisma?
 
@@ -365,11 +367,11 @@ If the feature on the roadmap is linked to a GitHub issue, please make sure to l
 
 ## Contributing
 
-Refer to our [contribution guidelines](https://github.com/prisma/prisma/blob/main/CONTRIBUTING.md) and [Code of Conduct for contributors](https://github.com/prisma/prisma/blob/main/CODE_OF_CONDUCT.md).
+Refer to our [contribution guidelines](https://github.com/prisma/prisma/blob/v7/CONTRIBUTING.md) and [Code of Conduct for contributors](https://github.com/prisma/prisma/blob/v7/CODE_OF_CONDUCT.md).
 
 ## Tests Status
 
 - Prisma Tests Status:
-  [![Prisma Tests Status](https://github.com/prisma/prisma/workflows/CI/badge.svg)](https://github.com/prisma/prisma/actions/workflows/test.yml?query=branch%3Amain)
+  [![Prisma Tests Status](https://github.com/prisma/prisma/actions/workflows/test.yml/badge.svg?branch=v7)](https://github.com/prisma/prisma/actions/workflows/test.yml?query=branch%3Av7)
 
 Scheduled CI is currently disabled across the ORM repos; test workflows run on push, pull request, and manual `workflow_dispatch`. See the [Actions tab](https://github.com/prisma/prisma/actions) for recent runs.

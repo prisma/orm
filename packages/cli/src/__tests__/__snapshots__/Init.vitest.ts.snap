@@ -6,7 +6,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .gitignore
   .claude/skills/
   .windsurf/skills/
@@ -16,7 +16,7 @@ Initialized Prisma in your project
 Next, choose how you want to set up your database:
 
 CONNECT EXISTING DATABASE:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 CREATE NEW DATABASE:
@@ -94,7 +94,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -105,7 +105,7 @@ Initialized Prisma in your project
 Next, choose how you want to set up your database:
 
 CONNECT EXISTING DATABASE:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 CREATE NEW DATABASE:
@@ -159,7 +159,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .gitignore
   .claude/skills/
   .windsurf/skills/
@@ -171,7 +171,7 @@ warn Prisma would have added DATABASE_URL but it already exists in .env.
 Next, choose how you want to set up your database:
 
 CONNECT EXISTING DATABASE:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 CREATE NEW DATABASE:
@@ -225,7 +225,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -234,7 +234,7 @@ Initialized Prisma in your project
   skills-lock.json
 
 Next, set up your database:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.
@@ -290,7 +290,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -299,7 +299,7 @@ Initialized Prisma in your project
   skills-lock.json
 
 Next, set up your database:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.
@@ -355,7 +355,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -366,7 +366,7 @@ Initialized Prisma in your project
 Next, choose how you want to set up your database:
 
 CONNECT EXISTING DATABASE:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 CREATE NEW DATABASE:
@@ -426,7 +426,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -437,7 +437,7 @@ Initialized Prisma in your project
 Next, choose how you want to set up your database:
 
 CONNECT EXISTING DATABASE:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 CREATE NEW DATABASE:
@@ -491,7 +491,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -502,7 +502,7 @@ Initialized Prisma in your project
 Next, choose how you want to set up your database:
 
 CONNECT EXISTING DATABASE:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 CREATE NEW DATABASE:
@@ -556,7 +556,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -567,7 +567,7 @@ Initialized Prisma in your project
 Next, choose how you want to set up your database:
 
 CONNECT EXISTING DATABASE:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 CREATE NEW DATABASE:
@@ -622,7 +622,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -633,7 +633,7 @@ Initialized Prisma in your project
 Next, choose how you want to set up your database:
 
 CONNECT EXISTING DATABASE:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 CREATE NEW DATABASE:
@@ -688,7 +688,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -697,7 +697,7 @@ Initialized Prisma in your project
   skills-lock.json
 
 Next, set up your database:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.
@@ -747,7 +747,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -756,7 +756,7 @@ Initialized Prisma in your project
   skills-lock.json
 
 Next, set up your database:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.
@@ -806,7 +806,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -815,7 +815,7 @@ Initialized Prisma in your project
   skills-lock.json
 
 Next, set up your database:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.
@@ -865,7 +865,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -874,7 +874,7 @@ Initialized Prisma in your project
   skills-lock.json
 
 Next, set up your database:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.
@@ -924,7 +924,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -933,7 +933,7 @@ Initialized Prisma in your project
   skills-lock.json
 
 Next, set up your database:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.
@@ -983,7 +983,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -992,7 +992,7 @@ Initialized Prisma in your project
   skills-lock.json
 
 Next, set up your database:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.
@@ -1042,7 +1042,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -1053,7 +1053,7 @@ Initialized Prisma in your project
 Next, choose how you want to set up your database:
 
 CONNECT EXISTING DATABASE:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 CREATE NEW DATABASE:
@@ -1089,7 +1089,7 @@ Initialized Prisma in your project
 
   prisma/
     schema.prisma
-  prisma.config.ts
+  prisma7.config.ts
   .env
   .gitignore
   .claude/skills/
@@ -1098,7 +1098,7 @@ Initialized Prisma in your project
   skills-lock.json
 
 Next, set up your database:
-  1. Configure your DATABASE_URL in prisma.config.ts
+  1. Configure your DATABASE_URL in prisma7.config.ts
   2. Run prisma db pull to introspect your database.
 
 Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.

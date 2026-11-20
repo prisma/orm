@@ -1,10 +1,11 @@
 import { fs, vol } from 'memfs'
 import { performance } from 'perf_hooks'
+import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest'
 
 import { CallSite } from './CallSite'
 import { createErrorMessageWithContext } from './createErrorMessageWithContext'
 
-jest.mock('fs', () => fs)
+vi.mock('fs', () => ({ default: fs }))
 
 function mockCallsite(fileName: string, lineNumber: number | null, columnNumber: number | null): CallSite {
   return {

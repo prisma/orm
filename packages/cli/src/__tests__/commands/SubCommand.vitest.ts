@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 test('@<version>', async () => {
-  const cmd = new SubCommand('sub-command')
+  const cmd = new SubCommand('sub-command', 'prisma')
   const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
   const copySrc = join(__dirname, '..', 'fixtures', 'sub-command')
@@ -58,7 +58,7 @@ test('@<version>', async () => {
 })
 
 test('@latest', async () => {
-  const cmd = new SubCommand('sub-command')
+  const cmd = new SubCommand('sub-command', 'prisma')
   const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
   const copySrc = join(__dirname, '..', 'fixtures', 'sub-command')
@@ -90,7 +90,7 @@ test('@latest', async () => {
 })
 
 test('autoinstall', async () => {
-  const cmd = new SubCommand('sub-command')
+  const cmd = new SubCommand('sub-command', 'prisma')
   const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
   const copySrc = join(__dirname, '..', 'fixtures', 'sub-command')
@@ -129,7 +129,7 @@ test('autoinstall', async () => {
 test('aborts on deno', async () => {
   globalThis.Deno = { version: '2.0.0' } // fake being Deno
 
-  const cmd = new SubCommand('sub-command')
+  const cmd = new SubCommand('sub-command', 'prisma')
 
   await cmd.parse(['@0.0.0', '--help'], defaultTestConfig())
 

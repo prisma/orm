@@ -6,6 +6,7 @@ import execa from 'execa'
 import { z } from 'zod'
 
 import { version } from '../../package.json'
+import type { CliDistributionIdentity } from '../utils/cli-distribution-identity'
 import { createHelp } from '../utils/help'
 
 // Only apply console redirection when running in MCP mode
@@ -31,21 +32,23 @@ async function runCommand({
 }
 
 export class Mcp implements Command {
-  public static new(): Mcp {
-    return new Mcp()
+  public static new(identity: CliDistributionIdentity): Mcp {
+    return new Mcp(identity)
   }
 
-  private constructor() {}
+  private constructor(private readonly identity: CliDistributionIdentity) {}
 
-  public help = createHelp({
-    usageLine: 'prisma mcp [options]',
-    options: [['--early-access', '', 'Enable early access features']],
-    examples: ['prisma mcp --early-access'],
-    additionalContent: [
-      'Starts an MCP server to use with AI development tools such as Cursor, Windsurf and Claude Desktop',
-      `For additional help visit ${link('https://pris.ly/cli/mcp')}`,
-    ],
-  })
+  public help(error?: string) {
+    return createHelp({
+      usageLine: `${this.identity} mcp [options]`,
+      options: [['--early-access', '', 'Enable early access features']],
+      examples: [`${this.identity} mcp --early-access`],
+      additionalContent: [
+        'Starts an MCP server to use with AI development tools such as Cursor, Windsurf and Claude Desktop',
+        `For additional help visit ${link('https://pris.ly/cli/mcp')}`,
+      ],
+    })(error)
+  }
 
   public async parse(_argv: string[], _config: PrismaConfigInternal): Promise<string | Error> {
     const server = new McpServer({
@@ -55,7 +58,7 @@ export class Mcp implements Command {
 
     server.tool(
       'migrate-status',
-      `The prisma migrate status command looks up the migrations in ./prisma/migrations/* folder and the entries in the _prisma_migrations table and compiles information about the state of the migrations in your database.
+      `The ${this.identity} migrate status command looks up the migrations in ./prisma/migrations/* folder and the entries in the _prisma_migrations table and compiles information about the state of the migrations in your database.
             Example output:
 
             Status

@@ -21,6 +21,6 @@ export async function migrateDb({ schemaPath }: { schemaPath: string }) {
     },
   }
 
-  await DbPush.new().parse(['--force-reset'], runtimeConfig)
+  await DbPush.new('prisma').parse(['--force-reset'], runtimeConfig)
   consoleInfoMock.mockRestore()
 }

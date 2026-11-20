@@ -86,7 +86,10 @@ export async function setupTestSuiteClient({
   let typedSql: SqlQueryOutput[] | undefined
   if (hasTypedSql) {
     const config = buildPrismaConfig({ suiteMeta, suiteConfig, datasourceInfo })
-    const validatedConfig = validatePrismaConfigWithDatasource({ config, cmd: '<test-suite> generate --sql' })
+    const validatedConfig = validatePrismaConfigWithDatasource({
+      config,
+      command: 'prisma <test-suite> generate --sql',
+    })
     const schemaContextIntrospect = await processSchemaResult({
       schemaResult: { schemas: [[schemaPath, schema]], schemaPath, schemaRootDir: path.dirname(schemaPath) },
     })
