@@ -6,7 +6,7 @@
  * A table is renamed only when everything stored in it moves. A variant that gains or loses a table of its own moves alone, so no rename is planned: that is a data migration, and the plan asks about the data it drops.
  *
  * - J1: `Bug` gains `@@map("bug")`, then loses it. Each time the plan asks about `Bug.severity`, and no row of `Task` or `Epic` moves.
- * - J2: `--rename Bug:Defect`, where `Defect` has a table of its own, is refused, since the rename would move the whole table `task`. The advice is followed: without the statement the plan asks about `Bug`, offering the same rename first, and `--delete Bug` deletes its rows and leaves every other row in place.
+ * - J2: `--rename Bug:Defect`, where `Defect` has a table of its own, is refused, since the rename would move the whole table `task`. The advice is followed: without the statement the plan asks about `Bug`, offering the same rename first, and the `--delete` the advice gives deletes its rows and leaves every other row in place.
  * - J3: the same refusal, through `migration plan` only, followed by the hand-written migration its advice describes: `migration new`, a table `defect` filled from the rows of `Bug`, and the column `severity` dropped from `task`. Every row stays in `task`, and `defect` holds the values of `Bug`.
  */
 
@@ -63,7 +63,7 @@ const BUG_RENAME_REFUSED: Diagnostic = {
     {
       kind: 'user-choice',
       label:
-        'A table rename moves every row of the table, and the rows of models "public.Epic" and "public.Task" do not move to table "defect". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. Leave out this --rename to plan the change without moving them: the command then stops and says what the change would delete. If it offers this same --rename for model "public.Bug", that is refused again for the same reason; give --delete for model "public.Bug" in its place, which plans the change and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "public.Bug" into table "defect" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        'A table rename moves every row of the table, and the rows of models "public.Epic" and "public.Task" do not move to table "defect". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. Run the command again without this rename to plan the change without moving them: it then says what the change would delete. If it offers this same rename for model "public.Bug", that is refused again for the same reason; let the data go in its place with --delete Bug (at the prompt, type delete), which plans the change and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "public.Bug" into table "defect" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
     },
   ],
   meta: {
@@ -72,7 +72,7 @@ const BUG_RENAME_REFUSED: Diagnostic = {
         kind: 'statementRefused',
         summary:
           'Cannot rename table "task" to "defect": table "task" also stores models "public.Epic" and "public.Task"',
-        why: 'A table rename moves every row of the table, and the rows of models "public.Epic" and "public.Task" do not move to table "defect". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. Leave out this --rename to plan the change without moving them: the command then stops and says what the change would delete. If it offers this same --rename for model "public.Bug", that is refused again for the same reason; give --delete for model "public.Bug" in its place, which plans the change and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "public.Bug" into table "defect" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        why: 'A table rename moves every row of the table, and the rows of models "public.Epic" and "public.Task" do not move to table "defect". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. Run the command again without this rename to plan the change without moving them: it then says what the change would delete. If it offers this same rename for model "public.Bug", that is refused again for the same reason; let the data go in its place with --delete Bug (at the prompt, type delete), which plans the change and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the rows of model "public.Bug" into table "defect" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
         location: {
           namespaceId: 'public',
           entityKind: 'table',
@@ -95,6 +95,12 @@ const BUG_RENAME_REFUSED: Diagnostic = {
   },
   docsUrl: 'https://docs.prisma.io/docs/orm/v8/reference/error-reference#MIGRATION.PLANNING_FAILED',
 };
+
+/** The `--delete` flags the refusal says to give in place of the refused rename. */
+function deletesInPlace(refused: Diagnostic): readonly string[] {
+  const label = refused.nextActions?.[0]?.label ?? '';
+  return (/in its place with (.+?) \(at the prompt/.exec(label)?.[1] ?? '').split(' ');
+}
 
 async function task(journey: StoredNameJourney) {
   return rows(journey, 'SELECT * FROM "task" ORDER BY id');
@@ -219,7 +225,7 @@ withTempDir(({ createTempDir }) => {
       const db = useDevDatabase();
 
       it(
-        'is refused, and without the statement --delete Bug leaves every other row in place',
+        'is refused, and without the statement the --delete its advice gives leaves every other row in place',
         async () => {
           const journey = postgresJourney(db.connectionString, createTempDir, command);
           await start(journey, SHARED, SEED, 'J2.01');
@@ -227,6 +233,8 @@ withTempDir(({ createTempDir }) => {
 
           const refused = await refusal(journey, ['--rename', 'Bug:Defect'], 'J2.03');
           expect(refused, 'J2.03: the statement is refused').toEqual(BUG_RENAME_REFUSED);
+          const deletes = deletesInPlace(refused);
+          expect(deletes, 'J2.03: the --delete to give in its place').toEqual(['--delete', 'Bug']);
 
           const asked = await refusal(journey, [], 'J2.04');
           expect(
@@ -260,7 +268,7 @@ withTempDir(({ createTempDir }) => {
             docsUrl:
               'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
           });
-          const planned = await planAndApply(journey, ['--delete', 'Bug'], 'J2.05');
+          const planned = await planAndApply(journey, deletes, 'J2.05');
           expect(planned, 'J2.05: no rename').toEqual([
             {
               label: 'Drop column "severity" from "task"',
