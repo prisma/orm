@@ -15,7 +15,7 @@ changes:
 prisma orm init --target @prisma/orm-sqlite --authoring psl
 ```
 
-`--target` is looked up among the short names (`postgres`, `mongodb` and their aliases). A value that is not one of them is taken as a package name when it is scoped (`@scope/name`) or begins `prisma-orm-`: `init` installs that package and writes the project from the init contribution it exports. `--target postgres` and `--target mongodb` do what they did before. Any other value is refused with `CLI.INIT_INVALID_FLAG_VALUE` before anything changes, and the error's `meta.problems` says why. That includes an unscoped word such as `--target sqlite`: use `--target @prisma/orm-sqlite`. Its `meta.allowed` still lists the short names only, and `meta.acceptsPackageName` is `true`.
+`--target` is looked up among the short names (`postgres`, `mongodb` and their aliases). A value that is not one of them is taken as a package name: `init` installs that package and writes the project from the init contribution it exports. `--target postgres` and `--target mongodb` do what they did before. A value that is not a valid package name is refused with `CLI.INIT_INVALID_FLAG_VALUE` before anything changes, and the error's `meta.problems` says why. Before installing, `init` checks that the package lists the `prisma-orm-extension` keyword and refuses with `CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED` when it does not. That includes `--target sqlite`, which names an unrelated package: use `--target @prisma/orm-sqlite`. The first error's `meta.allowed` still lists the short names only, and `meta.acceptsPackageName` is `true`.
 
 Without `--target`, the picker has one more entry, "Another target package", which asks for the package name.
 

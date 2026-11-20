@@ -248,7 +248,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 
 ## Init Flow
 - `prisma orm init` is the greenfield-app entry point (distinct from `prisma db init`, which adopts an existing database).
-- The target: `--target` takes a short name from the list of target packages Prisma vouches for (`postgres`, `mongodb`, with their aliases) or a package name that is scoped or begins `prisma-orm-`. Without `--target`, the picker lists the known packages and an entry for typing another package name. Everything about the target comes from the package's init contribution ([ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)).
+- The target: `--target` takes a short name from the list of target packages Prisma vouches for (`postgres`, `mongodb`, with their aliases) or the name of a package that lists the `prisma-orm-extension` keyword. Without `--target`, the picker lists the known packages and an entry for typing another package name. Everything about the target comes from the package's init contribution ([ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)).
 - Order: init installs the target package first, then asks the remaining questions: the authoring mode (only the modes the package offers; none when it offers one), the schema location (default `src/prisma/contract.prisma`), and, on a re-init, the consent token. Nothing is asked between naming the target and installing it.
 - Detects the package manager from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`/`bun.lockb`) and `package.json#packageManager`, falling back to npm. It installs the target package with `dotenv` (and, for a listed package, its drivers), later the drivers the contribution names, and `prisma` plus `@prisma/cli-engine` and `@types/node` as development dependencies. Then it runs `prisma contract emit` programmatically to produce `contract.json` and `contract.d.ts`.
 - Scaffolds:
@@ -260,7 +260,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 - After-init output: a short header and a numbered "Next steps" list.
 - Re-init: when the project already has any file init would replace (`prisma.config.ts`, the starter contract, `db.ts` or the quick reference), init asks the user to type the directory's basename (or `--confirm <name>`) before it overwrites the generated files.
 - `--skip-install` installs nothing: the target package must already be installed. Init writes the files and prints the install and emit commands.
-- Refusals before any file is written: a `--target` that is neither a short name nor a package name init accepts (scoped, or beginning `prisma-orm-`), a package with no `init` entrypoint, an authoring mode the package does not offer. A refusal after the install says what the install added to `package.json` and how to remove it.
+- Refusals before any file is written: a `--target` that is neither a short name nor a valid package name, a package that does not list the `prisma-orm-extension` keyword (checked before the install), a package with no `init` entrypoint, an authoring mode the package does not offer. A refusal after the install says what the install added to `package.json` and how to remove it.
 - Artifacts: commit `contract.json` and `contract.d.ts` to VCS by default.
 
 ## Flag Conventions
