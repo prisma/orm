@@ -108,7 +108,7 @@ async function clearRows(connectionString: string): Promise<void> {
 }
 
 /** Pushes `contract` into a clean database via plan → apply (greenfield init). */
-async function pushContract(connectionString: string, contractJson: unknown): Promise<void> {
+export async function pushContract(connectionString: string, contractJson: unknown): Promise<void> {
   const contract = controlFamily.deserializeContract(contractJson) as Contract<SqlStorage>;
   const driver = await postgresDriverControl.create(connectionString);
   try {
