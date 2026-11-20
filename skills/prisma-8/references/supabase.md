@@ -122,7 +122,7 @@ export const db = await supabase({
 });
 ```
 
-Options beyond the basics: `middleware` (same composition as `postgres()` — see `references/runtime.md`; middleware never sees the role-binding `set_config` calls), `poolOptions` (keep `max` at 2 or more unless `verifyMarker` is `false`: the first query's marker check needs a connection besides the role-bound one), `pg` (BYO `pg.Pool` instead of `url`; a `pg.Client` is rejected with `SUPABASE.CONFIG_INVALID`). Teardown is `await db.close()` / `await using` exactly as in `references/runtime.md` — the same script-hang rules apply.
+Options beyond the basics: `middleware` (same composition as `postgres()` — see `references/runtime.md`; middleware never sees the role-binding `set_config` calls), `poolOptions` (keep `max` at 2 or more unless `verifyMarker` is `false`: the first query's marker check needs a connection besides the role-bound one, so let one query finish before the client takes more concurrent first queries than the pool has spare connections), `pg` (BYO `pg.Pool` instead of `url`; a `pg.Client` is rejected with `SUPABASE.CONFIG_INVALID`). Teardown is `await db.close()` / `await using` exactly as in `references/runtime.md` — the same script-hang rules apply.
 
 ## Workflow — Role-bound queries
 
