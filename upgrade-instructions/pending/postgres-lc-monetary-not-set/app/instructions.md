@@ -2,7 +2,7 @@
 changes:
   - id: postgres-lc-monetary-not-set
     summary: |
-      The PostgreSQL driver no longer sets `lc_monetary=C` on its connections, so a pooled Prisma Postgres URL connects. An application with `money` columns (`Money` in PSL, `@db.Money` in a Prisma 7 schema) now needs the database to print `money` in the `C` form itself. Run `SHOW lc_monetary` as the application's role. `C`, `POSIX`, `en_US` and Prisma Postgres need no action. Under any other locale a `money` read fails with `RUNTIME.LC_MONETARY_NOT_C`: set `ALTER ROLE <role> SET lc_monetary = 'C'` or `ALTER DATABASE <database> SET lc_monetary = 'C'` before deploying the upgrade. Raw SQL that selects `money` as text now prints in the database's own locale.
+      The PostgreSQL driver no longer sets `lc_monetary=C` on its connections, so a pooled Prisma Postgres URL connects. An application with `money` columns (`Money` in PSL, `@db.Money` in a Prisma 7 schema) now needs the database to print `money` in the `C` form itself. Run `SHOW lc_monetary` as the application's role. `C`, `POSIX` and `en_US`, with or without an encoding suffix such as `C.UTF-8`, and Prisma Postgres need no action. Under any other locale a `money` read fails with `RUNTIME.LC_MONETARY_NOT_C`: run `ALTER ROLE <role> SET lc_monetary = 'C'` before deploying the upgrade. `ALTER DATABASE <database> SET lc_monetary = 'C'` also works, but changes `money` for every other client of the database. Raw SQL that selects `money` as text now prints in the database's own locale.
     detection:
       glob: "**/*.{prisma,ts,mts,cts,sql,json}"
       matches:
