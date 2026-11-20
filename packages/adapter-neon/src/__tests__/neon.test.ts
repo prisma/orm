@@ -76,6 +76,60 @@ describe('PrismaNeonAdapterFactory', () => {
 
     await adapter.dispose()
   })
+
+  describe('search path', () => {
+    const config: neon.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+
+    it('sets search_path at connection startup when a schema is provided', async () => {
+      const factory = new PrismaNeonAdapterFactory(config, { schema: 'my_schema' })
+      const adapter = await factory.connect()
+      expect(adapter.underlyingDriver().options.options).toBe('-c search_path=my_schema,public')
+      await adapter.dispose()
+    })
+
+    it('does not set the options startup parameter when no schema is provided', async () => {
+      const factory = new PrismaNeonAdapterFactory(config)
+      const adapter = await factory.connect()
+      expect(adapter.underlyingDriver().options.options).toBeUndefined()
+      await adapter.dispose()
+    })
+
+    it('quotes schema names that require quoting', async () => {
+      const factory = new PrismaNeonAdapterFactory(config, { schema: 'MySchema' })
+      const adapter = await factory.connect()
+      expect(adapter.underlyingDriver().options.options).toBe('-c search_path="MySchema",public')
+      await adapter.dispose()
+    })
+
+    it('escapes quotes, whitespace and backslashes in schema names', async () => {
+      const factory = new PrismaNeonAdapterFactory(config, { schema: 'my "weird"\\schema' })
+      const adapter = await factory.connect()
+      expect(adapter.underlyingDriver().options.options).toBe('-c search_path="my\\ ""weird""\\\\schema",public')
+      await adapter.dispose()
+    })
+
+    it('appends search_path to user-provided options', async () => {
+      const factory = new PrismaNeonAdapterFactory(
+        { ...config, options: '-c statement_timeout=1000' },
+        { schema: 'my_schema' },
+      )
+      const adapter = await factory.connect()
+      expect(adapter.underlyingDriver().options.options).toBe(
+        '-c statement_timeout=1000 -c search_path=my_schema,public',
+      )
+      await adapter.dispose()
+    })
+
+    it.each(['-c search_path=a,b', '--search_path=a,b', '-c statement_timeout=1000 -csearch_path=a'])(
+      'does not override a search_path set in user-provided options (%s)',
+      async (options) => {
+        const factory = new PrismaNeonAdapterFactory({ ...config, options }, { schema: 'my_schema' })
+        const adapter = await factory.connect()
+        expect(adapter.underlyingDriver().options.options).toBe(options)
+        await adapter.dispose()
+      },
+    )
+  })
 })
 
 describe('NeonTransaction', () => {

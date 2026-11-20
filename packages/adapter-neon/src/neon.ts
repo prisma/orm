@@ -213,6 +213,11 @@ class NeonTransaction extends NeonWsQueryable<neon.PoolClient> implements Transa
 }
 
 export type PrismaNeonOptions = {
+  /**
+   * The name of the schema to use in generated queries. The adapter also sets the `search_path` of
+   * every connection to this schema, so that raw queries resolve unqualified table names in this
+   * schema, unless the config's `options` already set a `search_path`.
+   */
   schema?: string
   onPoolError?: (err: Error) => void
   onConnectionError?: (err: Error) => void
@@ -298,7 +303,7 @@ export class PrismaNeonAdapterFactory implements SqlDriverAdapterFactory {
   ) {}
 
   async connect(): Promise<PrismaNeonAdapter> {
-    const pool = new neon.Pool(this.config)
+    const pool = new neon.Pool(withSearchPath(this.config, this.options?.schema))
     pool.on('error', (err) => {
       debug(`Error from pool client: ${err.message} %O`, err)
       this.options?.onPoolError?.(err)
@@ -306,6 +311,53 @@ export class PrismaNeonAdapterFactory implements SqlDriverAdapterFactory {
 
     return new PrismaNeonAdapter(pool, this.options)
   }
+}
+
+/**
+ * Extends a pool config with an `options` startup parameter that sets the `search_path` to the
+ * given schema, so that raw queries resolve unqualified table names in that schema, consistently
+ * with generated queries which qualify table names explicitly. `public` stays on the path after it,
+ * because extensions such as citext or PostGIS are usually installed there and their types and
+ * operators must keep resolving. Setting the search path at connection startup saves a round trip
+ * per connection and guarantees that no query can run before the search path is in effect.
+ * See https://github.com/prisma/prisma/issues/24660.
+ */
+function withSearchPath(config: neon.PoolConfig, schema: string | undefined): neon.PoolConfig {
+  if (schema === undefined || setsSearchPath(config.options)) {
+    return config
+  }
+  const searchPath = `-c search_path=${escapeOptionValue(quoteIdentifierIfNeeded(schema))},public`
+  return {
+    ...config,
+    options: config.options ? `${config.options} ${searchPath}` : searchPath,
+  }
+}
+
+/**
+ * Whether the `options` startup parameter already sets the `search_path`, either as `-c search_path=...`
+ * or as `--search_path=...`. A search path the user configured explicitly takes precedence over the schema.
+ */
+function setsSearchPath(options: string | undefined): boolean {
+  return options !== undefined && /(?:^|\s)(?:-c\s*|--)search[_-]path=/i.test(options)
+}
+
+/**
+ * Quotes a PostgreSQL identifier, doubling any embedded double quotes. Identifiers that don't
+ * require quoting are left as is, matching `@prisma/adapter-pg`.
+ */
+function quoteIdentifierIfNeeded(name: string): string {
+  if (/^[a-z_][a-z0-9_$]*$/.test(name)) {
+    return name
+  }
+  return `"${name.replaceAll('"', '""')}"`
+}
+
+/**
+ * Escapes a value for use in the `options` startup parameter, which the server splits on
+ * whitespace, treating a backslash as an escape character.
+ */
+function escapeOptionValue(value: string): string {
+  return value.replace(/[\\\s]/g, (char) => `\\${char}`)
 }
 
 export class PrismaNeonHttpAdapter extends NeonQueryable implements SqlDriverAdapter {
