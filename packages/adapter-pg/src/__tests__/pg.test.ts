@@ -175,6 +175,16 @@ describe('PrismaPgAdapterFactory', () => {
       await adapter.dispose()
     })
 
+    it.each(['-c search_path=a,b', '--search_path=a,b', '-c statement_timeout=1000 -csearch_path=a'])(
+      'should not override a search_path set in user-provided options (%s)',
+      async (options) => {
+        const factory = new PrismaPgAdapterFactory({ ...config, options }, { schema: 'my_schema' })
+        const adapter = await factory.connect()
+        expect(adapter.underlyingDriver().options.options).toBe(options)
+        await adapter.dispose()
+      },
+    )
+
     it('should leave externally provided pools untouched', async () => {
       const pool = new pg.Pool(config)
       const factory = new PrismaPgAdapterFactory(pool, { schema: 'my_schema' })

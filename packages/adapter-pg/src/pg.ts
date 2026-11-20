@@ -213,7 +213,7 @@ export type PrismaPgOptions = {
    * The name of the schema to use in generated queries. When the adapter creates the pool itself
    * (i.e. it is given a config object or a connection string), it also sets the `search_path` of
    * every connection to this schema, so that raw queries resolve unqualified table names in this
-   * schema. Externally provided pools are left untouched; configure the search path on the pool
+   * schema, unless the config's `options` already set a `search_path`. Externally provided pools are left untouched; configure the search path on the pool
    * itself in that case, e.g. via `options: '-c search_path="mySchema"'`.
    */
   schema?: string
@@ -395,7 +395,7 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
  * See https://github.com/prisma/prisma/issues/24660.
  */
 function withSearchPath(config: pg.PoolConfig, schema: string | undefined): pg.PoolConfig {
-  if (schema === undefined) {
+  if (schema === undefined || setsSearchPath(config.options)) {
     return config
   }
   const searchPath = `-c search_path=${escapeOptionValue(quoteIdentifierIfNeeded(schema))}`
@@ -403,6 +403,14 @@ function withSearchPath(config: pg.PoolConfig, schema: string | undefined): pg.P
     ...config,
     options: config.options ? `${config.options} ${searchPath}` : searchPath,
   }
+}
+
+/**
+ * Whether the `options` startup parameter already sets the `search_path`, either as `-c search_path=...`
+ * or as `--search_path=...`. A search path the user configured explicitly takes precedence over the schema.
+ */
+function setsSearchPath(options: string | undefined): boolean {
+  return options !== undefined && /(?:^|\s)(?:-c\s*|--)search[_-]path=/i.test(options)
 }
 
 /**
