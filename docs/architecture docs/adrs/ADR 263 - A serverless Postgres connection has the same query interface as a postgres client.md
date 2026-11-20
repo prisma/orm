@@ -237,7 +237,7 @@ export async function firstTitles(url: string) {
 }
 ```
 
-A query such as `await db.orm.public.User.first()` inside this loop never returns. On a client, the same query takes another database connection from the pool and the loop completes. With cursors off, the driver reads the whole result before the loop starts, so a query inside the loop works on a connection too.
+A query such as `await db.orm.public.User.first()` inside this loop never returns. On a client, the same query takes another database connection from the pool and the loop completes, unless the pool is limited to one connection (`poolOptions: { max: 1 }`): then the query waits for the connection the read holds and fails when the pool's connection timeout ends. With cursors off, the driver reads the whole result before the loop starts, so a query inside the loop works on a connection too.
 
 ## `connect` on a client and on a serverless client
 
