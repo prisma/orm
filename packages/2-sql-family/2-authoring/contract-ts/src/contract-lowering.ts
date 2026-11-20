@@ -70,6 +70,7 @@ import {
 import { contractError } from './contract-errors';
 import { emitTypedCrossModelFallbackWarnings } from './contract-warnings';
 import { isEnumTypeHandle } from './enum-type';
+import { namedEntriesFrom, namedEntriesIn, readNamedEntry, writeNamedEntry } from './named-entries';
 import { refuseTypesKey } from './refuse-types-key';
 import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
@@ -131,7 +132,7 @@ function mapFieldNamesToColumnNames(
   fieldToColumn: Record<string, string>,
 ): readonly string[] {
   return fieldNames.map((fieldName) => {
-    const columnName = fieldToColumn[fieldName];
+    const columnName = readNamedEntry(fieldToColumn, fieldName);
     if (!columnName) {
       throw contractError(
         'CONTRACT.FIELD_UNKNOWN',
@@ -383,7 +384,7 @@ function belongsToNullable(
   const { nullable, contradiction } = resolveToOneRelationNullable({
     declaredNullable,
     localFieldNullability: fieldNames.map(
-      (fieldName) => spec.fieldBuilders[fieldName]?.build().nullable === true,
+      (fieldName) => readNamedEntry(spec.fieldBuilders, fieldName)?.build().nullable === true,
     ),
     ownsReference: true,
   });
@@ -811,7 +812,7 @@ function resolveDeferredColumns(
   const columnNames = mapFieldNamesToColumnNames(spec.modelName, fieldNames, spec.fieldToColumn);
   return fieldNames.map((fieldName, position) => {
     const name = columnNames[position];
-    const codecId = fieldCodecIds[fieldName];
+    const codecId = readNamedEntry(fieldCodecIds, fieldName);
     if (name === undefined || codecId === undefined) {
       throw new InternalError(
         `Deferred index expression on "${spec.modelName}" resolved no column for field "${fieldName}"`,
@@ -960,11 +961,16 @@ function resolveModelNode(
   for (const [fieldName, fieldBuilder] of Object.entries(spec.fieldBuilders)) {
     const fieldState = fieldBuilder.build();
     const descriptor = resolveFieldDescriptor(spec.modelName, fieldName, fieldState);
-    const columnName = spec.fieldToColumn[fieldName];
+    const columnName = readNamedEntry(spec.fieldToColumn, fieldName);
     if (!columnName) {
       throw new InternalError(`Column name resolution failed for "${spec.modelName}.${fieldName}"`);
     }
-    fieldCodecIds[fieldName] = descriptor.codecId;
+    writeNamedEntry(
+      fieldCodecIds,
+      fieldName,
+      descriptor.codecId,
+      `a field of model "${spec.modelName}"`,
+    );
 
     const enumHandle =
       'enumHandle' in fieldState && isEnumTypeHandle(fieldState.enumHandle)
@@ -1101,10 +1107,14 @@ function columnLengthOf(definition: LoweringInput): ColumnLength {
 }
 
 function collectRuntimeModelSpecs(definition: LoweringInput): RuntimeCollection {
-  const databaseTypes: Record<string, AuthoredStorageTypeInstance> = {
-    ...definition.databaseTypes,
-  };
-  const models = { ...(definition.models ?? {}) } as Record<string, RuntimeModel>;
+  const databaseTypes = namedEntriesFrom(
+    Object.entries<AuthoredStorageTypeInstance>(definition.databaseTypes ?? {}),
+    'a database type',
+  );
+  const models = namedEntriesFrom(
+    Object.entries((definition.models ?? {}) as Record<string, RuntimeModel>),
+    'a model',
+  );
 
   const modelSpecs = new Map<string, RuntimeModelSpec>();
   const tableOwners = new Map<string, string>();
@@ -1152,7 +1162,7 @@ function collectRuntimeModelSpecs(definition: LoweringInput): RuntimeCollection 
         );
       }
       columnOwners.set(columnName, fieldName);
-      fieldToColumn[fieldName] = columnName;
+      writeNamedEntry(fieldToColumn, fieldName, columnName, `a field of model "${modelName}"`);
     }
 
     const fieldBuilders = modelDefinition.stageOne.fields;
@@ -1318,11 +1328,14 @@ function lowerPackEntityHandles(
       );
     }
     for (const row of authoring.lowerEntityHandles({ handles, defaultNamespaceId })) {
-      const forNamespace = pack[row.namespaceId] ?? {};
-      pack[row.namespaceId] = forNamespace;
+      const forNamespace = namedEntriesIn(
+        pack,
+        row.namespaceId,
+        `the namespace of "${row.entityKind}" entity "${row.key}"`,
+      );
       const forKind = forNamespace[row.entityKind] ?? {};
       forNamespace[row.entityKind] = forKind;
-      const existing = forKind[row.key];
+      const existing = readNamedEntry(forKind, row.key);
       if (existing !== undefined && existing !== row.entity) {
         throw contractError(
           'CONTRACT.NAME_DUPLICATE',
@@ -1330,7 +1343,12 @@ function lowerPackEntityHandles(
           { meta: { kind: row.entityKind, name: row.key, namespaceId: row.namespaceId } },
         );
       }
-      forKind[row.key] = row.entity;
+      writeNamedEntry(
+        forKind,
+        row.key,
+        row.entity,
+        `a "${row.entityKind}" entity in namespace "${row.namespaceId}"`,
+      );
     }
   }
   return pack;

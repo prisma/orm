@@ -7,6 +7,7 @@ import {
   type ScalarFieldBuilder,
   type SqlStageSpec,
 } from './contract-dsl';
+import { readNamedEntry } from './named-entries';
 
 type RuntimeModel = ContractModelBuilder<
   string | undefined,
@@ -29,7 +30,7 @@ type RuntimeCollection = {
 };
 
 function hasNamedModelToken(models: Record<string, RuntimeModel>, modelName: string): boolean {
-  return models[modelName]?.stageOne.modelName === modelName;
+  return readNamedEntry(models, modelName)?.stageOne.modelName === modelName;
 }
 
 function formatFieldSelection(fieldNames: readonly string[]): string {

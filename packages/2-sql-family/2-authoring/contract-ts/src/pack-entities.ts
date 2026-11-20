@@ -9,6 +9,7 @@ import type { StorageValueSetInput } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import type { ContractDefinition } from './contract-definition';
 import { contractError } from './contract-errors';
+import { namedEntriesFrom, namedEntriesIn, readNamedEntry, writeNamedEntry } from './named-entries';
 
 export type CollectedColumnEntities = Record<string, Record<string, Record<string, unknown>>>;
 
@@ -31,9 +32,13 @@ export function collectEntityFromColumn(
   namespaceId: string,
   entityRef: NonNullable<ColumnTypeDescriptor['entityRef']>,
 ): void {
-  const forNs = collected[namespaceId] ?? {};
+  const forNs = namedEntriesIn(
+    collected,
+    namespaceId,
+    `the namespace of "${entityRef.entityKind}" entity "${entityRef.entityName}"`,
+  );
   const forKind = forNs[entityRef.entityKind] ?? {};
-  const existing = forKind[entityRef.entityName];
+  const existing = readNamedEntry(forKind, entityRef.entityName);
   if (existing !== undefined && existing !== entityRef.entity) {
     throw contractError(
       'CONTRACT.NAME_DUPLICATE',
@@ -41,9 +46,13 @@ export function collectEntityFromColumn(
       { meta: { kind: entityRef.entityKind, name: entityRef.entityName, namespaceId } },
     );
   }
-  forKind[entityRef.entityName] = entityRef.entity;
+  writeNamedEntry(
+    forKind,
+    entityRef.entityName,
+    entityRef.entity,
+    `a "${entityRef.entityKind}" entity in namespace "${namespaceId}"`,
+  );
   forNs[entityRef.entityKind] = forKind;
-  collected[namespaceId] = forNs;
 }
 
 /**
@@ -61,15 +70,19 @@ export function mergeColumnAndAttachedEntities(
   attached: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
   columnCollected: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
 ): Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined {
-  if (attached === undefined) return columnCollected;
-  if (columnCollected === undefined) return attached;
-  const kinds = new Set([...Object.keys(attached), ...Object.keys(columnCollected)]);
+  if (attached === undefined && columnCollected === undefined) return undefined;
+  const kinds = new Set([...Object.keys(attached ?? {}), ...Object.keys(columnCollected ?? {})]);
   const result: Record<string, Readonly<Record<string, unknown>>> = {};
   for (const kind of kinds) {
-    const attachedForKind = attached[kind];
-    const columnForKind = columnCollected[kind];
-    for (const [name, entity] of Object.entries(columnForKind ?? {})) {
-      const existing = attachedForKind?.[name];
+    const attachedForKind = attached?.[kind] ?? {};
+    const columnForKind = columnCollected?.[kind] ?? {};
+    const entitiesOfKind: Record<string, unknown> = {};
+    const nameOf = `a "${kind}" entity in namespace "${namespaceId}"`;
+    for (const [name, entity] of Object.entries(attachedForKind)) {
+      writeNamedEntry(entitiesOfKind, name, entity, nameOf);
+    }
+    for (const [name, entity] of Object.entries(columnForKind)) {
+      const existing = readNamedEntry(attachedForKind, name);
       if (existing !== undefined && existing !== entity) {
         throw contractError(
           'CONTRACT.NAME_DUPLICATE',
@@ -77,8 +90,9 @@ export function mergeColumnAndAttachedEntities(
           { meta: { kind, name, namespaceId } },
         );
       }
+      writeNamedEntry(entitiesOfKind, name, entity, nameOf);
     }
-    result[kind] = { ...attachedForKind, ...columnForKind };
+    result[kind] = entitiesOfKind;
   }
   return result;
 }
@@ -149,6 +163,7 @@ export function collectEntityTypeDescriptorsByDiscriminator(
  * value-set, contribute nothing.
  */
 export function deriveEntityValueSets(
+  namespaceId: string,
   entitiesForNs: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
   entityTypesByDiscriminator: ReadonlyMap<string, AuthoringEntityTypeDescriptor>,
 ): Record<string, StorageValueSetInput> | undefined {
@@ -161,7 +176,12 @@ export function deriveEntityValueSets(
       const derivedValueSet = deriveValueSetFromEntity(descriptor.output, entity);
       if (derivedValueSet === undefined) continue;
       result ??= {};
-      result[name] = derivedValueSet;
+      writeNamedEntry(
+        result,
+        name,
+        derivedValueSet,
+        `the value set of a "${kind}" entity in namespace "${namespaceId}"`,
+      );
     }
   }
   return result;
@@ -192,5 +212,8 @@ export function mergeNamespaceValueSets(
       }
     }
   }
-  return { ...enumValueSets, ...packValueSets };
+  return namedEntriesFrom(
+    [...Object.entries(enumValueSets ?? {}), ...Object.entries(packValueSets ?? {})],
+    `a value set in namespace "${namespaceId}"`,
+  );
 }

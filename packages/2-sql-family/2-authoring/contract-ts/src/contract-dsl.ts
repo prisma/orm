@@ -31,6 +31,7 @@ import type { NamedConstraintSpec } from './authoring-type-utils';
 import type { AuthoredColumnDefault, CapabilityContributor } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { EnumTypeHandle } from './enum-type';
+import { writeNamedEntry } from './named-entries';
 
 export type NamingStrategy = 'identity' | 'snake_case';
 
@@ -1605,12 +1606,17 @@ export type SqlContext<
   readonly constraints: PackAwareSqlConstraints<IndexTypes>;
 };
 
+function fieldNameOf(modelName: string | undefined): string {
+  return modelName === undefined ? 'a field of a model' : `a field of model "${modelName}"`;
+}
+
 function createFieldRefs<Fields extends Record<string, ScalarFieldBuilder>>(
   fields: Fields,
+  modelName: string | undefined,
 ): FieldRefs<Fields> {
   const refs = {} as Record<string, ColumnRef>;
   for (const fieldName of Object.keys(fields)) {
-    refs[fieldName] = { kind: 'columnRef', fieldName };
+    writeNamedEntry(refs, fieldName, { kind: 'columnRef', fieldName }, fieldNameOf(modelName));
   }
   return refs as FieldRefs<Fields>;
 }
@@ -1632,24 +1638,29 @@ function createModelTokenRefs<
   for (const [fieldName, fieldBuilder] of Object.entries(fields)) {
     const physicalColumn =
       crossSpaceCoordinate !== undefined ? fieldBuilder.physicalColumnName : undefined;
-    refs[fieldName] = {
-      kind: 'targetFieldRef',
-      source: 'token',
-      modelName,
+    writeNamedEntry(
+      refs,
       fieldName,
-      ...(crossSpaceCoordinate !== undefined
-        ? {
-            spaceId: crossSpaceCoordinate.spaceId,
-            ...(crossSpaceCoordinate.namespaceId !== undefined
-              ? { namespaceId: crossSpaceCoordinate.namespaceId }
-              : {}),
-            ...(crossSpaceCoordinate.tableName !== undefined
-              ? { tableName: crossSpaceCoordinate.tableName }
-              : {}),
-            ...(physicalColumn !== undefined ? { columnName: physicalColumn } : {}),
-          }
-        : {}),
-    };
+      {
+        kind: 'targetFieldRef',
+        source: 'token',
+        modelName,
+        fieldName,
+        ...(crossSpaceCoordinate !== undefined
+          ? {
+              spaceId: crossSpaceCoordinate.spaceId,
+              ...(crossSpaceCoordinate.namespaceId !== undefined
+                ? { namespaceId: crossSpaceCoordinate.namespaceId }
+                : {}),
+              ...(crossSpaceCoordinate.tableName !== undefined
+                ? { tableName: crossSpaceCoordinate.tableName }
+                : {}),
+              ...(physicalColumn !== undefined ? { columnName: physicalColumn } : {}),
+            }
+          : {}),
+      },
+      fieldNameOf(modelName),
+    );
   }
   return refs as ModelTokenRefs<ModelName, Fields, TSpaceId>;
 }
@@ -1689,8 +1700,9 @@ function createSqlConstraintsDsl<
 
 function createColumnRefs<Fields extends Record<string, ScalarFieldBuilder>>(
   fields: Fields,
+  modelName: string | undefined,
 ): SqlContext<Fields>['cols'] {
-  return createFieldRefs(fields);
+  return createFieldRefs(fields, modelName);
 }
 
 type StaticLiteralName<Name> = Name extends string ? (string extends Name ? never : Name) : never;
@@ -2065,7 +2077,7 @@ export class ContractModelBuilder<
     }
 
     return buildStageSpec(this.attributesFactory, {
-      fields: createFieldRefs(this.stageOne.fields),
+      fields: createFieldRefs(this.stageOne.fields, this.stageOne.modelName),
       constraints: createAttributeConstraintsDsl() as AttributeContext<Fields>['constraints'],
     });
   }
@@ -2075,7 +2087,7 @@ export class ContractModelBuilder<
       return undefined as SqlSpec;
     }
     return buildStageSpec(this.sqlFactory, {
-      cols: createColumnRefs(this.stageOne.fields),
+      cols: createColumnRefs(this.stageOne.fields, this.stageOne.modelName),
       constraints: createSqlConstraintsDsl<IndexTypes>(),
     });
   }

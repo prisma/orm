@@ -14,6 +14,7 @@ import {
 import { derivedCheckPrefixes } from '@internal/sql-schema-ir/naming';
 import { invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
+import { writeNamedEntry } from './named-entries';
 
 /**
  * Creates a namespace of the caller's target concretion. Same shape as the
@@ -94,7 +95,7 @@ export function stripDerivedChecksFromNonManagedTables(
     if (!isMaterializedSqlNamespace(namespace)) return contract;
     const tables = namespace.entries['table'];
     if (tables === undefined) {
-      namespaces[namespaceId] = namespace;
+      writeNamedEntry(namespaces, namespaceId, namespace, 'a namespace');
       continue;
     }
 
@@ -105,18 +106,23 @@ export function stripDerivedChecksFromNonManagedTables(
         ? withoutDerivedChecks(tableName, table, contract.defaultControlPolicy)
         : table;
       if (stripped !== table) namespaceStripped = true;
-      nextTables[tableName] = stripped;
+      writeNamedEntry(nextTables, tableName, stripped, `a table in namespace "${namespaceId}"`);
     }
 
     if (!namespaceStripped) {
-      namespaces[namespaceId] = namespace;
+      writeNamedEntry(namespaces, namespaceId, namespace, 'a namespace');
       continue;
     }
     anyStripped = true;
-    namespaces[namespaceId] = createNamespace({
-      id: namespace.id,
-      entries: { ...namespace.entries, table: nextTables },
-    });
+    writeNamedEntry(
+      namespaces,
+      namespaceId,
+      createNamespace({
+        id: namespace.id,
+        entries: { ...namespace.entries, table: nextTables },
+      }),
+      'a namespace',
+    );
   }
 
   if (!anyStripped) return contract;
