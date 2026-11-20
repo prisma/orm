@@ -184,6 +184,26 @@ describe('executeMigrateShowPlan', () => {
     ]);
   });
 
+  it('advises --to with the ref name when the target is a ref', async () => {
+    await writeFile(
+      join(appMigrationsDir, 'refs', 'staging.json'),
+      JSON.stringify({ hash: HASH_A, invariants: [] }),
+    );
+
+    const result = await executeMigrateShowPlan({
+      config,
+      cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
+      from: HASH_B,
+      to: 'staging',
+    });
+
+    expect(planThenApplyCommands(result)).toEqual([
+      `{bin} migration plan --from ${HASH_B} --to staging --name <slug>`,
+      '{bin} db migrate --to staging',
+    ]);
+  });
+
   it('advises no --to when no path reaches the emitted contract', async () => {
     const emitted = 'c'.repeat(64);
     await writeFile(join(tempDir, 'contract.json'), JSON.stringify(contractJsonForHash(emitted)));

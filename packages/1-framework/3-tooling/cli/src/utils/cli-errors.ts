@@ -977,8 +977,6 @@ export interface PathUnreachable {
   readonly summary: string;
   readonly why: string;
   readonly meta: PathUnreachableMeta;
-  /** What `--to` takes to name the target in `migration plan` and `db migrate`, or `undefined` for the emitted contract, which both target without `--to`. */
-  readonly to: string | undefined;
 }
 
 /** The advice for a `PATH_UNREACHABLE` the caller knows better than a plan-then-apply of the app space. */
@@ -987,14 +985,27 @@ export interface PathUnreachableAdvice {
   readonly nextActions: readonly NextAction[];
 }
 
-function planThenApply({ meta, to }: PathUnreachable): PathUnreachableAdvice {
-  const fromOption =
+/**
+ * The advice to plan the missing migration in the app space and apply it. `toArgument` is what
+ * `--to` takes to name the target, or `undefined` for the emitted contract: `migration plan` and
+ * `db migrate` target it without `--to`, and `migration plan --to` resolves only a contract that a
+ * migration or a ref names. A space with no migrations has no such contract, so its commands never
+ * carry `--to`.
+ */
+export function planThenApply(
+  meta: PathUnreachableMeta,
+  toArgument: string | undefined,
+  invocation: CliInvocation | undefined,
+): PathUnreachableAdvice {
+  const from =
     meta.kind === 'neverPlanned' || meta.fromHash === EMPTY_CONTRACT_HASH
-      ? ''
-      : ` --from ${meta.fromHash}`;
-  const toOption = to === undefined ? '' : ` --to ${to}`;
-  const planCommand = `{bin} migration plan${fromOption}${toOption} --name <slug>`;
-  const applyCommand = `{bin} db migrate${toOption}`;
+      ? undefined
+      : meta.fromHash;
+  const to = meta.kind === 'neverPlanned' || toArgument === undefined ? [] : ['--to', toArgument];
+  const planCommand = printedPlanCommand(invocation, from, [...to, '--name', '<slug>']);
+  const applyCommand = cliCommand(invocation, 'db migrate', to);
+  const listCommand = cliCommand(invocation, 'migration list');
+  const showCommand = cliCommand(invocation, 'migration show', ['<bundle>']);
   return {
     fix: [
       'Plan the missing edge, then apply it:',
@@ -1002,18 +1013,15 @@ function planThenApply({ meta, to }: PathUnreachable): PathUnreachableAdvice {
       `  2. ${applyCommand}`,
       `${ROLLBACK_IS_DESTRUCTIVE}.`,
       `${RENAMES_AND_DATA_NEED_MORE}.`,
-      'Inspect the on-disk graph with `{bin} migration list`, or `{bin} migration show <bundle>` for any bundle in the path you expected.',
+      `Inspect the on-disk graph with \`${listCommand}\`, or \`${showCommand}\` for any bundle in the path you expected.`,
     ].join('\n'),
     nextActions: [
       runCommandAction('Plan the missing edge', planCommand),
       runCommandAction('Apply it', applyCommand),
       chooseAction(ROLLBACK_IS_DESTRUCTIVE),
       chooseAction(RENAMES_AND_DATA_NEED_MORE),
-      runCommandAction('Inspect the on-disk graph', '{bin} migration list'),
-      runCommandAction(
-        'Inspect a bundle in the path you expected',
-        '{bin} migration show <bundle>',
-      ),
+      runCommandAction('Inspect the on-disk graph', listCommand),
+      runCommandAction('Inspect a bundle in the path you expected', showCommand),
     ],
   };
 }
@@ -1043,10 +1051,10 @@ export function errorMigrationHasUnfilledPlaceholders(
   );
 }
 
-/** `MIGRATION.PATH_UNREACHABLE`, advising to plan the missing edge and apply it unless `advice` says otherwise. */
+/** `MIGRATION.PATH_UNREACHABLE` with the caller's advice; {@link planThenApply} builds the app space's. */
 export function errorPathUnreachable(
   failure: PathUnreachable,
-  advice: PathUnreachableAdvice = planThenApply(failure),
+  advice: PathUnreachableAdvice,
 ): ActionableCliError {
   return new ActionableCliError('MIGRATION.PATH_UNREACHABLE', failure.summary, {
     why: failure.why,

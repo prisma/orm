@@ -12,13 +12,13 @@ import {
 import { chooseAction, runCommandAction } from './next-actions';
 import { type CliInvocation, cliCommand } from './printed-command';
 
-/** An extension space `db init` or `db update` could not plan, and the command that tried. */
+/** An extension space a command could not bring to its head, and the command that tried. */
 export interface UnplannableExtensionSpace {
   readonly spaceId: string;
   /** The contract the space's marker names, or the empty contract's hash when it has none. */
   readonly fromHash: string;
   readonly targetHash: string;
-  readonly command: 'db init' | 'db update';
+  readonly command: 'db init' | 'db update' | 'db migrate';
   readonly invocation: CliInvocation;
 }
 
@@ -59,7 +59,6 @@ export function errorExtensionPathUnreachable(
         fromHash: space.fromHash,
         targetHash: space.targetHash,
       },
-      to: space.targetHash,
     },
     extensionAdvice(space),
   );

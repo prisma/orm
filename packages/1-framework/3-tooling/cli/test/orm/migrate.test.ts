@@ -6,7 +6,6 @@ import {
   type SchemaDiffIssue,
   schemaCheckWhy,
 } from '@internal/framework-components/control';
-import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
@@ -16,10 +15,10 @@ import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildPathNotFoundFailure } from '../../src/control-api/operations/migrate';
 import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
-import { errorPathUnreachable } from '../../src/utils/cli-errors';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import { stdoutErrorMeta } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
@@ -428,19 +427,7 @@ describe('migrate', () => {
   it('maps an unreachable path to its migration code', async () => {
     const cwd = await buildProject();
     mocks.migrate.mockResolvedValue(
-      notOk(
-        errorPathUnreachable({
-          summary: 'no path',
-          why: 'no recorded path',
-          meta: {
-            spaceId: 'app',
-            fromHash: EMPTY_CONTRACT_HASH,
-            targetHash: C2,
-            kind: 'pathUnreachable',
-          },
-          to: C2,
-        }),
-      ),
+      notOk(buildPathNotFoundFailure('app', null, C2, C2, undefined)),
     );
 
     const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });

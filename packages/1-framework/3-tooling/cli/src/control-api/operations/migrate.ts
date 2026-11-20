@@ -40,7 +40,10 @@ import {
   type CliStructuredError,
   errorMigrationHasUnfilledPlaceholders,
   errorPathUnreachable,
+  type PathUnreachableMeta,
+  planThenApply,
 } from '../../utils/cli-errors';
+import { errorExtensionPathUnreachable } from '../../utils/extension-path-failure';
 import { errorMarkerMismatch, readLedgerQuietly } from '../../utils/marker-mismatch';
 import { migrateRunnerFailureError } from '../../utils/migrate-failure';
 import { declaredSettingsText, errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
@@ -235,16 +238,22 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       continue;
     }
     if (outcome.kind === 'never-planned') {
-      return notOk(buildNeverPlannedFailure(outcome.spaceId, outcome.targetHash, migrationsDir));
+      return notOk(
+        buildNeverPlannedFailure(
+          outcome.spaceId,
+          outcome.targetHash,
+          migrationsDir,
+          options.invocation,
+        ),
+      );
     }
     if (outcome.kind === 'unreachable') {
       return notOk(
-        buildPathNotFoundFailure(
-          outcome.spaceId,
-          outcome.liveMarker,
-          outcome.targetHash,
-          outcome.spaceId === aggregate.app.spaceId ? toOptionFor(target) : outcome.targetHash,
-        ),
+        unreachableSpaceFailure(outcome, {
+          appSpaceId: aggregate.app.spaceId,
+          target,
+          invocation: options.invocation,
+        }),
       );
     }
     if (outcome.kind === 'unsatisfiable') {
@@ -863,11 +872,38 @@ function buildSuccess(args: BuildSuccessArgs): MigrateSuccess {
 }
 
 /**
- * What `--to` takes to name the application space's target: the ref's name, which also resolves a
- * ref whose contract no migration reaches yet, or the hash. `undefined` for the emitted contract,
- * which `--to` cannot name until a migration or a ref does.
+ * `MIGRATION.PATH_UNREACHABLE` for a space `db migrate` has no path for. The application space is
+ * advised to plan the missing migration; an extension space's migrations come with the extension,
+ * so its advice is to install a version that has them.
  */
-function toOptionFor(target: MigrateTarget | undefined): string | undefined {
+export function unreachableSpaceFailure(
+  outcome: Extract<SpacePathOutcome, { readonly kind: 'unreachable' }>,
+  run: {
+    readonly appSpaceId: string;
+    readonly target: MigrateTarget | undefined;
+    readonly invocation: CliInvocation;
+  },
+): CliStructuredError {
+  if (outcome.spaceId === run.appSpaceId) {
+    return buildPathNotFoundFailure(
+      outcome.spaceId,
+      outcome.liveMarker,
+      outcome.targetHash,
+      toArgumentFor(run.target),
+      run.invocation,
+    );
+  }
+  return errorExtensionPathUnreachable({
+    spaceId: outcome.spaceId,
+    fromHash: outcome.liveMarker?.storageHash ?? EMPTY_CONTRACT_HASH,
+    targetHash: outcome.targetHash,
+    command: 'db migrate',
+    invocation: run.invocation,
+  });
+}
+
+/** What `--to` takes to name the application space's target: a ref's name or a hash, and `undefined` for the emitted contract. */
+export function toArgumentFor(target: MigrateTarget | undefined): string | undefined {
   if (target === undefined) return undefined;
   return target.kind === 'ref' ? target.ref.name : target.hash;
 }
@@ -886,13 +922,17 @@ export function buildNeverPlannedFailure(
   spaceId: string,
   targetHash: string,
   migrationsDir: string,
+  invocation: CliInvocation | undefined,
 ): CliStructuredError {
-  return errorPathUnreachable({
-    summary: `No on-disk migrations for contract space "${spaceId}"`,
-    why: `migrate is replay-only: a contract space that declares managed storage elements must have an authored migration graph on disk. Space "${spaceId}" has no migrations under \`${migrationsDir}/${spaceId}/\` but its head ref targets "${targetHash}".`,
-    meta: { spaceId, targetHash, kind: 'neverPlanned' },
-    to: undefined,
-  });
+  const meta: PathUnreachableMeta = { spaceId, targetHash, kind: 'neverPlanned' };
+  return errorPathUnreachable(
+    {
+      summary: `No on-disk migrations for contract space "${spaceId}"`,
+      why: `migrate is replay-only: a contract space that declares managed storage elements must have an authored migration graph on disk. Space "${spaceId}" has no migrations under \`${migrationsDir}/${spaceId}/\` but its head ref targets "${targetHash}".`,
+      meta,
+    },
+    planThenApply(meta, undefined, invocation),
+  );
 }
 
 /**
@@ -909,7 +949,8 @@ export function buildPathNotFoundFailure(
   spaceId: string,
   marker: ContractMarkerRecordLike | null,
   targetHash: string,
-  to: string | undefined,
+  toArgument: string | undefined,
+  invocation: CliInvocation | undefined,
 ): CliStructuredError {
   const fromHash = marker?.storageHash ?? EMPTY_CONTRACT_HASH;
   const fromText = marker === null ? 'the empty contract' : `the current state "${fromHash}"`;
@@ -921,12 +962,15 @@ export function buildPathNotFoundFailure(
     spaceId === 'app'
       ? 'Current contract has no planned migration path'
       : `Current contract has no planned migration path for contract space "${spaceId}"`;
-  return errorPathUnreachable({
-    summary,
-    why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
-    meta: { spaceId, fromHash, targetHash, kind: 'pathUnreachable' },
-    to,
-  });
+  const meta: PathUnreachableMeta = { spaceId, fromHash, targetHash, kind: 'pathUnreachable' };
+  return errorPathUnreachable(
+    {
+      summary,
+      why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
+      meta,
+    },
+    planThenApply(meta, toArgument, invocation),
+  );
 }
 
 function failedMigrationOnDisk(

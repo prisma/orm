@@ -15,7 +15,12 @@ import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildPathNotFoundFailure, executeMigrate } from '../../src/control-api/operations/migrate';
+import {
+  buildPathNotFoundFailure,
+  executeMigrate,
+  unreachableSpaceFailure,
+} from '../../src/control-api/operations/migrate';
+import type { CliInvocation } from '../../src/utils/printed-command';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const APP_CONTRACT: Contract = createSqlContract();
@@ -99,6 +104,10 @@ function fakeFamily(args: {
   >(used);
 }
 
+function invocationIn(projectDir: string): CliInvocation {
+  return { cwd: projectDir, configPath: undefined, dbGiven: true };
+}
+
 function migrate(args: {
   readonly projectDir: string;
   readonly markers: ReadonlyMap<string, ContractMarkerRecord>;
@@ -111,7 +120,7 @@ function migrate(args: {
       ControlDriverInstance<'sql', 'postgres'>,
       'no path is found, so nothing reaches the driver'
     >({ familyId: 'sql', targetId: 'postgres', close: async () => {} }),
-    invocation: { cwd: args.projectDir, configPath: undefined, dbGiven: true },
+    invocation: invocationIn(args.projectDir),
     familyInstance: fakeFamily({ markers: args.markers, ledger: args.ledger ?? [] }),
     contract: APP_CONTRACT,
     migrations: blindCast<
@@ -227,7 +236,13 @@ describe('executeMigrate with no path to the target', () => {
     });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
-      buildPathNotFoundFailure('app', markerAt(APP_HEAD), ELSEWHERE, ELSEWHERE).toEnvelope(),
+      buildPathNotFoundFailure(
+        'app',
+        markerAt(APP_HEAD),
+        ELSEWHERE,
+        ELSEWHERE,
+        invocationIn(projectDir),
+      ).toEnvelope(),
     );
   });
 
@@ -237,7 +252,13 @@ describe('executeMigrate with no path to the target', () => {
     const result = await migrate({ projectDir, markers: new Map([['app', markerAt(ELSEWHERE)]]) });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
-      buildPathNotFoundFailure('app', markerAt(ELSEWHERE), APP_HEAD, undefined).toEnvelope(),
+      buildPathNotFoundFailure(
+        'app',
+        markerAt(ELSEWHERE),
+        APP_HEAD,
+        undefined,
+        invocationIn(projectDir),
+      ).toEnvelope(),
     );
   });
 
@@ -251,7 +272,13 @@ describe('executeMigrate with no path to the target', () => {
     });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
-      buildPathNotFoundFailure('app', markerAt(APP_HEAD), ELSEWHERE, 'production').toEnvelope(),
+      buildPathNotFoundFailure(
+        'app',
+        markerAt(APP_HEAD),
+        ELSEWHERE,
+        'production',
+        invocationIn(projectDir),
+      ).toEnvelope(),
     );
   });
 
@@ -261,7 +288,52 @@ describe('executeMigrate with no path to the target', () => {
     const result = await migrate({ projectDir, markers: new Map(), refHash: ELSEWHERE });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
-      buildPathNotFoundFailure('app', null, ELSEWHERE, ELSEWHERE).toEnvelope(),
+      buildPathNotFoundFailure(
+        'app',
+        null,
+        ELSEWHERE,
+        ELSEWHERE,
+        invocationIn(projectDir),
+      ).toEnvelope(),
     );
+  });
+
+  it('advises installing another version of the extension when an extension space has no path', () => {
+    const failure = unreachableSpaceFailure(
+      {
+        kind: 'unreachable',
+        spaceId: 'pgvector',
+        liveMarker: markerAt(DELETED),
+        targetHash: ELSEWHERE,
+      },
+      { appSpaceId: 'app', target: undefined, invocation: invocationIn('/project') },
+    );
+
+    expect(failure.toEnvelope()).toMatchObject({
+      code: 'MIGRATION.PATH_UNREACHABLE',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Install a version of the extension whose migrations start from the contract the database is at',
+        },
+        {
+          kind: 'run-command',
+          label: 'List the migrations of extension space "pgvector"',
+          command: '{bin} migration list --space pgvector',
+        },
+        {
+          kind: 'run-command',
+          label: 'Run db migrate again',
+          command: '{bin} db migrate --db <url>',
+        },
+      ],
+      meta: {
+        kind: 'pathUnreachable',
+        spaceId: 'pgvector',
+        fromHash: DELETED,
+        targetHash: ELSEWHERE,
+      },
+    });
   });
 });
