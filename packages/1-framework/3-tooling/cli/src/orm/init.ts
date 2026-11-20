@@ -36,6 +36,7 @@ import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold'
 import { createTargetPackagePreparation } from './init-target-package';
 import { normalizeError } from './normalize-error';
 import { type ImportFromProject, importFromProject } from './project-modules';
+import { type LookUpRegistryKeywords, lookUpRegistryKeywords } from './registry-keywords';
 
 /** Each of these is a finding on a completed run, not an error. */
 const INIT_EXIT_CODES = {
@@ -83,6 +84,7 @@ function causeMessage(error: unknown): string {
 export interface InitCommandDependencies {
   readonly emitScaffoldedContract: typeof emitScaffoldedContract;
   readonly importFromProject: ImportFromProject;
+  readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
 }
 
 export const createInitCommand = (injected: InitCommandDependencies) =>
@@ -168,10 +170,12 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           prompt: ctx.prompt,
           prepareTargetPackage: createTargetPackagePreparation({
             cwd: ctx.cwd,
+            env: ctx.env,
             packages: ctx.packages,
             packageManager,
             install: !args.flags.skipInstall,
             importFromProject: injected.importFromProject,
+            lookUpRegistryKeywords: injected.lookUpRegistryKeywords,
           }),
           checkPrisma7Source: createPrisma7SourceCheck({
             cwd: ctx.cwd,
@@ -421,4 +425,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
     },
   });
 
-export const initCommand = createInitCommand({ emitScaffoldedContract, importFromProject });
+export const initCommand = createInitCommand({
+  emitScaffoldedContract,
+  importFromProject,
+  lookUpRegistryKeywords,
+});

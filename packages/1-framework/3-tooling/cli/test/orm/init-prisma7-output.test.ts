@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { importFromProject } from '../../src/orm/project-modules';
+import { noRegistryLookup } from '../utils/registry-keywords';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
@@ -16,6 +17,7 @@ const commands: MountedTree = {
   'orm init': createInitCommand({
     emitScaffoldedContract: emit,
     importFromProject,
+    lookUpRegistryKeywords: noRegistryLookup,
   }),
 };
 

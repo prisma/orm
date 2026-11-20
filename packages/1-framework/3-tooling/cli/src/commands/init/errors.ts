@@ -5,6 +5,7 @@ import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
 import {
   KNOWN_TARGET_PACKAGES,
   PACKAGE_NAME_PLACEHOLDER,
+  PRISMA_ORM_PACKAGE_KEYWORD,
   TARGET_SHORT_NAMES,
 } from './target-packages';
 
@@ -90,7 +91,7 @@ export function errorInitInvalidTarget(options: {
       ? {
           summary: 'Invalid value for --target',
           why: `\`--target ${options.value}\` is not one of the short names (${SHORT_NAME_LIST}), and init does not take it as a package name: ${problems}.`,
-          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the name of a target package (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`): a scoped name (\`@scope/name\`), or an unscoped one that begins \`prisma-orm-\`.`,
+          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the full name of a target package (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`).`,
         }
       : {
           summary: 'Invalid target package name',
@@ -543,6 +544,62 @@ function explainUnlisted(
 
 function takenAsPackageNameMeta(unlisted: boolean): { readonly takenAsPackageName?: true } {
   return unlisted ? { takenAsPackageName: true } : {};
+}
+
+/**
+ * A package in no list does not list the Prisma 8 keyword, or init could not read its keywords.
+ * Init checks before installing anything, so nothing was changed. `registry` is set when the
+ * keywords were to come from the registry rather than the installed package.
+ */
+export function errorInitTargetPackageNotVerified(
+  options: {
+    readonly packageName: string;
+    readonly installCommand: string;
+  } & (
+    | { readonly reason: 'keyword-missing'; readonly registry: string | undefined }
+    | { readonly reason: 'not-found'; readonly registry: string }
+    | { readonly reason: 'lookup-failed'; readonly registry: string; readonly cause: string }
+  ),
+): CliStructuredError {
+  const { packageName } = options;
+  const keyword = `\`${PRISMA_ORM_PACKAGE_KEYWORD}\``;
+  const wording = (() => {
+    switch (options.reason) {
+      case 'keyword-missing': {
+        const installed = options.registry === undefined;
+        const read = installed
+          ? `The installed ${packageName}`
+          : `The latest version of ${packageName} on ${options.registry}`;
+        return {
+          summary: `${packageName} is not a Prisma 8 package`,
+          why: `${read} does not list the keyword ${keyword} in its package.json, which every Prisma 8 package does, so init does not ${installed ? 'use' : 'install'} it. Nothing was changed.`,
+          fix: `Check the package name. If you maintain ${packageName}, add ${keyword} to the keywords in its package.json and publish a new version.`,
+        };
+      }
+      case 'not-found':
+        return {
+          summary: `${packageName} was not found`,
+          why: `No package named ${packageName} was found on ${options.registry}. Nothing was changed.`,
+          fix: `Check the package name, and that ${options.registry} is the registry that publishes it.`,
+        };
+      case 'lookup-failed':
+        return {
+          summary: `Could not read the keywords of ${packageName}`,
+          why: `Before installing a package, init checks that its package.json lists the keyword ${keyword}, and it could not read ${packageName} from ${options.registry}: ${options.cause}. Nothing was changed.`,
+          fix: `Install ${packageName} yourself with \`${options.installCommand}\`, then run \`prisma orm init\` again: init reads the keywords of an installed package from disk.`,
+        };
+    }
+  })();
+  return new CliStructuredError('CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED', wording.summary, {
+    ...explainUnlisted(true, packageName, wording),
+    docsUrl: docsUrlFor('CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED'),
+    meta: {
+      reason: options.reason,
+      package: packageName,
+      keyword: PRISMA_ORM_PACKAGE_KEYWORD,
+      ...(options.registry === undefined ? {} : { registry: options.registry }),
+    },
+  });
 }
 
 /**

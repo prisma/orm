@@ -8,6 +8,7 @@ import { configFile } from '../../src/commands/init/templates/code-templates';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
+import type { LookUpRegistryKeywords, RegistryKeywords } from '../../src/orm/registry-keywords';
 import { declareAddedPackages } from '../utils/fake-package-manager';
 import { fixtureContribution } from '../utils/fixture-contribution';
 import { createTestProjectDir } from '../utils/test-project-dir';
@@ -19,6 +20,16 @@ let projectDir: string;
 let installs: (readonly string[])[];
 let loaded: string[];
 let installsFail: boolean;
+let lookups: string[];
+let registryAnswer: RegistryKeywords;
+
+const REGISTRY = 'https://registry.example.test';
+const KEYWORD = 'prisma-orm-extension';
+
+const lookUpRegistryKeywords: LookUpRegistryKeywords = async (packageName) => {
+  lookups.push(packageName);
+  return registryAnswer;
+};
 
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
@@ -34,6 +45,8 @@ beforeEach(() => {
   installs = [];
   loaded = [];
   installsFail = false;
+  lookups = [];
+  registryAnswer = { kind: 'read', registry: REGISTRY, keywords: ['database', KEYWORD] };
 });
 
 afterEach(() => {
@@ -41,7 +54,7 @@ afterEach(() => {
 });
 
 /** An unlisted package whose contribution names its own driver; listed packages load as installed. */
-async function unlistedPackage(): Promise<ImportFromProject> {
+async function unlistedPackage(packageName = UNLISTED): Promise<ImportFromProject> {
   const contribution = {
     ...(await fixtureContribution('@prisma/orm-postgres')),
     label: 'SomeDB',
@@ -49,7 +62,7 @@ async function unlistedPackage(): Promise<ImportFromProject> {
   };
   return async (cwd, specifier) => {
     if (specifier.endsWith('/init')) loaded.push(specifier);
-    return specifier === `${UNLISTED}/init`
+    return specifier === `${packageName}/init`
       ? { kind: 'loaded', module: { default: contribution } }
       : importFromProject(cwd, specifier);
   };
@@ -61,6 +74,7 @@ function harness(loadModule: ImportFromProject = importFromProject) {
     'orm init': createInitCommand({
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
       importFromProject: loadModule,
+      lookUpRegistryKeywords,
     }),
   };
   return createTestCli({
@@ -311,21 +325,225 @@ describe('an unlisted package that cannot be used', () => {
   );
 });
 
-describe('an unscoped value that is not a short name', () => {
+const LISTED_INSTEAD =
+  'To use a target package from the list instead, pass its short name (--target postgres, --target mongodb); for any other, pass its full package name.';
+
+function installPackage(name: string, keywords: readonly string[] | undefined): void {
+  writeProjectFile(
+    `node_modules/${name}/package.json`,
+    JSON.stringify({ name, version: '1.0.0', ...(keywords === undefined ? {} : { keywords }) }),
+  );
+}
+
+describe('an unlisted package that does not list the Prisma 8 keyword', () => {
   it.each(['sqlite', 'mysql', 'postgre'])(
     'refuses --target %s without installing anything',
     async (value) => {
+      registryAnswer = { kind: 'read', registry: REGISTRY, keywords: ['database', value] };
+
       const run = await harness().run(starter(value), { cwd: projectDir });
 
       expect(run.exitCode).toBe(2);
+      expect(lookups).toEqual([value]);
+      expect(installs).toEqual([]);
+      expect(loaded).toEqual([]);
+      expect(projectEntries()).toEqual([]);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
+          summary: `${value} is not a Prisma 8 package`,
+          why: `\`${value}\` is not one of the short names (postgres, mongodb), so init took it as a package name. The latest version of ${value} on ${REGISTRY} does not list the keyword \`${KEYWORD}\` in its package.json, which every Prisma 8 package does, so init does not install it. Nothing was changed.`,
+          nextActions: [
+            expect.objectContaining({
+              label: `Check the package name. If you maintain ${value}, add \`${KEYWORD}\` to the keywords in its package.json and publish a new version. ${LISTED_INSTEAD}`,
+            }),
+          ],
+          meta: { reason: 'keyword-missing', package: value, keyword: KEYWORD, registry: REGISTRY },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses a package name typed into the picker the same way',
+    async () => {
+      registryAnswer = { kind: 'read', registry: REGISTRY, keywords: [] };
+
+      const run = await harness().run(['orm', 'init', '--json'], {
+        cwd: projectDir,
+        isTty: { stdin: true },
+        answers: ['another-package', 'sqlite', 'psl', 'src/prisma/contract.prisma', false],
+      });
+
+      expect(lookups).toEqual(['sqlite']);
+      expect(installs).toEqual([]);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
+          meta: { reason: 'keyword-missing', package: 'sqlite' },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'accepts an unscoped name with no prefix when the package lists the keyword',
+    async () => {
+      const run = await harness(await unlistedPackage('acmedb')).run(starter('acmedb'), {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
+      expect(lookups).toEqual(['acmedb']);
+      expect(installs[0]).toEqual(['add', 'acmedb', 'dotenv']);
+      expect(run.presented?.data).toMatchObject({ target: 'acmedb', package: 'acmedb' });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses a package the registry does not have, without installing anything',
+    async () => {
+      registryAnswer = { kind: 'not-found', registry: REGISTRY };
+
+      const run = await harness().run(starter('acmedb'), { cwd: projectDir });
+
+      expect(run.exitCode).toBe(2);
+      expect(installs).toEqual([]);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
+          summary: 'acmedb was not found',
+          why: `\`acmedb\` is not one of the short names (postgres, mongodb), so init took it as a package name. No package named acmedb was found on ${REGISTRY}. Nothing was changed.`,
+          nextActions: [
+            expect.objectContaining({
+              label: `Check the package name, and that ${REGISTRY} is the registry that publishes it. ${LISTED_INSTEAD}`,
+            }),
+          ],
+          meta: { reason: 'not-found', package: 'acmedb', keyword: KEYWORD, registry: REGISTRY },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses when the registry cannot be read, and says installing the package first works',
+    async () => {
+      registryAnswer = {
+        kind: 'failed',
+        registry: REGISTRY,
+        cause: 'the registry answered with status 403',
+      };
+
+      const run = await harness().run(starter('acmedb'), { cwd: projectDir });
+
+      expect(run.exitCode).toBe(2);
+      expect(installs).toEqual([]);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
+          summary: 'Could not read the keywords of acmedb',
+          why: `\`acmedb\` is not one of the short names (postgres, mongodb), so init took it as a package name. Before installing a package, init checks that its package.json lists the keyword \`${KEYWORD}\`, and it could not read acmedb from ${REGISTRY}: the registry answered with status 403. Nothing was changed.`,
+          nextActions: [
+            expect.objectContaining({
+              label: `Install acmedb yourself with \`pnpm add acmedb\`, then run \`prisma orm init\` again: init reads the keywords of an installed package from disk. ${LISTED_INSTEAD}`,
+            }),
+          ],
+          meta: {
+            reason: 'lookup-failed',
+            package: 'acmedb',
+            keyword: KEYWORD,
+            registry: REGISTRY,
+          },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'never looks up a listed package',
+    async () => {
+      const run = await harness().run([...starter('postgres'), '--skip-install'], {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(lookups).toEqual([]);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'reads an installed package from disk and proceeds when it lists the keyword',
+    async () => {
+      installPackage('acmedb', [KEYWORD]);
+      registryAnswer = { kind: 'not-found', registry: REGISTRY };
+
+      const run = await harness(await unlistedPackage('acmedb')).run(starter('acmedb'), {
+        cwd: projectDir,
+      });
+
+      expect(run.exitCode, JSON.stringify(envelopeOf(run))).toBe(0);
+      expect(lookups).toEqual([]);
+      expect(loaded).toEqual(['acmedb/init']);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it.each([
+    ['', []],
+    [' under --skip-install', ['--skip-install']],
+  ])(
+    'refuses an installed package that does not list the keyword%s, reading it from disk',
+    async (_, extra) => {
+      installPackage('acmedb', ['database']);
+
+      const run = await harness(await unlistedPackage('acmedb')).run(
+        [...starter('acmedb'), ...extra],
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(lookups).toEqual([]);
       expect(installs).toEqual([]);
       expect(loaded).toEqual([]);
       expect(envelopeOf(run)).toMatchObject({
         ok: false,
         error: {
-          code: 'CLI.INIT_INVALID_FLAG_VALUE',
-          why: `\`--target ${value}\` is not one of the short names (postgres, mongodb), and init does not take it as a package name: an unscoped package name is accepted only when it begins \`prisma-orm-\`.`,
-          meta: { flag: 'target', value, allowed: ['postgres', 'mongodb'] },
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
+          why: `\`acmedb\` is not one of the short names (postgres, mongodb), so init took it as a package name. The installed acmedb does not list the keyword \`${KEYWORD}\` in its package.json, which every Prisma 8 package does, so init does not use it. Nothing was changed.`,
+          meta: { reason: 'keyword-missing', package: 'acmedb', keyword: KEYWORD },
+        },
+      });
+      expect(Reflect.get(envelopeOf(run).error.meta, 'registry')).toBeUndefined();
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'refuses an installed package whose keywords are not a list',
+    async () => {
+      writeProjectFile(
+        'node_modules/acmedb/package.json',
+        JSON.stringify({ name: 'acmedb', keywords: KEYWORD }),
+      );
+
+      const run = await harness().run([...starter('acmedb'), '--skip-install'], {
+        cwd: projectDir,
+      });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED',
+          meta: { reason: 'keyword-missing' },
         },
       });
     },

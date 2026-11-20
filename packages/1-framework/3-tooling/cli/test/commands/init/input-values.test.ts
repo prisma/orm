@@ -8,6 +8,8 @@ describe('resolveTarget', () => {
     ['PostgreSQL', 'postgres', '@prisma/orm-postgres'],
     ['@prisma/orm-mongo', 'mongodb', '@prisma/orm-mongo'],
     ['prisma-orm-somedb', 'prisma-orm-somedb', 'prisma-orm-somedb'],
+    ['acmedb', 'acmedb', 'acmedb'],
+    ['sqlite', 'sqlite', 'sqlite'],
     ['@acme/orm-somedb', '@acme/orm-somedb', '@acme/orm-somedb'],
   ])('takes --target %s as %s from %s', (value, name, packageName) => {
     const target = resolveTarget(value);
@@ -47,7 +49,7 @@ describe('resolveTarget', () => {
       expect.objectContaining({
         message: 'Invalid value for --target',
         why: expect.stringContaining('is not one of the short names (postgres, mongodb)'),
-        fix: 'Pass a short name (--target postgres, --target mongodb) or the name of a target package (`--target <package>`): a scoped name (`@scope/name`), or an unscoped one that begins `prisma-orm-`.',
+        fix: 'Pass a short name (--target postgres, --target mongodb) or the full name of a target package (`--target <package>`).',
       }),
     );
   });

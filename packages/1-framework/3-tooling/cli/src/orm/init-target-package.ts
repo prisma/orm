@@ -14,16 +14,22 @@ import {
   errorInitContributionUnavailable,
   errorInitInvalidManifest,
   errorInitTargetPackageNotInstalled,
+  errorInitTargetPackageNotVerified,
   type InstallReason,
   type PackagesAdded,
   packagesAddedAction,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
-import { firstInstallDrivers, type TargetPackage } from '../commands/init/target-packages';
+import {
+  firstInstallDrivers,
+  PRISMA_ORM_PACKAGE_KEYWORD,
+  type TargetPackage,
+} from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
 import { normalizeError } from './normalize-error';
-import { type ImportFromProject, isInstalledInProject } from './project-modules';
+import { type ImportFromProject, installedManifest, isInstalledInProject } from './project-modules';
+import { keywordsOf, type LookUpRegistryKeywords } from './registry-keywords';
 
 const InitContributionSchema = type({
   label: 'string',
@@ -126,20 +132,26 @@ export class TargetPackageInstallFailed extends Error {
 /**
  * Installs the target package with `dotenv`, the package every init installs, and the driver
  * packages its list entry names, leaving out those the project already declares, then loads the
- * package's init contribution from the project. Under `--skip-install` the package must already be
- * installed. Each refusal happens before any file is written.
+ * package's init contribution from the project. A package in no list must first list the Prisma 8
+ * keyword. Under `--skip-install` the package must already be installed. Each refusal happens
+ * before any file is written.
  */
 export function createTargetPackagePreparation(ctx: {
   readonly cwd: string;
+  readonly env: Readonly<Record<string, string | undefined>>;
   readonly packages: PackageOperations;
   readonly packageManager: PackageManager;
   readonly install: boolean;
   readonly importFromProject: ImportFromProject;
+  readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
 }): PrepareTargetPackage {
   return async (target) => {
     const { packageName } = target;
     const drivers = firstInstallDrivers(target);
     rejectUnparseableManifest(ctx.cwd);
+    if (target.listed === undefined) {
+      await rejectPackageWithoutKeyword(ctx, packageName);
+    }
     const warnings: string[] = [];
     let installed: readonly string[] = [];
     let added: PackagesAdded | undefined;
@@ -182,6 +194,70 @@ export function createTargetPackagePreparation(ctx: {
       throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
     }
   };
+}
+
+/**
+ * Installing a package runs its install scripts, so a name that is not a Prisma 8 package, such as
+ * a mistyped short name, is refused before anything is installed. An installed package is read
+ * from disk; any other from the registry.
+ */
+async function rejectPackageWithoutKeyword(
+  ctx: {
+    readonly cwd: string;
+    readonly env: Readonly<Record<string, string | undefined>>;
+    readonly packageManager: PackageManager;
+    readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
+  },
+  packageName: string,
+): Promise<void> {
+  const refusal = {
+    packageName,
+    installCommand: installCommand(ctx.packageManager, [packageName]),
+  };
+  const manifestPath = installedManifest(ctx.cwd, packageName);
+  if (manifestPath !== undefined) {
+    if (!keywordsOf(readManifest(manifestPath)).includes(PRISMA_ORM_PACKAGE_KEYWORD)) {
+      throw errorInitTargetPackageNotVerified({
+        ...refusal,
+        reason: 'keyword-missing',
+        registry: undefined,
+      });
+    }
+    return;
+  }
+  const answer = await ctx.lookUpRegistryKeywords(packageName, ctx.env);
+  switch (answer.kind) {
+    case 'read':
+      if (!answer.keywords.includes(PRISMA_ORM_PACKAGE_KEYWORD)) {
+        throw errorInitTargetPackageNotVerified({
+          ...refusal,
+          reason: 'keyword-missing',
+          registry: answer.registry,
+        });
+      }
+      return;
+    case 'not-found':
+      throw errorInitTargetPackageNotVerified({
+        ...refusal,
+        reason: 'not-found',
+        registry: answer.registry,
+      });
+    case 'failed':
+      throw errorInitTargetPackageNotVerified({
+        ...refusal,
+        reason: 'lookup-failed',
+        registry: answer.registry,
+        cause: answer.cause,
+      });
+  }
+}
+
+function readManifest(path: string): unknown {
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8'));
+  } catch {
+    return undefined;
+  }
 }
 
 async function loadContribution(

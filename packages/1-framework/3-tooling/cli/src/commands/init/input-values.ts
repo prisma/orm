@@ -40,27 +40,7 @@ export function resolveTargetName(value: string, answeredIn: 'flag' | 'prompt'):
       answeredIn,
     });
   }
-  if (!isScoped(value) && !value.startsWith(COMMUNITY_PACKAGE_PREFIX)) {
-    throw errorInitInvalidTarget({
-      value,
-      problems: [
-        `an unscoped package name is accepted only when it begins \`${COMMUNITY_PACKAGE_PREFIX}\``,
-      ],
-      answeredIn,
-    });
-  }
   return unlistedTargetPackage(value);
-}
-
-/**
- * The name a community package takes when it has no scope. A bare word is far
- * likelier a mistyped short name than a target package, and installing it would run an unrelated
- * package from the registry.
- */
-const COMMUNITY_PACKAGE_PREFIX = 'prisma-orm-';
-
-function isScoped(packageName: string): boolean {
-  return packageName.startsWith('@');
 }
 
 export function resolveAuthoring(value: string | undefined): ContractSourceFormat | undefined {

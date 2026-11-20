@@ -100,7 +100,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * The `package.json` of `name` in the nearest `node_modules` from `cwd` upwards, where Node looks
  * for a bare specifier. `module.findPackageJSON` does this too, but Bun and Deno do not have it.
  */
-function installedManifest(cwd: string, name: string): string | undefined {
+export function installedManifest(cwd: string, name: string): string | undefined {
   for (let dir = cwd; ; dir = dirname(dir)) {
     const candidate = join(dir, 'node_modules', name, 'package.json');
     if (existsSync(candidate)) {
