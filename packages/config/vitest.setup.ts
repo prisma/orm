@@ -2,6 +2,8 @@ import path from 'node:path'
 
 import { afterEach, beforeEach } from 'vitest'
 
+process.chdir(__dirname)
+
 beforeEach(() => {
   /**
    * Set up JITI aliasing for the test environment.

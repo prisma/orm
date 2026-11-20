@@ -34,8 +34,7 @@
   },
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
-    "build": "tsx helpers/build.ts",
-    "test": "vitest run"
+    "build": "tsx helpers/build.ts"
   },
   "files": [
     "dist",

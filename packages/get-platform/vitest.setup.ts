@@ -1,0 +1,1 @@
+process.chdir(__dirname)

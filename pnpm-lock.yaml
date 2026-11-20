@@ -1239,15 +1239,6 @@ importers:
         specifier: workspace:*
         version: link:../get-platform
     devDependencies:
-      '@swc/core':
-        specifier: 1.11.5
-        version: 1.11.5
-      '@swc/jest':
-        specifier: 0.2.37
-        version: 0.2.37(@swc/core@1.11.5)
-      '@types/jest':
-        specifier: 29.5.14
-        version: 29.5.14
       '@types/node':
         specifier: ~20.19.24
         version: 20.19.25

@@ -548,15 +548,16 @@ jobs:
         working-directory: packages/client
 
   #
-  # Client internals and generator packages
+  # Vitest
   #
-  client-packages:
-    name: Client internals and generators [v${{ matrix.node }}]
+  vitest:
+    name: Vitest [v${{ matrix.node }}]
     timeout-minutes: 30
     runs-on: ubuntu-latest
     if: |
       contains(inputs.jobsToRun, '-all-') ||
-      contains(inputs.jobsToRun, '-client-')
+      contains(inputs.jobsToRun, '-client-') ||
+      contains(inputs.jobsToRun, '-query-plan-executor-')
     strategy:
       fail-fast: false
       matrix:
@@ -571,33 +572,7 @@ jobs:
           engine-hash: ${{ inputs.engineHash }}
           skip-tsc: false
 
-      - run: pnpm run test
-        name: 'client-common'
-        working-directory: packages/client-common
-
-      - run: pnpm run test
-        name: 'param-graph'
-        working-directory: packages/param-graph
-
-      - run: pnpm run test
-        name: 'client-engine-runtime'
-        working-directory: packages/client-engine-runtime
-
-      - run: pnpm run test
-        name: 'ts-builders'
-        working-directory: packages/ts-builders
-
-      - run: pnpm run test
-        name: 'client-generator-js'
-        working-directory: packages/client-generator-js
-
-      - run: pnpm run test
-        name: 'client-generator-ts'
-        working-directory: packages/client-generator-ts
-
-      - run: pnpm run test
-        name: 'client-generator-registry'
-        working-directory: packages/client-generator-registry
+      - run: pnpm vitest
 
   #
   # WORKSPACE-TYPES
@@ -803,171 +778,6 @@ jobs:
         working-directory: packages/cli
 
   #
-  # All the other packages!
-  #
-  others:
-    name: Others [v${{ matrix.node }}]
-    timeout-minutes: 10
-    runs-on: ${{ matrix.os }}
-    if: contains(inputs.jobsToRun, '-all-')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        node: ['20.19.0', '22.12.0', '24']
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-
-      - name: Install & build
-        uses: ./.github/actions/setup
-        with:
-          node-version: ${{ matrix.node }}
-          engine-hash: ${{ inputs.engineHash }}
-          skip-tsc: true
-
-      - run: pnpm run test
-        name: 'debug'
-        working-directory: packages/debug
-
-      - run: pnpm run test
-        name: 'generator-helper'
-        working-directory: packages/generator-helper
-
-      - run: pnpm run test
-        name: 'get-platform'
-        working-directory: packages/get-platform
-
-      - run: pnpm run test
-        name: 'fetch-engine'
-        working-directory: packages/fetch-engine
-
-      - run: pnpm run test
-        name: 'engines'
-        working-directory: packages/engines
-
-      - run: pnpm run test
-        name: 'instrumentation'
-        working-directory: packages/instrumentation
-
-      - run: pnpm run test
-        name: 'instrumentation-contract'
-        working-directory: packages/instrumentation-contract
-
-      - run: pnpm run test
-        name: 'schema-files-loader'
-        working-directory: packages/schema-files-loader
-
-      - run: pnpm run test
-        name: 'config'
-        working-directory: packages/config
-
-      - run: pnpm run test
-        name: 'dmmf'
-        working-directory: packages/dmmf
-
-      - run: pnpm run test
-        name: 'generator'
-        working-directory: packages/generator
-
-      - run: pnpm run test
-        name: 'credentials-store'
-        working-directory: packages/credentials-store
-
-      - run: pnpm run test
-        name: 'sqlcommenter-query-tags'
-        working-directory: packages/sqlcommenter-query-tags
-
-      - run: pnpm run test
-        name: 'sqlcommenter-trace-context'
-        working-directory: packages/sqlcommenter-trace-context
-
-      - run: pnpm run test
-        name: 'sqlcommenter-query-insights'
-        working-directory: packages/sqlcommenter-query-insights
-
-  #
-  # Driver Adapter Unit Tests
-  #
-  driver-adapter-unit-tests:
-    name: DA Unit Tests [v${{ matrix.node }}]
-    timeout-minutes: 10
-    runs-on: ${{ matrix.os }}
-    if: contains(inputs.jobsToRun, '-all-')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        node: ['20.19.0', '24']
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-
-      - name: Install & build
-        uses: ./.github/actions/setup
-        with:
-          node-version: ${{ matrix.node }}
-          engine-hash: ${{ inputs.engineHash }}
-          skip-tsc: true
-
-      - run: pnpm run test
-        name: 'adapter-libsql'
-        working-directory: packages/adapter-libsql
-
-      - run: pnpm run test
-        name: 'adapter-mariadb'
-        working-directory: packages/adapter-mariadb
-
-      - run: pnpm run test
-        name: 'adapter-d1'
-        working-directory: packages/adapter-d1
-
-      - run: pnpm run test
-        name: 'adapter-pg'
-        working-directory: packages/adapter-pg
-
-      - run: pnpm run test
-        name: 'adapter-planetscale'
-        working-directory: packages/adapter-planetscale
-
-      - run: pnpm run test
-        name: 'adapter-mssql'
-        working-directory: packages/adapter-mssql
-
-      - run: pnpm run test
-        name: 'adapter-neon'
-        working-directory: packages/adapter-neon
-
-      - run: pnpm run test
-        name: 'adapter-ppg'
-        working-directory: packages/adapter-ppg
-
-  #
-  # Query plan executor unit tests
-  #
-  qpe-unit-tests:
-    name: QPE Unit Tests [v${{ matrix.node }}]
-    timeout-minutes: 10
-    runs-on: ${{ matrix.os }}
-    if: contains(inputs.jobsToRun, '-all-') || contains(inputs.jobsToRun, '-query-plan-executor-')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        node: ['24']
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-
-      - name: Install & build
-        uses: ./.github/actions/setup
-        with:
-          node-version: ${{ matrix.node }}
-          engine-hash: ${{ inputs.engineHash }}
-          skip-tsc: true
-
-      - run: pnpm run test
-        name: 'query-plan-executor'
-        working-directory: packages/query-plan-executor
-
-  #
   # Run type performance benchmark tests
   #
   type-benchmark-tests:
@@ -1105,6 +915,9 @@ jobs:
           # Fails if set to true
           skip-tsc: false
 
+      - run: pnpm vitest
+        if: contains(inputs.jobsToRun, '-all-')
+
       - name: Test packages/internals
         if: contains(inputs.jobsToRun, '-all-') || contains(inputs.jobsToRun, '-internals-')
         run: pnpm run test --testTimeout=40000
@@ -1140,142 +953,6 @@ jobs:
         env:
           JEST_JUNIT_SUITE_NAME: 'cli'
           JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/debug
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/debug
-        env:
-          JEST_JUNIT_SUITE_NAME: 'debug'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/generator-helper
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/generator-helper
-        env:
-          JEST_JUNIT_SUITE_NAME: 'generator-helper'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/get-platform
-        continue-on-error: true # Can fail randomly and we don't want to fail the whole workflow
-        if: success() && contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/get-platform
-        env:
-          JEST_JUNIT_SUITE_NAME: 'get-platform'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/fetch-engine
-        continue-on-error: true # Can fail randomly and we don't want to fail the whole workflow
-        if: success() && contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/fetch-engine
-        env:
-          JEST_JUNIT_SUITE_NAME: 'fetch-engine'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/engines
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/engines
-        env:
-          JEST_JUNIT_SUITE_NAME: 'engines'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/schema-files-loader
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/schema-files-loader
-        env:
-          JEST_JUNIT_SUITE_NAME: 'schema-files-loader'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/config
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/config
-        env:
-          JEST_JUNIT_SUITE_NAME: 'config'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/client-engine-runtime
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/client-engine-runtime
-        env:
-          JEST_JUNIT_SUITE_NAME: 'client-engine-runtime'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'dmmf'
-        working-directory: packages/dmmf
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'generator'
-        working-directory: packages/generator
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'client-common'
-        working-directory: packages/client-common
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'param-graph'
-        working-directory: packages/param-graph
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'ts-builders'
-        working-directory: packages/ts-builders
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'client-generator-js'
-        working-directory: packages/client-generator-js
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'client-generator-ts'
-        working-directory: packages/client-generator-ts
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'credentials-store'
-        working-directory: packages/credentials-store
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'client-generator-registry'
-        working-directory: packages/client-generator-registry
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-') || contains(inputs.jobsToRun, '-query-plan-executor-')
-        name: 'query-plan-executor'
-        working-directory: packages/query-plan-executor
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'instrumentation-contract'
-        working-directory: packages/instrumentation-contract
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'sqlcommenter-query-tags'
-        working-directory: packages/sqlcommenter-query-tags
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'sqlcommenter-trace-context'
-        working-directory: packages/sqlcommenter-trace-context
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'sqlcommenter-query-insights'
-        working-directory: packages/sqlcommenter-query-insights
 
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
