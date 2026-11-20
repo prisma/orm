@@ -256,6 +256,8 @@ await db.transaction(async (tx) => {
 
 Use `db.prepare(declaration, params => ...)` to prepare SQL queries, ORM row reads or ORM aggregates once and execute them with different parameter values.
 
+Both `postgres()` and `postgresServerless()` accept `prepare: 'client' | 'database'`. The default, `'database'`, prepares each statement once in the database as a named prepared statement and reuses it. Use `prepare: 'client'` with poolers that do not support database-level prepared statements: `db.prepare()` still pre-lowers and reuses the query on the client, but executions send unnamed statements to the database. The runtime that runs a statement decides: a statement prepared with one client and run with `prepared.query(other.runtime(), ...)` follows the `prepare` setting of `other`.
+
 ```ts
 const byId = await db.prepare({ id: 'pg/int4@1' }, (params) =>
   db.sql.public.users.select('id').where((f, fns) => fns.eq(f.id, params.id)).build(),

@@ -29,10 +29,10 @@ import type {
   AnyQueryAst,
   ContractCodecRegistry,
   LoweredStatement,
-  PreparedExecuteRequest,
   SqlCodecCallContext,
   SqlConnection,
   SqlDriver,
+  SqlExecuteRequest,
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
@@ -146,6 +146,10 @@ export interface RuntimeOptions<TContract extends Contract<SqlStorage> = Contrac
   readonly adapter: Adapter<AnyQueryAst, Contract<SqlStorage>, LoweredStatement>;
   readonly driver: SqlDriver<unknown>;
   readonly closeRefusal?: CloseRefusal | undefined;
+  /**
+   * Where statements from `prepare()` are prepared. `'database'` (the default) hands the driver a prepared-statement handle, so a driver that supports it prepares the statement once in the database and reuses it. `'client'` keeps the pre-lowered statement but sends it without a handle, so the driver runs it as an unnamed statement; use it behind poolers that do not support database-level prepared statements.
+   */
+  readonly prepare?: 'client' | 'database' | undefined;
   /** Whether `close()` closes the driver; `true` by default. Pass `false` for a runtime that shares a driver its owner closes: its `close()` refuses new work and waits for work in flight, and leaves the driver open. */
   readonly ownsDriver?: boolean | undefined;
 }
@@ -308,6 +312,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   private closePromise: Promise<void> | null;
   private readonly ownsDriver: boolean;
   private readonly closeRefusal: CloseRefusal;
+  private readonly prepareMode: 'client' | 'database';
   readonly #inFlight = new InFlightOperations();
   // Transactions from their start until their commit or rollback settles. close() waits for them once it refuses, but an open transaction alone does not keep a 'when-idle' close from starting to refuse.
   readonly #openTransactionWork = new InFlightOperations();
@@ -367,6 +372,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       log,
       closeRefusal,
       ownsDriver,
+      prepare,
     } = options;
 
     if (middleware) {
@@ -403,6 +409,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     this.sqlCtx = sqlCtx;
     this.verifyMarkerOption = verifyMarker ?? 'onFirstUse';
     this.closeRefusal = closeRefusal ?? 'when-idle';
+    this.prepareMode = prepare ?? 'database';
     this.codecRegistryValidated = false;
     this.verifyMarkerPromise = this.verifyMarkerOption === false ? Promise.resolve() : null;
     this.closePromise = null;
@@ -1310,17 +1317,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       meta: ps.meta,
     };
 
-    const handles = this.#preparedStatementHandles;
-    const request: PreparedExecuteRequest = {
-      sql: exec.sql,
-      params: exec.params,
-      preparedStatementHandle: {
-        get: () => handles.get(ps),
-        set: (value) => {
-          handles.set(ps, value);
-        },
-      },
-    };
+    const request = this.preparedRequest(ps, exec);
 
     yield* this.streamDecodedRows<Row>(
       run,
@@ -1398,8 +1395,19 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       ast: ps.ast,
       meta: ps.meta,
     };
+    const request = this.preparedRequest(ps, exec);
+
+    return this.executeEncodedPlan(run, exec, queryable, transaction, codecCtx, () =>
+      queryable.execute(request),
+    );
+  }
+
+  private preparedRequest(ps: object, exec: SqlExecutionPlan): SqlExecuteRequest {
+    if (this.prepareMode === 'client') {
+      return { sql: exec.sql, params: exec.params };
+    }
     const handles = this.#preparedStatementHandles;
-    const request: PreparedExecuteRequest = {
+    return {
       sql: exec.sql,
       params: exec.params,
       preparedStatementHandle: {
@@ -1409,10 +1417,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         },
       },
     };
-
-    return this.executeEncodedPlan(run, exec, queryable, transaction, codecCtx, () =>
-      queryable.execute(request),
-    );
   }
 
   async connection(

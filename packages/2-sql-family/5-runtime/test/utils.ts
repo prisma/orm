@@ -133,8 +133,17 @@ type CreateTestRuntimeOptions<TContract extends Contract<SqlStorage>> = Omit<
 export function createTestRuntime<TContract extends Contract<SqlStorage>>(
   options: CreateTestRuntimeOptions<TContract>,
 ): Runtime {
-  const { stackInstance, context, driver, verifyMarker, middleware, mode, log, closeRefusal } =
-    options;
+  const {
+    stackInstance,
+    context,
+    driver,
+    verifyMarker,
+    middleware,
+    mode,
+    log,
+    closeRefusal,
+    prepare,
+  } = options;
   const target = blindCast<
     TargetListDecoderContribution,
     'test stack target may contribute the runtime list-decoder hook structurally'
@@ -148,6 +157,7 @@ export function createTestRuntime<TContract extends Contract<SqlStorage>>(
       ...ifDefined('middleware', middleware),
       ...ifDefined('mode', mode),
       ...ifDefined('log', log),
+      ...ifDefined('prepare', prepare),
       closeRefusal,
     },
     target.listDecoder?.() ?? sqlNativeArrayListDecoder,

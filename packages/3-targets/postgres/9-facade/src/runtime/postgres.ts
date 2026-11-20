@@ -171,6 +171,7 @@ export default function postgres<
       adapter,
       driver,
       ...toRuntimeOptions(options),
+      prepare: options.prepare,
       closeRefusal: 'at-once',
     });
     runtimeInstance = runtime;
