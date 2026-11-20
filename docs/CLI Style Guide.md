@@ -258,9 +258,9 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
   - `prisma-8.md`, a short quick reference, and `.env.example` with `DATABASE_URL`.
   - `tsconfig.json`, and idempotent updates to `.gitignore`, `.gitattributes` and the `package.json` scripts.
 - After-init output: a short header and a numbered "Next steps" list.
-- Re-init: when the project already has a generated `prisma.config.ts`, init asks the user to type the directory's basename (or `--confirm <name>`) before it overwrites the generated files.
+- Re-init: when the project already has any file init would replace (`prisma.config.ts`, the starter contract, `db.ts` or the quick reference), init asks the user to type the directory's basename (or `--confirm <name>`) before it overwrites the generated files.
 - `--skip-install` installs nothing: the target package must already be installed. Init writes the files and prints the install and emit commands.
-- Refusals before any file is written: an unknown or invalid `--target`, a package with no `init` entrypoint, an authoring mode the package does not offer. A refusal after the install says what the install added to `package.json` and how to remove it.
+- Refusals before any file is written: a `--target` that is neither a short name nor a valid package name, a package with no `init` entrypoint, an authoring mode the package does not offer. A refusal after the install says what the install added to `package.json` and how to remove it.
 - Artifacts: commit `contract.json` and `contract.d.ts` to VCS by default.
 
 ## Flag Conventions

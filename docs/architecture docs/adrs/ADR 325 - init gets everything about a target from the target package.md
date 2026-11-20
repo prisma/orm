@@ -109,10 +109,10 @@ A failed install stops `init`, as [ADR 323](ADR%20323%20-%20Prisma%208%20is%20no
 
 ```sh
 prisma orm init --target postgres                 # a short name
-prisma orm init --target prisma-orm-cockroachdb   # a package name, once package names are accepted
+prisma orm init --target prisma-orm-cockroachdb   # a package name
 ```
 
-Today `--target` takes the short names and aliases in the CLI's list of known target packages, and refuses any other value. The decision is that `--target` is looked up in the list and a value that is not in it is taken as a package name; that comes with a later change, and everything this record says about unlisted packages applies from then.
+`--target` is looked up in the CLI's list of known target packages, by short name, alias or package name. A value that is not in the list is taken as a package name. A value that is neither in the list nor a name npm accepts for a new package is refused before anything changes. Naming a listed package by its package name is the same as naming it by its short name: `--target @prisma/orm-postgres` is `--target postgres`.
 
 | Short name | Aliases | Package | Name in this repository | Label | Provider in an earlier Prisma schema | Drivers it requires |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -121,19 +121,19 @@ Today `--target` takes the short names and aliases in the CLI's list of known ta
 
 - **A target package is listed because Prisma vouches for it.** Who wrote it does not matter, and a community package can be listed.
 - **The list holds names and the facts `init` needs before anything is installed.** The picker shows the label before the package is installed. The drivers go into the package's own install, and a Prisma 6 project gets printed setup instructions and no install at all, so both take the drivers from the list.
-- **A listed package runs the same code as an unlisted one.** Listing gives a short name, a line in the interactive picker, the drivers for the first install, and the mapping from an earlier Prisma's provider.
+- **A listed package runs the same code as an unlisted one.** Listing gives a short name, a line in the interactive picker, the drivers for the first install, the mapping from an earlier Prisma's provider, and, when a later run of `init` switches to another target, the offer to remove the package. `init` finds a previously installed target package by looking for the listed names in `package.json`, so it does not offer to remove an unlisted one.
 - **The list must agree with the contributions.** A test loads each listed package's published contribution and checks that its label, driver packages and config module match the list entry.
 
 ## Projects coming from Prisma 6 and Prisma 7
 
-`init` reads the `provider` from an existing Prisma schema and finds the target package through the list. Only listed packages take part. A provider with no entry is refused, with advice to start a fresh project with `--target`.
+`init` reads the `provider` from an existing Prisma schema and finds the target package through the list. Only listed packages take part. A provider with no entry is refused, with advice to start a fresh project with `--target`. `--from-prisma7-schema` with `--target` naming an unlisted package is refused before anything is installed. Without `--from-prisma7-schema`, `--target` naming an unlisted package sets up a fresh project and leaves the Prisma 7 schema alone, with a warning that says so.
 
 - **A provider only Prisma 6 wrote**, such as `mongodb`, marks a Prisma 6 project. `init` changes nothing and prints how to set Prisma 8 up beside it.
 - **A Prisma 7 schema** can be kept as the contract source. A target package can take one when its `configModule` exports `prisma7Schema`. The CLI then writes the config around it, and the contribution must give `prisma7QuickReference`. A package without `prisma7Schema` cannot take a Prisma 7 schema. In an interactive run, `init` then sets up a fresh project instead; with `--from-prisma7-schema` it stops with `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE` and writes nothing.
 
 ## Output
 
-The `--json` result reports `target`: the short name for a listed package. When package names are accepted, it also reports `package`, the name of the target package that was installed.
+The `--json` result reports `package`, the name of the target package, and `target`: the short name for a listed package, and the package name for an unlisted one.
 
 ## Why
 
@@ -148,6 +148,7 @@ The `--json` result reports `target`: the short name for a listed package. When 
 - A target package without a runtime client cannot provide a contribution, because there is no `db.ts` to write.
 - `init` cannot write a project for a target package that is not installed. `--skip-install` in a project without it is refused.
 - `init` runs code from the package the user names. It is the same package the config loads a moment later.
+- Any valid package name is installed. A mistyped short name, or a guess such as `--target sqlite`, names some package on the registry, and `init` installs it as the package manager's own `add sqlite` would. When that package has no `init` entrypoint, the error says the value was not a short name and was taken as a package name, and how to remove what was installed. `init` keeps no list of names to refuse, because that would put target names into the CLI, and it asks no confirmation, for the reason given under the alternatives.
 - `init` does not know an unlisted package's drivers before installing it, and it does not read the registry to find out. Its first install is the package and `dotenv`, and the package manager handles the package's required peers its own way; the contribution's `peerPackages` are declared in the later install. Where the package manager's configuration refuses a package without its peers, the install fails and `init` reports it.
 - The minimum server version has one source, the target package's code. The CLI keeps no copy of it.
 
