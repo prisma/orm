@@ -9,9 +9,7 @@ export const onErrorPlugin: esbuild.Plugin = {
     build.onEnd((result) => {
       // if there were errors found on the build
       if (result.errors.length > 0) {
-        if (process.env.WATCH !== 'true') {
-          process.exit(1)
-        }
+        process.exit(1)
       }
     })
   },
