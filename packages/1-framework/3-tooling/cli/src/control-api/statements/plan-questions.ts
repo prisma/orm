@@ -84,6 +84,8 @@ export interface PlanQuestion extends QuestionParts {
   readonly namespaceAnswer?: (verb: PlanQuestionVerb, text: string) => NamespaceAnswer | undefined;
 }
 
+const VERB_ORDER: readonly PlanQuestionVerb[] = ['rename', 'convert', 'delete', 'allow'];
+
 function isQuestionVerb(verb: string): verb is PlanQuestionVerb {
   return verb === 'rename' || verb === 'convert' || verb === 'delete' || verb === 'allow';
 }
@@ -1455,10 +1457,22 @@ function acceptingNamespaceAnswers(
       ? 'rename'
       : undefined;
   };
+  const namespaceParts = removedNamespaceParts(removedNamespace, added);
+  const namespaceForm = (verb: 'rename') =>
+    namespaceParts.answers.find(({ flag }) => flag.verb === verb)?.flag.text;
   return {
     ...question,
+    verbs: VERB_ORDER.filter(
+      (verb) =>
+        question.verbs.includes(verb) ||
+        namespaceParts.answers.some(({ flag }) => flag.verb === verb),
+    ),
+    forms: {
+      ...question.forms,
+      ...ifDefined('rename', question.forms.rename ?? namespaceForm('rename')),
+    },
     removedNamespace,
-    removedNamespaceParts: removedNamespaceParts(removedNamespace, added),
+    removedNamespaceParts: namespaceParts,
     namespaceAnswer,
     validate: (verb, text) => {
       if (namespaceAnswer(verb, text) !== undefined) return undefined;
