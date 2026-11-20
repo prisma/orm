@@ -286,12 +286,10 @@ function typecheckProject(app: Application): { files: string[]; problems: string
     skipLibCheck: false,
     noEmit: true,
   });
-  const problems = ts
-    .getPreEmitDiagnostics(program)
-    .map(
-      (diagnostic) =>
-        `${diagnostic.file === undefined ? '' : `${relative(app.dir, diagnostic.file.fileName)}: `}${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`,
-    );
+  const problems = [...parsed.errors, ...ts.getPreEmitDiagnostics(program)].map(
+    (diagnostic) =>
+      `${diagnostic.file === undefined ? '' : `${relative(app.dir, diagnostic.file.fileName)}: `}${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`,
+  );
   return { files: parsed.fileNames.map((file) => relative(app.dir, file)), problems };
 }
 

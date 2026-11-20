@@ -1507,8 +1507,8 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
       validate-npm-package-name:
-        specifier: ^8.0.0
-        version: 8.0.0
+        specifier: ^7.0.2
+        version: 7.0.2
       wrap-ansi:
         specifier: ^10.0.0
         version: 10.0.0
@@ -6569,8 +6569,8 @@ importers:
         specifier: 'catalog:'
         version: 0.2.17
       validate-npm-package-name:
-        specifier: ^8.0.0
-        version: 8.0.0
+        specifier: ^7.0.2
+        version: 7.0.2
       vite:
         specifier: ^7.0.0 || ^8.0.0
         version: 8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
@@ -12855,9 +12855,9 @@ packages:
       typescript:
         optional: true
 
-  validate-npm-package-name@8.0.0:
-    resolution: {integrity: sha512-SCv6OOV6Xj2/3cXy3dGmADluJTNcL3o7hZAglNPTe+WYuEuvxgJzxPrSDLZhF+CwyQOubqgecjMmTJGMVLWjYQ==}
-    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
+  validate-npm-package-name@7.0.2:
+    resolution: {integrity: sha512-hVDIBwsRruT73PbK7uP5ebUt+ezEtCmzZz3F59BSr2F6OVFnJ/6h8liuvdLrQ88Xmnk6/+xGGuq+pG9WwTuy3A==}
+    engines: {node: ^20.17.0 || >=22.9.0}
 
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
@@ -18472,7 +18472,7 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  validate-npm-package-name@8.0.0: {}
+  validate-npm-package-name@7.0.2: {}
 
   vary@1.1.2: {}
 

@@ -27,7 +27,7 @@ Prisma 8 moves fast, and your training data about it is very likely outdated. Th
 
 ## Pre-conditions
 
-Check these before acting on anything below. Halt on the first one that fails and tell the user what is missing.
+Check these before acting on anything below. Halt on the first one that fails and tell the user what is missing. Pre-conditions 1 and 3 describe an application. In a package that builds a target or is a Prisma extension, check only pre-condition 2.
 
 1. **The project is on Prisma 8.** `prisma.config.ts` exports `definePrismaConfig({ orm: ... })`, and `package.json` depends on `@prisma/orm-postgres`, `@prisma/orm-sqlite`, or `@prisma/orm-mongo`. A project with `schema.prisma` and `@prisma/client` is Prisma 7 or earlier; this skill does not apply to it, and its instructions will break such a project.
 2. **The skill matches the installed version.** Compare `metadata.library_version` in this file's frontmatter with the installed `@prisma/orm-*` version in `package.json`. If they differ, run `prisma skills sync` and re-read this file before continuing.
