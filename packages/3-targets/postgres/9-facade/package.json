@@ -54,7 +54,7 @@
     "@repo/tsdown": "workspace:8.0.0-rc.24",
     "@types/pg": "catalog:",
     "pg": "catalog:",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -62,7 +62,7 @@
   "peerDependencies": {
     "@types/pg": "^8.20.0",
     "pg": "^8.22.0",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

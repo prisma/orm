@@ -1,7 +1,6 @@
-import { asNamespaceId, type ContractWithDomain } from '@internal/contract/types';
+import type { ContractWithDomain } from '@internal/contract/types';
 import type {
   EnumValueCoordinate,
-  KeepDataEdit,
   MigrationAccessChange,
   MigrationDataLoss,
   MigrationDataLossKind,
@@ -12,14 +11,13 @@ import type {
   ValueObjectFieldCoordinate,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import type { SqlModelStorage } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import { fieldOfColumn } from './field-of-column';
-import {
-  isSqlModelStorage,
-  type TableRenameByHand,
-  type WorkingSchemaOrigins,
-} from './statement-planning';
+import { handWrittenMigrationSteps } from './hand-written-migration';
+import { exactName, isSqlModelStorage, type ModelTable, modelsStoring } from './model-storage';
+import { modelsText } from './plan-text';
+import type { TableRenameByHand, WorkingSchemaOrigins } from './statement-planning';
+import type { StorageRenames } from './storage-renames';
 
 /**
  * What an operation is about, as the plan names it after its rename statements: a table, or a
@@ -84,7 +82,6 @@ export interface CallSubjects {
   /** What the call's operation loses, one entry per model, field or storage name, how, and how to keep it. */
   readonly dataLoss: readonly (SubjectStorage & {
     readonly loss: MigrationDataLossKind;
-    readonly keepDataEdit?: KeepDataEdit;
     /** What the user should know to keep the data, which the question repeats. */
     readonly keepDataAdvice?: string;
   })[];
@@ -110,37 +107,11 @@ interface SubjectContext {
   readonly contract: ContractWithDomain;
   /** Where the plan's statements put the origin's tables and columns. */
   readonly origins: WorkingSchemaOrigins;
+  /** The renames of the plan, `undefined` with no origin contract. */
+  readonly storageRenames: StorageRenames | undefined;
   readonly byHand: TableRenameByHand;
   /** The variants of the origin the destination no longer has and no rename names: their columns are asked about as the variant. */
   readonly removedVariants: readonly ModelCoordinate[];
-}
-
-interface StoringModel {
-  readonly coordinate: ModelCoordinate;
-  readonly isRoot: boolean;
-  readonly fields: SqlModelStorage['fields'];
-}
-
-/** The models of `contract` that store `table`: a model and its variants share one. */
-function modelsStoring(
-  contract: ContractWithDomain,
-  namespaceId: string,
-  table: string,
-): readonly StoringModel[] {
-  return Object.entries(contract.domain.namespaces).flatMap(([modelNamespace, namespace]) =>
-    Object.entries(namespace.models).flatMap(([model, definition]) => {
-      const { storage } = definition;
-      if (!isSqlModelStorage(storage)) return [];
-      if (storage.namespaceId !== namespaceId || storage.table !== table) return [];
-      return [
-        {
-          coordinate: { namespaceId: asNamespaceId(modelNamespace), model },
-          isRoot: definition.base === undefined,
-          fields: storage.fields,
-        },
-      ];
-    }),
-  );
 }
 
 function isRemovedVariant(model: ModelCoordinate, context: SubjectContext): boolean {
@@ -162,7 +133,7 @@ function subjectOf(target: SubjectStorage, context: SubjectContext): MigrationSu
     namespaceId: target.table.namespaceId,
     table: target.table.table,
   });
-  const models = modelsStoring(fromContract, origin.namespaceId, origin.table);
+  const models = modelsStoring(fromContract, origin, exactName);
   if (target.table.column === undefined) {
     const model = models.find(({ isRoot }) => isRoot) ?? models[0];
     return model === undefined ? storage : { kind: 'model', ...model.coordinate };
@@ -180,15 +151,16 @@ function subjectOf(target: SubjectStorage, context: SubjectContext): MigrationSu
 
 /**
  * How to keep the rows of a dropped table whose model the destination keeps under the same name in
- * another table of the same namespace: no statement can rename that table, so the user renames it
- * by hand. None when the origin contract already stores a model in that table.
+ * another table of the same namespace, when the plan does not rename it: the user renames it by
+ * hand. None when the origin contract already stores a model in that table.
  */
 function keepTableAdvice(
   target: SubjectStorage,
   subject: MigrationSubject,
   context: SubjectContext,
 ): string | undefined {
-  if (subject.kind !== 'model' || target.table === undefined || context.fromContract === null) {
+  const { storageRenames } = context;
+  if (subject.kind !== 'model' || target.table === undefined || storageRenames === undefined) {
     return undefined;
   }
   const storage =
@@ -196,9 +168,51 @@ function keepTableAdvice(
   if (storage === undefined || !isSqlModelStorage(storage)) return undefined;
   const { namespaceId, table: from } = target.table;
   if (storage.namespaceId !== namespaceId || storage.table === from) return undefined;
-  if (modelsStoring(context.fromContract, namespaceId, storage.table).length > 0) return undefined;
+  if (storageRenames.originModelsIn({ namespaceId, table: storage.table }).length > 0)
+    return undefined;
+  const sharing = sharedStorageAdvice(storageRenames, {
+    origin: { namespaceId, table: from },
+    destination: { namespaceId, table: storage.table },
+  });
+  if (sharing !== undefined) return sharing;
   const rename = { namespaceId, from, to: storage.table };
-  return `To keep its rows, rename table "${from}" to "${storage.table}" instead; a statement cannot rename the table of a model that keeps its name. With db update, rename the table in the database yourself with ${context.byHand.tableRenameByHand(rename).join('; ')}, then run prisma db update. With migration plan, write the rename as a migration of its own instead: run prisma migration new --name <name> --from <hash of the migration the database is at>, add ${context.byHand.renderTableRename(rename)} to the operations of its migration.ts, run node on that migration.ts so it writes ops.json, then run prisma db migrate.`;
+  return `To keep its rows, rename table "${from}" to "${storage.table}" instead. The plan does not rename it: a plan renames the table of a model that keeps its name only on a target that plans table renames, when the control policy of the table is "managed" in both contracts, every model stored in it moves to the new table, and no model moves there from another table. With db update, rename the table in the database yourself with ${context.byHand.tableRenameByHand(rename).join('; ')}, then run prisma db update. With migration plan, write the rename as a migration of its own instead. That migration leads to the contract as it is when you write it, so first undo every other change to the contract, keep only the new table name, and run prisma contract emit. Then run prisma migration new --name <name> --from <hash of the migration the database is at>, add ${context.byHand.renderTableRename(rename)} to the operations of its migration.ts, run node on that migration.ts so it writes ops.json, and run prisma db migrate. Then make the rest of the change again and plan it with prisma migration plan.`;
+}
+
+function byName(left: ModelCoordinate, right: ModelCoordinate): number {
+  return `${left.namespaceId}.${left.model}`.localeCompare(`${right.namespaceId}.${right.model}`);
+}
+
+/**
+ * Why the rows of table `origin` cannot be kept by renaming it to `destination`, as the planner
+ * decides it: their storage is being split or merged. Keeping their rows is then a data migration.
+ */
+function sharedStorageAdvice(
+  storageRenames: StorageRenames,
+  tables: { readonly origin: ModelTable; readonly destination: ModelTable },
+): string | undefined {
+  const shared = storageRenames.sharedTable(tables);
+  if (shared === undefined) return undefined;
+  const split = shared.kind === 'split';
+  const models = [
+    ...(split
+      ? storageRenames.originModelsIn(tables.origin)
+      : storageRenames
+          .destinationModelsIn(tables.destination)
+          .filter((model) => storageRenames.originTableOf(model) !== undefined)),
+  ].sort(byName);
+  const into = new Map<string, ModelCoordinate[]>();
+  for (const model of models) {
+    const moved = split ? storageRenames.destinationTableOf(model) : tables.destination;
+    if (moved !== undefined) into.set(moved.table, [...(into.get(moved.table) ?? []), model]);
+  }
+  const moves = [...into]
+    .map(([table, moved]) => `the rows of ${modelsText(moved)} into table "${table}"`)
+    .join(' and ');
+  const stated = split
+    ? `The origin stores ${modelsText(models)} in table "${tables.origin.table}", and the destination stores them in different tables, so their storage is being split.`
+    : `The destination stores ${modelsText(models)} in table "${tables.destination.table}", and the origin stores them in different tables, so their storage is being merged.`;
+  return `${stated} Keeping their rows is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(moves)}`;
 }
 
 /**
@@ -239,7 +253,6 @@ export function subjectsOfCalls(
           'keepDataAdvice',
           target.keepDataAdvice ?? keepTableAdvice(target, subject, context),
         ),
-        ...ifDefined('keepDataEdit', target.keepDataEdit),
       });
     }
     for (const target of call.accessChanges) {

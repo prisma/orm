@@ -43,10 +43,18 @@ test('query, execute and toSql have the types a postgres client has', () => {
   expectTypeOf<Client['toSql']>().toEqualTypeOf<Postgres['toSql']>();
 });
 
-test('a transaction has no lifecycle members, transaction or runtime', () => {
-  expectTypeOf<
-    Extract<keyof Tx, 'close' | 'transaction' | 'runtime' | typeof Symbol.asyncDispose>
-  >().toBeNever();
+test('a transaction has no lifecycle members or runtime', () => {
+  expectTypeOf<Extract<keyof Tx, 'close' | 'runtime' | typeof Symbol.asyncDispose>>().toBeNever();
+});
+
+test('tx.transaction takes one callback, passes a context of the same type and infers the result', () => {
+  const tx = {} as Tx;
+  expectTypeOf(tx.transaction).parameters.toEqualTypeOf<[(tx: Tx) => PromiseLike<unknown>]>();
+  expectTypeOf(tx.transaction).parameter(0).parameter(0).toEqualTypeOf<Tx>();
+  expectTypeOf(tx.transaction(async () => 42)).toEqualTypeOf<Promise<number>>();
+  expectTypeOf(
+    tx.transaction(async (inner) => inner.transaction(async () => 'value' as const)),
+  ).toEqualTypeOf<Promise<'value'>>();
 });
 
 test('a role-bound client and its transaction have the enums and nativeEnums a postgres client has', () => {
@@ -57,7 +65,7 @@ test('a role-bound client and its transaction have the enums and nativeEnums a p
   expectTypeOf<Tx['nativeEnums']>().toEqualTypeOf<Postgres['nativeEnums']>();
 });
 
-test('a role-bound transaction has the members of a postgres transaction', () => {
+test('a role-bound transaction is a postgres transaction', () => {
   expectTypeOf<Tx>().toEqualTypeOf<PostgresTransactionContext<Contract, Classes>>();
 });
 

@@ -21,7 +21,7 @@
     "pathe": "^2.0.3",
     "temporal-spec": "1.0.1",
     "tinyglobby": "catalog:",
-    "uniku": "^0.5.0"
+    "uniku": "^0.6.0"
   },
   "devDependencies": {
     "@internal/config": "workspace:8.0.0-rc.24",
@@ -101,6 +101,7 @@
     "./type-implementations/date": "./dist/type-implementations__date.mjs",
     "./type-implementations/decimal": "./dist/type-implementations__decimal.mjs",
     "./type-implementations/duration": "./dist/type-implementations__duration.mjs",
+    "./type-implementations/json": "./dist/type-implementations__json.mjs",
     "./type-implementations/now": "./dist/type-implementations__now.mjs",
     "./type-implementations/temporal": "./dist/type-implementations__temporal.mjs",
     "./type-implementations/temporal-text": "./dist/type-implementations__temporal-text.mjs",

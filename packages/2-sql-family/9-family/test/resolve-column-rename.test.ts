@@ -50,11 +50,14 @@ function contractWithColumns(
   };
 }
 
+const ignoringCase = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
+
 function schemaTables(
   namespaces: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>>,
 ): SchemaTables {
   const columnsOf = (namespaceId: string, table: string) => namespaces[namespaceId]?.[table];
   return {
+    sameName: ignoringCase,
     hasTable: (namespaceId, table) => columnsOf(namespaceId, table) !== undefined,
     hasNamespace: (namespaceId) => Object.hasOwn(namespaces, namespaceId),
     hasColumn: (namespaceId, table, column) =>
@@ -62,9 +65,7 @@ function schemaTables(
     tablesNamed: (namespaceId, table) =>
       columnsOf(namespaceId, table) === undefined ? [] : [table],
     columnsNamed: (namespaceId, table, column) =>
-      (columnsOf(namespaceId, table) ?? []).filter(
-        (existing) => existing.toLowerCase() === column.toLowerCase(),
-      ),
+      (columnsOf(namespaceId, table) ?? []).filter((existing) => ignoringCase(existing, column)),
     namespacesWithTable: (table) =>
       Object.keys(namespaces).filter((namespaceId) => columnsOf(namespaceId, table) !== undefined),
   };

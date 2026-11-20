@@ -25,6 +25,8 @@ export interface LiveExpectations {
   readonly havingAboveExactMean: 'drops the group' | 'keeps the group';
   /** What an update or delete whose filter reads the table it writes does: the renderer refuses it, or the server runs it. */
   readonly writeReadingWrittenTable: 'refused' | 'runs';
+  /** What a decimal `sum` in an include over several parents gives when the total needs more digits than the widest decimal holds: the exact total, or the largest value of its type, with no error or warning, which the server gives when it groups the rows through a temporary table. */
+  readonly sumPastWidestDecimalIncludedForSeveralParents: 'exact' | 'the largest value';
 }
 
 /**

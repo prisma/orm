@@ -58,7 +58,11 @@ The migration must reach its end contract. The runner applies a migration's oper
 
 The planner cannot infer one. Indexes and check constraints carry a hash of their content in their names, so a renamed index can be paired with the name it had. Tables carry no such identity: a dropped table and a created table with the same columns may be one table renamed or two unrelated tables. Guessing would carry rows into the wrong table.
 
+> **Update — 2026-11:** this stays true of storage alone: the planner never pairs a dropped table with a created one by their shape. But a model, field or enum member that has the same name in the contract source on both sides is one object, so when only its `@@map`, `@map` or stored value changes, the planner renames the table or column, or replaces the value, with no question. That is not inference: the user wrote the same name on both sides. See [ADR 324 — The same coordinate is the same object](ADR%20324%20-%20The%20same%20coordinate%20is%20the%20same%20object.md).
+
 The planner instead refuses the dangerous plan. When a plan would drop table `X` and create table `Y` in the same namespace, where `X` is `Y` with its first letter lowered, planning fails with `MIGRATION.TABLE_NAME_CASE_CHANGED`. That shape is the signature of a schema written against a lowering rule, and the message gives the three ways forward: add `@@map` to keep the table, state the rename in a migration, or rename the storage by hand and run `db update` again. This check is transitional and goes away once no supported upgrade path reaches the old rule.
+
+> **Update — 2026-11:** with an origin contract, a model that keeps its name and loses the lowered table name is now renamed to the model name with no question, so the plan has no drop and create for this check to find. The check is in practice reached only when there is no origin contract. A project that wants to keep the lowered names adds `@@map` before planning. See [ADR 324 — The same coordinate is the same object](ADR%20324%20-%20The%20same%20coordinate%20is%20the%20same%20object.md).
 
 A schema that declares no `@@map` and whose storage was created under the lowering rule is brought up to date by adding `@@map("<current storage name>")` to each such model, which changes no emitted artifact, no storage hash and no migration history.
 
@@ -67,6 +71,9 @@ A schema that declares no `@@map` and whose storage was created under the loweri
 - A model with no `@@map` names storage that can be quoted exactly as written, which is what a database created by an earlier Prisma version holds.
 - `contract infer` round-trips: a table whose name already equals the model name infers with no `@@map` and verifies clean, and a snake_case table still infers with `@@map`.
 - A rename needs a hand-written migration. The user states one line per renamed table and the operations follow from the contracts.
+
+  > **Update — 2026-11:** a rename no longer needs a hand-written migration. A model rename is a `--rename` statement, and a model that keeps its name while its `@@map` changes is renamed by `migration plan` and `db update` with no statement, on PostgreSQL and SQLite. The hand-written route still works. See [ADR 324 — The same coordinate is the same object](ADR%20324%20-%20The%20same%20coordinate%20is%20the%20same%20object.md).
+
 - MongoDB renames a collection with the `renameCollection` operation, which a `--rename` statement plans (see [Migration System § Statements](../subsystems/7.%20Migration%20System.md#statements)).
 
 ## Alternatives considered

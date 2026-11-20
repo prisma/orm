@@ -792,6 +792,84 @@ describe('SQL contract validators', () => {
           }),
         );
       });
+
+      // Shared-PK 1:1 chain (class-table inheritance): every table's primary key is also a
+      // foreign key to its parent, so each model carries both a back-relation and an owning
+      // relation on the same local columns. Ownership must be matched on the foreign key's
+      // target table and columns, not on source columns alone.
+      const sharedPkChainContract = (assetImageNullable: boolean) =>
+        createContract<SqlStorage>({
+          storage: unboundTables({
+            stored_object: table({ id: col('pg/int4', 'pg/int4@1') }, { pk: pk('id') }),
+            asset: table(
+              { id: col('pg/int4', 'pg/int4@1'), name: col('pg/text', 'pg/text@1') },
+              { pk: pk('id'), fks: [fk('asset', ['id'], 'stored_object', ['id'])] },
+            ),
+            asset_image: table(
+              { id: col('pg/int4', 'pg/int4@1') },
+              { pk: pk('id'), fks: [fk('asset_image', ['id'], 'asset', ['id'])] },
+            ),
+          }),
+          models: {
+            StoredObject: contractModel(
+              'stored_object',
+              { id: { column: 'id' } },
+              {
+                asset: blindCast<ContractRelation, 'test relation literal'>({
+                  to: crossRef('Asset', UNBOUND_NAMESPACE_ID),
+                  cardinality: '1:1',
+                  nullable: true,
+                  on: { localFields: ['id'], targetFields: ['id'] },
+                }),
+              },
+            ),
+            Asset: contractModel(
+              'asset',
+              { id: { column: 'id' }, name: { column: 'name' } },
+              {
+                storedObject: blindCast<ContractRelation, 'test relation literal'>({
+                  to: crossRef('StoredObject', UNBOUND_NAMESPACE_ID),
+                  cardinality: '1:1',
+                  nullable: false,
+                  on: { localFields: ['id'], targetFields: ['id'] },
+                }),
+                assetImage: blindCast<ContractRelation, 'test relation literal'>({
+                  to: crossRef('AssetImage', UNBOUND_NAMESPACE_ID),
+                  cardinality: '1:1',
+                  nullable: assetImageNullable,
+                  on: { localFields: ['id'], targetFields: ['id'] },
+                }),
+              },
+            ),
+            AssetImage: contractModel(
+              'asset_image',
+              { id: { column: 'id' } },
+              {
+                asset: blindCast<ContractRelation, 'test relation literal'>({
+                  to: crossRef('Asset', UNBOUND_NAMESPACE_ID),
+                  cardinality: '1:1',
+                  nullable: false,
+                  on: { localFields: ['id'], targetFields: ['id'] },
+                }),
+              },
+            ),
+          },
+        });
+
+      it('accepts a shared-PK 1:1 chain without misattributing foreign-key ownership', () => {
+        expect(() => validateSqlContractFully(sharedPkChainContract(true))).not.toThrow();
+      });
+
+      it('still rejects a required back-relation in a shared-PK 1:1 chain', () => {
+        expect(() => validateSqlContractFully(sharedPkChainContract(false))).toThrow(
+          expect.objectContaining({
+            phase: 'storage',
+            message: expect.stringMatching(
+              /Relation "assetImage" on model "__unbound__:Asset" is required but does not own the foreign key/,
+            ),
+          }),
+        );
+      });
     });
 
     const manyToManyContract = (relationOverrides: {

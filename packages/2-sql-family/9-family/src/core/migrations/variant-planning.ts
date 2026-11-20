@@ -15,8 +15,8 @@ import {
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { buildColumnCodecRef } from './contract-to-schema-ir';
+import { isSqlModelStorage, tableControlPolicy } from './model-storage';
 import type { SchemaTables } from './schema-tables';
-import { isSqlModelStorage, tableControlPolicy } from './statement-planning';
 import type { SqlPlannerConflict } from './types';
 
 /**

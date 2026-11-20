@@ -2,6 +2,7 @@ import { asNamespaceId, type Contract, coreHash, profileHash } from '@internal/c
 import {
   type FieldEventCall,
   NO_RENAMED_ORIGINS,
+  StorageRenames,
   subjectsOfCalls,
 } from '@internal/family-sql/control';
 import type { OpFactoryCall } from '@internal/framework-components/control';
@@ -9,6 +10,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { sqliteIdentifiersCollide } from '../../src/core/migrations/identifier-case';
 import {
   DeleteRowsCall,
   RemoveStoredKeyCall,
@@ -94,6 +96,7 @@ function subjectsOf(
     {
       fromContract: contract,
       contract,
+      storageRenames: new StorageRenames([], contract, contract, sqliteIdentifiersCollide),
       byHand: sqliteTableRenameByHand,
       removedVariants: [],
       origins: NO_RENAMED_ORIGINS,

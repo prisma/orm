@@ -8,6 +8,7 @@ import {
   InsertAst,
   InsertOnConflict,
   JsonArrayAggExpr,
+  ListExpression,
   NativeJsonValueProjection,
   OrderByItem,
   ParamRef,
@@ -222,5 +223,19 @@ describe('MariaDB refusals', () => {
         'The MariaDB adapter does not build an ordered JSON array in SQL; the ORM loads includes with one query per relation',
       meta: { target: 'mariadb', feature: 'ordered-json-array' },
     });
+  });
+});
+
+describe('MariaDB lowering of a decimal param', () => {
+  it('casts it to DECIMAL(65,30), as MySQL does, so MariaDB compares it exactly in BETWEEN and IN, where it compares text as a double', () => {
+    const amount = ColumnRef.of('t', 'amount');
+    const decimal = (value: string) =>
+      ParamRef.of(value, { codec: { codecId: 'mysql/decimal@1' } });
+    const ast = SelectAst.from(TableSource.named('t'))
+      .withProjection([ProjectionItem.of('amount', amount)])
+      .withWhere(BinaryExpr.in(amount, ListExpression.of([decimal('0.1'), decimal('99')])));
+    expect(sqlOf(ast)).toBe(
+      'SELECT `t`.`amount` AS `amount` FROM `t` WHERE `t`.`amount` IN (CAST(?1 AS DECIMAL(65,30)), CAST(?2 AS DECIMAL(65,30)))',
+    );
   });
 });

@@ -1,9 +1,4 @@
-import {
-  type Contract,
-  type ContractWithDomain,
-  governingControlPolicy,
-  type ModelStorageBase,
-} from '@internal/contract/types';
+import type { Contract, ContractWithDomain } from '@internal/contract/types';
 import {
   type AppliedMigrationStatement,
   describeMigrationStatement,
@@ -21,8 +16,18 @@ import {
   type SchemaOwnership,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { type SqlModelStorage, type SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { handWrittenMigrationSteps } from './hand-written-migration';
+import {
+  fieldColumn,
+  type ModelTable,
+  modelTable,
+  sameTable,
+  sqlModelStorage,
+  tableControlPolicy,
+} from './model-storage';
+import { capitalized, fieldsText, modelsText } from './plan-text';
 import {
   type ColumnRename,
   type ColumnRenameMismatch,
@@ -36,13 +41,18 @@ import {
   tableRenameMismatchReason,
 } from './resolve-table-rename';
 import type { SchemaTables } from './schema-tables';
+import {
+  type ColumnChange,
+  type ConflictLocation,
+  columnChangeText,
+  plannedStorageRenames,
+  renameRefused,
+  StorageRenames,
+  storageRenameConflict,
+  type TableChange,
+  tableChangeText,
+} from './storage-renames';
 import type { SqlPlannerConflict } from './types';
-
-/** Where a model's rows live: a table in a storage namespace. */
-export interface ModelTable {
-  readonly namespaceId: string;
-  readonly table: string;
-}
 
 /** What a model rename does to storage. */
 export type ModelStorageEffect =
@@ -72,36 +82,6 @@ export interface ColumnOnOneSide {
   readonly kind: 'columnOnOneSide';
 }
 
-/** Whether a model's storage names a table, as a model a SQL contract stores in a table does. */
-export function isSqlModelStorage(storage: ModelStorageBase): storage is SqlModelStorage {
-  return (
-    typeof storage['table'] === 'string' &&
-    typeof storage['namespaceId'] === 'string' &&
-    typeof storage['fields'] === 'object' &&
-    storage['fields'] !== null
-  );
-}
-
-/** The storage of a model the contract stores in a table, or `undefined` for any other model. */
-function sqlModelStorage(
-  contract: ContractWithDomain,
-  coordinate: ModelCoordinate,
-): SqlModelStorage | undefined {
-  const storage =
-    contract.domain.namespaces[coordinate.namespaceId]?.models[coordinate.model]?.storage;
-  return storage !== undefined && isSqlModelStorage(storage) ? storage : undefined;
-}
-
-function modelTable(
-  contract: ContractWithDomain,
-  coordinate: ModelCoordinate,
-): ModelTable | undefined {
-  const storage = sqlModelStorage(contract, coordinate);
-  return storage === undefined
-    ? undefined
-    : { namespaceId: storage.namespaceId, table: storage.table };
-}
-
 /**
  * The storage effect of a model rename: the origin model's table compared with the destination
  * model's. Equal tables mean the rename needs no storage change.
@@ -121,16 +101,6 @@ export function modelRenameStorageEffect(
     kind: 'renameTable',
     rename: { namespaceId: from.namespaceId, from: from.table, to: to.table },
   });
-}
-
-function fieldColumn(
-  contract: ContractWithDomain,
-  coordinate: FieldCoordinate,
-): string | undefined {
-  const fields = sqlModelStorage(contract, coordinate)?.fields;
-  return fields !== undefined && Object.hasOwn(fields, coordinate.field)
-    ? fields[coordinate.field]?.column
-    : undefined;
 }
 
 /**
@@ -208,8 +178,7 @@ export interface NamespaceStatementTarget<TCall extends CallWithCompanions> {
 }
 
 /** What a target supplies for planning statements against its working schema. */
-export interface StatementPlanningTarget<TCall extends CallWithCompanions>
-  extends TableRenameByHand {
+export interface StatementPlanningTarget<TCall extends CallWithCompanions> {
   /** The tables of the working schema as earlier statements have left it. */
   tables(): SchemaTables;
   /** The call that renames a table, with its companions, computed against the working schema. */
@@ -271,12 +240,16 @@ export interface PlannedStatements<TCall extends CallWithCompanions> {
   readonly calls: readonly TCall[];
   readonly tableRenames: readonly TableRename[];
   readonly columnRenames: readonly ColumnRename[];
+  /**
+   * The tables whose model keeps its name and whose new table the working schema already has, so
+   * the rename is already done and none is planned: the diff renames their constraints, which a
+   * target puts before creates and after the drops that free their new names.
+   */
+  readonly alreadyRenamedTables: readonly ModelTable[];
   readonly plannedStatements: readonly PlannedStatement[];
   readonly origins: WorkingSchemaOrigins;
-}
-
-interface ConflictLocation extends ModelTable {
-  readonly column?: string;
+  /** The renames of the plan, which the questions read too; `undefined` with no origin contract. */
+  readonly storageRenames: StorageRenames | undefined;
 }
 
 const DRIFTED =
@@ -285,39 +258,12 @@ const DRIFTED =
 const UNMATCHED =
   'A statement plans the rename a hand-written rename call makes, and that call does not match the contracts. Leave out this statement.';
 
-function statementRefused(
-  statement: ResolvedMigrationStatement,
-  summary: string,
-  why: string,
-  location: ConflictLocation | undefined,
-  refusedOperationClass?: MigrationOperationClass,
-): SqlPlannerConflict {
-  return {
-    kind: 'statementRefused',
-    summary,
-    why,
-    refusedStatement: statement,
-    ...(refusedOperationClass === undefined ? {} : { refusedOperationClass }),
-    ...(location === undefined
-      ? {}
-      : {
-          location: {
-            namespaceId: location.namespaceId,
-            entityKind: 'table',
-            entityName: location.table,
-            ...(location.column === undefined ? {} : { column: location.column }),
-          },
-        }),
-  };
+function leaveOutShared(moving: string): string {
+  return `Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. A question about ${moving} offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.`;
 }
 
-export function tableControlPolicy(contract: Contract<SqlStorage>, table: ModelTable) {
-  const node = contract.storage.namespaces[table.namespaceId]?.entries.table?.[table.table];
-  return governingControlPolicy(
-    { explicitNodeControlPolicy: StorageTable.is(node) ? node.control : undefined },
-    contract.defaultControlPolicy,
-  );
-}
+const HAND_WRITTEN_WITH_MIGRATION_PLAN =
+  'To keep the data with migration plan, write this change as a hand-written migration instead: ';
 
 function tableKey(table: ModelTable): string {
   return JSON.stringify([table.namespaceId, table.table]);
@@ -343,7 +289,7 @@ function withoutNamespacesRefused(
   statement: ResolvedMigrationStatement,
   label: string,
 ): SqlPlannerConflict {
-  return statementRefused(
+  return renameRefused(
     statement,
     `${label}: the database target keeps every table in one namespace`,
     'This database target has no namespaces, so a statement cannot rename a namespace or move a model to another one. Leave out this statement.',
@@ -371,14 +317,14 @@ function tableRenameRefused(
 ): SqlPlannerConflict {
   switch (mismatch.kind) {
     case 'tableMissing':
-      return statementRefused(
+      return renameRefused(
         statement,
         `${label}: the schema being planned from has no table "${rename.from}"`,
         `The database has no table "${rename.from}", although the contract it was last updated to names it, ${DRIFTED}`,
         { namespaceId: rename.namespaceId, table: rename.from },
       );
     case 'nameTaken':
-      return statementRefused(
+      return renameRefused(
         statement,
         `${label}: the schema being planned from already has a table "${rename.to}"${mismatch.taken === rename.to ? '' : `, as "${mismatch.taken}"`}`,
         `A rename cannot replace a table that already exists. Rename or drop table "${mismatch.taken}" first, or leave out this statement.`,
@@ -386,7 +332,7 @@ function tableRenameRefused(
       );
     case 'tableInManyNamespaces':
     case 'notInEndContract':
-      return statementRefused(
+      return renameRefused(
         statement,
         `${label}: ${tableRenameMismatchReason(rename, mismatch)}`,
         UNMATCHED,
@@ -404,21 +350,21 @@ function columnRenameRefused(
   const table = { namespaceId: rename.namespaceId, table: rename.table };
   switch (mismatch.kind) {
     case 'tableMissing':
-      return statementRefused(
+      return renameRefused(
         statement,
         `${label}: the schema being planned from has no table "${rename.table}"`,
         `The database has no table "${rename.table}", although the contract it was last updated to names it, ${DRIFTED}`,
         table,
       );
     case 'columnMissing':
-      return statementRefused(
+      return renameRefused(
         statement,
         `${label}: the schema being planned from has no column "${rename.from}" on table "${rename.table}"`,
         `The database has no column "${rename.from}" on table "${rename.table}", although the contract it was last updated to names it, ${DRIFTED}`,
         { ...table, column: rename.from },
       );
     case 'nameTaken':
-      return statementRefused(
+      return renameRefused(
         statement,
         `${label}: the schema being planned from already has a column "${mismatch.taken}" on table "${rename.table}"`,
         `A rename cannot replace a column that already exists. Rename or drop column "${mismatch.taken}" of table "${rename.table}" first, or leave out this statement.`,
@@ -426,7 +372,7 @@ function columnRenameRefused(
       );
     case 'tableInManyNamespaces':
     case 'notInEndContract':
-      return statementRefused(
+      return renameRefused(
         statement,
         `${label}: ${columnRenameMismatchReason(rename, mismatch)}`,
         UNMATCHED,
@@ -434,6 +380,11 @@ function columnRenameRefused(
       );
   }
 }
+
+/** What asks for a rename: a statement, or the contract change it follows when no statement does. */
+type RenameSource =
+  | { readonly statement: ResolvedMigrationStatement }
+  | { readonly statement: undefined; readonly change: string };
 
 function planned(
   operationIndexes: Result<readonly number[], SqlPlannerConflict>,
@@ -450,15 +401,15 @@ class StatementPlanner<TCall extends CallWithCompanions> {
   readonly #renamedTables = new Map<string, ModelTable>();
   /** The origin place of each table renamed or moved so far, keyed as `#renamedTables`. */
   readonly #originTables = new Map<string, ModelTable>();
-  /** Each column renamed so far: its origin table, and its name before and after. */
-  readonly #renamedColumns: {
-    readonly origin: ModelTable;
-    readonly from: string;
-    readonly to: string;
-  }[] = [];
+  /** Each column renamed so far, keyed by its origin table and origin name: its name now. */
+  readonly #renamedColumns = new Map<
+    string,
+    { readonly origin: ModelTable; readonly from: string; readonly to: string }
+  >();
   /** The name each namespace renamed so far has in the working schema, keyed by its origin name. */
   readonly #renamedNamespaces = new Map<string, string>();
   readonly #ownership: StatementOwnership | undefined;
+  readonly #storageRenames: StorageRenames;
   readonly calls: TCall[] = [];
   /** How many operations the calls planned so far lower to. */
   #operationCount = 0;
@@ -471,12 +422,55 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     readonly policy: MigrationOperationPolicy;
     readonly target: StatementPlanningTarget<TCall>;
     readonly ownership: StatementOwnership | undefined;
+    readonly storageRenames: StorageRenames;
   }) {
     this.#fromContract = input.fromContract;
     this.#contract = input.contract;
     this.#policy = input.policy;
     this.#target = input.target;
     this.#ownership = input.ownership;
+    this.#storageRenames = input.storageRenames;
+  }
+
+  /** Renames a table no statement asks for, where it is in the working schema now. */
+  planTableChange(change: TableChange): Result<readonly number[], SqlPlannerConflict> {
+    const current = this.#current(change.origin);
+    return this.#renameTable(
+      { statement: undefined, change: tableChangeText(change) },
+      `Cannot rename table "${current.table}" to "${change.destination.table}"`,
+      change.origin,
+      { namespaceId: current.namespaceId, from: current.table, to: change.destination.table },
+    );
+  }
+
+  /** Renames a column no statement asks for, as the working schema has it and its table now. */
+  planColumnChange(change: ColumnChange): Result<readonly number[], SqlPlannerConflict> {
+    const current = this.#current(change.origin);
+    const from = this.#currentColumn(change.origin, change.from);
+    return this.#renameColumn(
+      { statement: undefined, change: columnChangeText(change) },
+      `Cannot rename column "${current.table}"."${from}" to "${change.to}"`,
+      change.origin,
+      change.from,
+      { namespaceId: current.namespaceId, table: current.table, from, to: change.to },
+    );
+  }
+
+  /**
+   * Records that the working schema has the table of a change no statement asks for as `table`:
+   * later renames and questions find it there, as after a planned rename.
+   */
+  recordTableFound(change: TableChange, table: string): Result<readonly number[], never> {
+    const current = this.#current(change.origin);
+    this.#renamedTables.set(tableKey(change.origin), { namespaceId: current.namespaceId, table });
+    this.#originTables.set(tableKey(change.origin), change.origin);
+    return ok([]);
+  }
+
+  /** Records that the working schema has the column of a change no statement asks for as `column`. */
+  recordColumnFound(change: ColumnChange, column: string): Result<readonly number[], never> {
+    this.#recordColumn(change.origin, change.from, column);
+    return ok([]);
   }
 
   /** Plans one statement; the result is the operations it accounts for. */
@@ -492,6 +486,15 @@ class StatementPlanner<TCall extends CallWithCompanions> {
       case 'valueObjectField':
         return ok(PLANNED_WITH_DIFF);
     }
+  }
+
+  #recordColumn(origin: ModelTable, from: string, to: string): void {
+    this.#renamedColumns.set(JSON.stringify([tableKey(origin), from]), { origin, from, to });
+  }
+
+  /** The name a column of an origin table has in the working schema, after the renames planned so far. */
+  #currentColumn(origin: ModelTable, column: string): string {
+    return this.#renamedColumns.get(JSON.stringify([tableKey(origin), column]))?.to ?? column;
   }
 
   /** Where a table of the origin is in the working schema, after the renames planned so far. */
@@ -513,15 +516,13 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const movePerModel = `--rename ${rename.from}.<Model>:${rename.to}.<Model>`;
     const refusal = namespaces.namespaceRenameRefusal(rename);
     if (refusal !== undefined) {
-      return notOk(
-        statementRefused(statement, `${label}: ${refusal.reason}`, refusal.fix, undefined),
-      );
+      return notOk(renameRefused(statement, `${label}: ${refusal.reason}`, refusal.fix, undefined));
     }
     const otherSpace =
       this.#ownership === undefined ? undefined : otherSpaceDeclaring(this.#ownership, rename.from);
     if (otherSpace !== undefined) {
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `${label}: contract space "${otherSpace}" also declares it`,
           `Renaming the namespace would rename it under contract space "${otherSpace}" too, whose contract still names it "${rename.from}". Leave out this statement, or move each model with ${movePerModel} instead.`,
@@ -534,7 +535,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
       const controlPolicy = tableControlPolicy(this.#contract, { namespaceId: rename.to, table });
       if (controlPolicy === 'managed') continue;
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `${label}: table "${table}" has control policy "${controlPolicy}"`,
           `Statements rename only namespaces whose tables all have control policy "managed"; table "${table}" is "${controlPolicy}". Make the change in the database yourself and leave out this statement.`,
@@ -545,7 +546,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const schemaTables = this.#target.tables();
     if (!schemaTables.hasNamespace(rename.from)) {
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `${label}: the schema being planned from has no namespace "${rename.from}"`,
           `The database has no namespace "${rename.from}", although the contract it was last updated to names it, ${DRIFTED}`,
@@ -555,7 +556,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     }
     if (schemaTables.hasNamespace(rename.to)) {
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `${label}: the database already has a namespace "${rename.to}"`,
           `The database already has a namespace "${rename.to}", which the contract it was last updated to does not declare. If it holds nothing, drop or rename it in the database yourself; otherwise move each model with ${movePerModel} instead of this statement.`,
@@ -563,7 +564,12 @@ class StatementPlanner<TCall extends CallWithCompanions> {
         ),
       );
     }
-    const planned = this.#emit(statement, label, undefined, namespaces.renameNamespaceCall(rename));
+    const planned = this.#emit(
+      { statement },
+      label,
+      undefined,
+      namespaces.renameNamespaceCall(rename),
+    );
     if (planned.ok) this.#renamedNamespaces.set(rename.from, rename.to);
     return planned;
   }
@@ -575,7 +581,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
   ): SqlPlannerConflict | undefined {
     const controlPolicy = tableControlPolicy(this.#contract, destinationTable);
     if (controlPolicy === 'managed') return undefined;
-    return statementRefused(
+    return renameRefused(
       statement,
       `${label}: the table's control policy is "${controlPolicy}"`,
       `Statements rename only tables, and columns of tables, whose control policy is "managed"; table "${destinationTable.table}" is "${controlPolicy}". Make the change in the database yourself and leave out this statement.`,
@@ -584,7 +590,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
   }
 
   #emit(
-    statement: ResolvedMigrationStatement,
+    source: RenameSource,
     label: string,
     location: ConflictLocation | undefined,
     call: TCall,
@@ -593,11 +599,14 @@ class StatementPlanner<TCall extends CallWithCompanions> {
       .map((operation) => operation.operationClass)
       .find((operationClass) => !this.#policy.allowedOperationClasses.includes(operationClass));
     if (refused !== undefined) {
+      const allowed = this.#policy.allowedOperationClasses.map((c) => `"${c}"`).join(', ');
       return notOk(
-        statementRefused(
-          statement,
+        renameRefused(
+          source.statement,
           `${label}: the plan does not allow "${refused}" operations`,
-          `The rename produces a "${refused}" operation, and this command plans only ${this.#policy.allowedOperationClasses.map((c) => `"${c}"`).join(', ')} operations. Leave out this statement, or make the change with a command that allows "${refused}" operations, such as migration plan.`,
+          source.statement === undefined
+            ? `${capitalized(source.change)}, and the rename produces a "${refused}" operation, which this command does not plan: it plans only ${allowed} operations. Make the change with a command that allows "${refused}" operations, such as db update or migration plan.`
+            : `The rename produces a "${refused}" operation, and this command plans only ${allowed} operations. Leave out this statement, or make the change with a command that allows "${refused}" operations, such as migration plan.`,
           location,
           refused,
         ),
@@ -616,7 +625,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const worked = modelRenameStorageEffect(statement, this.#fromContract, this.#contract);
     if (!worked.ok) {
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `Model "${modelDisplayName(worked.failure.model)}" has no table in its contract`,
           `A model rename renames the model's table, and model "${modelDisplayName(worked.failure.model)}" has none in its contract. Leave out this statement.`,
@@ -626,6 +635,8 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     }
     const effect = worked.value;
     if (effect.kind === 'unchanged') return ok([]);
+    const shared = this.#sharedTableRefusal(statement);
+    if (shared !== undefined) return notOk(shared);
     const [origin, destination] =
       effect.kind === 'moveNamespace'
         ? [effect.from, effect.to]
@@ -658,8 +669,18 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     if (!checked.ok) {
       return notOk(tableRenameRefused(statement, label, rename, checked.failure));
     }
+    return this.#renameTable({ statement }, label, origin, rename);
+  }
+
+  #renameTable(
+    source: RenameSource,
+    label: string,
+    origin: ModelTable,
+    rename: TableRename,
+  ): Result<readonly number[], SqlPlannerConflict> {
+    const destinationTable = { namespaceId: rename.namespaceId, table: rename.to };
     const planned = this.#emit(
-      statement,
+      source,
       label,
       destinationTable,
       this.#target.renameTableCall(rename),
@@ -670,6 +691,49 @@ class StatementPlanner<TCall extends CallWithCompanions> {
       this.#originTables.set(tableKey(origin), origin);
     }
     return planned;
+  }
+
+  #sharedTableRefusal(statement: ResolvedModelRenameStatement): SqlPlannerConflict | undefined {
+    const rename = this.#storageRenames.models.find((model) => model.statement === statement);
+    const change = rename === undefined ? undefined : this.#storageRenames.tableChangeOf(rename);
+    const shared = change === undefined ? undefined : this.#storageRenames.sharedTable(change);
+    if (change === undefined || shared === undefined) return undefined;
+    const from = change.origin.table;
+    const to = change.destination.table;
+    const label = `Cannot rename table "${from}" to "${to}"`;
+    const moving = change.renames.map((renamed) => renamed.from);
+    const others = modelsText(shared.objects);
+    return renameRefused(
+      statement,
+      shared.kind === 'split'
+        ? `${label}: table "${from}" also stores ${others}`
+        : `${label}: table "${to}" also stores ${others}, whose rows are not in table "${from}"`,
+      shared.kind === 'split'
+        ? `A table rename moves every row of the table, and the rows of ${others} do not move to table "${to}". Moving the rows of one model out of a table it shares with others is a data migration, which a plan does not write. ${leaveOutShared(modelsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the rows of ${modelsText(moving)} into table "${to}"`)}`
+        : `A table rename moves the rows of one table, and table "${to}" would also store the rows of ${others}. Moving the rows of two tables into one is a data migration, which a plan does not write. ${leaveOutShared(modelsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the rows of ${modelsText(moving)}, and those of ${others} that table "${to}" does not already hold, into table "${to}"`)}`,
+      change.origin,
+    );
+  }
+
+  #sharedColumnRefusal(statement: ResolvedFieldRenameStatement): SqlPlannerConflict | undefined {
+    const rename = this.#storageRenames.fields.find((field) => field.statement === statement);
+    const change = rename === undefined ? undefined : this.#storageRenames.columnChangeOf(rename);
+    const shared = change === undefined ? undefined : this.#storageRenames.sharedColumn(change);
+    if (change === undefined || shared === undefined) return undefined;
+    const { from, to } = change;
+    const label = `Cannot rename column "${change.origin.table}"."${from}" to "${to}"`;
+    const moving = change.renames.map((renamed) => renamed.from);
+    const others = fieldsText(shared.objects);
+    return renameRefused(
+      statement,
+      shared.kind === 'split'
+        ? `${label}: column "${from}" also stores ${others}`
+        : `${label}: column "${to}" also stores ${others}, whose values are not in column "${from}"`,
+      shared.kind === 'split'
+        ? `A column rename moves the values of every row, and the values of ${others} do not move to column "${to}". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. ${leaveOutShared(fieldsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the values of ${fieldsText(moving)} into column "${to}"`)}`
+        : `A column rename moves the values of one column, and column "${to}" would also store the values of ${others}. Moving the values of two columns into one is a data migration, which a plan does not write. ${leaveOutShared(fieldsText(moving))} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the values of ${fieldsText(moving)}, and those of ${others} that column "${to}" does not already hold, into column "${to}"`)}`,
+      { ...change.origin, column: from },
+    );
   }
 
   /**
@@ -688,7 +752,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     if (namespaces === undefined) return notOk(withoutNamespacesRefused(statement, label));
     if (to.namespaceId === UNBOUND_NAMESPACE_ID) {
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `Cannot move table "${from.table}" from ${namespaceText(from.namespaceId)} to the unbound namespace: the unbound namespace has no fixed place in the database`,
           `A table of the unbound namespace lives wherever the connection that uses it looks, so a migration cannot move a table there. Move the table yourself and leave out this statement, or keep the model in ${namespaceText(from.namespaceId)}.`,
@@ -702,7 +766,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const tables = this.#target.tables();
     if (!tables.hasTable(from.namespaceId, from.table)) {
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `${label}: the schema being planned from has no table "${qualifiedTable(from)}"`,
           `The database has no table "${qualifiedTable(from)}", although the contract it was last updated to names it, ${DRIFTED}`,
@@ -717,7 +781,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     if (taken !== undefined) {
       const takenTable = qualifiedTable({ namespaceId: to.namespaceId, table: taken });
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `${label}: the schema being planned from already has a table "${takenTable}"`,
           `A move cannot replace a table that already exists. Rename, move or drop table "${takenTable}" first, or leave out this statement.`,
@@ -726,11 +790,11 @@ class StatementPlanner<TCall extends CallWithCompanions> {
       );
     }
     for (const call of namespaces.createNamespaceCalls(to.namespaceId)) {
-      const created = this.#emit(statement, label, moved, call);
+      const created = this.#emit({ statement }, label, moved, call);
       if (!created.ok) return created;
     }
     const planned = this.#emit(
-      statement,
+      { statement },
       label,
       moved,
       namespaces.moveTableCall({ table: from.table, from: from.namespaceId, to: to.namespaceId }),
@@ -754,7 +818,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const worked = fieldRenameStorageEffect(statement, this.#fromContract, this.#contract);
     if (!worked.ok && worked.failure.kind === 'noTable') {
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `Model "${modelDisplayName(worked.failure.model)}" has no table in its contract`,
           `A field rename renames the field's column, and model "${modelDisplayName(worked.failure.model)}" has no table in its contract. Leave out this statement.`,
@@ -764,7 +828,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     }
     if (!worked.ok) {
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
           `Field "${modelDisplayName(statement.from)}.${statement.from.field}" has a column on one side only of ${describeMigrationStatement(statement, this.#fromContract, this.#contract)}`,
           'A field rename renames a column or changes nothing in storage, and this field gains or loses its column. Leave out this statement and plan the change without it.',
@@ -777,22 +841,12 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const current = this.#current(effect.table);
     const table = current.table;
     const destinationTable = modelTable(this.#contract, statement.to);
-    if (
-      destinationTable !== undefined &&
-      (destinationTable.namespaceId !== current.namespaceId || destinationTable.table !== table)
-    ) {
-      const tableRename = {
-        namespaceId: current.namespaceId,
-        from: table,
-        to: destinationTable.table,
-      };
-      const model = modelDisplayName(statement.to);
-      const fieldText = `${model}.${statement.from.field}:${model}.${statement.to.field}`;
+    if (destinationTable !== undefined && !sameTable(destinationTable, current)) {
       return notOk(
-        statementRefused(
+        renameRefused(
           statement,
-          `Cannot rename column "${table}"."${effect.from}": the model's table changes from "${table}" to "${destinationTable.table}", and no statement renames the table`,
-          `The column would be renamed on a table the plan then drops and creates under the new name, and a migration that only changes the table name is planned the same way. With migration plan, rename the table by hand in its own migration first. Change the contract so that only the table name changes, and run prisma contract emit. Run prisma migration new --name <name> --from <hash of the migration the database is at>, add ${this.#target.renderTableRename(tableRename)} to the operations of its migration.ts, and run node on that migration.ts to write its ops.json. Then change the contract to its final form, emit it, and plan the field rename with --from that migration. With db update, change the contract so that only the table name changes, and run prisma contract emit. Rename the table in the database yourself with ${this.#target.tableRenameByHand(tableRename).join('; ')}, check that prisma db update --dry-run plans no drop of a table or column, and run prisma db update to store that contract. Then emit the final contract and run prisma db update --rename ${fieldText}.`,
+          `Cannot rename column "${table}"."${effect.from}": the model's table changes from "${table}" to "${destinationTable.table}", and the plan does not rename it`,
+          `The plan renames a table only when every model stored in it moves to the same new table and its control policy is "managed" in both contracts, so the column would be renamed on a table the destination does not store the model in. Leave out this statement.`,
           { namespaceId: current.namespaceId, table, column: effect.from },
         ),
       );
@@ -800,34 +854,48 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const rename: ColumnRename = {
       namespaceId: current.namespaceId,
       table,
-      from: effect.from,
+      from: this.#currentColumn(effect.table, effect.from),
       to: effect.to,
     };
     const tableLocation = { namespaceId: rename.namespaceId, table };
     const label = `Cannot rename column "${table}"."${rename.from}" to "${rename.to}"`;
     const policyRefusal = this.#controlPolicyRefusal(statement, label, tableLocation);
     if (policyRefusal !== undefined) return notOk(policyRefusal);
-    const checked = checkColumnRename(this.#target.tables(), this.#contract, rename);
-    if (!checked.ok) {
-      return notOk(columnRenameRefused(statement, label, rename, checked.failure));
+    const renamedAlready = rename.from === rename.to;
+    if (!renamedAlready) {
+      const checked = checkColumnRename(this.#target.tables(), this.#contract, rename);
+      if (!checked.ok) {
+        return notOk(columnRenameRefused(statement, label, rename, checked.failure));
+      }
     }
+    const shared = this.#sharedColumnRefusal(statement);
+    if (shared !== undefined) return notOk(shared);
+    if (renamedAlready) return ok([]);
+    return this.#renameColumn({ statement }, label, effect.table, effect.from, rename);
+  }
+
+  #renameColumn(
+    source: RenameSource,
+    label: string,
+    origin: ModelTable,
+    originColumn: string,
+    rename: ColumnRename,
+  ): Result<readonly number[], SqlPlannerConflict> {
     const planned = this.#emit(
-      statement,
+      source,
       label,
-      { ...tableLocation, column: rename.from },
+      { namespaceId: rename.namespaceId, table: rename.table, column: rename.from },
       this.#target.renameColumnCall(rename),
     );
     if (planned.ok) {
       this.columnRenames.push(rename);
-      this.#renamedColumns.push({ origin: effect.table, from: effect.from, to: effect.to });
+      this.#recordColumn(origin, originColumn, rename.to);
     }
     return planned;
   }
 
   /** The origins of the working schema's tables and columns, as the statements left them. */
   origins(): WorkingSchemaOrigins {
-    const sameTable = (left: ModelTable, right: ModelTable) =>
-      left.namespaceId === right.namespaceId && left.table === right.table;
     return {
       originTable: (current) => {
         for (const origin of this.#originTables.values()) {
@@ -839,7 +907,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
         return current;
       },
       originColumn: (origin, column) =>
-        this.#renamedColumns.find(
+        [...this.#renamedColumns.values()].find(
           (renamed) => sameTable(renamed.origin, origin) && renamed.to === column,
         )?.from ?? column,
     };
@@ -847,12 +915,14 @@ class StatementPlanner<TCall extends CallWithCompanions> {
 }
 
 /**
- * Plans the statements against a target's working schema, namespace renames first and the rest in
- * the order given: model and field statements name the origin and destination contracts, so the
- * namespace renames' place among them does not matter. Each model rename becomes a table rename
- * and each field rename a column rename, computed against the schema earlier statements left, then
- * applied to it. The first statement that cannot be planned fails the whole
- * plan with a `statementRefused` conflict that carries the statement.
+ * Plans the renames of a plan against a target's working schema: those its statements ask for, and
+ * those of the tables and columns whose models and fields both contracts name alike. Every rename
+ * no statement asks for is checked against all the others first. Then, in order: namespace
+ * renames, the table renames no statement asks for, the other statements in the order given, and
+ * the column renames no statement asks for. Each model rename becomes a table rename and each field
+ * rename a column rename, computed against the schema earlier renames left, then applied to it.
+ * The first rename that cannot be planned fails the whole plan; its conflict carries the statement
+ * that asks for it, if one does.
  */
 export function planStatements<TCall extends CallWithCompanions>(input: {
   readonly statements: readonly ResolvedRenameStatement[];
@@ -864,18 +934,20 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
 }): Result<PlannedStatements<TCall>, SqlPlannerConflict> {
   const { fromContract } = input;
   const [first] = input.statements;
-  if (first === undefined) {
-    return ok({
-      calls: [],
-      tableRenames: [],
-      columnRenames: [],
-      plannedStatements: [],
-      origins: NO_RENAMED_ORIGINS,
-    });
-  }
   if (fromContract === null) {
+    if (first === undefined) {
+      return ok({
+        calls: [],
+        tableRenames: [],
+        columnRenames: [],
+        alreadyRenamedTables: [],
+        plannedStatements: [],
+        origins: NO_RENAMED_ORIGINS,
+        storageRenames: undefined,
+      });
+    }
     return notOk(
-      statementRefused(
+      renameRefused(
         first,
         'Statements need an origin contract, and this plan has none',
         'A statement names models and fields of the origin contract, and this plan has none. Plan from a contract that has the old names, or leave out the statement.',
@@ -883,27 +955,64 @@ export function planStatements<TCall extends CallWithCompanions>(input: {
       ),
     );
   }
-  const planner = new StatementPlanner({
+  const tables = input.target.tables();
+  const storageRenames = new StorageRenames(
+    input.statements,
+    fromContract,
+    input.contract,
+    tables.sameName,
+  );
+  const planned = plannedStorageRenames(storageRenames, tables);
+  const conflict = storageRenameConflict(planned, tables, storageRenames);
+  if (conflict !== undefined) return notOk(conflict);
+  const planner = new StatementPlanner<TCall>({
     ...input,
     fromContract,
     ownership: input.ownership,
+    storageRenames,
   });
+  const unstated = (change: TableChange | ColumnChange) =>
+    change.renames.every((rename) => rename.statement === undefined);
   const plannedStatements: PlannedStatement[] = [];
-  const namespacesFirst = [
-    ...input.statements.filter((statement) => statement.entity === 'namespace'),
-    ...input.statements.filter((statement) => statement.entity !== 'namespace'),
-  ];
-  for (const statement of namespacesFirst) {
+  const planStatement = (statement: ResolvedRenameStatement) => {
     const operations = planner.plan(statement);
-    if (!operations.ok) return operations;
-    plannedStatements.push({ statement, operations: operations.value });
+    if (operations.ok) plannedStatements.push({ statement, operations: operations.value });
+    return operations;
+  };
+  const steps = [
+    ...input.statements
+      .filter((statement) => statement.entity === 'namespace')
+      .map((statement) => () => planStatement(statement)),
+    ...planned.foundTables.map(
+      ({ change, name }) =>
+        () =>
+          planner.recordTableFound(change, name),
+    ),
+    ...planned.tables.filter(unstated).map((change) => () => planner.planTableChange(change)),
+    ...input.statements
+      .filter((statement) => statement.entity !== 'namespace')
+      .map((statement) => () => planStatement(statement)),
+    ...planned.foundColumns.map(
+      ({ change, name }) =>
+        () =>
+          planner.recordColumnFound(change, name),
+    ),
+    ...planned.columns.filter(unstated).map((change) => () => planner.planColumnChange(change)),
+  ];
+  for (const step of steps) {
+    const result = step();
+    if (!result.ok) return result;
   }
   return ok({
     calls: planner.calls,
     tableRenames: planner.tableRenames,
     columnRenames: planner.columnRenames,
+    alreadyRenamedTables: planned.foundTables
+      .filter(({ change }) => !planned.tables.includes(change))
+      .map(({ change, name }) => ({ namespaceId: change.destination.namespaceId, table: name })),
     plannedStatements,
     origins: planner.origins(),
+    storageRenames,
   });
 }
 
@@ -980,7 +1089,7 @@ export function backfillOfDefaultedField(
       contract.storage.namespaces[table.namespaceId]?.entries.table?.[table.table]?.columns[column];
     if (storageColumn?.default === undefined) continue;
     const label = describeMigrationStatement(statement, fromContract, contract);
-    return statementRefused(
+    return renameRefused(
       statement,
       `${label}: the field is new and has a default`,
       'The default fills the existing rows when the column is added, so there is nothing to backfill. Leave out the --backfill statement.',

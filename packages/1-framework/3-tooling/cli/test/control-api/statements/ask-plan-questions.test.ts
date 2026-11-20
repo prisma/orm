@@ -443,3 +443,30 @@ describe('a delete that answers a type change', () => {
     ]);
   });
 });
+
+describe('consentAll', () => {
+  it('asks nothing, and tells the answerer which subjects it answered without asking', async () => {
+    const calls: unknown[][] = [];
+    const result = await askPlanQuestions({
+      plan: planWith(dropRatio),
+      askAccess: true,
+      canConvert: false,
+      statements: [],
+      preAnswers: [],
+      consentAll: { delete: true, allow: false },
+      origin,
+      originKnown: true,
+      destination,
+      answer: async (...args) => {
+        calls.push(args);
+        return [];
+      },
+      replan: async () => ok(planWith()),
+    });
+
+    expect({ ok: result.ok, calls }).toEqual({
+      ok: true,
+      calls: [[[], [{ verb: 'delete', subject: 'T.ratio' }]]],
+    });
+  });
+});

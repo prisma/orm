@@ -10,6 +10,7 @@ import type {
   ControlExtensionDescriptor,
   ControlFamilyInstance,
   DatabasePolicyDifference,
+  MigrationDataLossKind,
   MigrationOperationPolicy,
   MigrationOperationSubject,
   MigrationPlannerConflict,
@@ -48,6 +49,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { join } from 'pathe';
 import { withEditsAsWritten } from '../../utils/calls-as-written';
 import { CliStructuredError, errorStatementNeedsMigrationFile } from '../../utils/cli-errors';
+import type { DataProtectionSetting } from '../../utils/data-protection-settings';
 import { dbInitPlanningFailedError, dbInitRunnerFailureError } from '../../utils/db-init-failure';
 import { dbUpdateRunnerFailureError } from '../../utils/db-update-failure';
 import {
@@ -57,7 +59,10 @@ import {
 } from '../../utils/extension-path-failure';
 import { dbUpdateKeepDataEditAdvice } from '../../utils/keep-data-edit-advice';
 import { planningRefusedError } from '../../utils/planning-refused-error';
-import { declaredSettingsText } from '../../utils/policy-errors';
+import {
+  type DataProtectionRefusedOperation,
+  declaredSettingsText,
+} from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import {
   type AnswerPlanQuestions,
@@ -67,6 +72,7 @@ import {
   type PlannedQuestions,
   refuseUnusedConsents,
   removedNamespaceOf,
+  type StatementContracts,
   subjectText,
 } from '../statements/plan-questions';
 import {
@@ -105,6 +111,9 @@ import {
   type CheckedDatabasePolicies,
   checkRunPolicies,
   databasePoliciesInForce,
+  forbiddingSettingsOfRun,
+  permittedSettingsOfRun,
+  refuseForbiddenChanges,
 } from './database-policies';
 import { stripOperations } from './migration-helpers';
 import { structuralPathOf } from './no-invariant-path';
@@ -343,6 +352,31 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   });
   onProgress?.({ action, kind: 'spanEnd', spanId: SPAN_IDS.introspect, outcome: 'ok' });
 
+  // Every plan is checked as it is made: a `forbidden` data protection setting refuses what it
+  // still loses or changes after the renames it was given, before anyone is asked about it.
+  const refuseForbidden = (
+    planned: PlannedRun,
+    texts: readonly StatementText[],
+  ): CliStructuredError | undefined => {
+    if (options.action !== 'dbUpdate' || checkedPolicies === undefined) return undefined;
+    const operations = (
+      entries: readonly (MigrationOperationSubject & { readonly loss?: MigrationDataLossKind })[],
+    ) =>
+      plannedOperations(planned.orderedResolutions, entries, {
+        origin: fromContract ?? EMPTY_ORIGIN,
+        destination: contract,
+        statements: texts,
+      });
+    return refuseForbiddenChanges({
+      appSpaceId: aggregate.app.spaceId,
+      command: 'db update',
+      invocation: options.invocation,
+      forbidden: forbiddingSettingsOfRun(checkedPolicies, options.ref),
+      dataLoss: operations(planned.subjects.dataLoss),
+      accessChanges: operations(planned.subjects.accessChanges),
+    });
+  };
+
   // 3. Plan via aggregate planner. App is forced through planFromDiff
   // (today's `db init` / `db update` daily-driver behaviour); extensions
   // walk their on-disk migration graphs via resolveRecordedPath.
@@ -366,6 +400,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       operationPolicy: policy,
       appSpace: { fromContract, statements: resolved },
       storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+      accessChangesOf: (operations) => familyInstance.accessChangesOf(operations),
     });
     if (!planned.ok) {
       onProgress?.({ action, kind: 'spanEnd', spanId: SPAN_IDS.plan, outcome: 'error' });
@@ -392,7 +427,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
         ...entry,
         label: operations[entry.operationIndex]?.label ?? JSON.stringify(entry.subject),
       }));
-    return ok({
+    const run: PlannedRun = {
       planned: planned.value,
       orderedResolutions,
       subjects,
@@ -404,7 +439,9 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
         orderedResolutions.find(({ spaceId }) => spaceId === aggregate.app.spaceId)?.entry
           .namespaces,
       ),
-    });
+    };
+    const refused = refuseForbidden(run, texts.filter(isPlannedStatement));
+    return refused === undefined ? ok(run) : notOk({ refused });
   };
 
   const first = await plan(statementTexts, firstResolved);
@@ -414,6 +451,14 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   let run = first.value;
   let plannedTexts: readonly StatementText[] = statementTexts.filter(isPlannedStatement);
   let consented: readonly ConsentedSubject[] = [];
+  const permitted = checkedPolicies === undefined ? [] : permittedSettingsOfRun(checkedPolicies);
+  const consentAll =
+    options.action === 'dbUpdate'
+      ? {
+          delete: options.acceptDataLoss || permitted.includes('dataLoss'),
+          allow: options.acceptAccessChanges || permitted.includes('accessWidening'),
+        }
+      : { delete: false, allow: false };
   // 3a. Questions: an apply of `db update` asks what each operation that would lose data means,
   // and whether each that would change access may run, before it applies anything. A dry run asks
   // nothing and lists them.
@@ -424,7 +469,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       canConvert: false,
       statements: plannedTexts,
       preAnswers: consentTexts,
-      consentAll: { delete: options.acceptDataLoss, allow: options.acceptAccessChanges },
+      consentAll,
       origin: fromContract ?? EMPTY_ORIGIN,
       originKnown: fromContract !== null,
       destination: contract,
@@ -461,7 +506,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     consented = givenConsents({
       plan: run,
       statements: statementTexts,
-      consentAll: { delete: options.acceptDataLoss, allow: options.acceptAccessChanges },
+      consentAll,
       contracts: {
         origin: fromContract ?? EMPTY_ORIGIN,
         destination: contract,
@@ -550,6 +595,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       appliedStatements,
       subjects,
       databaseStorageHash,
+      permitted,
     });
   }
 
@@ -621,6 +667,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       ? changedStorageEntities(fromContract, contract)
       : undefined,
     databasePoliciesUpdated: policiesToWrite?.differences,
+    permitted,
   });
 }
 
@@ -682,6 +729,35 @@ async function readAppOrigin(input: {
     const unreadable = error instanceof Error ? error.message : String(error);
     return { origin: { kind: 'missing', hash, snapshotDirectory, unreadable }, contract: null };
   }
+}
+
+/**
+ * The operations of a plan that `entries` name, each with its space and its subject as the user
+ * names it. `entries` index the operations of every space, in apply order.
+ */
+function plannedOperations(
+  orderedResolutions: readonly OrderedResolution[],
+  entries: readonly (MigrationOperationSubject & { readonly loss?: MigrationDataLossKind })[],
+  contracts: StatementContracts,
+): readonly DataProtectionRefusedOperation[] {
+  const placed = orderedResolutions.flatMap((resolution) =>
+    resolution.entry.displayOps.map((operation) => ({ spaceId: resolution.spaceId, operation })),
+  );
+  return entries.map(({ operationIndex, subject, loss }) => {
+    const at = placed[operationIndex];
+    if (at === undefined) {
+      throw new InternalError(
+        `Unreachable: the plan names operation ${operationIndex}, which it does not hold`,
+      );
+    }
+    return {
+      spaceId: at.spaceId,
+      operationId: at.operation.id,
+      subject: subjectText(subject, contracts),
+      label: at.operation.label,
+      ...ifDefined('loss', loss),
+    };
+  });
 }
 
 /** How many operations the spaces applied before `spaceId` list ahead of it in `operations`. */
@@ -847,9 +923,11 @@ function wrapPlanResult(args: {
     | undefined;
   /** `undefined` for `db init`, which prints no `migration plan`. */
   readonly databaseStorageHash: string | undefined;
+  readonly permitted: readonly DataProtectionSetting[];
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'plan',
+    ...(args.permitted.length > 0 ? { permitted: args.permitted } : {}),
     ...ifDefined('databaseStorageHash', args.databaseStorageHash),
     ...ifDefined('appliedStatements', args.appliedStatements),
     ...args.subjects,
@@ -885,9 +963,11 @@ function wrapApplyResult(args: {
   /** Set when `db update` signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities: readonly ChangedStorageEntity[] | undefined;
   readonly databasePoliciesUpdated: readonly DatabasePolicyDifference[] | undefined;
+  readonly permitted: readonly DataProtectionSetting[];
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'apply',
+    ...(args.permitted.length > 0 ? { permitted: args.permitted } : {}),
     ...ifDefined('databasePoliciesUpdated', args.databasePoliciesUpdated),
     ...ifDefined('databaseStorageHash', args.databaseStorageHash),
     ...ifDefined('changedStorageEntities', args.changedStorageEntities),

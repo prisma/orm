@@ -39,10 +39,10 @@ function elementNumber(element: JsonValue): number {
 }
 
 export const pgvectorVectorParams = arktype({
-  length: `number.integer >= 1 & number.integer <= ${VECTOR_MAX_DIM}` as const,
+  'length?': `number.integer >= 1 & number.integer <= ${VECTOR_MAX_DIM}` as const,
 });
 
-/** A `vector(n)` value is an array of exactly `n` finite numbers, each one a `real` holds exactly. */
+/** A `vector(n)` value is an array of exactly `n` finite numbers, and a `vector` value one of 1 to 16,000, each one a `real` holds exactly. */
 function isFiniteNumber(element: JsonValue): element is number {
   return typeof element === 'number' && Number.isFinite(element);
 }
@@ -51,9 +51,11 @@ const readVector: DataTypeReader = (json, params) => {
   const length = typeof params['length'] === 'number' ? params['length'] : undefined;
   const expected =
     length === undefined
-      ? 'an array of finite numbers'
+      ? `an array of 1 to ${VECTOR_MAX_DIM} finite numbers`
       : `an array of ${counted(length, 'finite number')}`;
-  if (!Array.isArray(json) || (length !== undefined && json.length !== length)) {
+  const acceptsLength = (received: number) =>
+    length === undefined ? received >= 1 && received <= VECTOR_MAX_DIM : received === length;
+  if (!Array.isArray(json) || !acceptsLength(json.length)) {
     return refuseJsonValue('pgvector/vector', expected, json);
   }
   if (!json.every(isFiniteNumber)) return refuseJsonValue('pgvector/vector', expected, json);
@@ -88,7 +90,10 @@ function realText(value: number): string {
 export const pgvectorVector = sqlDataType('pgvector/vector', {
   params: pgvectorVectorParams,
   read: readVector,
-  texts: [{ text: 'vector({length})', written: true, catalog: true }],
+  texts: [
+    { text: 'vector', written: true, catalog: true },
+    { text: 'vector({length})', written: true, catalog: true },
+  ],
   listCast: {
     of: [pgInt2.id, pgInt4.id, pgInt8.id, pgNumeric.id],
     cast: (elements) => elements.map(elementNumber),

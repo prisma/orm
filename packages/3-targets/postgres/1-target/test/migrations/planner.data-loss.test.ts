@@ -59,13 +59,20 @@ interface TableSpec {
   readonly indexed?: string;
   /** The hash of the policy's generated (wire) name; without it the policy has an exact name. */
   readonly policyHash?: string;
+  /** The policy's exact name, when it is not `<table> readers`. */
+  readonly policyName?: string;
 }
 
-function policyOn(table: string, using: string, hash: string | undefined): PostgresRlsPolicy {
+function policyOn(
+  table: string,
+  using: string,
+  hash: string | undefined,
+  name = `${table} readers`,
+): PostgresRlsPolicy {
   return new PostgresRlsPolicy({
     naming:
       hash === undefined
-        ? { kind: 'exact', name: `${table} readers` }
+        ? { kind: 'exact', name }
         : { kind: 'wire', prefix: `${table}_readers`, hash },
     tableName: table,
     namespaceId: 'public',
@@ -81,7 +88,9 @@ function policyOn(table: string, using: string, hash: string | undefined): Postg
 function contract(seed: string, tables: Readonly<Record<string, TableSpec>>): Contract<SqlStorage> {
   const specs = Object.entries(tables);
   const policies = specs.flatMap(([table, spec]) =>
-    spec.policy === undefined ? [] : [policyOn(table, spec.policy, spec.policyHash)],
+    spec.policy === undefined
+      ? []
+      : [policyOn(table, spec.policy, spec.policyHash, spec.policyName)],
   );
   const schema = new PostgresSchema({
     id: 'public',
@@ -325,6 +334,24 @@ describe('Postgres planner, data loss', () => {
 
     const { dataLoss, accessChanges } = await planned(from, to);
     expect({ dataLoss, accessChanges }).toEqual({ dataLoss: [], accessChanges: [] });
+  });
+
+  it('leaves out the drop of a policy named like a rename that the plan replaces', async () => {
+    const from = contract('from', {
+      User: { columns: { id: 'int4' }, policy: 'true', policyName: 'readers.rename' },
+    });
+    const to = contract('to', {
+      User: { columns: { id: 'int4' }, policy: 'false', policyName: 'readers.rename' },
+    });
+
+    const { labels, accessChanges } = await planned(from, to);
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        'Drop RLS policy "readers.rename" on "User"',
+        'Create RLS policy "readers.rename" on "User"',
+      ]),
+    );
+    expect(accessChanges).toEqual([]);
   });
 
   it('names the origin model and fields of a table a statement renamed earlier in the plan', async () => {

@@ -247,7 +247,12 @@ describe('isolation across Supabase roots and user roles', () => {
       'BEGIN',
       'ROLLBACK',
     ]);
-    expect(recorded.disposals).toEqual([failure]);
+    expect(recorded.disposals).toEqual([
+      expect.objectContaining({
+        code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
+        details: { rollbackError: failure },
+      }),
+    ]);
     expect(vi.getTimerCount()).toBe(0);
   });
 

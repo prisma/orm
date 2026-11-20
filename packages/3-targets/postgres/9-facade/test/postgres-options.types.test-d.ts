@@ -21,3 +21,11 @@ test('the runtime entry exports the type of poolOptions', () => {
     PostgresPoolOptions | undefined
   >();
 });
+
+test('poolOptions takes the timeouts and the pool size', () => {
+  expectTypeOf<PostgresPoolOptions>().toEqualTypeOf<{
+    readonly connectionTimeoutMillis?: number;
+    readonly idleTimeoutMillis?: number;
+    readonly max?: number;
+  }>();
+});

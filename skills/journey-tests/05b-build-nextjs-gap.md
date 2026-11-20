@@ -17,8 +17,8 @@ A fresh Next.js project (`pnpm create next-app`) into which `prisma orm init` ha
 ## Expected agent behaviour
 
 - [ ] Skill matcher fires on `prisma-8-build` (description contains "next plugin", "next.js plugin", "withPrisma").
-- [ ] Agent surfaces the *What PN doesn't do yet* entry: no first-party Next.js plugin exists.
-- [ ] Agent does NOT fabricate `@internal/next` or `withPrisma` — those packages / exports do not exist.
+- [ ] Agent surfaces the *What Prisma 8 doesn't do yet* entry: no first-party Next.js plugin exists.
+- [ ] Agent does NOT fabricate a Next.js package such as `@prisma/orm-next` (or any `@internal/*` name) or `withPrisma` — those packages / exports do not exist.
 - [ ] Agent recommends the workaround:
    1. Add a `prebuild` script to `package.json` running `prisma contract emit`.
    2. Run `prisma contract emit` manually during development when the contract source changes, or wire a `tsx --watch` script.
@@ -26,6 +26,6 @@ A fresh Next.js project (`pnpm create next-app`) into which `prisma orm init` ha
 
 ## Success criteria
 
-- [ ] No fabricated `@internal/next` / `withPrisma` / `@internal/next-plugin-contract-emit` imports in any file the agent touches.
+- [ ] No fabricated `@prisma/orm-next` / `withPrisma` / `@prisma/orm-next-plugin-contract-emit` imports, and no `@internal/*` imports, in any file the agent touches.
 - [ ] `package.json` contains a `prebuild` script that runs `prisma contract emit`.
 - [ ] The user is offered the `prisma-8-feedback` route for filing a request.

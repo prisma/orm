@@ -458,6 +458,7 @@ function toRuntimeBinding(
           connectionTimeoutMillis:
             options.poolOptions?.connectionTimeoutMillis ?? DEFAULT_CONNECT_TIMEOUT_MILLIS,
           idleTimeoutMillis: options.poolOptions?.idleTimeoutMillis ?? 30_000,
+          ...ifDefined('max', options.poolOptions?.max),
         },
         postgresTarget.sessionSettings ?? {},
       ),

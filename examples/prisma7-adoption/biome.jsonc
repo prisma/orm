@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.6/schema.json",
   "extends": "//",
   "files": {
     "includes": ["**", "!**/node_modules", "!**/*.d.ts", "!**/contract.json", "!generated/prisma7"]

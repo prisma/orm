@@ -27,7 +27,7 @@ The skill teaches *the system's mental model* — what a ref is, what a marker i
 
 ### Origin
 
-The **origin** is the database's *current contract hash*. The database carries a row in PN's marker table that records *"this database is at hash X"*. When the CLI runs online (a `--db <url>` is provided, or `db.connection` is set in `prisma.config.ts`), PN reads the marker and that hash is the origin. Offline (no DB connection), the origin is unknown — many commands degrade to listing the on-disk migrations and skip the per-edge applied/pending status.
+The **origin** is the database's *current contract hash*. The database carries a row in Prisma 8's marker table that records *"this database is at hash X"*. When the CLI runs online (a `--db <url>` is provided, or `db.connection` is set in `prisma.config.ts`), Prisma 8 reads the marker and that hash is the origin. Offline (no DB connection), the origin is unknown — many commands degrade to listing the on-disk migrations and skip the per-edge applied/pending status.
 
 A live DB is therefore the authoritative source of origin. The "recorded marker" in any other artifact (refs, local cache, your assumptions) is a working copy that can drift; the live DB never does.
 
@@ -82,7 +82,7 @@ These codes surface on `migration plan`, `migration ref set`, and `db migrate` �
 | `MIGRATION.HASH_NOT_IN_GRAPH` | `migration plan` (non-empty graph) or `migration ref set` | Resolved hash is not a node in the on-disk migration graph — typical when the default `db` ref points past the graph tip after `db update` cycles. | `migration plan --from <reachable-ref>` (e.g. `--from production`); or realign the ref with `migration ref set db <graph-node-hash>`. |
 | `MIGRATION.SNAPSHOT_MISSING` | `migration plan` | A named ref has no pointer file (`<name>.json`), and the hash being resolved isn't a node in the migration graph either. | `migration ref set <name> <hash>` to create the ref, `db update --advance-ref <name>` to advance it, or pass a hash that is a graph node. |
 | `MIGRATION.MARKER_MISMATCH` | `db migrate` (pre-DDL, before the runner), `db migrate --show` | Live DB marker hash is not a graph node. Usually a migration the database applied was planned again or deleted. | Follow the error's next actions, and `references/migrations.md` § *A database whose marker is not in the migration graph*. Never reset the database. |
-| `MIGRATION.PATH_UNREACHABLE` | `db migrate` (path resolution) | No migration path from the current marker to the resolved target in the on-disk graph. | Read the improved `fix` payload — it names `fromHash` / `targetHash` and suggests `migration plan --from <from> --to <target>`; run `migration list` to inspect the graph. |
+| `MIGRATION.PATH_UNREACHABLE` | `db migrate` (path resolution) | No migration path from the current marker to the resolved target in the on-disk graph. | Read the improved `fix` payload — it names `fromHash` / `targetHash` and prints the `migration plan` and `db migrate` commands to run, with `--to <target>` unless the target is the emitted contract or the space has no migrations yet. When the space named is an extension's, it prints no plan command: install a version of the extension whose migrations start from the contract the database is at; run `migration list` to inspect the graph. |
 
 ## Workflow — *"What's about to run on deploy?"*
 
@@ -105,7 +105,7 @@ If you omit `--db`, the command runs offline: it lists the migrations on disk bu
 
 If you omit `--to`, the destination defaults to the contract head — which answers *"is this branch's contract reachable from the database, and how?"*, not *"what runs on deploy"*. Pass the ref explicitly when the question is about a specific environment.
 
-`migration status` summarises each pending migration's operations by class (`additive`, `widening`, `data`, `destructive`) and reports a destructive-op count when destructive operations are present. Surface that count to the user before they merge or deploy — destructive operations are the class that warrants manual review.
+`migration status` summarises each pending migration's operations by class (`additive`, `widening`, `data`, `destructive`) and reports a destructive-op count when destructive operations are present. Surface that count to the user before they merge or deploy. Review `destructive` and `data` operations before deploy: both can change stored data. Then read each pending `migration.ts` against `references/migrations.md` § *Data changes go in a data transform*. These are findings: an insert, update or delete outside a data transform; a Postgres data transform whose query comes from `db.raw.sql` or contains `fns.raw`; a Postgres or Mongo data transform without `check`; and a hand-written `rawSql` step, unless it is DDL that no operation factory expresses and has both a precheck and a postcheck that test the live schema. `rawSql` steps the planner rendered itself are not findings; if you cannot tell who wrote a step, ask the author.
 
 ## Workflow — *"What state is each environment at?"*
 
@@ -113,7 +113,7 @@ Just `migration status --db $URL` for each environment's DB. The marker (origin)
 
 ## Concept — concurrent migrations on the same branch point
 
-This used to be called *diamond convergence* in some PN docs; the situation is the same regardless of the label.
+This used to be called *diamond convergence* in some Prisma 8 docs; the situation is the same regardless of the label.
 
 **What's happening.** Two topic branches each authored a migration off the same parent contract hash. The first branch merges to `main`; the destination ref (e.g. `production`) advances to that branch's `to` hash. Your branch's migration still has its `from` hash pointing at the *old* parent. The migration graph, after rebase, no longer has a clean path through your migration:
 
@@ -204,7 +204,8 @@ This skill is intentionally body-only; the underlying CLI reference (`prisma mig
 - [ ] Read the `migration status` header (it names config, ref, database) and the summary line (it names the origin/destination distance) before reading the per-edge list.
 - [ ] For concurrent-migration conflicts: re-applied the *core* workflow (edit → plan → apply) rather than following a memorised "diamond convergence" procedure. Ported any data-transform logic from the abandoned `migration.ts` over.
 - [ ] For a ref-mismatch: investigated *which* piece of state is wrong (DB ahead, DB behind, DB on a divergent branch). Did NOT `migration ref set` to silence the mismatch.
-- [ ] Surfaced the destructive-op count from `migration status` (the only operation class that warrants manual review pre-deploy) before the user merges or deploys.
+- [ ] Surfaced the destructive-op count from `migration status` before the user merges or deploys, and reviewed every `destructive` and `data` operation.
+- [ ] Flagged inserts, updates and deletes outside a data transform, Postgres transforms that use `db.raw.sql` or `fns.raw`, Postgres and Mongo transforms without `check`, and hand-written `rawSql` steps, unless they are DDL that no operation factory expresses and have both a precheck and a postcheck that test the live schema. Did NOT flag `rawSql` steps the planner rendered.
 - [ ] In CI: the deploy job is `prisma db migrate --to <ref> --db $URL` and nothing else. Did NOT rely on a `--dry-run` flag on `db migrate` (no such flag exists).
 - [ ] Did NOT confuse `--to` with database selection (`--to` picks the destination hash; `--db` picks the database).
 - [ ] Did NOT use `--ref` (removed; use `--to`).

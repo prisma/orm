@@ -1,0 +1,15 @@
+// use prisma-8
+
+model Measure {
+  id     Int                              @id
+  count  BigInt(as: number)               @default(7)
+  ratio  Float                            @default(0.25)
+  amount Decimal                          @default(1.5)
+  price  Decimal(precision: 10, scale: 2) @default("-0.5")
+  label  String(storage: text)?
+  name   String(length: 40)               @default("it's")
+  on     Boolean                          @default(true)
+  data   Bytes                            @default(longblob`00ff`)
+  doc    Json                             @default(json`{"b": [1, null], "a": "it's"}`)
+  extra  Json?
+}
