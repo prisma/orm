@@ -299,7 +299,7 @@ withTempDir(({ createTempDir }) => {
           await emit(journey, contract({ bug: undefined }), 'L7.02');
           const lines = linesOf(await refusal(journey, ['--delete', 'Nope'], 'L7.03'));
           expect(lines[0], 'L7.03: remove the flag').toBe(
-            'Remove --delete Nope: nothing in this change is called that.',
+            'Remove --delete Nope: this change does not delete the data of anything called that.',
           );
           const withYes = await refusal(journey, ['--yes'], 'L7.04');
           expect(withYes.why, 'L7.04: --yes does not allow it').toBe(

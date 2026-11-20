@@ -22,6 +22,11 @@ const destination = contractOf({
   },
 });
 
+/** The rename a line says to use in place of the one given, as `--rename` takes it. */
+function usedInPlace(line: string | undefined): string {
+  return /use --rename (\S+) in place of/.exec(line ?? '')?.[1] ?? '';
+}
+
 function renamed(text: string) {
   return failureShape(
     resolveStatements({
@@ -40,7 +45,7 @@ describe('a --rename to a name the contract does not have', () => {
       why: 'The contract adds enum value "Status.RETIRED".',
       nextActions: [
         'If enum value "Status.ARCHIVED" was renamed to "Status.GONE", add enum value "Status.GONE" to the contract, run `{bin} contract emit`, and run this command again.',
-        'If enum value "Status.ARCHIVED" was renamed to "Status.RETIRED", put this in place of --rename Status.ARCHIVED:Status.GONE: --rename Status.ARCHIVED:Status.RETIRED',
+        'If enum value "Status.ARCHIVED" was renamed to "Status.RETIRED", use --rename Status.ARCHIVED:Status.RETIRED in place of --rename Status.ARCHIVED:Status.GONE',
       ],
       meta: { statement: 'Status.ARCHIVED:Status.GONE', verb: 'rename' },
     });
@@ -87,9 +92,8 @@ describe('a rename typed at the prompt whose new name does not fit', () => {
       missing:
         'the contract has no field "Shop.nope" to rename "Shop.legacy" to. The contract adds fields "Shop.rating" and "Shop.score". If field "Shop.legacy" was renamed to "Shop.nope", stop this command, add field "Shop.nope" to the contract, run `{bin} contract emit`, and run this command again.',
       hadBefore:
-        'the contract had field "Shop.id" before this change too, so one change cannot make it the new name of "Shop.legacy".',
-      otherOldName:
-        'The rename\'s old name is not "Shop.legacy". Write it as Shop.legacy:Shop.<new name>.',
+        'the contract had field "Shop.id" before this change too, so one change cannot make it the new name of "Shop.legacy". The contract adds fields "Shop.rating" and "Shop.score". If "Shop.legacy" is to take the name "Shop.id" from the field that has it now, stop this command and do it in two steps. First, in the contract, give field "Shop.id" its new name or remove it, and keep "Shop.legacy" as it was; run `{bin} contract emit`, and run this command again. Then rename "Shop.legacy" to "Shop.id" in the contract, run `{bin} contract emit`, and run this command again with --rename Shop.legacy:Shop.id.',
+      otherOldName: 'To rename "Shop.legacy", type rename Shop.legacy:Shop.<new name>.',
       fits: undefined,
     });
   });
@@ -131,7 +135,7 @@ describe('the new names a removed model can have', () => {
         destination: variantDestination,
       });
     const flagError = failureShape(resolve('Bug:Nope')) as { readonly nextActions: string[] };
-    const printed = flagError.nextActions.at(-1)?.split(': ')[1]?.replace('--rename ', '') ?? '';
+    const printed = usedInPlace(flagError.nextActions.at(-1));
 
     expect({
       refusal: question?.answers.map(({ meaning, flag }) => `${meaning}: ${flag.text}`),
@@ -147,8 +151,8 @@ describe('the new names a removed model can have', () => {
         summary: 'The contract has no model "Nope" to rename "Bug" to.',
         why: 'The contract adds model "Defect".',
         nextActions: [
-          'If model "Bug" was renamed to "Nope", add model "Nope" to the contract, run `{bin} contract emit`, and run this command again.',
-          'If model "Bug" was renamed to "Defect", put this in place of --rename Bug:Nope: --rename Bug:Defect',
+          'If model "Bug" was renamed to "Nope", add model "Nope" to the contract as a variant of model "Issue", run `{bin} contract emit`, and run this command again.',
+          'If model "Bug" was renamed to "Defect", use --rename Bug:Defect in place of --rename Bug:Nope',
         ],
         meta: { statement: 'Bug:Nope', verb: 'rename' },
       },
@@ -159,6 +163,87 @@ describe('the new names a removed model can have', () => {
           from: { namespaceId: app, model: 'Bug' },
           to: { namespaceId: app, model: 'Defect' },
         },
+      ],
+    });
+  });
+
+  it('say a variant gets its new name as a variant of the same base when the contract adds none, and the --rename resolves once it does', async () => {
+    const withoutVariant = issues({ task: 'Task' }, { Audit: { fields: ['id'] } });
+    const [question] = await askedAbout({
+      origin: variantOrigin,
+      destination: withoutVariant,
+      losses: [bugRemoved],
+    });
+    const resolve = (destination: typeof withoutVariant, text: string) =>
+      resolveStatements({
+        statements: [{ verb: 'rename', text }],
+        origin: { kind: 'contract', contract: variantOrigin },
+        destination,
+      });
+
+    expect({
+      refusal: question?.answers.map(({ meaning, flag }) => `${meaning}: ${flag.text}`),
+      prompt: question?.answers.map(({ promptMeaning }) => promptMeaning),
+      flagError: failureShape(resolve(withoutVariant, 'Bug:Nope')),
+      followed: expectValue(resolve(variantDestination, 'Bug:Defect')),
+    }).toEqual({
+      refusal: [
+        'If the model was renamed, add it to the contract under its new name as a variant of model "Issue" and run `{bin} contract emit`; then keep its data: Bug:<new name>',
+        'If its data can go: Bug',
+      ],
+      prompt: [
+        'rename works only once the contract has the model under its new name as a variant of model "Issue": stop this command, add it to the contract, run `{bin} contract emit`, and run this command again',
+        'delete lets its data go',
+      ],
+      flagError: {
+        code: 'MIGRATION.STATEMENT_UNRESOLVED',
+        summary: 'The contract has no model "Nope" to rename "Bug" to.',
+        nextActions: [
+          'If model "Bug" was renamed to "Nope", add model "Nope" to the contract as a variant of model "Issue", run `{bin} contract emit`, and run this command again.',
+        ],
+        meta: { statement: 'Bug:Nope', verb: 'rename' },
+      },
+      followed: [
+        {
+          kind: 'rename',
+          entity: 'model',
+          from: { namespaceId: app, model: 'Bug' },
+          to: { namespaceId: app, model: 'Defect' },
+        },
+      ],
+    });
+  });
+
+  it('leave out a name a later --rename gives, whatever the order of the flags', () => {
+    const origin = contractOf({
+      app: { models: { Bug: { fields: ['id'] }, Task: { fields: ['id'] } } },
+      billing: { models: { Invoice: { fields: ['id'] } } },
+    });
+    const destination = contractOf({
+      app: { models: { Ticket: { fields: ['id'] } } },
+      finance: { models: { Invoice: { fields: ['id'] } } },
+    });
+    const refused = (...texts: readonly string[]) =>
+      (
+        failureShape(
+          resolveStatements({
+            statements: texts.map((text) => ({ verb: 'rename' as const, text })),
+            origin: { kind: 'contract', contract: origin },
+            destination,
+          }),
+        ) as { readonly nextActions: readonly string[] }
+      ).nextActions;
+
+    expect({
+      modelLater: refused('app.Bug:app.Nope', 'app.Task:app.Ticket'),
+      namespaceLater: refused('app.Bug:app.Nope', 'app.Task:app.Ticket', 'billing:finance'),
+    }).toEqual({
+      modelLater: [
+        'If model "app.Bug" was renamed to "app.Nope", add model "app.Nope" to the contract, run `{bin} contract emit`, and run this command again.',
+        'If model "app.Bug" was renamed to "finance.Invoice", use --rename app.Bug:finance.Invoice in place of --rename app.Bug:app.Nope',
+      ],
+      namespaceLater: [
+        'If model "app.Bug" was renamed to "app.Nope", add model "app.Nope" to the contract, run `{bin} contract emit`, and run this command again.',
       ],
     });
   });
@@ -200,7 +285,7 @@ describe('the new names a removed model can have', () => {
         why: 'The contract adds model "app.Defect".',
         nextActions: [
           'If model "app.Bug" was renamed to "app.Nope", add model "app.Nope" to the contract, run `{bin} contract emit`, and run this command again.',
-          'If model "app.Bug" was renamed to "app.Defect", put this in place of --rename app.Bug:app.Nope: --rename app.Bug:app.Defect',
+          'If model "app.Bug" was renamed to "app.Defect", use --rename app.Bug:app.Defect in place of --rename app.Bug:app.Nope',
         ],
         meta: { statement: 'app.Bug:app.Nope', verb: 'rename' },
       },
@@ -228,13 +313,13 @@ describe('a removed field when the command plans to a ref', () => {
       typed: question?.validate('rename', 'Shop.legacy:Shop.nope'),
     }).toEqual({
       prompt:
-        'Removing field "Shop.legacy" would delete its values.\nThe operation of the plan that does this: Drop column "legacy" from "shop".\nrename works only once the contract has the field under its new name: stop this command, add it to the contract, run `prisma contract emit`, and run this command again without --to next; delete lets the values go.',
+        'Removing field "Shop.legacy" would delete its values.\nThe operation of the plan that does this: Drop column "legacy" from "shop".\nrename works only once the contract has the field under its new name: stop this command, add it to the contract, run `prisma contract emit`, and run this command again without --to next, so that it plans to the emitted contract and not to the one that --to next names; delete lets the values go.',
       refusal: [
-        'If the field was renamed, add it to the contract under its new name and run `{bin} contract emit`, then run this command without --to next and keep its values',
+        'If the field was renamed, add it to the contract under its new name and run `{bin} contract emit`, then run this command again without --to next, so that it plans to the emitted contract and not to the one that --to next names, and keep its values',
         'If the values can go',
       ],
       typed:
-        'the contract --to next names has no field "Shop.nope" to rename "Shop.legacy" to. If field "Shop.legacy" was renamed to "Shop.nope", stop this command, add field "Shop.nope" to the contract, run `{bin} contract emit`, and run this command again without --to next.',
+        'the contract that --to next names has no field "Shop.nope" to rename "Shop.legacy" to. If field "Shop.legacy" was renamed to "Shop.nope", stop this command, add field "Shop.nope" to the contract, run `{bin} contract emit`, and run this command again without --to next, so that it plans to the emitted contract and not to the one that --to next names.',
     });
   });
 });
@@ -250,7 +335,7 @@ describe('a --rename to a name the contract had before the change too', () => {
     const refused = failureShape(resolve('Shop.legacy:Shop.id')) as {
       readonly nextActions: readonly string[];
     };
-    const printed = refused.nextActions[0]?.split(': ').at(-1)?.replace('--rename ', '') ?? '';
+    const printed = usedInPlace(refused.nextActions[0]);
 
     expect({ refused, followed: expectValue(resolve(printed)) }).toEqual({
       refused: {
@@ -259,9 +344,9 @@ describe('a --rename to a name the contract had before the change too', () => {
           'The contract had field "Shop.id" before this change too, so one change cannot make it the new name of "Shop.legacy".',
         why: 'The contract adds fields "Shop.rating" and "Shop.score".',
         nextActions: [
-          'If field "Shop.legacy" was renamed to "Shop.rating", put this in place of --rename Shop.legacy:Shop.id: --rename Shop.legacy:Shop.rating',
-          'If field "Shop.legacy" was renamed to "Shop.score", put this in place of --rename Shop.legacy:Shop.id: --rename Shop.legacy:Shop.score',
-          'If "Shop.legacy" takes the name of field "Shop.id", which this change renames or removes, make the change in two migrations: first change the contract so that "Shop.id" has its new name or is gone, and plan only that; then rename "Shop.legacy" to "Shop.id" with --rename Shop.legacy:Shop.id.',
+          'If field "Shop.legacy" was renamed to "Shop.rating", use --rename Shop.legacy:Shop.rating in place of --rename Shop.legacy:Shop.id',
+          'If field "Shop.legacy" was renamed to "Shop.score", use --rename Shop.legacy:Shop.score in place of --rename Shop.legacy:Shop.id',
+          'If "Shop.legacy" is to take the name "Shop.id" from the field that has it now, do it in two steps. First, in the contract, give field "Shop.id" its new name or remove it, and keep "Shop.legacy" as it was; run `{bin} contract emit`, and run this command again. Then rename "Shop.legacy" to "Shop.id" in the contract, run `{bin} contract emit`, and run this command again with --rename Shop.legacy:Shop.id.',
         ],
         meta: { statement: 'Shop.legacy:Shop.id', verb: 'rename' },
       },

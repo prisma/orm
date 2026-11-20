@@ -109,7 +109,8 @@ describe('the output when migration plan stops to ask and nobody can answer', ()
       nextActions: [
         {
           kind: 'user-choice',
-          label: 'Remove --delete nope: nothing in this change is called that.',
+          label:
+            'Remove --delete nope: this change does not delete the data of anything called that.',
         },
         {
           kind: 'user-choice',
@@ -234,7 +235,7 @@ describe('following a printed line of the output when migration plan stops', () 
 
     expect({ removed, remaining, exitCode: followed.exitCode }).toEqual({
       removed: [
-        'Remove --delete nope: nothing in this change is called that.',
+        'Remove --delete nope: this change does not delete the data of anything called that.',
         'Remove --confirm postgres: nothing in this change needs it.',
       ],
       remaining: [],
@@ -306,9 +307,15 @@ describe('the output when a --rename gives a name the contract does not have', (
       ['migration', 'plan', '--rename', 'Shop.legacy:Shop.nope', '--json'],
       { cwd: project.dir },
     );
-    const renameLine = labelsOf(errorOf(refused)).find((label) => label.endsWith('Shop.rating'));
+    const renameLine = labelsOf(errorOf(refused)).find((label) =>
+      label.includes('use --rename Shop.legacy:Shop.rating'),
+    );
     const followed = await harness(project, { script }).run(
-      ['migration', 'plan', ...flagsOf(renameLine ?? '')],
+      [
+        'migration',
+        'plan',
+        ...(/use (--rename) (\S+) in place of/.exec(renameLine ?? '')?.slice(1) ?? []),
+      ],
       { cwd: project.dir },
     );
 
@@ -327,7 +334,7 @@ describe('the output when a --rename gives a name the contract does not have', (
           {
             kind: 'user-choice',
             label:
-              'If field "Shop.legacy" was renamed to "Shop.rating", put this in place of --rename Shop.legacy:Shop.nope: --rename Shop.legacy:Shop.rating',
+              'If field "Shop.legacy" was renamed to "Shop.rating", use --rename Shop.legacy:Shop.rating in place of --rename Shop.legacy:Shop.nope',
           },
         ],
         meta: { statement: 'Shop.legacy:Shop.nope', verb: 'rename' },
@@ -373,12 +380,12 @@ describe('the output when migration plan plans to a ref', () => {
         code: 'MIGRATION.STATEMENT_UNRESOLVED',
         severity: 'error',
         summary:
-          'The contract --to next names has no field "Shop.rating" to rename "Shop.legacy" to.',
+          'The contract that --to next names has no field "Shop.rating" to rename "Shop.legacy" to.',
         nextActions: [
           {
             kind: 'user-choice',
             label:
-              'If field "Shop.legacy" was renamed to "Shop.rating", add field "Shop.rating" to the contract, run `prisma-test contract emit`, and run this command again without --to next.',
+              'If field "Shop.legacy" was renamed to "Shop.rating", add field "Shop.rating" to the contract, run `prisma-test contract emit`, and run this command again without --to next, so that it plans to the emitted contract and not to the one that --to next names.',
           },
         ],
         meta: { statement: 'Shop.legacy:Shop.rating', verb: 'rename' },
@@ -398,18 +405,19 @@ describe('the output when migration plan plans to a ref', () => {
     expect(errorOf(run)).toEqual({
       code: 'MIGRATION.STATEMENT_UNRESOLVED',
       severity: 'error',
-      summary: 'The contract --to next names has no field "Shop.nope" to rename "Shop.legacy" to.',
+      summary:
+        'The contract that --to next names has no field "Shop.nope" to rename "Shop.legacy" to.',
       why: 'That contract adds field "Shop.rating".',
       nextActions: [
         {
           kind: 'user-choice',
           label:
-            'If field "Shop.legacy" was renamed to "Shop.nope", add field "Shop.nope" to the contract, run `prisma-test contract emit`, and run this command again without --to next.',
+            'If field "Shop.legacy" was renamed to "Shop.nope", add field "Shop.nope" to the contract, run `prisma-test contract emit`, and run this command again without --to next, so that it plans to the emitted contract and not to the one that --to next names.',
         },
         {
           kind: 'user-choice',
           label:
-            'If field "Shop.legacy" was renamed to "Shop.rating", put this in place of --rename Shop.legacy:Shop.nope: --rename Shop.legacy:Shop.rating',
+            'If field "Shop.legacy" was renamed to "Shop.rating", use --rename Shop.legacy:Shop.rating in place of --rename Shop.legacy:Shop.nope',
         },
       ],
       meta: { statement: 'Shop.legacy:Shop.nope', verb: 'rename' },
@@ -425,7 +433,7 @@ describe('the output when migration plan plans to a ref', () => {
     );
 
     expect(labelsOf(errorOf(run))).toEqual([
-      "If the field was renamed, add it to the contract under its new name and run `prisma-test contract emit`, then run this command without --to next and keep its values: --rename 'Shop.legacy:Shop.<new name>'",
+      "If the field was renamed, add it to the contract under its new name and run `prisma-test contract emit`, then run this command again without --to next, so that it plans to the emitted contract and not to the one that --to next names, and keep its values: --rename 'Shop.legacy:Shop.<new name>'",
       'If the values can go: --delete Shop.legacy',
     ]);
   });

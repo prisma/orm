@@ -259,7 +259,7 @@ const UNMATCHED =
   'A statement plans the rename a hand-written rename call makes, and that call does not match the contracts. Leave out this statement.';
 
 function leaveOutShared(moving: string): string {
-  return `Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. A question about ${moving} offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.`;
+  return `Leave out this --rename to plan the change without moving them: the command then stops and says what the change would delete. If it offers this same --rename for ${moving}, that is refused again for the same reason; give --delete for ${moving} in its place, which plans the change and deletes the data.`;
 }
 
 const HAND_WRITTEN_WITH_MIGRATION_PLAN =

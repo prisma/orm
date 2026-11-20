@@ -46,7 +46,7 @@ import {
 import { possibleNewNames } from './possible-new-names';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
-import { variantValue } from './variants';
+import { variantBaseText, variantValue } from './variants';
 
 /**
  * The origin contract statements resolve against, or where the command looked
@@ -1442,6 +1442,7 @@ function resolveOneNameStatement(
         to,
         candidates: added,
         destinationRef: state.destinationRef,
+        variantOf: undefined,
       }),
     );
   }
@@ -1479,6 +1480,7 @@ function subjectRead(reading: SideReading): MigrationSubject {
 function newNameRefusal(
   state: ResolutionState,
   statement: ParsedRename,
+  later: readonly ParsedRename[],
   from: SideReading,
   to: SideReading | undefined,
 ): CliStructuredError | undefined {
@@ -1492,9 +1494,11 @@ function newNameRefusal(
     candidates: possibleNewNames(subjectRead(from), {
       origin: state.origin.contract,
       destination: state.destination.contract,
-      renames: state.renames,
+      renames: [...state.renames, ...laterRenames(state, later)],
     }).map((each) => (from.entity === 'model' || parent === '' ? each : `${parent}.${each}`)),
     destinationRef: state.destinationRef,
+    variantOf:
+      from.entity === 'model' ? variantBaseText(state.origin.contract, from.coordinate) : undefined,
   };
   const missing = () =>
     to === undefined ? errorRenameToMissingName(statement, rename) : undefined;
@@ -1546,6 +1550,52 @@ function newNameRefusal(
   }
 }
 
+/**
+ * The renames given after the one being resolved, read as renames where both names read as the same
+ * kind of thing, so the names they give count as taken when offering others.
+ */
+function laterRenames(
+  state: ResolutionState,
+  later: readonly ParsedRename[],
+): readonly ResolvedMigrationStatement[] {
+  return later.flatMap((statement): readonly ResolvedMigrationStatement[] => {
+    const [fromName] = statement.from;
+    const [toName] = statement.to;
+    if (statement.from.length === 1 && statement.to.length === 1) {
+      const asNamespace = readNamespaceRename(state, fromName, toName);
+      if (asNamespace?.ok) {
+        return [
+          {
+            kind: 'rename',
+            entity: 'namespace',
+            from: asNamespaceId(asNamespace.value.from),
+            to: asNamespaceId(asNamespace.value.to),
+          },
+        ];
+      }
+    }
+    const from = readSide(state, 'old', statement.from);
+    const to = readSide(state, 'new', statement.to);
+    if (!from.ok || !to.ok) return [];
+    const [old, next] = [from.value, to.value];
+    if (old.entity === 'model' && next.entity === 'model') {
+      return [{ kind: 'rename', entity: 'model', from: old.coordinate, to: next.coordinate }];
+    }
+    if (old.entity === 'field' && next.entity === 'field') {
+      return [{ kind: 'rename', entity: 'field', from: old.coordinate, to: next.coordinate }];
+    }
+    if (old.entity === 'enumValue' && next.entity === 'enumValue') {
+      return [{ kind: 'rename', entity: 'enumValue', from: old.coordinate, to: next.coordinate }];
+    }
+    if (old.entity === 'valueObjectField' && next.entity === 'valueObjectField') {
+      return [
+        { kind: 'rename', entity: 'valueObjectField', from: old.coordinate, to: next.coordinate },
+      ];
+    }
+    return [];
+  });
+}
+
 function resolveStatement(
   state: ResolutionState,
   statement: ParsedRename,
@@ -1564,7 +1614,7 @@ function resolveStatement(
   const from = readSide(state, 'old', statement.from);
   if (!from.ok) return notOk(oldSideRefusal(state, statement, later, from.failure));
   const to = readSide(state, 'new', statement.to);
-  const refusal = newNameRefusal(state, statement, from.value, to.ok ? to.value : undefined);
+  const refusal = newNameRefusal(state, statement, later, from.value, to.ok ? to.value : undefined);
   if (refusal !== undefined) return notOk(refusal);
   if (
     !to.ok &&

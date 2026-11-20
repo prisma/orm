@@ -294,7 +294,8 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
         '`db` ref first. A plan that would lose data is written only once you say\n' +
         'what each such operation means: --rename to keep the data under a new\n' +
         'name, or --delete to let it go. Where nobody can answer, the command\n' +
-        'refuses and lists every question. Offline — does not consult the database.',
+        'refuses, says what would be lost, and lists the flags that settle it.\n' +
+        'Offline — does not consult the database.',
       examples: [
         'migration plan',
         // biome-ignore lint/plugin/no-family-vocabulary: a migration slug a user would plausibly type, not a schema concept

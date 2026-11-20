@@ -351,7 +351,7 @@ describe('db update --to bundle resolution', () => {
     ]);
   });
 
-  it('hands the client the whole ref --to names, and no ref for a migration name', async () => {
+  it('hands the client the whole ref --to names, and no ref for a migration name, and the --to its texts name', async () => {
     const { cwd, dirNext } = await setupFixture();
     const policies = { change: ['migrate'] } as const;
     await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
@@ -384,18 +384,21 @@ describe('db update --to bundle resolution', () => {
         options.ref,
         options.permitPolicyChange,
         options.invocation.rerunArgs,
+        options.invocation.to,
       ]),
     ).toEqual([
       [
         { name: 'production', hash: HASH_B, invariants: [], policies },
         undefined,
         ['--to', 'production'],
+        'production',
       ],
-      [undefined, undefined, ['--to', dirNext]],
+      [undefined, undefined, ['--to', dirNext], dirNext],
       [
         { name: 'production', hash: HASH_B, invariants: [], policies },
         true,
         ['--to', 'production', '--permit-policy-change'],
+        'production',
       ],
     ]);
   });

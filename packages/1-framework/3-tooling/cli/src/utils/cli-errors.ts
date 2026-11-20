@@ -35,9 +35,9 @@ import {
   candidateRenames,
   candidatesFact,
   missingNameFact,
-  nameHadBeforeReason,
+  nameHadBeforeFact,
   type RenameToMissingName,
-  renameInTwoMigrations,
+  renameInTwoSteps,
 } from '../control-api/statements/missing-new-name';
 import { shellQuoted, statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
@@ -704,19 +704,14 @@ export function errorRenameToNameHadBefore(
   statement: WrittenStatement,
   rename: RenameToMissingName,
 ): ActionableCliError {
-  const reason = nameHadBeforeReason(rename.entity, rename.from, rename.to);
-  const twoMigrations = renameInTwoMigrations(rename);
-  const nextActions = [...candidateRenames(rename), twoMigrations];
-  return new ActionableCliError(
-    'MIGRATION.STATEMENT_UNRESOLVED',
-    `${reason.charAt(0).toUpperCase()}${reason.slice(1)}`,
-    {
-      ...ifDefined('why', candidatesFact(rename)),
-      fix: nextActions[0] ?? twoMigrations,
-      nextActions: nextActions.map(chooseAction),
-      meta: { statement: statement.text, verb: statement.verb },
-    },
-  );
+  const twoSteps = renameInTwoSteps(rename);
+  const nextActions = [...candidateRenames(rename), twoSteps];
+  return new ActionableCliError('MIGRATION.STATEMENT_UNRESOLVED', nameHadBeforeFact(rename), {
+    ...ifDefined('why', candidatesFact(rename)),
+    fix: nextActions[0] ?? twoSteps,
+    nextActions: nextActions.map(chooseAction),
+    meta: { statement: statement.text, verb: statement.verb },
+  });
 }
 
 /**

@@ -161,11 +161,17 @@ export function misdirectedLine({ verb, text, subjectInList }: MisdirectedFlag):
   }
 }
 
+/** Why a flag naming nothing the change touches did nothing: true whether or not the contract has something of that name. */
+const UNMATCHED_REASON: Readonly<Record<string, string>> = {
+  delete: 'this change does not delete the data of anything called that.',
+  allow: 'this change does not change access to anything called that.',
+};
+
 function removeFlagLines(flags: FlagsThatDidNothing): readonly string[] {
   return [
     ...flags.unmatched.map(
       ({ verb, values }) =>
-        `Remove --${verb} ${values.map(shellQuoted).join(' ')}: nothing in this change is called that.`,
+        `Remove --${verb} ${values.map(shellQuoted).join(' ')}: ${UNMATCHED_REASON[verb] ?? 'nothing in this change is called that.'}`,
     ),
     ...flags.misdirected.map(misdirectedLine),
     ...flags.confirm.map(

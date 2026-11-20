@@ -5,6 +5,7 @@ import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
+  contractWithModels,
   DESTINATION_HASH,
   destination,
   markerAt,
@@ -232,6 +233,37 @@ describe('executeDbUpdate with statements', () => {
         label: 'Drop column nickname',
         text: 'User.nickname',
       },
+    ]);
+  });
+
+  it('says to run again without the --to the command was given, once the contract has the new name', async () => {
+    const { migrations } = recordingMigrations('destructive', [
+      {
+        operationIndex: 0,
+        subject: { kind: 'model', namespaceId: asNamespaceId('app'), model: 'Profile' },
+        loss: 'drop',
+        label: 'Drop table Profile',
+      },
+    ]);
+    const asked: string[] = [];
+
+    await update({
+      migrationsDir: await migrationsDirWithSnapshot(origin),
+      marker: markerAt(ORIGIN_HASH),
+      renames: [],
+      destination: contractWithModels(DESTINATION_HASH, []),
+      mode: 'apply',
+      to: 'next',
+      answerQuestions: async (questions) => {
+        asked.push(...questions.flatMap(({ answers }) => answers.map(({ meaning }) => meaning)));
+        return questions.map(({ subject }) => ({ verb: 'delete', text: subject }));
+      },
+      migrations,
+    });
+
+    expect(asked).toEqual([
+      'If the model was renamed, add it to the contract under its new name and run `{bin} contract emit`, then run this command again without --to next, so that it plans to the emitted contract and not to the one that --to next names, and keep its data',
+      'If its data can go',
     ]);
   });
 

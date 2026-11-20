@@ -230,7 +230,8 @@ describe('db update questions', () => {
         nextActions: [
           {
             kind: 'user-choice',
-            label: 'Remove --allow Nope: nothing in this change is called that.',
+            label:
+              'Remove --allow Nope: this change does not change access to anything called that.',
           },
           {
             kind: 'user-choice',

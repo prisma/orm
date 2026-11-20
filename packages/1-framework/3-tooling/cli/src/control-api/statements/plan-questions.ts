@@ -26,7 +26,13 @@ import {
   STORE_ORIGIN_SNAPSHOT_STEPS,
   type UnusedConsent,
 } from '../../utils/cli-errors';
-import { EMIT_COMMAND, missingNameReason, nameHadBeforeReason, runAgain } from './missing-new-name';
+import {
+  asVariantOf,
+  EMIT_COMMAND,
+  missingNameReason,
+  nameHadBeforeReason,
+  runAgain,
+} from './missing-new-name';
 import type { ConsentVerb } from './parse-consent';
 import type {
   KeepDataWay,
@@ -49,9 +55,9 @@ import {
   valueObjectFields,
 } from './possible-new-names';
 import { resolveStatements } from './resolve-statements';
-import { shellQuoted, statementFlag } from './statement-flag';
+import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
-import { variantValue, variantValueChanged } from './variants';
+import { variantBaseText, variantValue, variantValueChanged } from './variants';
 
 /** A verb a plan question accepts. */
 export type PlanQuestionVerb = 'rename' | 'convert' | ConsentVerb;
@@ -480,6 +486,7 @@ function renameMeaning(
   newNames: readonly string[],
   placeholder: string,
   destinationRef: string | undefined,
+  variantOf: string | undefined,
 ): string {
   const [only] = newNames;
   if (only !== undefined && newNames.length === 1)
@@ -487,9 +494,10 @@ function renameMeaning(
   if (newNames.length > 1) {
     return `If ${renamed} was renamed to ${eitherOf(newNames)}, put that name in place of ${placeholder} to ${keep}`;
   }
+  const add = `If ${renamed} was renamed, add it to the contract under its new name${asVariantOf(variantOf)} and run ${EMIT_COMMAND}`;
   return destinationRef === undefined
-    ? `If ${renamed} was renamed, add it to the contract under its new name and run ${EMIT_COMMAND}; then ${keep}`
-    : `If ${renamed} was renamed, add it to the contract under its new name and run ${EMIT_COMMAND}, then run this command without --to ${shellQuoted(destinationRef)} and ${keep}`;
+    ? `${add}; then ${keep}`
+    : `${add}, then ${runAgain(destinationRef)}, and ${keep}`;
 }
 
 /** A rename as a flag writes it, and the names the contract can give the subject. */
@@ -502,8 +510,10 @@ function renameAnswer(
   subject: MigrationSubject,
   text: string,
   rename: RenameTarget,
-  destinationRef: string | undefined,
+  contracts: StatementContracts,
 ): QuestionAnswer {
+  const { destinationRef } = contracts;
+  const variantOf = variantOfModel(subject, contracts.origin);
   const kind = subject.kind === 'storage' ? 'data' : ENTITY_WORDS[subject.kind];
   const keep =
     subject.kind === 'model' || subject.kind === 'storage'
@@ -519,17 +529,25 @@ function renameAnswer(
         : 'keeps the values';
   return {
     flag: { verb: 'rename', text: rename.form },
-    meaning: renameMeaning(`the ${kind}`, keep, rename.newNames, NEW_NAME, destinationRef),
+    meaning: renameMeaning(
+      `the ${kind}`,
+      keep,
+      rename.newNames,
+      NEW_NAME,
+      destinationRef,
+      variantOf,
+    ),
     meaningNamingSubject: renameMeaning(
       namedSubject(subject, text),
       keep,
       rename.newNames,
       NEW_NAME,
       destinationRef,
+      variantOf,
     ),
     promptMeaning:
       rename.newNames.length === 0
-        ? `rename works only once the contract has the ${kind} under its new name: stop this command, add it to the contract, run ${EMIT_COMMAND}, and ${runAgain(destinationRef)}`
+        ? `rename works only once the contract has the ${kind} under its new name${asVariantOf(variantOf)}: stop this command, add it to the contract, run ${EMIT_COMMAND}, and ${runAgain(destinationRef)}`
         : rename.newNames.length === 1
           ? `rename ${kept} under the new name`
           : `rename ${kept} under the new name, ${eitherOf(rename.newNames)}`,
@@ -537,6 +555,11 @@ function renameAnswer(
 }
 
 const NEW_NAME = '<new name>';
+
+/** The base of a model subject that is a variant, as a `--rename` writes it; its new name must be a variant of that base too. */
+function variantOfModel(subject: MigrationSubject, origin: ContractWithDomain): string | undefined {
+  return subject.kind === 'model' ? variantBaseText(origin, subject) : undefined;
+}
 
 const SNAPSHOT_RECOVERY_WAY =
   'store a snapshot of the contract before this change, which is the contract the database was last updated to, then run this command again, and it gives the --rename to use.';
@@ -614,18 +637,20 @@ function modelRenameWay(
   const to = only !== undefined && newNames.length === 1 ? only : NEW_NAME;
   const flag = statementFlag({ verb: 'rename', text: `${name}:${to}` });
   const renamed = `If model "${name}" was renamed`;
+  const variantOf = variantBaseText(contracts.origin, model);
   const meaning = renameMeaning(
     `model "${name}"`,
     'say so first',
     newNames,
     NEW_NAME,
     contracts.destinationRef,
+    variantOf,
   );
   return {
     text: `${meaning}: ${flag}`,
     atPrompt:
       newNames.length === 0
-        ? `${renamed}, stop this command, add it to the contract under its new name, run ${EMIT_COMMAND}, and ${runAgain(contracts.destinationRef)} with ${flag}.`
+        ? `${renamed}, stop this command, add it to the contract under its new name${asVariantOf(variantOf)}, run ${EMIT_COMMAND}, and ${runAgain(contracts.destinationRef, flag)}.`
         : newNames.length === 1
           ? `${renamed} to "${only}", stop this command and run it again with ${flag}.`
           : `${renamed} to ${eitherOf(newNames)}, stop this command and run it again with ${flag}, putting that name in place of ${NEW_NAME}.`,
@@ -772,20 +797,21 @@ function newNameProblem(
         : subject.kind === 'valueObjectField'
           ? { ...subject, ...renamedValueObjectField(subject, contracts) }
           : subject;
-  const entity = ENTITY_WORDS[subject.kind];
+  const rename = {
+    entity: ENTITY_WORDS[subject.kind],
+    from: text,
+    to,
+    candidates: possibleNewNames(subject, contractsAndRenames(contracts)).map(
+      (each) => `${parent}${each}`,
+    ),
+    destinationRef: contracts.destinationRef,
+    variantOf: variantOfModel(subject, contracts.origin),
+  };
   if (!namesBeside(destinationSubject, contracts.destination).includes(name)) {
-    return missingNameReason({
-      entity,
-      from: text,
-      to,
-      candidates: possibleNewNames(subject, contractsAndRenames(contracts)).map(
-        (each) => `${parent}${each}`,
-      ),
-      destinationRef: contracts.destinationRef,
-    });
+    return missingNameReason(rename);
   }
   return namesBeside(subject, contracts.origin).includes(name)
-    ? nameHadBeforeReason(entity, text, to)
+    ? nameHadBeforeReason(rename)
     : undefined;
 }
 
@@ -1179,14 +1205,14 @@ export function dataLossQuestion(
     answers:
       rename === undefined
         ? [deleting]
-        : [renameAnswer(loss.subject, subject, rename, contracts.destinationRef), deleting],
+        : [renameAnswer(loss.subject, subject, rename, contracts), deleting],
     validate: (verb, text) => {
       if (verb !== 'rename') return deleteNames(text);
       if (!text.includes(':')) {
         return `rename needs the new name: type rename ${renameForm(loss.subject, subject, contracts)}.`;
       }
       const [from, to = ''] = text.split(':');
-      const notTheSubject = `The rename's old name is not "${subject}". Write it as ${renameForm(loss.subject, subject, contracts)}.`;
+      const notTheSubject = `To rename "${subject}", type rename ${renameForm(loss.subject, subject, contracts)}.`;
       const problem =
         from === subject ? newNameProblem(loss.subject, subject, to, contracts) : undefined;
       if (problem !== undefined) return problem;
@@ -1333,6 +1359,7 @@ function removedNamespaceParts(removed: string, added: readonly string[]): Remov
     added,
     '<new namespace>',
     undefined,
+    undefined,
   );
   const rename: readonly QuestionAnswer[] =
     only === undefined
@@ -1398,6 +1425,7 @@ function acceptingNamespaceAnswers(
           to,
           candidates: added,
           destinationRef: contracts.destinationRef,
+          variantOf: undefined,
         });
       }
       return question.validate(verb, text);

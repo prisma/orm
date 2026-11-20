@@ -76,7 +76,7 @@ describe('resolveStatements, value object field renames', () => {
       resolve([rename('GeoPoint.lat:GeoPoint.lng')]),
       UNRESOLVED,
       'The contract had value object field "GeoPoint.lng" before this change too, so one change cannot make it the new name of "GeoPoint.lat".',
-      'If value object field "GeoPoint.lat" was renamed to "GeoPoint.latitude", put this in place of --rename GeoPoint.lat:GeoPoint.lng: --rename GeoPoint.lat:GeoPoint.latitude',
+      'If value object field "GeoPoint.lat" was renamed to "GeoPoint.latitude", use --rename GeoPoint.lat:GeoPoint.latitude in place of --rename GeoPoint.lat:GeoPoint.lng',
     );
   });
 

@@ -3,7 +3,7 @@ import {
   type ContractModelBase,
   type ContractWithDomain,
 } from '@internal/contract/types';
-import type { ModelCoordinate } from '@internal/framework-components/control';
+import { type ModelCoordinate, modelStatementText } from '@internal/framework-components/control';
 
 function modelOf(
   contract: ContractWithDomain,
@@ -16,6 +16,20 @@ function modelOf(
   return namespace !== undefined && Object.hasOwn(namespace.models, coordinate.model)
     ? namespace.models[coordinate.model]
     : undefined;
+}
+
+/** The base model of a variant, as a `--rename` writes it, or `undefined` when the model is no variant of the contract. */
+export function variantBaseText(
+  contract: ContractWithDomain,
+  coordinate: { readonly namespaceId: string; readonly model: string },
+): string | undefined {
+  const base = modelOf(contract, coordinate)?.base;
+  return base === undefined
+    ? undefined
+    : modelStatementText(contract, {
+        namespaceId: asNamespaceId(base.namespace),
+        model: base.model,
+      });
 }
 
 /** Whether a field is the discriminator of its model in the contract. */

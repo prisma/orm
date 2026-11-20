@@ -103,7 +103,7 @@ describe('resolveStatements, model renames', () => {
         why: 'The contract adds model "User".',
         nextActions: [
           'If model "Profile" was renamed to "Account", add model "Account" to the contract, run `{bin} contract emit`, and run this command again.',
-          'If model "Profile" was renamed to "User", put this in place of --rename Profile:Account: --rename Profile:User',
+          'If model "Profile" was renamed to "User", use --rename Profile:User in place of --rename Profile:Account',
         ],
         meta: { statement: 'Profile:Account', verb: 'rename' },
       });

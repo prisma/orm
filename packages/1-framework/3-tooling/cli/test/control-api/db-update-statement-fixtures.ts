@@ -17,6 +17,7 @@ import { ok } from '@internal/utils/result';
 import { join } from 'pathe';
 import { afterEach, type Mock, vi } from 'vitest';
 import { executeDbUpdate } from '../../src/control-api/operations/db-update';
+import type { AnswerPlanQuestions } from '../../src/control-api/statements/plan-questions';
 import {
   renameStatements,
   type StatementText,
@@ -178,6 +179,9 @@ export function update(options: {
   readonly mode?: 'plan' | 'apply';
   readonly unreadableOrigin?: boolean;
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /** The `--to` the command was given, as the CLI passes it in the invocation. */
+  readonly to?: string;
+  readonly answerQuestions?: AnswerPlanQuestions;
   readonly migrations: TargetMigrationsCapability<
     'sql',
     'postgres',
@@ -185,7 +189,7 @@ export function update(options: {
   >;
 }) {
   return executeDbUpdate({
-    invocation: TEST_INVOCATION,
+    invocation: { ...TEST_INVOCATION, ...(options.to === undefined ? {} : { to: options.to }) },
     driver,
     adapter: {} as unknown as ControlAdapterInstance<'sql', 'postgres'>,
     familyInstance: familyWithMarker(options.marker, {
@@ -196,7 +200,7 @@ export function update(options: {
     migrations: options.migrations,
     frameworkComponents: [],
     migrationsDir: options.migrationsDir,
-    answerQuestions: async () => [],
+    answerQuestions: options.answerQuestions ?? (async () => []),
     targetId: 'postgres',
     statements: [...renameStatements(options.renames), ...(options.fieldStatements ?? [])],
     ...(options.verifySnapshotContent === undefined

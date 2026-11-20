@@ -178,7 +178,7 @@ describe('resolveStatements, field renames', () => {
         why: 'The contract adds field "User.fullName".',
         nextActions: [
           'If field "User.name" was renamed to "User.email", add field "User.email" to the contract, run `{bin} contract emit`, and run this command again.',
-          'If field "User.name" was renamed to "User.fullName", put this in place of --rename User.name:User.email: --rename User.name:User.fullName',
+          'If field "User.name" was renamed to "User.fullName", use --rename User.name:User.fullName in place of --rename User.name:User.email',
         ],
         meta: { statement: 'User.name:User.email', verb: 'rename' },
       });
@@ -191,7 +191,7 @@ describe('resolveStatements, field renames', () => {
         resolve(['User.name:User.fullName'], origin, destination),
         UNRESOLVED,
         'The contract had field "User.fullName" before this change too, so one change cannot make it the new name of "User.name".',
-        'If "User.name" takes the name of field "User.fullName", which this change renames or removes, make the change in two migrations: first change the contract so that "User.fullName" has its new name or is gone, and plan only that; then rename "User.name" to "User.fullName" with --rename User.name:User.fullName.',
+        'If "User.name" is to take the name "User.fullName" from the field that has it now, do it in two steps. First, in the contract, give field "User.fullName" its new name or remove it, and keep "User.name" as it was; run `{bin} contract emit`, and run this command again. Then rename "User.name" to "User.fullName" in the contract, run `{bin} contract emit`, and run this command again with --rename User.name:User.fullName.',
       );
     });
 
