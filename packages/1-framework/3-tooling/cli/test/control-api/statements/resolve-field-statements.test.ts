@@ -191,7 +191,7 @@ describe('resolveStatements, field renames', () => {
         resolve(['User.name:User.fullName'], origin, destination),
         UNRESOLVED,
         'The contract had field "User.fullName" before this change too, so one change cannot make it the new name of "User.name".',
-        'If "User.name" is to take the name "User.fullName" from the field that has it now, do it in two steps. First, in the contract, give field "User.fullName" its new name or remove it, and keep "User.name" as it was; run `{bin} contract emit`, and run this command again. Then rename "User.name" to "User.fullName" in the contract, run `{bin} contract emit`, and run this command again with --rename User.name:User.fullName.',
+        'If "User.name" is to take the name "User.fullName" from the field that has it now, do it in two steps. First, in the contract, give field "User.fullName" its new name or remove it, and keep "User.name" as it was; run `{bin} contract emit`, and run this command again without --rename User.name:User.fullName. Then rename "User.name" to "User.fullName" in the contract, run `{bin} contract emit`, and run this command again with --rename User.name:User.fullName.',
       );
     });
 

@@ -4,16 +4,23 @@ import { shellQuoted, statementFlag } from './statement-flag';
 export const EMIT_COMMAND = '`{bin} contract emit`';
 
 /**
- * How a run again reaches the emitted contract, with `flag` when given: as it was, or without the
- * `--to` that named a stored one, whose contract emitting does not change.
+ * How a run again reaches the emitted contract, with `flag` or without `leftOut` when given: as it
+ * was, or without the `--to` that named a stored one, whose contract emitting does not change.
  */
-export function runAgain(destinationRef: string | undefined, flag?: string): string {
+export function runAgain(
+  destinationRef: string | undefined,
+  flag?: string,
+  leftOut?: string,
+): string {
+  const changes = [
+    ...(flag === undefined ? [] : [`with ${flag}`]),
+    ...(leftOut === undefined ? [] : [`without ${leftOut}`]),
+  ];
   if (destinationRef === undefined) {
-    return flag === undefined ? 'run this command again' : `run this command again with ${flag}`;
+    return ['run this command again', ...changes].join(' ');
   }
   const to = `--to ${shellQuoted(destinationRef)}`;
-  const withFlag = flag === undefined ? '' : `with ${flag} and `;
-  return `run this command again ${withFlag}without ${to}, so that it plans to the emitted contract and not to the one that ${to} names`;
+  return `run this command again ${[...changes, `without ${to}`].join(' and ')}, so that it plans to the emitted contract and not to the one that ${to} names`;
 }
 
 /**
@@ -149,7 +156,7 @@ export function renameInTwoSteps(rename: RenameToMissingName, atPrompt = false):
   const leaveOut = leaveOutRename(from, variantOf);
   if (leaveOut !== undefined) return leaveOut;
   const flag = statementFlag({ verb: 'rename', text: `${from}:${to}` });
-  return `If "${from}" is to take the name "${to}" from the ${entity} that has it now, ${atPrompt ? 'stop this command and ' : ''}do it in two steps. First, in the contract, give ${entity} "${to}" its new name or remove it, and keep "${from}" as it was; run ${EMIT_COMMAND}, and ${runAgain(destinationRef)}. Then rename "${from}" to "${to}" in the contract, run ${EMIT_COMMAND}, and ${runAgain(destinationRef, flag)}.`;
+  return `If "${from}" is to take the name "${to}" from the ${entity} that has it now, ${atPrompt ? 'stop this command and ' : ''}do it in two steps. First, in the contract, give ${entity} "${to}" its new name or remove it, and keep "${from}" as it was; run ${EMIT_COMMAND}, and ${runAgain(destinationRef, undefined, atPrompt ? undefined : flag)}. Then rename "${from}" to "${to}" in the contract, run ${EMIT_COMMAND}, and ${runAgain(destinationRef, flag)}.`;
 }
 
 /**

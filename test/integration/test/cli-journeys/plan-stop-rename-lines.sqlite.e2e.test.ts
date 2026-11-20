@@ -318,7 +318,7 @@ withTempDir(({ createTempDir }) => {
               'The contract had field "Shop.name" before this change too, so one change cannot make it the new name of "Shop.legacy".',
             lines: [
               'If field "Shop.legacy" was renamed to "Shop.title", use --rename Shop.legacy:Shop.title in place of --rename Shop.legacy:Shop.name',
-              'If "Shop.legacy" is to take the name "Shop.name" from the field that has it now, do it in two steps. First, in the contract, give field "Shop.name" its new name or remove it, and keep "Shop.legacy" as it was; run `prisma-test contract emit`, and run this command again. Then rename "Shop.legacy" to "Shop.name" in the contract, run `prisma-test contract emit`, and run this command again with --rename Shop.legacy:Shop.name.',
+              'If "Shop.legacy" is to take the name "Shop.name" from the field that has it now, do it in two steps. First, in the contract, give field "Shop.name" its new name or remove it, and keep "Shop.legacy" as it was; run `prisma-test contract emit`, and run this command again without --rename Shop.legacy:Shop.name. Then rename "Shop.legacy" to "Shop.name" in the contract, run `prisma-test contract emit`, and run this command again with --rename Shop.legacy:Shop.name.',
             ],
           });
 

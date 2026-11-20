@@ -185,7 +185,7 @@ describe('a removed variant with a table of its own whose base the change remove
         summary:
           'The contract had model "Audit" before this change too, so one change cannot make it the new name of "Bug".',
         nextActions: [
-          'If "Bug" is to take the name "Audit" from the model that has it now, do it in two steps. First, in the contract, give model "Audit" its new name or remove it, and keep "Bug" as it was; run `{bin} contract emit`, and run this command again. Then rename "Bug" to "Audit" in the contract, run `{bin} contract emit`, and run this command again with --rename Bug:Audit.',
+          'If "Bug" is to take the name "Audit" from the model that has it now, do it in two steps. First, in the contract, give model "Audit" its new name or remove it, and keep "Bug" as it was; run `{bin} contract emit`, and run this command again without --rename Bug:Audit. Then rename "Bug" to "Audit" in the contract, run `{bin} contract emit`, and run this command again with --rename Bug:Audit.',
         ],
         meta: { statement: 'Bug:Audit', verb: 'rename' },
       },

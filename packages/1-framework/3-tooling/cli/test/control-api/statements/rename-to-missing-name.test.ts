@@ -1,5 +1,6 @@
 import { asNamespaceId } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
+import { renameInTwoSteps } from '../../../src/control-api/statements/missing-new-name';
 import { questionText } from '../../../src/control-api/statements/plan-question-text';
 import { resolveStatements } from '../../../src/control-api/statements/resolve-statements';
 import { askedAbout } from './plan-question-fixtures';
@@ -397,7 +398,7 @@ describe('a --rename to a name the contract had before the change too', () => {
         nextActions: [
           'If field "Shop.legacy" was renamed to "Shop.rating", use --rename Shop.legacy:Shop.rating in place of --rename Shop.legacy:Shop.id',
           'If field "Shop.legacy" was renamed to "Shop.score", use --rename Shop.legacy:Shop.score in place of --rename Shop.legacy:Shop.id',
-          'If "Shop.legacy" is to take the name "Shop.id" from the field that has it now, do it in two steps. First, in the contract, give field "Shop.id" its new name or remove it, and keep "Shop.legacy" as it was; run `{bin} contract emit`, and run this command again. Then rename "Shop.legacy" to "Shop.id" in the contract, run `{bin} contract emit`, and run this command again with --rename Shop.legacy:Shop.id.',
+          'If "Shop.legacy" is to take the name "Shop.id" from the field that has it now, do it in two steps. First, in the contract, give field "Shop.id" its new name or remove it, and keep "Shop.legacy" as it was; run `{bin} contract emit`, and run this command again without --rename Shop.legacy:Shop.id. Then rename "Shop.legacy" to "Shop.id" in the contract, run `{bin} contract emit`, and run this command again with --rename Shop.legacy:Shop.id.',
         ],
         meta: { statement: 'Shop.legacy:Shop.id', verb: 'rename' },
       },
@@ -409,6 +410,25 @@ describe('a --rename to a name the contract had before the change too', () => {
           to: { namespaceId: app, model: 'Shop', field: 'rating' },
         },
       ],
+    });
+  });
+
+  it('says to run the first step without the rename that was refused, and without --to when planning to a ref', () => {
+    const rename = {
+      entity: 'field',
+      from: 'Shop.legacy',
+      to: 'Shop.id',
+      candidates: [],
+      variantOf: undefined,
+    };
+
+    expect({
+      emitted: renameInTwoSteps({ ...rename, destinationRef: undefined }),
+      ref: renameInTwoSteps({ ...rename, destinationRef: 'next' }),
+    }).toEqual({
+      emitted:
+        'If "Shop.legacy" is to take the name "Shop.id" from the field that has it now, do it in two steps. First, in the contract, give field "Shop.id" its new name or remove it, and keep "Shop.legacy" as it was; run `{bin} contract emit`, and run this command again without --rename Shop.legacy:Shop.id. Then rename "Shop.legacy" to "Shop.id" in the contract, run `{bin} contract emit`, and run this command again with --rename Shop.legacy:Shop.id.',
+      ref: 'If "Shop.legacy" is to take the name "Shop.id" from the field that has it now, do it in two steps. First, in the contract, give field "Shop.id" its new name or remove it, and keep "Shop.legacy" as it was; run `{bin} contract emit`, and run this command again without --rename Shop.legacy:Shop.id and without --to next, so that it plans to the emitted contract and not to the one that --to next names. Then rename "Shop.legacy" to "Shop.id" in the contract, run `{bin} contract emit`, and run this command again with --rename Shop.legacy:Shop.id and without --to next, so that it plans to the emitted contract and not to the one that --to next names.',
     });
   });
 });
