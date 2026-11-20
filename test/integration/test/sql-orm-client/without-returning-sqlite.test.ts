@@ -317,6 +317,19 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
+  it('a nested update of the row the parent holds the key for reads the key from the parent before its own update', async () => {
+    await withDatabase(async ({ db, database }) => {
+      const post = await db.Post.create({ title: 'Hello', author: (author) => author.create(ada) });
+      expect(
+        await db.Post.where({ id: post.id }).update({
+          title: 'Hello again',
+          author: (author) => author.update({ name: 'Ada L.' }),
+        }),
+      ).toEqual({ id: post.id, title: 'Hello again', authorId: post.authorId });
+      expect(rowsOf(database, 'users')).toEqual([{ id: post.authorId, ...ada, name: 'Ada L.' }]);
+    });
+  });
+
   it('updateAll() writes with the caller filter and reads the written rows back by key', async () => {
     await withDatabase(async ({ db, statements }) => {
       await db.User.createAndCount([ada, grace, { email: 'edsger@example.com', name: 'Edsger' }]);

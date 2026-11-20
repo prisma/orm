@@ -62,11 +62,11 @@ export function foldsIntoCondition(
   { id, find }: FindAt,
   where: AnyExpression | undefined,
 ): boolean {
-  const { filter, requires } = graph.inputsOf(id);
+  const { filter, link, requires } = graph.inputsOf(id);
   return (
     find.ast.where === where &&
     rowsOfConditionReadOf(find.ast) !== undefined &&
-    [filter ?? [], requires ?? []].flat().length === 0
+    [filter ?? [], link ?? [], requires ?? []].flat().length === 0
   );
 }
 

@@ -12,6 +12,7 @@ import {
   type PreparedStatement,
 } from '@internal/sql-runtime';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
+import { isRecord } from '@internal/utils/guards';
 import { hashContent } from '@internal/utils/hash-content';
 import { ormError } from './orm-errors';
 import type { CollectionQueryable } from './types';
@@ -44,10 +45,6 @@ export function preparedHashInput(
 /** A write's statements depend on earlier results, so its hash input is the model it writes. */
 export function modelHashInput(namespaceId: string, modelName: string): CallHashInput {
   return async () => ({ namespace: namespaceId, model: modelName });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export const ormResults = {
