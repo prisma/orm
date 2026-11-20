@@ -59,21 +59,46 @@ test('a to-one relation updates or deletes the linked row, bare or after where()
   expectTypeOf([update, narrowed]).toExtend<readonly unknown[]>();
 });
 
-test('update() and delete() are type errors on a relation the parent holds the key for and through a junction', () => {
-  const parentHolds: PostUpdate = {
-    // @ts-expect-error
-    author: (author) => author.update({ name: 'Ada L.' }),
+test('a relation the parent holds the key for updates and deletes the linked row, bare or after where()', () => {
+  const update: PostUpdate = {
+    author: (author) => author.where({ name: 'Ada' }).update({ name: 'Ada L.' }),
   };
-  const deleted: PostUpdate = {
+  const deleted: UserUpdate = {
+    invitedBy: (inviter) => inviter.delete(),
+  };
+  const narrowed: UserUpdate = {
+    invitedBy: (inviter) => inviter.where({ name: 'Ada' }).delete(),
+  };
+
+  expectTypeOf([update, deleted, narrowed]).toExtend<readonly unknown[]>();
+});
+
+test('delete() is a type error on a relation the parent holds a required key for', () => {
+  const bare: PostUpdate = {
     // @ts-expect-error
     author: (author) => author.delete(),
   };
-  const junction: UserUpdate = {
+  const narrowed: PostUpdate = {
     // @ts-expect-error
-    tags: (tags) => tags.where({ name: 'SQL' }).delete(),
+    author: (author) => author.where({ name: 'Ada' }).delete(),
   };
 
-  expectTypeOf([parentHolds, deleted, junction]).toExtend<readonly unknown[]>();
+  expectTypeOf([bare, narrowed]).toExtend<readonly unknown[]>();
+});
+
+test('a relation through a junction updates or deletes one row after where()', () => {
+  const update: UserUpdate = {
+    tags: (tags) => [
+      tags.where({ name: 'SQL' }).update({ name: 'Postgres' }),
+      tags.where({ name: 'Go' }).delete(),
+    ],
+  };
+  const bare: UserUpdate = {
+    // @ts-expect-error
+    tags: (tags) => tags.delete(),
+  };
+
+  expectTypeOf([update, bare]).toExtend<readonly unknown[]>();
 });
 
 test('a to-one relation has no updateAll() or deleteAll(), bare or after where()', () => {

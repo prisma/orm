@@ -6,9 +6,9 @@
 
 ## At a glance
 
-Eleven slices in two stages. Stage 1 (three slices, in order) moves every write method of the collection onto the mutation graph with no new behaviour, and removes the nested-write executor. Stage 2 (eight slices) first unifies the write builders and redesigns read-backs, then adds the project's operations as entries in the graph's translation, and nested creates of a chosen variant. `has-one-unique` does not touch the ORM client and can be built at any time.
+Twelve slices in two stages. Stage 1 (three slices, in order) moves every write method of the collection onto the mutation graph with no new behaviour, and removes the nested-write executor. Stage 2 (nine slices) first unifies the write builders and redesigns read-backs, then adds the project's operations as entries in the graph's translation, and nested creates of a chosen variant. `has-one-unique` does not touch the ORM client and can be built at any time.
 
-Eleven is more than the one to four slices a project should have. Stage 1 could be a project of its own; it is kept here because the project owner asked for the graph to be worked into this project.
+Twelve is more than the one to four slices a project should have. Stage 1 could be a project of its own; it is kept here because the project owner asked for the graph to be worked into this project.
 
 PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filtered-many-writes` on the executor, is closed without merging. Its mutator types, integration tests and docs are reused in slice 4. PR [#30642](https://github.com/prisma/orm/pull/30642), its ports, is rebased onto slice 4.
 
@@ -90,6 +90,12 @@ PR [#30634](https://github.com/prisma/orm/pull/30634), the first build of `filte
    - **Builds on:** Slice `filtered-many-writes`' mutator `where`, array return, junction subquery and parent-link check; the first-row builders of the collection's `update` and `delete`, with slice `unique-key-writes`' condition check.
    - **Hands to:** Project close-out. `nested-upsert` may port the relation-key tests that mix single-row `delete` with `upsert` once both exist.
    - **Focus:** Translation entries per layout (child-held, junction, parent-held with the foreign key set to null before a `delete`), the narrowed mutator's types per cardinality, the required-key rule shared by `delete` and `disconnect`. Ports: `nested_update_inside_update.rs` (16), `nested_delete_inside_update.rs` (22), `blog-update`.
+
+12. **Slice `read-back-reuse`** — `projects/nested-mutations/slices/read-back-reuse/` (added 2026-11-19, from the review of `single-row-writes`)
+   - **Outcome:** An `update()` that sets none of the record's own fields returns the record as it is after its nested writes, decided by a statement-graph rule instead of a flag. The `BeforeWrite.unlinksAfterWrite` flag is removed. Results are unchanged.
+   - **Builds on:** Slice `write-builders`' read-backs and rules (`read-back-rule.ts`, `rule-patterns.ts`); slice `single-row-writes`, whose N:1 `delete` and conditional `disconnect` set the flag today.
+   - **Hands to:** Project close-out. A later nested write that changes the parent's row after its `UPDATE` gets a correct result without having to set a flag.
+   - **Focus:** `updateFirstGraph` always adds the read-back. A new rule replaces a read-back with its source `Find` when the read-back's state edge for the table comes from the same node as the `Find`'s, so no write to the table runs between them (the comparison `readsTableAsFound` already makes). That `Find` selects only identity columns today, so it selects the result shape when the rule applies. Graph tests for both cases (no write between: one `Find`; N:1 unlink between: read-back kept), and integration tests that results are unchanged.
 
 ## Dependencies (external)
 

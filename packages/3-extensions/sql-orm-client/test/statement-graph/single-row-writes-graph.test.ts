@@ -1,14 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { parseMutationInput } from '../../src/relation-mutations';
 import { createGraph, updateFirstGraph } from '../../src/statement-graph/collection-graphs';
+import { queryGraph } from '../../src/statement-graph/run-graph';
 import { createCollectionFor, relatedCollectionOf } from '../collection-fixtures';
-import { getTestContext } from '../helpers';
+import { createMockRuntime, getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
 interface SingleRowMutator {
   where(filter: object): SingleRowMutator;
   update(data: object): unknown;
   delete(): unknown;
+}
+
+interface LinkMutator extends SingleRowMutator {
+  create(data: object): unknown;
+  connect(criterion: object): unknown;
+  disconnect(): unknown;
 }
 
 function parsed(modelName: 'User' | 'Post', input: Record<string, unknown>) {
@@ -22,22 +29,22 @@ function parsed(modelName: 'User' | 'Post', input: Record<string, unknown>) {
   );
 }
 
+function firstRowOf(modelName: 'User' | 'Post') {
+  return {
+    context: getTestContext(),
+    state: createCollectionFor(modelName).collection.where({ id: 1 }).state,
+    modelName,
+    namespaceId: 'public',
+  };
+}
+
 function printUpdate(
   input: Record<string, unknown>,
   modelName: 'User' | 'Post' = 'User',
   set: Record<string, unknown> = {},
 ): string {
   return printGraph(
-    updateFirstGraph(
-      {
-        context: getTestContext(),
-        state: createCollectionFor(modelName).collection.where({ id: 1 }).state,
-        modelName,
-        namespaceId: 'public',
-      },
-      set,
-      parsed(modelName, input).relationMutations,
-    ),
+    updateFirstGraph(firstRowOf(modelName), set, parsed(modelName, input).relationMutations),
   );
 }
 
@@ -123,6 +130,126 @@ describe('update() and delete() on a relation the child holds the key for', () =
   });
 });
 
+describe('update() and delete() on a many-to-many relation', () => {
+  it('finds the first related row the filter matches through the junction, then writes it by key', () => {
+    expect(
+      printUpdate({
+        tags: (tags: SingleRowMutator) => [
+          tags.where({ name: 'SQL' }).update({ name: 'Postgres' }),
+          tags.where({ name: 'Go' }).delete(),
+        ],
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Find tags where name = 'SQL' limit 1 <- JunctionFilterData n1 (id->user_id; user_tags tag_id->id)",
+        "n3 Update tags set name = 'Postgres' where name = 'SQL' <- FilterData n2 (id->id), JunctionFilterData n1 (id->user_id; user_tags tag_id->id)",
+        "n4 Find tags where name = 'Go' limit 1 <- JunctionFilterData n1 (id->user_id; user_tags tag_id->id)",
+        "n5 Delete tags where name = 'Go' <- FilterData n4 (id->id), JunctionFilterData n1 (id->user_id; user_tags tag_id->id)",
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+});
+
+describe('update() and delete() on a relation the parent holds the key for', () => {
+  it('updates the linked row, found through the key the parent holds', () => {
+    expect(
+      printUpdate({
+        invitedBy: (inviter: SingleRowMutator) =>
+          inviter.where({ name: 'Grace' }).update({ name: 'Grace H.' }),
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Find users where name = 'Grace' limit 1 <- JunctionFilterData n1 (id->id; users invited_by_id->id)",
+        "n3 Update users set name = 'Grace H.' where name = 'Grace' <- FilterData n2 (id->id), JunctionFilterData n1 (id->id; users invited_by_id->id)",
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it("reads the key of the linked row from the rows the parent's Update matched", () => {
+    expect(
+      printUpdate(
+        { invitedBy: (inviter: SingleRowMutator) => inviter.update({ name: 'Grace H.' }) },
+        'User',
+        { name: 'Ada' },
+      ),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Update users set name = 'Ada' where id = 1",
+        'n3 Find users limit 1 <- JunctionFilterData n2 (id->id; users invited_by_id->id)',
+        "n4 Update users set name = 'Grace H.' <- FilterData n3 (id->id), JunctionFilterData n2 (id->id; users invited_by_id->id)",
+        'n5 Find users <- FilterData n2 (id->id)',
+        'result: n5',
+      ].join('\n'),
+    );
+  });
+
+  it('deletes the linked row after the parent writes its own values', () => {
+    expect(
+      printUpdate({ invitedBy: (inviter: SingleRowMutator) => inviter.delete() }, 'User', {
+        name: 'Ada',
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Update users set name = 'Ada' where id = 1",
+        'n3 Find users limit 1 <- JunctionFilterData n2 (id->id; users invited_by_id->id)',
+        'n4 Update users set invited_by_id = null <- FilterData n2 (id->id), FilterData n3 (id->invited_by_id)',
+        'n5 Delete users <- FilterData n3 (id->id)',
+        'n6 Find users <- FilterData n2 (id->id)',
+        'result: n6',
+      ].join('\n'),
+    );
+  });
+
+  it('finds the linked row, sets the key of the parent to null only if it found one, then deletes it', () => {
+    expect(
+      printUpdate({
+        invitedBy: (inviter: SingleRowMutator) => inviter.where({ name: 'Grace' }).delete(),
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        "n2 Find users where name = 'Grace' limit 1 <- JunctionFilterData n1 (id->id; users invited_by_id->id)",
+        'n3 Update users set invited_by_id = null <- FilterData n1 (id->id), FilterData n2 (id->invited_by_id)',
+        'n4 Delete users <- FilterData n2 (id->id)',
+        'n5 Find users <- FilterData n1 (id->id)',
+        'result: n5',
+      ].join('\n'),
+    );
+  });
+
+  it.each([
+    ['update', (inviter: SingleRowMutator) => inviter.update({ name: 'Grace H.' })],
+    ['delete', (inviter: SingleRowMutator) => inviter.delete()],
+  ])(
+    "runs no %s of the linked row when the parent's Update matches no row",
+    async (_, invitedBy) => {
+      const runtime = createMockRuntime();
+      runtime.setNextResults([[]]);
+      const users = firstRowOf('User');
+      const graph = updateFirstGraph(
+        users,
+        { name: 'Ada' },
+        parsed('User', { invitedBy }).relationMutations,
+      );
+
+      const rows = await queryGraph(graph, { runtime, context: users.context }, users).toArray();
+
+      expect({
+        rows,
+        statements: runtime.executions.map(({ operation, plan }) =>
+          'ast' in plan ? `${operation} ${plan.ast.kind}` : operation,
+        ),
+      }).toEqual({ rows: [], statements: ['query update'] });
+    },
+  );
+});
+
 describe('rejections of update() and delete() on a relation', () => {
   it.each([
     [
@@ -158,24 +285,68 @@ describe('rejections of update() and delete() on a relation', () => {
       { kind: 'update', relation: 'posts', problem: 'parent-link-column', fields: ['userId'] },
     ],
     [
-      'update() on a relation the parent holds the key for',
-      'Post',
-      { author: (author: SingleRowMutator) => author.update({ name: 'Ada' }) },
-      'ORM.OPERATION_UNSUPPORTED',
-      'update() nested mutation for relation "author" is not supported yet on this relation',
-      { kind: 'update', relation: 'author', reason: 'single-row-layout' },
+      'delete() without where() on a many-to-many relation',
+      'User',
+      { tags: (tags: SingleRowMutator) => tags.delete() },
+      'ORM.ARGUMENT_INVALID',
+      'delete() nested mutation for relation "tags" requires where() on a to-many relation',
+      { kind: 'delete', relation: 'tags', problem: 'missing-where' },
     ],
     [
-      'delete() on a many-to-many relation',
-      'User',
-      { tags: (tags: SingleRowMutator) => tags.where({ name: 'SQL' }).delete() },
+      'delete() on a relation the parent holds a required key for',
+      'Post',
+      { author: (author: SingleRowMutator) => author.delete() },
       'ORM.OPERATION_UNSUPPORTED',
-      'delete() nested mutation for relation "tags" is not supported yet on this relation',
-      { kind: 'delete', relation: 'tags', reason: 'single-row-layout' },
+      'delete() nested mutation for relation "author" cannot set "userId" of model "Post" to null, because the foreign key is required',
+      {
+        kind: 'delete',
+        relation: 'author',
+        reason: 'required-foreign-key',
+        model: 'Post',
+        fields: ['userId'],
+      },
     ],
   ] as const)('rejects %s while the graph is built', (_, modelName, input, code, message, meta) => {
     expect(() => printUpdate(input, modelName)).toThrow(
       expect.objectContaining({ code, message, meta }),
+    );
+  });
+
+  it.each([
+    ['create', (inviter: LinkMutator) => inviter.create({ id: 9, name: 'Nia', email: 'nia@x.io' })],
+    ['connect', (inviter: LinkMutator) => inviter.connect({ id: 2 })],
+    ['disconnect', (inviter: LinkMutator) => inviter.disconnect()],
+    ['update', (inviter: LinkMutator) => inviter.update({ name: 'Grace H.' })],
+    ['delete', (inviter: LinkMutator) => inviter.delete()],
+  ])(
+    'rejects update() data that sets the foreign key of a relation together with %s() on it',
+    (_, invitedBy) => {
+      expect(() => printUpdate({ invitedBy }, 'User', { name: 'Ada', invitedById: 3 })).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          message:
+            'update() data sets "invitedById", the foreign key of relation "invitedBy", and also has a callback on "invitedBy"; set the foreign key or use the callback',
+          meta: {
+            relation: 'invitedBy',
+            problem: 'foreign-key-with-relation-mutation',
+            fields: ['invitedById'],
+          },
+        }),
+      );
+    },
+  );
+
+  it('accepts update() data that leaves the foreign key of a relation with a callback undefined', () => {
+    expect(
+      printUpdate({ invitedBy: (inviter: LinkMutator) => inviter.disconnect() }, 'User', {
+        invitedById: undefined,
+      }),
+    ).toBe(
+      [
+        'n1 Find users where id = 1',
+        'n2 Update users set invited_by_id = null where id = 1',
+        'result: n2',
+      ].join('\n'),
     );
   });
 

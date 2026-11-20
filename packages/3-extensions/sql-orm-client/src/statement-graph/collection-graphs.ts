@@ -45,12 +45,12 @@ import {
   deleteRows,
   findRows,
   insertRows,
-  type KeySource,
+  type KeyFilter,
+  type KeyFilters,
   type Model,
   type Returns,
   readBack,
   type Shape,
-  type Sources,
   selectAstOf,
   updateRows,
 } from './model-statements';
@@ -58,7 +58,8 @@ import {
   addAfterWrite,
   addBeforeWrite,
   addCreateWithRelations,
-  type Translation,
+  type ParentRow,
+  rejectForeignKeyWithRelationMutation,
 } from './nested-mutations';
 import { PayloadData } from './payload-data';
 import type { Requires } from './requires';
@@ -116,7 +117,7 @@ export function addUpdateAll(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
-  { filters, links }: Sources,
+  { filters, links }: KeyFilters,
   returns: Returns,
 ): NodeId {
   return updateRows(b, modelOf(collection), set, {
@@ -157,22 +158,22 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
 export function addDeleteAll(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
-  sources: Sources,
+  keyFilters: KeyFilters,
 ): NodeId {
-  return deleteRows(b, collection.state.tables, { where: whereOf(collection), ...sources });
+  return deleteRows(b, collection.state.tables, { where: whereOf(collection), ...keyFilters });
 }
 
 export function addUpdateFirst(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
-  filters: readonly KeySource[],
+  keyFilters: KeyFilters,
 ): void {
-  const find = addFindOfFirstRelated(b, collection, 'update()', filters);
+  const find = addFindOfFirstRelated(b, collection, 'update()', keyFilters);
   updateRows(b, modelOf(collection), set, {
     where: whereOf(collection),
-    filters: [{ from: find, columns: sameRowColumns(collection) }, ...filters],
-    links: [],
+    filters: [{ from: find, columns: sameRowColumns(collection) }, ...keyFilters.filters],
+    links: keyFilters.links,
     payloads: [],
     owner: { operation: 'update', modelName: collection.modelName },
     returns: 'count',
@@ -184,26 +185,36 @@ export function addUpdateFirst(
 export function addDeleteFirst(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
-  filters: readonly KeySource[],
+  keyFilters: KeyFilters,
+  unlinkFound?: (found: NodeId) => void,
 ): void {
-  const find = addFindOfFirstRelated(b, collection, 'delete()', filters);
-  deleteRows(b, collection.state.tables, {
-    where: whereOf(collection),
-    filters: [{ from: find, columns: sameRowColumns(collection) }, ...filters],
-    links: [],
-  });
+  const find = addFindOfFirstRelated(b, collection, 'delete()', keyFilters);
+  unlinkFound?.(find);
+  const byFoundKey = [{ from: find, columns: sameRowColumns(collection) }];
+  deleteRows(
+    b,
+    collection.state.tables,
+    unlinkFound === undefined
+      ? {
+          where: whereOf(collection),
+          filters: [...byFoundKey, ...keyFilters.filters],
+          links: keyFilters.links,
+        }
+      : { where: undefined, filters: byFoundKey, links: [] },
+  );
 }
 
 function addFindOfFirstRelated(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   method: string,
-  filters: readonly KeySource[],
+  { filters, links }: KeyFilters,
 ): NodeId {
   requireIdentityColumns(collection, method);
   return findRows(b, selectIdentityAst(collection, { ...collection.state, limit: 1 }), {
     filter: filters.map(({ from, columns }) => new FilterData(from, columns)),
     requires: [],
+    links,
   });
 }
 
@@ -212,6 +223,7 @@ export function updateFirstGraph(
   data: Readonly<Record<string, unknown>>,
   relationMutations: readonly ParsedRelationMutation[] = [],
 ): Graph {
+  rejectForeignKeyWithRelationMutation(data, relationMutations);
   const { state } = collection;
   const b = builderOf(collection);
   const set = mappedUpdateRow(collection, data);
@@ -231,12 +243,12 @@ export function updateFirstGraph(
   }
 
   const model = modelOf(collection);
-  const t: Translation = { ...b, parentRow: find, parentValues: set };
-  const before = addBeforeWrite(t, model, relationMutations);
+  const parent: ParentRow = { rowBeforeWrite: find, setValues: set };
+  const before = addBeforeWrite(b, model, parent, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
   const owner = { operation: 'update', modelName: collection.modelName };
   if (Object.keys(values).length === 0 && before.keys.length === 0) {
-    addAfterWrite(t, model, find, relationMutations);
+    addAfterWrite(b, model, { ...parent, node: find }, relationMutations);
     b.graph.setResult(
       state.includes.length === 0 && !before.unlinksAfterWrite
         ? find
@@ -258,7 +270,8 @@ export function updateFirstGraph(
       owner,
       returns: 'rows',
       shape: shapeOf(collection),
-      afterWrite: (updated) => addAfterWrite(t, model, updated, relationMutations),
+      afterWrite: (updated) =>
+        addAfterWrite(b, model, { ...parent, node: updated }, relationMutations),
     }),
   );
   return b.graph;
@@ -333,8 +346,9 @@ export function createGraph(
   requireIdentityColumnsForIncludes(collection);
   b.graph.setResult(
     addCreateWithRelations(
-      { ...b, parentRow: undefined, parentValues: {} },
+      b,
       modelOf(collection),
+      { rowBeforeWrite: undefined, setValues: {} },
       parsed,
       {
         keysFromParent: [],
@@ -349,7 +363,7 @@ export function createGraph(
 
 export interface NestedVariantCreate {
   readonly graph: Graph;
-  readonly keys: readonly KeySource[];
+  readonly keys: readonly KeyFilter[];
   readonly requires: readonly Requires[];
   readonly added: (base: NodeId) => void;
 }
