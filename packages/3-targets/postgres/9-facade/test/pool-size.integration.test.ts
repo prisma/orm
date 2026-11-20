@@ -72,6 +72,7 @@ async function createRealDatabase(): Promise<Server> {
 /** Starts a server for each test, and after it rolls back every transaction still open, closes every client and drops the server. */
 function useServer(start: () => Promise<Server>): {
   open(poolOptions?: PostgresPoolOptions): Promise<Db>;
+  openUnused(poolOptions: PostgresPoolOptions): Promise<Db>;
   openTransaction(db: Db): OpenTransaction;
 } {
   let server: Server | undefined;
@@ -105,6 +106,20 @@ function useServer(start: () => Promise<Server>): {
       });
       clients.push(db);
       await db.execute(db.raw.sql`CREATE TABLE pool_rows (id INT)`.affectedCount().build());
+      return db;
+    },
+    /** Creates the table on a connection of its own, then returns a client that verifies the contract marker and has sent nothing yet. */
+    async openUnused(poolOptions) {
+      if (server === undefined) throw new Error('Expected a started server');
+      const setup = new pg.Client({ connectionString: server.url });
+      try {
+        await setup.connect();
+        await setup.query('CREATE TABLE pool_rows (id INT)');
+      } finally {
+        await setup.end();
+      }
+      const db = postgres({ contract, url: server.url, poolOptions });
+      clients.push(db);
       return db;
     },
     openTransaction(db) {
@@ -260,6 +275,30 @@ describe.each(servers)('postgres() with poolOptions.max of 1, on $name', ({ star
 
       transaction.end('commit');
       await transaction.done;
+      expect(await readRows(db)).toEqual([{ id: 1 }]);
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it.each(['the transaction', 'the query'])(
+    'runs a first transaction and a first query sent together, %s first, with the contract marker check on',
+    async (first) => {
+      const db = await server.openUnused({
+        max: 1,
+        connectionTimeoutMillis: timeouts.poolConnectionWait,
+      });
+      const insert = () =>
+        db.transaction(async (tx) => {
+          await tx.execute(tx.raw.sql`INSERT INTO pool_rows VALUES (1)`.affectedCount().build());
+        });
+
+      const sent =
+        first === 'the transaction'
+          ? { transaction: insert(), read: readRows(db) }
+          : { read: readRows(db), transaction: insert() };
+
+      await expect(sent.transaction).resolves.toBeUndefined();
+      await expect(sent.read).resolves.toEqual(expect.any(Array));
       expect(await readRows(db)).toEqual([{ id: 1 }]);
     },
     timeouts.spinUpPpgDev,
