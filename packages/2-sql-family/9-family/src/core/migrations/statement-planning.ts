@@ -854,19 +854,23 @@ class StatementPlanner<TCall extends CallWithCompanions> {
     const rename: ColumnRename = {
       namespaceId: current.namespaceId,
       table,
-      from: effect.from,
+      from: this.#currentColumn(effect.table, effect.from),
       to: effect.to,
     };
     const tableLocation = { namespaceId: rename.namespaceId, table };
     const label = `Cannot rename column "${table}"."${rename.from}" to "${rename.to}"`;
     const policyRefusal = this.#controlPolicyRefusal(statement, label, tableLocation);
     if (policyRefusal !== undefined) return notOk(policyRefusal);
-    const checked = checkColumnRename(this.#target.tables(), this.#contract, rename);
-    if (!checked.ok) {
-      return notOk(columnRenameRefused(statement, label, rename, checked.failure));
+    const renamedAlready = rename.from === rename.to;
+    if (!renamedAlready) {
+      const checked = checkColumnRename(this.#target.tables(), this.#contract, rename);
+      if (!checked.ok) {
+        return notOk(columnRenameRefused(statement, label, rename, checked.failure));
+      }
     }
     const shared = this.#sharedColumnRefusal(statement);
     if (shared !== undefined) return notOk(shared);
+    if (renamedAlready) return ok([]);
     return this.#renameColumn({ statement }, label, effect.table, effect.from, rename);
   }
 

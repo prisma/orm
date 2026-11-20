@@ -121,6 +121,37 @@ describe('planStatements, storage whose removed objects stay behind', () => {
       plannedStatements: [],
     });
   });
+  it('plans one column rename for two field rename statements that move a shared column together', () => {
+    const bug = renameField('Bug', 'title', 'heading');
+    const story = renameField('Story', 'title', 'heading');
+    expect(
+      planned(
+        plan(
+          {
+            Task: tasks('tasks'),
+            Bug: variant('tasks', { title: 'title' }),
+            Story: variant('tasks', { title: 'title' }),
+          },
+          {
+            Task: tasks('tasks'),
+            Bug: variant('tasks', { heading: 'heading' }),
+            Story: variant('tasks', { heading: 'heading' }),
+          },
+          fakeTarget(['app.tasks'], { 'app.tasks': ['id', 'type', 'title'] }),
+          [bug, story],
+        ),
+      ),
+    ).toEqual({
+      calls: ['column app.tasks.title -> heading'],
+      tableRenames: [],
+      columnRenames: [{ namespaceId: 'app', table: 'tasks', from: 'title', to: 'heading' }],
+      alreadyRenamedTables: [],
+      plannedStatements: [
+        { statement: bug, operations: { kind: 'planned', operationIndexes: [0, 1] } },
+        { statement: story, operations: { kind: 'planned', operationIndexes: [] } },
+      ],
+    });
+  });
 });
 
 describe('planStatements, storage that other storage joins', () => {
