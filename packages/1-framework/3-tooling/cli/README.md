@@ -1227,7 +1227,7 @@ prisma db migrate [--db <url>] [--to <contract>] [--advance-ref <name>] [--show]
 7. Each migration runs in its own transaction with prechecks, postchecks, and idempotency checks enabled
 8. After each migration, the runner runs the migration's post-checks and verifies the resulting state matches the target contract's storage hash, then updates the marker/ledger
 
-**Rollback workflow:** When no on-disk edge reaches the target (for example `db migrate --to <migration-dir>^`), the command refuses with `MIGRATION.PATH_UNREACHABLE` and suggests planning the missing edge with `migration plan --from <current> --to <target> --name <slug>`, then re-running `db migrate --to <target>`. No contract-source edit is required.
+**Rollback workflow:** When no on-disk edge reaches the target (for example `db migrate --to <migration-dir>^`), the command refuses with `MIGRATION.PATH_UNREACHABLE` and suggests planning the missing edge with `migration plan --from <current> --to <target> --name <slug>`, then re-running `db migrate --to <target>`. No contract-source edit is required. When the target is the emitted contract, the suggested commands have no `--to`, since `--to` resolves only a contract that a migration or a ref names.
 
 **Config requirements:** Requires `driver` and `db.connection` (or `--db`). `migrations.dir` is optional and defaults to `migrations/`.
 

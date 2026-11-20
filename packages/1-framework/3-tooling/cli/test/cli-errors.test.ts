@@ -52,6 +52,7 @@ describe('errorPathUnreachable', () => {
       summary: 'Current contract has no planned migration path',
       why: 'Cannot reach target.',
       meta: { spaceId: 'app', kind: 'pathUnreachable', fromHash, targetHash },
+      to: targetHash,
     };
     const envelope = errorPathUnreachable(failure).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.PATH_UNREACHABLE');
@@ -70,6 +71,7 @@ describe('errorPathUnreachable', () => {
       summary: 'No on-disk migrations for contract space "app"',
       why: 'migrate is replay-only.',
       meta: { spaceId: 'app', kind: 'neverPlanned', targetHash },
+      to: undefined,
     };
     const envelope = errorPathUnreachable(failure).toEnvelope();
     // A never-planned space has an EMPTY graph, and `--to <hash>` only
@@ -87,6 +89,7 @@ describe('errorPathUnreachable', () => {
     const failure = buildPathNotFoundFailure(
       'app',
       { storageHash: fromHash, invariants: [] },
+      targetHash,
       targetHash,
     );
     const envelope = failure.toEnvelope();
@@ -108,12 +111,74 @@ describe('errorPathUnreachable', () => {
   });
 
   it('omits --from in the fix and names the empty contract when the space has no marker', () => {
-    const envelope = buildPathNotFoundFailure('app', null, targetHash).toEnvelope();
+    const envelope = buildPathNotFoundFailure('app', null, targetHash, targetHash).toEnvelope();
 
     expect(envelope.why).toContain('No migration edge connects the empty contract to the target');
     expect(envelope.meta?.['fromHash']).toBe(EMPTY_CONTRACT_HASH);
     expect(envelope.fix).toContain(`{bin} migration plan --to ${targetHash} --name <slug>`);
     expect(envelope.fix).not.toMatch(/--from\s/);
+  });
+
+  it('leaves --to out of both steps when the target is the emitted contract, which no migration or ref names yet', () => {
+    const error = buildPathNotFoundFailure(
+      'app',
+      { storageHash: fromHash, invariants: [] },
+      targetHash,
+      undefined,
+    );
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: `{bin} migration plan --from ${fromHash} --name <slug>`,
+      },
+      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
+    ]);
+    expect(error.toEnvelope().fix).toContain(
+      [
+        'Plan the missing edge, then apply it:',
+        `  1. {bin} migration plan --from ${fromHash} --name <slug>`,
+        '  2. {bin} db migrate',
+      ].join('\n'),
+    );
+    expect(error.toEnvelope().meta).toEqual({
+      spaceId: 'app',
+      kind: 'pathUnreachable',
+      fromHash,
+      targetHash,
+    });
+  });
+
+  it('names a ref target by its name in both steps', () => {
+    const error = buildPathNotFoundFailure(
+      'app',
+      { storageHash: fromHash, invariants: [] },
+      targetHash,
+      'production',
+    );
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: `{bin} migration plan --from ${fromHash} --to production --name <slug>`,
+      },
+      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate --to production' },
+    ]);
+  });
+
+  it('leaves out --from and --to when the space has no marker and the target is the emitted contract', () => {
+    const error = buildPathNotFoundFailure('app', null, targetHash, undefined);
+
+    expect(error.nextActions?.slice(0, 2)).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Plan the missing edge',
+        command: '{bin} migration plan --name <slug>',
+      },
+      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
+    ]);
   });
 
   it('composes buildNeverPlannedFailure why with the fix into one plan-then-apply sequence', () => {
@@ -207,6 +272,7 @@ describe('typed next actions on the CLI factories', () => {
       summary: 'Current contract has no planned migration path',
       why: 'Cannot reach target.',
       meta: { spaceId: 'app', kind: 'pathUnreachable', fromHash, targetHash },
+      to: targetHash,
     };
 
     const actions = errorPathUnreachable(failure).nextActions;

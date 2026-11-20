@@ -160,6 +160,48 @@ describe('executeMigrateShowPlan', () => {
     }
   });
 
+  function planThenApplyCommands(
+    result: Awaited<ReturnType<typeof executeMigrateShowPlan>>,
+  ): readonly (string | undefined)[] | undefined {
+    if (result.ok) return undefined;
+    return result.failure.nextActions
+      ?.slice(0, 2)
+      .map((action) => (action.kind === 'run-command' ? action.command : undefined));
+  }
+
+  it('advises --to with the hash when no path reaches a contract a migration names', async () => {
+    const result = await executeMigrateShowPlan({
+      config,
+      cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
+      from: HASH_B,
+      to: HASH_A,
+    });
+
+    expect(planThenApplyCommands(result)).toEqual([
+      `{bin} migration plan --from ${HASH_B} --to ${HASH_A} --name <slug>`,
+      `{bin} db migrate --to ${HASH_A}`,
+    ]);
+  });
+
+  it('advises no --to when no path reaches the emitted contract', async () => {
+    const emitted = 'c'.repeat(64);
+    await writeFile(join(tempDir, 'contract.json'), JSON.stringify(contractJsonForHash(emitted)));
+
+    const result = await executeMigrateShowPlan({
+      config,
+      cwd: tempDir,
+      invocation: { cwd: tempDir, configPath: undefined, dbGiven: false },
+      from: HASH_B,
+    });
+
+    expect(result.ok ? undefined : result.failure.meta).toMatchObject({ targetHash: emitted });
+    expect(planThenApplyCommands(result)).toEqual([
+      `{bin} migration plan --from ${HASH_B} --name <slug>`,
+      '{bin} db migrate',
+    ]);
+  });
+
   it('fires onPreflightComplete exactly once, before any client construction', async () => {
     const onPreflightComplete = vi.fn();
     const result = await executeMigrateShowPlan({

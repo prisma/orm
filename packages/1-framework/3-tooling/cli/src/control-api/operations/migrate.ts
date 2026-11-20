@@ -239,7 +239,12 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     }
     if (outcome.kind === 'unreachable') {
       return notOk(
-        buildPathNotFoundFailure(outcome.spaceId, outcome.liveMarker, outcome.targetHash),
+        buildPathNotFoundFailure(
+          outcome.spaceId,
+          outcome.liveMarker,
+          outcome.targetHash,
+          outcome.spaceId === aggregate.app.spaceId ? toOptionFor(target) : outcome.targetHash,
+        ),
       );
     }
     if (outcome.kind === 'unsatisfiable') {
@@ -858,6 +863,16 @@ function buildSuccess(args: BuildSuccessArgs): MigrateSuccess {
 }
 
 /**
+ * What `--to` takes to name the application space's target: the ref's name, which also resolves a
+ * ref whose contract no migration reaches yet, or the hash. `undefined` for the emitted contract,
+ * which `--to` cannot name until a migration or a ref does.
+ */
+function toOptionFor(target: MigrateTarget | undefined): string | undefined {
+  if (target === undefined) return undefined;
+  return target.kind === 'ref' ? target.ref.name : target.hash;
+}
+
+/**
  * Build the `neverPlanned` failure raised when a contract space that
  * declares managed storage elements has no on-disk migration graph but
  * migrate was asked to reach a target hash. All-external spaces never reach
@@ -876,6 +891,7 @@ export function buildNeverPlannedFailure(
     summary: `No on-disk migrations for contract space "${spaceId}"`,
     why: `migrate is replay-only: a contract space that declares managed storage elements must have an authored migration graph on disk. Space "${spaceId}" has no migrations under \`${migrationsDir}/${spaceId}/\` but its head ref targets "${targetHash}".`,
     meta: { spaceId, targetHash, kind: 'neverPlanned' },
+    to: undefined,
   });
 }
 
@@ -893,6 +909,7 @@ export function buildPathNotFoundFailure(
   spaceId: string,
   marker: ContractMarkerRecordLike | null,
   targetHash: string,
+  to: string | undefined,
 ): CliStructuredError {
   const fromHash = marker?.storageHash ?? EMPTY_CONTRACT_HASH;
   const fromText = marker === null ? 'the empty contract' : `the current state "${fromHash}"`;
@@ -908,6 +925,7 @@ export function buildPathNotFoundFailure(
     summary,
     why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
     meta: { spaceId, fromHash, targetHash, kind: 'pathUnreachable' },
+    to,
   });
 }
 

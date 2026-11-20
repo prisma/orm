@@ -10,6 +10,7 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
 import { join } from 'pathe';
@@ -34,14 +35,14 @@ afterEach(async () => {
   await Promise.all(projectDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-/** A project whose app space carries one migration ∅ → APP_HEAD; returns its directory. */
-async function projectWithOneAppEdge(): Promise<string> {
+/** A project whose app space carries one migration ∅ → `to`; returns its directory. */
+async function projectWithOneAppEdge(to: string = APP_HEAD): Promise<string> {
   const projectDir = createTestProjectDir('migrate-no-path');
   projectDirs.push(projectDir);
   const ops = [CREATE_TABLE];
   const base: Omit<MigrationMetadata, 'migrationHash'> = {
     from: EMPTY_CONTRACT_HASH,
-    to: APP_HEAD,
+    to,
     providedInvariants: [],
     createdAt: '2026-01-01T00:00:00.000Z',
   };
@@ -103,6 +104,7 @@ function migrate(args: {
   readonly markers: ReadonlyMap<string, ContractMarkerRecord>;
   readonly ledger?: readonly LedgerEntryRecord[];
   readonly refHash?: string;
+  readonly ref?: NamedRef;
 }) {
   return executeMigrate({
     driver: blindCast<
@@ -121,6 +123,7 @@ function migrate(args: {
     extensions: [],
     targetId: 'postgres',
     ...(args.refHash === undefined ? {} : { target: { kind: 'hash', hash: args.refHash } }),
+    ...(args.ref === undefined ? {} : { target: { kind: 'ref', ref: args.ref } }),
   });
 }
 
@@ -224,7 +227,31 @@ describe('executeMigrate with no path to the target', () => {
     });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
-      buildPathNotFoundFailure('app', markerAt(APP_HEAD), ELSEWHERE).toEnvelope(),
+      buildPathNotFoundFailure('app', markerAt(APP_HEAD), ELSEWHERE, ELSEWHERE).toEnvelope(),
+    );
+  });
+
+  it('advises planning without --to when the unreachable target is the emitted contract', async () => {
+    const projectDir = await projectWithOneAppEdge(ELSEWHERE);
+
+    const result = await migrate({ projectDir, markers: new Map([['app', markerAt(ELSEWHERE)]]) });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
+      buildPathNotFoundFailure('app', markerAt(ELSEWHERE), APP_HEAD, undefined).toEnvelope(),
+    );
+  });
+
+  it('advises naming a ref target by its name', async () => {
+    const projectDir = await projectWithOneAppEdge();
+
+    const result = await migrate({
+      projectDir,
+      markers: new Map([['app', markerAt(APP_HEAD)]]),
+      ref: { name: 'production', hash: ELSEWHERE, invariants: [] },
+    });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
+      buildPathNotFoundFailure('app', markerAt(APP_HEAD), ELSEWHERE, 'production').toEnvelope(),
     );
   });
 
@@ -234,7 +261,7 @@ describe('executeMigrate with no path to the target', () => {
     const result = await migrate({ projectDir, markers: new Map(), refHash: ELSEWHERE });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
-      buildPathNotFoundFailure('app', null, ELSEWHERE).toEnvelope(),
+      buildPathNotFoundFailure('app', null, ELSEWHERE, ELSEWHERE).toEnvelope(),
     );
   });
 });

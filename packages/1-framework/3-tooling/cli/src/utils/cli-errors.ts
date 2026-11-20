@@ -977,6 +977,8 @@ export interface PathUnreachable {
   readonly summary: string;
   readonly why: string;
   readonly meta: PathUnreachableMeta;
+  /** What `--to` takes to name the target in `migration plan` and `db migrate`, or `undefined` for the emitted contract, which both target without `--to`. */
+  readonly to: string | undefined;
 }
 
 /** The advice for a `PATH_UNREACHABLE` the caller knows better than a plan-then-apply of the app space. */
@@ -985,23 +987,14 @@ export interface PathUnreachableAdvice {
   readonly nextActions: readonly NextAction[];
 }
 
-function planThenApply(meta: PathUnreachableMeta): PathUnreachableAdvice {
-  // Never-planned spaces have an EMPTY migration graph, and contract-ref
-  // resolution only resolves full hashes against graph nodes — a
-  // `--to <hash>` remediation would reject its own input. `migration plan`
-  // without `--to` targets the working contract (the same contract the app
-  // space's synthesized head ref carries), so the bare form is the one that
-  // runs verbatim. With no marker, the live origin `migration plan` uses
-  // without `--from` is the empty contract, so the printed command leaves
-  // `--from` out.
-  const planCommand =
-    meta.kind === 'neverPlanned'
-      ? '{bin} migration plan --name <slug>'
-      : meta.fromHash === EMPTY_CONTRACT_HASH
-        ? `{bin} migration plan --to ${meta.targetHash} --name <slug>`
-        : `{bin} migration plan --from ${meta.fromHash} --to ${meta.targetHash} --name <slug>`;
-  const applyCommand =
-    meta.kind === 'neverPlanned' ? '{bin} db migrate' : `{bin} db migrate --to ${meta.targetHash}`;
+function planThenApply({ meta, to }: PathUnreachable): PathUnreachableAdvice {
+  const fromOption =
+    meta.kind === 'neverPlanned' || meta.fromHash === EMPTY_CONTRACT_HASH
+      ? ''
+      : ` --from ${meta.fromHash}`;
+  const toOption = to === undefined ? '' : ` --to ${to}`;
+  const planCommand = `{bin} migration plan${fromOption}${toOption} --name <slug>`;
+  const applyCommand = `{bin} db migrate${toOption}`;
   return {
     fix: [
       'Plan the missing edge, then apply it:',
@@ -1053,7 +1046,7 @@ export function errorMigrationHasUnfilledPlaceholders(
 /** `MIGRATION.PATH_UNREACHABLE`, advising to plan the missing edge and apply it unless `advice` says otherwise. */
 export function errorPathUnreachable(
   failure: PathUnreachable,
-  advice: PathUnreachableAdvice = planThenApply(failure.meta),
+  advice: PathUnreachableAdvice = planThenApply(failure),
 ): ActionableCliError {
   return new ActionableCliError('MIGRATION.PATH_UNREACHABLE', failure.summary, {
     why: failure.why,

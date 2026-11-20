@@ -59,6 +59,7 @@ export function errorExtensionPathUnreachable(
         fromHash: space.fromHash,
         targetHash: space.targetHash,
       },
+      to: space.targetHash,
     },
     extensionAdvice(space),
   );

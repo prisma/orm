@@ -438,6 +438,7 @@ describe('migrate', () => {
             targetHash: C2,
             kind: 'pathUnreachable',
           },
+          to: C2,
         }),
       ),
     );

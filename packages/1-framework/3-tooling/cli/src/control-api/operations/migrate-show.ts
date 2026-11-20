@@ -143,6 +143,7 @@ export async function executeMigrateShowPlan(
   let targetHash: string = contractHash;
   let refInvariants: readonly string[] | undefined;
   let namedRef: NamedRef | undefined;
+  let targetsEmittedContract = !liveTarget;
   const refContext = { graph: appGraph, refs: allRefs, contractHash };
   if (options.to && !liveTarget) {
     const toResult = resolveContractRef(options.to, refContext);
@@ -150,6 +151,7 @@ export async function executeMigrateShowPlan(
       return notOk(toResult.failure);
     }
     targetHash = toResult.value.hash;
+    targetsEmittedContract = toResult.value.provenance.kind === 'reserved-contract';
     if (toResult.value.provenance.kind === 'ref') {
       const refName = toResult.value.provenance.refName;
       const refEntry = allRefs[refName];
@@ -277,6 +279,7 @@ export async function executeMigrateShowPlan(
   // An offline --from is not a database marker, so a --from outside the graph is a path that does
   // not exist rather than MIGRATION.MARKER_MISMATCH.
   const planned = outcomes ?? planSpaces(planInputs());
+  const appTargetTo = targetsEmittedContract ? undefined : (namedRef?.name ?? targetHash);
   const orderedMigrations: MigrateShowMigration[] = [];
   for (const space of spacesInApplyOrder(aggregate)) {
     const outcome = planned.get(space.spaceId);
@@ -294,6 +297,7 @@ export async function executeMigrateShowPlan(
           summary: `No on-disk migrations for contract space "${outcome.spaceId}"`,
           why: `migrate is replay-only: space "${outcome.spaceId}" has no on-disk migrations but its head ref targets "${outcome.targetHash}".`,
           meta: { spaceId: outcome.spaceId, targetHash: outcome.targetHash, kind: 'neverPlanned' },
+          to: undefined,
         }),
       );
     }
@@ -312,6 +316,7 @@ export async function executeMigrateShowPlan(
             targetHash: outcome.targetHash,
             kind: 'pathUnreachable',
           },
+          to: outcome.spaceId === aggregate.app.spaceId ? appTargetTo : outcome.targetHash,
         }),
       );
     }
