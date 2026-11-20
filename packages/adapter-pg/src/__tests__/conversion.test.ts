@@ -4,6 +4,15 @@ import { describe, expect, it } from 'vitest'
 import { customParsers, mapArg } from '../conversion'
 
 describe('mapArg', () => {
+  it.each([
+    ['0000-01-02', '0001-01-02 BC'],
+    ['-000001-01-02', '0002-01-02 BC'],
+  ])('converts ISO date %s to PostgreSQL date %s', (iso, postgres) => {
+    const date = new Date(`${iso}T00:00:00.000Z`)
+    expect(mapArg(date, { dbType: 'DATE', scalarType: 'datetime', arity: 'scalar' })).toBe(postgres)
+    expect(customParsers[pg.types.builtins.DATE](postgres)).toBe(iso)
+  })
+
   it('converts a date with a 4-digit year (value >= 1000-01-01) to the correct date', () => {
     const date = new Date('1999-12-31T23:59:59.999Z')
     const result = mapArg(date, { dbType: 'DATE', scalarType: 'datetime', arity: 'scalar' })
