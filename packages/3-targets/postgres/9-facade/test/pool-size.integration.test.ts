@@ -29,7 +29,11 @@ const maintenanceUrl =
   process.env['DATABASE_URL'] ?? 'postgres://postgres:postgres@localhost:5432/postgres';
 
 async function onMaintenanceConnection<T>(run: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: maintenanceUrl });
+  const client = new pg.Client({
+    connectionString: maintenanceUrl,
+    connectionTimeoutMillis: timeouts.databaseOperation,
+    query_timeout: timeouts.databaseOperation,
+  });
   try {
     await client.connect();
     return await run(client);
@@ -124,14 +128,18 @@ function openTransaction(db: Db): OpenTransaction {
     end = resolve;
   });
   let inserted: () => void = () => {};
-  const insertedRow = new Promise<void>((resolve) => {
+  let setupFailed: (error: unknown) => void = () => {};
+  const insertedRow = new Promise<void>((resolve, reject) => {
     inserted = resolve;
+    setupFailed = reject;
   });
   const done = db.transaction(async (tx) => {
     await tx.execute(tx.raw.sql`INSERT INTO pool_rows VALUES (1)`.affectedCount().build());
     inserted();
     if ((await ended) === 'rollback') throw new Error('roll back');
   });
+  done.catch(setupFailed);
+  insertedRow.catch(() => undefined);
   return { insertedRow, end, done };
 }
 
