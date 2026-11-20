@@ -389,7 +389,9 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
 /**
  * Extends a pool config with an `options` startup parameter that sets the `search_path` to the
  * given schema, so that raw queries resolve unqualified table names in that schema, consistently
- * with generated queries which qualify table names explicitly. Setting the search path at
+ * with generated queries which qualify table names explicitly. `public` stays on the path after it,
+ * because extensions such as citext or PostGIS are usually installed there and their types and
+ * operators must keep resolving. Setting the search path at
  * connection startup saves a round trip per connection and guarantees that no query can run
  * before the search path is in effect.
  * See https://github.com/prisma/prisma/issues/24660.
@@ -398,7 +400,7 @@ function withSearchPath(config: pg.PoolConfig, schema: string | undefined): pg.P
   if (schema === undefined || setsSearchPath(config.options)) {
     return config
   }
-  const searchPath = `-c search_path=${escapeOptionValue(quoteIdentifierIfNeeded(schema))}`
+  const searchPath = `-c search_path=${escapeOptionValue(quoteIdentifierIfNeeded(schema))},public`
   return {
     ...config,
     options: config.options ? `${config.options} ${searchPath}` : searchPath,
