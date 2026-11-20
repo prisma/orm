@@ -144,7 +144,7 @@ Rules:
 
 ### 2. Your package exports an init contribution
 
-`prisma orm init --target <package>` installs that package, loads the default export of its `/init` entrypoint, and scaffolds the project from it:
+`prisma orm init --target <package>` checks that the package lists the `prisma-orm-extension` keyword, installs it, loads the default export of its `/init` entrypoint, and scaffolds the project from it:
 
 ```ts
 // @microsoft/prisma-orm-mssql/init
@@ -230,7 +230,7 @@ The Postgres package is the reference for all of these: [`packages/3-targets/pos
 Package rules:
 
 - Depend on `@prisma/orm-framework` and `@prisma/orm-family-sql`, pinned to one exact version while Prisma 8 is in release candidates.
-- Name the package `prisma-orm-<name>` under your scope, and add the keyword `prisma-orm-extension` to its `package.json`. The name is the convention for packages Prisma does not publish. The keyword is required: `prisma orm init --target` reads it before installing your package, from the registry's `latest` version or from disk when the package is already installed, and refuses a package without it.
+- Name the package `prisma-orm-<name>` under your scope, and add the keyword `prisma-orm-extension` to its `package.json`. The name is the convention for packages Prisma does not publish. The keyword is required: `prisma orm init --target` reads it before installing your package, from the registry's `latest` version when it will install the package, or from the installed `package.json` when the project already declares your package and has it on disk, and refuses a package without it.
 - Do not import or name any module beginning `@internal/`. Those are our private workspace names.
 
 ## Until the changes are released

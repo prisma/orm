@@ -102,7 +102,7 @@ When a refusal comes after the install, `init` has written no scaffold file, but
 
 A failed install also leaves no scaffold file, and the package manager may already have changed the dependency files, so the user checks them before trying again.
 
-With `--skip-install`, `init` installs nothing, so the target package must already be there. If it is not, `init` stops before changing anything and prints the install command.
+With `--skip-install`, `init` installs nothing, so the target package must already be there. If it is not, `init` stops before changing anything. For a listed package it prints the install command. For a package that is not in the list it says to run `init` again without `--skip-install`, which checks the package's keyword before installing it.
 
 A failed install stops `init`, as [ADR 323](ADR%20323%20-%20Prisma%208%20is%20not%20a%20package%20manager%20and%20does%20not%20second-guess%20one.md) requires.
 

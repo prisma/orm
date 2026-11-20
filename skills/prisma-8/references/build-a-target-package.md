@@ -55,7 +55,7 @@ A config that names neither module stops with `CONFIG.CONTRACT_TYPES_MODULE_MISS
 
 ## `prisma orm init` writes the project from your package
 
-`init` installs your package, loads the default export of its `/init` entrypoint, and writes the project from it:
+`init` checks that your package lists the `prisma-orm-extension` keyword (see *Package rules*), installs it, loads the default export of its `/init` entrypoint, and writes the project from it:
 
 ```ts
 // src/init.ts
@@ -100,7 +100,7 @@ Rules:
 
 ## Package rules
 
-- Name the package `prisma-orm-<name>`, under your scope if you have one, and add the keyword `prisma-orm-extension` to its `package.json`. The keyword is required: `prisma orm init --target` reads it before installing your package and refuses a package without it. `init` reads an installed package from disk and any other from the registry, so a package on a registry that needs credentials is installed first.
+- Name the package `prisma-orm-<name>`, under your scope if you have one, and add the keyword `prisma-orm-extension` to its `package.json`. The keyword is required: `prisma orm init --target` reads it before installing your package and refuses a package without it. `init` checks the copy it is about to load: the registry's `latest` version when it will install your package, and the installed `package.json` when the project already declares your package and has it on disk. It asks the registry without credentials, so a user of a package on a registry that needs them, or on a scope's own registry, installs the package first and then runs `init`.
 - Depend on the Prisma packages your code imports at run time (`@prisma/orm-framework`, your family's package), each pinned to one exact version; see [`upgrade-extension.md`](upgrade-extension.md) § *Exact-pin rule*.
 - `/init` imports only the `InitContribution` type from `@prisma/orm-toolchain`. If that is your package's only use of it, make it a development dependency: as a pinned dependency it gives the application a second copy of the toolchain whenever its `prisma` is another version.
 - Import or name no module beginning `@internal/`. Those are Prisma's private workspace names.
