@@ -13,7 +13,7 @@ import {
   type ModelLookups,
   modelNamespaceId,
 } from './model-references';
-import { writeNamedEntry } from './named-entries';
+import { type NameSite, writeNamedEntry } from './named-entries';
 import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
 function toOneRelationNullable(semanticModel: ModelNode, relation: RelationNode): boolean {
@@ -173,7 +173,7 @@ export function lowerRelations(
 ): Record<string, ContractRelation> {
   const { defaultNamespaceId } = lookups;
   const modelRelations: Record<string, ContractRelation> = {};
-  const relationNameOf = `a relation of model "${semanticModel.modelName}"`;
+  const relationSite: NameSite = { kind: 'relation', modelName: semanticModel.modelName };
   for (const relation of semanticModel.relations ?? []) {
     // Cross-space relations have `spaceId` set — the target model lives in
     // a different contract space, so skip local model lookup and validation.
@@ -197,7 +197,7 @@ export function lowerRelations(
             targetFields: relation.on.childColumns,
           },
         },
-        relationNameOf,
+        relationSite,
       );
       continue;
     }
@@ -271,14 +271,14 @@ export function lowerRelations(
             defaultNamespaceId,
           ),
         },
-        relationNameOf,
+        relationSite,
       );
     } else if (relation.cardinality === '1:N') {
       writeNamedEntry(
         modelRelations,
         relation.fieldName,
         { to, cardinality: '1:N', on },
-        relationNameOf,
+        relationSite,
       );
     } else {
       if (relation.cardinality === '1:1') {
@@ -293,7 +293,7 @@ export function lowerRelations(
           nullable: toOneRelationNullable(semanticModel, relation),
           on,
         },
-        relationNameOf,
+        relationSite,
       );
     }
   }

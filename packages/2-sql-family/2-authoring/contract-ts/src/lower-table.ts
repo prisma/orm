@@ -66,12 +66,7 @@ export function lowerTable(
   const checks: CheckConstraint[] = [];
   for (const description of table.columns) {
     const lowered = lowerColumn(description, placement, context);
-    writeNamedEntry(
-      columns,
-      description.columnName,
-      lowered.column,
-      `a column of table "${tableName}"`,
-    );
+    writeNamedEntry(columns, description.columnName, lowered.column, { kind: 'column', tableName });
     checks.push(...lowered.derivedChecks);
   }
 

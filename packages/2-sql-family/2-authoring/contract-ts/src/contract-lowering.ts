@@ -70,7 +70,13 @@ import {
 import { contractError } from './contract-errors';
 import { emitTypedCrossModelFallbackWarnings } from './contract-warnings';
 import { isEnumTypeHandle } from './enum-type';
-import { namedEntriesFrom, namedEntriesIn, readNamedEntry, writeNamedEntry } from './named-entries';
+import {
+  ensureNamedEntries,
+  namedEntriesFrom,
+  namespaceNameSite,
+  readNamedEntry,
+  writeNamedEntry,
+} from './named-entries';
 import { refuseTypesKey } from './refuse-types-key';
 import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
@@ -965,12 +971,10 @@ function resolveModelNode(
     if (!columnName) {
       throw new InternalError(`Column name resolution failed for "${spec.modelName}.${fieldName}"`);
     }
-    writeNamedEntry(
-      fieldCodecIds,
-      fieldName,
-      descriptor.codecId,
-      `a field of model "${spec.modelName}"`,
-    );
+    writeNamedEntry(fieldCodecIds, fieldName, descriptor.codecId, {
+      kind: 'field',
+      modelName: spec.modelName,
+    });
 
     const enumHandle =
       'enumHandle' in fieldState && isEnumTypeHandle(fieldState.enumHandle)
@@ -1109,11 +1113,11 @@ function columnLengthOf(definition: LoweringInput): ColumnLength {
 function collectRuntimeModelSpecs(definition: LoweringInput): RuntimeCollection {
   const databaseTypes = namedEntriesFrom(
     Object.entries<AuthoredStorageTypeInstance>(definition.databaseTypes ?? {}),
-    'a database type',
+    { kind: 'databaseType' },
   );
   const models = namedEntriesFrom(
     Object.entries((definition.models ?? {}) as Record<string, RuntimeModel>),
-    'a model',
+    { kind: 'model', namespaceId: undefined },
   );
 
   const modelSpecs = new Map<string, RuntimeModelSpec>();
@@ -1162,7 +1166,7 @@ function collectRuntimeModelSpecs(definition: LoweringInput): RuntimeCollection 
         );
       }
       columnOwners.set(columnName, fieldName);
-      writeNamedEntry(fieldToColumn, fieldName, columnName, `a field of model "${modelName}"`);
+      writeNamedEntry(fieldToColumn, fieldName, columnName, { kind: 'field', modelName });
     }
 
     const fieldBuilders = modelDefinition.stageOne.fields;
@@ -1328,12 +1332,8 @@ function lowerPackEntityHandles(
       );
     }
     for (const row of authoring.lowerEntityHandles({ handles, defaultNamespaceId })) {
-      const forNamespace = namedEntriesIn(
-        pack,
-        row.namespaceId,
-        `the namespace of "${row.entityKind}" entity "${row.key}"`,
-      );
-      const forKind = forNamespace[row.entityKind] ?? {};
+      const forNamespace = ensureNamedEntries(pack, row.namespaceId, namespaceNameSite);
+      const forKind = readNamedEntry(forNamespace, row.entityKind) ?? {};
       forNamespace[row.entityKind] = forKind;
       const existing = readNamedEntry(forKind, row.key);
       if (existing !== undefined && existing !== row.entity) {
@@ -1343,12 +1343,11 @@ function lowerPackEntityHandles(
           { meta: { kind: row.entityKind, name: row.key, namespaceId: row.namespaceId } },
         );
       }
-      writeNamedEntry(
-        forKind,
-        row.key,
-        row.entity,
-        `a "${row.entityKind}" entity in namespace "${row.namespaceId}"`,
-      );
+      writeNamedEntry(forKind, row.key, row.entity, {
+        kind: 'entity',
+        entityKind: row.entityKind,
+        namespaceId: row.namespaceId,
+      });
     }
   }
   return pack;

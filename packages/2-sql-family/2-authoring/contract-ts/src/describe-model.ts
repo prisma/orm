@@ -16,7 +16,7 @@ import { describeColumn } from './describe-column';
 import { buildDomainField, valueObjectReference } from './domain-fields';
 import { modelNamespaceId } from './model-references';
 import { lowerRelations } from './model-relations';
-import { writeNamedEntry } from './named-entries';
+import { type NameSite, writeNamedEntry } from './named-entries';
 import { type ForeignKeyResolutionContext, resolveForeignKey } from './resolve-foreign-key';
 import type { ColumnDescription, ModelStorage } from './storage-description';
 import { type ColumnTypeQualifier, resolveColumnDescriptor } from './target-authoring-hooks';
@@ -54,10 +54,10 @@ export function describeModel(
   const fieldToColumn: Record<string, string> = {};
   const domainFields: Record<string, ContractField> = {};
   const executionDefaults: ExecutionMutationDefault[] = [];
-  const fieldNameOf = `a field of model "${model.modelName}"`;
+  const fieldSite: NameSite = { kind: 'field', modelName: model.modelName };
   for (const field of model.fields) {
     const executionDefault = executionDefaultOf(field);
-    writeNamedEntry(fieldToColumn, field.fieldName, field.columnName, fieldNameOf);
+    writeNamedEntry(fieldToColumn, field.fieldName, field.columnName, fieldSite);
     writeNamedEntry(
       domainFields,
       field.fieldName,
@@ -74,7 +74,7 @@ export function describeModel(
             },
         context.defaultNamespaceId,
       ),
-      fieldNameOf,
+      fieldSite,
     );
     if (executionDefault) {
       executionDefaults.push({
@@ -100,7 +100,7 @@ export function describeModel(
 
   const storageFields: Record<string, { readonly column: string }> = {};
   for (const [fieldName, columnName] of Object.entries(fieldToColumn)) {
-    writeNamedEntry(storageFields, fieldName, { column: columnName }, fieldNameOf);
+    writeNamedEntry(storageFields, fieldName, { column: columnName }, fieldSite);
   }
   const columnToField = new Map(Object.entries(fieldToColumn).map(([field, col]) => [col, field]));
 

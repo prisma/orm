@@ -58,7 +58,14 @@ import { lowerRenderedChecks } from './lower-column';
 import { inCanonicalOrder, lowerTable, type TableLoweringContext } from './lower-table';
 import { mergeTables } from './merge-tables';
 import { modelLookupsOf, modelNamespaceId } from './model-references';
-import { namedEntriesFrom, namedEntriesIn, readNamedEntry, writeNamedEntry } from './named-entries';
+import {
+  ensureNamedEntries,
+  type NameSite,
+  namedEntriesFrom,
+  namespaceNameSite,
+  readNamedEntry,
+  writeNamedEntry,
+} from './named-entries';
 import { namespaceIdOrDefault } from './namespace-id';
 import {
   assertNoManagedEntityKinds,
@@ -178,11 +185,11 @@ function valueObjectsFromDefinition(
             field.fieldName,
             buildValueObjectMember(field, defaultNamespaceId),
           ]),
-          `a field of value object "${valueObject.name}"`,
+          { kind: 'valueObjectField', valueObjectName: valueObject.name },
         ),
       },
     ]),
-    'a value object',
+    { kind: 'valueObject' },
   );
 }
 
@@ -205,7 +212,7 @@ function storageOf(
           },
         },
       ]),
-      'a namespace',
+      namespaceNameSite,
     ),
   };
 }
@@ -248,11 +255,11 @@ function writeDiscriminatorValueSets(
       discriminator.field,
       Object.keys(variants),
     );
-    const namespaceValueSets = namedEntriesIn(
-      storageValueSetsByNs,
-      namespaceId,
-      `the namespace of model "${model.modelName}"`,
-    );
+    const namespaceValueSets = ensureNamedEntries(storageValueSetsByNs, namespaceId, {
+      kind: 'namespace',
+      modelName: model.modelName,
+      tableName: undefined,
+    });
     if (Object.hasOwn(namespaceValueSets, valueSetName)) {
       throw contractError(
         'CONTRACT.ENUM_INVALID',
@@ -271,7 +278,7 @@ function writeDiscriminatorValueSets(
       namespaceValueSets,
       valueSetName,
       { kind: 'valueSet', values },
-      `the value set of discriminator field "${discriminator.field}" of model "${model.modelName}"`,
+      { kind: 'valueSet', namespaceId },
     );
     const render = checkRendererFor(table);
     const derivedChecks =
@@ -300,7 +307,7 @@ function writeDiscriminatorValueSets(
           entityName: valueSetName,
         },
       },
-      `a column of table "${model.tableName}"`,
+      { kind: 'column', tableName: model.tableName },
     );
     writeNamedEntry(
       namespaceTables,
@@ -317,7 +324,7 @@ function writeDiscriminatorValueSets(
           : {}),
         columns,
       },
-      `a table in namespace "${namespaceId}"`,
+      { kind: 'table', namespaceId },
     );
   }
 }
@@ -357,19 +364,19 @@ export function buildSqlContractFromDefinition(
         },
       );
     }
-    const enumNameOf = `an enum in namespace "${defaultNamespaceId}"`;
+    const enumSite: NameSite = { kind: 'enum', namespaceId: defaultNamespaceId };
     const storedMembers = encodeEnumTypeMembers(handle, codecLookup, 'the column');
     writeNamedEntry(
-      namedEntriesIn(domainEnumsByNs, defaultNamespaceId, 'the default namespace'),
+      ensureNamedEntries(domainEnumsByNs, defaultNamespaceId, namespaceNameSite),
       enumName,
       { codecId: handle.codecId, members: storedMembers },
-      enumNameOf,
+      enumSite,
     );
     writeNamedEntry(
-      namedEntriesIn(storageValueSetsByNs, defaultNamespaceId, 'the default namespace'),
+      ensureNamedEntries(storageValueSetsByNs, defaultNamespaceId, namespaceNameSite),
       enumName,
       { kind: 'valueSet', values: storedMembers.map((member) => member.value) },
-      enumNameOf,
+      enumSite,
     );
   }
 
@@ -409,14 +416,14 @@ export function buildSqlContractFromDefinition(
   authoringWarnings.push(...requiredUnmappedColumnWarnings(modelStorages, tables));
   for (const table of tables) {
     writeNamedEntry(
-      namedEntriesIn(
-        tablesByNamespace,
-        table.namespaceId,
-        `the namespace of table "${table.tableName}"`,
-      ),
+      ensureNamedEntries(tablesByNamespace, table.namespaceId, {
+        kind: 'namespace',
+        modelName: undefined,
+        tableName: table.tableName,
+      }),
       table.tableName,
       lowerTable(table, tableLoweringContext),
-      `a table in namespace "${table.namespaceId}"`,
+      { kind: 'table', namespaceId: table.namespaceId },
     );
   }
   writeDiscriminatorValueSets(definition, tablesByNamespace, storageValueSetsByNs, (table) =>
@@ -432,14 +439,14 @@ export function buildSqlContractFromDefinition(
   const modelsByNamespace: Record<string, Record<string, ContractModel>> = {};
   for (const { domain } of components) {
     writeNamedEntry(
-      namedEntriesIn(
-        modelsByNamespace,
-        domain.namespaceId,
-        `the namespace of model "${domain.modelName}"`,
-      ),
+      ensureNamedEntries(modelsByNamespace, domain.namespaceId, {
+        kind: 'namespace',
+        modelName: domain.modelName,
+        tableName: undefined,
+      }),
       domain.modelName,
       domain.model,
-      `a model in namespace "${domain.namespaceId}"`,
+      { kind: 'model', namespaceId: domain.namespaceId },
     );
   }
   const roots = buildRoots(components);
@@ -458,7 +465,7 @@ export function buildSqlContractFromDefinition(
         typeParams: entry.typeParams,
       }),
     ]),
-    'a database type',
+    { kind: 'databaseType' },
   );
   const namespaceCoordinateIds = collectStorageNamespaceCoordinateIds(definition);
 
@@ -501,7 +508,7 @@ export function buildSqlContractFromDefinition(
       };
       return [id, createNamespace(nsInput)];
     }),
-    'a namespace',
+    namespaceNameSite,
   );
   const storageWithoutHash = {
     ...(Object.keys(documentTypes).length > 0 ? { types: documentTypes } : {}),
@@ -578,7 +585,7 @@ export function buildSqlContractFromDefinition(
       };
       return [namespaceId, namespaceSlice];
     }),
-    'a namespace',
+    namespaceNameSite,
   );
 
   const contract: Contract<SqlStorage> = {
@@ -627,7 +634,7 @@ function buildRoots(components: readonly ModelDescription[]): Record<string, Cro
       (rootTableNameCounts.get(entry.tableName) ?? 0) > 1
         ? `${entry.namespaceId}.${entry.tableName}`
         : entry.tableName;
-    writeNamedEntry(roots, key, entry.ref, `the table of model "${entry.modelName}"`);
+    writeNamedEntry(roots, key, entry.ref, { kind: 'table', namespaceId: entry.namespaceId });
   }
   return roots;
 }

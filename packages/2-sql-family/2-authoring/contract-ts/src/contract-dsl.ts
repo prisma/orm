@@ -31,7 +31,7 @@ import type { NamedConstraintSpec } from './authoring-type-utils';
 import type { AuthoredColumnDefault, CapabilityContributor } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { EnumTypeHandle } from './enum-type';
-import { writeNamedEntry } from './named-entries';
+import { assertPlainNamedEntries, type NameSite, writeNamedEntry } from './named-entries';
 
 export type NamingStrategy = 'identity' | 'snake_case';
 
@@ -1606,8 +1606,8 @@ export type SqlContext<
   readonly constraints: PackAwareSqlConstraints<IndexTypes>;
 };
 
-function fieldNameOf(modelName: string | undefined): string {
-  return modelName === undefined ? 'a field of a model' : `a field of model "${modelName}"`;
+function fieldNameSite(modelName: string | undefined): NameSite {
+  return { kind: 'field', modelName };
 }
 
 function createFieldRefs<Fields extends Record<string, ScalarFieldBuilder>>(
@@ -1616,7 +1616,7 @@ function createFieldRefs<Fields extends Record<string, ScalarFieldBuilder>>(
 ): FieldRefs<Fields> {
   const refs = {} as Record<string, ColumnRef>;
   for (const fieldName of Object.keys(fields)) {
-    writeNamedEntry(refs, fieldName, { kind: 'columnRef', fieldName }, fieldNameOf(modelName));
+    writeNamedEntry(refs, fieldName, { kind: 'columnRef', fieldName }, fieldNameSite(modelName));
   }
   return refs as FieldRefs<Fields>;
 }
@@ -1659,7 +1659,7 @@ function createModelTokenRefs<
             }
           : {}),
       },
-      fieldNameOf(modelName),
+      fieldNameSite(modelName),
     );
   }
   return refs as ModelTokenRefs<ModelName, Fields, TSpaceId>;
@@ -1902,6 +1902,11 @@ export class ContractModelBuilder<
     readonly spaceId?: TSpaceId,
     readonly tableName?: string,
   ) {
+    assertPlainNamedEntries(stageOne.fields, { kind: 'field', modelName: stageOne.modelName });
+    assertPlainNamedEntries(stageOne.relations, {
+      kind: 'relation',
+      modelName: stageOne.modelName,
+    });
     const crossSpaceCoordinate =
       spaceId !== undefined
         ? {
@@ -1963,6 +1968,7 @@ export class ContractModelBuilder<
     TSpaceId,
     Namespace
   > {
+    assertPlainNamedEntries(relations, { kind: 'relation', modelName: this.stageOne.modelName });
     const duplicateRelationName = findDuplicateRelationName(this.stageOne.relations, relations);
     if (duplicateRelationName) {
       throw contractError(
