@@ -171,3 +171,36 @@ describe('the texts of a loss the target says how to keep', () => {
     `);
   });
 });
+
+describe('a model rename typed at the prompt', () => {
+  const legacy = {
+    label: 'Drop table "legacy"',
+    subject: { kind: 'model', namespaceId: asNamespaceId('a'), model: 'Legacy' },
+  } as const;
+  const origin = contractOf({
+    a: { models: { Legacy: { fields: ['id'] } } },
+    b: { models: { Fresh: { fields: ['id'] } } },
+  });
+
+  it('fits a new name that only another namespace had before', async () => {
+    const [question] = await askedAbout({
+      origin,
+      destination: contractOf({ c: { models: { Fresh: { fields: ['id'] } } } }),
+      losses: [legacy],
+    });
+
+    expect(question?.validate('rename', 'a.Legacy:Fresh')).toBeUndefined();
+  });
+
+  it('refuses a new name the contract had before at the same place', async () => {
+    const [question] = await askedAbout({
+      origin,
+      destination: contractOf({ b: { models: { Fresh: { fields: ['id'] } } } }),
+      losses: [legacy],
+    });
+
+    expect(question?.validate('rename', 'a.Legacy:Fresh')).toBe(
+      'the contract had model "Fresh" before this change too, so one change cannot make it the new name of "a.Legacy". If "a.Legacy" is to take the name "Fresh" from the model that has it now, stop this command and do it in two steps. First, in the contract, give model "Fresh" its new name or remove it, and keep "a.Legacy" as it was; run `{bin} contract emit`, and run this command again. Then rename "a.Legacy" to "Fresh" in the contract, run `{bin} contract emit`, and run this command again with --rename a.Legacy:Fresh.',
+    );
+  });
+});

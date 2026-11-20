@@ -760,6 +760,41 @@ function resolvesWith(
   return ok(resolved.value.at(-1));
 }
 
+/** Each model of a contract, with the names a `--rename` can give it by. */
+function modelNames(contract: ContractWithDomain): readonly {
+  readonly coordinate: ModelCoordinate;
+  readonly names: readonly string[];
+}[] {
+  return Object.entries(contract.domain.namespaces).flatMap(([namespaceId, namespace]) =>
+    Object.keys(namespace.models).map((model) => {
+      const coordinate: ModelCoordinate = { namespaceId: asNamespaceId(namespaceId), model };
+      return {
+        coordinate,
+        names: [model, `${namespaceId}.${model}`, modelStatementText(contract, coordinate)],
+      };
+    }),
+  );
+}
+
+/**
+ * Whether the contract before this change had the new name a rename gives: the field, enum value
+ * or value object field beside the subject, or, for a model, the one model the name gives in the
+ * contract, at the same place.
+ */
+function hadNameBefore(
+  subject: Exclude<MigrationSubject, { readonly kind: 'storage' }>,
+  name: string,
+  contracts: StatementContracts & { readonly destination: ContractWithDomain },
+): boolean {
+  if (subject.kind !== 'model') return namesBeside(subject, contracts.origin).includes(name);
+  const [only, ...others] = modelNames(contracts.destination).filter(({ names }) =>
+    names.includes(name),
+  );
+  if (only === undefined || others.length > 0) return false;
+  const { namespaceId, model } = only.coordinate;
+  return contracts.origin.domain.namespaces[namespaceId]?.models[model] !== undefined;
+}
+
 /** The names a contract has beside a subject, of the same kind and in the same model, enum, value object or contract, as a `--rename` writes them after the parent. */
 function namesBeside(
   subject: Exclude<MigrationSubject, { readonly kind: 'storage' }>,
@@ -767,13 +802,7 @@ function namesBeside(
 ): readonly string[] {
   switch (subject.kind) {
     case 'model':
-      return Object.entries(contract.domain.namespaces).flatMap(([namespaceId, namespace]) =>
-        Object.keys(namespace.models).flatMap((model) => [
-          model,
-          `${namespaceId}.${model}`,
-          modelStatementText(contract, { namespaceId: asNamespaceId(namespaceId), model }),
-        ]),
-      );
+      return modelNames(contract).flatMap(({ names }) => names);
     case 'field': {
       const model = contract.domain.namespaces[subject.namespaceId]?.models[subject.model];
       return model === undefined
@@ -824,9 +853,7 @@ function newNameProblem(
   if (!namesBeside(destinationSubject, contracts.destination).includes(name)) {
     return missingNameReason(rename);
   }
-  return namesBeside(subject, contracts.origin).includes(name)
-    ? nameHadBeforeReason(rename)
-    : undefined;
+  return hadNameBefore(subject, name, contracts) ? nameHadBeforeReason(rename) : undefined;
 }
 
 type DataLossContracts = StatementContracts & {
@@ -1329,7 +1356,7 @@ function checkAnswers(
   const plansAgain = answers.some(
     (answer) => answer?.verb === 'rename' || answer?.verb === 'convert',
   );
-  const open = answers.indexOf(undefined);
+  const open = answers.findIndex((answer) => answer === undefined);
   if (open !== -1 && !plansAgain) {
     throw new InternalError(
       `answerQuestions left "${questions[open]?.headline}" open, which it may do only beside a rename or convert answer that plans again.`,
