@@ -321,6 +321,21 @@ describe('joins', () => {
     );
   });
 
+  it('a column name three joined tables have is not a top-level field', () => {
+    const d = db();
+    const joined = d.public.users
+      .innerJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+      .innerJoin(d.public.profiles, (f, fns) => fns.eq(f.users.id, f.profiles.user_id));
+    expect(() => joined.select('id' as never)).toThrow(
+      expect.objectContaining({ code: 'ORM.COLUMN_UNKNOWN' }),
+    );
+    const ast = getAst(joined.select((f) => ({ id: f.profiles.id, email: f.email })));
+    expect(ast.projection.map((item) => item.expr)).toEqual([
+      ColumnRef.of('profiles', 'id'),
+      ColumnRef.of('users', 'email'),
+    ]);
+  });
+
   it('top-level fields from the nullable side of an outer join stay qualified', () => {
     const d = db();
     const ast = getAst(
@@ -545,6 +560,23 @@ describe('lateral joins', () => {
     expect(ast.joins![0]!.lateral).toBe(true);
     expect(ast.joins![0]!.source).toBeInstanceOf(DerivedTableSource);
     expect((ast.joins![0]!.source as DerivedTableSource).alias).toBe('recent_posts');
+  });
+
+  it('inside a lateral subquery, a name the parent tables also have needs its table', () => {
+    const d = db();
+    const topLevelNames: string[][] = [];
+    d.public.users
+      .innerJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+      .lateralJoin('profile', (lateral) =>
+        lateral
+          .from(d.public.profiles)
+          .select('bio')
+          .where((f, fns) => {
+            topLevelNames.push(['id', 'bio'].filter((name) => Reflect.get(f, name) !== undefined));
+            return fns.eq(f.profiles.user_id, f.users.id);
+          }),
+      );
+    expect(topLevelNames).toEqual([['bio']]);
   });
 
   it('lateralJoin throws without capability', () => {

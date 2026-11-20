@@ -19,6 +19,19 @@ test('conflicting column names are not available at top level', () => {
     .build();
 });
 
+test('a column name three joined tables have is not available at top level', () => {
+  const joined = db.public.users
+    .innerJoin(db.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+    .innerJoin(db.public.profiles, (f, fns) => fns.eq(f.users.id, f.profiles.user_id));
+
+  // @ts-expect-error users, posts and profiles all have id; name the table
+  joined.select((f) => ({ id: f.id }));
+
+  expectTypeOf(joined.select((f) => ({ id: f.profiles.id, bio: f.bio })).build()).toEqualTypeOf<
+    SqlQueryPlan<{ id: number; bio: string }>
+  >();
+});
+
 test('outer left join makes right side nullable', () => {
   const left = db.public.users
     .outerLeftJoin(db.public.posts, (f, fns) => fns.eq(f.users.id, f.user_id))
