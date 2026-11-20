@@ -830,7 +830,7 @@ importers:
         version: 0.25.2(typescript@5.9.3)(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.0))
       '@prisma/prisma7':
         specifier: 7.10.0
-        version: 7.10.0(magicast@0.5.4)(typescript@5.9.3)
+        version: 7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.24
         version: link:../../test/utils
@@ -1622,16 +1622,6 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
-
-  packages/1-framework/3-tooling/cli/test/fixture-app/test-orm-init-prisma7-output-1795150616646-4p3d54bmdhj:
-    dependencies:
-      '@prisma/client':
-        specifier: ^7.4.0
-        version: 7.10.1(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3))(typescript@5.9.3)
-    devDependencies:
-      prisma:
-        specifier: ^7.4.0
-        version: 7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3)
 
   packages/1-framework/3-tooling/config-loader:
     dependencies:
@@ -4946,8 +4936,8 @@ importers:
         specifier: ^2.2.9
         version: 2.2.10
       pg-connection-string:
-        specifier: ^2.14.1
-        version: 2.14.1
+        specifier: 2.14.0
+        version: 2.14.0
       pg-cursor:
         specifier: ^2.22.1
         version: 2.22.1(pg@8.22.0)
@@ -6409,8 +6399,8 @@ importers:
         specifier: ^8.22.0
         version: 8.22.0
       pg-connection-string:
-        specifier: ^2.14.1
-        version: 2.14.1
+        specifier: 2.14.0
+        version: 2.14.0
       pg-cursor:
         specifier: ^2.22.1
         version: 2.22.1(pg@8.22.0)
@@ -12136,9 +12126,6 @@ packages:
   pg-connection-string@2.14.0:
     resolution: {integrity: sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==}
 
-  pg-connection-string@2.14.1:
-    resolution: {integrity: sha512-qR3kGNPBLpCNtz0evbKA0Y/MRFXwSSdT+pTJvYp/bXTcReZbvX1kzF0IyTc1QnxqF7AZbOeBhNL8R5mYQZV/MA==}
-
   pg-cursor@2.22.1:
     resolution: {integrity: sha512-X10ldv3wwBONQkOSwgWEbaEITMGLd92V2Zd+xsFPhDt3nhhU3hpAT08SERBChnIFmomczLax6lKXLJrHPPXfxA==}
     peerDependencies:
@@ -14819,13 +14806,6 @@ snapshots:
 
   '@prisma/client-runtime-utils@7.10.1': {}
 
-  '@prisma/client@7.10.1(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3))(typescript@5.9.3)':
-    dependencies:
-      '@prisma/client-runtime-utils': 7.10.1
-    optionalDependencies:
-      prisma: 7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3)
-      typescript: 5.9.3
-
   '@prisma/client@7.10.1(prisma@test+prisma-bin)(typescript@5.9.3)':
     dependencies:
       '@prisma/client-runtime-utils': 7.10.1
@@ -14943,7 +14923,7 @@ snapshots:
     dependencies:
       openapi-fetch: 0.14.0
 
-  '@prisma/prisma7@7.10.0(magicast@0.5.4)(typescript@5.9.3)':
+  '@prisma/prisma7@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3)':
     dependencies:
       prisma: 7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3)
     transitivePeerDependencies:
@@ -17785,8 +17765,6 @@ snapshots:
     optional: true
 
   pg-connection-string@2.14.0: {}
-
-  pg-connection-string@2.14.1: {}
 
   pg-cursor@2.22.1(pg@8.22.0):
     dependencies:
