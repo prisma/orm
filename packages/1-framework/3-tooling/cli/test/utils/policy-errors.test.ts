@@ -225,7 +225,7 @@ describe('errorDataProtectionForbids', () => {
     'To do it anyway, whoever owns that database must first change the data protection policy production declares.';
   const lossForbidden =
     "This database's data protection policy forbids losing data, so these operations cannot run on it.";
-  const keepData = `${lossForbidden} If another database has already applied this migration, keep it as it is: this database cannot run it until its data protection policy changes. If none has, and a model or field was only renamed or its type changed, delete it and plan it again with --rename or --convert; otherwise remove the operation from the migration. ${markerCloses}`;
+  const keepData = `${lossForbidden} If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise remove the operation from the migration. ${markerCloses}`;
   const keepAccess = `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. Keep the contract's access rules as they are. ${refCloses}`;
   const keepDataPlanned = `${lossForbidden} If a model or field was only renamed, state the rename with --rename <old>:<new>. Otherwise keep it in the contract. ${markerCloses}`;
 
@@ -298,9 +298,36 @@ describe('errorDataProtectionForbids', () => {
         invocation,
       }).toEnvelope().fix,
     ).toBe(
-      `This database's data protection policy forbids changing who can read or write data, so these operations cannot run on it. If another database has already applied this migration, keep it as it is: this database cannot run it until its data protection policy changes. If none has, remove the operation from the migration. ${markerCloses}`,
+      `This database's data protection policy forbids changing who can read or write data, so these operations cannot run on it. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, remove the operation from the migration. ${markerCloses}`,
     );
   });
+
+  it.each([
+    [
+      'dataLoss',
+      dropColumn,
+      `production declares a data protection policy that forbids losing data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise remove the operation from the migration. ${refCloses}`,
+    ],
+    [
+      'accessWidening',
+      disableRls,
+      `production declares a data protection policy that forbids changing who can read or write data, so these operations cannot run on the database it describes. If another database has already applied a migration listed here, keep it as it is. For a migration no database has applied, remove the operation from the migration. ${refCloses}`,
+    ],
+  ] as const)(
+    'tells a db migrate user what to do when a ref forbids %s',
+    (setting, operation, fix) => {
+      expect(
+        errorDataProtectionForbids({
+          spaceId: 'app',
+          command: 'db migrate',
+          refusals: [
+            { setting, source: { kind: 'ref', refName: 'production' }, operations: [operation] },
+          ],
+          invocation,
+        }).toEnvelope().fix,
+      ).toBe(fix);
+    },
+  );
 
   it('reports both settings in one error when a run breaks both', () => {
     expect(

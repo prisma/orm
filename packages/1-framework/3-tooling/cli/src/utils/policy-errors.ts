@@ -142,7 +142,7 @@ function refusingPolicy(source: PolicySource, forbids: string): string {
 }
 
 const KEEP_APPLIED_MIGRATION =
-  'If another database has already applied this migration, keep it as it is: this database cannot run it until its data protection policy changes.';
+  'If another database has already applied a migration listed here, keep it as it is.';
 
 function doItAnyway(source: PolicySource): string {
   return source.kind === 'ref'
@@ -161,7 +161,10 @@ function keepProtected(
     return [
       refusingPolicy(refusal.source, FORBIDDEN_CHANGE.accessWidening),
       ...(migrated
-        ? [KEEP_APPLIED_MIGRATION, 'If none has, remove the operation from the migration.']
+        ? [
+            KEEP_APPLIED_MIGRATION,
+            'For a migration no database has applied, remove the operation from the migration.',
+          ]
         : ["Keep the contract's access rules as they are."]),
       doItAnyway(refusal.source),
     ].join(' ');
@@ -172,7 +175,7 @@ function keepProtected(
     ...(migrated
       ? [
           KEEP_APPLIED_MIGRATION,
-          'If none has, and a model or field was only renamed or its type changed, delete it and plan it again with --rename or --convert; otherwise remove the operation from the migration.',
+          'For a migration no database has applied: if a model or field was only renamed or its type changed, delete the migration and plan it again with --rename or --convert; otherwise remove the operation from the migration.',
         ]
       : [
           'If a model or field was only renamed, state the rename with --rename <old>:<new>.',
