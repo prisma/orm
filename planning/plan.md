@@ -20,11 +20,11 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | --- | --- | --- | --- | --- |
 | Foundations and breaking changes | 8 of 8 (100%) | `██████████` | 0 | 0 |
 | Upgrade path from Prisma 7 | 7 of 7 (100%) | `██████████` | 0 | 0 |
-| Editor and tools | 3 of 5 (60%) | `██████░░░░` | 1 | 1 |
+| Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
 | Query features | 9 of 11 (82%) | `████████░░` | 2 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
 | Work found along the way | 4 of 8 (50%) | `█████░░░░░` | 1 | 3 |
-| **All streams** | **33 of 44 (75%)** | `████████░░` | **6** | **5** |
+| **All streams** | **33 of 45 (73%)** | `███████░░░` | **6** | **6** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -65,12 +65,12 @@ Test: an existing Prisma 7 database can be signed by Prisma 8.
 
 ## Stream 3: Editor and tools
 
-**GA readiness:** 3 of 5 Must projects done (60%). 1 in progress, 1 not started.
+**GA readiness:** 3 of 6 Must projects done (50%). 1 in progress, 2 not started.
 
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | ✅ 5/5 | Emulator controls in the `prisma` CLI: start, stop, list, reset | Must, urgent | Will | Done 2026-10-21. `prisma dev --detach`, `prisma dev stop`, `prisma dev url` and `prisma emulator list` ship in `prisma@8.0.0-rc.24`, and the docs slice merged. Reset was not built | Decide whether reset is still needed |
-| 1b | ⏳ | A Prisma Studio command in the `prisma` CLI | Aim | Serhii | Not started, no ticket. Moved from Must to Aim on 2026-11-20: before GA if possible, small. Prisma 8's `prisma` has no Studio command; Prisma 7's `prisma studio` has no replacement. Until it has, a docs PR in review tells Prisma 8 users to run Studio with `npx prisma@prev studio` |  |
+| 1b | ⏳ | A Prisma Studio command in the `prisma` CLI | Must | Serhii | Not started, no ticket. Small, by Will's estimate. Prisma 8's `prisma` has no Studio command; Prisma 7's `prisma studio` has no replacement. Until it has, a docs PR in review tells Prisma 8 users to run Studio with `npx prisma@prev studio` |  |
 | 2 | 🔄 2/4 | VS Code extension: formatter without the CLI, go-to-definition, multi-file PSL, emulator controls | Must | Serhii | Go-to-definition and multi-file PSL done. Rename merged. File watching approved, not merged; a fix to removing a file watcher merged 2026-10-20. Formatter without the CLI unverified. Emulator controls wait on row 1 | Merge the file-watching PR. Verify the formatter works without the CLI |
 | 3 | ⏳ | Make the extension's handling of local and remote Prisma Postgres match the CLI and its emulators | Must | Serhii | Not started |  |
 | 4 | ✅ 1/1 | Multi-file PSL | Must | Serhii | Done 2026-09-30 | |

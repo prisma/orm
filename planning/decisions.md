@@ -90,7 +90,7 @@ Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgen
 
 ## Changes of 2026-11-20
 
-- The Prisma Studio command (stream 3, row 1b) moves from Must to Aim. It can ship after GA, but before is preferred, and Will expects it to be a small piece of work (Will, 2026-11-20). Until it ships, the docs tell Prisma 8 users to run `npx prisma@prev studio`.
+- The Prisma Studio command (stream 3, row 1b) stays Must, no longer marked urgent. Will expects it to be a small piece of work (Will, 2026-11-20). Until it ships, the docs tell Prisma 8 users to run `npx prisma@prev studio`.
 
 ## Changes of 2026-11-18
 
