@@ -1,3 +1,5 @@
+import { describe, expect, test, vi } from 'vitest'
+
 import { computeEngineSideOmissions, computeEngineSideSelection, getComputedFields } from './resultUtils'
 
 describe('getAllComputedFields', () => {
@@ -9,7 +11,7 @@ describe('getAllComputedFields', () => {
           user: {
             fullName: {
               needs: { firstName: true, lastName: true },
-              compute: jest.fn(),
+              compute: vi.fn(),
             },
           },
         },
@@ -30,7 +32,7 @@ describe('getAllComputedFields', () => {
           user: {
             fullName: {
               needs: { firstName: true, lastName: false },
-              compute: jest.fn(),
+              compute: vi.fn(),
             },
           },
         },
@@ -49,7 +51,7 @@ describe('getAllComputedFields', () => {
           user: {
             fullName: {
               needs: { firstName: true, lastName: true },
-              compute: jest.fn(),
+              compute: vi.fn(),
             },
           },
         },
@@ -67,7 +69,7 @@ describe('getAllComputedFields', () => {
         result: {
           $allModels: {
             fullName: {
-              compute: jest.fn(),
+              compute: vi.fn(),
             },
           },
         },
@@ -84,12 +86,12 @@ describe('getAllComputedFields', () => {
       {
         result: {
           $allModels: {
-            fullName: { needs: { firstName: true, lastName: true }, compute: jest.fn() },
+            fullName: { needs: { firstName: true, lastName: true }, compute: vi.fn() },
           },
 
           user: {
             fullName: {
-              compute: jest.fn(),
+              compute: vi.fn(),
             },
           },
         },
@@ -105,7 +107,7 @@ describe('getAllComputedFields', () => {
   test('in case of previous field exists, new one wins', () => {
     const result = getComputedFields(
       {
-        fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: jest.fn() },
+        fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: vi.fn() },
       },
 
       {
@@ -113,7 +115,7 @@ describe('getAllComputedFields', () => {
           user: {
             fullName: {
               needs: { middleName: true, patronymic: true },
-              compute: jest.fn(),
+              compute: vi.fn(),
             },
           },
         },
@@ -129,7 +131,7 @@ describe('getAllComputedFields', () => {
   test('resolves dependencies between computed fields', () => {
     const result = getComputedFields(
       {
-        fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: jest.fn() },
+        fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: vi.fn() },
       },
 
       {
@@ -137,7 +139,7 @@ describe('getAllComputedFields', () => {
           user: {
             nameAndAge: {
               needs: { fullName: true, age: true },
-              compute: jest.fn(),
+              compute: vi.fn(),
             },
           },
         },
@@ -152,11 +154,11 @@ describe('getAllComputedFields', () => {
   })
 
   test('composes computed fields from two extensions targeting the same field and forwards the active model name to both computes', () => {
-    const previousCompute = jest.fn((model: any, modelName: string) => {
+    const previousCompute = vi.fn((model: any, modelName: string) => {
       expect(modelName).toBe('User')
       return `${model.firstName} ${model.lastName}`
     })
-    const nextCompute = jest.fn((model: any, modelName: string) => {
+    const nextCompute = vi.fn((model: any, modelName: string) => {
       expect(modelName).toBe('User')
       return model.fullName.toUpperCase()
     })
@@ -191,7 +193,7 @@ describe('getAllComputedFields', () => {
           user: {
             firstName: {
               needs: { firstName: true },
-              compute: jest.fn(),
+              compute: vi.fn(),
             },
           },
         },
@@ -208,7 +210,7 @@ describe('getAllComputedFields', () => {
 describe('computeEngineSideSelection', () => {
   test('adds all dependencies to the selection', () => {
     const fields = {
-      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: jest.fn() },
+      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: vi.fn() },
     }
     const selection = { fullName: true, age: true }
 
@@ -222,7 +224,7 @@ describe('computeEngineSideSelection', () => {
 
   test('works correctly with shadowing dependencies', () => {
     const fields = {
-      fullName: { name: 'firstName', needs: ['firstName'], compute: jest.fn() },
+      fullName: { name: 'firstName', needs: ['firstName'], compute: vi.fn() },
     }
 
     const selection = { firstName: true }
@@ -234,7 +236,7 @@ describe('computeEngineSideSelection', () => {
 
   test('does not add dependencies if computed field is not selected', () => {
     const fields = {
-      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: jest.fn() },
+      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: vi.fn() },
     }
     const selection = { age: true }
 
@@ -245,7 +247,7 @@ describe('computeEngineSideSelection', () => {
 
   test('does not add dependencies if computed fields selection is explicitly false', () => {
     const fields = {
-      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: jest.fn() },
+      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: vi.fn() },
     }
     const selection = { age: true, fullName: false }
 
@@ -259,7 +261,7 @@ describe('computeEngineSideSelection', () => {
 describe('computeEngineSideOmissions', () => {
   test('removes computed field dependencies from an exclusion', () => {
     const fields = {
-      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: jest.fn() },
+      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: vi.fn() },
     }
     const omission = { firstName: true, age: true }
 
@@ -270,7 +272,7 @@ describe('computeEngineSideOmissions', () => {
 
   test('does not remove dependencies if computed field is excluded as well', () => {
     const fields = {
-      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: jest.fn() },
+      fullName: { name: 'fullName', needs: ['firstName', 'lastName'], compute: vi.fn() },
     }
     const omission = { fullName: true, firstName: true, lastName: true }
 

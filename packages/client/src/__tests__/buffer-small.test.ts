@@ -1,17 +1,18 @@
-/* eslint-disable no-global-assign */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-loss-of-precision */
 
-import assert from 'assert'
-import { Buffer as NodeBuffer } from 'buffer'
+import assert from 'node:assert'
+import { Buffer as NodeBuffer } from 'node:buffer'
+
+import { describe as describeVi, expect, test as testVi } from 'vitest'
 
 import { Buffer } from '../../../../helpers/compile/plugins/fill-plugin/fillers/buffer-small'
 
-const describeIf = (condition: boolean) => (condition ? describe : describe.skip)
-const testIf = (condition: boolean) => (condition ? test : test.skip)
+const describeIf = (condition: boolean) => (condition ? describeVi : describeVi.skip)
+const testIf = (condition: boolean) => (condition ? testVi : testVi.skip)
 
-describe = describeIf(!process.version.startsWith('v16.'))
-test = testIf(!process.version.startsWith('v16.'))
+const describe = describeIf(!process.version.startsWith('v16.'))
+const test = testIf(!process.version.startsWith('v16.'))
 
 describe('tests that Buffer and NodeBuffer are compatible', () => {
   test('Buffer can be created from NodeBuffer', () => {
@@ -1959,6 +1960,7 @@ test('Buffer concat (node.js repository test)', () => {
   const zero = [] as Buffer[]
   const one = [Buffer.from('asdf')]
   const long = [] as Buffer[]
+  // @ts-expect-error
   for (let i = 0; i < 10; i++) long.push(Buffer.from('asdf'))
 
   const flatZero = Buffer.concat(zero)
@@ -3486,7 +3488,7 @@ test('Buffer read double (node.js repository test)', () => {
   buffer[0] = 1
   buffer[6] = 0
   buffer[7] = 0
-  // eslint-disable-next-line no-loss-of-precision
+
   assert.strictEqual(buffer.readDoubleBE(0), 7.291122019556398e-304)
   assert.strictEqual(buffer.readDoubleLE(0), 5e-324)
 
@@ -4130,7 +4132,6 @@ test('Buffer toJSON (node.js repository test)', () => {
 
     assert.strictEqual(string, '{"type":"Buffer","data":[116,101,115,116]}')
 
-    // eslint-disable-next-line no-inner-declarations
     function receiver(key, value) {
       return value && value.type === 'Buffer' ? Buffer.from(value.data) : value
     }
@@ -6036,7 +6037,6 @@ test('Buffer alloc (node.js repository test)', () => {
   }
 
   // Regression test to verify that an empty ArrayBuffer does not throw.
-  // @ts-expect-error
   Buffer.from(new ArrayBuffer())
 
   // ❌

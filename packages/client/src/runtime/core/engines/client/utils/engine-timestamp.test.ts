@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { convertEngineTimestamp, dateFromEngineTimestamp } from './engine-timestamp'
 
 test('convertEngineTimestamp', () => {

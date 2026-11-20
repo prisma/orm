@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { SourceFileSlice } from './SourceFileSlice'
 
 test('line numbers', () => {
