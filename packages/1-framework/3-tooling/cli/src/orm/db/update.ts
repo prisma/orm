@@ -283,7 +283,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         'Before it applies an operation that would lose data, it asks what the\n' +
         'operation means: --rename keeps the data under a new name, --delete lets it\n' +
         "go. Before it changes who can read or write a model's data, it asks for\n" +
-        '--allow. Where nobody can answer, it refuses, says what the change would\n' +
+        '--allow. When it cannot ask, it refuses, says what the change would\n' +
         'do, and lists the flags that settle it. Use --dry-run to see the operations\n' +
         'and what an apply would stop for without applying anything.',
       examples: [

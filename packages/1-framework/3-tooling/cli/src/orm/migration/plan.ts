@@ -293,7 +293,7 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
         'On an empty migrations directory a baseline package is derived from the\n' +
         '`db` ref first. A plan that would lose data is written only once you say\n' +
         'what each such operation means: --rename to keep the data under a new\n' +
-        'name, or --delete to let it go. Where nobody can answer, the command\n' +
+        'name, or --delete to let it go. When it cannot ask, the command\n' +
         'refuses, says what would be lost, and lists the flags that settle it.\n' +
         'Offline — does not consult the database.',
       examples: [
