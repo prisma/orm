@@ -154,13 +154,16 @@ describe('the read-back rule, on a contract with returning', () => {
 
   it('adds a Find that reads a node that does not write as it is', () => {
     const graph = newGraph();
-    const find = addWithState(graph, findUsers([nameIsAda], ['id']));
+    const find = addWithState(
+      graph,
+      new Find(findUsers([nameIsAda], ['id']).ast.withDistinctOn([ColumnRef.of('users', 'id')])),
+    );
 
     addWithState(graph, findUsers([], ['id', 'name']), { filter: [new FilterData(find, sameId)] });
 
     expect(printGraph(graph)).toBe(
       [
-        "n1 Find users where name = 'Ada'",
+        "n1 Find users where name = 'Ada' distinct on (id)",
         'n2 Find users <- FilterData n1 (id->id)',
         'result: none',
       ].join('\n'),
@@ -267,8 +270,8 @@ describe('the read-back rule, on a contract with returning', () => {
   });
 });
 
-describe('the rules, on a contract without returning', () => {
-  it('do not run: the graph keeps every node as it is added', () => {
+describe('the rules that need returning, on a contract without returning', () => {
+  it('do not run: the graph keeps every write and read-back as it is added', () => {
     const graph = newGraphWithoutReturning();
     const found = findUsers([nameIsAda]);
     const find = addWithState(graph, found);

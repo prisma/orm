@@ -137,7 +137,7 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
           .update({
             tags: (t) => t.connect({ id: TAG_RUST }),
           });
-        expectPerRelationStatements(runtime, strategy, 5);
+        expectPerRelationStatements(runtime, strategy, 4);
 
         expect(updated).toEqual({
           id: 1,
@@ -172,7 +172,7 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
           .update({
             tags: (t) => t.connect({ id: TAG_RUST }),
           });
-        expectPerRelationStatements(runtime, strategy, 5);
+        expectPerRelationStatements(runtime, strategy, 4);
 
         expect(updated).toEqual({ id: 1, name: 'Alice', tags: [{ id: TAG_RUST, name: 'Rust' }] });
 
@@ -308,7 +308,7 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
           .update({
             tags: (t) => t.disconnect([{ id: TAG_RUST }]),
           });
-        expectPerRelationStatements(runtime, strategy, 5);
+        expectPerRelationStatements(runtime, strategy, 4);
 
         expect(updated).toEqual({
           id: 1,
@@ -344,7 +344,7 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
           .update({
             tags: (t) => t.disconnect([{ id: TAG_RUST }]),
           });
-        expectPerRelationStatements(runtime, strategy, 5);
+        expectPerRelationStatements(runtime, strategy, 4);
 
         // Full User shape + tags: [] (junction row deleted, no .select() on parent).
         expect(updated).toEqual({
@@ -456,7 +456,7 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
                 { id: TAG_TS, name: 'TypeScript' },
               ]),
           });
-        expectPerRelationStatements(runtime, strategy, 7);
+        expectPerRelationStatements(runtime, strategy, 6);
 
         expect(updated).toEqual({
           id: 1,
@@ -673,7 +673,7 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
           .update({
             roles: (r) => r.disconnect([{ id: ROLE_ADMIN }]),
           });
-        expectPerRelationStatements(runtime, strategy, 5);
+        expectPerRelationStatements(runtime, strategy, 4);
 
         expect(updated).toEqual({
           id: 1,
@@ -781,7 +781,7 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
                 .where((tag) => or(tag.name.eq('Rust'), tag.name.eq('Go')))
                 .updateAll({ name: 'Changed' }),
           });
-        expectPerRelationStatements(runtime, strategy, 4);
+        expectPerRelationStatements(runtime, strategy, 3);
 
         expect(updated).toEqual({
           id: 1,
@@ -818,7 +818,7 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
           .update({
             tags: (t) => t.where((tag) => or(tag.name.eq('Rust'), tag.name.eq('Go'))).deleteAll(),
           });
-        expectPerRelationStatements(runtime, strategy, 4);
+        expectPerRelationStatements(runtime, strategy, 3);
 
         expect(updated).toEqual({
           id: 1,
@@ -888,7 +888,7 @@ describe.each(includeStrategies)('integration/mn-nested-write (%s)', (strategy) 
               t.where({ name: 'Rust' }).updateAll({ name: 'Rust 2' }),
             ],
           });
-        expectPerRelationStatements(runtime, strategy, 6);
+        expectPerRelationStatements(runtime, strategy, 5);
 
         expect(updated).toEqual({
           id: 2,

@@ -121,7 +121,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
                 },
               ]),
           });
-        expectPerRelationStatements(runtime, strategy, 6);
+        expectPerRelationStatements(runtime, strategy, 5);
 
         expect(updated).toEqual({
           id: 1,
@@ -550,7 +550,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           .update({
             posts: (posts) => posts.where({ title: 'Draft' }).updateAll({ views: 100 }),
           });
-        expectPerRelationStatements(runtime, strategy, 4);
+        expectPerRelationStatements(runtime, strategy, 3);
 
         expect(updated).toEqual({
           id: 1,
@@ -587,7 +587,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           .update({
             posts: (posts) => posts.where({ title: 'Draft' }).deleteAll(),
           });
-        expectPerRelationStatements(runtime, strategy, 4);
+        expectPerRelationStatements(runtime, strategy, 3);
 
         expect(updated).toEqual({
           id: 1,
@@ -618,7 +618,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
             posts.select('id', 'title', 'views').orderBy((post) => post.id.asc()),
           )
           .update({ posts: (posts) => posts.updateAll({ views: 0 }) });
-        expectPerRelationStatements(runtime, strategy, 4);
+        expectPerRelationStatements(runtime, strategy, 3);
 
         expect(alice).toEqual({
           id: 1,
@@ -635,7 +635,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
           .select('id', 'name')
           .include('posts', (posts) => posts.select('id', 'title', 'views'))
           .update({ posts: (posts) => posts.deleteAll() });
-        expectPerRelationStatements(runtime, strategy, 4);
+        expectPerRelationStatements(runtime, strategy, 3);
 
         expect(bob).toEqual({ id: 2, name: 'Bob', posts: [] });
         expect(await postRows(runtime)).toEqual([
@@ -670,7 +670,7 @@ describe.each(includeStrategies)('integration/nested-mutations (%s)', (strategy)
               posts.where({ title: 'Kept' }).updateAll({ views: 9 }),
             ],
           });
-        expectPerRelationStatements(runtime, strategy, 8);
+        expectPerRelationStatements(runtime, strategy, 7);
 
         expect(updated).toEqual({
           id: 1,
