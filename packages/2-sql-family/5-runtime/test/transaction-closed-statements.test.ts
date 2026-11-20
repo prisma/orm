@@ -351,6 +351,7 @@ describe('the runtime first statement, held in middleware while its transaction 
     const readMarker = vi.fn(async () => ({ kind: 'absent' as const }));
     const setup = createSetup({ middleware: [held.middleware], readMarker });
     const connection = await setup.runtime.connection();
+    expect(readMarker).toHaveBeenCalledOnce();
     const transaction = await connection.transaction();
     const pending = settled(sends[send](transaction));
     await held.entered.promise;
@@ -359,7 +360,7 @@ describe('the runtime first statement, held in middleware while its transaction 
     held.resume.resolve();
 
     expect(await pending).toMatchObject(transactionClosed);
-    expect(readMarker).not.toHaveBeenCalled();
+    expect(readMarker).toHaveBeenCalledOnce();
     expect(sentSql(setup.driver)).toEqual([]);
     await connection.release();
   });
