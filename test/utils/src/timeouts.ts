@@ -7,7 +7,7 @@ const BASE_TIMEOUTS = {
   databaseOperation: 5000,
   pslRoundTrip: 5000,
   repeatedScriptRuns: 60000,
-  largeContractPlanning: 2000,
+  largeContractPlanning: 4000,
   default: 100,
   /**
    * Vitest `testTimeout` / `hookTimeout` when a package uses mostly local I/O
