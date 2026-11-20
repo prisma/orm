@@ -650,7 +650,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     };
   }
 
-  /** The activity route of a held connection that `owner` wraps: its statements run on `connection`, and its transactions begin there. The connection must come from {@link acquireRawConnection}, which checks the contract marker before anything is held. */
+  /** The activity route of a held connection that `owner` wraps: its statements run on `connection`, and its transactions begin there. A held connection must come from {@link acquireRawConnection}. */
   protected connectionRoute(
     connection: SqlConnection,
     owner: TransactionStartTarget,
@@ -694,7 +694,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
   }
 
-  /** The `activitySource` member of a held connection that `owner()` wraps. The connection must come from {@link acquireRawConnection}, which checks the contract marker before anything is held. */
+  /** The `activitySource` member of a held connection that `owner()` wraps. A held connection must come from {@link acquireRawConnection}. */
   protected connectionActivitySource(
     connection: SqlConnection,
     owner: () => TransactionStartTarget,
@@ -823,7 +823,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const endOperation = this.beginOperation(this.driver, options);
     let connection: SqlConnection;
     try {
-      // Nothing is held while the marker is read, so the read never waits for a connection its own caller holds.
       await this.ensureMarkerChecked();
       connection = await this.driver.acquireConnection();
     } finally {
@@ -1044,7 +1043,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.encodeDraftParams(draftWithMutations, codecCtx);
   }
 
-  /** Query rows against a caller-supplied queryable through the shared preparation pipeline. A queryable other than the driver must be a connection from {@link acquireRawConnection}, or a transaction on one, because that is where the contract marker is checked before anything is held. */
+  /** Query rows against a caller-supplied queryable through the shared preparation pipeline. A held connection must come from {@link acquireRawConnection}. */
   protected queryAgainstQueryable<Row>(
     plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
     queryable: SqlQueryable,
@@ -1087,7 +1086,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return new AsyncIterableResult(generator());
   }
 
-  /** Execute statistics against a caller-supplied queryable through the shared preparation pipeline. A queryable other than the driver must be a connection from {@link acquireRawConnection}, or a transaction on one, because that is where the contract marker is checked before anything is held. */
+  /** Execute statistics against a caller-supplied queryable through the shared preparation pipeline. A held connection must come from {@link acquireRawConnection}. */
   protected async executeStatisticsAgainstQueryable(
     plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
     queryable: SqlQueryable,
@@ -1222,7 +1221,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     >(prepared);
   }
 
-  /** Query prepared rows against a caller-supplied queryable through the full pipeline. A queryable other than the driver must be a connection from {@link acquireRawConnection}, or a transaction on one, because that is where the contract marker is checked before anything is held. */
+  /** Query prepared rows against a caller-supplied queryable through the full pipeline. A held connection must come from {@link acquireRawConnection}. */
   protected runPreparedQueryAgainstQueryable<P, Row>(
     ps: PreparedStatementImpl<P, Row>,
     userParams: unknown,
@@ -1325,7 +1324,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     );
   }
 
-  /** Execute a prepared statement's statistics against a caller-supplied queryable through the full pipeline. A queryable other than the driver must be a connection from {@link acquireRawConnection}, or a transaction on one, because that is where the contract marker is checked before anything is held. */
+  /** Execute a prepared statement's statistics against a caller-supplied queryable through the full pipeline. A held connection must come from {@link acquireRawConnection}. */
   protected async runPreparedExecuteAgainstQueryable<P>(
     ps: PreparedExecutionImpl<P>,
     userParams: unknown,

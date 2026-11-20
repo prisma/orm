@@ -298,10 +298,10 @@ describe.each(servers)('postgres() with poolOptions.max of 1, on $name', ({ star
           : await Promise.allSettled([readRows(db), insert()]).then(([r, t]) => [t, r] as const);
 
       expect(transaction).toEqual({ status: 'fulfilled', value: undefined });
-      expect(read).toMatchObject({ status: 'fulfilled' });
-      expect([[], [{ id: 1 }]]).toContainEqual(
-        read.status === 'fulfilled' ? read.value : read.reason,
-      );
+      expect(read).toEqual({
+        status: 'fulfilled',
+        value: expect.toBeOneOf([[], [{ id: 1 }]]),
+      });
       expect(await readRows(db)).toEqual([{ id: 1 }]);
     },
     timeouts.spinUpPpgDev,
