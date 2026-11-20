@@ -96,7 +96,7 @@
     "@types/lodash": "4.17.27",
     "@types/pg": "catalog:",
     "cli-journeys": "workspace:8.0.0-rc.24",
-    "commander": "^15.0.0",
+    "commander": "^15.1.0",
     "gray-matter": "catalog:",
     "lodash": "4.18.1",
     "mongodb": "catalog:",

@@ -29,11 +29,11 @@
   "devDependencies": {
     "@prisma/cli-engine": "0.10.0",
     "@prisma/compute-sdk": "^0.43.0",
-    "@prisma/management-api-sdk": "^1.76.0",
+    "@prisma/management-api-sdk": "^1.95.0",
     "@repo/prisma-bin": "workspace:8.0.0-rc.24",
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
-    "@types/bun": "^1.2.18",
+    "@types/bun": "^1.4.4",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "pathe": "^2.0.3",

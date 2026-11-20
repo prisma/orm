@@ -80,7 +80,7 @@
     "@internal/migration-tools": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
-    "@vitest/coverage-v8": "5.0.0-rc.2",
+    "@vitest/coverage-v8": "5.1.0",
     "arktype": "catalog:",
     "dependency-cruiser": "^18.7.2",
     "es-module-lexer": "3.0.4",
