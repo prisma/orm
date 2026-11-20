@@ -15,7 +15,9 @@ changes:
 prisma orm init --target @prisma/orm-sqlite --authoring psl
 ```
 
-`--target` is looked up among the short names (`postgres`, `mongodb` and their aliases). A value that is not one of them is taken as a package name: `init` installs that package and writes the project from the init contribution it exports. `--target postgres` and `--target mongodb` do what they did before. A value that is neither a short name nor a valid npm package name is refused with `CLI.INIT_INVALID_FLAG_VALUE` before anything changes, and the error's `meta.problems` says why the name is not valid.
+`--target` is looked up among the short names (`postgres`, `mongodb` and their aliases). A value that is not one of them is taken as a package name: `init` installs that package and writes the project from the init contribution it exports. `--target postgres` and `--target mongodb` do what they did before. A value that is neither a short name nor a valid npm package name is refused with `CLI.INIT_INVALID_FLAG_VALUE` before anything changes, and the error's `meta.problems` says why the name is not valid. Its `meta.allowed` still lists the short names only, and `meta.acceptsPackageName` is `true`.
+
+Any valid package name is installed. A value such as `--target sqlite` is not a short name, so it names the registry package `sqlite`, which is not a Prisma target package. When the package `init` installed has no `init` entrypoint, the error says the value was taken as a package name and how to remove what was installed.
 
 Without `--target`, the picker has one more entry, "Another target package", which asks for the package name.
 
