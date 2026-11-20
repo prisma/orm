@@ -174,13 +174,18 @@ export function newModels(
   return inSameNamespace.length > 0 ? inSameNamespace : added;
 }
 
-/** The members of the enum of an enum value that the contract adds and no rename names. */
+/** The members of the enum of an enum value that the contract adds and no rename into that enum names. */
 function newMembers(subject: EnumValueCoordinate, context: ContractsAndRenames): readonly string[] {
   const value = enumValueAfterRenames(subject, context.renames, context.destination) ?? subject;
   const originMembers = enumMembers(context.origin, subject);
   const renamedTo = new Set(
     context.renames.flatMap((statement) =>
-      statement.kind === 'rename' && statement.entity === 'enumValue' ? [statement.to.member] : [],
+      statement.kind === 'rename' &&
+      statement.entity === 'enumValue' &&
+      statement.to.namespaceId === value.namespaceId &&
+      statement.to.enum === value.enum
+        ? [statement.to.member]
+        : [],
     ),
   );
   return enumMembers(context.destination, value)
@@ -190,7 +195,7 @@ function newMembers(subject: EnumValueCoordinate, context: ContractsAndRenames):
     );
 }
 
-/** The fields of a value object field's value object that the contract adds and no rename names. */
+/** The fields of a value object field's value object that the contract adds and no rename into that value object names. */
 export function newValueObjectFields(
   subject: ValueObjectFieldCoordinate,
   context: ContractsAndRenames,
@@ -200,7 +205,10 @@ export function newValueObjectFields(
   const originFields = valueObjectFields(context.origin, subject) ?? [];
   const renamedTo = new Set(
     context.renames.flatMap((statement) =>
-      statement.kind === 'rename' && statement.entity === 'valueObjectField'
+      statement.kind === 'rename' &&
+      statement.entity === 'valueObjectField' &&
+      statement.to.namespaceId === field.namespaceId &&
+      statement.to.valueObject === field.valueObject
         ? [statement.to.field]
         : [],
     ),
