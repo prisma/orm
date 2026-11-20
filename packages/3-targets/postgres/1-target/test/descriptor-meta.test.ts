@@ -21,8 +21,8 @@ describe('postgresTargetDescriptorMeta', () => {
     );
   });
 
-  it('declares, on the control and runtime target, that every session prints dates in DateStyle ISO and money under lc_monetary C, which its codecs read', () => {
-    const settings = { DateStyle: 'ISO', lc_monetary: 'C' };
+  it('declares, on the control and runtime target, only that every session prints dates in DateStyle ISO, which its codecs read', () => {
+    const settings = { DateStyle: 'ISO' };
     expect([
       postgresTargetDescriptorMeta.sessionSettings,
       postgresRuntimeTargetDescriptor.sessionSettings,

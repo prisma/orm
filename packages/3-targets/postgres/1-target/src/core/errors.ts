@@ -151,14 +151,21 @@ export function errorDateStyleNotIso(codecId: string, received: string): Structu
   );
 }
 
-/** A money codec read text PostgreSQL printed under an `lc_monetary` other than C, which no codec reads. */
+/** Money text whose last digits are a two-digit fraction, which every locale that stores money in cents prints. */
+const CENTS_FORM = /[.,]\d{2}\D*$/;
+
+/** A money codec read text that a locale other than C printed, because the database or role sets that `lc_monetary`; the driver does not set it. */
 export function errorLcMonetaryNotC(codecId: string, received: string): StructuredError {
+  const fix =
+    "Set lc_monetary to C for the role or the database: ALTER ROLE <role> SET lc_monetary = 'C', or ALTER DATABASE <database> SET lc_monetary = 'C'. This applies to server connections opened afterwards; a connection pooler's existing server connections keep the old value until they are replaced. On a direct connection, not through a pooler, you can instead add options=-c%20lc_monetary%3DC to the connection URL.";
+  const scaledRowsWarning =
+    'Warning: this locale stores money in whole units or in thousandths, so money values Prisma wrote while it was in effect are stored in its units (1234.56 is stored as 1235 under ja_JP). After lc_monetary is changed to C, those rows read back as wrong amounts, with no error. Check or correct the rows written since you upgraded Prisma before you change the setting.';
   return postgresError(
     'RUNTIME.LC_MONETARY_NOT_C',
-    `Codec '${codecId}' read ${JSON.stringify(received)}, which PostgreSQL prints only when the connection's lc_monetary is not C: the driver could not ensure the lc_monetary=C the PostgreSQL target requires. Prisma reads money only as PostgreSQL prints it under lc_monetary C, as in $1,234.56 and -$1,234.56.`,
+    `Codec '${codecId}' read ${JSON.stringify(received)}, which is money as a locale other than C prints it. Prisma reads money only in the form the C locale prints, as in $1,234.56 and -$1,234.56.`,
     {
-      why: "PostgreSQL prints a money value in the lc_monetary locale of the connection, with that locale's currency symbol, separators and sign. The PostgreSQL driver ensures lc_monetary=C on every connection it uses: it starts each connection it opens with it, and sets it on a connection the application supplies before first use. A statement that sets lc_monetary on a connection undoes that, and so does a connection pooler between Prisma and PostgreSQL that drops the startup option or runs each statement on another server connection. A write that returns its row, such as create(), gets the row from the same statement, and Prisma decodes it only after PostgreSQL has run the statement: a single statement outside a transaction is already committed when this error is raised, and a transaction that ends with this error is rolled back.",
-      fix: "Do not change lc_monetary on a connection Prisma uses. Behind a connection pooler, set lc_monetary on the role or database (ALTER ROLE <role> SET lc_monetary = 'C'), so every server connection holds it.",
+      why: "PostgreSQL prints a money value in the lc_monetary locale of the connection, with that locale's currency symbol, separators and sign. The PostgreSQL driver does not set lc_monetary, so the connection has the value the database or role sets, and here it prints another locale's form. A write that returns its row, such as create(), gets the row from the same statement, and Prisma decodes it only after PostgreSQL has run the statement: a single statement outside a transaction is already committed when this error is raised, and a transaction that ends with this error is rolled back.",
+      fix: CENTS_FORM.test(received) ? fix : `${fix} ${scaledRowsWarning}`,
       meta: { codecId, received: received.slice(0, 100) },
     },
   );

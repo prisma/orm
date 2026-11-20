@@ -1234,7 +1234,7 @@ export class PgMoneyCodec extends CodecImpl<
 }
 
 /**
- * A `money` column. The application value is decimal text with two fraction digits, as `pg/numeric@1` gives a decimal: `"12.50"`, `"-1234.56"`. PostgreSQL prints money in the session's `lc_monetary`, which the PostgreSQL target sets to C on every connection, so a row and an included row both read `$1,234.56`.
+ * A `money` column. The application value is decimal text with two fraction digits, as `pg/numeric@1` gives a decimal: `"12.50"`, `"-1234.56"`. PostgreSQL prints money in the session's `lc_monetary`, which the database or role sets and the driver does not; the codec reads only the form the C locale prints, `$1,234.56`, and refuses any other.
  */
 export class PgMoneyDescriptor extends PostgresCodecDescriptor<void> {
   override readonly jsonType = 'string' as const;
