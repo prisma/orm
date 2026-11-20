@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { envExampleContent, envFileContent } from '../../../../src/commands/init/templates/env';
+import { envExampleContent } from '../../../../src/commands/init/templates/env';
 import {
   defaultTsConfig,
   mergeTsConfig,
@@ -201,57 +201,11 @@ describe('parseTsConfigText', () => {
 // ---------------------------------------------------------------------------
 
 describe('envExampleContent', () => {
-  it('writes a postgresql:// placeholder for the postgres target', () => {
-    const md = envExampleContent('postgres');
-    expect(md).toContain('DATABASE_URL=');
-    expect(md).toContain('postgresql://');
-  });
-
-  it('writes a mongodb:// placeholder with credentials and a database segment for the mongo target', () => {
-    const md = envExampleContent('mongo');
-    expect(md).toContain('mongodb://');
-    expect(md).toContain('DATABASE_URL="mongodb://user:password@localhost:27017/mydb"');
-  });
-
-  it('documents replica-set requirements without baking query params into the default URL', () => {
-    const md = envExampleContent('mongo');
-    expect(md).toMatch(/replica set/i);
-    expect(md).toMatch(/standalone local mongod/i);
-  });
-
-  it('documents the minimum supported server version', () => {
-    expect(envExampleContent('postgres')).toMatch(/Requires PostgreSQL >= \d/);
-    expect(envExampleContent('mongo')).toMatch(/Requires MongoDB >= \d/);
-  });
+  const body = '# Connection string.\n\nDATABASE_URL="db://localhost/mydb"\n';
 
   it('explains the copy-to-.env workflow (so first-run users know what to do)', () => {
-    expect(envExampleContent('postgres')).toMatch(/Copy this file to `\.env`/i);
-  });
-});
-
-describe('envFileContent', () => {
-  it('omits the example-only "Copy this file to `.env`…" intro', () => {
-    // The real `.env` is the destination of that copy, so the line
-    // would lie if it ended up in the scaffolded `.env` itself.
-    for (const target of ['postgres', 'mongo'] as const) {
-      expect(envFileContent(target)).not.toMatch(/Copy this file to/i);
-    }
-  });
-
-  it('keeps the same placeholder body as the example so a single edit boots the project', () => {
-    for (const target of ['postgres', 'mongo'] as const) {
-      const example = envExampleContent(target);
-      const real = envFileContent(target);
-      expect(real).toContain('DATABASE_URL=');
-      expect(real).toMatch(/Requires (PostgreSQL|MongoDB) >= /);
-      // The example file's body trails the intro, so the real file
-      // matches the suffix once the intro is removed.
-      expect(example).toContain(real.trim());
-    }
-  });
-
-  it('writes a target-specific connection-string placeholder', () => {
-    expect(envFileContent('postgres')).toContain('postgresql://');
-    expect(envFileContent('mongo')).toContain('mongodb://user:password@localhost:27017/mydb');
+    expect(envExampleContent(body)).toBe(
+      `# Copy this file to \`.env\` and replace the placeholder with your real connection string.\n${body}`,
+    );
   });
 });

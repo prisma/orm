@@ -15,7 +15,7 @@ describe('defineConfig', () => {
     id: 'sql',
     generateStorageType: () => '{}',
     generateModelStorageType: () => '{}',
-    getFamilyImports: () => [] as string[],
+    getFamilyImports: () => [],
     getFamilyTypeAliases: () => '',
     getTypeMapsExpression: () => 'never',
     getContractWrapper: (base: string, tm: string) =>
@@ -34,6 +34,7 @@ describe('defineConfig', () => {
         markerLocation: 'prisma_contract.marker',
         deserializeContract: (contract: unknown) => contract as Contract,
         storageNameOf: (operation) => operation.id,
+        accessChangesOf: () => [],
         verify: async () => ({
           ok: true,
           summary: 'test',

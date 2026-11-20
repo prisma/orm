@@ -1,6 +1,6 @@
 # ADR 316 — PostgreSQL scalars get convenience types
 
-**Status:** Accepted, amended 2026-11-17: `Json` is a convenience type too, and `sql.String(n)` is renamed `sql.Varchar(n)`. [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md) gives the other targets the same convenience types, starting with MongoDB.
+**Status:** Accepted, amended 2026-11-17: `Json` is a convenience type too, and `sql.String(n)` is renamed `sql.Varchar(n)`. [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md) gives the other targets the same convenience types, starting with MongoDB, and its rule 4 replaces this ADR's suffix rule: an explicit type carries a suffix where its database type is read by more than one codec of its data type.
 **Amends:** [ADR 257 — Scalar types are named after the target on every surface](ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md), [ADR 279 — Convenience types choose an explicit type from their arguments](ADR%20279%20-%20Convenience%20types%20choose%20an%20explicit%20type%20from%20their%20arguments.md)
 
 ## At a glance
@@ -68,7 +68,7 @@ The PSL name of an explicit type is the database type, plus a suffix naming the 
 | `PlainJson` | `pg/json@1` | `json` | a JSON value |
 | `Jsonb` | `pg/jsonb@1` | `jsonb` | a JSON value |
 
-A convenience type and an explicit type cannot share a name, because a type choice row names its explicit type in the same `type` namespace. This rule is decided here and applied to PostgreSQL in this change. MongoDB applies it under [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md). SQLite and MySQL still have explicit types with convenience names, such as SQLite's `Int`; each takes the names below when it gets these convenience types. Where the naming rule above would give an explicit type the name of a convenience type, the explicit type takes the first of these that applies:
+A convenience type and an explicit type cannot share a name, because a type choice row names its explicit type in the same `type` namespace. This rule is decided here and applied to PostgreSQL in this change. MongoDB, SQLite and MySQL apply it under [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md). Where the naming rule above would give an explicit type the name of a convenience type, the explicit type takes the first of these that applies:
 
 1. The database's own second name for the type, where it has one, such as MySQL's `INT4`, `NUMERIC` and `BOOL`.
 2. The application-value suffix of [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md) (rule 5), where it gives a meaningful name, such as `DecimalString`, the name SQLite's explicit decimal type will take.
@@ -162,7 +162,7 @@ The Prisma 7 reader gives Prisma 7's `Json`, which was a `jsonb` column, as `Jso
 - `contract infer` and `contract print` write different text for some columns, such as `Int(storage: int2)` where they wrote `SmallInt`. The contract they describe is the same.
 - In a TypeScript contract, `type.Int()`, `type.BigInt({ as: 'number' })`, `type.Json({ storage: 'jsonb' })` and so on are typed as the explicit type they choose, and a combination with no row does not compile.
 - A bare `Json` field cannot be filtered by equality, indexed or made unique, as before. The convenience type makes the fix one argument: `Json(storage: jsonb)`.
-- MongoDB has the same convenience types over its own explicit types, recorded in [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md). SQLite and MySQL use some of these names for explicit types today and get the convenience types in later changes, whose tables that ADR gains.
+- MongoDB has the same convenience types over its own explicit types, recorded in [ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md). SQLite and MySQL have them too, with their tables in the same ADR.
 - This ADR's `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are concepts, not representations, as in [ADR 315](ADR%20315%20-%20Each%20target%20declares%20the%20convenience%20date%20and%20time%20types%20over%20its%20own%20explicit%20types.md). SQLite's `Int` today is an explicit type: SQLite's `integer`, read as a `number`. Under ADR 315 an explicit type does not take a convenience name, so the change that gives SQLite these convenience types must rename it and declare SQLite's `Int` as a convenience type over it. That SQLite stores the integer in 64 bits is SQLite's representation and does not change the concept.
 
 ## Alternatives considered

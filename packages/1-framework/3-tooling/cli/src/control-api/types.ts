@@ -36,6 +36,7 @@ import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggreg
 import type { NamedRef } from '@internal/migration-tools/refs';
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
+import type { DataProtectionSetting } from '../utils/data-protection-settings';
 import type { CliInvocation } from '../utils/printed-command';
 import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';
@@ -350,6 +351,8 @@ export interface EmitContractConfig {
    * The .d.ts types file will be colocated (e.g., contract.json → contract.d.ts).
    */
   readonly output: string;
+  /** The module the generated `contract.d.ts` imports the framework and family contract types from. */
+  readonly typesModule: string;
 }
 
 /**
@@ -515,6 +518,8 @@ export interface DbUpdateSuccess
   readonly summary: string;
   /** The settings the run recorded as the database's policies, with the values they replaced. Present only when it recorded some. */
   readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
+  /** The data protection settings at their `permitted` level, so an apply asks nothing about the operations they cover. Present only when some are. */
+  readonly permitted?: readonly DataProtectionSetting[];
 }
 
 /**
@@ -804,14 +809,6 @@ export interface ContractEmitOptions {
   readonly config: PrismaConfig;
   /** Directory the caller was invoked from. */
   readonly cwd: string;
-  /**
-   * The project's directory, normally the validated config's `baseDir`. Used
-   * to find the project manifest whose dependencies decide the import
-   * specifiers in emitted files. Omit it and the manifest is looked up from
-   * the directory the artifacts are written to, which is the package that
-   * will import them.
-   */
-  readonly projectDir?: string;
   /**
    * Directory to write contract artifacts into. When set, `contract.json` and
    * `contract.d.ts` are written inside this directory, taking precedence over

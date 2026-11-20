@@ -55,7 +55,7 @@ export interface MysqlControlAdapterOptions {
 function unsupportedDdl(ast: DdlNode): Error {
   return structuredError(
     'RUNTIME.DDL_UNSUPPORTED',
-    `The MySQL control adapter cannot lower the DDL node "${ast.kind}".`,
+    `The MySQL and MariaDB control adapter cannot lower the DDL node "${ast.kind}".`,
     { meta: { surface: 'control-adapter', kind: ast.kind } },
   );
 }
@@ -248,14 +248,14 @@ export class MysqlControlAdapter<TargetId extends string> implements SqlControlA
     return buildMysqlSchemaIR(
       await this.readCatalog(driver),
       this.declaredDataTypes,
-      async (tableName, columnName, rawDefault) => {
+      async (tableName, columnName, rawDefault, body) => {
         const column = columns.columnOf(undefined, tableName, columnName);
         const codec =
           column === undefined ? undefined : codecForRef(this.codecRegistry, column.codecRef);
         if (codec === undefined) return {};
         return readColumnDefault(
           codec,
-          { literal: { kind: 'value', body: rawDefault }, raw: rawDefault },
+          { literal: { kind: 'value', body }, raw: rawDefault },
           undefined,
         );
       },

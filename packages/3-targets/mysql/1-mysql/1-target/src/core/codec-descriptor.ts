@@ -13,7 +13,7 @@ import {
   type DataTypeId,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
-import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
+import type { AnyExpression, AnyParamRef, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
@@ -27,10 +27,11 @@ const MYSQL_CODEC_DESCRIPTOR_KIND = 'mysql-codec' as const;
 export interface AnyMysqlCodecDescriptor extends AnyCodecDescriptor {
   readonly descriptorKind: typeof MYSQL_CODEC_DESCRIPTOR_KIND;
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr;
+  wrapParameter(parameter: AnyParamRef, ref: CodecRef): AnyExpression;
 }
 
 /**
- * A codec descriptor the MySQL target registers. `jsonProjection` writes a column into the JSON an include reads, in the form the codec's `fromWire` reads from a row.
+ * A codec descriptor the MySQL target registers. `jsonProjection` writes a column into the JSON an include reads, in the form the codec's `fromWire` reads from a row, and `wrappedParameter` is the expression a parameter of the codec is written as in a statement.
  */
 export abstract class MysqlCodecDescriptor<P = void>
   extends CodecDescriptorImpl<P>
@@ -40,24 +41,35 @@ export abstract class MysqlCodecDescriptor<P = void>
 
   protected abstract jsonProjection(expression: ProjectionExpr, params: P): ProjectionExpr;
 
+  /** The expression a parameter of this codec is written as, such as a cast around it: the parameter itself, unless the server would compare the value it carries in another type than the column's. It holds the parameter exactly once. */
+  protected wrappedParameter(parameter: AnyParamRef, _params: P): AnyExpression {
+    return parameter;
+  }
+
+  wrapParameter(parameter: AnyParamRef, ref: CodecRef): AnyExpression {
+    return this.wrappedParameter(parameter, this.paramsOf(ref));
+  }
+
   projectJson(expression: ProjectionExpr, ref: CodecRef): ProjectionExpr {
+    return this.jsonProjection(expression, this.paramsOf(ref));
+  }
+
+  private paramsOf(ref: CodecRef): P {
     if (ref.many === true) {
       throw structuredError(
         'RUNTIME.CODEC_DESCRIPTOR_ARRAY_UNSUPPORTED',
-        `Codec '${ref.codecId}' uses CodecRef.many, but MySQL has no stored scalar arrays.`,
+        `Codec '${ref.codecId}' uses CodecRef.many, but MySQL and MariaDB have no stored scalar arrays.`,
         {
-          why: 'MySQL codec descriptors project scalar values only.',
+          why: 'The codec descriptors MySQL and MariaDB share project scalar values only.',
           fix: 'Use a scalar CodecRef.',
           meta: { codecId: ref.codecId },
         },
       );
     }
-    return this.jsonProjection(
-      expression,
-      blindCast<P, 'validateCodecTypeParams validates the params against this descriptor schema'>(
-        validateCodecTypeParams(this, ref),
-      ),
-    );
+    return blindCast<
+      P,
+      'validateCodecTypeParams validates the params against this descriptor schema'
+    >(validateCodecTypeParams(this, ref));
   }
 }
 
@@ -94,7 +106,7 @@ export type AdaptedMysqlCodecDescriptor<D extends AnyCodecDescriptorTemplate> = 
   keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
   Pick<CodecDescriptor, 'dataType'> &
-  Pick<AnyMysqlCodecDescriptor, 'descriptorKind' | 'projectJson'>;
+  Pick<AnyMysqlCodecDescriptor, 'descriptorKind' | 'projectJson' | 'wrapParameter'>;
 
 class MysqlCodecDescriptorAdapter<
   D extends AnyCodecDescriptorTemplate,
@@ -165,7 +177,9 @@ export function isMysqlCodecDescriptor(value: unknown): value is AnyMysqlCodecDe
     'factory' in value &&
     typeof value.factory === 'function' &&
     'projectJson' in value &&
-    typeof value.projectJson === 'function'
+    typeof value.projectJson === 'function' &&
+    'wrapParameter' in value &&
+    typeof value.wrapParameter === 'function'
   );
 }
 
@@ -201,9 +215,9 @@ export function buildMysqlCodecDescriptorRegistry(
       const codecId = candidateCodecId(descriptor);
       throw structuredError(
         'RUNTIME.CODEC_DESCRIPTOR_INVALID',
-        `Codec descriptor '${codecId}' is not a valid MySQL codec descriptor.`,
+        `Codec descriptor '${codecId}' is not a codec descriptor of the MySQL and MariaDB targets.`,
         {
-          why: 'MySQL codec registries require the mysql-codec discriminant and the MySQL descriptor methods.',
+          why: 'The codec registries of MySQL and MariaDB require the mysql-codec discriminant and the methods of MysqlCodecDescriptor.',
           fix: 'Extend MysqlCodecDescriptor or adapt a family descriptor with mysqlCodec().',
           meta: { codecId },
         },
@@ -212,11 +226,11 @@ export function buildMysqlCodecDescriptorRegistry(
     if (byId.has(descriptor.codecId)) {
       throw structuredError(
         'RUNTIME.DUPLICATE_CODEC',
-        `Duplicate MySQL codec descriptor id '${descriptor.codecId}'.`,
+        `Duplicate codec descriptor id '${descriptor.codecId}' in a MySQL or MariaDB codec registry.`,
         {
-          why: 'Each codecId must resolve to exactly one MySQL descriptor during registry composition.',
+          why: 'Each codecId must resolve to exactly one descriptor during registry composition.',
           fix: 'Remove the duplicate target, adapter, or extension contribution.',
-          meta: { codecId: descriptor.codecId, target: 'mysql' },
+          meta: { codecId: descriptor.codecId },
         },
       );
     }

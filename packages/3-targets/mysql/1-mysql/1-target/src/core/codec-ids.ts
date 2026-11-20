@@ -1,6 +1,12 @@
 export const MYSQL_INT_CODEC_ID = 'mysql/int@1' as const;
 export const MYSQL_BIGINT_CODEC_ID = 'mysql/bigint@1' as const;
+export const MYSQL_BIGINT_NUMBER_CODEC_ID = 'mysql/bigintnumber@1' as const;
+export const MYSQL_DOUBLE_CODEC_ID = 'mysql/double@1' as const;
+export const MYSQL_DECIMAL_CODEC_ID = 'mysql/decimal@1' as const;
 export const MYSQL_TEXT_CODEC_ID = 'mysql/text@1' as const;
+export const MYSQL_BOOLEAN_CODEC_ID = 'mysql/boolean@1' as const;
+export const MYSQL_LONGBLOB_CODEC_ID = 'mysql/longblob@1' as const;
+export const MYSQL_JSON_CODEC_ID = 'mysql/json@1' as const;
 export const MYSQL_DATETIME_CODEC_ID = 'mysql/datetime@1' as const;
 export const MYSQL_ENUM_CODEC_ID = 'mysql/enum@1' as const;
 export const MYSQL_DATETIME_TEMPORAL_CODEC_ID = 'mysql/datetime-temporal@1' as const;

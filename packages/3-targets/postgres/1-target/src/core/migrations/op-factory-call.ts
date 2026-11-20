@@ -4,7 +4,7 @@
  *
  * Every call class carries the literal arguments its backing factory would
  * receive, computes a human-readable `label` in its constructor, and
- * implements two polymorphic hooks:
+ * implements these polymorphic hooks:
  *
  * - `toOp()` — converts the IR node to a runtime
  *   `SqlMigrationPlanOperation` by delegating to the matching pure factory
@@ -14,6 +14,12 @@
  * - `renderTypeScript()` / `importRequirements()` — inherited from
  *   `TsExpression`. Used by `renderCallsToTypeScript` to emit the call as
  *   a TypeScript expression inside the scaffolded `migration.ts`.
+ * - `rlsIdentity()` — the id, class and target of the row-level-security operation
+ *   the call lowers to, which `access-changes.ts` reads to decide whether the
+ *   call changes who can read or write rows. The base returns `undefined`.
+ *   A call whose operation enables or disables row-level security, or
+ *   creates, drops or renames a policy, must override it, or the data
+ *   protection policy cannot see the change.
  *
  * The abstract base and all concrete classes are package-private. External
  * consumers see only the framework-level `OpFactoryCall` interface and the
@@ -127,10 +133,16 @@ import { type CreateIndexExtras, createIndex, dropIndex, renameIndex } from './o
 import { createNativeEnumType, dropNativeEnumType } from './operations/native-enum-types';
 import {
   createRlsPolicy,
+  createRlsPolicyIdentity,
   disableRowLevelSecurity,
+  disableRowLevelSecurityIdentity,
   dropRlsPolicy,
+  dropRlsPolicyIdentity,
   enableRowLevelSecurity,
+  enableRowLevelSecurityIdentity,
+  type RlsOperationIdentity,
   renameRlsPolicy,
+  renameRlsPolicyIdentity,
 } from './operations/rls';
 import { dropSchema, renameSchema, setTableSchema } from './operations/schemas';
 import type { ForeignKeySpec } from './operations/shared';
@@ -160,22 +172,7 @@ import type { PostgresPlanTargetDetails } from './planner-target-details';
 
 type Op = SqlMigrationPlanOperation<PostgresPlanTargetDetails>;
 
-// Single module specifier emitted in user-edited `migration.ts` imports. The
-// Postgres migration facade re-exports both the `*Call` factory names
-// (createTable / addColumn / …) and the contract-free DDL builders
-// (col / lit / fn / primaryKey / foreignKey / unique) from
-// sql-relational-core/contract-free. We emit imports against the facade,
-// not against the underlying sql-relational-core subpath, because user
-// projects depend on `@internal/postgres` (a runtime dep of every
-// init-scaffolded project) — they do not depend on the internal
-// `@internal/sql-relational-core` package, so an emitted
-// `import … from '@internal/sql-relational-core/contract-free'` fails
-// ESM resolution at runtime in user migrations even though pnpm has the
-// transitive package on disk.
-// This is the authored name. `render-typescript.ts` maps it to whatever the
-// consuming application's import root calls it, once over the whole assembled
-// import list.
-const POSTGRES_MIGRATION_FACADE = '@internal/postgres/migration';
+export const MIGRATION_MODULE = '<migrations.module>';
 
 abstract class PostgresOpFactoryCallNode extends TsExpression implements FrameworkOpFactoryCall {
   abstract readonly factoryName: string;
@@ -189,7 +186,12 @@ abstract class PostgresOpFactoryCallNode extends TsExpression implements Framewo
   }
 
   importRequirements(): readonly ImportRequirement[] {
-    return [{ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: this.factoryName }];
+    return [{ moduleSpecifier: MIGRATION_MODULE, symbol: this.factoryName }];
+  }
+
+  /** The id, class and target of a row-level-security operation this call lowers to; `undefined` for any other call. */
+  rlsIdentity(): RlsOperationIdentity | undefined {
+    return undefined;
   }
 
   protected freeze(): void {
@@ -396,7 +398,7 @@ export class CreateTableCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const columnsList = this.columns
       .map((column) => renderDdlColumnAsTsCall(column, sql))
       .join(', ');
@@ -420,13 +422,13 @@ export class CreateTableCall extends PostgresOpFactoryCallNode {
   override importRequirements(): readonly ImportRequirement[] {
     const req: ImportRequirement[] = [];
     if (needsColOrConstraintImport(this.columns)) {
-      req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'col' });
+      req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: 'col' });
       for (const sym of defaultImportSymbols(this.columns)) {
-        req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: sym });
+        req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: sym });
       }
     }
     for (const sym of constraintImportSymbols(this.constraints)) {
-      req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: sym });
+      req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: sym });
     }
     req.push(...this.#written().imports);
     return req;
@@ -639,7 +641,7 @@ export class AddColumnCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const opts: string[] = [];
     if (this.schemaName !== UNBOUND_NAMESPACE_ID) {
       opts.push(`schema: ${jsonToTsSource(this.schemaName)}`);
@@ -650,11 +652,9 @@ export class AddColumnCall extends PostgresOpFactoryCallNode {
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    const req: ImportRequirement[] = [
-      { moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'col' },
-    ];
+    const req: ImportRequirement[] = [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'col' }];
     for (const sym of defaultImportSymbols([this.column])) {
-      req.push({ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: sym });
+      req.push({ moduleSpecifier: MIGRATION_MODULE, symbol: sym });
     }
     req.push(...this.#written().imports);
     return req;
@@ -889,14 +889,14 @@ export class AlterColumnTypeCall extends PostgresOpFactoryCallNode {
   override importRequirements(): readonly ImportRequirement[] {
     return [
       ...(isUnfilledSlot(this.using)
-        ? [{ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'placeholder' }]
+        ? [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' }]
         : []),
       ...this.#written().imports,
     ];
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const using = this.using === undefined ? [] : [`using: ${slotSource(this.using, sql)}`];
     const opts = [
       ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
@@ -1037,7 +1037,7 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const opts: string[] = [];
     if (this.schemaName !== UNBOUND_NAMESPACE_ID) {
       opts.push(`schema: ${jsonToTsSource(this.schemaName)}`);
@@ -1049,9 +1049,9 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return [
-      { moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'col' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'col' },
       ...defaultImportSymbols([this.column]).map((symbol) => ({
-        moduleSpecifier: POSTGRES_MIGRATION_FACADE,
+        moduleSpecifier: MIGRATION_MODULE,
         symbol,
       })),
       ...this.#written().imports,
@@ -1254,7 +1254,7 @@ export class AddColumnWithTemporaryDefaultCall extends PostgresOpFactoryCallNode
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const source = `this.addColumnWithTemporaryDefault({ ${[
       ...columnCallLocation(this.schemaName, this.tableName, this.columnName),
       `type: ${jsonToTsSource(this.type)}`,
@@ -1575,7 +1575,7 @@ export class AddCheckConstraintCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const source = `this.addCheckConstraint({ ${constraintCallOptions(this.schemaName, this.tableName, this.constraintName)}, expression: ${sql.source(this.expression)} })`;
     return { source, imports: sql.imports() };
   }
@@ -1700,7 +1700,7 @@ export class CreateIndexCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const opts: string[] = [];
     if (this.schemaName !== UNBOUND_NAMESPACE_ID) {
       opts.push(`schema: ${jsonToTsSource(this.schemaName)}`);
@@ -2895,7 +2895,7 @@ export class FillStoredKeyCall extends PostgresOpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return this.value instanceof UnfilledValue
-      ? [{ moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'placeholder' }]
+      ? [{ moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' }]
       : [];
   }
 }
@@ -2953,7 +2953,7 @@ export class DataTransformCall extends PostgresOpFactoryCallNode {
 
   override importRequirements(): readonly ImportRequirement[] {
     return [
-      { moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'placeholder' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' },
       // endContract is imported by the migration scaffold's contractImports; an op never renders outside it.
     ];
   }
@@ -2987,6 +2987,10 @@ export class CreatePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
     return createRlsPolicy(this.schemaName, this.tableName, this.policy, lowerer);
   }
 
+  override rlsIdentity(): RlsOperationIdentity {
+    return createRlsPolicyIdentity(this.schemaName, this.tableName, this.policy.name);
+  }
+
   renderTypeScript(): string {
     return this.#written().source;
   }
@@ -2996,7 +3000,7 @@ export class CreatePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
   }
 
   #written(): WrittenCall {
-    const sql = createSqlTextSources(POSTGRES_MIGRATION_FACADE);
+    const sql = createSqlTextSources(MIGRATION_MODULE);
     const p = this.policy;
     // `input` and `sources` are typed against the parameter `createRlsPolicy`
     // accepts, so a drift between the renderer and the API, including a field
@@ -3060,6 +3064,10 @@ export class DropPostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
     return dropRlsPolicy(this.schemaName, this.tableName, this.policyName, lowerer);
   }
 
+  override rlsIdentity(): RlsOperationIdentity {
+    return dropRlsPolicyIdentity(this.schemaName, this.tableName, this.policyName);
+  }
+
   renderTypeScript(): string {
     return `this.dropRlsPolicy({ schema: ${jsonToTsSource(this.schemaName)}, table: ${jsonToTsSource(this.tableName)}, policy: ${jsonToTsSource(this.policyName)} })`;
   }
@@ -3095,6 +3103,10 @@ export class EnableRowLevelSecurityCall extends PostgresOpFactoryCallNode {
     return enableRowLevelSecurity(this.schemaName, this.tableName, lowerer);
   }
 
+  override rlsIdentity(): RlsOperationIdentity {
+    return enableRowLevelSecurityIdentity(this.schemaName, this.tableName);
+  }
+
   renderTypeScript(): string {
     return `this.enableRowLevelSecurity({ schema: ${jsonToTsSource(this.schemaName)}, table: ${jsonToTsSource(this.tableName)} })`;
   }
@@ -3128,6 +3140,10 @@ export class DisableRowLevelSecurityCall extends PostgresOpFactoryCallNode {
       );
     }
     return disableRowLevelSecurity(this.schemaName, this.tableName, lowerer);
+  }
+
+  override rlsIdentity(): RlsOperationIdentity {
+    return disableRowLevelSecurityIdentity(this.schemaName, this.tableName);
   }
 
   renderTypeScript(): string {
@@ -3172,6 +3188,15 @@ export class RenamePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
       this.oldPolicyName,
       this.newPolicyName,
       lowerer,
+    );
+  }
+
+  override rlsIdentity(): RlsOperationIdentity {
+    return renameRlsPolicyIdentity(
+      this.schemaName,
+      this.tableName,
+      this.oldPolicyName,
+      this.newPolicyName,
     );
   }
 

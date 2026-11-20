@@ -1,5 +1,6 @@
 import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
 import mysql from '@internal/target-mysql/control';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { defineContract } from '../../src/exports/contract-builder';
 import { frameworkComponents, loadExampleContract } from '../example-contract';
@@ -66,7 +67,7 @@ describe('the MySQL planner', () => {
   it('writes a migration.ts that extends the MySQL migration class', () => {
     const result = planFrom(null, loadExampleContract());
     if (result.kind !== 'success') throw new Error('expected a plan');
-    const source = result.plan.renderTypeScript((specifier) => specifier);
+    const source = result.plan.renderTypeScript(workspaceMigrationModule.mysql);
     expect({
       imports: source.includes(
         "import { Migration, MigrationCLI, col, fn, primaryKey, sql, unique } from '@internal/mysql/migration';",

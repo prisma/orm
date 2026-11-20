@@ -9,14 +9,19 @@ import {
   type CodecInstanceContext,
   type DataTypeValue,
   decimalTextBigintLiteral,
+  decimalTextNumberLiteral,
+  floatNumberLiteral,
+  readJsonIntegerText,
   refuseJsonValue,
   renderTsLiteral,
+  SAFE_INTEGER_BIGINT_RANGE,
 } from '@internal/framework-components/codec';
 import { sqlRawDataType } from '@internal/sql-contract/data-type';
 import {
   CastExpr,
   type ProjectionExpr,
   SqlCharCodec,
+  type SqlCodecCallContext,
   SqlRawCodec,
   SqlVarcharCodec,
   sqlCharDescriptor,
@@ -24,10 +29,13 @@ import {
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
 import { hasDigitsBelowAMillisecond } from '@internal/type-implementations/date';
+import { mysqlBooleanDescriptor } from './boolean-codec';
 import { identityJsonProjection, MysqlCodecDescriptor, mysqlCodec } from './codec-descriptor';
 import {
   MYSQL_BIGINT_CODEC_ID,
+  MYSQL_BIGINT_NUMBER_CODEC_ID,
   MYSQL_DATETIME_CODEC_ID,
+  MYSQL_DOUBLE_CODEC_ID,
   MYSQL_ENUM_CODEC_ID,
   MYSQL_INT_CODEC_ID,
   MYSQL_TEXT_CODEC_ID,
@@ -38,6 +46,7 @@ import {
   mysqlDatetime,
   mysqlDatetimeParams,
   mysqlDatetimeText,
+  mysqlDouble,
   mysqlEnum,
   mysqlEnumParams,
   mysqlInt,
@@ -62,9 +71,14 @@ import {
   storedWithinPrecision,
   wireTextOfDate,
 } from './date-time-values';
-import { mysqlError, mysqlQueryNotYetSupported } from './errors';
+import { mysqlDecimalDescriptor } from './decimal-codec';
+import { errorColumnUnreadable, errorColumnUnwritable, mysqlError } from './errors';
+import { mysqlJsonDescriptor } from './json-codec';
+import { mysqlLongblobDescriptor } from './longblob-codec';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
+/** A double as MySQL and MariaDB print it: `1.5`, `-2`, `9.007199254740992e15`. */
+const DOUBLE_TEXT = /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
 const BIGINT_MIN = -(2n ** 63n);
 const BIGINT_MAX = 2n ** 63n - 1n;
 
@@ -102,7 +116,15 @@ export const mysqlSqlVarcharDescriptor = mysqlCodec(sqlVarcharDescriptor, {
 export const mysqlSqlRawDescriptor = mysqlCodec(sqlRawDescriptor, {
   dataType: sqlRawDataType,
   jsonProjection: () => {
-    throw mysqlQueryNotYetSupported('Reading a raw column inside an include');
+    throw mysqlError(
+      'RUNTIME.AST_UNSUPPORTED',
+      'Reading a raw column inside an include is not yet supported on MySQL and MariaDB.',
+      {
+        why: "An include reads its rows as JSON, and Prisma cannot yet write a raw column's value into that JSON on MySQL and MariaDB.",
+        fix: "Leave the raw column out of the include's select, and read it with its own query.",
+        meta: { feature: 'Reading a raw column inside an include' },
+      },
+    );
   },
   factory: (descriptor, dataType, params) => () => new SqlRawCodec(descriptor, dataType, params),
 });
@@ -242,6 +264,144 @@ export class MysqlBigintDescriptor extends MysqlCodecDescriptor<void> {
 
 export const mysqlBigintDescriptor = new MysqlBigintDescriptor();
 
+const SAFE_INTEGER_FIX =
+  'Read the column as BigInt, which reads a JavaScript bigint, or keep its values within ±(2^53 − 1).';
+
+/** A value read without a column is an aggregate's result, an aggregate in an include, a computed projection or a raw query's column; the codec cannot tell which, so the fix names each. */
+const SAFE_INTEGER_RESULT_FIX =
+  "The value does not fit a JavaScript number. Use an aggregate's BigInt form, such as sumBigInt or countBigInt; for a column's value, such as its min or max, declare the field BigInt, or read it as mysql/bigint@1 in a raw query.";
+
+function safeIntegerToWrite(value: number, ctx: SqlCodecCallContext): number {
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return value;
+  throw errorColumnUnwritable({
+    codecId: MYSQL_BIGINT_NUMBER_CODEC_ID,
+    received: String(value),
+    column: ctx.column,
+    holds: 'integers read as JavaScript numbers, within ±(2^53 − 1)',
+    fix: SAFE_INTEGER_FIX,
+  });
+}
+
+function unreadableSafeInteger(wire: string | number, ctx: SqlCodecCallContext): never {
+  throw errorColumnUnreadable({
+    codecId: MYSQL_BIGINT_NUMBER_CODEC_ID,
+    received: String(wire),
+    column: ctx.column,
+    notA: 'an integer within the safe integer range',
+    reads: 'a JavaScript number, an integer within ±(2^53 − 1)',
+    fix: ctx.column === undefined ? SAFE_INTEGER_RESULT_FIX : SAFE_INTEGER_FIX,
+  });
+}
+
+/** A MySQL `bigint`, or an integral `DECIMAL` such as a `SUM` of integers, as a JavaScript number. Both directions refuse a value outside ±(2^53 − 1) rather than round it, naming the column where the read knows it. A row and an include's JSON carry it as decimal text, so the range is checked before any digit is lost. */
+export class MysqlBigintNumberCodec extends CodecImpl<
+  typeof MYSQL_BIGINT_NUMBER_CODEC_ID,
+  readonly ['equality', 'order', 'numeric'],
+  string | number,
+  number
+> {
+  async toWire(value: number, ctx: SqlCodecCallContext): Promise<number> {
+    return safeIntegerToWrite(value, ctx);
+  }
+  async fromWire(wire: string | number, ctx: SqlCodecCallContext): Promise<number> {
+    if (typeof wire === 'number') {
+      return Number.isSafeInteger(wire) ? wire : unreadableSafeInteger(wire, ctx);
+    }
+    if (!DECIMAL_INTEGER.test(wire)) return unreadableSafeInteger(wire, ctx);
+    const value = BigInt(wire);
+    if (value < SAFE_INTEGER_BIGINT_RANGE.min || value > SAFE_INTEGER_BIGINT_RANGE.max) {
+      return unreadableSafeInteger(wire, ctx);
+    }
+    return Number(value);
+  }
+  fromDataTypeValue(value: DataTypeValue<string>): number {
+    return Number(
+      readJsonIntegerText(MYSQL_BIGINT_NUMBER_CODEC_ID, value.value, SAFE_INTEGER_BIGINT_RANGE),
+    );
+  }
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(String(safeIntegerToWrite(input, {})));
+  }
+}
+
+export class MysqlBigintNumberDescriptor extends MysqlCodecDescriptor<void> {
+  override readonly dataType = mysqlBigint.id;
+  override readonly codecId = MYSQL_BIGINT_NUMBER_CODEC_ID;
+  override readonly traits = ['equality', 'order', 'numeric'] as const;
+  override readonly paramsSchema = undefined;
+  override renderValueLiteral(value: JsonValue): string | undefined {
+    return decimalTextNumberLiteral(value);
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return textJsonProjection(expression);
+  }
+  override factory(): (ctx: CodecInstanceContext) => MysqlBigintNumberCodec {
+    return () => new MysqlBigintNumberCodec(this, mysqlBigint);
+  }
+}
+
+export const mysqlBigintNumberDescriptor = new MysqlBigintNumberDescriptor();
+
+function finiteDoubleToWrite(value: number, ctx: SqlCodecCallContext): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  throw errorColumnUnwritable({
+    codecId: MYSQL_DOUBLE_CODEC_ID,
+    received: String(value),
+    column: ctx.column,
+    holds: 'finite numbers only: MySQL and MariaDB store no NaN or infinity',
+    fix: 'Write a finite number, or store NaN and infinity in another column, such as a nullable one left NULL.',
+  });
+}
+
+/** A MySQL `double` as a JavaScript number. A row carries it as the text MySQL prints, `1.5` or `9.007199254740992e15`, and an include's JSON as a number. MySQL and MariaDB hold no NaN or infinity, so the codec refuses to write one. */
+export class MysqlDoubleCodec extends CodecImpl<
+  typeof MYSQL_DOUBLE_CODEC_ID,
+  readonly ['equality', 'order', 'numeric'],
+  string | number,
+  number
+> {
+  async toWire(value: number, ctx: SqlCodecCallContext): Promise<number> {
+    return finiteDoubleToWrite(value, ctx);
+  }
+  async fromWire(wire: string | number, ctx: SqlCodecCallContext): Promise<number> {
+    const value =
+      typeof wire === 'number' ? wire : DOUBLE_TEXT.test(wire) ? Number(wire) : Number.NaN;
+    if (Number.isFinite(value)) return value;
+    throw errorColumnUnreadable({
+      codecId: MYSQL_DOUBLE_CODEC_ID,
+      received: typeof wire === 'string' ? JSON.stringify(wire) : String(wire),
+      column: ctx.column,
+      notA: 'a finite number',
+      reads: 'the text MySQL and MariaDB print for a double, such as 1.5 or 9.007199254740992e15',
+      fix: 'Read the column with a type that holds its value.',
+    });
+  }
+  fromDataTypeValue(value: DataTypeValue<number>): number {
+    return value.value;
+  }
+  toDataTypeValue(input: number): DataTypeValue {
+    return this.dataTypeValueOf(finiteDoubleToWrite(input, {}));
+  }
+}
+
+export class MysqlDoubleDescriptor extends MysqlCodecDescriptor<void> {
+  override readonly dataType = mysqlDouble.id;
+  override readonly codecId = MYSQL_DOUBLE_CODEC_ID;
+  override readonly traits = ['equality', 'order', 'numeric'] as const;
+  override readonly paramsSchema = undefined;
+  override renderValueLiteral(value: JsonValue): string | undefined {
+    return floatNumberLiteral(value);
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return identityJsonProjection(expression);
+  }
+  override factory(): (ctx: CodecInstanceContext) => MysqlDoubleCodec {
+    return () => new MysqlDoubleCodec(this, mysqlDouble);
+  }
+}
+
+export const mysqlDoubleDescriptor = new MysqlDoubleDescriptor();
+
 /**
  * Reads the text MySQL sends for a `datetime` as the instant it names in UTC: the codec writes every value in UTC, so the column holds no time zone of its own.
  */
@@ -349,6 +509,12 @@ export const codecDescriptors = [
   mysqlTextDescriptor,
   mysqlIntDescriptor,
   mysqlBigintDescriptor,
+  mysqlBigintNumberDescriptor,
+  mysqlDoubleDescriptor,
+  mysqlDecimalDescriptor,
+  mysqlBooleanDescriptor,
+  mysqlLongblobDescriptor,
+  mysqlJsonDescriptor,
   mysqlDatetimeDescriptor,
   mysqlDatetimeTemporalDescriptor,
   mysqlDatetimeStringDescriptor,

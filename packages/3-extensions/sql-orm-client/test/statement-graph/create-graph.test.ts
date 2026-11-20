@@ -85,7 +85,7 @@ describe('createGraph', () => {
         }),
       ).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          code: 'ORM.OPERATION_UNSUPPORTED',
           message: 'disconnect() is only supported in update() nested mutations',
           meta: { kind: 'disconnect', relation: 'author' },
         }),
@@ -131,7 +131,7 @@ describe('createGraph', () => {
           ...ada,
           posts: (posts: Mutator) => posts.disconnect(),
         }),
-      ).toThrow(expect.objectContaining({ code: 'ORM.RELATION_MUTATION_UNSUPPORTED' }));
+      ).toThrow(expect.objectContaining({ code: 'ORM.OPERATION_UNSUPPORTED' }));
     });
   });
 
@@ -199,7 +199,7 @@ describe('createGraph', () => {
         }),
       ).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_UNSUPPORTED',
+          code: 'ORM.OPERATION_UNSUPPORTED',
           meta: {
             kind: 'connect',
             relation: 'roles',
@@ -275,7 +275,7 @@ describe('createGraph', () => {
     it('rejects a relation field that is not a callback', () => {
       expect(() => graphOf(targetOf('User'), { ...ada, posts: [hello], tags: createPost })).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_INVALID',
+          code: 'ORM.ARGUMENT_INVALID',
           message: 'Relation field "posts" on model "User" expects a mutator callback',
           meta: { relation: 'posts', model: 'User', problem: 'missing-callback' },
         }),
@@ -290,7 +290,7 @@ describe('createGraph', () => {
         }),
       ).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_INVALID',
+          code: 'ORM.ARGUMENT_INVALID',
           message: 'Relation field "comments" on model "Post" expects a mutator callback',
           meta: { relation: 'comments', model: 'Post', problem: 'missing-callback' },
         }),
@@ -300,7 +300,7 @@ describe('createGraph', () => {
     it('rejects a callback that returns no relation operation', () => {
       expect(() => graphOf(targetOf('User'), { ...ada, posts: () => ({ invalid: true }) })).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_INVALID',
+          code: 'ORM.ARGUMENT_INVALID',
           meta: { relation: 'posts', model: 'User', problem: 'invalid-descriptor' },
         }),
       );
@@ -314,7 +314,7 @@ describe('createGraph', () => {
         }),
       ).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_INVALID',
+          code: 'ORM.ARGUMENT_INVALID',
           message: 'connect() nested mutation for relation "author" requires criterion',
           meta: { kind: 'connect', relation: 'author', problem: 'missing-criterion' },
         }),
@@ -326,7 +326,7 @@ describe('createGraph', () => {
         graphOf(targetOf('User'), { ...ada, posts: (posts: Mutator) => posts.connect({}) }),
       ).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_INVALID',
+          code: 'ORM.ARGUMENT_INVALID',
           message: 'connect() nested mutation for relation "posts" requires non-empty criterion',
           meta: { kind: 'connect', relation: 'posts', problem: 'empty-criterion' },
         }),
@@ -341,7 +341,7 @@ describe('createGraph', () => {
         }),
       ).toThrow(
         expect.objectContaining({
-          code: 'ORM.RELATION_MUTATION_INVALID',
+          code: 'ORM.ARGUMENT_INVALID',
           message: 'connect() nested mutation for relation "author" requires non-empty criterion',
           meta: { kind: 'connect', relation: 'author', problem: 'empty-criterion' },
         }),

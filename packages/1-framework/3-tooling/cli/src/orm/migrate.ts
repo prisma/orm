@@ -72,7 +72,7 @@ import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
 import { defineOrmCommand } from './define-command';
 import { dbFlag, permitPolicyChangeFlag } from './flags';
-import { baseDirFor, displayPath, migrationsDirFor } from './migration/paths';
+import { displayPath, migrationsDirFor } from './migration/paths';
 import { normalizeError } from './normalize-error';
 import { controlProgressReporter } from './progress';
 
@@ -455,6 +455,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             refName: target.refName,
           },
           storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+          accessChangesOf: (operations) => familyInstance.accessChangesOf(operations),
           migrationsDir,
           invocation: cliInvocation(ctx, args.flags.db),
           readLedger: (spaceId) => client.readLedger(spaceId),
@@ -516,7 +517,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             name: args.flags.advanceRef,
             contractJson: snapshotContractJson,
             contractJsonPath: snapshotContractPath,
-            projectDir: baseDirFor(ctx.config),
+            config: ctx.config,
             client,
           });
           if (!preflight.ok) {

@@ -1,0 +1,1702 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "mariadb",
+  "profileHash": "c3165876e6069b3fd8cde4fadadb0b534082345d678b2c81c8c83e9225ce21d8",
+  "roots": {
+    "Account": {
+      "model": "Account",
+      "namespace": "__unbound__"
+    },
+    "Author": {
+      "model": "Author",
+      "namespace": "__unbound__"
+    },
+    "Counter": {
+      "model": "Counter",
+      "namespace": "__unbound__"
+    },
+    "Drawer": {
+      "model": "Drawer",
+      "namespace": "__unbound__"
+    },
+    "Event": {
+      "model": "Event",
+      "namespace": "__unbound__"
+    },
+    "Item": {
+      "model": "Item",
+      "namespace": "__unbound__"
+    },
+    "Ledger": {
+      "model": "Ledger",
+      "namespace": "__unbound__"
+    },
+    "Measure": {
+      "model": "Measure",
+      "namespace": "__unbound__"
+    },
+    "Note": {
+      "model": "Note",
+      "namespace": "__unbound__"
+    },
+    "Post": {
+      "model": "Post",
+      "namespace": "__unbound__"
+    },
+    "Shelf": {
+      "model": "Shelf",
+      "namespace": "__unbound__"
+    },
+    "Task": {
+      "model": "Task",
+      "namespace": "__unbound__"
+    },
+    "Tick": {
+      "model": "Tick",
+      "namespace": "__unbound__"
+    },
+    "User": {
+      "model": "User",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "enum": {
+          "Role": {
+            "codecId": "mysql/enum@1",
+            "members": [
+              {
+                "name": "USER",
+                "value": "USER"
+              },
+              {
+                "name": "ADMIN",
+                "value": "ADMIN"
+              }
+            ]
+          }
+        },
+        "models": {
+          "Account": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {
+              "events": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "accountId"
+                  ]
+                },
+                "to": {
+                  "model": "Event",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "name": {
+                  "column": "name"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Account"
+            }
+          },
+          "Author": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "notes": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "authorId"
+                  ]
+                },
+                "to": {
+                  "model": "Note",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Author"
+            }
+          },
+          "Bug": {
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "severity": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "severity": {
+                  "column": "severity"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Task"
+            }
+          },
+          "Counter": {
+            "fields": {
+              "big": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/bigint@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "big": {
+                  "column": "big"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Counter"
+            }
+          },
+          "Drawer": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "items": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "drawerId"
+                  ]
+                },
+                "to": {
+                  "model": "Item",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Drawer"
+            }
+          },
+          "Event": {
+            "fields": {
+              "accountId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "at": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/datetime@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/bigint@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "account": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "accountId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Account",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "accountId": {
+                  "column": "accountId"
+                },
+                "at": {
+                  "column": "at"
+                },
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Event"
+            }
+          },
+          "Feature": {
+            "base": {
+              "model": "Task",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "priority": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "priority": {
+                  "column": "priority"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Feature"
+            }
+          },
+          "Item": {
+            "fields": {
+              "data": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/longblob@1",
+                  "kind": "scalar"
+                }
+              },
+              "doc": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "drawerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "extra": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mysql/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "on": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/boolean@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "drawer": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "drawerId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Drawer",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "data": {
+                  "column": "data"
+                },
+                "doc": {
+                  "column": "doc"
+                },
+                "drawerId": {
+                  "column": "drawerId"
+                },
+                "extra": {
+                  "column": "extra"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "on": {
+                  "column": "on"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Item"
+            }
+          },
+          "Ledger": {
+            "fields": {
+              "cents": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "wide": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 0
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "cents": {
+                  "column": "cents"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "wide": {
+                  "column": "wide"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Ledger"
+            }
+          },
+          "Measure": {
+            "fields": {
+              "amount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "count": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/bigintnumber@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "label": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "price": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "ratio": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/double@1",
+                  "kind": "scalar"
+                }
+              },
+              "shelfId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "shelf": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "shelfId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Shelf",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "amount": {
+                  "column": "amount"
+                },
+                "count": {
+                  "column": "count"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "label": {
+                  "column": "label"
+                },
+                "price": {
+                  "column": "price"
+                },
+                "ratio": {
+                  "column": "ratio"
+                },
+                "shelfId": {
+                  "column": "shelfId"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Measure"
+            }
+          },
+          "Note": {
+            "fields": {
+              "authorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "body": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "summary": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {
+              "author": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Author",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "authorId": {
+                  "column": "authorId"
+                },
+                "body": {
+                  "column": "body"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "summary": {
+                  "column": "summary"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Note"
+            }
+          },
+          "Post": {
+            "fields": {
+              "authorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {
+              "author": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "authorId": {
+                  "column": "authorId"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "title": {
+                  "column": "title"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Post"
+            }
+          },
+          "Shelf": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "measures": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "shelfId"
+                  ]
+                },
+                "to": {
+                  "model": "Measure",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Shelf"
+            }
+          },
+          "Task": {
+            "discriminator": {
+              "field": "type"
+            },
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "parentId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "type": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {
+              "parent": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "parentId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Task",
+                  "namespace": "__unbound__"
+                }
+              },
+              "subtasks": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "parentId"
+                  ]
+                },
+                "to": {
+                  "model": "Task",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "parentId": {
+                  "column": "parentId"
+                },
+                "title": {
+                  "column": "title"
+                },
+                "type": {
+                  "column": "type"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Task"
+            },
+            "variants": {
+              "bug": {
+                "model": "Bug",
+                "namespace": "__unbound__"
+              },
+              "feature": {
+                "model": "Feature",
+                "namespace": "__unbound__"
+              }
+            }
+          },
+          "Tick": {
+            "fields": {
+              "at": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/datetime@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "label": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "at": {
+                  "column": "at"
+                },
+                "label": {
+                  "column": "label"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Tick"
+            }
+          },
+          "User": {
+            "fields": {
+              "email": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "role": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/enum@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Role",
+                  "namespaceId": "__unbound__",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {
+              "posts": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "authorId"
+                  ]
+                },
+                "to": {
+                  "model": "Post",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "email": {
+                  "column": "email"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "role": {
+                  "column": "role"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "User"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "table": {
+            "Account": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Author": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Counter": {
+              "columns": {
+                "big": {
+                  "codecId": "mysql/bigint@1",
+                  "dataType": "mysql/bigint",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Drawer": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Event": {
+              "columns": {
+                "accountId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "at": {
+                  "codecId": "mysql/datetime@1",
+                  "dataType": "mysql/datetime",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "id": {
+                  "codecId": "mysql/bigint@1",
+                  "dataType": "mysql/bigint",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Event_accountId_idx_cbfb3085"
+                  },
+                  "source": {
+                    "columns": [
+                      "accountId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Event"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Account"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "accountId"
+                  ],
+                  "name": "Event_accountId_idx_cbfb3085",
+                  "prefix": "Event_accountId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Feature": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "priority": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "primaryKey": true
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Feature"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Task"
+                  }
+                }
+              ],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Item": {
+              "columns": {
+                "data": {
+                  "codecId": "mysql/longblob@1",
+                  "dataType": "mysql/longblob",
+                  "nullable": false
+                },
+                "doc": {
+                  "codecId": "mysql/json@1",
+                  "dataType": "mysql/json",
+                  "nullable": false
+                },
+                "drawerId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "extra": {
+                  "codecId": "mysql/json@1",
+                  "dataType": "mysql/json",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "on": {
+                  "codecId": "mysql/boolean@1",
+                  "dataType": "mysql/boolean",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Item_drawerId_idx_a3d701ce"
+                  },
+                  "source": {
+                    "columns": [
+                      "drawerId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Item"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Drawer"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "drawerId"
+                  ],
+                  "name": "Item_drawerId_idx_a3d701ce",
+                  "prefix": "Item_drawerId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Ledger": {
+              "columns": {
+                "cents": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "wide": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 0
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Measure": {
+              "columns": {
+                "amount": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "count": {
+                  "codecId": "mysql/bigintnumber@1",
+                  "dataType": "mysql/bigint",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "label": {
+                  "codecId": "mysql/text@1",
+                  "dataType": "mysql/text",
+                  "nullable": false
+                },
+                "price": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "ratio": {
+                  "codecId": "mysql/double@1",
+                  "dataType": "mysql/double",
+                  "nullable": false
+                },
+                "shelfId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Measure_shelfId_idx_8761559f"
+                  },
+                  "source": {
+                    "columns": [
+                      "shelfId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Measure"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Shelf"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "shelfId"
+                  ],
+                  "name": "Measure_shelfId_idx_8761559f",
+                  "prefix": "Measure_shelfId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Note": {
+              "columns": {
+                "authorId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "body": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "summary": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": true,
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Note_authorId_idx_e47547ed"
+                  },
+                  "source": {
+                    "columns": [
+                      "authorId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Note"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Author"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "authorId"
+                  ],
+                  "name": "Note_authorId_idx_e47547ed",
+                  "prefix": "Note_authorId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Post": {
+              "columns": {
+                "authorId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "title": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Post_authorId_idx_e47547ed"
+                  },
+                  "source": {
+                    "columns": [
+                      "authorId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Post"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "User"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "authorId"
+                  ],
+                  "name": "Post_authorId_idx_e47547ed",
+                  "prefix": "Post_authorId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Shelf": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Task": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "parentId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": true
+                },
+                "severity": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": true,
+                  "typeParams": {
+                    "length": 191
+                  }
+                },
+                "title": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                },
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Task.type",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Task_parentId_idx_6a68f597"
+                  },
+                  "source": {
+                    "columns": [
+                      "parentId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Task"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Task"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "parentId"
+                  ],
+                  "name": "Task_parentId_idx_6a68f597",
+                  "prefix": "Task_parentId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Tick": {
+              "columns": {
+                "at": {
+                  "codecId": "mysql/datetime@1",
+                  "dataType": "mysql/datetime",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "label": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "at"
+                ]
+              },
+              "uniques": []
+            },
+            "User": {
+              "columns": {
+                "email": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "role": {
+                  "codecId": "mysql/enum@1",
+                  "dataType": "mysql/enum",
+                  "nullable": false,
+                  "typeParams": {
+                    "values": [
+                      "USER",
+                      "ADMIN"
+                    ]
+                  },
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "Role",
+                    "namespaceId": "__unbound__",
+                    "plane": "storage"
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "email"
+                  ]
+                }
+              ]
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": [
+                "USER",
+                "ADMIN"
+              ]
+            },
+            "Task.type": {
+              "kind": "valueSet",
+              "values": [
+                "bug",
+                "feature"
+              ]
+            }
+          }
+        },
+        "id": "__unbound__"
+      }
+    },
+    "storageHash": "4ac60b45c34e468ab20c6bfa9a22a2898ea50ac83b0ef69a77de85a8d4bafc2b"
+  },
+  "capabilities": {
+    "sql": {
+      "defaultInInsert": true,
+      "enums": true,
+      "foreignKeys": true,
+      "jsonAgg": true,
+      "limit": true,
+      "orderBy": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

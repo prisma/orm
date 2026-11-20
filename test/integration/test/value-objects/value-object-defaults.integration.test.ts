@@ -210,7 +210,9 @@ model User {
     expect({ accepted, refused: refused.diagnostics }).toEqual({
       accepted: [[], [], [], [], [], []],
       refused: [
-        invalidLiteral('Field "User.a.price": sqlite/text JSON value must be a string'),
+        invalidLiteral(
+          'Field "User.a.price": sqlite/decimal JSON value must be decimal text, as in "12.50"',
+        ),
         invalidLiteral(
           'Field "User.a.big": sqlite/integer JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
         ),

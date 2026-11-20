@@ -77,6 +77,14 @@ The library that handles the actual network connection to your database. A drive
 
 Which specific database you're using — Postgres, MySQL, MongoDB, etc. Each target belongs to a family (e.g., Postgres is a SQL target; MongoDB is a Mongo target) and supports a specific set of capabilities.
 
+### Target package
+
+The package an application installs to use a target, such as `@prisma/orm-postgres`. Its `defineConfig` assembles the family, target, adapter and driver, and it exports everything the application imports. ADR 242 and some older code call it a *facade*.
+
+### Init contribution
+
+What a target package tells `prisma orm init`: the default export of its `init` entrypoint, typed `InitContribution`. It holds the starter contract, the `db.ts` and `.env.example` text, the driver packages, the quick reference and an optional server probe. Unlike a descriptor's contributions, no stack aggregates it; `init` loads it from the one target package the user chose. See [ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md).
+
 ### Family
 
 A category of databases that share fundamental characteristics. SQL is a family — Postgres, MySQL, and SQLite are all SQL targets that share concepts like tables, columns, and joins. MongoDB is its own family (not a target under a generic "document" family). Prisma 8 defines shared behavior at the family level so individual targets only need to handle what's specific to them.
@@ -233,7 +241,7 @@ The strategies a database may be changed by, recorded in its [marker](#marker): 
 
 ### Data Protection Policy
 
-Whether a change to a database may lose data or widen who can read or write rows, recorded in its [marker](#marker) as two settings: `dataLoss` (`data-loss-forbidden`, `data-loss-with-consent`, `data-loss-permitted`) and `accessWidening` (`access-widening-forbidden`, `access-widening-with-consent`, `access-widening-permitted`). `with-consent` is the default and is today's behaviour: `db update` asks before a loss, and a migration carries the consent given when it was planned. No command enforces the data protection settings yet: they are recorded and compared with a ref's, and `forbidden` and `permitted` behave as `with-consent` until enforcement is in place. A [ref](#ref-contract-ref) declares the policies its database should have; `db migrate --to <ref>` and `db update --to <ref>` fail with `MIGRATION.POLICY_MISMATCH` when they differ from the database's, and write the ref's policies into the marker only when given `--permit-policy-change`. See [ADR 320](architecture%20docs/adrs/ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md).
+Whether a change to a database may lose data or widen who can read or write rows, recorded in its [marker](#marker) as two settings: `dataLoss` (`data-loss-forbidden`, `data-loss-with-consent`, `data-loss-permitted`) and `accessWidening` (`access-widening-forbidden`, `access-widening-with-consent`, `access-widening-permitted`). `with-consent` is the default and is today's behaviour: `db update` asks before a loss, and a migration carries the consent given when it was planned. Under `forbidden`, `db update` refuses the change even with `--delete` or `--allow`, `db migrate` refuses a run containing a migration that does it, and `migration plan --to <ref>` refuses to write one when the ref declares it; each fails with `MIGRATION.DATA_PROTECTION_FORBIDS` before anything runs. Under `permitted`, `db update` does not ask. A loss is an operation whose class is `destructive`; an access change in a recorded migration is recognised by the target from the operation's structure, so one written as raw SQL is not seen. A [ref](#ref-contract-ref) declares the policies its database should have; `db migrate --to <ref>` and `db update --to <ref>` fail with `MIGRATION.POLICY_MISMATCH` when they differ from the database's, and write the ref's policies into the marker only when given `--permit-policy-change`. See [ADR 320](architecture%20docs/adrs/ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md).
 
 ### Namespace
 

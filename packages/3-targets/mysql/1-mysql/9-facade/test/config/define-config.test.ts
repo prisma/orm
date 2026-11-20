@@ -2,6 +2,7 @@ import mysqlAdapter from '@internal/adapter-mysql/control';
 import mysqlDriver from '@internal/driver-mysql/control';
 import sql from '@internal/family-sql/control';
 import mysql from '@internal/target-mysql/control';
+import { restateTypeDeclarations } from '@internal/target-package-config/type-declarations';
 import { describe, expect, it } from 'vitest';
 import { defineConfig } from '../../src/config/define-config';
 
@@ -24,7 +25,7 @@ describe('defineConfig for MySQL', () => {
     }).toEqual({
       family: sql,
       target: mysql,
-      adapter: mysqlAdapter,
+      adapter: restateTypeDeclarations(mysqlAdapter, '@internal/mysql/contract-types'),
       driver: mysqlDriver,
       extensions: [],
       output: './prisma/contract.json',
@@ -35,7 +36,12 @@ describe('defineConfig for MySQL', () => {
 
   it('reads a TypeScript contract with the TypeScript provider', () => {
     const config = defineConfig({ contract: './prisma/contract.ts', output: 'generated' });
-    expect({ output: config.contract?.output, inputs: config.contract?.source.inputs }).toEqual({
+    expect({
+      format: config.contract?.source.format,
+      output: config.contract?.output,
+      inputs: config.contract?.source.inputs,
+    }).toEqual({
+      format: 'typescript',
       output: 'generated/contract.json',
       inputs: ['./prisma/contract.ts'],
     });
@@ -65,5 +71,16 @@ describe('defineConfig for MySQL', () => {
     const config = defineConfig({ contract: './prisma/contract.prisma' });
 
     expect(Object.hasOwn(config, 'formatter')).toBe(false);
+  });
+});
+
+describe('the modules generated files import from', () => {
+  it('names its own contract-types and migration modules', () => {
+    const config = defineConfig({ contract: './prisma/contract.prisma' });
+
+    expect([config.contract?.typesModule, config.migrations]).toEqual([
+      '@internal/mysql/contract-types',
+      { module: '@internal/mysql/migration' },
+    ]);
   });
 });

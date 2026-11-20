@@ -1,0 +1,117 @@
+// use prisma-8
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  role  Role
+  posts Post[]
+}
+
+model Post {
+  id       Int    @id @default(autoincrement())
+  title    String
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId Int
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model Counter {
+  id  Int    @id
+  big BigInt
+}
+
+model Account {
+  id     Int     @id
+  name   String
+  events Event[]
+}
+
+model Event {
+  id        BigInt   @id
+  at        DateTime
+  account   Account  @relation(fields: [accountId], references: [id])
+  accountId Int
+}
+
+model Author {
+  id    Int    @id
+  notes Note[]
+}
+
+model Note {
+  id       Int     @id
+  body     String
+  summary  String?
+  author   Author  @relation(fields: [authorId], references: [id])
+  authorId Int
+}
+
+model Tick {
+  at    DateTime @id
+  label String
+}
+
+model Task {
+  id       Int     @id
+  title    String
+  type     String
+  parentId Int?
+  parent   Task?   @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks Task[]  @relation("Subtasks")
+
+  @@discriminator(type)
+}
+
+model Bug {
+  severity String
+
+  @@base(Task, "bug")
+}
+
+model Feature {
+  priority Int
+
+  @@base(Task, "feature")
+  @@map("Feature")
+}
+
+model Shelf {
+  id       Int       @id
+  measures Measure[]
+}
+
+model Measure {
+  id      Int                @id
+  count   BigInt(as: number)
+  ratio   Float
+  amount  Decimal
+  price   Decimal(precision: 10, scale: 2)
+  label   String(storage: text)
+  shelf   Shelf              @relation(fields: [shelfId], references: [id])
+  shelfId Int
+}
+
+model Ledger {
+  id    Int                              @id
+  wide  Decimal(precision: 65, scale: 0)
+  cents Decimal(precision: 10, scale: 2)
+}
+
+model Drawer {
+  id    Int    @id
+  items Item[]
+}
+
+model Item {
+  id       Int     @id
+  on       Boolean
+  data     Bytes
+  doc      Json
+  extra    Json?
+  drawer   Drawer  @relation(fields: [drawerId], references: [id])
+  drawerId Int
+}

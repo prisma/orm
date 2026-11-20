@@ -148,13 +148,13 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [x] `update with upsert relation` — 5 parallel update with nested child upsert, asserts occStamp 1 and child count 1 [providers: all] → non-ported
 
 ### packages/client/tests/functional/order-by-null/tests.ts
-- [x] `should return records sorted by name asc and null first` — findMany orderBy name asc nulls first, asserts nulls precede 'a','b' [providers: exclude:mongodb] → non-ported
-- [x] `should return records sorted by name asc and null last` — findMany orderBy name asc nulls last, asserts 'a','b' precede nulls [providers: exclude:mongodb] → non-ported
-- [x] `should return records sorted by name desc and null first` — findMany orderBy name desc nulls first, asserts nulls precede 'b','a' [providers: exclude:mongodb] → non-ported
-- [x] `should return records sorted by name desc and null last` — findMany orderBy name desc nulls last, asserts 'b','a' precede nulls [providers: exclude:mongodb] → non-ported
+- [ ] `should return records sorted by name asc and null first` — findMany orderBy name asc nulls first, asserts nulls precede 'a','b' [providers: exclude:mongodb] → non-ported (not yet ported)
+- [ ] `should return records sorted by name asc and null last` — findMany orderBy name asc nulls last, asserts 'a','b' precede nulls [providers: exclude:mongodb] → non-ported (not yet ported)
+- [ ] `should return records sorted by name desc and null first` — findMany orderBy name desc nulls first, asserts nulls precede 'b','a' [providers: exclude:mongodb] → non-ported (not yet ported)
+- [ ] `should return records sorted by name desc and null last` — findMany orderBy name desc nulls last, asserts 'b','a' precede nulls [providers: exclude:mongodb] → non-ported (not yet ported)
 
 ### packages/client/tests/functional/postgres_raw_query_parameter_types/test.ts
-- [x] `$queryRaw works with different parameter types` — issues two identical-text $queryRaw with int vs decimal param, verifies prepared-statement cache respects param types (no type-mismatch error) [providers: postgres-only] → non-ported
+- [ ] `$queryRaw works with different parameter types` — issues two identical-text $queryRaw with int vs decimal param, verifies prepared-statement cache respects param types (no type-mismatch error) [providers: postgres-only] → non-ported (needs re-examination)
 
 ### packages/client/tests/functional/prisma-dot-dmmf/tests.ts
 - [x] `Prisma.dmmf in JS client > exports Prisma.dmmf (default)` — asserts Prisma.dmmf matches snapshot; only runs when generatorType is prisma-client-js (describeIf) [providers: all, skipDb] → non-ported
@@ -195,8 +195,8 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [x] `columns with _bin collation return strings, not Uint8Array` — after altering char/varchar/text columns to utf8mb4_bin and creating a user, `$queryRaw` returns those columns as string 'hello' (not Uint8Array) [providers: mysql-only] → non-ported
 
 ### packages/client/tests/functional/raw-queries/send-type-hints/tests.ts
-- [x] `Uint8Array ($queryRaw)` — INSERT binary via `$queryRaw` template (MySQL vs quoted-identifier branch), findUnique returns binary equal to Uint8Array [1,2,3] [providers: exclude:mongodb] → non-ported
-- [x] `Uint8Array ($executeRaw)` — same insert via `$executeRaw` template, findUnique binary equals Uint8Array [1,2,3] [providers: exclude:mongodb] → non-ported
+- [ ] `Uint8Array ($queryRaw)` — INSERT binary via `$queryRaw` template (MySQL vs quoted-identifier branch), findUnique returns binary equal to Uint8Array [1,2,3] [providers: exclude:mongodb] → non-ported (needs re-examination)
+- [ ] `Uint8Array ($executeRaw)` — same insert via `$executeRaw` template, findUnique binary equals Uint8Array [1,2,3] [providers: exclude:mongodb] → non-ported (needs re-examination)
 - [x] `Uint8Array ($queryRaw + Prisma.sql)` — insert via `$queryRaw(Prisma.sql...)`, binary round-trips [providers: exclude:mongodb] → non-ported
 - [x] `Uint8Array ($executeRaw + Prisma.sql)` — insert via `$executeRaw(Prisma.sql...)`, binary round-trips [providers: exclude:mongodb] → non-ported
 

@@ -32,7 +32,7 @@ export function requireTemporal(meta: TemporalUnavailableMeta): TemporalImplemen
 5. **It is published inside `@prisma/orm-framework`,** as `@prisma/orm-framework/type-implementations/*`. This amends ADR 242, whose platform packages otherwise follow the domain folders: `@prisma/orm-framework` carries the framework's layers and this one package besides. Every internal package reaches the registry inside one published package, and every target's published package depends on `@prisma/orm-framework`, so a process holds one copy, and one fallback `Temporal`. Which tarball carries it does not change where it sits in the layering.
 6. **`packages/3-targets/` holds one folder per database, plus `0-shared/`** for packages that several databases' packages share. The check that a database's packages depend only on lower-numbered packages of their own database walks the database folders and skips `0-shared/` by name. The top-level `packages/0-shared/` is a different folder: it holds repository tooling registered in the framework domain, such as the map of published packages.
 
-Today it holds the date and time logic: finding `Temporal` (`./temporal`), the `now()` values and their generator ids (`./now`), reading and writing Temporal values as ISO text (`./temporal-text`), checks on a JavaScript `Date` (`./date`) and the ISO 8601 duration pattern (`./duration`).
+Today it holds the date and time logic: finding `Temporal` (`./temporal`), the `now()` values and their generator ids (`./now`), reading and writing Temporal values as ISO text (`./temporal-text`), checks on a JavaScript `Date` (`./date`) and the ISO 8601 duration pattern (`./duration`). It also holds decimal text (`./decimal`), which PostgreSQL, SQLite and MongoDB use, booleans stored as integers (`./boolean`), which SQLite and MySQL use, and the check that a value is plain JSON (`./json`), which MongoDB and MySQL use ([ADR 322](ADR%20322%20-%20Each%20target%20declares%20the%20scalar%20convenience%20types%20over%20its%20own%20explicit%20types.md)).
 
 ## Why
 
@@ -43,7 +43,7 @@ The framework is not the place for it. The framework holds the affordances every
 ## Consequences
 
 - A target's date and time codecs import the value logic and keep their own wiring and errors.
-- More logic of the same kind can move here: the safe-integer range checks of the `number`-valued 64-bit integer codecs, decimal text, the plain-JSON check (which ADR 257 plans to share), and the ISO date and time text reader that the framework holds today.
+- More logic of the same kind can move here: the safe-integer range checks of the `number`-valued 64-bit integer codecs and the ISO date and time text reader that the framework holds today.
 - Code that only one family can use, such as anything that builds SQL expressions, stays in that family's packages.
 
 ## Alternatives considered

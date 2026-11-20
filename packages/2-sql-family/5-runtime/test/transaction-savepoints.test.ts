@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { startActivityOn } from '../src/activity-handle';
-import { testCall } from './client-activity-kinds';
 import {
   afterHookNames,
   createSetup,
+  finalized,
   type HookEvent,
   names,
   rawPlan,
+  rejectsWith,
   type SetupOptions,
+  transactionIds,
 } from './transaction-activity-fixtures';
 
 async function begin(options: SetupOptions = {}) {
@@ -25,18 +26,6 @@ const driverCalls = (events: readonly HookEvent[]) =>
   names(events)
     .filter((name) => /^(SAVEPOINT|RELEASE|ROLLBACK|begin|commit|rollback)/.test(name))
     .join(', ');
-
-const finalized = (events: readonly HookEvent[]) =>
-  names(events)
-    .filter((name) => name.startsWith('finalized:'))
-    .map((name) => name.slice('finalized:'.length))
-    .join(', ');
-
-const transactionIds = (events: readonly HookEvent[]) =>
-  events.filter((event) => event.name === 'started:transaction').map((e) => e.activity?.id);
-
-const rejectsWith = (work: Promise<unknown>, code: string) =>
-  expect(work).rejects.toMatchObject({ code: `RUNTIME.${code}` });
 
 describe('RuntimeTransaction.transaction()', () => {
   it.each([
@@ -224,12 +213,41 @@ describe('RuntimeTransaction.transaction()', () => {
     expect(savepoint.signal).toBe(transaction.signal);
   });
 
-  it('closes the transaction and every savepoint when ROLLBACK TO fails, and destroys an owned connection on the outer rollback', async () => {
+  it.each([
+    { title: 'resolved', middleware: [], commit: 'resolves' },
+    {
+      title: 'rejected with an activityEnded error',
+      middleware: [
+        {
+          name: 'failing-end',
+          familyId: 'sql' as const,
+          async activityEnded() {
+            throw new Error('ended failed');
+          },
+        },
+      ],
+      commit: 'rejects',
+    },
+  ])(
+    'rejects rollback() on a savepoint whose commit() $title, sending nothing',
+    async ({ middleware, commit }) => {
+      const { transaction, events } = await begin({ middleware });
+      const savepoint = await transaction.transaction();
+
+      const committing = savepoint.commit();
+      await (commit === 'resolves' ? committing : expect(committing).rejects.toThrow());
+      const before = driverCalls(events);
+      await rejectsWith(savepoint.rollback(), 'TRANSACTION_CLOSED');
+
+      expect(driverCalls(events)).toBe(before);
+    },
+  );
+
+  it('closes the transaction and every savepoint when ROLLBACK TO fails', async () => {
     const setup = createSetup({
       failures: { rollbackToSavepoint: new Error('rollback to failed') },
     });
-    const transaction = await (await startActivityOn(setup.runtime, testCall)).transaction?.();
-    if (transaction === undefined) throw new Error('the runtime handle has no transaction');
+    const transaction = await (await setup.runtime.connection()).transaction();
     const outerChild = await transaction.transaction();
     const innerChild = await outerChild.transaction();
 
@@ -243,8 +261,8 @@ describe('RuntimeTransaction.transaction()', () => {
     expect(setup.events.slice(before)).toEqual([]);
 
     await rejectsWith(transaction.rollback(), 'TRANSACTION_CLOSED');
-    expect(afterHookNames(setup.events).slice(-3).join(', ')).toBe(
-      'ended:transaction:failed, finalized:transaction:rolled-back, destroy',
+    expect(afterHookNames(setup.events).slice(-2).join(', ')).toBe(
+      'ended:transaction:failed, finalized:transaction:rolled-back',
     );
     expect(driverCalls(setup.events)).toBe(
       'begin, SAVEPOINT sp_1, SAVEPOINT sp_2, ROLLBACK TO SAVEPOINT sp_2',

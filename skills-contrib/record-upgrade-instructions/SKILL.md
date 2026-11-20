@@ -2,8 +2,8 @@
 name: record-upgrade-instructions
 description: >-
   Record upgrade instructions alongside a Prisma 8 breaking-change
-  PR, so downstream consumers (users of `@internal/*` and authors
-  of Prisma 8 extensions) can apply the matching code translation
+  PR, so downstream consumers (applications on the published
+  `@prisma/orm-*` packages and authors of Prisma 8 extensions) can apply the matching code translation
   automatically via the published upgrade skills. Use when you have
   refactored framework code and the test suite went red in
   `examples/`, `packages/3-extensions/` or a target facade, when you fixed those
@@ -51,6 +51,8 @@ Throughout this skill, `<target>` is the target branch (`main` unless stacked), 
    ```
 
    The inner lookbehind restricts the exclusion to the exact `fns` token.
+
+   **Name only published packages in prose.** Follow the rule in [`upgrade-instructions/README.md`](../../upgrade-instructions/README.md#checks): prose names `@prisma/orm-*` entries, never `@internal/*` packages; `detection` patterns and codemod scripts may name workspace names.
 
    **Only describe consumer action.** Omit narrative about internal renames, dev-only dependency bumps, and incidental generated churn. Changes to `@internal/*` APIs that no published `@prisma/*` package re-exports are not consumer action either: a PR that only changes those declares `changes: []`, even when extension tests had to be updated. If this PR's audience needs no action, use only:
 
@@ -141,7 +143,7 @@ Include:
 - The updated example and extension code, matching the result of applying the instructions outside test directories. The entry neither writes nor updates those tests.
 - PR-description references naming the fragment directories, for example `upgrade-instructions/pending/migration-metadata-shape/app/` and `upgrade-instructions/pending/migration-metadata-shape/extension/`.
 
-Both audience copies may share IDs, summaries, or detection predicates; they are independent records. Fixes to either copy use normal PR review. Historical published guidance can also be corrected through normal reviewed PRs, but edits to old guides do not replace a new PR's required pending declaration.
+Both audience copies may share IDs, summaries, or detection predicates; they are independent records. Fixes to either copy use normal PR review. Historical published guidance can also be corrected through normal reviewed PRs, but edits to old guides do not replace a new PR's required pending declaration. Guides up to `8.0.0-rc.24` may keep the workspace names they shipped with; the published-names check does not read them.
 
 ## Out of scope
 

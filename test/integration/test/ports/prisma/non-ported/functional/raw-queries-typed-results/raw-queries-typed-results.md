@@ -1,6 +1,6 @@
 # Non-ported — raw-queries/typed-results
 
-The subject of every test is `$queryRaw` (tagged-template form: `` prisma.$queryRaw`SELECT …` ``) returning typed rows from the database. Prisma 8 has no raw-SQL-string executor (verified: no `queryRaw`/`executeRaw`/`queryRawUnsafe` runtime surface in `packages/`; the only `rawSql` is a migration-op factory, not a query executor). The `sql()` builder is a query-builder expression, not a passthrough of raw SQL text. The mechanism under test (`$queryRaw` tagged-template → raw SQL text → typed JSON response) is absent.
+The subject of every test is `$queryRaw` (tagged-template form: `` prisma.$queryRaw`SELECT …` ``) returning typed rows from the database. Prisma 8 runs raw SQL through ``db.raw.sql`…` ``, but the caller declares each result column's codec (`.returnsRow({ ... })`), so the mechanism under test, result types inferred from the database's response, has no equivalent.
 
 - `packages/client/tests/functional/raw-queries/typed-results/tests.ts` › `simple expression` — verifies `$queryRaw\`SELECT 1 + 1\`` returns `2` — `$queryRaw` tagged-template absent in Prisma 8
 - `packages/client/tests/functional/raw-queries/typed-results/tests.ts` › `query model with multiple types` — verifies `$queryRaw\`SELECT * FROM "TestModel"\`` returns typed row with all scalar types — `$queryRaw` tagged-template absent in Prisma 8

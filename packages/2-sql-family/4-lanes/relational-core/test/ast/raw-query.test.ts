@@ -68,6 +68,60 @@ describe('ast/RawQueryAst', () => {
     });
   });
 
+  describe('result codec bindings', () => {
+    it('copies and freezes parameterized array metadata', () => {
+      const codec = {
+        codecId: 'test/value@1',
+        typeParams: { nested: { labels: ['kept'] } },
+        many: true,
+      };
+      const node = RawQueryAst.rows(['select values from sample'], {
+        values: { codecId: codec.codecId, nullable: true, codec },
+      });
+
+      codec.typeParams.nested.labels.push('changed');
+      codec.many = false;
+
+      expect(node.result).toEqual({
+        kind: 'rows',
+        columns: {
+          values: {
+            codecId: 'test/value@1',
+            nullable: true,
+            codec: {
+              codecId: 'test/value@1',
+              typeParams: { nested: { labels: ['kept'] } },
+              many: true,
+            },
+          },
+        },
+      });
+      if (node.result.kind !== 'rows') expect.unreachable('expected rows');
+      const copied = node.result.columns['values']?.codec;
+      if (!copied) expect.unreachable('expected copied codec');
+      expect(Object.isFrozen(copied)).toBe(true);
+      expect(Object.isFrozen(copied.typeParams)).toBe(true);
+      expect(node.rewrite({}).result).toEqual(node.result);
+    });
+
+    it('refuses a codec binding that contradicts the declared codec id', () => {
+      expect(() =>
+        RawQueryAst.rows(['select status from sample'], {
+          status: {
+            codecId: 'pg/text@1',
+            nullable: false,
+            codec: { codecId: 'pg/int4@1' },
+          },
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.AST_INVALID',
+          meta: expect.objectContaining({ column: 'status' }),
+        }),
+      );
+    });
+  });
+
   describe('column names that collide with object machinery', () => {
     const protoColumns = Object.fromEntries([
       ['__proto__', { codecId: 'pg/int4@1', nullable: false }],

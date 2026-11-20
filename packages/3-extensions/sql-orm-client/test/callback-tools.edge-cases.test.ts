@@ -171,7 +171,7 @@ describe('the indexes of a collection narrowed by variant', () => {
 
     const filtered = features.where((_t, { fns, indexes }) => {
       expectTypeOf<keyof typeof indexes>().toEqualTypeOf<
-        'tasks_project_id_idx' | 'tasks_reporter_id_idx'
+        'tasks_bug_assignee_person_id_idx' | 'tasks_project_id_idx' | 'tasks_reporter_id_idx'
       >();
       return fns.eq(indexes.tasks_project_id_idx.columns.project_id, 1);
     });

@@ -23,10 +23,8 @@
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "catalog:",
-    "@types/pg": "catalog:",
     "arktype": "^2.2.9",
-    "jose": "^6",
-    "pg": "catalog:"
+    "jose": "^6"
   },
   "devDependencies": {
     "@internal/extension-supabase": "workspace:8.0.0-rc.24",
@@ -38,6 +36,8 @@
   },
   "peerDependencies": {
     "@prisma/orm-target-postgres": "workspace:8.0.0-rc.24",
+    "@types/pg": "^8.20.0",
+    "pg": "^8.22.0",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

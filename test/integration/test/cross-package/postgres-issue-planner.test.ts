@@ -29,7 +29,7 @@ import {
   PostgresUnboundSchema,
   postgresCreateNamespace,
 } from '@internal/target-postgres/types';
-import { applicationDomainOf } from '@repo/test-utils';
+import { applicationDomainOf, workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { introspectedColumn as introspectedColumnOver } from '../../../../packages/2-sql-family/1-core/contract/test/introspected-column';
 import { createTestPostgresControlAdapter } from '../../../../packages/3-targets/postgres/2-adapter/test/helpers/test-control-adapter';
@@ -709,6 +709,7 @@ describe('planIssues', () => {
         from: 'a'.repeat(64),
         to: 'b'.repeat(64),
         snapshotsImportPath: '../../snapshots',
+        migrationModule: workspaceMigrationModule.postgres,
       });
 
       expect(ts).toContain('export default class M extends Migration');

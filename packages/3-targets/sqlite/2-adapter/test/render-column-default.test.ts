@@ -32,6 +32,16 @@ describe('the DEFAULT clause the SQLite adapter writes in every DDL statement', 
       "DEFAULT '-000043-03-15T00:00:00.500Z'",
     ],
     [
+      'true on a boolean column, as the integer its codec writes',
+      col('c', 'INTEGER', { default: lit(true), codecRef: { codecId: 'sqlite/boolean@1' } }),
+      'DEFAULT 1',
+    ],
+    [
+      'false on a boolean column, as the integer its codec writes',
+      col('c', 'INTEGER', { default: lit(false), codecRef: { codecId: 'sqlite/boolean@1' } }),
+      'DEFAULT 0',
+    ],
+    [
       'date text on a text column, unchanged',
       col('c', 'TEXT', {
         default: lit('2024-01-01T00:00:00Z'),

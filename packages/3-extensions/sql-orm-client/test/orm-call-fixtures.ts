@@ -13,7 +13,6 @@ import {
   type ActivitySource,
   activitySource,
   type HashablePlan,
-  type RuntimeTransaction,
 } from '@internal/sql-runtime';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { hashContent } from '@internal/utils/hash-content';
@@ -86,21 +85,18 @@ export function createActivityRuntime(options: ActivityRuntimeOptions = {}): {
       };
       const call: RecordedCall = { activity, statements: [], transactions: [], ended: undefined };
       calls.push(call);
-      const transaction = async (): Promise<RuntimeTransaction> => {
+      const transaction = async <R>(
+        fn: (tx: ReturnType<typeof recordingScope>) => PromiseLike<R>,
+      ): Promise<R> => {
         const index = call.transactions.push('open') - 1;
-        return {
-          ...recordingScope(call.statements),
-          signal: new AbortController().signal,
-          commit: async () => {
-            call.transactions[index] = 'committed';
-          },
-          rollback: async () => {
-            call.transactions[index] = 'rolled-back';
-          },
-          transaction: async (): Promise<never> => {
-            throw new Error('transaction is not stubbed');
-          },
-        };
+        try {
+          const result = await fn(recordingScope(call.statements));
+          call.transactions[index] = 'committed';
+          return result;
+        } catch (error) {
+          call.transactions[index] = 'rolled-back';
+          throw error;
+        }
       };
       const handle = {
         ...recordingScope(call.statements),

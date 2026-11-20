@@ -12,7 +12,13 @@ import {
 } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { MYSQL_ENUM_CODEC_ID } from './codec-ids';
-import { mysqlDatetime, mysqlTime, mysqlTimestamp } from './data-types';
+import {
+  mysqlDatetime,
+  mysqlDecimal,
+  mysqlDecimalColumnAsCreated,
+  mysqlTime,
+  mysqlTimestamp,
+} from './data-types';
 import { mysqlError } from './errors';
 import { quoteIdentifier } from './sql-utils';
 
@@ -85,9 +91,9 @@ function enumMembersOf(
   if (!Array.isArray(values) || !values.every((value) => typeof value === 'string')) {
     throw mysqlError(
       'CONTRACT.TYPE_PARAMS_INVALID',
-      `${subject} is a MySQL enum but has no enum whose text members it can list.`,
+      `${subject} is a native enum column but has no enum whose text members it can list.`,
       {
-        why: 'A native MySQL enum column is written with its members, which come from the enum that types the column.',
+        why: 'A native enum column on MySQL and MariaDB is written with its members, which come from the enum that types the column.',
         fix: 'Type the column with a PSL enum or an enumType() whose members are text.',
         meta: { table: tableName, column: columnName },
       },
@@ -118,7 +124,7 @@ function enumColumnWithMembers(
       'CONTRACT.TYPE_PARAMS_INVALID',
       `Column "${tableName}"."${columnName}" lists enum members that differ from the members of the enum that types it.`,
       {
-        why: 'A MySQL enum column takes its members from its enum, in the order the enum declares them, so the database and the contract enforce the same members.',
+        why: 'An enum column on MySQL and MariaDB takes its members from its enum, in the order the enum declares them, so the database and the contract enforce the same members.',
         fix: 'Remove the column’s own members, or make them equal the enum’s members in the same order.',
         meta: {
           table: tableName,
@@ -151,6 +157,43 @@ function withZeroPrecision(column: Loose): Loose {
   return { ...column, typeParams: { ...typeParams, precision: 0 } };
 }
 
+function isUnwrittenDecimalColumn(column: unknown): column is Loose {
+  if (!isLoose(column) || column['dataType'] !== mysqlDecimal.id) return false;
+  const typeParams = column['typeParams'];
+  return (
+    !isLoose(typeParams) ||
+    typeParams['precision'] === undefined ||
+    typeParams['scale'] === undefined
+  );
+}
+
+/** A `decimal` column with no precision or no scale written records the column the server makes of it, `decimal(10,0)` for neither and a scale of 0 for a precision alone, and its default is written as that column prints it; a codec reference with no precision is a raw parameter's or an aggregate's, of no column. */
+function withDecimalColumnParams(column: Loose): Loose {
+  const typeParams = mysqlDecimalColumnAsCreated(
+    isLoose(column['typeParams']) ? column['typeParams'] : {},
+  );
+  const columnDefault = column['default'];
+  if (!isLoose(columnDefault) || typeof columnDefault['value'] !== 'string') {
+    return { ...column, typeParams };
+  }
+  const printed = mysqlDecimal.toContract(
+    mysqlDecimal.valueFrom(columnDefault['value'], typeParams),
+  );
+  return { ...column, typeParams, default: { ...columnDefault, value: printed } };
+}
+
+function withFilledColumnParams(
+  namespace: SqlNamespaceInput,
+  tableName: string,
+  columnName: string,
+  column: unknown,
+): unknown {
+  if (isEnumColumn(column)) return enumColumnWithMembers(namespace, tableName, columnName, column);
+  if (isUnwrittenPrecisionColumn(column)) return withZeroPrecision(column);
+  if (isUnwrittenDecimalColumn(column)) return withDecimalColumnParams(column);
+  return column;
+}
+
 function withFilledTypeParams(
   namespace: SqlNamespaceInput,
   tableName: string,
@@ -158,28 +201,18 @@ function withFilledTypeParams(
 ): unknown {
   if (!isLoose(table)) return table;
   const columns = table['columns'];
-  if (
-    !isLoose(columns) ||
-    !Object.values(columns).some(
-      (column) => isEnumColumn(column) || isUnwrittenPrecisionColumn(column),
-    )
-  ) {
-    return table;
-  }
+  if (!isLoose(columns)) return table;
   const filled = Object.fromEntries(
-    Object.entries(columns).map(([columnName, column]) => {
-      if (isEnumColumn(column)) {
-        return [columnName, enumColumnWithMembers(namespace, tableName, columnName, column)];
-      }
-      if (isUnwrittenPrecisionColumn(column)) return [columnName, withZeroPrecision(column)];
-      return [columnName, column];
-    }),
+    Object.entries(columns).map(([columnName, column]) => [
+      columnName,
+      withFilledColumnParams(namespace, tableName, columnName, column),
+    ]),
   );
   return { ...table, columns: filled };
 }
 
 /**
- * Writes the type parameters MySQL gives a column that the authored schema leaves out. Each MySQL enum column's members, from the value set the column names, go into its type parameters in the order the enum declares them, and a column whose own members differ from them is refused; the column's type is then `enum('A','B')`, so the database enforces the members and `db verify` sees a change to them as a change of the column's type. A `datetime`, `timestamp` or `time` column with no precision records precision 0.
+ * Writes the type parameters MySQL gives a column that the authored schema leaves out. Each MySQL enum column's members, from the value set the column names, go into its type parameters in the order the enum declares them, and a column whose own members differ from them is refused; the column's type is then `enum('A','B')`, so the database enforces the members and `db verify` sees a change to them as a change of the column's type. A `datetime`, `timestamp` or `time` column with no precision records precision 0, and a `decimal` column with no precision or scale the precision and scale the server gives it.
  */
 function fillTypeParams(input: SqlNamespaceInput): SqlNamespaceInput {
   const tables = input.entries['table'];
@@ -209,7 +242,7 @@ function rejectSqlBodyIndexes(input: SqlNamespaceInput): void {
       if (index['expression'] !== undefined || index['where'] !== undefined) {
         throw mysqlError(
           'CONTRACT.ARGUMENT_INVALID',
-          `MySQL does not support expression or partial indexes yet: index "${String(index['name'] ?? '<unnamed>')}" on table "${tableName}" declares ${index['expression'] !== undefined ? 'an expression' : 'a where predicate'}. Use a fields-only index.`,
+          `The MySQL and MariaDB targets do not support expression or partial indexes yet: index "${String(index['name'] ?? '<unnamed>')}" on table "${tableName}" declares ${index['expression'] !== undefined ? 'an expression' : 'a where predicate'}. Use a fields-only index.`,
           { meta: { table: tableName } },
         );
       }
@@ -224,8 +257,8 @@ export function mysqlCreateNamespace(input: SqlNamespaceInput): MysqlDatabase {
   if (input.id !== UNBOUND_NAMESPACE_ID) {
     throw mysqlError(
       'CONTRACT.NAMESPACE_INVALID',
-      `The MySQL target has one namespace, "${UNBOUND_NAMESPACE_ID}"; it received "${input.id}".`,
-      { meta: { received: input.id } },
+      `MySQL and MariaDB do not support namespaces, but the contract puts a model in namespace "${input.id}".`,
+      { fix: 'Remove `namespace` from the model.', meta: { received: input.id } },
     );
   }
   rejectSqlBodyIndexes(input);

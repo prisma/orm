@@ -948,36 +948,7 @@ export type AnyColumnBuilder = ColumnBuilder<string, StorageColumn, unknown, any
 
 ## Query Patterns
 
-**Pattern**: Export `tables` from `query.ts` and import directly for better DX. See `.cursor/rules/query-patterns.mdc` for comprehensive query patterns.
-
-**✅ CORRECT: Export tables from query.ts**
-
-```typescript
-// src/prisma/query.ts
-export const tables = schema.tables;
-
-// In query files
-import { sql, tables } from '../prisma/query';
-
-const plan = sql
-  .from(tables.user)
-  .select({ id: tables.user.columns.id })
-  .build();
-```
-
-**✅ CORRECT: Extract variables for reuse**
-
-```typescript
-const userTable = tables.user;
-const userColumns = userTable.columns;
-
-const plan = sql
-  .from(userTable)
-  .select({ id: userColumns.id })
-  .build();
-```
-
-See `.cursor/rules/query-patterns.mdc` for full details on query patterns, type inference, and common usage patterns.
+See [Query Patterns](./query-patterns.md): import `db` from one `db.ts` and address tables as `db.sql.<namespace>.<table>` and models as `db.orm.<namespace>.<Model>`.
 
 ## Type Safety is Non-Negotiable
 

@@ -13,7 +13,7 @@ export function assertOneValuePerColumn(
   for (const [column, value] of values) {
     if (seen.has(column) && !Object.is(seen.get(column), value)) {
       throw ormError(
-        'ORM.RELATION_MUTATION_INVALID',
+        'ORM.ARGUMENT_INVALID',
         `Cannot write junction "${junction}": conflicting values for junction column "${column}"`,
         { meta: { relation, junction, column } },
       );

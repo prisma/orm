@@ -3,6 +3,7 @@ import { UnfilledValue } from '@internal/family-sql/control';
 import { describe, expect, it } from 'vitest';
 import {
   FillStoredKeyCall,
+  MIGRATION_MODULE,
   RemoveStoredKeyCall,
   RenameStoredKeyCall,
 } from '../../src/core/migrations/op-factory-call';
@@ -259,7 +260,7 @@ describe('fillStoredKey', () => {
       'this.fillStoredKey({ table: "place", column: "point", path: "$.country", value: placeholder("GeoPoint.country:value") })',
     );
     expect(call.importRequirements()).toEqual([
-      { moduleSpecifier: '@internal/sqlite/migration', symbol: 'placeholder' },
+      { moduleSpecifier: MIGRATION_MODULE, symbol: 'placeholder' },
     ]);
     await expect(call.toOp()).rejects.toMatchObject({
       code: 'MIGRATION.UNFILLED_PLACEHOLDER',

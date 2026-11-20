@@ -26,7 +26,6 @@
     "@internal/sql-orm-client": "workspace:8.0.0-rc.24",
     "@internal/target-postgres": "workspace:8.0.0-rc.24",
     "jose": "^6",
-    "pg": "catalog:",
     "@internal/contract-authoring": "workspace:8.0.0-rc.24",
     "@internal/family-sql": "workspace:8.0.0-rc.24",
     "@internal/framework-components": "workspace:8.0.0-rc.24",
@@ -40,7 +39,6 @@
     "@internal/utils": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "catalog:",
-    "@types/pg": "catalog:",
     "arktype": "^2.2.9"
   },
   "devDependencies": {
@@ -53,7 +51,9 @@
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@types/pg": "catalog:",
     "ci-info": "^4.3.1",
+    "pg": "catalog:",
     "tsdown": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
@@ -61,6 +61,8 @@
   },
   "peerDependencies": {
     "@internal/adapter-postgres": "workspace:8.0.0-rc.24",
+    "@types/pg": "^8.20.0",
+    "pg": "^8.22.0",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -83,6 +85,9 @@
       "import": "./dist/contract.mjs"
     },
     "./package.json": "./package.json"
+  },
+  "imports": {
+    "#contract-types": "./src/contract/contract-types.ts"
   },
   "engines": {
     "node": ">=24"

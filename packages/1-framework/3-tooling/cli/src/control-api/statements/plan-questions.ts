@@ -73,7 +73,18 @@ export interface PlanAnswer {
  */
 export type AnswerPlanQuestions = (
   questions: readonly PlanQuestion[],
+  answeredWithoutAsking?: readonly AnsweredWithoutAsking[],
 ) => Promise<readonly (PlanAnswer | undefined)[]>;
+
+/**
+ * A subject a run answered without asking, because `consentAll` covers its verb: a consent flag
+ * the user gave for it anyway is used, not unused.
+ */
+export interface AnsweredWithoutAsking {
+  readonly verb: ConsentVerb;
+  readonly subject: string;
+  readonly removedNamespace?: string;
+}
 
 /**
  * An operation of a plan with its subject and the label of that operation. `operationIndex` is
@@ -1184,6 +1195,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
   const consented = new Map<string, ConsentedSubject>();
   const usedPreAnswers = new Set<StatementText>();
   for (let round = 0; ; round += 1) {
+    const answeredWithoutAsking: AnsweredWithoutAsking[] = [];
     const contracts = {
       origin: input.origin,
       originKnown: input.originKnown,
@@ -1233,8 +1245,14 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
         if (statement !== undefined) usedPreAnswers.add(statement);
       }
       entries.forEach((entry, index) => {
-        if (input.consentAll[verb] || matched.answered.has(index)) {
-          consent(verb, entry, texts[index] ?? '');
+        if (!input.consentAll[verb] && !matched.answered.has(index)) return;
+        consent(verb, entry, texts[index] ?? '');
+        if (!matched.answered.has(index)) {
+          answeredWithoutAsking.push({
+            verb,
+            subject: texts[index] ?? '',
+            ...ifDefined('removedNamespace', removedNamespaceOf(entry.subject, plan.namespaces)),
+          });
         }
       });
     }
@@ -1279,7 +1297,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
       ),
       ...accessChanges.map((change) => accessChangeQuestion(change, contracts)),
     ];
-    const answers = await input.answer(questions);
+    const answers = await input.answer(questions, answeredWithoutAsking);
     checkAnswers(questions, answers);
     const typed: {
       readonly statement: StatementText;

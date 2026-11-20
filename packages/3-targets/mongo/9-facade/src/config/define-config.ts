@@ -1,19 +1,17 @@
-import mongoAdapter from '@internal/adapter-mongo/control';
 import type { ContractConfig, FormatterConfig, PrismaConfig } from '@internal/config/config-types';
 import {
   defineConfig as coreDefineConfig,
   defaultContractOutputPath,
 } from '@internal/config/config-types';
-import mongoDriver from '@internal/driver-mongo/control';
-import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/mongo-contract-ts/config-types';
 import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
-import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
+import { contractTypesModule, controlComponents } from './components';
+import { moduleBase } from './module-base';
 
 export interface MongoConfigOptions {
   /** A contract file path (`.prisma` or `.ts`), or a ready `ContractConfig` such as `prisma6Schema(...)`. */
@@ -72,14 +70,11 @@ export function defineConfig(options: MongoConfigOptions): PrismaConfig<'mongo',
   const contractConfig = resolveContractConfig(options, extensions);
 
   return coreDefineConfig({
-    family: mongoFamilyDescriptor,
-    target: mongoTargetDescriptor,
-    adapter: mongoAdapter,
-    driver: mongoDriver,
+    ...controlComponents,
     extensions,
-    contract: contractConfig,
+    contract: { ...contractConfig, typesModule: contractTypesModule },
+    migrations: { ...options.migrations, module: `${moduleBase}/migration` },
     ...ifDefined('db', options.db),
-    ...ifDefined('migrations', options.migrations),
     ...ifDefined('formatter', options.formatter),
   });
 }

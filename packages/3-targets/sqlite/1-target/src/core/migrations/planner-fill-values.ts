@@ -5,10 +5,12 @@ import type { SqlColumnIR } from '@internal/sql-schema-ir/types';
 import { encodeSqliteDatetime } from '../codecs';
 import {
   sqliteBlob,
+  sqliteBoolean,
   sqliteCharacter,
   sqliteCharacterVarying,
   sqliteDate,
   sqliteDatetime,
+  sqliteDecimal,
   sqliteDuration,
   sqliteInteger,
   sqliteJson,
@@ -27,6 +29,8 @@ const DATA_TYPE_FILL_VALUES: ReadonlyMap<string, string> = new Map([
   [sqliteInteger.id, '0'],
   [sqliteReal.id, '0'],
   [sqliteText.id, "''"],
+  [sqliteDecimal.id, "'0'"],
+  [sqliteBoolean.id, '0'],
   [sqliteCharacter.id, "''"],
   [sqliteCharacterVarying.id, "''"],
   [sqliteBlob.id, "X''"],

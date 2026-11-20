@@ -6,6 +6,7 @@ const mysqlTargetDescriptorMetaRuntimeBase = {
   familyId: 'sql',
   targetId: 'mysql',
   id: 'mysql',
+  displayName: 'MySQL',
   version: '0.0.1',
   capabilities: {},
   dataTypes: mysqlDataTypes,

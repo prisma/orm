@@ -38,11 +38,11 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 
 ### packages/client/tests/functional/0-legacy-ports/execute-raw/tests.ts
 
-- [x] `update via executeRawUnsafe` — $executeRawUnsafe UPDATE returns affected count [providers: exclude:mongodb] → non-ported
-- [x] `update via queryRawUnsafe with values` — $executeRawUnsafe with positional params returns affected count [providers: exclude:mongodb] → non-ported
-- [x] `update via executeRaw` — tagged-template $executeRaw UPDATE returns affected count [providers: exclude:mongodb] → non-ported
-- [x] `update via executeRaw using Prisma.join` — $executeRaw with Prisma.join in IN clause [providers: exclude:mongodb] → non-ported
-- [x] `update via executeRaw using Prisma.join and Prisma.sql` — $executeRaw(Prisma.sql`...`) with Prisma.join [providers: exclude:mongodb] → non-ported
+- [ ] `update via executeRawUnsafe` — $executeRawUnsafe UPDATE returns affected count [providers: exclude:mongodb] → non-ported (not yet ported)
+- [ ] `update via queryRawUnsafe with values` — $executeRawUnsafe with positional params returns affected count [providers: exclude:mongodb] → non-ported (not yet ported)
+- [ ] `update via executeRaw` — tagged-template $executeRaw UPDATE returns affected count [providers: exclude:mongodb] → non-ported (not yet ported)
+- [ ] `update via executeRaw using Prisma.join` — $executeRaw with Prisma.join in IN clause [providers: exclude:mongodb] → non-ported (not yet ported)
+- [ ] `update via executeRaw using Prisma.join and Prisma.sql` — $executeRaw(Prisma.sql`...`) with Prisma.join [providers: exclude:mongodb] → non-ported (not yet ported)
 
 ### packages/client/tests/functional/0-legacy-ports/find-raw/tests.ts
 
@@ -76,15 +76,15 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 
 ### packages/client/tests/functional/0-legacy-ports/query-raw/tests.ts
 
-- [x] `select 1 via queryRaw` — tagged $queryRaw SELECT 1, per-provider/driver result [providers: exclude:mongodb] → non-ported
+- [ ] `select 1 via queryRaw` — tagged $queryRaw SELECT 1, per-provider/driver result [providers: exclude:mongodb] → non-ported (not yet ported)
 - [x] `select 1 via queryRawUnsafe` — $queryRawUnsafe SELECT 1 as number, per-provider result [providers: exclude:mongodb] → non-ported
-- [x] `select with alias via queryRaw` — tagged $queryRaw SELECT 1 as number [providers: exclude:mongodb] → non-ported
+- [ ] `select with alias via queryRaw` — tagged $queryRaw SELECT 1 as number [providers: exclude:mongodb] → non-ported (not yet ported)
 - [x] `select values via queryRawUnsafe` — $queryRawUnsafe SELECT 1, per-provider/driver result [providers: exclude:mongodb] → non-ported
 - [x] `select * via queryRawUnsafe` — $queryRawUnsafe SELECT * with inline range filter [providers: exclude:mongodb] → non-ported
 - [x] `select * via queryRawUnsafe with values` — $queryRawUnsafe SELECT * with positional params [providers: exclude:mongodb] → non-ported
-- [x] `select * via queryRaw` — tagged $queryRaw SELECT * with range filter [providers: exclude:mongodb] → non-ported
-- [x] `select fields via queryRaw using Prisma.join` — $queryRaw with Prisma.join for columns and IN values [providers: exclude:mongodb] → non-ported
-- [x] `select fields via queryRaw using Prisma.join and Prisma.sql` — $queryRaw(Prisma.sql`...`) with Prisma.join [providers: exclude:mongodb] → non-ported
+- [ ] `select * via queryRaw` — tagged $queryRaw SELECT * with range filter [providers: exclude:mongodb] → non-ported (not yet ported)
+- [ ] `select fields via queryRaw using Prisma.join` — $queryRaw with Prisma.join for columns and IN values [providers: exclude:mongodb] → non-ported (needs re-examination)
+- [ ] `select fields via queryRaw using Prisma.join and Prisma.sql` — $queryRaw(Prisma.sql`...`) with Prisma.join [providers: exclude:mongodb] → non-ported (needs re-examination)
 
 ### packages/client/tests/functional/0-legacy-ports/run-command-raw/tests.ts
 
@@ -742,16 +742,16 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 
 ### packages/client/tests/functional/field-reference/numeric/tests.ts
 
-- [x] `single condition` — findMany where quantity gt maxQuantity field reference [providers: all] → non-ported
-- [x] `multiple condition` — quantity gt minQuantity and lt maxQuantity field references [providers: all] → non-ported
-- [x] `aggregate` — aggregate _sum with field-reference where filter [providers: all] → non-ported
-- [x] `relationship` — nested relation select with field-reference where filter [providers: all] → non-ported
+- [ ] `single condition` — findMany where quantity gt maxQuantity field reference [providers: all] → non-ported (not yet ported)
+- [ ] `multiple condition` — quantity gt minQuantity and lt maxQuantity field references [providers: all] → non-ported (not yet ported)
+- [ ] `aggregate` — aggregate _sum with field-reference where filter [providers: all] → non-ported (not yet ported)
+- [ ] `relationship` — nested relation select with field-reference where filter [providers: all] → non-ported (not yet ported)
 - [x] `wrong column numeric type` — referencing mismatched-type column rejects with error snapshot [providers: all] → non-ported
 - [x] `via extended client` — numeric field-reference gt through $extends client [providers: all] → non-ported
 
 ### packages/client/tests/functional/field-reference/string/tests.ts
 
-- [x] `simple equality` — findMany where string equals otherString field reference [providers: all] → non-ported
+- [ ] `simple equality` — findMany where string equals otherString field reference [providers: all] → non-ported (not yet ported)
 - [x] `advanced filter` — string startsWith field reference [providers: all] → non-ported
 - [x] `wrong field type` — referencing an Int field for a String filter rejects with inline snapshot [providers: all] → non-ported
 - [x] `wrong model` — referencing a field of another model rejects with inline snapshot [providers: all] → non-ported
@@ -866,13 +866,13 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 ### packages/client/tests/functional/fulltext-search/tests.ts
 
 - [x] `AND query` — fulltext search AND query returns single matching user [providers: postgres,mysql] → non-ported
-- [x] `OR query` — fulltext search OR query returns all three users [providers: postgres,mysql] → non-ported
-- [x] `NOT query` — fulltext search NOT query excludes matched term [providers: postgres,mysql] → non-ported
-- [x] `no results` — fulltext search query with no matches returns empty [providers: postgres,mysql] → non-ported
+- [ ] `OR query` — fulltext search OR query returns all three users [providers: postgres,mysql] → non-ported (not yet ported)
+- [ ] `NOT query` — fulltext search NOT query excludes matched term [providers: postgres,mysql] → non-ported (not yet ported)
+- [ ] `no results` — fulltext search query with no matches returns empty [providers: postgres,mysql] → non-ported (not yet ported)
 - [x] `bad query` — testIf(platform!==win32): malformed fulltext query rejects with error snapshot [providers: postgres,mysql] → non-ported
-- [x] `order by relevance on a single field` — orderBy _relevance on name field, desc [providers: postgres,mysql] → non-ported
-- [x] `order by relevance on multiple fields` — orderBy _relevance on name and email, asc [providers: postgres,mysql] → non-ported
-- [x] `order by relevance: multiple orderBy statements` — orderBy _relevance on name field, desc ordering [providers: postgres,mysql] → non-ported
+- [ ] `order by relevance on a single field` — orderBy _relevance on name field, desc [providers: postgres,mysql] → non-ported (not yet ported)
+- [ ] `order by relevance on multiple fields` — orderBy _relevance on name and email, asc [providers: postgres,mysql] → non-ported (not yet ported)
+- [ ] `order by relevance: multiple orderBy statements` — orderBy _relevance on name field, desc ordering [providers: postgres,mysql] → non-ported (not yet ported)
 
 ### packages/client/tests/functional/globalOmit/test.ts
 
@@ -988,7 +988,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [x] `rollback with then calls` — rollback when using .then chaining [providers: all] → ports/prisma/functional/interactive-transactions/interactive-transactions.test.ts
 - [x] `rollback with catch calls` — rollback when using .catch chaining [providers: all] → ports/prisma/functional/interactive-transactions/interactive-transactions.test.ts
 - [x] `rollback with finally calls` — rollback when using .finally chaining [providers: all] → ports/prisma/functional/interactive-transactions/interactive-transactions.test.ts
-- [x] `high concurrency with SET FOR UPDATE` — high concurrency using SELECT FOR UPDATE (testIf: postgres only) [providers: all] → non-ported
+- [ ] `high concurrency with SET FOR UPDATE` — high concurrency using SELECT FOR UPDATE (testIf: postgres only) [providers: all] → non-ported (not yet ported)
 - [x] `isolation levels > read committed` — read committed isolation level supported per provider (describeIf: non-mongodb) [providers: all] → non-ported
 - [x] `isolation levels > read uncommitted` — read uncommitted isolation level supported per provider (describeIf: non-mongodb) [providers: all] → non-ported
 - [x] `isolation levels > repeatable read` — repeatable read isolation level supported per provider (describeIf: non-mongodb) [providers: all] → non-ported

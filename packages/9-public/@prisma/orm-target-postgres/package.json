@@ -20,10 +20,8 @@
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "^1.1.0",
     "@types/node": "catalog:",
-    "@types/pg": "catalog:",
     "arktype": "^2.2.9",
     "pathe": "^2.0.3",
-    "pg": "catalog:",
     "pg-connection-string": "^2.14.1",
     "pg-cursor": "^2.22.1",
     "postgres-array": "2.0.0",
@@ -41,6 +39,8 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@types/pg": "^8.20.0",
+    "pg": "^8.22.0",
     "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },

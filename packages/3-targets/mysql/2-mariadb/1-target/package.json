@@ -46,8 +46,10 @@
   ],
   "exports": {
     "./control": "./dist/control.mjs",
+    "./descriptor-meta-runtime": "./dist/descriptor-meta-runtime.mjs",
     "./migration": "./dist/migration.mjs",
     "./pack": "./dist/pack.mjs",
+    "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

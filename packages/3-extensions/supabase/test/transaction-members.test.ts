@@ -90,7 +90,7 @@ function underRole(
   ];
 }
 
-const selectByName = 'SELECT "id" AS "id" FROM "public"."profile" WHERE "username" = $1';
+const selectByName = 'SELECT "id" AS "id" FROM "public"."profile" WHERE "profile"."username" = $1';
 
 afterEach(() => {
   recorded.statements.length = 0;
@@ -247,7 +247,12 @@ describe('isolation across Supabase roots and user roles', () => {
       'BEGIN',
       'ROLLBACK',
     ]);
-    expect(recorded.disposals).toEqual([failure]);
+    expect(recorded.disposals).toEqual([
+      expect.objectContaining({
+        code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
+        details: { rollbackError: failure },
+      }),
+    ]);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -347,11 +352,10 @@ describe('isolation across Supabase roots and user roles', () => {
           kind: 'test-call',
           contentHash: async () => 'test',
         });
-        const tx = await activity.transaction?.(undefined);
-        if (!tx) throw new Error('Expected transaction');
-        await vi.advanceTimersByTimeAsync(10);
-        expect(vi.getTimerCount()).toBe(0);
-        await tx.commit();
+        await activity.transaction?.(async () => {
+          await vi.advanceTimersByTimeAsync(10);
+          expect(vi.getTimerCount()).toBe(0);
+        });
         await activity.end({ outcome: 'succeeded' });
         expect(recorded.statements).toEqual(underRole('service_role', [['BEGIN'], ['COMMIT']]));
       }

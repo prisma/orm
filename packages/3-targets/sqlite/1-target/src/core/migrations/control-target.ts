@@ -37,6 +37,7 @@ function createSqliteControlTargetDescriptor(): SqlControlTargetDescriptor<
     },
     classifySubjectGranularity: relationalNodeGranularity,
     classifyEntityKind: relationalNodeEntityKind,
+    accessChangesOf: () => [],
     migrations: {
       createPlanner(adapter: SqlControlAdapter<'sqlite'>): MigrationPlanner<'sql', 'sqlite'> {
         return createSqliteMigrationPlanner(adapter);

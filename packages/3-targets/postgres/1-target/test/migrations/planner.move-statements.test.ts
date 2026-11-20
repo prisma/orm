@@ -10,9 +10,9 @@ import {
   planOriginOf,
   type ResolvedModelRenameStatement,
 } from '@internal/framework-components/control';
-import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { workspaceMigrationModule } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
 import { postgresContractToSchema } from '../../src/core/migrations/postgres-contract-to-schema';
@@ -141,7 +141,7 @@ describe('Postgres planner, a model statement that moves the table to another na
   it('renders the move as the facade call a hand-written migration makes', () => {
     const migration = succeeded(plan(inPublic, inBilling, moveStatement('public', 'billing'))).plan;
 
-    expect(migration.renderTypeScript(keepInternalSpecifiers)).toContain(
+    expect(migration.renderTypeScript(workspaceMigrationModule.postgres)).toContain(
       'this.setTableSchema({ schema: "public", table: "Invoice", to: "billing" })',
     );
   });
@@ -163,7 +163,7 @@ describe('Postgres planner, a model statement that moves the table to another na
       'Create schema "billing"',
       'Move table "Invoice" to schema "billing"',
     ]);
-    expect(succeeded(result).plan.renderTypeScript(keepInternalSpecifiers)).toContain(
+    expect(succeeded(result).plan.renderTypeScript(workspaceMigrationModule.postgres)).toContain(
       'this.setTableSchema({ table: "Invoice", to: "billing" })',
     );
   });
@@ -178,7 +178,7 @@ describe('Postgres planner, a model statement that moves the table to another na
 
     expect(
       migration
-        .renderTypeScript(keepInternalSpecifiers)
+        .renderTypeScript(workspaceMigrationModule.postgres)
         .split('\n')
         .filter((line) => line.includes('RlsPolicy')),
     ).toEqual([
@@ -203,7 +203,7 @@ describe('Postgres planner, a model statement that moves the table to another na
 
     expect(
       migration
-        .renderTypeScript(keepInternalSpecifiers)
+        .renderTypeScript(workspaceMigrationModule.postgres)
         .split('\n')
         .filter((line) => line.includes('RlsPolicy')),
     ).toEqual([

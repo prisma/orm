@@ -249,10 +249,24 @@ function foldRawPart<T>(part: Exclude<RawPart, string>, folder: ExpressionFolder
   }
 }
 
+/** Appends in place: `a` is always `combineAll`'s own running result, and `empty` is never pushed into. */
+function appendRefs<T>(a: T[], b: T[]): T[] {
+  if (b.length === 0) {
+    return a;
+  }
+  if (a.length === 0) {
+    return b.slice();
+  }
+  for (const ref of b) {
+    a.push(ref);
+  }
+  return a;
+}
+
 function collectColumnRefsWith<TNode extends Expression>(node: TNode): ColumnRef[] {
   return node.fold<ColumnRef[]>({
     empty: [],
-    combine: (a, b) => [...a, ...b],
+    combine: appendRefs,
     columnRef: (columnRef) => [columnRef],
     select: (ast) => ast.collectColumnRefs(),
   });
@@ -261,7 +275,7 @@ function collectColumnRefsWith<TNode extends Expression>(node: TNode): ColumnRef
 function collectParamRefsWith<TNode extends Expression>(node: TNode): AnyParamRef[] {
   return node.fold<AnyParamRef[]>({
     empty: [],
-    combine: (a, b) => [...a, ...b],
+    combine: appendRefs,
     paramRef: (paramRef) => [paramRef],
     preparedParamRef: (paramRef) => [paramRef],
     select: (ast) => ast.collectParamRefs(),
@@ -2279,13 +2293,13 @@ export class DeleteAst extends QueryAst {
 
 /**
  * One column of a raw query's declared result row: the codec that decodes the
- * column and whether it may carry `null`. Structurally identical to the
- * contract-free lane's `ColumnDescriptor`, so a spec written for one reads as
- * a spec for the other.
+ * column and whether it may carry `null`. A complete codec binding preserves
+ * the parameters and array metadata of a contract column reference.
  */
 export interface RawQueryColumn {
   readonly codecId: string;
   readonly nullable: boolean;
+  readonly codec?: CodecRef;
 }
 
 /**
@@ -2319,7 +2333,18 @@ function frozenRawQueryResult(result: RawQueryResult): RawQueryResult {
         { meta: { kind: 'raw-query', field: 'result.columns', column: name } },
       );
     }
-    columns[name] = Object.freeze({ codecId: column.codecId, nullable: column.nullable });
+    if (column.codec !== undefined && column.codec.codecId !== column.codecId) {
+      throw structuredError(
+        'RUNTIME.AST_INVALID',
+        'A raw query result codec must match its declared codecId',
+        { meta: { kind: 'raw-query', field: 'result.columns', column: name } },
+      );
+    }
+    columns[name] = Object.freeze({
+      codecId: column.codecId,
+      nullable: column.nullable,
+      ...ifDefined('codec', column.codec === undefined ? undefined : frozenCodecRef(column.codec)),
+    });
   }
   return Object.freeze({ kind: 'rows' as const, columns: Object.freeze(columns) });
 }

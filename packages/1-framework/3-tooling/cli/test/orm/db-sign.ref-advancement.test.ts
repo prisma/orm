@@ -250,7 +250,7 @@ describe('db sign', () => {
       expect(run.exitCode).toBe(0);
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
         contract: { storage: { storageHash: HASH_A }, target: 'postgres' },
-        resolveImportSpecifier: expect.any(Function),
+        typesModule: '@acme/orm-db/contract-types',
       });
       const storeDir = contractSnapshotDir(join(dir, 'migrations'), HASH_A);
       expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);

@@ -67,6 +67,9 @@
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },
+  "imports": {
+    "#contract-types": "./src/contract-types.ts"
+  },
   "engines": {
     "node": ">=24"
   },

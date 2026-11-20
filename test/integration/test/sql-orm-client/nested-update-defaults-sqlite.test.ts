@@ -1,7 +1,11 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
-import { datetimeColumn, integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import {
+  datetimeColumn,
+  integerNumberColumn,
+  textColumn,
+} from '@internal/adapter-sqlite/column-types';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import { soleDomainNamespaceId } from '@internal/contract/types';
 import sqliteDriver from '@internal/driver-sqlite/runtime';
@@ -17,13 +21,13 @@ import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 
 const Author = model('Author', {
-  fields: { id: field.column(integerColumn).id(), name: field.column(textColumn) },
+  fields: { id: field.column(integerNumberColumn).id(), name: field.column(textColumn) },
 }).sql({ table: 'authors' });
 
 const Article = model('Article', {
   fields: {
-    id: field.column(integerColumn).id(),
-    authorId: field.column(integerColumn).column('author_id').optional(),
+    id: field.column(integerNumberColumn).id(),
+    authorId: field.column(integerNumberColumn).column('author_id').optional(),
     updatedAt: field.column(datetimeColumn).column('updated_at').onUpdate(gen.now()),
   },
   relations: { author: rel.belongsTo(Author, { from: 'authorId', to: 'id' }).sql({ fk: {} }) },
@@ -124,6 +128,36 @@ describe('integration/update() with a relation the parent holds the key for on S
           .update({ author: (author) => author.disconnect() });
 
         await expectAdvanced(articles, updated, null);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+  it(
+    'advances the update default when the only change is a disconnect whose criteria match the linked row',
+    async () => {
+      await withArticles(async (articles) => {
+        const updated = await articles
+          .select('id', 'authorId', 'updatedAt')
+          .where({ id: 10 })
+          .update({ author: (author) => author.disconnect([{ id: 1 }]) });
+
+        await expectAdvanced(articles, updated, null);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'keeps an update default the update sets itself when a disconnect whose criteria match unlinks the row',
+    async () => {
+      await withArticles(async (articles) => {
+        const explicit = new Date('2021-06-01T00:00:00.000Z');
+        const updated = await articles
+          .select('id', 'authorId', 'updatedAt')
+          .where({ id: 10 })
+          .update({ updatedAt: explicit, author: (author) => author.disconnect([{ id: 1 }]) });
+
+        expect(updated).toEqual({ id: 10, authorId: null, updatedAt: explicit });
       });
     },
     timeouts.databaseOperation,

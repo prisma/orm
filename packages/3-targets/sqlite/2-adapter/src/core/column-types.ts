@@ -4,11 +4,13 @@ import {
   SQL_RAW_CODEC_ID,
   SQLITE_BIGINT_CODEC_ID,
   SQLITE_BLOB_CODEC_ID,
+  SQLITE_BOOLEAN_CODEC_ID,
   SQLITE_DATE_STRING_CODEC_ID,
   SQLITE_DATE_TEMPORAL_CODEC_ID,
   SQLITE_DATETIME_CODEC_ID,
   SQLITE_DATETIME_STRING_CODEC_ID,
   SQLITE_DATETIME_TEMPORAL_CODEC_ID,
+  SQLITE_DECIMAL_CODEC_ID,
   SQLITE_DURATION_STRING_CODEC_ID,
   SQLITE_INTEGER_CODEC_ID,
   SQLITE_JSON_CODEC_ID,
@@ -22,12 +24,20 @@ export const textColumn = {
   codecId: SQLITE_TEXT_CODEC_ID,
 } as const;
 
-export const integerColumn = {
+export const integerNumberColumn = {
   codecId: SQLITE_INTEGER_CODEC_ID,
 } as const;
 
 export const realColumn = {
   codecId: SQLITE_REAL_CODEC_ID,
+} as const;
+
+export const decimalStringColumn = {
+  codecId: SQLITE_DECIMAL_CODEC_ID,
+} as const;
+
+export const integerBooleanColumn = {
+  codecId: SQLITE_BOOLEAN_CODEC_ID,
 } as const;
 
 export const blobColumn = {
@@ -66,11 +76,11 @@ export const durationStringColumn = {
   codecId: SQLITE_DURATION_STRING_CODEC_ID,
 } as const;
 
-export const jsonColumn = {
+export const plainJsonColumn = {
   codecId: SQLITE_JSON_CODEC_ID,
 } as const;
 
-export const bigintColumn = {
+export const integerBigIntColumn = {
   codecId: SQLITE_BIGINT_CODEC_ID,
 } as const;
 

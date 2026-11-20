@@ -307,6 +307,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/0-shared/target-package-config/**",
+      "domain": "targets",
+      "layer": "shared",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/0-shared/type-implementations/**",
       "domain": "targets",
       "layer": "shared",
@@ -350,6 +356,12 @@
     },
     {
       "glob": "packages/3-targets/postgres/1-target/src/exports/codec-types.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/postgres/1-target/src/exports/module-base.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
@@ -811,6 +823,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/postgres/9-facade/src/exports/contract-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/9-facade/src/exports/migration.ts",
       "domain": "extensions",
       "layer": "adapters",
@@ -839,6 +857,18 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/postgres/9-facade/src/exports/init.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/postgres/9-facade/src/init/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
     },
     {
       "glob": "packages/3-targets/postgres/9-facade/src/config/**",
@@ -1117,6 +1147,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/sqlite/3-driver/src/exact-integers.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/sqlite/3-driver/src/normalize-error.ts",
       "domain": "targets",
       "layer": "drivers",
@@ -1163,6 +1199,12 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/sqlite/9-facade/src/exports/contract-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/sqlite/9-facade/src/exports/migration.ts",
@@ -1223,6 +1265,18 @@
       "domain": "extensions",
       "layer": "targets",
       "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/aggregates.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/descriptor-meta-runtime.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/mysql/1-mysql/1-target/src/exports/codec-descriptor.ts",
@@ -1381,6 +1435,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/mysql/1-mysql/2-adapter/src/exports/sql-renderer.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
       "glob": "packages/3-targets/mysql/1-mysql/3-driver/src/core/*.ts",
       "domain": "targets",
       "layer": "drivers",
@@ -1429,10 +1489,22 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/define-contract.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/control.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/contract-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/migration.ts",
@@ -1495,6 +1567,12 @@
       "plane": "migration"
     },
     {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/exports/descriptor-meta-runtime.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/exports/migration.ts",
       "domain": "extensions",
       "layer": "targets",
@@ -1505,6 +1583,18 @@
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/core/runtime/**",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/1-target/src/exports/runtime.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "runtime"
     },
     {
       "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/core/*.ts",
@@ -1519,6 +1609,12 @@
       "plane": "migration"
     },
     {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/adapter.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/codec-types.ts",
       "domain": "targets",
       "layer": "adapters",
@@ -1529,6 +1625,24 @@
       "domain": "targets",
       "layer": "adapters",
       "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/core/runtime/**",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/2-adapter/src/exports/runtime.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/3-driver/src/core/*.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/mysql/2-mariadb/3-driver/src/core/migrations/**",
@@ -1573,16 +1687,58 @@
       "plane": "migration"
     },
     {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/contract-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/migration.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "migration"
     },
     {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/contract-builder.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/contract/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/config/**",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/runtime.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/exports/static.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/runtime/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/2-mariadb/9-facade/src/static/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "runtime"
     },
     {
       "glob": "packages/3-targets/mongo/1-target/src/core/*.ts",
@@ -1610,6 +1766,12 @@
     },
     {
       "glob": "packages/3-targets/mongo/1-target/src/exports/codec-types.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mongo/1-target/src/exports/module-base.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"
@@ -1777,6 +1939,18 @@
       "plane": "migration"
     },
     {
+      "glob": "packages/3-targets/mongo/9-facade/src/exports/contract-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mongo/9-facade/src/exports/migration.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
       "glob": "packages/3-targets/mongo/9-facade/src/exports/family.ts",
       "domain": "extensions",
       "layer": "adapters",
@@ -1799,6 +1973,18 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/mongo/9-facade/src/exports/init.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mongo/9-facade/src/init/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
     },
     {
       "glob": "packages/3-targets/mongo/9-facade/src/config/**",
@@ -1867,6 +2053,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-extensions/paradedb/src/contract-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-extensions/pgvector/src/core/**",
       "domain": "extensions",
       "layer": "adapters",
@@ -1904,6 +2096,12 @@
     },
     {
       "glob": "packages/3-extensions/pgvector/src/contract.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-extensions/pgvector/src/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"
@@ -1957,6 +2155,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-extensions/citext/src/contract-types.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-extensions/citext/src/exports/column-types.ts",
       "domain": "extensions",
       "layer": "adapters",
@@ -1982,6 +2186,12 @@
     },
     {
       "glob": "packages/3-extensions/postgis/src/contract.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-extensions/postgis/src/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",
       "plane": "shared"

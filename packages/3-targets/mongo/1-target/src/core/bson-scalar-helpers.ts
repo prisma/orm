@@ -3,6 +3,7 @@ import {
   INT32_RANGE,
   INT64_RANGE,
   isIntegerIn,
+  isNonFiniteText,
   readJsonInteger,
   readJsonIntegerText,
   readJsonMatching,
@@ -11,12 +12,16 @@ import {
   SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
 import { dateOfThisRealm, isDate, isValidDate } from '@internal/type-implementations/date';
+import {
+  decimalTextWithoutExponent,
+  decimalTextWithoutLeadingZeros,
+  isDecimalText,
+  printedDecimalText,
+} from '@internal/type-implementations/decimal';
 import { counted } from '@internal/utils/text';
 import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
 import { mongoTargetError } from './mongo-target-errors';
 
-const STORED_DECIMAL_TEXT = /^(?:-?\d+(?:\.\d+)?|NaN|-?Infinity)$/;
-const DECIMAL128_TEXT = /^(-?)(\d+)(?:\.(\d+))?(?:E([+-]\d+))?$/;
 const BASE64_TEXT = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 /**
@@ -340,35 +345,13 @@ export function int64NumberFromDigits(codecId: string, digits: JsonValue): numbe
   return Number(readJsonIntegerText(codecId, digits, SAFE_INTEGER_BIGINT_RANGE));
 }
 
-/**
- * `Decimal128.toString()` writes some values with an exponent (`1E+3`, `1.23E+40`). The application value is decimal text without one, as for Postgres `numeric`: the point moves to where the exponent puts it, trailing zeros stay, and the sign of zero goes.
- */
-export function decimalTextWithoutExponent(text: string): string | undefined {
-  if (text === 'NaN' || text === 'Infinity' || text === '-Infinity') return text;
-  const match = DECIMAL128_TEXT.exec(text);
-  if (match === null) return undefined;
-  const [, sign = '', whole = '', fraction = '', exponent = '0'] = match;
-  const digits = `${whole}${fraction}`;
-  const point = whole.length + Number(exponent);
-  let integerPart: string;
-  let fractionPart: string;
-  if (point <= 0) {
-    integerPart = '0';
-    fractionPart = `${'0'.repeat(-point)}${digits}`;
-  } else if (point >= digits.length) {
-    integerPart = `${digits}${'0'.repeat(point - digits.length)}`;
-    fractionPart = '';
-  } else {
-    integerPart = digits.slice(0, point);
-    fractionPart = digits.slice(point);
-  }
-  const trimmedInteger = integerPart.replace(/^0+(?=\d)/, '');
-  const unsigned = fractionPart === '' ? trimmedInteger : `${trimmedInteger}.${fractionPart}`;
-  return /^[0.]+$/.test(unsigned) ? unsigned : `${sign}${unsigned}`;
+/** Decimal text without an exponent, or `NaN`, `Infinity` or `-Infinity`, which a Decimal128 also holds. */
+function isStoredDecimalText(value: unknown): value is string {
+  return typeof value === 'string' && (isDecimalText(value) || isNonFiniteText(value));
 }
 
 function requireStoredDecimalText(codecId: string, value: string): string {
-  if (typeof value !== 'string' || !STORED_DECIMAL_TEXT.test(value)) {
+  if (!isStoredDecimalText(value)) {
     encodeFailed(
       codecId,
       'value must be decimal text without an exponent, or NaN, Infinity or -Infinity',
@@ -404,15 +387,6 @@ export function decimal128ToJson(codecId: string, value: string): string {
   return requireStoredDecimalText(codecId, value);
 }
 
-/** Decimal text without its leading zeros, as MongoDB writes it; the sign of zero and trailing zeros stay. */
-function decimalTextWithoutLeadingZeros(text: string): string {
-  return text.replace(/^(-?)0+(?=\d)/, '$1');
-}
-
-function withoutSignOfZero(text: string): string {
-  return /^-[0.]+$/.test(text) ? text.slice(1) : text;
-}
-
 /** Whether a Decimal128 holds the decimal text exactly: the text it writes back is the same number, digit for digit. */
 export function decimal128HoldsExactly(text: string): boolean {
   let written: string;
@@ -421,9 +395,7 @@ export function decimal128HoldsExactly(text: string): boolean {
   } catch {
     return false;
   }
-  return (
-    decimalTextWithoutExponent(written) === withoutSignOfZero(decimalTextWithoutLeadingZeros(text))
-  );
+  return decimalTextWithoutExponent(written) === printedDecimalText(text);
 }
 
 /**
@@ -432,8 +404,9 @@ export function decimal128HoldsExactly(text: string): boolean {
 export function readDecimal128Json(owner: string, json: JsonValue): string {
   const expected =
     'decimal text without an exponent that a Decimal128 holds exactly, or NaN, Infinity or -Infinity';
-  const text = readJsonMatching(owner, json, STORED_DECIMAL_TEXT, expected);
-  return decimal128HoldsExactly(text) ? text : refuseJsonValue(owner, expected, json);
+  return isStoredDecimalText(json) && decimal128HoldsExactly(json)
+    ? json
+    : refuseJsonValue(owner, expected, json);
 }
 
 /** The decimal text without leading zeros, as MongoDB writes it, keeping negative zero. */

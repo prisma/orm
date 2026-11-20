@@ -50,6 +50,7 @@ describe('planSpacePath — empty-graph spaces', () => {
   it('an all-external extension space with no marker resolves declaratively to its head ref', () => {
     const outcome = planSpacePath({
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
       space: makeEmptyGraphSpace('supabase'),
       aggregate,
       targetHash: HEAD_HASH,
@@ -68,6 +69,7 @@ describe('planSpacePath — empty-graph spaces', () => {
   it('an extension space with a stale marker advances declaratively to the new head', () => {
     const outcome = planSpacePath({
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
       space: makeEmptyGraphSpace('supabase'),
       aggregate,
       targetHash: HEAD_HASH,
@@ -87,6 +89,7 @@ describe('planSpacePath — empty-graph spaces', () => {
   it('an extension space already at head stays an at-head resolution (no marker rewrite)', () => {
     const outcome = planSpacePath({
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
       space: makeEmptyGraphSpace('supabase'),
       aggregate,
       targetHash: HEAD_HASH,
@@ -100,6 +103,7 @@ describe('planSpacePath — empty-graph spaces', () => {
   it('an extension space whose head requires invariants stays unsatisfiable', () => {
     const outcome = planSpacePath({
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
       space: makeEmptyGraphSpace('supabase', ['ext:install-v1']),
       aggregate,
       targetHash: HEAD_HASH,
@@ -118,6 +122,7 @@ describe('planSpacePath — empty-graph spaces', () => {
     // graph is an authoring bug and must fail loudly.
     const outcome = planSpacePath({
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
       space: makeEmptyGraphSpace('broken-extension', [], 'managed'),
       aggregate,
       targetHash: HEAD_HASH,
@@ -135,6 +140,7 @@ describe('planSpacePath — empty-graph spaces', () => {
   it('the APP space with an empty graph and a pending target stays never-planned', () => {
     const outcome = planSpacePath({
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
       space: makeEmptyGraphSpace('app'),
       aggregate,
       targetHash: HEAD_HASH,
@@ -159,6 +165,7 @@ describe('planSpacePath — empty-graph spaces', () => {
     });
     const outcome = planSpacePath({
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
       space,
       aggregate,
       targetHash: EMPTY_CONTRACT_HASH,

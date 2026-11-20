@@ -1,0 +1,910 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`MySQL lowering of JSON for includes > aggregates an unordered array with JSON_ARRAYAGG 1`] = `
+{
+  "params": [],
+  "sql": "SELECT JSON_ARRAYAGG(JSON_OBJECT('id', \`rows\`.\`id\`, 'big', CAST(\`rows\`.\`big\` AS CHAR), 'at', \`rows\`.\`at\`, 'raw', \`rows\`.\`raw\`, 'posts', \`rows\`.\`posts\`)) AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of JSON for includes > builds an object with JSON_OBJECT, each value projected by its codec 1`] = `
+{
+  "params": [],
+  "sql": "SELECT JSON_OBJECT('id', \`rows\`.\`id\`, 'big', CAST(\`rows\`.\`big\` AS CHAR), 'at', \`rows\`.\`at\`, 'raw', \`rows\`.\`raw\`, 'posts', \`rows\`.\`posts\`) AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of JSON for includes > keeps a to-many include in order with GROUP_CONCAT, cast to JSON, raising the length limit for the statement, an empty include as an empty JSON array, and an array larger than a packet as an error 1`] = `
+{
+  "params": [],
+  "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ CASE WHEN COUNT(*) = 0 THEN JSON_ARRAY() ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_OBJECT('id', \`rows\`.\`id\`, 'big', CAST(\`rows\`.\`big\` AS CHAR), 'at', \`rows\`.\`at\`, 'raw', \`rows\`.\`raw\`, 'posts', \`rows\`.\`posts\`) ORDER BY \`rows\`.\`order_0\` DESC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of JSON for includes > writes a scalar element of an ordered array as JSON text 1`] = `
+{
+  "params": [],
+  "sql": "SELECT /*+ SET_VAR(group_concat_max_len = 4294967295) */ CASE WHEN COUNT(*) = 0 THEN NULL ELSE CAST(COALESCE(CONCAT('[', GROUP_CONCAT(JSON_EXTRACT(JSON_ARRAY(\`rows\`.\`title\`), '$[0]') ORDER BY \`rows\`.\`title\` ASC SEPARATOR ','), ']'), CONCAT('array larger than max_allowed_packet: ', COUNT(*), ' rows')) AS JSON) END AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of NULLS FIRST and NULLS LAST > binds a param the sort key writes twice once 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` ORDER BY \`user\`.\`id\` = ?1 IS NULL ASC, \`user\`.\`id\` = ?1 ASC",
+}
+`;
+
+exports[`MySQL lowering of NULLS FIRST and NULLS LAST > leads with an IS NULL sort key, since MySQL has no NULLS clause 1`] = `
+{
+  "params": [],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` ORDER BY \`user\`.\`email\` IS NULL ASC, \`user\`.\`email\` ASC, \`user\`.\`id\` IS NULL DESC, \`user\`.\`id\` DESC",
+}
+`;
+
+exports[`MySQL lowering of a row value IN a subquery > renders the row value and the subquery 1`] = `
+{
+  "params": [],
+  "sql": "SELECT \`tag\`.\`id\` AS \`id\` FROM \`tag\` WHERE (\`tag\`.\`tenant_id\`, \`tag\`.\`id\`) IN (SELECT \`ut\`.\`tenant_id\` AS \`tenant_id\`, \`ut\`.\`tag_id\` AS \`tag_id\` FROM \`user_tags\` AS \`ut\` WHERE \`ut\`.\`user_id\` = 1)",
+}
+`;
+
+exports[`MySQL lowering of a select > aliases a table 1`] = `
+{
+  "params": [],
+  "sql": "SELECT \`u\`.\`id\` AS \`id\` FROM \`user\` AS \`u\`",
+}
+`;
+
+exports[`MySQL lowering of a select > binds a prepared param by name 1`] = `
+{
+  "params": [
+    {
+      "kind": "bind",
+      "name": "email",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`email\` = ?1",
+}
+`;
+
+exports[`MySQL lowering of a select > binds each param to its own numbered placeholder > when GROUP BY and HAVING both carry one 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "having",
+    },
+    {
+      "kind": "literal",
+      "value": "group",
+    },
+  ],
+  "sql": "SELECT COUNT(*) AS \`n\` FROM \`user\` GROUP BY \`user\`.\`email\` = ?2 HAVING COUNT(*) > ?1",
+}
+`;
+
+exports[`MySQL lowering of a select > binds each param to its own numbered placeholder > when a join condition and a WHERE both carry one 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "where",
+    },
+    {
+      "kind": "literal",
+      "value": "on",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` INNER JOIN \`post\` ON (\`post\`.\`authorId\` = \`user\`.\`id\` AND \`post\`.\`title\` = ?2) WHERE \`user\`.\`email\` = ?1",
+}
+`;
+
+exports[`MySQL lowering of a select > binds each param to its own numbered placeholder > when an operation template writes its argument before itself 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "self",
+    },
+    {
+      "kind": "literal",
+      "value": "arg",
+    },
+  ],
+  "sql": "SELECT LOCATE(?2, \`user\`.\`email\` = ?1) AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of a select > binds each param to its own numbered placeholder > when the projection and a derived FROM both carry one 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "from",
+    },
+    {
+      "kind": "literal",
+      "value": "projection",
+    },
+  ],
+  "sql": "SELECT ?2 AS \`p\` FROM (SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`email\` = ?1) AS \`u\`",
+}
+`;
+
+exports[`MySQL lowering of a select > casts a decimal param to a DECIMAL that holds every value of its column, past 35 digits before the point included 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "1",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,0))",
+}
+`;
+
+exports[`MySQL lowering of a select > casts a decimal param to a DECIMAL that holds every value of its column, past 35 digits before the point included 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "1",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,25))",
+}
+`;
+
+exports[`MySQL lowering of a select > numbers params in the order the runtime encodes them 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "first",
+    },
+    {
+      "kind": "literal",
+      "value": "second",
+    },
+    {
+      "kind": "literal",
+      "value": 3,
+    },
+  ],
+  "sql": "SELECT ?1 AS \`p\` FROM \`user\` WHERE \`user\`.\`email\` = ?2 LIMIT ?3",
+}
+`;
+
+exports[`MySQL lowering of a select > quotes identifiers with backticks and writes params as numbered placeholders 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "a@b.c",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`email\` = ?1",
+}
+`;
+
+exports[`MySQL lowering of a select > renders DISTINCT, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT and OFFSET in order 1`] = `
+{
+  "params": [],
+  "sql": "SELECT DISTINCT \`user\`.\`email\` AS \`email\`, COUNT(*) AS \`n\` FROM \`user\` WHERE \`user\`.\`id\` > 0 GROUP BY \`user\`.\`email\` HAVING COUNT(\`user\`.\`id\`) > 1 ORDER BY \`user\`.\`email\` DESC LIMIT 10 OFFSET 5",
+}
+`;
+
+exports[`MySQL lowering of a select > renders inner, left and right joins 1`] = `
+{
+  "params": [],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` INNER JOIN \`post\` ON \`post\`.\`authorId\` = \`user\`.\`id\` LEFT JOIN \`post\` ON \`user\`.\`id\` = 1 RIGHT JOIN \`post\` ON \`post\`.\`authorId\` = \`user\`.\`id\`",
+}
+`;
+
+exports[`MySQL lowering of a select > selects from a derived table 1`] = `
+{
+  "params": [],
+  "sql": "SELECT \`u\`.\`id\` AS \`id\` FROM (SELECT \`user\`.\`id\` AS \`id\` FROM \`user\`) AS \`u\`",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "0.1",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,30))",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "0.1",
+    },
+    {
+      "kind": "literal",
+      "value": "99",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` IN (CAST(?1 AS DECIMAL(65,30)), CAST(?2 AS DECIMAL(65,30)))",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 3`] = `
+{
+  "params": [
+    {
+      "kind": "bind",
+      "name": "a",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,30))",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 4`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "1.50",
+    },
+  ],
+  "sql": "INSERT INTO \`t\` (\`amount\`) VALUES (CAST(?1 AS DECIMAL(65,30)))",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 5`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "2",
+    },
+  ],
+  "sql": "UPDATE \`t\` SET \`amount\` = CAST(?1 AS DECIMAL(65,30))",
+}
+`;
+
+exports[`MySQL lowering of a select > writes an OFFSET with no LIMIT with the largest row count MySQL takes 1`] = `
+{
+  "params": [],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` LIMIT 18446744073709551615 OFFSET 5",
+}
+`;
+
+exports[`MySQL lowering of a select > writes an integer param as a bare placeholder, which the driver sends as a BIGINT 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 9007199254740993n,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`big\` = ?1",
+}
+`;
+
+exports[`MySQL lowering of a select > writes an integer param as a bare placeholder, which the driver sends as a BIGINT 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1n,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`big\` IN (?1)",
+}
+`;
+
+exports[`MySQL lowering of a select > writes an integer param as a bare placeholder, which the driver sends as a BIGINT 3`] = `
+{
+  "params": [
+    {
+      "kind": "bind",
+      "name": "b",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`big\` = ?1",
+}
+`;
+
+exports[`MySQL lowering of a select > writes an integer param as a bare placeholder, which the driver sends as a BIGINT 4`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 10,
+    },
+    {
+      "kind": "literal",
+      "value": 9,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE ?1 < ?2",
+}
+`;
+
+exports[`MySQL lowering of a select > writes an integer param as a bare placeholder, which the driver sends as a BIGINT 5`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 5,
+    },
+    {
+      "kind": "literal",
+      "value": 2,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` LIMIT ?1 OFFSET ?2",
+}
+`;
+
+exports[`MySQL lowering of a select > writes an integer param as a bare placeholder, which the driver sends as a BIGINT 6`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "x",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`email\` = ?1",
+}
+`;
+
+exports[`MySQL lowering of a statement embedded in raw SQL > numbers params before, inside and after the embedded select in template order 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+    {
+      "kind": "literal",
+      "value": 2,
+    },
+    {
+      "kind": "literal",
+      "value": 3,
+    },
+  ],
+  "sql": "WITH n AS (SELECT ?1 AS v) SELECT * FROM (SELECT \`user\`.\`id\` AS \`id\`, \`user\`.\`email\` AS \`email\` FROM \`user\` WHERE \`user\`.\`id\` > ?2 AND \`user\`.\`id\` < ?3) AS t",
+}
+`;
+
+exports[`MySQL lowering of a statement embedded in raw SQL > renders a select part inside a RawExpr in expression position 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "a@b.c",
+    },
+    {
+      "kind": "literal",
+      "value": 2,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE (\`user\`.\`email\` = ?1 AND EXISTS (SELECT \`user\`.\`id\` AS \`id\`, \`user\`.\`email\` AS \`email\` FROM \`user\` WHERE \`user\`.\`id\` > ?2))",
+}
+`;
+
+exports[`MySQL lowering of a statement embedded in raw SQL > splices a multi-column select as a derived table 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 5,
+    },
+  ],
+  "sql": "SELECT * FROM (SELECT \`user\`.\`id\` AS \`id\`, \`user\`.\`email\` AS \`email\` FROM \`user\` WHERE \`user\`.\`id\` > ?1) AS t",
+}
+`;
+
+exports[`MySQL lowering of a statement embedded in raw SQL > splices a select after INSERT INTO without parentheses 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 5,
+    },
+  ],
+  "sql": "INSERT INTO archive (id, email) SELECT \`user\`.\`id\` AS \`id\`, \`user\`.\`email\` AS \`email\` FROM \`user\` WHERE \`user\`.\`id\` > ?1",
+}
+`;
+
+exports[`MySQL lowering of a statement embedded in raw SQL > splices a select into a CTE body 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 5,
+    },
+  ],
+  "sql": "WITH x AS (SELECT \`user\`.\`id\` AS \`id\`, \`user\`.\`email\` AS \`email\` FROM \`user\` WHERE \`user\`.\`id\` > ?1) SELECT id FROM x",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders AND, OR, NOT, null checks and EXISTS, and empty AND and OR as constants 1`] = `
+{
+  "params": [],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE ((\`user\`.\`email\` IS NULL OR \`user\`.\`id\` IS NOT NULL) AND NOT (EXISTS (SELECT \`user\`.\`id\` AS \`id\` FROM \`user\`)) AND NOT EXISTS (SELECT \`user\`.\`id\` AS \`id\` FROM \`user\`))",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders AND, OR, NOT, null checks and EXISTS, and empty AND and OR as constants 2`] = `
+{
+  "params": [],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE TRUE",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders AND, OR, NOT, null checks and EXISTS, and empty AND and OR as constants 3`] = `
+{
+  "params": [],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE FALSE",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders IN and NOT IN lists, and an empty list as a constant 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+    {
+      "kind": "literal",
+      "value": 2,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` IN (?1, ?2)",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders IN and NOT IN lists, and an empty list as a constant 2`] = `
+{
+  "params": [],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` NOT IN (3)",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders IN and NOT IN lists, and an empty list as a constant 3`] = `
+{
+  "params": [],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE FALSE",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders IN and NOT IN lists, and an empty list as a constant 4`] = `
+{
+  "params": [],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE TRUE",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders aggregates and a window function 1`] = `
+{
+  "params": [],
+  "sql": "SELECT SUM(\`user\`.\`id\`) AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders aggregates and a window function 2`] = `
+{
+  "params": [],
+  "sql": "SELECT MAX(\`user\`.\`id\`) AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders aggregates and a window function 3`] = `
+{
+  "params": [],
+  "sql": "SELECT ROW_NUMBER() OVER (PARTITION BY \`user\`.\`email\` ORDER BY \`user\`.\`id\` ASC) AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders an identifier, a function call, a cast, a CASE and a scalar subquery 1`] = `
+{
+  "params": [],
+  "sql": "SELECT \`total\` AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders an identifier, a function call, a cast, a CASE and a scalar subquery 2`] = `
+{
+  "params": [],
+  "sql": "SELECT LOWER(\`user\`.\`email\`) AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders an identifier, a function call, a cast, a CASE and a scalar subquery 3`] = `
+{
+  "params": [],
+  "sql": "SELECT CAST(\`user\`.\`id\` AS CHAR) AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders an identifier, a function call, a cast, a CASE and a scalar subquery 4`] = `
+{
+  "params": [],
+  "sql": "SELECT CASE WHEN \`user\`.\`id\` = 1 THEN 10 ELSE 20 END AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders an identifier, a function call, a cast, a CASE and a scalar subquery 5`] = `
+{
+  "params": [],
+  "sql": "SELECT CASE WHEN \`user\`.\`id\` IS NULL THEN \`user\`.\`id\` END AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders an identifier, a function call, a cast, a CASE and a scalar subquery 6`] = `
+{
+  "params": [],
+  "sql": "SELECT (SELECT \`user\`.\`id\` AS \`id\` FROM \`user\`) AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders an operation from its template, grouping it inside a comparison and a null check 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "x",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE (CONCAT(LOWER(\`user\`.\`email\`), ?1)) = 1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders an operation from its template, grouping it inside a comparison and a null check 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "x",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE (CONCAT(LOWER(\`user\`.\`email\`), ?1)) IS NULL",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders raw SQL fragments and raw queries 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` > ?1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders raw SQL fragments and raw queries 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT ?1 + 1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the eq operator 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` = ?1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the gt operator 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` > ?1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the gte operator 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` >= ?1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the isDistinctFrom operator 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE NOT (\`user\`.\`id\` <=> ?1)",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the isNotDistinctFrom operator 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` <=> ?1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the like operator 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` LIKE ?1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the literal 42 1`] = `
+{
+  "params": [],
+  "sql": "SELECT 42 AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the literal 9007199254740993n 1`] = `
+{
+  "params": [],
+  "sql": "SELECT 9007199254740993 AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the literal false 1`] = `
+{
+  "params": [],
+  "sql": "SELECT FALSE AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the literal null 1`] = `
+{
+  "params": [],
+  "sql": "SELECT NULL AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the literal true 1`] = `
+{
+  "params": [],
+  "sql": "SELECT TRUE AS \`v\`",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the lt operator 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` < ?1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the lte operator 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` <= ?1",
+}
+`;
+
+exports[`MySQL lowering of expressions > renders the neq operator 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`user\`.\`id\` <> ?1",
+}
+`;
+
+exports[`MySQL lowering of writes > writes a multi-row insert with the bare table name, and DEFAULT where a row has no value 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "a@b.c",
+    },
+    {
+      "kind": "literal",
+      "value": "USER",
+    },
+    {
+      "kind": "literal",
+      "value": "d@e.f",
+    },
+  ],
+  "sql": "INSERT INTO \`user\` (\`email\`, \`role\`) VALUES (?1, ?2), (?3, DEFAULT)",
+}
+`;
+
+exports[`MySQL lowering of writes > writes an update and a delete with the table alias 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "x",
+    },
+    {
+      "kind": "literal",
+      "value": "ADMIN",
+    },
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "UPDATE \`user\` AS \`u\` SET \`email\` = ?1, \`role\` = ?2 WHERE \`u\`.\`id\` = ?3",
+}
+`;
+
+exports[`MySQL lowering of writes > writes an update and a delete with the table alias 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "DELETE FROM \`user\` AS \`u\` WHERE \`u\`.\`id\` = ?1",
+}
+`;
+
+exports[`MySQL lowering of writes > writes an update and a delete with the table alias 3`] = `
+{
+  "params": [],
+  "sql": "DELETE FROM \`user\`",
+}
+`;
+
+exports[`MySQL lowering of writes > writes an upsert with no conflict columns as an insert whose row is named new, updating the row on a duplicate key 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "a@b.c",
+    },
+    {
+      "kind": "literal",
+      "value": "USER",
+    },
+    {
+      "kind": "literal",
+      "value": "ADMIN",
+    },
+  ],
+  "sql": "INSERT INTO \`user\` (\`email\`, \`role\`) VALUES (?1, ?2) AS \`new\` ON DUPLICATE KEY UPDATE \`role\` = ?3",
+}
+`;
+
+exports[`MySQL lowering of writes > writes rows with no values as empty column and value lists 1`] = `
+{
+  "params": [],
+  "sql": "INSERT INTO \`user\` () VALUES (), ()",
+}
+`;
+
+exports[`MySQL lowering of writes > writes the proposed row, excluded, as new, and a column of the aliased table by its table name 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "a@b.c",
+    },
+    {
+      "kind": "literal",
+      "value": "USER",
+    },
+  ],
+  "sql": "INSERT INTO \`user\` (\`email\`, \`role\`) VALUES (?1, ?2) AS \`new\` ON DUPLICATE KEY UPDATE \`email\` = \`new\`.\`email\`, \`role\` = \`user\`.\`role\`",
+}
+`;
+
+exports[`MySQL placeholder check > ignores a ? inside quoted text, a backtick identifier or a comment 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT 'why?', "b?", \`c?\` /* d? */ # e?
+-- f?
+, ?1",
+}
+`;
+
+exports[`MySQL placeholder check > writes a raw integer value as a bare placeholder wherever it appears 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 2,
+    },
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT id FROM t LIMIT ?1 OFFSET ?2",
+}
+`;
+
+exports[`MySQL placeholder check > writes a raw integer value as a bare placeholder wherever it appears 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 10,
+    },
+    {
+      "kind": "literal",
+      "value": 9,
+    },
+  ],
+  "sql": "SELECT ?1 < ?2 FROM t",
+}
+`;
+
+exports[`MySQL placeholder check > writes a raw integer value as a bare placeholder wherever it appears 3`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": 1,
+    },
+  ],
+  "sql": "SELECT 'why?' = ?1 FROM t",
+}
+`;

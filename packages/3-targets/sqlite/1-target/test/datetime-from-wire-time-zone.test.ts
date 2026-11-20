@@ -62,3 +62,18 @@ describe('sqlite/datetime@1 reads text without an offset as UTC, as SQLite does'
     });
   });
 });
+
+describe('sqlite/datetime@1 reads a stored integer as milliseconds since 1970', () => {
+  it('reads one within the range Date holds', async () => {
+    expect((await codec.fromWire(1704067200000, {})).toISOString()).toBe(
+      '2024-01-01T00:00:00.000Z',
+    );
+  });
+
+  it('refuses an integer outside the safe range, which the driver reads exactly', async () => {
+    await expect(codec.fromWire(2n ** 60n, {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      meta: { codecId: 'sqlite/datetime@1', received: String(2n ** 60n) },
+    });
+  });
+});

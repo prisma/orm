@@ -564,6 +564,35 @@ describe('resolveToForPlan', () => {
     }
   });
 
+  it('returns the ref a ref name names, with the policies it declares', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1')];
+    const policies = { dataProtection: { dataLoss: 'data-loss-forbidden' } } as const;
+    const space = makeSpace(
+      bundles,
+      { production: { hash: HASH_A, invariants: [], policies } },
+      vi.fn().mockResolvedValue(contractAtResult(HASH_A)),
+    );
+    const result = await resolveToForPlan('production', baseToInput({ space }));
+
+    expect(result.ok ? result.value.ref : result.failure).toEqual({
+      name: 'production',
+      hash: HASH_A,
+      invariants: [],
+      policies,
+    });
+  });
+
+  it('returns no ref for a hash', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1')];
+    const contractAt = vi
+      .fn()
+      .mockResolvedValue(contractAtResult(HASH_A, { provenance: 'graph-node' }));
+    const space = makeSpace(bundles, {}, contractAt);
+    const result = await resolveToForPlan(HASH_A, baseToInput({ space }));
+
+    expect(result.ok ? result.value.ref : result.failure).toBeUndefined();
+  });
+
   it('resolves a full hash that is a graph node via the bundle destination contract artifacts', async () => {
     const bundles = [makePkg(E, HASH_A, 'm1')];
     const contractAt = vi

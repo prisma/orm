@@ -29,10 +29,14 @@ function asUtcWhenUnmarked(text: string): string {
 /**
  * The instant SQLite holds for a row, in milliseconds since 1970, read as `Date` reads it, with text without a UTC offset read as UTC, as SQLite's own date and time functions read it, never in the machine's time zone. A number is milliseconds since 1970, as the Prisma ORM query engine wrote a `DateTime`. Digits below a millisecond are cut, as `Date` cuts them.
  */
-export function sqliteInstantMilliseconds(codecId: string, value: string | number): number {
-  const milliseconds = new Date(
-    typeof value === 'number' ? value : asUtcWhenUnmarked(value),
-  ).getTime();
+export function sqliteInstantMilliseconds(
+  codecId: string,
+  value: string | number | bigint,
+): number {
+  const milliseconds =
+    typeof value === 'bigint'
+      ? Number.NaN
+      : new Date(typeof value === 'number' ? value : asUtcWhenUnmarked(value)).getTime();
   if (Number.isNaN(milliseconds)) {
     throw sqliteError(
       'RUNTIME.DECODE_FAILED',
