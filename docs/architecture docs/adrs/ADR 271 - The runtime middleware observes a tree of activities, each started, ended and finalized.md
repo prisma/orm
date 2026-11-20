@@ -90,6 +90,8 @@ A nested transaction is a savepoint, a transaction activity beneath a transactio
 - **Released:** it and the activities beneath it are finalized with the outermost transaction's outcome, when that transaction ends. A failed statement beneath it counts as a failure of the enclosing transaction, so a `COMMIT` that resolves afterwards is `unknown`.
 - **Rolled back:** it and the activities beneath it are finalized `rolled-back` at once. Its failed statements do not count against the enclosing transaction, because `ROLLBACK TO` recovered it and a later `COMMIT` really commits.
 
+How the runtime opens, guards and settles savepoints is recorded in [ADR 326](ADR%20326%20-%20A%20nested%20transaction%20is%20a%20savepoint.md).
+
 ### Interceptors
 
 The runtime executes statements and nothing else, so three of the four interceptors exist only on statement activities. In the order the runtime runs them:
@@ -133,12 +135,13 @@ startActivityOn<K extends ClientActivityKind>(queryable: RuntimeScope, activity:
 interface ActivityHandle<K> extends RuntimeQueryable, ActivitySource, ActivitySourceTarget {
   readonly activity: ClientActivity<K>;
   readonly intercepted: { readonly result: ClientActivityResult<K> } | undefined;
-  readonly transaction?: <R>(fn: (tx: TransactionContext) => PromiseLike<R>, options?: RuntimeTransactionOptions) => Promise<R>;
+  readonly transaction: <R>(fn: (tx: TransactionContext) => PromiseLike<R>, options?: RuntimeTransactionOptions) => Promise<R>;
+  inTransaction(): boolean;
   end(result: { readonly outcome: 'succeeded' | 'failed' | 'stopped'; readonly result?: ClientActivityResult<K> }): Promise<void>;
 }
 ```
 
-Statements sent through the handle are the activity's children, and `handle.transaction(fn)` runs `fn` in a transaction through `withTransaction`, with the transaction activity beneath it. A handle carries the `activitySource` member too, so `startActivityOn(handle, activity)` nests an activity beneath it. On a handle opened under a transaction, `transaction(fn)` runs `fn` in a savepoint of that transaction, with the savepoint activity beneath the handle's activity. `intercepted` is set when an `intercept.onActivity` handler supplied a result; the client then returns it without running anything. `end()` hands the runtime the value the client returns to its caller, which the runtime passes to middleware without reading it.
+Statements sent through the handle are the activity's children, and `handle.transaction(fn)` runs `fn` in a transaction through `withTransaction`, with the transaction activity beneath it. A handle carries the `activitySource` member too, so `startActivityOn(handle, activity)` nests an activity beneath it. On a handle opened under a transaction, `transaction(fn)` runs `fn` in a savepoint of that transaction, with the savepoint activity beneath the handle's activity, and `inTransaction()` returns `true`. `intercepted` is set when an `intercept.onActivity` handler supplied a result; the client then returns it without running anything. `end()` hands the runtime the value the client returns to its caller, which the runtime passes to middleware without reading it.
 
 Ending an activity while one of its children is still open ends it `failed`, finalizes it, and rejects with a runtime error naming how many children are open. A transaction is the exception: the database ends it, so a child still open then is finalized when it ends (see "When an activity is finalized"). Starting a statement or an activity beneath an activity that no longer accepts children is rejected at entry with `RUNTIME.ACTIVITY_NOT_ACCEPTING_CHILDREN`. A client activity stops accepting children when it ends; a transaction, when its `commit()` or `rollback()` is called, before it ends, and with it every client activity inside it.
 
@@ -159,7 +162,7 @@ await call.end({ outcome: 'succeeded', result: rows });
 return rows;
 ```
 
-The user-facing types (`tx`, the facades) and the public `Runtime`, `RuntimeConnection` and `RuntimeTransaction` types omit `startActivity` and `planContentHash`, as `tx` has no `transaction` method today. The ORM reaches activities the same way everything else does, with `startActivityOn` and `planContentHashOn` on the queryable it holds: the runtime's queryables carry the `activitySource` member, the facades give the ORM runtime objects they build the same member, and a terminal method on a queryable without it fails with `ORM.ACTIVITY_SOURCE_MISSING`, so a call's annotations are never dropped silently.
+The user-facing types (`tx`, the facades) and the public `Runtime`, `RuntimeConnection` and `RuntimeTransaction` types omit `startActivity` and `planContentHash`. The ORM reaches activities the same way everything else does, with `startActivityOn` and `planContentHashOn` on the queryable it holds: the runtime's queryables carry the `activitySource` member, the facades give the ORM runtime objects they build the same member, and a terminal method on a queryable without it fails with `ORM.ACTIVITY_SOURCE_MISSING`, so a call's annotations are never dropped silently.
 
 ### Annotations
 
