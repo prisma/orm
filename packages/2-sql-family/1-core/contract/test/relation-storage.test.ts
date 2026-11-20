@@ -155,9 +155,20 @@ describe('resolveSqlToOneRelationStorage', () => {
       fields: { userId: { column: 'user_id' } },
     };
     const relation = makeRelation({ cardinality: '1:1', localFields: ['userId'] });
+    const models = {
+      User: {
+        fields: {},
+        relations: {},
+        storage: {
+          table: 'users',
+          namespaceId: UNBOUND_NAMESPACE_ID,
+          fields: { id: { column: 'id' } },
+        },
+      },
+    };
 
     const result = resolveSqlToOneRelationStorage(
-      createContract<SqlStorage>({ storage }),
+      createContract<SqlStorage>({ storage, models }),
       modelStorage,
       relation,
     );
