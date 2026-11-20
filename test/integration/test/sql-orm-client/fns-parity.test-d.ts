@@ -119,6 +119,20 @@ describe('the ORM fns keep the signatures of every registered operation', () => 
     >().toHaveProperty('within');
   });
 
+  test('and keep the type parameters of an operation whose every result is a condition', () => {
+    type GenericCondition = {
+      readonly genericCondition: {
+        readonly impl: <Nullable extends boolean>(
+          value: Expression<{ codecId: 'pg/text@1'; nullable: Nullable }>,
+        ) => Expression<{ codecId: 'pg/bool@1'; nullable: Nullable }>;
+      };
+    };
+
+    expectTypeOf<OrmFunctionsOf<CT, GenericCondition>['genericCondition']>().toEqualTypeOf<
+      GenericCondition['genericCondition']['impl']
+    >();
+  });
+
   test('except the type parameters of a generic operation, which take their constraints', () => {
     expectTypeOf<Generic['generic']['impl']>().toBeCallableWith('a', 'a');
     expectTypeOf<OrmFunctionsOf<CT, Generic>['generic']>().parameters.toEqualTypeOf<

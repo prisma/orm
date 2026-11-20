@@ -37,23 +37,10 @@ type Normalize<Key extends keyof TypeMaps, Map> = Key extends 'codecTypes'
     ? Record<never, never>
     : Map;
 
-/**
- * Type map entries that differ for a reason, with the reason. `fullTextMatches` and `fullTextRank` take a `FullTextIndexReference<CodecTypes>`, an interface; the built codec types leave out the `json` slot, so its type argument differs from the emitted one, though no operation reads `json`.
- */
-type ExpectedDifferences =
-  | 'postgresScalar: fullTextMatches'
-  | 'postgresScalar: fullTextRank'
-  | 'postgresParity: fullTextMatches'
-  | 'postgresParity: fullTextRank'
-  | 'relations: fullTextMatches'
-  | 'relations: fullTextRank'
-  | 'fullText: fullTextMatches'
-  | 'fullText: fullTextRank';
-
-type Differences<Key extends keyof TypeMaps, Compare extends 'keys' | 'namespaced'> = Exclude<
-  FixtureDifferences<Key, Compare>,
-  ExpectedDifferences
->;
+type Differences<
+  Key extends keyof TypeMaps,
+  Compare extends 'keys' | 'namespaced',
+> = FixtureDifferences<Key, Compare>;
 
 describe('every type map of a defineContract contract equals the emitted one', () => {
   test('every type map is compared', () => {
@@ -68,10 +55,9 @@ describe('every type map of a defineContract contract equals the emitted one', (
     expectTypeOf<UnclassifiedKeys<TypeMaps, Compared, Record<never, never>>>().toBeNever();
   });
 
-  test('each listed difference still occurs, so the comparison sees the maps', () => {
-    expectTypeOf<
-      Exclude<ExpectedDifferences, FixtureDifferences<'queryOperationTypes', 'keys'>>
-    >().toBeNever();
+  test('the compared maps hold the operations, so the comparison sees them', () => {
+    expectTypeOf<'fullTextMatches'>().toExtend<keyof Maps<'fullText', 0>['queryOperationTypes']>();
+    expectTypeOf<'fullTextMatches'>().toExtend<keyof Maps<'fullText', 1>['queryOperationTypes']>();
   });
 
   test('codec types', () => {

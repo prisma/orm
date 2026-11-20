@@ -39,6 +39,28 @@ describe('integration: ilike (target operation)', { timeout: timeouts.databaseOp
     );
     expect(rows).toEqual([{ name: 'Alice' }, { name: 'Bob' }]);
   });
+
+  it('ilike and fullTextMatches on a nullable column select null where the column is null', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.users.outerLeftJoin(db().public.profiles, (f, fns) =>
+          fns.eq(f.users.id, f.profiles.user_id),
+        )
+        .select('name')
+        .select('likeBio', (f, fns) => fns.ilike(f.profiles.bio, '%ALICE%'))
+        .select('matchesBio', (f, fns) =>
+          fns.fullTextMatches(f.profiles.bio, websearchToTsquery('alice')),
+        )
+        .orderBy('name')
+        .build(),
+    );
+    expect(rows).toEqual([
+      { name: 'Alice', likeBio: true, matchesBio: true },
+      { name: 'Bob', likeBio: false, matchesBio: false },
+      { name: 'Charlie', likeBio: null, matchesBio: null },
+      { name: 'Diana', likeBio: null, matchesBio: null },
+    ]);
+  });
 });
 
 describe('integration: extension functions', { timeout: timeouts.databaseOperation }, () => {
