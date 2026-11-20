@@ -99,15 +99,17 @@ sequenceDiagram
 
 ### A target's session settings
 
-A target may need every database session to have certain settings. PostgreSQL's date and time codecs read ISO 8601 text, so they need `DateStyle=ISO`, and its `money` codec reads the text PostgreSQL prints under the `C` locale, so it needs `lc_monetary=C`. The target states this as data, `sessionSettings` on its descriptor:
+A target may need every database session to have certain settings. PostgreSQL's date and time codecs read ISO 8601 text, so they need `DateStyle=ISO`. The target states this as data, `sessionSettings` on its descriptor:
 
 ```ts
-sessionSettings: { DateStyle: 'ISO', lc_monetary: 'C' }
+sessionSettings: { DateStyle: 'ISO' }
 ```
 
 The stack hands the settings to the driver. `createExecutionStack` calls `RuntimeDriverDescriptor.create(options, sessionSettings)`, and `createControlStack` passes them in the control driver's connect options. The driver ensures every connection it hands to the runtime has them, whatever its binding. How it does so is the driver's choice. The PostgreSQL driver sends them as startup options on connections it opens. On a pool or client the user supplies, it applies them with a statement before first use, and again after an exclusively held connection is released, because the holder may have reset the session.
 
 A codec never sets a session setting. If a connection does not have the setting, for example because a pooler dropped it, the codec refuses the value it cannot read and names the setting.
+
+A target declares a setting here only when a driver can set it at connection start on every server, including through a connection pooler. A setting a codec needs that cannot be set that way is a requirement on the database: the target does not declare it, nothing sets it, and the codec refuses a value printed under another value of it. PostgreSQL's `lc_monetary` is one. The `money` codec reads the text PostgreSQL prints under the `C` locale, but a per-transaction pooler refuses a connection whose startup options name `lc_monetary`, and a statement that sets it there changes a server connection other clients share. The target declared it until 2026-11-20 (amended then; see "Money" in [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)).
 
 ### How to pass driver create options when stack instantiation calls `create()` with no args
 
