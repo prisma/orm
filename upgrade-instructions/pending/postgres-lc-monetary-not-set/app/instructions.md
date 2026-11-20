@@ -17,7 +17,7 @@ Earlier releases started every PostgreSQL connection with `lc_monetary=C`, so `m
 
 This matters only if the application reads or writes `money` columns.
 
-1. Connect as the role the application uses and run `SHOW lc_monetary`.
+1. Connect as the role the application uses, to the database and address it uses, and run `SHOW lc_monetary`. Use `psql` or another client, not Prisma: earlier releases set `lc_monetary` to `C` on their own connections, so a query through them prints `C` whatever the database has.
 2. If it prints `C`, `POSIX` or `en_US`, with or without an encoding suffix (`C.UTF-8`, `en_US.UTF-8`), stop. Prisma Postgres also needs no action.
 3. Otherwise, set it before you deploy the upgrade, while the old release still forces `C` on its own connections:
 
@@ -30,6 +30,8 @@ This matters only if the application reads or writes `money` columns.
    Prefer the role. The database setting also changes how every other client of that database prints and reads `money`.
 
    The setting applies to server connections opened afterwards. Behind a connection pooler, it takes effect once the pooler replaces its existing server connections.
+
+   PostgreSQL uses the most specific setting: one made for the role in one database (`ALTER ROLE app_role IN DATABASE app_db SET …`) wins over the role's, and the role's wins over the database's. So repeat step 1 on a new connection, through the pooler if the application uses one, and deploy the upgrade only once it prints `C`.
 
 If you upgrade first, a `money` read fails with `RUNTIME.LC_MONETARY_NOT_C`. Under a locale with two fraction digits, such as `de_DE` or `en_GB`, nothing is stored wrong, and setting `lc_monetary` afterwards is enough.
 
