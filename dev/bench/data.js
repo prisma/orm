@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795143945792,
+  "lastUpdate": 1795145237043,
   "repoUrl": "https://github.com/prisma/orm",
   "entries": {
     "Benchmark.js Benchmark": [
@@ -458600,6 +458600,401 @@ window.BENCHMARK_DATA = {
             "range": "±1.18%",
             "unit": "ops/sec",
             "extra": "86 samples"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "35897247+ericvtheg@users.noreply.github.com",
+            "name": "Eric Ventor",
+            "username": "ericvtheg"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "599f05f73ad88fc3efa7edddf81a2857b87db8da",
+          "message": "fix(adapter-better-sqlite3): report SQLite's bind parameter limit (#30867)\n\n## Problem\n\n`@prisma/adapter-better-sqlite3` doesn't implement `getConnectionInfo`,\nso the query interpreter falls back to its hardcoded SQLite limit of 999\nbind parameters. That was SQLite's default before 3.32.0 (2020). It has\nbeen 32766 since, and every better-sqlite3 release bundles a newer\nSQLite (12.6.0 ships 3.51).\n\nQueries the interpreter can't split into chunks hit P2029 even though\nSQLite would run them fine. For example, an `include` with a nested\n`orderBy` over 1,000 parent rows:\n\n```prisma\nmodel Clip {\n  id      Int      @id\n  markers Marker[]\n}\n\nmodel Marker {\n  id     Int   @id\n  clipId Int\n  beat   Float\n  clip   Clip  @relation(fields: [clipId], references: [id])\n}\n```\n\n```ts\nconst prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: ':memory:' }) })\n// ...create 1000 clips\nawait prisma.clip.findMany({ include: { markers: { orderBy: { beat: 'asc' } } } })\n// P2029: The query parameter limit supported by your database is exceeded.\n```\n\nWe hit this in a desktop app that loads a music project with ~1,800\nclips.\n\n## Change\n\nWhen a connection opens, the adapter reads `MAX_VARIABLE_NUMBER` from\n`PRAGMA compile_options` and reports it as `maxBindValues` from\n`getConnectionInfo`. If a build doesn't report it, `maxBindValues` stays\n`undefined` and the interpreter keeps its 999 default, so nothing\nchanges for those builds. `supportsRelationJoins: false` matches what\n`LocalExecutor` already assumes when an adapter has no\n`getConnectionInfo`.\n\nThis is the same thing the D1, MSSQL and PPG adapters already do with\ntheir limits.\n\n`@prisma/adapter-libsql` has the same gap. I left it out to keep this PR\nfocused.\n\n## Tests\n\n- New `src/better-sqlite3.test.ts`: for both `connect()` and\n`connectToShadowDb()`, the reported limit is above 999, a query with\nexactly that many parameters succeeds, and one more fails with `too many\nSQL variables`. It also checks `supportsRelationJoins` is `false`. All\nthree tests fail on `v7` and pass with this change.\n- End to end with the repro above on published 7.10.1: stock adapter\ngives P2029; after swapping in this build's `dist`, it returns all 1,000\nclips.\n- `pnpm build`, `eslint` and `prettier --check` pass for the package.\n\n`src/errors.test.ts › should handle UniqueConstraintViolation` already\nfails on `v7` (the converted error now includes `table`). It's unrelated\nto this change, so I left it alone.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\n\n<!-- This is an auto-generated comment: release notes by coderabbit.ai\n-->\n<!-- coderabbit-ai-generated:v1 -->\n\n## Summary by CodeRabbit\n\n* **New Features**\n* SQLite connection details now report the maximum number of bind\nvariables supported and whether relation joins are supported. The\nbind-variable limit is available for regular and shadow-database\nconnections when SQLite provides a valid limit; otherwise, it is\nreported as unavailable. SQLite connections report that relation joins\nare not supported. Queries exceeding the reported bind-variable limit\nare rejected with a “too many SQL variables” error.\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n\n---------\n\nSigned-off-by: Eric Ventor <ericventor97@gmail.com>\nSigned-off-by: willbot <w.a.madden+machine@gmail.com>\nSigned-off-by: Will Madden <madden@prisma.io>\nCo-authored-by: Claude Opus 5.5 <noreply@anthropic.com>\nCo-authored-by: willbot <w.a.madden+machine@gmail.com>",
+          "timestamp": "2026-11-20T04:17:00+01:00",
+          "tree_id": "fdefbbd7f727a2dbabe12fcfb74695beaecf5ea1",
+          "url": "https://github.com/prisma/orm/commit/599f05f73ad88fc3efa7edddf81a2857b87db8da"
+        },
+        "date": 1795145195282,
+        "tool": "benchmarkjs",
+        "benches": [
+          {
+            "name": "interpreter: simple select",
+            "value": 132525,
+            "range": "±0.71%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "interpreter: findUnique",
+            "value": 106985,
+            "range": "±1.03%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "interpreter: join (1:N)",
+            "value": 59948,
+            "range": "±1.06%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "interpreter: sequence",
+            "value": 61676,
+            "range": "±2.63%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "interpreter: deep nested join",
+            "value": 20689,
+            "range": "±0.69%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "serializer: 10 rows x 3 cols",
+            "value": 1570468,
+            "range": "±0.54%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "serializer: 50 rows x 8 cols",
+            "value": 137318,
+            "range": "±0.29%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "serializer: 100 rows x 8 cols",
+            "value": 68944,
+            "range": "±0.57%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "getBinaryTargetForCurrentPlatform",
+            "value": 1002,
+            "range": "±0.62%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "client generation ~50 Models",
+            "value": 2.36,
+            "range": "±18.09%",
+            "unit": "ops/sec",
+            "extra": "17 samples"
+          },
+          {
+            "name": "typescript compilation ~50 Models",
+            "value": 0.93,
+            "range": "±16.42%",
+            "unit": "ops/sec",
+            "extra": "10 samples"
+          },
+          {
+            "name": "@prisma/client size",
+            "value": 71.06430149078369,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client size",
+            "value": 10.426462173461914,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.d.ts size",
+            "value": 2.372147560119629,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.js size",
+            "value": 0.17815494537353516,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "dotPlusAtPrismaClientFolder.zip size",
+            "value": 28.72628402709961,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "compile findUnique (uncached baseline)",
+            "value": 7838,
+            "range": "±11.86%",
+            "unit": "ops/sec",
+            "extra": "93 samples"
+          },
+          {
+            "name": "compile findMany filtered (uncached baseline)",
+            "value": 6156,
+            "range": "±1.54%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "compile blog post page (uncached baseline)",
+            "value": 1675,
+            "range": "±0.92%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "parameterize findUnique",
+            "value": 462249,
+            "range": "±0.78%",
+            "unit": "ops/sec",
+            "extra": "93 samples"
+          },
+          {
+            "name": "parameterize findMany",
+            "value": 223546,
+            "range": "±0.83%",
+            "unit": "ops/sec",
+            "extra": "93 samples"
+          },
+          {
+            "name": "parameterize blog post page query",
+            "value": 157717,
+            "range": "±0.56%",
+            "unit": "ops/sec",
+            "extra": "93 samples"
+          },
+          {
+            "name": "findUnique by id",
+            "value": 4732,
+            "range": "±1.94%",
+            "unit": "ops/sec",
+            "extra": "79 samples"
+          },
+          {
+            "name": "findFirst with simple where",
+            "value": 5193,
+            "range": "±1.57%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany 10 records",
+            "value": 4993,
+            "range": "±1.98%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "findMany with orderBy",
+            "value": 4864,
+            "range": "±1.08%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "findMany with filter",
+            "value": 4937,
+            "range": "±1.06%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findMany with pagination",
+            "value": 5364,
+            "range": "±1.07%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findUnique with 1:1 include",
+            "value": 2889,
+            "range": "±1.64%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findUnique with 1:N include",
+            "value": 2475,
+            "range": "±1.27%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findUnique with nested includes",
+            "value": 1286,
+            "range": "±1.96%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with includes",
+            "value": 1293,
+            "range": "±1.43%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findMany with select",
+            "value": 7363,
+            "range": "±1.22%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findMany with nested select",
+            "value": 3785,
+            "range": "±1.47%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "findMany with OR filter",
+            "value": 4135,
+            "range": "±1.14%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "findMany with complex filters",
+            "value": 3268,
+            "range": "±1.55%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findMany with contains filter",
+            "value": 3795,
+            "range": "±1.45%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "count all",
+            "value": 7856,
+            "range": "±1.37%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "count with filter",
+            "value": 6627,
+            "range": "±1.05%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "aggregate sum/avg",
+            "value": 6312,
+            "range": "±0.97%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "groupBy with count",
+            "value": 6393,
+            "range": "±1.62%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "create single record",
+            "value": 3622,
+            "range": "±1.41%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "create with nested",
+            "value": 1839,
+            "range": "±1.42%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "update single record",
+            "value": 4550,
+            "range": "±1.22%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "updateMany",
+            "value": 5847,
+            "range": "±1.07%",
+            "unit": "ops/sec",
+            "extra": "81 samples"
+          },
+          {
+            "name": "transaction sequential",
+            "value": 1696,
+            "range": "±2.11%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "transaction batch",
+            "value": 1653,
+            "range": "±2.01%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "blog post page query",
+            "value": 1041,
+            "range": "±1.14%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "blog listing page query",
+            "value": 1349,
+            "range": "±1.09%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "user profile page query",
+            "value": 1346,
+            "range": "±1.03%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "order history query",
+            "value": 2046,
+            "range": "±1.20%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "product search query",
+            "value": 3746,
+            "range": "±1.20%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "client generation 100 models with relations",
+            "value": 0.46,
+            "range": "±13.69%",
+            "unit": "ops/sec",
+            "extra": "7 samples"
           }
         ]
       }
