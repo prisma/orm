@@ -393,7 +393,7 @@ On a many-to-many relation, `r.disconnect()` without criteria is refused with `O
 
 On a runtime that provides transactions, a write that takes more than one statement, such as a parent write with nested operations, runs in one transaction, so either all of it is applied or none of it is.
 
-When a nested operation of the call writes the record's own table, as on a model related to itself, the record is read again after the nested operations, so `update()` returns the record as the database holds it, also when the operation writes another row of that table.
+When a nested operation of the call writes the record's own table, as on a model related to itself, `update()` returns the record as the database holds it after the nested operations, also when the operation writes another row of that table.
 
 ### Several operations on one relation
 
