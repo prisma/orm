@@ -14,6 +14,9 @@ const setup = new DatabaseSync(path);
 setup.exec(
   'CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT NOT NULL, user_id INTEGER NOT NULL, views INTEGER NOT NULL)',
 );
+setup.exec(
+  'CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL, invited_by_id INTEGER)',
+);
 setup.close();
 
 const db = sqlite({
@@ -29,10 +32,24 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await db.execute(db.raw.sql`DELETE FROM posts`.affectedCount().build());
+  await db.execute(db.raw.sql`DELETE FROM users`.affectedCount().build());
 });
 
 const create = (tx: SqliteTransactionContext<Contract>, id: number, title: string) =>
   tx.orm.Post.select('id').create({ id, title, userId: 1, views: 0 });
+
+const createWithAuthor = (
+  tx: SqliteTransactionContext<Contract>,
+  id: number,
+  title: string,
+  authorId: number,
+) =>
+  tx.orm.Post.select('id').create({
+    id,
+    title,
+    views: 0,
+    author: (author) => author.create({ id: authorId, email: `${title}@example.com`, name: title }),
+  });
 
 const titles = async (q: Pick<SqliteTransactionContext<Contract>, 'orm'>) =>
   (
@@ -81,6 +98,32 @@ describe('tx.transaction on sqlite', () => {
     expect({ inside, committed: await titles(db) }).toEqual({
       inside: ['A', 'B', 'C'],
       committed: ['A', 'B'],
+    });
+  });
+
+  it('runs an ORM write of several statements in a savepoint, so a failed write leaves none of its rows and the transaction commits', async () => {
+    await db.transaction(async (tx) => {
+      await createWithAuthor(tx, 1, 'A', 1);
+      await expect(createWithAuthor(tx, 1, 'B', 2)).rejects.toThrow(/UNIQUE constraint failed/);
+      await createWithAuthor(tx, 3, 'C', 3);
+    });
+
+    expect({
+      posts: await db.orm.Post.select('id', 'title', 'userId')
+        .orderBy((post) => post.id.asc())
+        .all(),
+      users: await db.orm.User.select('id', 'name')
+        .orderBy((user) => user.id.asc())
+        .all(),
+    }).toEqual({
+      posts: [
+        { id: 1, title: 'A', userId: 1 },
+        { id: 3, title: 'C', userId: 3 },
+      ],
+      users: [
+        { id: 1, name: 'A' },
+        { id: 3, name: 'C' },
+      ],
     });
   });
 });
