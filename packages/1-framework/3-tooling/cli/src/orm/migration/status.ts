@@ -13,13 +13,14 @@ import {
   type ContractMarkerRecordLike,
   contractHashAtMarker,
 } from '@internal/migration-tools/aggregate';
-import { isInSpaceHistory } from '@internal/migration-tools/migration-graph';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
+import { isGraphNode, isInSpaceHistory } from '@internal/migration-tools/migration-graph';
 import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry, Refs } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
-import type { Diagnostic, Result } from '@prisma/cli-engine/protocol';
+import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
 import { type CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import type {
   MigrationStatusResult,
@@ -68,6 +69,13 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import { chooseAction, runCommandAction } from '../../utils/next-actions';
+import {
+  type CliInvocation,
+  cliCommand,
+  cliInvocation,
+  printedPlanCommand,
+} from '../../utils/printed-command';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
@@ -160,11 +168,13 @@ export type StatusTarget =
     }
   | { readonly kind: 'extension'; readonly spaceId: string };
 
-export function buildNoPathSummary(args: {
+export interface StatusNoPath {
   readonly origin: StatusOrigin;
   readonly targetHash: string;
   readonly target: StatusTarget;
-}): string {
+}
+
+export function buildNoPathSummary(args: StatusNoPath): string {
   const markerPart = describeOrigin(args.origin);
   const targetShort = shortDisplayHash(args.targetHash);
   const { target } = args;
@@ -172,20 +182,17 @@ export function buildNoPathSummary(args: {
     return `No migration path from ${markerPart} to the head of extension space \`${target.spaceId}\` (${targetShort}).`;
   }
   if (!target.explicitTarget) {
-    return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`;
+    return `No migration path from ${markerPart} to the application's contract (${targetShort}).`;
   }
   const targetLabel =
     target.refName !== undefined
       ? `the target (${targetShort} via \`${target.refName}\`)`
       : `the target (${targetShort})`;
-  return `No migration path from ${markerPart} to ${targetLabel}. Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
+  return `No migration path from ${markerPart} to ${targetLabel}.`;
 }
 
 export function buildStatusHeadline(args: {
   readonly pendingCount: number;
-  readonly targetHash: string;
-  /** The ref `--to` named, which the suggested run names too, so it checks the ref's policies. */
-  readonly refName?: string | undefined;
   readonly markerDiverged: boolean;
   readonly markerHash: string | undefined;
 }): string {
@@ -195,9 +202,59 @@ export function buildStatusHeadline(args: {
   if (args.pendingCount === 0) {
     return 'Up to date';
   }
+  return `${args.pendingCount} pending`;
+}
+
+/**
+ * The commands that follow from the headline. They live here rather than in the summary because
+ * only next actions get `{bin}` replaced with the name of the CLI that ran, and the `--json`
+ * document should not carry shell commands.
+ */
+export function buildStatusNextActions(args: {
+  readonly everySpaceEmpty: boolean;
+  readonly markerDiverged: boolean;
+  readonly noPath: StatusNoPath | undefined;
+  readonly pendingCount: number;
+  readonly targetHash: string;
+  /** The ref `--to` named, which the suggested run names too, so it checks the ref's policies. */
+  readonly refName: string | undefined;
+  /** What `--to` takes to name a target no path reaches, as `toArgumentFor` defines it. */
+  readonly toArgument: string | undefined;
+  readonly invocation: CliInvocation;
+}): readonly NextAction[] {
+  const { noPath, invocation } = args;
+  if (args.everySpaceEmpty || args.markerDiverged) {
+    return [];
+  }
+  if (noPath !== undefined) {
+    if (noPath.target.kind === 'extension') {
+      return [];
+    }
+    const originHash = currentContractOf(noPath.origin) ?? undefined;
+    const from = originHash === EMPTY_CONTRACT_HASH ? undefined : originHash;
+    const to = args.toArgument === undefined ? [] : ['--to', shellQuoted(args.toArgument)];
+    return [
+      runCommandAction(
+        'Plan the missing migration',
+        printedPlanCommand(invocation, from, [...to, '--name', '<name>']),
+      ),
+      runCommandAction('Then apply it', cliCommand(invocation, 'db migrate', to)),
+      ...(noPath.target.explicitTarget
+        ? [chooseAction('Or pass `--to <contract>` to pick a reachable target')]
+        : []),
+    ];
+  }
+  if (args.pendingCount === 0) {
+    return [];
+  }
   const to =
     args.refName === undefined ? shortDisplayHash(args.targetHash) : shellQuoted(args.refName);
-  return `${args.pendingCount} pending — run \`{bin} db migrate --to ${to}\``;
+  return [
+    runCommandAction(
+      'Apply the pending migrations',
+      cliCommand(invocation, 'db migrate', ['--to', to]),
+    ),
+  ];
 }
 
 interface SpaceSection {
@@ -256,6 +313,7 @@ function statusPresentations(inputs: {
   readonly from: string | undefined;
   readonly space: string | undefined;
   readonly legend: string | undefined;
+  readonly next: readonly NextAction[];
 }): Presentations {
   const legend = inputs.legend;
   return {
@@ -272,7 +330,7 @@ function statusPresentations(inputs: {
           ]),
         ),
       ),
-    next: () => [],
+    next: () => inputs.next,
     human: (): readonly Block[] => [
       {
         kind: 'fields',
@@ -455,13 +513,7 @@ export const migrationStatusCommand = defineOrmCommand({
       [];
     const emptySpaces: string[] = [];
     let divergedMarker: { readonly space: string; readonly markerHash: string } | undefined;
-    let noPath:
-      | {
-          readonly origin: StatusOrigin;
-          readonly targetHash: string;
-          readonly target: StatusTarget;
-        }
-      | undefined;
+    let noPath: StatusNoPath | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
 
@@ -620,11 +672,23 @@ export const migrationStatusCommand = defineOrmCommand({
         ? buildNoPathSummary(noPath)
         : buildStatusHeadline({
             pendingCount: totalPending,
-            targetHash: headlineTargetHash,
-            refName: activeRefName,
             markerDiverged: divergedMarker !== undefined,
             markerHash: divergedMarker?.markerHash,
           });
+    const next = buildStatusNextActions({
+      everySpaceEmpty,
+      markerDiverged: divergedMarker !== undefined,
+      noPath,
+      pendingCount: totalPending,
+      targetHash: headlineTargetHash,
+      refName: activeRefName,
+      toArgument:
+        to === undefined
+          ? undefined
+          : (activeRefName ??
+            (isGraphNode(headlineTargetHash, appGraph) ? headlineTargetHash : undefined)),
+      invocation: cliInvocation(ctx, args.flags.db),
+    });
 
     const summary =
       differences !== undefined && differences.length > 0 && activeRefName !== undefined
@@ -670,6 +734,7 @@ export const migrationStatusCommand = defineOrmCommand({
                 palette: TONE_MIGRATION_GRAPH_PALETTE,
               })
             : undefined,
+          next,
         }),
       ),
     );

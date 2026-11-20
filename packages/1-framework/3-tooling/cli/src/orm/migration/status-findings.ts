@@ -29,7 +29,7 @@ export function contractUnreadableFinding(reason: string): StatusFinding {
       code: 'CONTRACT.UNREADABLE',
       severity: 'warn',
       message,
-      hints: ["Run '{bin} contract emit' to generate a valid contract"],
+      hints: ["Run 'contract emit' to generate a valid contract"],
     },
     diagnostic: {
       code: 'CONTRACT.UNREADABLE',
@@ -76,8 +76,8 @@ export function markerNotInHistoryFinding(
   const reconciles = change.includes('reconcile');
   const hints = reconciles
     ? [
-        "Run '{bin} db sign' to overwrite the marker if the database already matches the contract",
-        "Run '{bin} db update' to push the current contract to the database",
+        "Run 'db sign' to overwrite the marker if the database already matches the contract",
+        "Run 'db update' to push the current contract to the database",
       ]
     : [AUTHOR_MIGRATIONS_BACK];
   return {

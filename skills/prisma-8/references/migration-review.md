@@ -54,7 +54,7 @@ The graph is a static, committed artifact. Several branch tips may coexist, roll
 
 ### Diagnostic codes
 
-`migration status` answers with a document (`--json`): `spaces[]`, each with `currentContract` (the marker hash, or `null` when the database has no marker for that space), `targetContract`, and `migrations[]` carrying the `applied` / `pending` / `null` status above; a `summary` line; and `diagnostics[]`. The ordinary states — up to date, N pending, no marker yet, marker on another branch, no path to the target — are read from `spaces[]` and the summary, not from diagnostic codes. The three diagnostics it can attach are all `warn`, and each carries a `message` and `hints` — the same hints the CLI prints under the summary line:
+`migration status` answers with a document (`--json`): `spaces[]`, each with `currentContract` (the marker hash, or `null` when the database has no marker for that space), `targetContract`, and `migrations[]` carrying the `applied` / `pending` / `null` status above; a `summary` line; and `diagnostics[]`. The ordinary states — up to date, N pending, no marker yet, marker on another branch, no path to the target — are read from `spaces[]` and the summary, not from diagnostic codes. The summary states the condition only; the command that follows from it (`db migrate --to <target>` for pending migrations, `migration plan` then `db migrate` for a missing path) is in the envelope's `next` actions, with the CLI's name filled in. The three diagnostics it can attach are all `warn`, and each carries a `message` and `hints` — the same hints the CLI prints under the summary line:
 
 | Code | Meaning in the navigation model | Next move |
 |---|---|---|
