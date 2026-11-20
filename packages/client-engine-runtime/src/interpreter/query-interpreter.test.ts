@@ -327,7 +327,7 @@ describe('purifyQueryPlan', () => {
     expect(evalNode).toHaveBeenCalledWith(query)
     expect(purified).toEqual({
       type: 'unique',
-      args: { type: 'value', args: [{ id: 1 }], lastInsertId: '1' },
+      args: { type: 'value', args: [{ id: 1 }], lastInsertId: '1', isEvaluated: true },
     })
     expect(plan).toEqual(original)
   })
@@ -371,5 +371,160 @@ describe('purifyQueryPlan', () => {
     const plan: QueryPlanNode = { type: 'value', args: 42 }
 
     expect(purifyQueryPlan(plan, vi.fn())).toBeUndefined()
+  })
+
+  test('does not copy result rows when running an already purified plan', async () => {
+    const rows = [
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' },
+    ]
+    const plan: QueryPlanNode = queryNode('SELECT "id", "name" FROM "User"')
+
+    const evalNode = vi.fn().mockResolvedValue({ value: rows })
+    const purified = await purifyQueryPlan(plan, evalNode)
+    expect(purified).toBeDefined()
+
+    const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+    const result = await interpreter.run(purified!, {
+      queryable: {
+        provider: 'postgres' as const,
+        adapterName: 'mock',
+        queryRaw: vi.fn(),
+        executeRaw: vi.fn(),
+      },
+      transactionManager: { enabled: false },
+      scope: {},
+    })
+
+    expect(result).toBe(rows)
+  })
+
+  test('does not copy result rows when run purifies the plan itself', async () => {
+    const rows = [
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' },
+    ]
+    const interpreter = new QueryInterpreter({ tracingHelper: noopTracingHelper, serializer: () => rows })
+
+    const result = await interpreter.run(queryNode('SELECT "id", "name" FROM "User"'), {
+      queryable: {
+        provider: 'postgres',
+        adapterName: 'mock',
+        queryRaw: () => Promise.resolve(userResultSet(1, 'Alice')),
+        executeRaw: vi.fn(),
+      },
+      transactionManager: { enabled: false },
+      scope: {},
+    })
+
+    expect(result).toBe(rows)
+  })
+
+  test('evaluating reverse on a purified plan does not mutate cached rows on repeated runs', async () => {
+    const rows = [
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' },
+    ]
+    const plan: QueryPlanNode = {
+      type: 'reverse',
+      args: queryNode('SELECT "id", "name" FROM "User"'),
+    }
+
+    const evalNode = vi.fn().mockResolvedValue({ value: rows })
+    const purified = await purifyQueryPlan(plan, evalNode)
+    expect(purified).toBeDefined()
+
+    const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+    const context: QueryRuntimeOptions = {
+      queryable: {
+        provider: 'postgres',
+        adapterName: 'mock',
+        queryRaw: vi.fn(),
+        executeRaw: vi.fn(),
+      },
+      transactionManager: { enabled: false },
+      scope: {},
+    }
+
+    const firstRun = await interpreter.run(purified!, context)
+    expect(firstRun).toEqual([
+      { id: 2, name: 'Bob' },
+      { id: 1, name: 'Alice' },
+    ])
+    expect(rows[0].id).toBe(1)
+    expect(rows[1].id).toBe(2)
+
+    const secondRun = await interpreter.run(purified!, context)
+    expect(secondRun).toEqual([
+      { id: 2, name: 'Bob' },
+      { id: 1, name: 'Alice' },
+    ])
+    expect(rows[0].id).toBe(1)
+  })
+})
+
+describe('join', () => {
+  function joinPlan(): QueryPlanNode {
+    return {
+      type: 'join',
+      args: {
+        parent: queryNode('SELECT "id", "tagId" FROM "Child"'),
+        children: [
+          {
+            child: queryNode('SELECT "id" FROM "Tag"'),
+            on: [['tagId', 'id']],
+            parentField: 'tag',
+            isRelationUnique: true,
+          },
+        ],
+        canAssumeStrictEquality: true,
+      },
+    }
+  }
+
+  function childResultSet(rows: [number, number | null][]): SqlResultSet {
+    return { columnNames: ['id', 'tagId'], columnTypes: [ColumnTypeEnum.Int32, ColumnTypeEnum.Int32], rows }
+  }
+
+  async function run(parentRows: [number, number | null][]) {
+    const queryable = {
+      provider: 'postgres' as const,
+      adapterName: 'mock',
+      queryRaw: vi
+        .fn()
+        .mockResolvedValueOnce(childResultSet(parentRows))
+        .mockResolvedValueOnce({ columnNames: ['id'], columnTypes: [ColumnTypeEnum.Int32], rows: [[7]] }),
+      executeRaw: vi.fn(),
+    }
+    const interpreter = QueryInterpreter.forSql({ tracingHelper: noopTracingHelper })
+    const result = await interpreter.run(joinPlan(), {
+      queryable,
+      transactionManager: { enabled: false },
+      scope: {},
+    })
+    return { result, queries: queryable.queryRaw.mock.calls.length }
+  }
+
+  test('skips the child query when there are no parent rows', async () => {
+    await expect(run([])).resolves.toEqual({ result: [], queries: 1 })
+  })
+
+  test('skips the child query when no parent row has a join key', async () => {
+    await expect(run([[1, null]])).resolves.toEqual({ result: [{ id: 1, tagId: null, tag: null }], queries: 1 })
+  })
+
+  test('runs the child query when a parent row has a join key', async () => {
+    await expect(
+      run([
+        [1, null],
+        [2, 7],
+      ]),
+    ).resolves.toEqual({
+      result: [
+        { id: 1, tagId: null, tag: null },
+        { id: 2, tagId: 7, tag: { id: 7 } },
+      ],
+      queries: 2,
+    })
   })
 })

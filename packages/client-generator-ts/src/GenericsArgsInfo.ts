@@ -24,9 +24,11 @@ export class GenericArgsInfo {
   typeNeedsGenericModelArg(topLevelType: DMMF.InputType): boolean {
     return this._cache.getOrCreate(topLevelType, () => {
       const toVisit: ToVisitItem[] = [{ type: topLevelType }]
+      const queued = new Set<DMMF.InputType>([topLevelType])
       const visited = new Set<DMMF.InputType>()
-      let item: ToVisitItem | undefined
-      while ((item = toVisit.shift())) {
+      // Indexing instead of `shift()`, which copies the array and made this search quadratic.
+      for (let index = 0; index < toVisit.length; index++) {
+        const item = toVisit[index]
         const { type: currentType } = item
         const cached = this._cache.get(currentType)
         if (cached === true) {
@@ -34,10 +36,6 @@ export class GenericArgsInfo {
           return true
         }
         if (cached === false) {
-          continue
-        }
-        if (visited.has(currentType)) {
-          // if we have a loop, outcome is determined by other keys
           continue
         }
         if (currentType.meta?.source) {
@@ -53,7 +51,8 @@ export class GenericArgsInfo {
               return true
             }
             const inputObject = this._dmmf.resolveInputObjectType(fieldType)
-            if (inputObject) {
+            if (inputObject && !queued.has(inputObject)) {
+              queued.add(inputObject)
               toVisit.push({ type: inputObject, parent: item })
             }
           }

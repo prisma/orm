@@ -1,4 +1,5 @@
 import type { ArgType, SqlDriverAdapter } from '@prisma/driver-adapter-utils'
+import { ColumnTypeEnum } from '@prisma/driver-adapter-utils'
 import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'
 
@@ -47,6 +48,21 @@ describe('getConnectionInfo', () => {
     const adapter = await new PrismaBetterSqlite3AdapterFactory({ url: ':memory:' }).connect()
     try {
       expect(adapter.getConnectionInfo?.().supportsRelationJoins).toBe(false)
+    } finally {
+      await adapter.dispose()
+    }
+  })
+})
+
+describe('queryRaw', () => {
+  it('returns Bytes for a BLOB expression with no declared column type', async () => {
+    const adapter = await new PrismaBetterSqlite3AdapterFactory({ url: ':memory:' }).connect()
+    try {
+      const result = await adapter.queryRaw({ sql: "SELECT X'DEADBEEF' AS b", args: [], argTypes: [] })
+
+      expect(result.columnNames).toEqual(['b'])
+      expect(result.columnTypes).toEqual([ColumnTypeEnum.Bytes])
+      expect(Array.from(result.rows[0][0] as Uint8Array)).toEqual([0xde, 0xad, 0xbe, 0xef])
     } finally {
       await adapter.dispose()
     }

@@ -130,7 +130,7 @@ export class QueryInterpreter {
     switch (node.type) {
       case 'value': {
         return {
-          value: evaluateArg(node.args, context.scope, context.generators),
+          value: node.isEvaluated ? node.args : evaluateArg(node.args, context.scope, context.generators),
           lastInsertId: node.lastInsertId,
         }
       }
@@ -221,7 +221,7 @@ export class QueryInterpreter {
 
       case 'reverse': {
         const { value, lastInsertId } = await this.interpretNode(node.args, context)
-        return { value: Array.isArray(value) ? value.reverse() : value, lastInsertId }
+        return { value: Array.isArray(value) ? value.slice().reverse() : value, lastInsertId }
       }
 
       case 'unique': {
@@ -255,10 +255,14 @@ export class QueryInterpreter {
           return { value: null, lastInsertId }
         }
 
+        const parentRecords = (Array.isArray(parent) ? parent : [parent]).map(asRecord)
         const children = await Promise.all(
           node.args.children.map(async (joinExpr) => ({
             joinExpr,
-            childRecords: (await this.interpretNode(joinExpr.child, context)).value,
+            // A child can only attach to a parent whose join keys are all non-null.
+            childRecords: parentRecords.some((record) => joinExpr.on.every(([key]) => record[key] != null))
+              ? (await this.interpretNode(joinExpr.child, context)).value
+              : [],
           })),
         )
 
@@ -339,7 +343,10 @@ export class QueryInterpreter {
   ): IntermediateValue {
     switch (node.type) {
       case 'value': {
-        return { value: evaluateArg(node.args, scope, generators), lastInsertId: node.lastInsertId }
+        return {
+          value: node.isEvaluated ? node.args : evaluateArg(node.args, scope, generators),
+          lastInsertId: node.lastInsertId,
+        }
       }
 
       case 'seq': {
@@ -391,7 +398,7 @@ export class QueryInterpreter {
 
       case 'reverse': {
         const { value, lastInsertId } = this.#interpretPureNode(node.args, scope, generators)
-        return { value: Array.isArray(value) ? value.reverse() : value, lastInsertId }
+        return { value: Array.isArray(value) ? value.slice().reverse() : value, lastInsertId }
       }
 
       case 'unique': {
@@ -807,6 +814,7 @@ export function purifyQueryPlan(
       type: 'value',
       args: result.value as PrismaValue,
       lastInsertId: result.lastInsertId,
+      isEvaluated: true,
     }
     const purified = replaceImpureNode(node, impureNode, evaluated)
     if (!purified) {
