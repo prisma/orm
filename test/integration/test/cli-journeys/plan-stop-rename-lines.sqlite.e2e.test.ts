@@ -1,5 +1,5 @@
 /**
- * The rename lines `migration plan` and `db update` print for a removed variant, also when the same change renames or removes its base, and for a rename to a name another field holds work when a careful reader follows them (SQLite).
+ * The rename lines `migration plan` and `db update` print for a removed variant, also when the same change renames or removes its base (with the variant in its base's table or in a table of its own), and for a rename to a name another field holds work when a careful reader follows them (SQLite).
  *
  * Each journey reads the line, changes the contract as it says, runs the command with the flags it gives, and checks the data.
  */
@@ -47,6 +47,22 @@ model Issue {
   id       Int     @id
   severity String?
   @@map("issue")
+}
+`;
+
+const BUG_OWN_TABLE = `
+model Bug {
+  severity String?
+  @@base(Task, "bug")
+  @@map("bug")
+}
+`;
+
+const DEFECT_OWN_MODEL = `
+model Defect {
+  id       Int     @id
+  severity String?
+  @@map("defect")
 }
 `;
 
@@ -234,6 +250,48 @@ withTempDir(({ createTempDir }) => {
             { id: 3, severity: null },
           ]);
           await expectSettled(journey, 'R4.07');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
+
+  describe.each(COMMANDS)(
+    'Journey R5 (SQLite): a removed variant with a table of its own whose base the same change removes, with %s',
+    (command) => {
+      it(
+        'keeps its rows under the model the contract gets first, as the rename line says',
+        async () => {
+          const journey = sqliteJourney(createTempDir, command);
+          await start(
+            journey,
+            tasks(BUG_OWN_TABLE),
+            `INSERT INTO "task" (id, type, scope) VALUES (1, 'bug', NULL), (2, 'epic', 'big'); INSERT INTO "bug" (id, severity) VALUES (1, 'high');`,
+            'R5.01',
+          );
+          await emit(journey, `// use prisma-8\n${ISSUE}`, 'R5.02');
+          const rename = linesOf(await refusal(journey, [], 'R5.03')).find((line) =>
+            line.includes("--rename 'Bug:"),
+          );
+          expect(rename, 'R5.03: a model to add, and no base it must be a variant of').toBe(
+            `If model "Bug" was renamed, add it to the contract under its new name and run \`prisma-test contract emit\`; then keep its data: --rename 'Bug:<new name>'`,
+          );
+
+          await emit(journey, `// use prisma-8\n${ISSUE}${DEFECT_OWN_MODEL}`, 'R5.04');
+          const renameBug = flagsOf(rename ?? '', 'Defect');
+          const deletes = linesOf(await refusal(journey, renameBug, 'R5.05'))
+            .filter((line) => line.includes(': --delete '))
+            .flatMap((line) => flagsOf(line));
+          expect(deletes, 'R5.05: the base is asked about on its own').toEqual([
+            '--delete',
+            'Task',
+          ]);
+          await planAndApply(journey, [...renameBug, ...deletes], 'R5.06');
+          expect(
+            await rows(journey, 'SELECT id, severity FROM "defect" ORDER BY id'),
+            'R5.06: the rows of the variant are kept under the new model',
+          ).toEqual([{ id: 1, severity: 'high' }]);
+          await expectSettled(journey, 'R5.07');
         },
         timeouts.spinUpPpgDev,
       );

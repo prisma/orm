@@ -19,6 +19,8 @@ interface ModelSpec {
   /** The discriminator field of a base model, and each variant by its discriminator value. */
   readonly discriminator?: string;
   readonly variants?: Readonly<Record<string, string>>;
+  /** Where the model is stored, as a family writes it; empty when not given. */
+  readonly storage?: Readonly<Record<string, unknown>>;
   /** The field's codec or the value object of its namespace it holds, and whether it is optional, for a field `fields` lists; text and required otherwise. */
   readonly fieldTypes?: Readonly<
     Record<
@@ -80,7 +82,7 @@ function modelOf(namespaceId: string, spec: ModelSpec): ContractModelBase {
   return {
     fields: fieldsOf(namespaceId, spec.fields ?? [], spec.fieldTypes),
     relations: Object.fromEntries((spec.relations ?? []).map((name) => [name, relation])),
-    storage: {},
+    storage: spec.storage ?? {},
     ...(spec.base !== undefined ? { base: crossRef(spec.base, namespaceId) } : {}),
     ...(spec.owner !== undefined ? { owner: spec.owner } : {}),
     ...(spec.discriminator !== undefined ? { discriminator: { field: spec.discriminator } } : {}),

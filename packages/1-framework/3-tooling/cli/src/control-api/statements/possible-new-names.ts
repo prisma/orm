@@ -9,7 +9,7 @@ import {
   type ValueObjectFieldCoordinate,
 } from '@internal/framework-components/control';
 import type { VariantBase } from './missing-new-name';
-import { hasModel, isBaseModel, newVariantsOfBase, variantBase } from './variants';
+import { hasModel, isBaseModel, newVariantsOfBase, storedWithBase, variantBase } from './variants';
 
 /** The two contracts of a change, and the renames resolved between them so far. */
 export interface ContractsAndRenames {
@@ -50,8 +50,9 @@ export function modelAfterRenames(
 
 /**
  * The base of a variant of the origin: kept, as the destination names it after the renames and a
- * `--rename` writes it, or removed by the change, as the origin names it. `undefined` when the
- * model is no variant, or the destination has the base as a model that is no base.
+ * `--rename` writes it, or, for a variant stored where its base is, removed by the change, as the
+ * origin names it. `undefined` when the model is no variant, when the destination has the base as
+ * a model that is no base, or when the change removes the base of a variant stored elsewhere.
  */
 export function variantBaseAfterRenames(
   { origin, destination, renames }: ContractsAndRenames,
@@ -63,7 +64,7 @@ export function variantBaseAfterRenames(
   if (isBaseModel(destination, now)) {
     return { kind: 'kept', base: modelStatementText(destination, now) };
   }
-  return hasModel(destination, now)
+  return hasModel(destination, now) || !storedWithBase(origin, variant)
     ? undefined
     : { kind: 'removed', base: modelStatementText(origin, base) };
 }

@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import {
   asNamespaceId,
   type ContractModelBase,
@@ -32,6 +33,27 @@ export function variantBase(
 /** Whether the contract has the model. */
 export function hasModel(contract: ContractWithDomain, coordinate: ModelCoordinate): boolean {
   return modelOf(contract, coordinate) !== undefined;
+}
+
+/**
+ * Whether a variant is stored where its base is: their storage is the same apart from where each
+ * field goes, as for a variant whose rows are rows of its base's table or collection.
+ */
+export function storedWithBase(contract: ContractWithDomain, variant: ModelCoordinate): boolean {
+  const model = modelOf(contract, variant);
+  const base =
+    model?.base === undefined
+      ? undefined
+      : modelOf(contract, { namespaceId: model.base.namespace, model: model.base.model });
+  return (
+    model !== undefined &&
+    base !== undefined &&
+    isDeepStrictEqual(placeOf(model.storage), placeOf(base.storage))
+  );
+}
+
+function placeOf(storage: ContractModelBase['storage']): Readonly<Record<string, unknown>> {
+  return Object.fromEntries(Object.entries(storage).filter(([key]) => key !== 'fields'));
 }
 
 /** Whether the contract has the model, with a discriminator, so a variant can name it as its base. */
