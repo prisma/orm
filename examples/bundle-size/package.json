@@ -38,7 +38,7 @@
     "@types/pg": "catalog:",
     "esbuild": "^0.28.2",
     "mongodb-memory-server": "catalog:",
-    "size-limit": "^12.1.0",
+    "size-limit": "^14.3.0",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
