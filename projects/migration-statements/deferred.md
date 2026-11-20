@@ -629,3 +629,17 @@ In `db update`, at a prompt or through the control API, a round can answer an ac
 **Found:** the automated review of the plan-stop output pull request (2026-11-21). `main` behaves the same.
 
 Scenario: the plan drops model `Bug`, and the user runs `prisma db update --allow Bug` in a terminal. The command asks about `Bug` first, and after the answer refuses `--allow Bug` as unused. Without a terminal, the refusal already says `Remove --allow Bug: this change does not change access to model "Bug".`. `refuseMisdirectedConsents` (`packages/1-framework/3-tooling/cli/src/orm/plan-question-prompt.ts`) refuses such a flag before anything is asked only beside a flag that settles the subject, as the plan-stop output spec chose. Refusing it before the prompt in every case would save the user an answer that is then thrown away.
+
+## Nine statements in the migration system doc that contradict each other or look false
+
+**Found:** the restructuring of `docs/architecture docs/subsystems/7. Migration System.md` (2026-11-21), which kept every fact and changed none. All nine were in the doc before the plan-stop output change. Each needs a check against the code before the doc is corrected.
+
+1. **A migration with no operations.** "A plan with no operations" says `db migrate` and `db update` apply it by moving the marker to the new hash. "Authoring intermediate state", "States" and "Diagnostics" say a migration whose `ops.json` is `[]` does not move the marker and fails the destination-hash postcheck with `MIGRATION.POSTCHECK_FAILED`.
+2. **Where refs live.** The File Layout tree shows `migrations/refs/db.json`. The rest of the doc says `migrations/<space>/refs/<name>.json` and `migrations/app/refs/db.json`.
+3. **Where the contract snapshot goes.** Authoring Pipeline step 3 says the destination contract is snapshotted "into the migration directory". "Contract snapshot" says it goes into the shared `migrations/snapshots/` store and that the migration package carries no contract copy.
+4. **The placeholder list is incomplete.** The slot list in step 3 and in "Placeholder safety" leaves out the `fillStoredKey` `value` placeholder and MongoDB's `placeholder('<field>:update')`.
+5. **Planner IR lists only MongoDB call classes,** while its text says there is one per migration factory function.
+6. **`MIGRATION.STATEMENT_ORIGIN_UNKNOWN`.** The Error Taxonomy says it is raised when `db update` "was given statements". The body says a missing snapshot fails only a run with `--rename`, and that a delete still works.
+7. **Policy Knobs says "different `edgeId`",** which looks like an old name for `migrationHash`.
+8. **`migration show` and `migration check`** link to a "migration-reference grammar" under `#refs-environment-targets`, and that section describes no such grammar.
+9. **No `db` ref.** Step 3 of the default `from` resolution says a missing `db` ref resolves to an empty origin. It does not mention the `MIGRATION.PLAN_ORIGIN_UNKNOWN` refusal on a non-empty graph that the command synopsis states.
