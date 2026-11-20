@@ -186,7 +186,7 @@ pnpm dlx prisma@latest orm init --yes --target postgres --authoring psl
 
 The flags `init` accepts (run `prisma orm init --help` for the source of truth):
 
-- `--target <db>` — `postgres` or `mongodb`.
+- `--target <package>` — `postgres`, `mongodb`, or the name of another target package, such as `@prisma/orm-sqlite`.
 - `--authoring <style>` — `psl` or `typescript`.
 - `--schema-path <path>` — where to write the starter schema. Defaults to `src/prisma/contract.prisma` (or `src/prisma/contract.ts` with `--authoring typescript`), the canonical layout above. The extension must agree with `--authoring` (`CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH` otherwise).
 - `--confirm <directory name>` — grant the reinit consent non-interactively. Re-running init in a scaffolded directory asks you to type the directory name back before it overwrites; non-interactive runs pass the name with this flag instead (`--yes` does not grant it).

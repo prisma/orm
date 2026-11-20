@@ -13,7 +13,7 @@ changes:
 
 This applies to a package that adds a target and wants `prisma orm init` to set up projects on it. Nothing changes for a package that does not.
 
-In this release `--target` takes only the short names of the packages Prisma lists, so `init` cannot reach a package outside that list yet; accepting a package name comes in a later release. Exporting the entrypoint now prepares your package for it.
+A user reaches your package with `prisma orm init --target <your package name>`.
 
 Export an `init` entrypoint whose default export satisfies `InitContribution`:
 

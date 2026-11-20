@@ -43,6 +43,7 @@
     "pathe": "^2.0.3",
     "string-width": "^8.3.0",
     "strip-ansi": "^7.2.0",
+    "validate-npm-package-name": "^7.0.2",
     "wrap-ansi": "^10.0.2"
   },
   "devDependencies": {
@@ -56,6 +57,7 @@
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
+    "@types/validate-npm-package-name": "^4.0.2",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

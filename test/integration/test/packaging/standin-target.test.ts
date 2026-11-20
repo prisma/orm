@@ -35,13 +35,18 @@ const MIGRATION_MODULE = `${STANDIN}/migration`;
 const EXTENSION = '@prisma/orm-extension-pgvector';
 const TOOLCHAIN = '@prisma/orm-toolchain';
 const TARGET = '@prisma/orm-target-postgres';
+const RUNTIME = '@prisma/orm-postgres';
 const shells: ShellName[] = [
   '@prisma/orm-framework',
   '@prisma/orm-toolchain',
   '@prisma/orm-family-sql',
   '@prisma/orm-target-postgres',
+  '@prisma/orm-postgres',
   '@prisma/orm-extension-pgvector',
 ];
+
+/** What init's own install would add beside the stand-in; the run under `--skip-install` needs them in place. */
+const INIT_INSTALLS = { dotenv: '^17.4.2', '@types/node': '^24.10.4' };
 
 const CONTRACT = `// use prisma-8
 
@@ -95,7 +100,7 @@ function standinManifest(): string {
 function buildStandin(scratch: string, packed: readonly PackedShell[]): PackedShell {
   const buildDir = join(scratch, 'standin-build');
   installShells(buildDir, packed, {
-    direct: ['@prisma/orm-framework', '@prisma/orm-family-sql', TARGET],
+    direct: ['@prisma/orm-framework', '@prisma/orm-family-sql', TARGET, RUNTIME, TOOLCHAIN],
     registryDependencies: { typescript: typescriptVersion },
   });
   cpSync(join(fixtureDir, 'src'), join(buildDir, 'src'), { recursive: true });
@@ -122,6 +127,35 @@ interface Application {
   runNode(file: string): void;
   read(path: string): string;
   generatedFiles(): string[];
+}
+
+/**
+ * An application set up by `prisma orm init --target <the stand-in>`, which writes its config,
+ * contract source, `db.ts` and `tsconfig.json` from the stand-in's init contribution.
+ */
+function createInitApplication(dir: string, packed: readonly PackedShell[]): Application {
+  installShells(dir, packed, {
+    direct: [STANDIN, TOOLCHAIN],
+    registryDependencies: {
+      '@prisma/cli-engine': cliEngineVersion ?? '',
+      typescript: typescriptVersion,
+      ...INIT_INSTALLS,
+    },
+  });
+  writeFileSync(join(dir, 'prisma-cli.mjs'), CLI_RUNNER);
+  runNodeIn(dir, [
+    'prisma-cli.mjs',
+    'orm',
+    'init',
+    '--target',
+    STANDIN,
+    '--authoring',
+    'psl',
+    '--yes',
+    '--skip-install',
+  ]);
+  writeFileSync(join(dir, 'src', 'contract-is-typed.ts'), CONTRACT_IS_TYPED);
+  return applicationIn(dir, { extensionPackages: [] });
 }
 
 function createApplication(
@@ -160,7 +194,13 @@ export default definePrismaConfig({
   );
   writeFileSync(join(dir, 'src', 'contract-is-typed.ts'), CONTRACT_IS_TYPED);
   writeFileSync(join(dir, 'prisma-cli.mjs'), CLI_RUNNER);
+  return applicationIn(dir, { extensionPackages: options.withExtension ? [EXTENSION] : [] });
+}
 
+function applicationIn(
+  dir: string,
+  options: { readonly extensionPackages: readonly string[] },
+): Application {
   const directDependencies = Object.keys(
     (
       JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
@@ -171,7 +211,7 @@ export default definePrismaConfig({
   return {
     dir,
     directDependencies,
-    extensionPackages: options.withExtension ? [EXTENSION] : [],
+    extensionPackages: options.extensionPackages,
     run(...args) {
       runNodeIn(dir, ['prisma-cli.mjs', ...args]);
     },
@@ -234,6 +274,25 @@ function typecheck(app: Application): string[] {
   });
 }
 
+/** Typechecks every file of the project with the `tsconfig.json` init wrote, declaration files checked. */
+function typecheckProject(app: Application): { files: string[]; problems: string[] } {
+  const config = ts.readConfigFile(join(app.dir, 'tsconfig.json'), ts.sys.readFile);
+  if (config.error !== undefined) {
+    throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, ' '));
+  }
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, app.dir);
+  const program = ts.createProgram(parsed.fileNames, {
+    ...parsed.options,
+    skipLibCheck: false,
+    noEmit: true,
+  });
+  const problems = [...parsed.errors, ...ts.getPreEmitDiagnostics(program)].map(
+    (diagnostic) =>
+      `${diagnostic.file === undefined ? '' : `${relative(app.dir, diagnostic.file.fileName)}: `}${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`,
+  );
+  return { files: parsed.fileNames.map((file) => relative(app.dir, file)), problems };
+}
+
 function importStatements(source: string): string[] {
   return [...source.matchAll(/^import type \{[^}]*\} from '[^']+';$/gms)].map(([statement]) =>
     statement.replace(/\s+/g, ' '),
@@ -260,7 +319,7 @@ describe('a target package under a name the CLI has never heard of', () => {
     scratch = mkdtempSync(join(tmpdir(), 'orm-standin-target-'));
     const packed = packShells(scratch);
     const standin = buildStandin(scratch, packed);
-    app = createApplication(join(scratch, 'app'), [...packed, standin], { withExtension: false });
+    app = createInitApplication(join(scratch, 'app'), [...packed, standin]);
     appWithExtension = createApplication(
       join(scratch, 'app-with-extension'),
       [...packed, standin],
@@ -280,8 +339,32 @@ describe('a target package under a name the CLI has never heard of', () => {
 
   it('is installed from its own tarball and is the only target package the application declares', () => {
     expect([...app.directDependencies].sort()).toEqual(
-      [STANDIN, TOOLCHAIN, '@prisma/cli-engine', 'typescript'].sort(),
+      [
+        STANDIN,
+        TOOLCHAIN,
+        '@prisma/cli-engine',
+        'typescript',
+        ...Object.keys(INIT_INSTALLS),
+      ].sort(),
     );
+  });
+
+  it("is what init writes the project from, through the stand-in's init entrypoint", () => {
+    expect(app.read('prisma.config.ts')).toContain(
+      `import { defineConfig as ormConfig } from '${STANDIN}/config';`,
+    );
+    expect(app.read('src/prisma/db.ts')).toContain(`from '${STANDIN}/runtime'`);
+    expect(app.read('src/prisma/contract.prisma')).toContain('model User');
+    expect(app.read('.env.example')).toContain('DATABASE_URL=');
+  });
+
+  it('typechecks the project init wrote, with its own tsconfig.json and db.ts', () => {
+    const { files, problems } = typecheckProject(app);
+
+    expect(files).toEqual(
+      expect.arrayContaining(['prisma.config.ts', 'src/prisma/db.ts', 'src/prisma/contract.d.ts']),
+    );
+    expect(problems).toEqual([]);
   });
 
   it('emits contract types importing the framework, family, target and adapter types from its types module, in one statement', () => {
