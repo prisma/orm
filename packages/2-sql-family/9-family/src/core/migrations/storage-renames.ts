@@ -369,21 +369,21 @@ export class StorageRenames {
   }
 
   /**
-   * A name for `name` to move through that no table of the namespace has in either contract, as
-   * the target compares names.
+   * A name for `name` to move through that no table of the namespace has in either contract, and
+   * that is not one of `reserved`, as the target compares names.
    */
-  unusedTableName(namespaceId: string, name: string): string {
+  unusedTableName(namespaceId: string, name: string, reserved: readonly string[] = []): string {
     const used = [this.#fromContract, this.#contract].flatMap((contract) =>
       Object.keys(contract.storage.namespaces[namespaceId]?.entries.table ?? {}),
     );
-    return this.#unused(used, name);
+    return this.#unused([...used, ...reserved], name);
   }
 
   /**
    * A name for `name` to move through that no column of the change's table has in either
-   * contract, as the target compares names.
+   * contract, and that is not one of `reserved`, as the target compares names.
    */
-  unusedColumnName(change: ColumnChange, name: string): string {
+  unusedColumnName(change: ColumnChange, name: string, reserved: readonly string[] = []): string {
     const columnsOf = (contract: Contract<SqlStorage>, table: ModelTable) =>
       Object.keys(
         contract.storage.namespaces[table.namespaceId]?.entries.table?.[table.table]?.columns ?? {},
@@ -392,6 +392,7 @@ export class StorageRenames {
       [
         ...columnsOf(this.#fromContract, change.origin),
         ...columnsOf(this.#contract, change.destination),
+        ...reserved,
       ],
       name,
     );
@@ -472,26 +473,84 @@ function temporaryNamesRoute(
   return `Make the change in two plans: first give ${give(({ through }) => through)}, ${noun}s nothing uses, and plan and apply that${withStatements ? ' with the same statements' : ''}; then give ${give(({ to }) => to)}, and plan again${withStatements ? ' without them' : ''}.`;
 }
 
-function tableMoves(
-  changes: readonly TableChange[],
-  renames: StorageRenames,
-): readonly RouteMove[] {
-  return changes.map((change) => ({
-    objects: modelsText(change.renames.map((rename) => rename.to)),
-    through: renames.unusedTableName(change.destination.namespaceId, change.destination.table),
-    to: change.destination.table,
-  }));
+/**
+ * The changes of `pair` and every change of `changes` linked to them by a name one frees and
+ * another takes, in either direction. All of them must move through names nothing uses before any
+ * takes its final name. The order is `pair`, then the changes after it in the chain, then those
+ * before it.
+ */
+function linkedChanges<TChange>(
+  pair: readonly [TChange, TChange],
+  changes: readonly TChange[],
+  takesFrom: (taker: TChange, freer: TChange) => boolean,
+): readonly TChange[] {
+  const linked: TChange[] = [...pair];
+  for (const current of linked) {
+    for (const other of changes) {
+      if (linked.includes(other)) continue;
+      if (takesFrom(current, other) || takesFrom(other, current)) linked.push(other);
+    }
+  }
+  const ordered: TChange[] = [...pair];
+  const follow = (from: TChange, step: (change: TChange) => TChange | undefined) => {
+    for (let next = step(from); next !== undefined && !ordered.includes(next); next = step(next)) {
+      ordered.push(next);
+    }
+  };
+  follow(pair[1], (change) => linked.find((other) => takesFrom(change, other)));
+  follow(pair[0], (change) => linked.find((other) => takesFrom(other, change)));
+  return [...ordered, ...linked.filter((change) => !ordered.includes(change))];
 }
 
-function columnMoves(
+function tableRoute(
+  pair: readonly [TableChange, TableChange],
+  changes: readonly TableChange[],
+  renames: StorageRenames,
+): string {
+  const linked = linkedChanges(
+    pair,
+    changes,
+    (taker, freer) =>
+      taker.destination.namespaceId === freer.origin.namespaceId &&
+      renames.sameName(taker.destination.table, freer.origin.table),
+  );
+  const reserved: { readonly namespaceId: string; readonly name: string }[] = [];
+  const moves = linked.map((moving) => {
+    const { namespaceId, table } = moving.destination;
+    const through = renames.unusedTableName(
+      namespaceId,
+      table,
+      reserved.filter((name) => name.namespaceId === namespaceId).map(({ name }) => name),
+    );
+    reserved.push({ namespaceId, name: through });
+    return {
+      objects: modelsText(moving.renames.map((rename) => rename.to)),
+      through,
+      to: table,
+    };
+  });
+  return temporaryNamesRoute('table', moves, linked.some(hasStatement));
+}
+
+function columnRoute(
+  pair: readonly [ColumnChange, ColumnChange],
   changes: readonly ColumnChange[],
   renames: StorageRenames,
-): readonly RouteMove[] {
-  return changes.map((change) => ({
-    objects: fieldsText(change.renames.map((rename) => rename.to)),
-    through: renames.unusedColumnName(change, change.to),
-    to: change.to,
-  }));
+): string {
+  const linked = linkedChanges(pair, changes, (taker, freer) =>
+    renames.sameName(taker.to, freer.from),
+  );
+  const reserved: string[] = [];
+  const moves = linked.map((moving) => {
+    const through = renames.unusedColumnName(moving, moving.to, reserved);
+    reserved.push(through);
+    return {
+      objects: fieldsText(moving.renames.map((rename) => rename.to)),
+      through,
+      to: moving.to,
+    };
+  });
+  return temporaryNamesRoute('column', moves, linked.some(hasStatement));
 }
 
 const ORDER =
@@ -592,7 +651,7 @@ function tableRenameConflict(
     if (moved !== undefined) {
       return contractChangeRefused(
         `${label}: table "${held}" is renamed in the same plan`,
-        `${changeText}, and ${tableChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(held)}. ${temporaryNamesRoute('table', tableMoves([change, moved], renames), hasStatement(moved))}`,
+        `${changeText}, and ${tableChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(held)}. ${tableRoute([change, moved], others, renames)}`,
         location,
       );
     }
@@ -619,7 +678,7 @@ function tableRenameConflict(
   if (takes !== undefined) {
     return contractChangeRefused(
       `${label}: another rename in the same plan takes table name "${takes.destination.table}"`,
-      `${changeText}, and ${tableChangeText(takes)}. ${ORDER}. ${temporaryNamesRoute('table', tableMoves([change, takes], renames), true)}`,
+      `${changeText}, and ${tableChangeText(takes)}. ${ORDER}. ${tableRoute([change, takes], others, renames)}`,
       location,
     );
   }
@@ -652,7 +711,7 @@ function columnRenameConflict(
     if (moved !== undefined) {
       return contractChangeRefused(
         `${label}: column "${held}" is renamed in the same plan`,
-        `${changeText}, and ${columnChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(held)}. ${temporaryNamesRoute('column', columnMoves([change, moved], renames), hasStatement(moved))}`,
+        `${changeText}, and ${columnChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(held)}. ${columnRoute([change, moved], others, renames)}`,
         location,
       );
     }
@@ -674,7 +733,7 @@ function columnRenameConflict(
   if (takes !== undefined) {
     return contractChangeRefused(
       `${label}: another rename in the same plan takes column name "${takes.to}"`,
-      `${changeText}, and ${columnChangeText(takes)}. ${ORDER}. ${temporaryNamesRoute('column', columnMoves([change, takes], renames), true)}`,
+      `${changeText}, and ${columnChangeText(takes)}. ${ORDER}. ${columnRoute([change, takes], others, renames)}`,
       location,
     );
   }

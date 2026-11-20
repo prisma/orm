@@ -69,6 +69,51 @@ describe('planStatements refuses a table rename no statement asks for', () => {
     });
   });
 
+  it('when four tables move round a cycle, giving each of them a name nothing uses', () => {
+    expect(
+      refusal(
+        { A: table('a'), B: table('b'), C: table('c'), D: table('d') },
+        { A: table('b'), B: table('c'), C: table('d'), D: table('a') },
+        fakeTarget(['app.a', 'app.b', 'app.c', 'app.d']),
+      ),
+    ).toEqual({
+      kind: 'unsupportedOperation',
+      summary: 'Cannot rename table "a" to "b": table "b" is renamed in the same plan',
+      why: `The table of model "app.A" changes from "a" to "b", and the table of model "app.B" changes from "b" to "c". ${ORDER}, and without the renames the plan would read the rows of table "b" as rows of model "app.A". Make the change in two plans: first give model "app.A" the table "prisma_swap_b", model "app.B" the table "prisma_swap_c", model "app.C" the table "prisma_swap_d" and model "app.D" the table "prisma_swap_a", tables nothing uses, and plan and apply that; then give model "app.A" the table "b", model "app.B" the table "c", model "app.C" the table "d" and model "app.D" the table "a", and plan again.`,
+      location: { ...usersLocation, entityName: 'a' },
+    });
+  });
+
+  it('when three tables move along a chain, giving each of them a name nothing uses', () => {
+    expect(
+      refusal(
+        { A: table('a'), B: table('b'), D: table('d') },
+        { A: table('b'), B: table('c'), D: table('a') },
+        fakeTarget(['app.a', 'app.b', 'app.d']),
+      ),
+    ).toEqual({
+      kind: 'unsupportedOperation',
+      summary: 'Cannot rename table "a" to "b": table "b" is renamed in the same plan',
+      why: `The table of model "app.A" changes from "a" to "b", and the table of model "app.B" changes from "b" to "c". ${ORDER}, and without the renames the plan would read the rows of table "b" as rows of model "app.A". Make the change in two plans: first give model "app.A" the table "prisma_swap_b", model "app.B" the table "prisma_swap_c" and model "app.D" the table "prisma_swap_a", tables nothing uses, and plan and apply that; then give model "app.A" the table "b", model "app.B" the table "c" and model "app.D" the table "a", and plan again.`,
+      location: { ...usersLocation, entityName: 'a' },
+    });
+  });
+
+  it('when two tables swap names, giving each a different name nothing uses', () => {
+    expect(
+      refusal(
+        { A: table('x'), B: table('x_'), C: table('prisma_swap_x') },
+        { A: table('x_'), B: table('x'), C: table('prisma_swap_x') },
+        fakeTarget(['app.x', 'app.x_', 'app.prisma_swap_x']),
+      ),
+    ).toEqual({
+      kind: 'unsupportedOperation',
+      summary: 'Cannot rename table "x" to "x_": table "x_" is renamed in the same plan',
+      why: `The table of model "app.A" changes from "x" to "x_", and the table of model "app.B" changes from "x_" to "x". ${ORDER}, and without the renames the plan would read the rows of table "x_" as rows of model "app.A". Make the change in two plans: first give model "app.A" the table "prisma_swap_x_" and model "app.B" the table "prisma_swap_x__", tables nothing uses, and plan and apply that; then give model "app.A" the table "x_" and model "app.B" the table "x", and plan again.`,
+      location: { ...usersLocation, entityName: 'x' },
+    });
+  });
+
   it('when it takes the table of a removed model', () => {
     expect(
       refusal(
@@ -188,6 +233,36 @@ describe('planStatements refuses a column rename no statement asks for', () => {
       kind: 'unsupportedOperation',
       summary: 'Cannot rename column "users"."x" to "y": column "y" is renamed in the same plan',
       why: `The column of field "app.User.a" changes from "x" to "y", and the column of field "app.User.b" changes from "y" to "z". ${ORDER}, and without the renames the plan would read the values of column "y" as values of field "app.User.a". Make the change in two plans: first give field "app.User.a" the column "prisma_swap_y" and field "app.User.b" the column "prisma_swap_z", columns nothing uses, and plan and apply that; then give field "app.User.a" the column "y" and field "app.User.b" the column "z", and plan again.`,
+      location: columnLocation('x'),
+    });
+  });
+
+  it('when three columns move round a cycle, giving each of them a name nothing uses', () => {
+    expect(
+      refusal(
+        { User: columns({ a: 'x', b: 'y', c: 'z' }) },
+        { User: columns({ a: 'y', b: 'z', c: 'x' }) },
+        usersWith(['x', 'y', 'z']),
+      ),
+    ).toEqual({
+      kind: 'unsupportedOperation',
+      summary: 'Cannot rename column "users"."x" to "y": column "y" is renamed in the same plan',
+      why: `The column of field "app.User.a" changes from "x" to "y", and the column of field "app.User.b" changes from "y" to "z". ${ORDER}, and without the renames the plan would read the values of column "y" as values of field "app.User.a". Make the change in two plans: first give field "app.User.a" the column "prisma_swap_y", field "app.User.b" the column "prisma_swap_z" and field "app.User.c" the column "prisma_swap_x", columns nothing uses, and plan and apply that; then give field "app.User.a" the column "y", field "app.User.b" the column "z" and field "app.User.c" the column "x", and plan again.`,
+      location: columnLocation('x'),
+    });
+  });
+
+  it('when two columns swap names, giving each a different name nothing uses', () => {
+    expect(
+      refusal(
+        { User: columns({ a: 'x', b: 'x_', c: 'prisma_swap_x' }) },
+        { User: columns({ a: 'x_', b: 'x', c: 'prisma_swap_x' }) },
+        usersWith(['x', 'x_', 'prisma_swap_x']),
+      ),
+    ).toEqual({
+      kind: 'unsupportedOperation',
+      summary: 'Cannot rename column "users"."x" to "x_": column "x_" is renamed in the same plan',
+      why: `The column of field "app.User.a" changes from "x" to "x_", and the column of field "app.User.b" changes from "x_" to "x". ${ORDER}, and without the renames the plan would read the values of column "x_" as values of field "app.User.a". Make the change in two plans: first give field "app.User.a" the column "prisma_swap_x_" and field "app.User.b" the column "prisma_swap_x__", columns nothing uses, and plan and apply that; then give field "app.User.a" the column "x_" and field "app.User.b" the column "x", and plan again.`,
       location: columnLocation('x'),
     });
   });
