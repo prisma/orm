@@ -20,11 +20,19 @@ changes:
         - 'STATEMENT_ANSWERS_NO_QUESTION'
   - id: rename-to-missing-name-reworded
     summary: |
-      A `--rename` whose old name is gone from the contract and whose new name the contract does not have, in the same model, enum, value object or contract, still fails with `MIGRATION.STATEMENT_UNRESOLVED` and the same `meta` (`statement`, `verb`), but its text changed. The summary no longer says `Cannot resolve statement "--rename …"`; it says `The contract has no field "Shop.nope" to rename "Shop.legacy" to.` Its `why` lists the names the contract adds, or is absent when it adds none. Its next actions say to add the name and run `prisma contract emit` (with `--to <ref>`, to run again without `--to`), and give a `--rename` to each name the contract adds, to put in place of the one given. A `--rename` to a name the contract had before the change too gets the same code and `meta`, with the summary `The contract had field "Shop.id" before this change too, so one change cannot make it the new name of "Shop.legacy".` The detection matches code that reads the old summary.
+      A `--rename` whose old name is gone from the contract and whose new name the contract does not have, in the same model, enum, value object or contract, still fails with `MIGRATION.STATEMENT_UNRESOLVED` and the same `meta` (`statement`, `verb`), but its text changed. The summary no longer says `Cannot resolve statement "--rename …"`; it says `The contract has no field "Shop.nope" to rename "Shop.legacy" to.` Its `why` lists the names the contract adds, or is absent when it adds none. Its next actions say to add the name and run `prisma contract emit` (with `--to <ref>`, to run again without `--to`), and give a `--rename` to each name the contract adds, to use in place of the one given. A `--rename` to a name the contract had before the change too gets the same code and `meta`, with the summary `The contract had field "Shop.id" before this change too, so one change cannot make it the new name of "Shop.legacy".` The detection matches code that reads the old summary.
     detection:
       glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,sh,bash,yml,yaml}"
       matches:
         - 'Cannot resolve statement'
+  - id: consent-unused-reworded
+    summary: |
+      The CLI's own `CLI.CONSENT_UNUSED` errors are worded differently, and have no `why`. A flag given twice says `--allow User is given twice, and one is enough.`, with the next action `Remove one --allow User.`, where it said `--allow User was given, but the question about User was already answered by --allow User.` and `Give one flag per question.`. A `--delete` of a namespace whose models other flags already answered says `--delete billing does nothing: the other --delete flags already cover everything in namespace "billing".`. Through the control API, a `delete` or `allow` statement that names nothing says `--delete Nope names nothing whose data this change deletes.`. The code and `meta` (`unused`, `asked`) do not change. The detection matches code that reads the old texts; read `meta.unused` instead.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs,sh,bash,yml,yaml}"
+      matches:
+        - 'was already answered by'
+        - 'Give one flag per question'
   - id: plan-question-parts
     summary: |
       A `PlanQuestion` that the control API hands to `answerQuestions` no longer has `question`, its prompt text. It carries the parts the text is built from (`headline`, `subjectInList`, `operations`, `notes`, `keepDataWays`, `answers`, `alsoGiveWhenDeleted`, `effect`), and `questionText(question)` from `@prisma/orm-toolchain/cli/control-api` builds the text, with `prisma` as the name of the CLI in the commands it names unless `questionText(question, { bin })` gives another. Each of `keepDataWays` is an object: `text`, and, when they apply, `forSubject`, `textNamingSubjects` and `atPrompt`, the way as the prompt gives it. `verbs`, `forms`, `subject` and `validate` are unchanged.
@@ -96,7 +104,7 @@ After:
 ✘ [MIGRATION.STATEMENT_UNRESOLVED] The contract has no field "Shop.nope" to rename "Shop.legacy" to.
   why: The contract adds field "Shop.rating".
 → If field "Shop.legacy" was renamed to "Shop.nope", add field "Shop.nope" to the contract, run `prisma contract emit`, and run this command again.
-→ If field "Shop.legacy" was renamed to "Shop.rating", put this in place of --rename Shop.legacy:Shop.nope: --rename Shop.legacy:Shop.rating
+→ If field "Shop.legacy" was renamed to "Shop.rating", use --rename Shop.legacy:Shop.rating in place of --rename Shop.legacy:Shop.nope
 ```
 
 # A repeated `delete` statement through the control API
