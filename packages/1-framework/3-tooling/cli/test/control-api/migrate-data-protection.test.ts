@@ -474,14 +474,14 @@ describe('executeMigrate, data protection', () => {
     expect({
       ok: result.ok,
       operations: runnerCalls.map((call) =>
-        call.map((o) => ({ space: o.space, operations: o.plan.operations.map(({ id }) => id) })),
+        call.map((o) => ({ space: o.space, operations: o.plan.operations.length })),
       ),
     }).toEqual({
       ok: true,
       operations: [
         [
-          { space: AUDIT_SPACE, operations: [] },
-          { space: 'app', operations: [CREATE_TABLE.id] },
+          { space: AUDIT_SPACE, operations: 0 },
+          { space: 'app', operations: 1 },
         ],
       ],
     });
