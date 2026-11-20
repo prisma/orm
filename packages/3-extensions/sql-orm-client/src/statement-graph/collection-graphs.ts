@@ -36,6 +36,7 @@ import { rowIdentity } from '../written-keys';
 import { requireRowsThatCanConflict } from './conflict-keys';
 import { CrossJoin } from './cross-join';
 import type { ColumnMapping, NodeId } from './edge';
+import { FilterData } from './filter-data';
 import { Graph } from './graph';
 import { addIncludeNodes, identityMissing } from './include-nodes';
 import { Insert } from './insert';
@@ -159,6 +160,51 @@ export function addDeleteAll(
   sources: Sources,
 ): NodeId {
   return deleteRows(b, collection.state.tables, { where: whereOf(collection), ...sources });
+}
+
+export function addUpdateFirst(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  set: Readonly<Record<string, unknown>>,
+  filters: readonly KeySource[],
+): void {
+  const find = addFindOfFirstRelated(b, collection, 'update()', filters);
+  updateRows(b, modelOf(collection), set, {
+    where: whereOf(collection),
+    filters: [{ from: find, columns: sameRowColumns(collection) }, ...filters],
+    links: [],
+    payloads: [],
+    owner: { operation: 'update', modelName: collection.modelName },
+    returns: 'count',
+    shape: shapeOf(collection),
+    afterWrite: undefined,
+  });
+}
+
+export function addDeleteFirst(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  filters: readonly KeySource[],
+): void {
+  const find = addFindOfFirstRelated(b, collection, 'delete()', filters);
+  deleteRows(b, collection.state.tables, {
+    where: whereOf(collection),
+    filters: [{ from: find, columns: sameRowColumns(collection) }, ...filters],
+    links: [],
+  });
+}
+
+function addFindOfFirstRelated(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  method: string,
+  filters: readonly KeySource[],
+): NodeId {
+  requireIdentityColumns(collection, method);
+  return findRows(b, selectIdentityAst(collection, { ...collection.state, limit: 1 }), {
+    filter: filters.map(({ from, columns }) => new FilterData(from, columns)),
+    requires: [],
+  });
 }
 
 export function updateFirstGraph(
