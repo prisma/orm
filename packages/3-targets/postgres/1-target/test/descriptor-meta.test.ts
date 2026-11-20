@@ -1,3 +1,4 @@
+import { PRISMA_POSTGRES_POOLER_STARTUP_SETTINGS } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { postgresRenderCheckExpressions } from '../src/core/check-expressions';
 import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
@@ -21,11 +22,19 @@ describe('postgresTargetDescriptorMeta', () => {
     );
   });
 
-  it('declares, on the control and runtime target, that every session prints dates in DateStyle ISO and money under lc_monetary C, which its codecs read', () => {
-    const settings = { DateStyle: 'ISO', lc_monetary: 'C' };
+  it('declares, on the control and runtime target, only that every session prints dates in DateStyle ISO, which its codecs read', () => {
+    const settings = { DateStyle: 'ISO' };
     expect([
       postgresTargetDescriptorMeta.sessionSettings,
       postgresRuntimeTargetDescriptor.sessionSettings,
     ]).toEqual([settings, settings]);
+  });
+
+  it('declares only session settings the Prisma Postgres pooler accepts as startup options', () => {
+    expect(
+      Object.keys(postgresRuntimeTargetDescriptor.sessionSettings ?? {}).filter(
+        (name) => !PRISMA_POSTGRES_POOLER_STARTUP_SETTINGS.includes(name),
+      ),
+    ).toEqual([]);
   });
 });

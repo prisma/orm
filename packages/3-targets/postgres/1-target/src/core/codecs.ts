@@ -1185,6 +1185,9 @@ pgOidColumn satisfies ColumnHelperForStrict<PgOidDescriptor>;
 /** Money as PostgreSQL prints it under `lc_monetary` C: a dollar sign, a comma between each group of three digits, and a minus sign before the dollar sign. */
 const C_LOCALE_MONEY_TEXT = /^(-?)\$(\d{1,3}(?:,\d{3})*)\.(\d{2})$/;
 
+/** Money text whose last digits are a two-digit fraction, as every locale that stores money in cents prints it; a locale that stores whole units or thousandths prints none or three. */
+const TWO_DIGIT_FRACTION_MONEY_TEXT = /[.,]\d{2}\D*$/;
+
 /**
  * Reads the money text PostgreSQL prints under `lc_monetary` C into the stored form, and a numeral, which is how PostgreSQL reports a default written as a number. Any other text was printed under another locale, whose currency symbol and separators the codec does not guess at.
  */
@@ -1204,7 +1207,9 @@ function pgMoneyDecode(wire: string): string {
       { meta: { codecId: PG_MONEY_CODEC_ID, received: wire } },
     );
   }
-  throw errorLcMonetaryNotC(PG_MONEY_CODEC_ID, wire);
+  throw errorLcMonetaryNotC(PG_MONEY_CODEC_ID, wire, {
+    twoFractionDigits: TWO_DIGIT_FRACTION_MONEY_TEXT.test(wire),
+  });
 }
 
 export class PgMoneyCodec extends CodecImpl<
@@ -1234,7 +1239,7 @@ export class PgMoneyCodec extends CodecImpl<
 }
 
 /**
- * A `money` column. The application value is decimal text with two fraction digits, as `pg/numeric@1` gives a decimal: `"12.50"`, `"-1234.56"`. PostgreSQL prints money in the session's `lc_monetary`, which the PostgreSQL target sets to C on every connection, so a row and an included row both read `$1,234.56`.
+ * A `money` column. The application value is decimal text with two fraction digits, as `pg/numeric@1` gives a decimal: `"12.50"`, `"-1234.56"`. PostgreSQL prints money in the session's `lc_monetary`, which Prisma does not set; the codec reads only the form the C locale prints, `$1,234.56`, and refuses any other.
  */
 export class PgMoneyDescriptor extends PostgresCodecDescriptor<void> {
   override readonly jsonType = 'string' as const;

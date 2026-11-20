@@ -10,6 +10,7 @@ interface Submittable {
 const recorded = vi.hoisted(() => ({
   cursorReadSizes: [] as number[],
   bufferedAppReads: 0,
+  poolConfigs: [] as unknown[],
 }));
 
 vi.mock('pg', () => {
@@ -45,6 +46,9 @@ vi.mock('pg', () => {
     totalCount = 0;
     idleCount = 0;
     waitingCount = 0;
+    constructor(config?: unknown) {
+      recorded.poolConfigs.push(config);
+    }
   }
 
   class Client {
@@ -65,7 +69,7 @@ const contract = contractFromJson<Contract>(contractJson);
 const jwtSecret = 'fixture-jwt-signing-input-not-a-real-credential';
 const url = 'postgres://localhost/db';
 
-type ReadOptions = Pick<SupabaseOptions<Contract>, 'url' | 'binding' | 'cursor'>;
+type ReadOptions = Pick<SupabaseOptions<Contract>, 'url' | 'binding' | 'cursor' | 'poolOptions'>;
 
 async function readProfilesAsAnon(options: ReadOptions): Promise<void> {
   const db = await supabase({ contract, jwtSecret, verifyMarker: false, ...options });
@@ -80,6 +84,7 @@ async function readProfilesAsAnon(options: ReadOptions): Promise<void> {
 beforeEach(() => {
   recorded.cursorReadSizes.length = 0;
   recorded.bufferedAppReads = 0;
+  recorded.poolConfigs.length = 0;
 });
 
 describe('supabase() cursor option', () => {
@@ -127,6 +132,14 @@ describe('supabase() cursor option', () => {
       message: 'Invalid cursor option',
       meta: { helper: 'supabase', argument: 'cursor', received: { batchSize: 0 } },
     });
+  });
+});
+
+describe('supabase() poolOptions', () => {
+  it('sizes the pool it creates for a url', async () => {
+    await readProfilesAsAnon({ url, poolOptions: { max: 1 } });
+
+    expect(recorded.poolConfigs).toEqual([expect.objectContaining({ max: 1 })]);
   });
 });
 

@@ -33,7 +33,7 @@
     "@prisma/cli-engine": "0.10.0",
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
