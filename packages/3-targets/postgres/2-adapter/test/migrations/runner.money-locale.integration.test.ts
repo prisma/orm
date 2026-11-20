@@ -79,7 +79,7 @@ describe('PostgresMigrationRunner monetary locale', { concurrent: false }, () =>
     await database.close();
   }, testTimeout);
 
-  it('sets lc_monetary to C before the migration takes its lock, for its transaction only, and stores a money default in cents', {
+  it('sets lc_monetary to C before the migration takes its lock, for its transaction only', {
     timeout: testTimeout,
   }, async () => {
     const statements: string[] = [];

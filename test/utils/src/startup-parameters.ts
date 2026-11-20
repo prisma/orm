@@ -69,7 +69,7 @@ function settingNamesOf(options: string): string[] {
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index] ?? '';
     const assignment = word === '-c' ? words[++index] : word.replace(/^(-c|--)/, '');
-    names.push((assignment ?? '').split('=')[0] ?? '');
+    names.push(((assignment ?? '').split('=')[0] ?? '').replaceAll('-', '_'));
   }
   return names;
 }

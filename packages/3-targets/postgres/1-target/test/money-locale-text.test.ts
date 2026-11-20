@@ -36,7 +36,7 @@ describe('pg/money text printed under a locale', () => {
     ['nl_NL.UTF-8', '€ -1.234,56'],
     ['en_SG.UTF-8', '($1,234.56)'],
     ['zh_CN.UTF-8', '￥1,234.56'],
-    ['a euro symbol before the amount', '€1,234.56'],
+    ['en_IE.UTF-8', '€1,234.56'],
   ])(
     'refuses the form %s prints, %s, without a warning about stored units, because that locale writes cents',
     async (_locale, wire) => {
