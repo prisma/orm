@@ -10,6 +10,7 @@ import { sqliteIdentifiersCollide } from './identifier-case';
 export function sqliteSchemaTables(schema: SqlSchemaIR): SchemaTables {
   const hasTable = (_namespaceId: string, table: string) => Object.hasOwn(schema.tables, table);
   return {
+    sameName: sqliteIdentifiersCollide,
     hasTable,
     hasColumn: (_namespaceId, table, column) =>
       Object.hasOwn(schema.tables[table]?.columns ?? {}, column),

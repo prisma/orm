@@ -22,7 +22,7 @@
 | 2 | The same through `db update` on SQLite, then run it again | No prompt; rows survive; the second run fails with a message that says why | tmpdir |
 | 3 | Type the statements wrong, once each way | Each error says what was searched, what was found, and what to type instead | tmpdir |
 | 4 | `db update --db <url>` with a statement and no snapshot | The error names the hash and directory and tells you about `--advance-ref` | tmpdir |
-| 5 | A model that keeps its name but changes `@@map`, with a field statement | The refusal tells you a safe route; nothing is dropped | tmpdir |
+| 5 | A model that keeps its name but changes `@@map`, with a field statement | On Postgres and SQLite the table is renamed, then the column, with no question; the rows survive | tmpdir |
 | 6 | Drop an index only, through `db update`, on Postgres | No consent prompt for a drop that loses no data | tmpdir |
 | 7 | `--rename` on a MongoDB project | Refused; nothing planned; the advice does not lead to data loss | tmpdir |
 | 8 | Read the extension upgrade instructions as a planner author **(judgement)** | You know exactly what to change in a planner you maintain | read-only |
@@ -60,7 +60,7 @@ On a fresh SQLite project, `prisma db update --db <path>` (no `--advance-ref`) o
 
 ### 5. `@@map` changes, model name kept
 
-"From": `model User { ...; @@map("users") }`. "To": `@@map("app_users")` and a field renamed. `prisma migration plan --rename User.name:User.fullName`. Is it refused? Does the advice (rename the table by hand with `renameTable` first) lead to a migration that keeps the rows? Follow it and check.
+"From": `model User { ...; @@map("users") }`. "To": `@@map("app_users")` and a field renamed. `prisma migration plan --rename User.name:User.fullName`. On Postgres and SQLite: is the plan the table rename, then the column rename, with no question? Apply it and check the rows are under the new names. Try the same with no field statement and `db update`. Then try two models that swap tables: is it refused, and does following the advice (two plans through names nothing uses) keep every row under the right model?
 
 ### 6. A drop that loses no data
 

@@ -18,7 +18,7 @@ export interface TableRenameRequest {
   readonly to: string;
 }
 
-/** A table rename in a known namespace. */
+/** A table rename against the working schema, computed from a `TableChange` or a statement. */
 export interface TableRename {
   readonly namespaceId: string;
   readonly from: string;

@@ -75,6 +75,11 @@ updates:
       # driver lists the same array type ids as pg does. The devDependency must
       # be the version pg itself depends on, so it moves only when pg does.
       - dependency-name: "pg-types"
+      # The postgres driver parses a connection URL itself and its tests check
+      # the result matches what pg builds from the same URL. So it must use the
+      # pg-connection-string version pg resolves; 2.14.1 strips the brackets
+      # from an IPv6 host while pg 8.22.0 still uses 2.14.0, which keeps them.
+      - dependency-name: "pg-connection-string"
       # apps/lsp-playground is a private dev tool: a Monaco editor wired to the
       # language server, started by hand when working on PSL diagnostics. It
       # ships to nobody, and its dependency churn is pure noise — the
@@ -130,3 +135,11 @@ updates:
           - patch
           - minor
           - major
+    ignore:
+      # These releases make the publish, preview release and telemetry deploy
+      # workflows fail before any job starts. CI passed because it uses the
+      # shared setup action, which pins older versions.
+      - dependency-name: "jdx/mise-action"
+        versions: ["5.2.6"]
+      - dependency-name: "pnpm/action-setup"
+        versions: ["6.1.1"]

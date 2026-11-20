@@ -48,13 +48,13 @@ Read the **base branch**, not the title and not the paths. [Supported versions](
 | Base branch | Line | What we accept |
 | --- | --- | --- |
 | `main` | Prisma 8 (8.x) | Bug fixes and directionally aligned features |
-| `v7`, `7.9.x` | Prisma 7 | Bug fixes and security updates, and community features in line with Prisma 7's design that meet the quality bar, for eighteen months after `8.0.0` final |
+| `v7`, `7.9.x` | Prisma 7 | Bug fixes and security updates, corrections to, improvements to and maintenance of its build, test, CI and release tooling, and community features in line with Prisma 7's design that meet the quality bar, for eighteen months after `8.0.0` final |
 
 A PR whose title says Prisma 8 but which targets `v7` is targeting Prisma 7. If the base branch looks wrong for the change, that is the first thing to ask about — a rebase onto the right base is cheaper than a review against the wrong one.
 
 ## Step 2 — Is it in scope for that line?
 
-**Prisma 7 (`v7`, `7.9.x`): fixes and security updates, and community features that fit.** A contributed feature is in scope when it is in line with Prisma 7's design direction and passes the [mechanical requirements](#step-4--mechanical-requirements); a maintainer decides the first ([versioning](./versioning.md#supported-versions)). When it does not fit, direct the contributor to `main` or explain why it does not fit Prisma 7. Be specific about which it is — "this does not fit Prisma 7's design, but it would be welcome against `main`" is a useful reply, and "no thanks" is not.
+**Prisma 7 (`v7`, `7.9.x`): fixes and security updates, tooling work, and community features that fit.** Corrections to, improvements to, and maintenance of Prisma 7's tooling are in scope: its test runner, CI workflows, build scripts and dependencies. The line has to stay buildable, testable and releasable for eighteen months, and this work changes nothing users run, so judge it on whether it is correct and leaves the build and CI green, not on design fit. Do not close it because it is not a bug fix. A contributed feature is in scope when it is in line with Prisma 7's design direction and passes the [mechanical requirements](#step-4--mechanical-requirements); a maintainer decides the first ([versioning](./versioning.md#supported-versions)). When it does not fit, direct the contributor to `main` or explain why it does not fit Prisma 7. Be specific about which it is — "this does not fit Prisma 7's design, but it would be welcome against `main`" is a useful reply, and "no thanks" is not.
 
 **Prisma 8 (`main`): fixes are in scope by default, features need a direction call.** See step 5.
 
