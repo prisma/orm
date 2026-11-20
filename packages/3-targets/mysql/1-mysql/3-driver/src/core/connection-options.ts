@@ -177,7 +177,10 @@ function connectionOptions(
       hostGiven ? decodeURIComponent(parsed.hostname).replace(/^\[(.*)\]$/, '$1') : undefined,
     ),
     ...ifDefined('port', parsed.port === '' ? undefined : Number(parsed.port)),
-    ...ifDefined('user', parsed.username === '' ? undefined : decodeURIComponent(parsed.username)),
+    ...ifDefined(
+      'user',
+      parsed.username === '' ? process.env['USER'] : decodeURIComponent(parsed.username),
+    ),
     password: decodeURIComponent(parsed.password),
     database: decodeURIComponent(parsed.pathname.slice(1)),
     ...ifDefined('ssl', tlsOptions(parameters, displayName)),

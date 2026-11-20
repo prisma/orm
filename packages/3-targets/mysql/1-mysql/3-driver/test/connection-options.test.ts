@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inspect } from 'node:util';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mysqlConnectionOptions, mysqlPoolOptions } from '../src/core/connection-options';
 import { SESSION_SETUP } from '../src/core/session-setup';
 import { readTextOrBytes } from '../src/core/text-or-bytes';
@@ -20,12 +20,20 @@ describe('mysqlConnectionOptions', () => {
     });
   });
 
-  it('leaves the user unset when the URL leaves it blank, so the connector falls back to its default', () => {
-    const options = mysqlConnectionOptions('mysql://:password@localhost/db', {
-      displayName: 'MySQL',
-    });
-    expect(options).not.toHaveProperty('user');
-    expect(options).toMatchObject({ host: 'localhost', password: 'password', database: 'db' });
+  it('connects as the operating-system login name when the URL leaves the user blank, as the mysql client and pg do', () => {
+    vi.stubEnv('USER', 'os-login');
+    try {
+      expect(
+        mysqlConnectionOptions('mysql://:password@localhost/db', { displayName: 'MySQL' }),
+      ).toMatchObject({
+        host: 'localhost',
+        user: 'os-login',
+        password: 'password',
+        database: 'db',
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('leaves the host unset when the URL leaves it blank', () => {
@@ -46,11 +54,15 @@ describe('mysqlConnectionOptions', () => {
     );
   });
 
-  it('leaves both unset when the URL names neither', () => {
-    const options = mysqlConnectionOptions('mysql:///db', { displayName: 'MySQL' });
-    expect(options).not.toHaveProperty('user');
-    expect(options).not.toHaveProperty('host');
-    expect(options.database).toBe('db');
+  it('leaves the host unset and uses the login name when the URL names neither', () => {
+    vi.stubEnv('USER', 'os-login');
+    try {
+      const options = mysqlConnectionOptions('mysql:///db', { displayName: 'MySQL' });
+      expect(options).not.toHaveProperty('host');
+      expect(options).toMatchObject({ user: 'os-login', database: 'db' });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('reads TLS settings as pg-connection-string does for Postgres: ssl, sslmode, and sslcert, sslkey and sslrootcert as PEM files', () => {
