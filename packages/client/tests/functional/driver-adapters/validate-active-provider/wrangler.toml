@@ -1,7 +1,7 @@
 
 name = "functional-tests-config"
 main = "src/index.ts"
-compatibility_date = "2023-12-18"
+compatibility_date = "2025-05-05"
 
 [[d1_databases]]
 binding = "D1_DATABASE"    # i.e. available in the Worker on env.MY_DATABASE

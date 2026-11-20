@@ -1,6 +1,0 @@
-{
-  "name": "pkg-json-nearest-b",
-  "prisma": {
-    "schema": "./some-path"
-  }
-}

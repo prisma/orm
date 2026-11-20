@@ -267,7 +267,7 @@ testMatrix.setupTestSuite(
             if (isTransaction) {
               expect(ctx.$connect).toBeUndefined()
               expect(ctx.$disconnect).toBeUndefined()
-              expect(ctx.$transaction).toBeUndefined()
+              expect(ctx.$transaction).toBeDefined()
               expect(ctx.$extends).toBeUndefined()
             } else {
               expect(ctx.$connect).toBeDefined()

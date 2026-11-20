@@ -207,7 +207,7 @@ ${indent(
 
 ${ts.stringify(buildOutputType(groupByType))}
 
-type ${getGroupByPayloadName(model.name)}<T extends ${groupByArgsName}> = Prisma.PrismaPromise<
+export type ${getGroupByPayloadName(model.name)}<T extends ${groupByArgsName}> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<${groupByType.name}, T['by']> &
       {
@@ -284,6 +284,7 @@ ${
               name: field.name,
               isNullable: false,
               isRequired: false,
+              isParameterizable: false,
               inputTypes: [
                 {
                   isList: false,

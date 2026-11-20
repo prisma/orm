@@ -1,1 +1,1 @@
-export { PrismaLibSQLWebAdapterFactory as PrismaLibSQL } from './libsql-web'
+export { PrismaLibSqlWebAdapterFactory as PrismaLibSql } from './libsql-web'

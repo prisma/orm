@@ -1,5 +1,5 @@
+import { Decimal } from '@prisma/client-runtime-utils'
 import type { QueryIntrospectionBuiltinType } from '@prisma/generator'
-import Decimal from 'decimal.js'
 
 export type RawResponse = {
   columns: string[]
@@ -16,10 +16,9 @@ function deserializeValue(type: QueryIntrospectionBuiltinType, value: unknown): 
     case 'bigint':
       return BigInt(value as string)
 
-    case 'bytes': {
-      const { buffer, byteOffset, byteLength } = Buffer.from(value as string, 'base64')
-      return new Uint8Array(buffer, byteOffset, byteLength)
-    }
+    case 'bytes':
+      // copy instead of returning a view into Node's shared Buffer pool
+      return new Uint8Array(Buffer.from(value as string, 'base64'))
 
     case 'decimal':
       return new Decimal(value as string)

@@ -1,4 +1,4 @@
-import Decimal from 'decimal.js'
+import { Decimal } from '@prisma/client-runtime-utils'
 
 import { FieldRefImpl } from '../model/FieldRef'
 import { prettyPrintArguments } from './prettyPrintArguments'

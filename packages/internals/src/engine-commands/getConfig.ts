@@ -1,5 +1,6 @@
 import Debug from '@prisma/debug'
-import type { DataSource, EnvValue, GeneratorConfig } from '@prisma/generator'
+import type { DataSource, GeneratorConfig } from '@prisma/generator'
+import { SchemaFileInput } from '@prisma/get-dmmf'
 import { getBinaryTargetForCurrentPlatform } from '@prisma/get-platform'
 import * as E from 'fp-ts/Either'
 import { pipe } from 'fp-ts/lib/function'
@@ -7,7 +8,6 @@ import { bold, red } from 'kleur/colors'
 import { match } from 'ts-pattern'
 
 import { ErrorArea, getWasmError, isWasmPanic, RustPanic, WasmPanic } from '../panic'
-import { type SchemaFileInput } from '../utils/schemaFileInput'
 import { prismaSchemaWasm } from '../wasm'
 import { addVersionDetailsToErrorMessage } from './errorHelpers'
 import {
@@ -39,7 +39,6 @@ interface GetConfigValidationError {
 
 export type GetConfigOptions = {
   datamodel: SchemaFileInput
-  ignoreEnvVarErrors?: boolean
 }
 
 export class GetConfigError extends Error {
@@ -66,24 +65,6 @@ ${detailsHeader} ${message}`
   }
 }
 
-export function getEffectiveUrl(ds: DataSource): EnvValue {
-  if (ds.directUrl !== undefined) return ds.directUrl
-
-  return ds.url
-}
-
-export function getDirectUrl(ds: DataSource) {
-  return ds.directUrl
-}
-
-export function resolveUrl(envValue: EnvValue | undefined) {
-  const urlFromValue = envValue?.value
-  const urlEnvVarName = envValue?.fromEnvVar
-  const urlEnvVarValue = urlEnvVarName ? process.env[urlEnvVarName] : undefined
-
-  return urlFromValue ?? urlEnvVarValue
-}
-
 /**
  * Wasm'd version of `getConfig`.
  */
@@ -94,20 +75,14 @@ export async function getConfig(options: GetConfigOptions): Promise<ConfigMetaFo
   const configEither = pipe(
     E.tryCatch(
       () => {
-        if (process.env.FORCE_PANIC_QUERY_ENGINE_GET_CONFIG) {
+        if (process.env.FORCE_PANIC_GET_CONFIG) {
           debug('Triggering a Rust panic...')
           prismaSchemaWasm.debug_panic()
         }
 
-        const params = JSON.stringify({
-          prismaSchema: options.datamodel,
-          datasourceOverrides: {},
-          ignoreEnvVarErrors: options.ignoreEnvVarErrors ?? false,
-          env: process.env,
-        })
+        const params = JSON.stringify({ prismaSchema: options.datamodel })
 
-        const data = prismaSchemaWasm.get_config(params)
-        return data
+        return prismaSchemaWasm.get_config(params)
       },
       (e) => ({
         type: 'wasm-error' as const,

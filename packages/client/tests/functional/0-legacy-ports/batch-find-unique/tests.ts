@@ -70,10 +70,7 @@ testMatrix.setupTestSuite(({ provider, driverAdapter, clientEngineExecutor }, _s
       if (query.includes('BEGIN') || query.includes('COMMIT') || query.includes('ROLLBACK')) {
         return
       }
-      executedBatchQuery = query
-        .replace(` /* traceparent='00-00000000000000000000000000000010-0000000000000010-01' */`, '')
-        .replace(mySqlSchemaIdRegex, '')
-        .trim()
+      executedBatchQuery = query.replace(mySqlSchemaIdRegex, '').trim()
     })
 
     const results = await Promise.all([

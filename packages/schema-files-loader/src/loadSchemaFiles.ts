@@ -20,6 +20,7 @@ async function processEntry(
   entryPath: string,
   entryType: FsEntryType | undefined,
   filesResolver: FilesResolver,
+  visitedDirs: Set<string> = new Set(),
 ): Promise<LoadedFile[]> {
   if (!entryType) {
     return []
@@ -27,7 +28,7 @@ async function processEntry(
   if (entryType.kind === 'symlink') {
     const realPath = entryType.realPath
     const realType = await filesResolver.getEntryType(realPath)
-    return processEntry(realPath, realType, filesResolver)
+    return processEntry(realPath, realType, filesResolver, visitedDirs)
   }
 
   if (entryType.kind === 'file') {
@@ -42,12 +43,22 @@ async function processEntry(
   }
 
   if (entryType.kind === 'directory') {
+    // Symlinks pointing to directories are followed, so a directory that is
+    // reachable from itself would otherwise be traversed forever. The canonical
+    // path is used for tracking, since the same directory can be reached under
+    // different paths.
+    const dirId = entryType.realPath ?? entryPath
+    if (visitedDirs.has(dirId)) {
+      return []
+    }
+    visitedDirs.add(dirId)
+
     const dirEntries = await filesResolver.listDirContents(entryPath)
     const nested = await Promise.all(
       dirEntries.map(async (dirEntry) => {
         const fullPath = path.join(entryPath, dirEntry)
         const nestedEntryType = await filesResolver.getEntryType(fullPath)
-        return processEntry(fullPath, nestedEntryType, filesResolver)
+        return processEntry(fullPath, nestedEntryType, filesResolver, visitedDirs)
       }),
     )
     return nested.flat()

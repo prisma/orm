@@ -1,0 +1,9 @@
+generator client {
+  provider = "prisma-client-ts"
+  output = "../src/generated"
+  compilerBuild = "invalid"
+}
+
+datasource db {
+  provider = "sqlite"
+}

@@ -560,3 +560,26 @@ test('allows to omit transitive dependency of a computed team', () => {
   expect(extended).not.toHaveProperty('firstName')
   expect(extended).toHaveProperty('screamingName', 'JOHN!!!')
 })
+
+test('model name is available in compute function', () => {
+  const result = {}
+
+  const extension = {
+    result: {
+      $allModels: {
+        modelName: {
+          compute: (_, modelName) => {
+            return modelName
+          },
+        },
+      },
+    },
+  }
+
+  const extended = applyResultExtensions({
+    result,
+    modelName: 'user',
+    extensions: MergedExtensionsList.single(extension),
+  })
+  expect(extended).toHaveProperty('modelName', 'user')
+})

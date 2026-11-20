@@ -8,7 +8,7 @@ declare const newPrismaClient: NewPrismaClient<PrismaClient, typeof PrismaClient
 testMatrix.setupTestSuite(
   () => {
     test('can disconnect and reconnect', async () => {
-      const prisma = newPrismaClient()
+      const prisma = newPrismaClient({})
       await prisma.user.findMany()
       await prisma.$disconnect()
       await prisma.$connect()

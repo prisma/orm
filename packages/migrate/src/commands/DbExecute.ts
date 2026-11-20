@@ -4,15 +4,12 @@ import type { PrismaConfigInternal } from '@prisma/config'
 import {
   arg,
   checkUnsupportedDataProxy,
-  checkUnsupportedSchemaEngineWasm,
   Command,
   format,
   getCommandWithExecutor,
   HelpError,
   isError,
-  loadEnvFile,
-  loadSchemaContext,
-  toSchemasContainer,
+  validatePrismaConfigWithDatasource,
 } from '@prisma/internals'
 import fs from 'fs'
 import { bold, dim, green, italic } from 'kleur/colors'
@@ -21,19 +18,18 @@ import path from 'path'
 import { Migrate } from '../Migrate'
 import type { EngineArgs } from '../types'
 
-const helpOptions = format(
-  `${bold('Usage')}
+function renderHelpOptions(cliCommand: string): string {
+  return format(
+    `${bold('Usage')}
 
-${dim('$')} prisma db execute [options]
+  ${dim('$')} ${cliCommand} db execute [options]
+
+  The datasource URL configuration is read from the Prisma config file (e.g., ${italic('prisma7.config.ts')}).
 
 ${bold('Options')}
 
 -h, --help            Display this help message
 --config              Custom path to your Prisma config file
-
-${italic('Datasource input, only 1 must be provided:')}
---url                 URL of the datasource to run the command on
---schema              Path to your Prisma schema file to take the datasource URL from
 
 ${italic('Script input, only 1 must be provided:')}
 --file                Path to a file. The content will be sent as the script to be executed
@@ -41,24 +37,18 @@ ${italic('Script input, only 1 must be provided:')}
 ${bold('Flags')}
 
 --stdin              Use the terminal standard input as the script to be executed`,
-)
+  )
+}
 
-export class DbExecute implements Command {
-  public static new(): DbExecute {
-    return new DbExecute()
-  }
-
-  // TODO: This command needs to get proper support for `prisma.config.ts` eventually. Not just taking the schema path
-  //  from prisma.config.ts but likely to support driver adapters, too?
-  //  See https://linear.app/prisma-company/issue/ORM-639/prisma-db-execute-support-prismaconfigts-and-driver-adapters
-  private static help = format(`
+function renderHelp(cliCommand: string): string {
+  return format(`
 ${process.platform === 'win32' ? '' : '📝 '}Execute native commands to your database
 
-This command takes as input a datasource, using ${green(`--url`)} or ${green(`--schema`)} and a script, using ${green(
+This command takes as input a datasource defined in ${italic('prisma7.config.ts')} and a script, using ${green(
     `--stdin`,
   )} or ${green(`--file`)}.
-The input parameters are mutually exclusive, only 1 of each (datasource & script) must be provided.
- 
+The script input parameters are mutually exclusive, only 1 must be provided.
+
 The output of the command is connector-specific, and is not meant for returning data, but only to report success or failure.
 
 On SQL databases, this command takes as input a SQL script.
@@ -66,28 +56,27 @@ The whole script will be sent as a single command to the database.
 
 ${italic(`This command is currently not supported on MongoDB.`)}
 
-${helpOptions}
+${renderHelpOptions(cliCommand)}
 ${bold('Examples')}
- 
-  Execute the content of a SQL script file to the datasource URL taken from the schema
-  ${dim('$')} prisma db execute
-    --file ./script.sql \\
-    --schema schema.prisma
 
-  Execute the SQL script from stdin to the datasource URL specified via the \`DATABASE_URL\` environment variable
-  ${dim('$')} echo 'TRUNCATE TABLE dev;' | \\
-    prisma db execute \\
-    --stdin \\
-    --url="$DATABASE_URL"
+  Execute the content of a SQL script file using the datasource configured in prisma7.config.ts
+  ${dim('$')} ${cliCommand} db execute --file ./script.sql
 
-  Like previous example, but exposing the datasource url credentials to your terminal history
-  ${dim('$')} echo 'TRUNCATE TABLE dev;' | \\
-    prisma db execute \\
-    --stdin \\
-    --url="mysql://root:root@localhost/mydb"
+  Execute the SQL script from stdin using the configured datasource
+  ${dim('$')} echo 'TRUNCATE TABLE dev;' | \
+    ${cliCommand} db execute \
+    --stdin
 `)
+}
 
-  public async parse(argv: string[], config: PrismaConfigInternal): Promise<string | Error> {
+export class DbExecute implements Command {
+  public static new(cliCommand: string): DbExecute {
+    return new DbExecute(cliCommand)
+  }
+
+  private constructor(private readonly cliCommand: string) {}
+
+  public async parse(argv: string[], config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(
       argv,
       {
@@ -96,8 +85,6 @@ ${bold('Examples')}
         '--config': String,
         '--stdin': Boolean,
         '--file': String,
-        '--schema': String,
-        '--url': String,
         '--telemetry-information': String,
       },
       false,
@@ -111,45 +98,22 @@ ${bold('Examples')}
       return this.help()
     }
 
-    await loadEnvFile({ schemaPath: args['--schema'], printMessage: false, config })
+    const cmd = `${this.cliCommand} db execute`
+    const validatedConfig = validatePrismaConfigWithDatasource({ config, command: cmd })
 
-    const cmd = 'db execute'
-
-    checkUnsupportedSchemaEngineWasm({
-      cmd,
-      config,
-      args,
-      flags: ['--url'],
-    })
-
-    // One of --stdin or --file is required
     if (args['--stdin'] && args['--file']) {
       throw new Error(
-        `--stdin and --file cannot be used at the same time. Only 1 must be provided. 
-See \`${green(getCommandWithExecutor('prisma db execute -h'))}\``,
+        `--stdin and --file cannot be used at the same time. Only 1 must be provided.
+See \`${green(getCommandWithExecutor(`${this.cliCommand} db execute -h`))}\``,
       )
     } else if (!args['--stdin'] && !args['--file']) {
       throw new Error(
         `Either --stdin or --file must be provided.
-See \`${green(getCommandWithExecutor('prisma db execute -h'))}\``,
-      )
-    }
-
-    // One of --url or --schema is required
-    if (args['--url'] && args['--schema']) {
-      throw new Error(
-        `--url and --schema cannot be used at the same time. Only 1 must be provided.
-See \`${green(getCommandWithExecutor('prisma db execute -h'))}\``,
-      )
-    } else if (!args['--url'] && !args['--schema']) {
-      throw new Error(
-        `Either --url or --schema must be provided.
-See \`${green(getCommandWithExecutor('prisma db execute -h'))}\``,
+See \`${green(getCommandWithExecutor(`${this.cliCommand} db execute -h`))}\``,
       )
     }
 
     let script = ''
-    // Read file
     if (args['--file']) {
       try {
         script = fs.readFileSync(path.resolve(args['--file']), 'utf-8')
@@ -162,44 +126,23 @@ See \`${green(getCommandWithExecutor('prisma db execute -h'))}\``,
         }
       }
     }
-    // Read stdin
+
     if (args['--stdin']) {
       script = await streamConsumer.text(process.stdin)
     }
 
-    let datasourceType: EngineArgs.DbExecuteDatasourceType
+    checkUnsupportedDataProxy({ command: cmd, validatedConfig })
 
-    // Execute command(s) to url passed
-    if (args['--url']) {
-      checkUnsupportedDataProxy({ cmd, urls: [args['--url']] })
-
-      datasourceType = {
-        tag: 'url',
-        url: args['--url'],
-      }
-    }
-    // Execute command(s) to url from schema
-    else {
-      // validate that schema file exists
-      // throws an error if it doesn't
-      const schemaContext = await loadSchemaContext({
-        schemaPathFromArg: args['--schema'],
-        schemaPathFromConfig: config.schema,
-        printLoadMessage: false,
-      })
-
-      checkUnsupportedDataProxy({ cmd, schemaContext })
-
-      // Execute command(s) to url from schema
-      datasourceType = {
-        tag: 'schema',
-        ...toSchemasContainer(schemaContext.schemaFiles),
-        configDir: schemaContext.primaryDatasourceDirectory,
-      }
+    const datasourceType: EngineArgs.DbExecuteDatasourceType = {
+      tag: 'url',
+      url: validatedConfig.datasource.url,
     }
 
-    const adapter = await config.adapter?.()
-    const migrate = await Migrate.setup({ adapter, extensions: config['extensions'] })
+    const migrate = await Migrate.setup({
+      schemaEngineConfig: config,
+      extensions: config['extensions'],
+      baseDir,
+    })
 
     try {
       await migrate.engine.dbExecute({
@@ -215,8 +158,8 @@ See \`${green(getCommandWithExecutor('prisma db execute -h'))}\``,
 
   public help(error?: string): string | HelpError {
     if (error) {
-      throw new HelpError(`\n${error}\n\n${helpOptions}`)
+      throw new HelpError(`\n${error}\n\n${renderHelpOptions(this.cliCommand)}`)
     }
-    return DbExecute.help
+    return renderHelp(this.cliCommand)
   }
 }

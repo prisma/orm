@@ -2,13 +2,7 @@ import { expectError } from 'tsd'
 
 import { Prisma, PrismaClient } from '.'
 
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: 'file:dev.db',
-    },
-  },
-})
+const prisma = new PrismaClient()
 
 ;(async () => {
   const validator = Prisma.validator<Prisma.UserSelect>()

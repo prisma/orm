@@ -1,4 +1,5 @@
-import type { PrismaClientInitializationError } from '../../../../src/runtime/core/errors/PrismaClientInitializationError'
+import type { PrismaClientInitializationError } from '@prisma/client-runtime-utils'
+
 import testMatrix from './_matrix'
 // @ts-ignore
 import type { PrismaClient } from './generated/prisma/client'
@@ -31,10 +32,6 @@ testMatrix.setupTestSuite(
         mongodb: times out and dont throw
         sqlserver: returns undefined
       `,
-    },
-    skipDataProxy: {
-      runtimes: ['node', 'edge'],
-      reason: 'InvalidDatasourceError is not compatible with asserted error // Change in Prisma 6',
     },
     skipDriverAdapter: {
       from: ['js_neon', 'js_pg', 'js_pg_cockroachdb', 'js_planetscale', 'js_mariadb'],

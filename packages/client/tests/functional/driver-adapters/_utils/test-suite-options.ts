@@ -11,23 +11,10 @@ export const optOutFromProvidersWithNoMatchingDriverAdapters: MatrixOptions['opt
 }
 
 /**
- * Default `skipDataProxy` option for driver adapters tests.
- */
-export const skipDataProxy: MatrixOptions['skipDataProxy'] = {
-  runtimes: ['node', 'edge'],
-  reason: "driver adapters don't work with data proxy",
-}
-
-/**
  * Default sensible options for driver adapters tests.
  */
 export const defaultTestSuiteOptions: MatrixOptions = {
   skipDefaultClientInstance: true,
-  skipEngine: {
-    from: ['binary'],
-    reason: 'driver adapters are not supported with binary engine',
-  },
-  skipDataProxy,
   optOut: optOutFromProvidersWithNoMatchingDriverAdapters,
   skip(when, { clientEngineExecutor }) {
     when(clientEngineExecutor === 'remote', "Can't use driver adapters with Acelerate.")

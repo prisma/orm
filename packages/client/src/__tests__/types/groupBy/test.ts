@@ -3,13 +3,7 @@ import { expectType } from 'tsd'
 
 // This file will not be executed, just compiled to check if the typings are valid
 async function main() {
-  const prisma = new PrismaClient({
-    datasources: {
-      db: {
-        url: 'file:dev.db',
-      },
-    },
-  })
+  const prisma = new PrismaClient()
 
   const x = await prisma.user.groupBy({
     by: ['name', 'count', 'min', 'sum', 'max', 'avg'],

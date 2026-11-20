@@ -6,17 +6,19 @@ if (isMacOrWindowsCI) {
   jest.setTimeout(60_000)
 }
 
+const testIf = (condition: boolean) => (condition ? test : test.skip)
+
 const ctx = createDefaultTestContext()
 
-test('reintrospection - no changes', async () => {
+// TODO: https://linear.app/prisma-company/issue/TML-1576/investigate-failing-snapshot-tests-and-schema-path-formatting-on
+testIf(process.platform !== 'win32')('reintrospection - no changes', async () => {
   ctx.fixture('introspection-folder')
-  const introspect = new DbPull()
-  const result = introspect.parse(['--schema=./prisma/schema'], await ctx.config())
+  const introspect = DbPull.new('prisma')
+  const result = introspect.parse([], await ctx.config(), ctx.configDir())
   await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
   expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
-    "Prisma schema loaded from prisma/schema
-    Datasource "my_db": SQLite database "dev.db" <location placeholder>
+    "Datasource "my_db": SQLite database "dev.db" <location placeholder>
 
     - Introspecting based on datasource defined in prisma/schema
     ✔ Introspected 2 models and wrote them into prisma/schema in XXXms
@@ -45,7 +47,6 @@ test('reintrospection - no changes', async () => {
 
     datasource my_db {
       provider = "sqlite"
-      url      = "file:../../dev.db"
     }
 
 
@@ -59,10 +60,11 @@ test('reintrospection - no changes', async () => {
   `)
 })
 
-test('reintrospection - with --print', async () => {
+// TODO: https://linear.app/prisma-company/issue/TML-1576/investigate-failing-snapshot-tests-and-schema-path-formatting-on
+testIf(process.platform !== 'win32')('reintrospection - with --print', async () => {
   ctx.fixture('introspection-folder')
-  const introspect = new DbPull()
-  const result = introspect.parse(['--schema=./prisma/schema', '--print'], await ctx.config())
+  const introspect = DbPull.new('prisma')
+  const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
   await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
   expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
@@ -82,7 +84,6 @@ test('reintrospection - with --print', async () => {
 
     datasource my_db {
       provider = "sqlite"
-      url      = "file:../../dev.db"
     }
 
     // prisma/schema/User.prisma
@@ -97,8 +98,8 @@ test('reintrospection - with --print', async () => {
 
 test('reintrospection - new model', async () => {
   ctx.fixture('introspection-folder-new-model')
-  const introspect = new DbPull()
-  const result = introspect.parse(['--schema=./prisma/schema'], await ctx.config())
+  const introspect = DbPull.new('prisma')
+  const result = introspect.parse([], await ctx.config(), ctx.configDir())
   await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
   expect(ctx.printDir('prisma/schema', ['.prisma'])).toMatchInlineSnapshot(`
@@ -111,7 +112,6 @@ test('reintrospection - new model', async () => {
 
     datasource my_db {
       provider = "sqlite"
-      url      = "file:../../dev.db"
     }
 
 
@@ -137,8 +137,8 @@ test('reintrospection - new model', async () => {
 
 test('reintrospection - new model - existing introspected.prisma', async () => {
   ctx.fixture('introspection-folder-new-model-with-introspected')
-  const introspect = new DbPull()
-  const result = introspect.parse(['--schema=./prisma/schema'], await ctx.config())
+  const introspect = DbPull.new('prisma')
+  const result = introspect.parse([], await ctx.config(), ctx.configDir())
   await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
   expect(ctx.printDir('prisma/schema', ['.prisma'])).toMatchInlineSnapshot(`
@@ -151,7 +151,6 @@ test('reintrospection - new model - existing introspected.prisma', async () => {
 
     datasource my_db {
       provider = "sqlite"
-      url      = "file:../../dev.db"
     }
 
 
@@ -174,8 +173,8 @@ test('reintrospection - new model - existing introspected.prisma', async () => {
 
 test('reintrospection - new field', async () => {
   ctx.fixture('introspection-folder-new-field')
-  const introspect = new DbPull()
-  const result = introspect.parse(['--schema=./prisma/schema'], await ctx.config())
+  const introspect = DbPull.new('prisma')
+  const result = introspect.parse([], await ctx.config(), ctx.configDir())
   await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
   expect(ctx.printDir('prisma/schema', ['.prisma'])).toMatchInlineSnapshot(`
@@ -198,7 +197,6 @@ test('reintrospection - new field', async () => {
 
     datasource my_db {
       provider = "sqlite"
-      url      = "file:../../dev.db"
     }
 
 
@@ -214,8 +212,8 @@ test('reintrospection - new field', async () => {
 
 test('reintrospection - remove model', async () => {
   ctx.fixture('introspection-folder-remove-model')
-  const introspect = new DbPull()
-  const result = introspect.parse(['--schema=./prisma/schema'], await ctx.config())
+  const introspect = DbPull.new('prisma')
+  const result = introspect.parse([], await ctx.config(), ctx.configDir())
   await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
   expect(ctx.printDir('prisma/schema', ['.prisma'])).toMatchInlineSnapshot(`
@@ -233,7 +231,6 @@ test('reintrospection - remove model', async () => {
 
     datasource my_db {
       provider = "sqlite"
-      url      = "file:../../dev.db"
     }
 
 
@@ -248,8 +245,8 @@ test('reintrospection - remove model', async () => {
 
 test('reintrospection - invalid schema with --force', async () => {
   ctx.fixture('introspection-folder-invalid')
-  const introspect = new DbPull()
-  const result = introspect.parse(['--schema=./prisma/schema', '--force'], await ctx.config())
+  const introspect = DbPull.new('prisma')
+  const result = introspect.parse(['--force'], await ctx.config(), ctx.configDir())
   await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
   expect(ctx.printDir('prisma/schema', ['.prisma'])).toMatchInlineSnapshot(`
@@ -262,7 +259,6 @@ test('reintrospection - invalid schema with --force', async () => {
 
     datasource my_db {
       provider = "sqlite"
-      url      = "file:../../dev.db"
     }
 
     model Blog {

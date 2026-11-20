@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
+import { chmod, mkdir, readFile, writeFile } from 'fs/promises'
 import path from 'path'
 import XDGAppPaths from 'xdg-app-paths'
 
@@ -9,7 +9,7 @@ type AuthFile = {
 export type Credentials = {
   workspaceId: string
   token: string
-  refreshToken: string
+  refreshToken?: string
 }
 
 /**
@@ -74,7 +74,13 @@ export class CredentialsStore {
 
   private async writeCredentialsToDisk(credentials: Credentials[]): Promise<void> {
     const data: AuthFile = { tokens: credentials }
-    await mkdir(path.dirname(this.authFilePath), { recursive: true })
-    await writeFile(this.authFilePath, JSON.stringify(data, null, 2))
+    // 0o700 dir + 0o600 file so the auth.json (containing Prisma Platform OAuth
+    // tokens) is only readable by the user. writeFile's mode option only
+    // applies when the file is created, so chmod after to handle the
+    // pre-existing-file (overwrite) case as well.
+    await mkdir(path.dirname(this.authFilePath), { recursive: true, mode: 0o700 })
+    await writeFile(this.authFilePath, JSON.stringify(data, null, 2), { mode: 0o600 })
+    await chmod(this.authFilePath, 0o600)
+    await chmod(path.dirname(this.authFilePath), 0o700)
   }
 }

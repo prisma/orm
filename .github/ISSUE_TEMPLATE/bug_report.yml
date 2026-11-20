@@ -13,9 +13,8 @@ body:
         The **most important** thing you can do is include a minimal reproduction of the issue.
 
         Easy ways to create a reproduction:
-        - Create a CodeSandbox ([here are templates](https://codesandbox.io/examples/package/prisma))
         - A **GitHub repository** we can clone
-        - As a last resort, detailed step-by-step instructions (this makes debugging harder for us)
+        - Detailed step-by-step instructions
 
         We receive a _lot_ of GitHub issues. **Bug reports without a reproduction might not be investigated.**
 
@@ -45,13 +44,11 @@ body:
     attributes:
       label: Reproduction
       description: |
-        A **minimal reproduction** is required. Provide a CodeSandbox link, GitHub repository, or detailed steps.
-
-        **CodeSandbox template:** [https://codesandbox.io/examples/package/prisma](https://codesandbox.io/examples/package/prisma)
+        A **minimal reproduction** is required. Provide a GitHub repository, or detailed steps.
 
         **If you cannot provide a reproduction, explain why.**
       value: |
-        <!-- Link to CodeSandbox, GitHub repo, or step-by-step instructions -->
+        <!-- Link to a GitHub repo, or step-by-step instructions -->
     validations:
       required: true
 

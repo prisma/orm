@@ -5,13 +5,13 @@ import { executeSteps } from '../../_utils/executeSteps'
 void executeSteps({
   setup: async () => {
     await $`pnpm install`
+    await $`pnpm prisma db push --force-reset`
     await $`pnpm prisma generate`
-    await $`pnpm prisma db push --force-reset --skip-generate`
   },
   test: async () => {
     await $`pnpm exec prisma -v`
     await $`tsx src/test.ts`
-    await $`pnpm exec tsc --noEmit`
+    await $`pnpm tsc --noEmit`
   },
   finish: async () => {
     await $`echo "done"`

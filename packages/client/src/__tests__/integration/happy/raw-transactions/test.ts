@@ -29,22 +29,22 @@ describe('transaction', () => {
         {
           params: [],
           query: BEGIN,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: SELECT * FROM "User",
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: SELECT * FROM "Post",
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: COMMIT,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
       ]
     `)
@@ -99,27 +99,27 @@ describe('transaction', () => {
         {
           params: [],
           query: BEGIN,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: SELECT * FROM "User",
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: ["B","A"],
           query: UPDATE \`main\`.\`User\` SET \`name\` = ? WHERE \`main\`.\`User\`.\`name\` = ?,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: SELECT * FROM "Post",
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: COMMIT,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
       ]
     `)
@@ -177,27 +177,27 @@ describe('transaction', () => {
         {
           params: [],
           query: BEGIN,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: ["B","A"],
           query: UPDATE \`main\`.\`User\` SET \`name\` = ? WHERE \`main\`.\`User\`.\`name\` = ?,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: SELECT * FROM "User",
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: SELECT * FROM "Post",
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: COMMIT,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
       ]
     `)
@@ -245,22 +245,22 @@ describe('transaction', () => {
         {
           params: [],
           query: BEGIN,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: ["blub1","THIS_DOES_NOT_EXIT1"],
           query: UPDATE User SET name = ? WHERE id = ?;,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: ["blub2","THIS_DOES_NOT_EXIT2"],
           query: UPDATE User SET name = ? WHERE id = ?;,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
         {
           params: [],
           query: COMMIT,
-          target: quaint::connector::metrics,
+          target: quaint::connector::trace,
         },
       ]
     `)
@@ -365,37 +365,37 @@ describe('transaction', () => {
               duration: 0,
               params: [],
               query: BEGIN,
-              target: quaint::connector::metrics,
+              target: quaint::connector::trace,
             },
             {
               duration: 0,
               params: [],
               query: SELECT * FROM "Post",
-              target: quaint::connector::metrics,
+              target: quaint::connector::trace,
             },
             {
               duration: 0,
               params: ["blub1","THIS_DOES_NOT_EXIT1"],
               query: UPDATE User SET name = ? WHERE id = ?;,
-              target: quaint::connector::metrics,
+              target: quaint::connector::trace,
             },
             {
               duration: 0,
               params: [],
               query: SELECT * FROM "User",
-              target: quaint::connector::metrics,
+              target: quaint::connector::trace,
             },
             {
               duration: 0,
               params: ["blub2","THIS_DOES_NOT_EXIT2"],
               query: UPDATE User SET name = ? WHERE id = ?;,
-              target: quaint::connector::metrics,
+              target: quaint::connector::trace,
             },
             {
               duration: 0,
               params: [],
               query: COMMIT,
-              target: quaint::connector::metrics,
+              target: quaint::connector::trace,
             },
           ]
       `)

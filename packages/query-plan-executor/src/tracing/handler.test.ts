@@ -31,7 +31,7 @@ describe('TracingHandler', () => {
 
     // Verify a span was collected
     expect(collector.spans.length).toEqual(1)
-    expect(collector.spans[0].name).toEqual('prisma:engine:test-operation')
+    expect(collector.spans[0].name).toEqual('prisma:accelerate:test-operation')
   })
 
   test('runInChildSpan with options object', () => {
@@ -59,7 +59,7 @@ describe('TracingHandler', () => {
     // Verify a span was collected with the expected attributes
     expect(collector.spans.length).toEqual(1)
     const collectedSpan = collector.spans[0]
-    expect(collectedSpan.name).toEqual('prisma:engine:test-operation')
+    expect(collectedSpan.name).toEqual('prisma:accelerate:test-operation')
     expect(collectedSpan.attributes).toBeDefined()
     expect(collectedSpan.attributes!['test.key']).toEqual('test.value')
     expect(collectedSpan.attributes!['another.key']).toEqual('another.value')
@@ -81,7 +81,7 @@ describe('TracingHandler', () => {
 
     // Verify a span was collected
     expect(collector.spans.length).toEqual(1)
-    expect(collector.spans[0].name).toEqual('prisma:engine:async-operation')
+    expect(collector.spans[0].name).toEqual('prisma:accelerate:async-operation')
   })
 
   test('runs without active collector', () => {
@@ -117,7 +117,7 @@ describe('TracingHandler', () => {
 
     // Verify a span was collected despite the error
     expect(collector.spans.length).toEqual(1)
-    expect(collector.spans[0].name).toEqual('prisma:engine:error-operation')
+    expect(collector.spans[0].name).toEqual('prisma:accelerate:error-operation')
   })
 
   test('handles errors in async functions', async () => {
@@ -142,7 +142,7 @@ describe('TracingHandler', () => {
 
     // Verify a span was collected despite the error
     expect(collector.spans.length).toEqual(1)
-    expect(collector.spans[0].name).toEqual('prisma:engine:async-error-operation')
+    expect(collector.spans[0].name).toEqual('prisma:accelerate:async-error-operation')
   })
 
   test('nested spans create parent-child relationship', () => {
@@ -170,8 +170,8 @@ describe('TracingHandler', () => {
 
     // Verify the child has the parent ID
     expect(spans[0].parentId).toEqual(parentId)
-    expect(spans[0].name).toEqual('prisma:engine:child-operation')
-    expect(spans[1].name).toEqual('prisma:engine:parent-operation')
+    expect(spans[0].name).toEqual('prisma:accelerate:child-operation')
+    expect(spans[1].name).toEqual('prisma:accelerate:parent-operation')
   })
 
   test('root option creates spans without parent', () => {
@@ -198,7 +198,7 @@ describe('TracingHandler', () => {
     expect(collector.spans.length).toEqual(2)
 
     // Find the root span
-    const rootSpan = collector.spans.find((span) => span.name === 'prisma:engine:root-operation')
+    const rootSpan = collector.spans.find((span) => span.name === 'prisma:accelerate:root-operation')
 
     // Verify it has no parent
     expect(rootSpan).toBeDefined()
@@ -217,7 +217,7 @@ describe('TracingHandler', () => {
 
       expect(collector.spans.length).toEqual(1)
 
-      const rootSpan = collector.spans.find((span) => span.name === 'prisma:engine:root-operation')
+      const rootSpan = collector.spans.find((span) => span.name === 'prisma:accelerate:root-operation')
 
       expect(rootSpan).toBeDefined()
       expect(rootSpan!.parentId).toEqual(null)

@@ -1,6 +1,6 @@
 import { PrismaPlanetScale } from '@prisma/adapter-planetscale'
 
-import { PrismaClient } from './client/wasm'
+import { PrismaClient } from './client/edge'
 
 export default {
   async fetch(request, env) {
@@ -16,7 +16,6 @@ export default {
     const users = await prisma.user.findMany()
     const result = JSON.stringify(users)
 
-    // eslint-disable-next-line no-undef
     return new Response(result)
   },
 }

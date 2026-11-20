@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`getConfig datasource with env var - ignoreEnvVarErrors 1`] = `
+exports[`getConfig > datasource with env var 1`] = `
 ""{
   "generators": [],
   "datasources": [
@@ -8,10 +8,6 @@ exports[`getConfig datasource with env var - ignoreEnvVarErrors 1`] = `
       "name": "db",
       "provider": "postgresql",
       "activeProvider": "postgresql",
-      "url": {
-        "fromEnvVar": "SOMETHING-SOMETHING-1234",
-        "value": null
-      },
       "schemas": [],
       "sourceFilePath": "schema.prisma"
     }
@@ -20,27 +16,7 @@ exports[`getConfig datasource with env var - ignoreEnvVarErrors 1`] = `
 }""
 `;
 
-exports[`getConfig datasource with env var 1`] = `
-""{
-  "generators": [],
-  "datasources": [
-    {
-      "name": "db",
-      "provider": "postgresql",
-      "activeProvider": "postgresql",
-      "url": {
-        "fromEnvVar": "TEST_POSTGRES_URI_FOR_DATASOURCE",
-        "value": "postgres://user:password@something:5432/db"
-      },
-      "schemas": [],
-      "sourceFilePath": "schema.prisma"
-    }
-  ],
-  "warnings": []
-}""
-`;
-
-exports[`getConfig empty config 1`] = `
+exports[`getConfig > empty config 1`] = `
 ""{
   "generators": [],
   "datasources": [
@@ -48,10 +24,6 @@ exports[`getConfig empty config 1`] = `
       "name": "db",
       "provider": "sqlite",
       "activeProvider": "sqlite",
-      "url": {
-        "fromEnvVar": null,
-        "value": "file:../hello.db"
-      },
       "schemas": [],
       "sourceFilePath": "schema.prisma"
     }
@@ -60,7 +32,7 @@ exports[`getConfig empty config 1`] = `
 }""
 `;
 
-exports[`getConfig with generator and datasource 1`] = `
+exports[`getConfig > with generator and datasource 1`] = `
 ""{
   "generators": [
     {
@@ -87,10 +59,6 @@ exports[`getConfig with generator and datasource 1`] = `
       "name": "db",
       "provider": "sqlite",
       "activeProvider": "sqlite",
-      "url": {
-        "fromEnvVar": null,
-        "value": "file:dev.db"
-      },
       "schemas": [],
       "sourceFilePath": "schema.prisma"
     }

@@ -1,4 +1,9 @@
+import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 import { Prisma, PrismaClient } from '@prisma/client'
+
+const adapter = new PrismaBetterSqlite3({
+  url: './dev.db',
+})
 
 export const extension = Prisma.defineExtension((client) => {
   return client.$extends({
@@ -13,9 +18,9 @@ export const extension = Prisma.defineExtension((client) => {
   })
 })
 
-export const xprismaViaDefinedExt = new PrismaClient().$extends(extension)
+export const xprismaViaDefinedExt = new PrismaClient({ adapter }).$extends(extension)
 
-export const xprismaViaInlineExt = new PrismaClient().$extends({
+export const xprismaViaInlineExt = new PrismaClient({ adapter }).$extends({
   model: {
     $allModels: {
       someOperation<T, A>(this: T, _: Prisma.Exact<A, Prisma.Args<T, 'findMany'>>) {

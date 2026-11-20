@@ -1,4 +1,3 @@
 datasource my_db {
   provider = "sqlserver"
-  url      = "sqlserver://doesnotexist:1433;database=tests-migrate;user=SA;password=Pr1sm4_Pr1sm4;trustServerCertificate=true;"
 }

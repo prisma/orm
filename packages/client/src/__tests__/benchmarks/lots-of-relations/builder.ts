@@ -31,7 +31,6 @@ async function main() {
 
   datasource db {
       provider = "postgresql"
-      url      = env("DATABASE_URL")
   }
 
   ${modelsStr}

@@ -7,11 +7,9 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./test.db"
 }
 
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
 }
-

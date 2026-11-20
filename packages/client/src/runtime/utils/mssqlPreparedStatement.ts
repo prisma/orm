@@ -1,4 +1,4 @@
-import type { Sql } from 'sql-template-tag'
+import type { Sql } from '@prisma/client-runtime-utils'
 
 // Generate something like: SELECT * FROM User WHERE name = @P1 AND email = @P2 ...
 export const mssqlPreparedStatement = (sql: Sql) => {

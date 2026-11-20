@@ -1,11 +1,9 @@
 // datasource my_db {
 //   provider = "postgresql"
-//   url      = env("TEST_POSTGRES_URI_MIGRATE")
 // }
 
 datasource my_db {
   provider = "sqlite"
-  url      = "file:./dev.db"
 }
 
 generator client {

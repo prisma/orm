@@ -1,23 +1,5 @@
 import { ErrorCapturingSqlDriverAdapter } from '@prisma/driver-adapter-utils'
 
-export type EngineWasmLoadingConfig = {
-  /**
-   * WASM-bindgen runtime for corresponding module
-   */
-  getRuntime: () => Promise<{
-    __wbg_set_wasm(exports: unknown): void
-    QueryEngine: QueryEngineConstructor
-  }>
-  /**
-   * Loads the raw wasm module for the wasm query engine. This configuration is
-   * generated specifically for each type of client, eg. Node.js client and Edge
-   * clients will have different implementations.
-   * @remarks this is a callback on purpose, we only load the wasm if needed.
-   * @remarks only used by LibraryEngine
-   */
-  getQueryEngineWasmModule: () => Promise<unknown>
-}
-
 export type QueryEngineInstance = {
   connect(headers: string, requestId: string): Promise<void>
   disconnect(headers: string, requestId: string): Promise<void>
@@ -35,8 +17,6 @@ export type QueryEngineInstance = {
   startTransaction(options: string, traceHeaders: string, requestId: string): Promise<string>
   commitTransaction(id: string, traceHeaders: string, requestId: string): Promise<string>
   rollbackTransaction(id: string, traceHeaders: string, requestId: string): Promise<string>
-  metrics?(options: string): Promise<string>
-  applyPendingMigrations?(): Promise<void>
   trace(requestId: string): Promise<string | null>
 }
 

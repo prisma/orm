@@ -1,6 +1,5 @@
 datasource mysql {
     provider = "mysql"
-    url      = "mysql://root:prisma@localhost/mydb"
 }
 
 // From Introspection

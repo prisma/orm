@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest'
+
 import { formatTable } from '../utils/formatTable'
 
 describe('formatTable', () => {

@@ -1,7 +1,0 @@
-{
-  "name": "package-b",
-  "version": "0.0.0",
-  "prisma": {
-    "schema": "./db/schema.prisma"
-  }
-}

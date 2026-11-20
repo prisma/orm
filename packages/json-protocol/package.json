@@ -1,0 +1,37 @@
+{
+  "name": "@prisma/json-protocol",
+  "version": "0.0.0",
+  "description": "JSON protocol types for Prisma",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://www.prisma.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/json-protocol"
+  },
+  "bugs": "https://github.com/prisma/prisma/issues",
+  "scripts": {
+    "dev": "DEV=true tsx helpers/build.ts",
+    "build": "tsx helpers/build.ts",
+    "prepublishOnly": "pnpm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false
+}

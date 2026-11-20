@@ -1,8 +1,7 @@
 import { klona } from 'klona'
 
-import { getTestSuiteFullName, NamedTestSuiteConfig } from './getTestSuiteInfo'
+import { getTestSuiteFullName, NamedTestSuiteConfig, TestSuiteMeta } from './getTestSuiteInfo'
 import { AdapterProviders, adaptersForProvider, Providers, relationModesForAdapter } from './providers'
-import { TestSuiteMeta } from './setupTestSuiteMatrix'
 import { CliMeta, MatrixOptions } from './types'
 
 export type TestPlanEntry = {
@@ -38,7 +37,6 @@ export function getTestSuitePlan(
     .flatMap(getExpandedTestSuitePlanWithRemoteQpe)
 
   expandedSuiteConfigs.forEach((config) => {
-    config.matrixOptions.engineType ??= testCliMeta.engineType
     config.matrixOptions.clientRuntime ??= testCliMeta.runtime
     config.matrixOptions.previewFeatures ??= testCliMeta.previewFeatures
     config.matrixOptions.generatorType ??= testCliMeta.generatorType
@@ -127,8 +125,7 @@ function shouldSkipSuiteConfig(
   cliMeta: CliMeta,
   options?: MatrixOptions,
 ): boolean {
-  const { provider, driverAdapter, relationMode, engineType, clientRuntime, clientEngineExecutor } =
-    config.matrixOptions
+  const { provider, driverAdapter, relationMode, clientRuntime, clientEngineExecutor } = config.matrixOptions
 
   if (updateSnapshots === 'inline' && configIndex > 0) {
     // when updating inline snapshots, we have to run a  single suite only -
@@ -149,16 +146,6 @@ function shouldSkipSuiteConfig(
   }, config.matrixOptions)
 
   if (isSkipped) {
-    return true
-  }
-
-  // if the test doesn't support the engine type, skip
-  if (options?.skipEngine?.from.includes(engineType!)) {
-    return true
-  }
-
-  // if the test needs to skip the dataproxy test, skip
-  if (cliMeta.dataProxy && options?.skipDataProxy?.runtimes.includes(cliMeta.runtime)) {
     return true
   }
 
@@ -210,6 +197,11 @@ function shouldSkipSuiteConfig(
 
   // if Driver Adapters are enabled and the test has no Driver Adapter, skip
   if (includedProviderAdapters !== undefined && driverAdapter === undefined) {
+    return true
+  }
+
+  // if there's no adapter, skip
+  if (driverAdapter === undefined && cliMeta.clientEngineExecutor === 'local') {
     return true
   }
 

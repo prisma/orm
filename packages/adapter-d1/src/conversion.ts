@@ -107,7 +107,7 @@ export function mapRow<A>(result: (A | ResultValue)[], columnTypes: ColumnType[]
     const value = result[i]
 
     if (value instanceof ArrayBuffer) {
-      result[i] = Array.from(new Uint8Array(value))
+      result[i] = new Uint8Array(value)
       continue
     }
 

@@ -6,7 +6,7 @@ The `mssql` driver is one of the most popular drivers in the JavaScript ecosyste
 
 ## Usage
 
-This section explains how you can use it with Prisma ORM and the `@prisma/adapter-mssql` driver adapter. Be sure that the `DATABASE_URL` environment variable is set to your SQL Server connection string (e.g. in a `.env` file).
+This section explains how you can use it with Prisma ORM and the `@prisma/adapter-mssql` driver adapter. Be sure that the `DATABASE_URL` environment variable is set to your SQL Server connection string (e.g. loaded using `dotenv` from a `.env` file).
 
 ### 1. Install the dependencies
 

@@ -1,6 +1,9 @@
+import timers from 'node:timers/promises'
+
 import { $ } from 'zx'
 
 import { executeSteps } from '../_utils/executeSteps'
+import { stopProcess, waitForWranglerReady } from '../_utils/wrangler'
 
 void executeSteps({
   setup: async () => {
@@ -8,19 +11,17 @@ void executeSteps({
     await $`pnpm prisma generate`
   },
   test: async () => {
-    const wrangler = $`pnpm wrangler dev --ip 127.0.0.1 --port 8787`.nothrow()
+    const wranglerProcess = $`pnpm wrangler dev --ip 127.0.0.1 --port 8787`.nothrow()
 
-    let data = ''
-    for await (const chunk of wrangler.stdout) {
-      data += chunk
-      if (data.includes('Ready')) {
-        break
-      }
+    try {
+      await waitForWranglerReady(wranglerProcess)
+
+      await timers.setTimeout(1000)
+
+      await $`pnpm exec jest`
+    } finally {
+      await stopProcess(wranglerProcess).catch(() => {})
     }
-
-    await $`pnpm exec jest`
-
-    await wrangler.kill()
   },
   finish: async () => {
     await $`echo "done"`

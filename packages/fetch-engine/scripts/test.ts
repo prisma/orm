@@ -4,7 +4,6 @@ import { download } from '../src'
 
 void download({
   binaries: {
-    'query-engine': path.join(__dirname, '../test'),
     'schema-engine': path.join(__dirname, '../test'),
   },
   binaryTargets: [

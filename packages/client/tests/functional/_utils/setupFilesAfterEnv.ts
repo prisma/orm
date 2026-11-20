@@ -75,12 +75,6 @@ const skip = new Proxy(it.skip, {
   },
 })
 
-// Workaround to inject PRISMA_CLIENT_DATA_PROXY_CLIENT_VERSION="0.0.0" during tests as the edge client
-// doesn't have access to process.env because it gets polyfilled out.
-if (process.env.PRISMA_CLIENT_DATA_PROXY_CLIENT_VERSION) {
-  globalThis.PRISMA_CLIENT_DATA_PROXY_CLIENT_VERSION = process.env.PRISMA_CLIENT_DATA_PROXY_CLIENT_VERSION
-}
-
 globalThis.beforeAll = process.env.TEST_GENERATE_ONLY === 'true' ? () => {} : beforeAll
 globalThis.afterAll = process.env.TEST_GENERATE_ONLY === 'true' ? () => {} : afterAll
 globalThis.beforeEach = process.env.TEST_GENERATE_ONLY === 'true' ? () => {} : beforeEach

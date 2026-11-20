@@ -1,3 +1,6 @@
+import readline from 'node:readline'
+
+import type { Datasource } from '@prisma/config'
 import Debug from '@prisma/debug'
 import {
   BinaryType,
@@ -18,7 +21,6 @@ import { bold, red } from 'kleur/colors'
 import { Extension, SchemaExtensionConfig } from './extensions'
 import type { SchemaEngine } from './SchemaEngine'
 import type { EngineArgs, EngineResults, RPCPayload, RpcSuccessResponse } from './types'
-import byline from './utils/byline'
 import { handleViewsIO } from './views/handleViewsIO'
 
 const debugRpc = Debug('prisma:schemaEngine:rpc')
@@ -39,10 +41,12 @@ setClassName(EngineError, 'EngineError')
 let messageId = 1
 
 interface SchemaEngineCLISetupInput {
+  datasource?: Datasource
   debug?: boolean
   enabledPreviewFeatures?: string[]
   schemaContext?: SchemaContext
   extensions?: Extension[]
+  baseDir: string
 }
 
 export type SchemaEngineCLIOptions = SchemaEngineCLISetupInput
@@ -51,6 +55,7 @@ export class SchemaEngineCLI implements SchemaEngine {
   private debug: boolean
   private child?: ChildProcess
   private schemaContext?: SchemaContext
+  private datasource?: Datasource
   private listeners: { [key: string]: (result: any, err?: any) => any } = {}
   /**  _All_ the logs from the engine process. */
   private messages: string[] = []
@@ -60,22 +65,28 @@ export class SchemaEngineCLI implements SchemaEngine {
   private initPromise?: Promise<void>
   private enabledPreviewFeatures?: string[]
   private extensionConfig?: SchemaExtensionConfig
-
-  // `latestSchema` is set to the latest schema that was used in `introspect()`
-  // TODO: remove, it's not used anywhere.
-  private latestSchema?: MigrateTypes.SchemasContainer
+  private baseDir: string
 
   // `isRunning` is set to true when the engine is initialized, and set to false when the engine is stopped
   public isRunning = false
 
-  private constructor({ debug = false, schemaContext, enabledPreviewFeatures, extensions }: SchemaEngineCLIOptions) {
+  private constructor({
+    debug = false,
+    schemaContext,
+    datasource,
+    enabledPreviewFeatures,
+    extensions,
+    baseDir,
+  }: SchemaEngineCLIOptions) {
     this.schemaContext = schemaContext
+    this.datasource = datasource
     if (debug) {
       Debug.enable('SchemaEngine*')
     }
     this.debug = debug
     this.enabledPreviewFeatures = enabledPreviewFeatures
     this.extensionConfig = extensions ? { types: extensions.flatMap((ext) => ext.types) } : undefined
+    this.baseDir = baseDir
   }
 
   static setup(input: SchemaEngineCLISetupInput): Promise<SchemaEngineCLI> {
@@ -188,8 +199,6 @@ export class SchemaEngineCLI implements SchemaEngine {
     compositeTypeDepth = -1, // cannot be undefined
     namespaces,
   }: EngineArgs.IntrospectParams): Promise<EngineArgs.IntrospectResult> {
-    this.latestSchema = schema
-
     try {
       const introspectResult: EngineArgs.IntrospectResult = await this.runCommand(
         this.getRPCPayload('introspect', { schema, force, compositeTypeDepth, namespaces, baseDirectoryPath }),
@@ -371,11 +380,14 @@ export class SchemaEngineCLI implements SchemaEngine {
         debugRpc('starting Schema engine with binary: ' + binaryPath)
         const args: string[] = []
 
-        let projectDir: string = process.cwd()
         if (this.schemaContext) {
-          projectDir = this.schemaContext.primaryDatasourceDirectory
-          const schemaArgs = this.schemaContext.schemaFiles.flatMap(([path]) => ['-d', path])
+          // list of paths to the schema files
+          const schemaArgs = this.schemaContext.schemaFiles.flatMap(([path]) => ['--datamodels', path])
           args.push(...schemaArgs)
+        }
+
+        if (this.datasource) {
+          args.push(...['--datasource', JSON.stringify(this.datasource)])
         }
 
         if (
@@ -391,7 +403,7 @@ export class SchemaEngineCLI implements SchemaEngine {
         }
 
         this.child = spawn(binaryPath, args, {
-          cwd: projectDir,
+          cwd: this.baseDir,
           stdio: ['pipe', 'pipe', this.debug ? process.stderr : 'pipe'],
           env: {
             // The following environment variables can be overridden by the user.
@@ -459,12 +471,16 @@ export class SchemaEngineCLI implements SchemaEngine {
 
         // logs (info, error)
         // error can be a panic
-        byline(this.child.stderr).on('data', (msg) => {
-          const data = String(msg)
-          debugStderr(data)
+        const stderrInterface = readline.createInterface({
+          input: this.child.stderr!,
+          crlfDelay: Infinity,
+        })
+
+        stderrInterface.on('line', (line: string) => {
+          debugStderr(line)
 
           try {
-            const json: SchemaEngineLogLine = JSON.parse(data)
+            const json: SchemaEngineLogLine = JSON.parse(line)
 
             this.messages.push(json.fields.message)
 
@@ -476,8 +492,13 @@ export class SchemaEngineCLI implements SchemaEngine {
           }
         })
 
-        byline(this.child.stdout).on('data', (line) => {
-          this.handleResponse(String(line))
+        const stdoutInterface = readline.createInterface({
+          input: this.child.stdout!,
+          crlfDelay: Infinity,
+        })
+
+        stdoutInterface.on('line', (line: string) => {
+          this.handleResponse(line)
         })
 
         setImmediate(() => {

@@ -3,8 +3,7 @@
   "include": ["./**/*"],
   "compilerOptions": {
     "paths": {
-      "src/*": ["./src/*"],
-      "test-utils/*": ["./src/__tests__/_utils/*"]
+      "src/*": ["./src/*"]
     }
   }
 }

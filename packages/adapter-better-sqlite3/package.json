@@ -19,12 +19,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/adapter-better-sqlite3"
   },
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
-    "build": "tsx helpers/build.ts"
+    "build": "tsx helpers/build.ts",
+    "test": "vitest run"
   },
   "files": [
     "dist",
@@ -36,7 +37,7 @@
   "sideEffects": false,
   "dependencies": {
     "@prisma/driver-adapter-utils": "workspace:*",
-    "better-sqlite3": "^11.9.0"
+    "better-sqlite3": "^12.6.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "7.6.12",

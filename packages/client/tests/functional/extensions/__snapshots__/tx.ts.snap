@@ -25,7 +25,7 @@ exports[`extensions.tx (provider=cockroachdb, js_pg_cockroachdb) extended client
 Invalid \`prisma.user.create()\` invocation:
 
 
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`extensions.tx (provider=cockroachdb, js_pg_cockroachdb) extended client in tx can rollback via normal call 1`] = `
@@ -37,7 +37,7 @@ Invalid \`xprisma.user.create()\` invocation in
   XX   },
   XX }),
 → XX xprisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`extensions.tx (provider=mongodb) extended client in tx can rollback via custom call 1`] = `
@@ -185,7 +185,7 @@ exports[`extensions.tx (provider=postgresql, js_pg) extended client in tx can ro
 Invalid \`prisma.user.create()\` invocation:
 
 
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`extensions.tx (provider=postgresql, js_pg) extended client in tx can rollback via normal call 1`] = `
@@ -197,7 +197,7 @@ Invalid \`xprisma.user.create()\` invocation in
   XX   },
   XX }),
 → XX xprisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`extensions.tx (provider=postgresql, qpe=remote) extended client in tx can rollback via custom call 1`] = `
@@ -205,7 +205,7 @@ exports[`extensions.tx (provider=postgresql, qpe=remote) extended client in tx c
 Invalid \`prisma.user.create()\` invocation:
 
 
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`extensions.tx (provider=postgresql, qpe=remote) extended client in tx can rollback via normal call 1`] = `
@@ -217,7 +217,7 @@ Invalid \`xprisma.user.create()\` invocation in
   XX   },
   XX }),
 → XX xprisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`extensions.tx (provider=sqlite) extended client in tx can rollback via custom call 1`] = `

@@ -9,7 +9,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("TEST_E2E_POSTGRES_URI")
 }
 
 model User {

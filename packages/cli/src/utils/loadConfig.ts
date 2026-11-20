@@ -1,4 +1,9 @@
-import { type ConfigDiagnostic, loadConfigFromFile, type PrismaConfigInternal } from '@prisma/config'
+import {
+  type ConfigDiagnostic,
+  loadConfigFromFile,
+  PrismaConfigEnvError,
+  type PrismaConfigInternal,
+} from '@prisma/config'
 import { Debug } from '@prisma/debug'
 import { assertNever, HelpError } from '@prisma/internals'
 
@@ -17,14 +22,27 @@ export async function loadConfig(
     switch (error._tag) {
       case 'ConfigFileNotFound':
         return new HelpError(`Config file not found at "${resolvedPath}"`)
+
       case 'ConfigLoadError':
+        if (error.error instanceof PrismaConfigEnvError) {
+          diagnostics.push({
+            _tag: 'warn',
+            value: (formatters) => () => {
+              formatters.log(formatters.dim(`${error.error.message}`))
+            },
+          })
+        }
+
         return new HelpError(
           `Failed to load config file "${resolvedPath}" as a TypeScript/JavaScript module. Error: ${error.error}`,
         )
+
       case 'ConfigFileSyntaxError':
         return new HelpError(`Failed to parse syntax of config file at "${resolvedPath}"`)
+
       case 'UnknownError':
         return new HelpError(`Unknown error during config file loading: ${error.error}`)
+
       default:
         assertNever(error, `Unhandled error '${JSON.stringify(error)}' in 'loadConfigFromFile'.`)
     }

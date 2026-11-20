@@ -6,5 +6,5 @@ export function createFileNameToKeyMapper(options: CaseSensitivityOptions): File
   if (options.caseSensitive) {
     return (fileName) => fileName
   }
-  return (fileName) => fileName.toLocaleLowerCase()
+  return (fileName) => fileName.toLowerCase()
 }

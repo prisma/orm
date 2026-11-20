@@ -13,7 +13,7 @@ describe('diagnostics related to prisma.config.ts should not influence structure
 
   test('prisma migrate diff --script', async () => {
     const { stdout, stderr, exitCode } =
-      await $`pnpm prisma migrate diff --from-empty --to-schema-datamodel ./prisma/schema.prisma --script`
+      await $`pnpm prisma migrate diff --from-empty --to-schema ./prisma/schema.prisma --script`
     expect(exitCode).toBe(0)
     expect(stdout).toMatchInlineSnapshot(`
       "-- CreateTable
@@ -28,13 +28,7 @@ describe('diagnostics related to prisma.config.ts should not influence structure
       "
     `)
     expect(stderr).toMatchInlineSnapshot(`
-      "warn The configuration property \`package.json#prisma\` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., \`prisma.config.ts\`).
-      For more information, see: https://pris.ly/prisma-config
-
-      Loaded Prisma config from prisma.config.ts.
-
-      warn The Prisma config file in prisma.config.ts overrides the deprecated \`package.json#prisma\` property in package.json.
-        For more information, see: https://pris.ly/prisma-config
+      "Loaded Prisma config from prisma.config.ts.
 
       "
     `)
@@ -44,19 +38,11 @@ describe('diagnostics related to prisma.config.ts should not influence structure
     const { stdout, stderr, exitCode } = await $`pnpm prisma version --json`
 
     expect(exitCode).toBe(0)
-    // TODO: uncomment when https://linear.app/prisma-company/issue/ORM-1257/fix-27005-which-is-similar-to-27638 is solved.
-    expect(() => JSON.parse(stdout)) /* .not */
-      .toThrow()
+    expect(() => JSON.parse(stdout)).not.toThrow()
     expect(stderr).toMatchInlineSnapshot(`
-      "warn The configuration property \`package.json#prisma\` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., \`prisma.config.ts\`).
-      For more information, see: https://pris.ly/prisma-config
+      "Loaded Prisma config from prisma.config.ts.
 
-      Loaded Prisma config from prisma.config.ts.
-
-      warn The Prisma config file in prisma.config.ts overrides the deprecated \`package.json#prisma\` property in package.json.
-        For more information, see: https://pris.ly/prisma-config
-
-      Prisma config detected, skipping environment variable loading.
+      Prisma schema loaded from prisma/schema.prisma.
       "
     `)
   })

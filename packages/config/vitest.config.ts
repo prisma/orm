@@ -4,7 +4,6 @@ export default defineConfig({
   resolve: {
     alias: {
       'src/*': './src/*',
-      'test-utils/*': './src/__tests__/_utils/*',
     },
   },
   test: {

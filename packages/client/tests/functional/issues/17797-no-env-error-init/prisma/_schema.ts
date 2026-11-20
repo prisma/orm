@@ -9,7 +9,6 @@ export default testMatrix.setupSchema(({ provider }) => {
   
   datasource db {
     provider = "${provider}"
-    url      = env("INVALID_DATABASE_URI")
   }
   
   model User {

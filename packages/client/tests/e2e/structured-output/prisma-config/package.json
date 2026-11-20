@@ -8,11 +8,8 @@
     "zx": "^7"
   },
   "devDependencies": {
-    "@types/node": "18.19.76",
+    "@types/node": "~20.19.0",
     "prisma": "/tmp/prisma-0.0.0.tgz",
-    "vitest": "3.2.4"
-  },
-  "prisma": {
-    "schema": "./prisma/schema.prisma"
+    "vitest": "4.0.18"
   }
 }

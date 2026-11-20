@@ -1,8 +1,0 @@
-{
-  "name": "schema-from-package-json",
-  "version": "1.0.0",
-  "description": "",
-  "prisma": {
-    "schema": "custom-folder/schema.prisma"
-  }
-}

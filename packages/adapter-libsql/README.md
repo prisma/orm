@@ -18,17 +18,17 @@ Update your Prisma Client instance to use the libSQL database Client:
 ```ts
 // Import needed packages
 import { PrismaClient } from '@prisma/client'
-import { PrismaLibSQL } from '@prisma/adapter-libsql'
+import { PrismaLibSql } from '@prisma/adapter-libsql'
 // You can alternatively use the web version of the client if you're running in
 // a constrained environment where the standard libsql client doesn't work:
-// import { PrismaLibSQL } from '@prisma/adapter-libsql/web'
+// import { PrismaLibSql } from '@prisma/adapter-libsql/web'
 
 // Setup
 const connectionString = `${process.env.TURSO_DATABASE_URL}`
 const authToken = `${process.env.TURSO_AUTH_TOKEN}`
 
 // Init prisma client
-const adapter = new PrismaLibSQL({
+const adapter = new PrismaLibSql({
   url: connectionString,
   authToken,
 })

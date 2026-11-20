@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/client-generator-js"
   },
   "license": "Apache-2.0",
@@ -28,23 +28,22 @@
     "@prisma/client-common": "workspace:*",
     "@prisma/debug": "workspace:*",
     "@prisma/dmmf": "workspace:*",
-    "@prisma/engines-version": "6.18.0-2.ba2627112b75424f26505fb83167ce78db40fc57",
+    "@prisma/engines-version": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@prisma/fetch-engine": "workspace:*",
     "@prisma/generator": "workspace:*",
     "@prisma/get-platform": "workspace:*",
     "@prisma/internals": "workspace:*",
+    "@prisma/param-graph-builder": "workspace:*",
     "@prisma/ts-builders": "workspace:*",
-    "ci-info": "4.2.0",
     "env-paths": "2.2.1",
     "indent-string": "4.0.0",
     "klona": "2.0.6",
     "package-up": "5.0.0",
     "pluralize": "8.0.0",
-    "ts-pattern": "5.6.2"
+    "ts-pattern": "5.9.0"
   },
   "devDependencies": {
-    "@types/pluralize": "0.0.33",
-    "vitest": "3.2.4"
+    "@types/pluralize": "0.0.33"
   },
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",

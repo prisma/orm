@@ -1,0 +1,47 @@
+{
+  "name": "@prisma/adapter-ppg",
+  "version": "0.0.0",
+  "description": "Prisma Postgres Serverless driver adapter",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/adapter-ppg"
+  },
+  "scripts": {
+    "dev": "DEV=true tsx helpers/build.ts",
+    "build": "tsx helpers/build.ts",
+    "test": "vitest run"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [],
+  "author": "Pierantonio Cangianiello (cangianiello@prisma.io)",
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "dependencies": {
+    "@prisma/driver-adapter-utils": "workspace:*",
+    "postgres-array": "3.0.4",
+    "pg-types": "4.0.2",
+    "@prisma/ppg": "^1.0.1"
+  },
+  "devDependencies": {
+    "@prisma/debug": "workspace:*"
+  }
+}

@@ -4,12 +4,12 @@
 generator client {
   provider               = "prisma-client"
   output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
   generatedFileExtension = "mts"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./db"
 }
 
 model User {

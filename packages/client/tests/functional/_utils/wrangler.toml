@@ -1,7 +1,7 @@
 
 name = "functional-tests-config"
 main = "src/index.ts"
-compatibility_date = "2023-12-18"
+compatibility_date = "2025-05-05"
 
 # https://developers.cloudflare.com/workers/wrangler/configuration/#local-development-settings
 [dev]

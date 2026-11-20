@@ -14,9 +14,8 @@ import {
   getModelArgName,
   getPayloadName,
 } from '../utils'
-import { runtimeImport, runtimeImportedType } from '../utils/runtimeImport'
+import { runtimeImportedType } from '../utils/runtimeImport'
 import { TAB_SIZE } from './constants'
-import { Datasources } from './Datasources'
 import type { Generable } from './Generable'
 import { GenerateContext } from './GenerateContext'
 import { globalOmitConfig } from './globalOmit'
@@ -200,20 +199,22 @@ function batchingTransactionDefinition(context: GenerateContext) {
         ])
         \`\`\`
 
-        Read more in our [docs](https://www.prisma.io/docs/concepts/components/prisma-client/transactions).
+        Read more in our [docs](https://www.prisma.io/docs/orm/prisma-client/queries/transactions).
       `,
     )
     .addGenericParameter(ts.genericParameter('P').extends(ts.array(tsx.prismaPromise(ts.anyType))))
     .addParameter(ts.parameter('arg', ts.arraySpread(ts.namedType('P'))))
     .setReturnType(tsx.promise(ts.namedType('runtime.Types.Utils.UnwrapTuple').addGenericArgument(ts.namedType('P'))))
 
+  const options = ts.objectType().formatInline()
+  options.add(ts.property('maxWait', ts.numberType).optional())
+  options.add(ts.property('timeout', ts.numberType).optional())
+
   if (context.dmmf.hasEnumInNamespace('TransactionIsolationLevel', 'prisma')) {
-    const options = ts
-      .objectType()
-      .formatInline()
-      .add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
-    method.addParameter(ts.parameter('options', options).optional())
+    options.add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
   }
+
+  method.addParameter(ts.parameter('options', options).optional())
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
 }
@@ -234,9 +235,7 @@ function interactiveTransactionDefinition(context: GenerateContext) {
 
   const callbackType = ts
     .functionType()
-    .addParameter(
-      ts.parameter('prisma', ts.omit(ts.namedType('PrismaClient'), ts.namedType('runtime.ITXClientDenyList'))),
-    )
+    .addParameter(ts.parameter('prisma', ts.omit(ts.namedType('PrismaClient'), itxTransactionClientDenyList(context))))
     .setReturnType(returnType)
 
   const method = ts
@@ -247,6 +246,14 @@ function interactiveTransactionDefinition(context: GenerateContext) {
     .setReturnType(returnType)
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
+}
+
+function itxTransactionClientDenyList(context: GenerateContext) {
+  if (context.provider === 'mongodb') {
+    return ts.unionType([ts.namedType('runtime.ITXClientDenyList'), ts.stringLiteral('$transaction')])
+  }
+
+  return ts.namedType('runtime.ITXClientDenyList')
 }
 
 function queryRawDefinition(context: GenerateContext) {
@@ -263,7 +270,7 @@ function queryRawDefinition(context: GenerateContext) {
    * const result = await prisma.$queryRaw\`SELECT * FROM User WHERE id = \${1} OR email = \${'user@email.com'};\`
    * \`\`\`
    *
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+   * Read more in our [docs](https://pris.ly/d/raw-queries).
    */
   $queryRaw<T = unknown>(query: TemplateStringsArray | Prisma.Sql, ...values: any[]): Prisma.PrismaPromise<T>;
 
@@ -275,7 +282,7 @@ function queryRawDefinition(context: GenerateContext) {
    * const result = await prisma.$queryRawUnsafe('SELECT * FROM User WHERE id = $1 OR email = $2;', 1, 'user@email.com')
    * \`\`\`
    *
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+   * Read more in our [docs](https://pris.ly/d/raw-queries).
    */
   $queryRawUnsafe<T = unknown>(query: string, ...values: any[]): Prisma.PrismaPromise<T>;`
 }
@@ -294,7 +301,7 @@ function executeRawDefinition(context: GenerateContext) {
    * const result = await prisma.$executeRaw\`UPDATE User SET cool = \${true} WHERE email = \${'user@email.com'};\`
    * \`\`\`
    *
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+   * Read more in our [docs](https://pris.ly/d/raw-queries).
    */
   $executeRaw<T = unknown>(query: TemplateStringsArray | Prisma.Sql, ...values: any[]): Prisma.PrismaPromise<number>;
 
@@ -306,7 +313,7 @@ function executeRawDefinition(context: GenerateContext) {
    * const result = await prisma.$executeRawUnsafe('UPDATE User SET cool = $1 WHERE email = $2 ;', true, 'user@email.com')
    * \`\`\`
    *
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+   * Read more in our [docs](https://pris.ly/d/raw-queries).
    */
   $executeRawUnsafe<T = unknown>(query: string, ...values: any[]): Prisma.PrismaPromise<number>;`
 }
@@ -347,30 +354,6 @@ function queryRawTypedDefinition(context: GenerateContext) {
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
 }
 
-function metricDefinition(context: GenerateContext) {
-  if (!context.isPreviewFeatureOn('metrics')) {
-    return ''
-  }
-
-  const property = ts
-    .property('$metrics', ts.namedType(`runtime.${runtimeImport('MetricsClient')}`))
-    .setDocComment(
-      ts.docComment`
-        Gives access to the client metrics in json or prometheus format.
-
-        @example
-        \`\`\`
-        const metrics = await prisma.$metrics.json()
-        // or
-        const metrics = await prisma.$metrics.prometheus()
-        \`\`\`
-    `,
-    )
-    .readonly()
-
-  return ts.stringify(property, { indentLevel: 1, newLine: 'leading' })
-}
-
 function runCommandRawDefinition(context: GenerateContext) {
   // we do not generate `$runCommandRaw` definitions if not supported
   if (!context.dmmf.mappings.otherOperations.write.includes('runCommandRaw')) {
@@ -391,33 +374,10 @@ function runCommandRawDefinition(context: GenerateContext) {
       })
       \`\`\`
 
-      Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+      Read more in our [docs](https://pris.ly/d/raw-queries).
     `)
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
-}
-
-function applyPendingMigrationsDefinition(this: PrismaClientClass) {
-  if (this.runtimeNameTs !== 'react-native') {
-    return null
-  }
-
-  const method = ts
-    .method('$applyPendingMigrations')
-    .setReturnType(tsx.promise(ts.voidType))
-    .setDocComment(
-      ts.docComment`Tries to apply pending migrations one by one. If a migration fails to apply, the function will stop and throw an error. You are responsible for informing the user and possibly blocking the app as we cannot guarantee the state of the database.`,
-    )
-
-  return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
-}
-
-function eventRegistrationMethodDeclaration(runtimeNameTs: TSClientOptions['runtimeNameTs']) {
-  if (runtimeNameTs === 'binary.js') {
-    return `$on<V extends (U | 'beforeExit')>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : V extends 'beforeExit' ? () => $Utils.JsPromise<void> : Prisma.LogEvent) => void): PrismaClient;`
-  } else {
-    return `$on<V extends U>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : Prisma.LogEvent) => void): PrismaClient;`
-  }
 }
 
 export class PrismaClientClass implements Generable {
@@ -425,7 +385,7 @@ export class PrismaClientClass implements Generable {
     protected readonly context: GenerateContext,
     protected readonly internalDatasources: DataSource[],
     protected readonly outputDir: string,
-    protected readonly runtimeNameTs: TSClientOptions['runtimeNameTs'],
+    protected readonly runtimeName: TSClientOptions['runtimeName'],
     protected readonly browser?: boolean,
   ) {}
   private get jsDoc(): string {
@@ -449,13 +409,15 @@ export class PrismaClientClass implements Generable {
  * Type-safe database client for TypeScript & Node.js
  * @example
  * \`\`\`
- * const prisma = new PrismaClient()
+ * const prisma = new PrismaClient({
+ *   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
+ * })
  * // Fetch zero or more ${capitalize(example.plural)}
  * const ${uncapitalize(example.plural)} = await prisma.${uncapitalize(example.model)}.findMany()
  * \`\`\`
  *
  *
- * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client).
+ * Read more in our [docs](https://pris.ly/d/client).
  */`
   }
   public toTSWithoutNamespace(): string {
@@ -471,8 +433,8 @@ export class PrismaClient<
 
   ${indent(this.jsDoc, TAB_SIZE)}
 
-  constructor(optionsArg ?: Prisma.Subset<ClientOptions, Prisma.PrismaClientOptions>);
-  ${eventRegistrationMethodDeclaration(this.runtimeNameTs)}
+  constructor(optionsArg ?: Prisma.PrismaClientConstructorArgs<ClientOptions>);
+  $on<V extends U>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : Prisma.LogEvent) => void): PrismaClient;
 
   /**
    * Connect with the database
@@ -491,8 +453,6 @@ ${[
   batchingTransactionDefinition(this.context),
   interactiveTransactionDefinition(this.context),
   runCommandRawDefinition(this.context),
-  metricDefinition(this.context),
-  applyPendingMigrationsDefinition.bind(this)(),
   extendsPropertyDefinition(),
 ]
   .filter((d) => d !== null)
@@ -526,9 +486,10 @@ get ${methodName}(): Prisma.${m.model}Delegate<${generics.join(', ')}>;`
   }
   public toTS(): string {
     const clientOptions = this.buildClientOptions()
+    const transactionClientDenyList =
+      this.context.provider === 'mongodb' ? "runtime.ITXClientDenyList | '$transaction'" : 'runtime.ITXClientDenyList'
 
-    return `${new Datasources(this.internalDatasources).toTS()}
-${clientExtensionsDefinitions(this.context)}
+    return `${clientExtensionsDefinitions(this.context)}
 export type DefaultPrismaClient = PrismaClient
 export type ErrorFormat = 'pretty' | 'colorless' | 'minimal'
 ${ts.stringify(ts.moduleExport(clientOptions))}
@@ -596,25 +557,13 @@ export function getLogLevel(log: Array<LogLevel | LogDefinition>): LogLevel | un
 /**
  * \`PrismaClient\` proxy available in interactive transactions.
  */
-export type TransactionClient = Omit<Prisma.DefaultPrismaClient, runtime.ITXClientDenyList>
+export type TransactionClient = Omit<Prisma.DefaultPrismaClient, ${transactionClientDenyList}>
 `
   }
 
   private buildClientOptions() {
     const clientOptions = ts
       .interfaceDeclaration('PrismaClientOptions')
-      .add(
-        ts
-          .property('datasources', ts.namedType('Datasources'))
-          .optional()
-          .setDocComment(ts.docComment('Overwrites the datasource url from your schema.prisma file')),
-      )
-      .add(
-        ts
-          .property('datasourceUrl', ts.stringType)
-          .optional()
-          .setDocComment(ts.docComment('Overwrites the datasource url from your schema.prisma file')),
-      )
       .add(
         ts
           .property('errorFormat', ts.namedType('ErrorFormat'))
@@ -645,7 +594,7 @@ export type TransactionClient = Omit<Prisma.DefaultPrismaClient, runtime.ITXClie
               { emit: 'stdout', level: 'error' }
             ]
              \`\`\`
-             Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/logging#the-log-option).
+             Read more in our [docs](https://pris.ly/d/logging).
           `),
       )
 
@@ -667,19 +616,36 @@ export type TransactionClient = Omit<Prisma.DefaultPrismaClient, runtime.ITXClie
     )
 
     if (
-      ['library.js', 'client.js'].includes(this.runtimeNameTs) &&
       // We don't support a custom adapter with MongoDB for now.
       this.internalDatasources.some((d) => d.provider !== 'mongodb')
     ) {
       clientOptions.add(
-        ts
-          .property('adapter', ts.unionType([ts.namedType('runtime.SqlDriverAdapterFactory'), ts.namedType('null')]))
-          .optional()
-          .setDocComment(
-            ts.docComment('Instance of a Driver Adapter, e.g., like one provided by `@prisma/adapter-planetscale`'),
-          ),
+        ts.property('adapter', ts.namedType('runtime.SqlDriverAdapterFactory')).optional().setDocComment(ts.docComment`
+            A driver adapter that PrismaClient uses to connect to your database, such as the ones provided by \`@prisma/adapter-pg\`, \`@prisma/adapter-libsql\`, \`@prisma/adapter-planetscale\`, etc.
+
+            A driver adapter is **required** unless you connect to your database through Prisma Accelerate (in which case use \`accelerateUrl\` instead).
+
+            Learn more: https://pris.ly/d/driver-adapters
+
+            @example
+            \`\`\`ts
+            import { PrismaPg } from '@prisma/adapter-pg'
+            import { PrismaClient } from './generated/prisma/client'
+
+            const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
+            const prisma = new PrismaClient({ adapter })
+            \`\`\`
+          `),
       )
     }
+
+    clientOptions.add(
+      ts.property('accelerateUrl', ts.stringType).optional().setDocComment(ts.docComment`
+            The Prisma Accelerate connection URL. Use this option to connect to your database through Prisma Accelerate instead of using a driver adapter to connect directly.
+
+            Learn more: https://pris.ly/d/accelerate
+          `),
+    )
 
     clientOptions.add(
       ts.property('omit', ts.namedType('Prisma.GlobalOmitConfig')).optional().setDocComment(ts.docComment`
@@ -697,6 +663,27 @@ export type TransactionClient = Omit<Prisma.DefaultPrismaClient, runtime.ITXClie
         \`\`\`
       `),
     )
+
+    if (this.context.isSqlProvider()) {
+      clientOptions.add(
+        ts.property('comments', ts.array(ts.namedType('runtime.SqlCommenterPlugin'))).optional()
+          .setDocComment(ts.docComment`
+            SQL commenter plugins that add metadata to SQL queries as comments.
+            Comments follow the sqlcommenter format: https://google.github.io/sqlcommenter/
+
+            @example
+            \`\`\`
+            const prisma = new PrismaClient({
+              adapter,
+              comments: [
+                traceContext(),
+                queryInsights(),
+              ],
+            })
+            \`\`\`
+          `),
+      )
+    }
 
     return clientOptions
   }

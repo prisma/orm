@@ -73,19 +73,6 @@ function serializeRawValue(value: unknown, type: ColumnType): unknown {
       }
       return value.map((v) => serializeRawValue(v, ColumnTypeEnum.Json))
 
-    case ColumnTypeEnum.Bytes:
-      if (Array.isArray(value)) {
-        return new Uint8Array(value)
-      } else {
-        throw new Error(`Cannot serialize value of type ${typeof value} as Bytes`)
-      }
-
-    case ColumnTypeEnum.BytesArray:
-      if (!Array.isArray(value)) {
-        throw new Error(`Cannot serialize value of type ${typeof value} as BytesArray`)
-      }
-      return value.map((v) => serializeRawValue(v, ColumnTypeEnum.Bytes))
-
     case ColumnTypeEnum.Boolean:
       switch (typeof value) {
         case 'boolean':

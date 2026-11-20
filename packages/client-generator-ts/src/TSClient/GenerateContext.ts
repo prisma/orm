@@ -1,4 +1,4 @@
-import { GeneratorConfig } from '@prisma/generator'
+import { ActiveConnectorType, GeneratorConfig } from '@prisma/generator'
 
 import { DMMFHelper } from '../dmmf'
 import { FileNameMapper } from '../file-extensions'
@@ -12,6 +12,7 @@ export interface GenerateContextOptions {
   outputFileName: FileNameMapper
   importFileName: FileNameMapper
   generator?: GeneratorConfig
+  provider: ActiveConnectorType
 }
 
 export class GenerateContext implements GenerateContextOptions {
@@ -22,6 +23,7 @@ export class GenerateContext implements GenerateContextOptions {
   outputFileName: FileNameMapper
   importFileName: FileNameMapper
   generator?: GeneratorConfig
+  provider: ActiveConnectorType
 
   constructor({
     dmmf,
@@ -31,6 +33,7 @@ export class GenerateContext implements GenerateContextOptions {
     outputFileName,
     importFileName,
     generator,
+    provider,
   }: GenerateContextOptions) {
     this.dmmf = dmmf
     this.genericArgsInfo = genericArgsInfo
@@ -39,9 +42,14 @@ export class GenerateContext implements GenerateContextOptions {
     this.outputFileName = outputFileName
     this.importFileName = importFileName
     this.generator = generator
+    this.provider = provider
   }
 
   isPreviewFeatureOn(previewFeature: string): boolean {
     return this.generator?.previewFeatures?.includes(previewFeature) ?? false
+  }
+
+  isSqlProvider(): boolean {
+    return this.provider !== 'mongodb'
   }
 }

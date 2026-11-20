@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { GeneratorRegistry } from './generators'
 
 test('should always return the same time for a single snapshot', async () => {

@@ -4,6 +4,7 @@ import {
   normalizeJsonProtocolValues,
   QueryEvent,
   QueryInterpreter,
+  QueryInterpreterSqlCommenter,
   QueryPlanNode,
   safeJsonStringify,
   TransactionInfo,
@@ -26,11 +27,16 @@ export class App {
   readonly #db: SqlDriverAdapter
   readonly #transactionManager: TransactionManager
   readonly #tracingHandler: TracingHandler
+  readonly #interpreter: QueryInterpreter
 
   constructor(db: SqlDriverAdapter, transactionManager: TransactionManager, tracingHandler: TracingHandler) {
     this.#db = db
     this.#transactionManager = transactionManager
     this.#tracingHandler = tracingHandler
+    this.#interpreter = QueryInterpreter.forSql({
+      tracingHelper: this.#tracingHandler,
+      onQuery: logQuery,
+    })
   }
 
   /**
@@ -69,68 +75,74 @@ export class App {
 
   /**
    * Executes a query plan and returns the result.
+   *
+   * @param queryPlan - The query plan to execute
+   * @param scope - Placeholder values for the query
+   * @param comments - Pre-computed SQL commenter tags from the client
+   * @param resourceLimits - Resource limits for the query
+   * @param transactionId - Transaction ID if running within a transaction
    */
   async query(
     queryPlan: QueryPlanNode,
-    placeholderValues: Record<string, unknown>,
+    scope: Record<string, unknown>,
+    comments: Record<string, string> | undefined,
     resourceLimits: ResourceLimits,
     transactionId: string | null,
   ): Promise<unknown> {
-    return await this.#tracingHandler.runInChildSpan('query', async () => {
-      const queryable =
-        transactionId !== null
-          ? await this.#transactionManager.getTransaction({ id: transactionId }, 'query')
-          : this.#db
+    const queryable =
+      transactionId !== null ? await this.#transactionManager.getTransaction({ id: transactionId }, 'query') : this.#db
 
-      const queryInterpreter = QueryInterpreter.forSql({
-        placeholderValues,
-        tracingHelper: this.#tracingHandler,
+    // Create constant commenter plugin if comments were provided
+    const sqlCommenter: QueryInterpreterSqlCommenter | undefined =
+      comments && Object.keys(comments).length > 0
+        ? {
+            plugins: [() => comments],
+            // For pre-computed comments, we use a placeholder queryInfo since the actual
+            // query info was already used on the client side to compute the comments
+            queryInfo: { type: 'single', action: 'queryRaw', query: {} },
+          }
+        : undefined
+
+    const result = await Promise.race([
+      this.#interpreter.run(queryPlan, {
+        queryable,
         transactionManager:
           transactionId === null ? { enabled: true, manager: this.#transactionManager } : { enabled: false },
-        onQuery: logQuery,
-      })
+        scope,
+        sqlCommenter,
+      }),
+      timers.setTimeout(resourceLimits.queryTimeout.total('milliseconds'), undefined, { ref: false }).then(() => {
+        throw new ResourceLimitError('Query timeout exceeded')
+      }),
+    ])
 
-      const result = await Promise.race([
-        queryInterpreter.run(queryPlan, queryable),
-        timers.setTimeout(resourceLimits.queryTimeout.total('milliseconds'), undefined, { ref: false }).then(() => {
-          throw new ResourceLimitError('Query timeout exceeded')
-        }),
-      ])
-
-      return normalizeJsonProtocolValues(result)
-    })
+    return normalizeJsonProtocolValues(result)
   }
 
   /**
    * Starts a new transaction.
    */
   async startTransaction(options: TransactionOptions, resourceLimits: ResourceLimits): Promise<TransactionInfo> {
-    return await this.#tracingHandler.runInChildSpan('start_transaction', () => {
-      const timeout = Math.min(options.timeout ?? Infinity, resourceLimits.maxTransactionTimeout.total('milliseconds'))
+    const timeout = Math.min(options.timeout ?? Infinity, resourceLimits.maxTransactionTimeout.total('milliseconds'))
 
-      return this.#transactionManager.startTransaction({
-        ...options,
-        timeout,
-      })
+    return this.#transactionManager.startTransaction({
+      ...options,
+      timeout,
     })
   }
 
   /**
    * Commits a transaction.
    */
-  async commitTransaction(transactionId: string): Promise<void> {
-    return await this.#tracingHandler.runInChildSpan('commit_transaction', () =>
-      this.#transactionManager.commitTransaction(transactionId),
-    )
+  commitTransaction(transactionId: string): Promise<void> {
+    return this.#transactionManager.commitTransaction(transactionId)
   }
 
   /**
    * Rolls back a transaction.
    */
-  async rollbackTransaction(transactionId: string): Promise<void> {
-    return await this.#tracingHandler.runInChildSpan('rollback_transaction', () =>
-      this.#transactionManager.rollbackTransaction(transactionId),
-    )
+  rollbackTransaction(transactionId: string): Promise<void> {
+    return this.#transactionManager.rollbackTransaction(transactionId)
   }
 
   /**

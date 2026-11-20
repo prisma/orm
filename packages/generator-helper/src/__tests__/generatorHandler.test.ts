@@ -104,7 +104,6 @@ describe('generatorHandler', () => {
         "prettyName": "This is a pretty name",
         "requiresEngines": [
           "schema-engine",
-          "query-engine",
         ],
         "requiresGenerators": [
           "prisma-client-js",

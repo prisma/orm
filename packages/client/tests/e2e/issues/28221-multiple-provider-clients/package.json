@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "version": "0.0.0",
+  "main": "index.js",
+  "scripts": {},
+  "type": "module",
+  "dependencies": {
+    "@prisma/adapter-pg": "/tmp/prisma-adapter-pg-0.0.0.tgz",
+    "@prisma/adapter-mariadb": "/tmp/prisma-adapter-mariadb-0.0.0.tgz",
+    "@prisma/client": "/tmp/prisma-client-0.0.0.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "18.19.76",
+    "prisma": "/tmp/prisma-0.0.0.tgz"
+  }
+}

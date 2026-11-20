@@ -1,3 +1,4 @@
+const { PrismaPg } = require('@prisma/adapter-pg')
 const { PrismaClient } = require('@prisma/client')
 
 export async function generateStaticParams() {
@@ -7,7 +8,10 @@ export async function generateStaticParams() {
 async function doPrismaQuery(params) {
   if (params.id === '1') return JSON.stringify({})
 
-  const prisma = new PrismaClient()
+  const adapter = new PrismaPg({
+    connectionString: process.env['TEST_E2E_POSTGRES_URI'],
+  })
+  const prisma = new PrismaClient({ adapter })
 
   const result = await prisma.$queryRaw`SELECT 1`
 

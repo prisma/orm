@@ -1,35 +1,22 @@
-import { defaultRegistry } from '@prisma/client-generator-registry'
-import type { ErrorCapturingSqlDriverAdapterFactory } from '@prisma/driver-adapter-utils'
-import { enginesVersion } from '@prisma/engines-version'
-import {
-  getGenerators,
-  getGeneratorSuccessMessage,
-  isPrismaPostgres,
-  MigrateTypes,
-  SchemaContext,
-  toSchemasContainer,
-} from '@prisma/internals'
-import { dim } from 'kleur/colors'
-import logUpdate from 'log-update'
+import { SchemaEngineConfigInternal } from '@prisma/config'
+import { MigrateTypes, SchemaContext, toSchemasContainer } from '@prisma/internals'
 
 import { Extension } from './extensions'
 import type { SchemaEngine } from './SchemaEngine'
 import { SchemaEngineCLI } from './SchemaEngineCLI'
-import { SchemaEngineWasm } from './SchemaEngineWasm'
 import type { EngineArgs, EngineResults } from './types'
 import { createMigration, writeMigrationLockfile, writeMigrationScript } from './utils/createMigration'
-import { DatasourceInfo } from './utils/ensureDatabaseExists'
 import { listMigrations } from './utils/listMigrations'
-import { warnDatasourceDriverAdapter } from './utils/warnDatasourceDriverAdapter'
 
-interface MigrateSetupInput {
-  adapter?: ErrorCapturingSqlDriverAdapterFactory
+type MigrateSetupInput = {
+  schemaEngineConfig: SchemaEngineConfigInternal
   migrationsDirPath?: string
   enabledPreviewFeatures?: string[]
   schemaContext?: SchemaContext
   schemaFilter?: MigrateTypes.SchemaFilter
   shadowDbInitScript?: string
   extensions?: Extension[]
+  baseDir: string
 }
 
 interface MigrateOptions {
@@ -58,18 +45,13 @@ export class Migrate {
     this.shadowDbInitScript = shadowDbInitScript ?? ''
   }
 
-  static async setup({ adapter, schemaContext, ...rest }: MigrateSetupInput): Promise<Migrate> {
-    const engine = await (async () => {
-      if (adapter) {
-        return await SchemaEngineWasm.setup({ adapter, schemaContext, ...rest })
-      } else {
-        return await SchemaEngineCLI.setup({ schemaContext, ...rest })
-      }
+  static async setup({ schemaContext, schemaEngineConfig, ...rest }: MigrateSetupInput): Promise<Migrate> {
+    const schemaEngine = await (async () => {
+      const datasource = schemaEngineConfig.datasource
+      return await SchemaEngineCLI.setup({ datasource, schemaContext, ...rest })
     })()
 
-    warnDatasourceDriverAdapter(schemaContext, adapter)
-
-    return new Migrate({ engine, schemaContext, ...rest })
+    return new Migrate({ engine: schemaEngine, schemaContext, ...rest })
   }
 
   public async stop(): Promise<void> {
@@ -228,42 +210,5 @@ export class Migrate {
       warnings,
       unexecutable,
     }
-  }
-
-  public async tryToRunGenerate(datasourceInfo: DatasourceInfo): Promise<void> {
-    if (!this.schemaContext) throw new Error('this.schemaContext is undefined')
-
-    // Auto-append the `--no-engine` flag to the `prisma generate` command when a Prisma Postgres URL is used.
-    const skipEngines = isPrismaPostgres(datasourceInfo.url)
-
-    const message: string[] = []
-
-    process.stdout.write('\n') // empty line
-    logUpdate(`Running generate... ${dim('(Use --skip-generate to skip the generators)')}`)
-
-    const generators = await getGenerators({
-      schemaContext: this.schemaContext,
-      printDownloadProgress: true,
-      version: enginesVersion,
-      noEngine: skipEngines,
-      registry: defaultRegistry.toInternal(),
-    })
-
-    for (const generator of generators) {
-      logUpdate(`Running generate... - ${generator.getPrettyName()}`)
-
-      const before = Math.round(performance.now())
-      try {
-        await generator.generate()
-        const after = Math.round(performance.now())
-        message.push(getGeneratorSuccessMessage(generator, after - before))
-        generator.stop()
-      } catch (e: any) {
-        message.push(`${e.message}`)
-        generator.stop()
-      }
-    }
-
-    logUpdate(message.join('\n'))
   }
 }

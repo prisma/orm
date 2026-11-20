@@ -36,7 +36,7 @@ class LibSqlQueryable<ClientT extends StdClient | TransactionClient> implements 
 
   constructor(
     protected readonly client: ClientT,
-    protected readonly adapterOptions?: PrismaLibSQLOptions,
+    protected readonly adapterOptions?: PrismaLibSqlOptions,
   ) {}
 
   /**
@@ -101,7 +101,7 @@ class LibSqlTransaction extends LibSqlQueryable<TransactionClient> implements Tr
   constructor(
     client: TransactionClient,
     readonly options: TransactionOptions,
-    adapterOptions: PrismaLibSQLOptions | undefined,
+    adapterOptions: PrismaLibSqlOptions | undefined,
     unlockParent: () => void,
   ) {
     super(client, adapterOptions)
@@ -129,10 +129,22 @@ class LibSqlTransaction extends LibSqlQueryable<TransactionClient> implements Tr
       this.#unlockParent()
     }
   }
+
+  async createSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
+
+  async rollbackToSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `ROLLBACK TO ${name}`, args: [], argTypes: [] })
+  }
+
+  async releaseSavepoint(name: string): Promise<void> {
+    await this.executeRaw({ sql: `RELEASE SAVEPOINT ${name}`, args: [], argTypes: [] })
+  }
 }
 
-export class PrismaLibSQLAdapter extends LibSqlQueryable<StdClient> implements SqlDriverAdapter {
-  constructor(client: StdClient, adapterOptions?: PrismaLibSQLOptions) {
+export class PrismaLibSqlAdapter extends LibSqlQueryable<StdClient> implements SqlDriverAdapter {
+  constructor(client: StdClient, adapterOptions?: PrismaLibSqlOptions) {
     super(client, adapterOptions)
   }
 
@@ -181,30 +193,30 @@ export class PrismaLibSQLAdapter extends LibSqlQueryable<StdClient> implements S
   }
 }
 
-export type PrismaLibSQLOptions = {
+export type PrismaLibSqlOptions = {
   timestampFormat?: 'iso8601' | 'unixepoch-ms'
 }
 
-export abstract class PrismaLibSQLAdapterFactoryBase implements SqlMigrationAwareDriverAdapterFactory {
+export abstract class PrismaLibSqlAdapterFactoryBase implements SqlMigrationAwareDriverAdapterFactory {
   readonly provider = 'sqlite'
   readonly adapterName = packageName
 
   readonly #config: LibSqlConfig
-  readonly #options?: PrismaLibSQLOptions
+  readonly #options?: PrismaLibSqlOptions
 
-  constructor(config: LibSqlConfig, options?: PrismaLibSQLOptions) {
+  constructor(config: LibSqlConfig, options?: PrismaLibSqlOptions) {
     this.#config = config
     this.#options = options
   }
 
   connect(): Promise<SqlDriverAdapter> {
-    return Promise.resolve(new PrismaLibSQLAdapter(this.createClient(this.#config), this.#options))
+    return Promise.resolve(new PrismaLibSqlAdapter(this.createClient(this.#config), this.#options))
   }
 
   connectToShadowDb(): Promise<SqlDriverAdapter> {
     // TODO: the user should be able to provide a custom URL for the shadow database
     return Promise.resolve(
-      new PrismaLibSQLAdapter(this.createClient({ ...this.#config, url: ':memory:' }), this.#options),
+      new PrismaLibSqlAdapter(this.createClient({ ...this.#config, url: ':memory:' }), this.#options),
     )
   }
 

@@ -1,4 +1,5 @@
-import { serialize } from '@prisma/get-platform/src/test-utils/jestSnapshotSerializer'
+import { serialize } from '@prisma/get-platform/src/test-utils/vitest-snapshot-serializer'
+import { describe, expect, test } from 'vitest'
 
 import { getConfig, isRustPanic } from '../..'
 
@@ -8,7 +9,7 @@ describe('getConfig', () => {
 
     try {
       // @ts-expect-error
-      await getConfig({ datamodel: true, ignoreEnvVarErrors: false })
+      await getConfig({ datamodel: true })
     } catch (e) {
       const error = e as Error
       expect(isRustPanic(error)).toBe(true)
@@ -17,13 +18,11 @@ describe('getConfig', () => {
 
   test('empty config', async () => {
     const config = await getConfig({
-      ignoreEnvVarErrors: false,
       datamodel: `
       datasource db {
         provider = "sqlite"
-        url      = "file:../hello.db"
       }
-      
+
       model A {
         id Int @id
         name String
@@ -39,10 +38,8 @@ describe('getConfig', () => {
 
   test('with generator and datasource', async () => {
     const config = await getConfig({
-      ignoreEnvVarErrors: false,
       datamodel: `
     datasource db {
-      url = "file:dev.db"
       provider = "sqlite"
     }
 
@@ -67,11 +64,9 @@ describe('getConfig', () => {
     process.env.TEST_POSTGRES_URI_FOR_DATASOURCE = 'postgres://user:password@something:5432/db'
 
     const config = await getConfig({
-      ignoreEnvVarErrors: false,
       datamodel: `
       datasource db {
         provider = "postgresql"
-        url      = env("TEST_POSTGRES_URI_FOR_DATASOURCE")
       }
       `,
     })
@@ -79,87 +74,11 @@ describe('getConfig', () => {
     expect(serialize(JSON.stringify(config, null, 2))).toMatchSnapshot()
   })
 
-  test('datasource with env var - ignoreEnvVarErrors', async () => {
-    const config = await getConfig({
-      ignoreEnvVarErrors: true,
-      datamodel: `
-      datasource db {
-        provider = "postgresql"
-        url      = env("SOMETHING-SOMETHING-1234")
-      }
-      `,
-    })
-
-    expect(serialize(JSON.stringify(config, null, 2))).toMatchSnapshot()
-  })
-  test('with engineType="binary"', async () => {
-    const binaryConfig = await getConfig({
-      ignoreEnvVarErrors: false,
-      datamodel: `
-      datasource db {
-        provider = "sqlite"
-        url      = "file:../hello.db"
-      }
-
-      generator gen {
-        provider = "fancy-provider"
-        engineType = "binary"
-      }
-
-      model A {
-        id Int @id
-        name String
-      }`,
-    })
-
-    expect(serialize(JSON.stringify(binaryConfig, null, 2))).toMatchInlineSnapshot(`
-      ""{
-        "generators": [
-          {
-            "name": "gen",
-            "provider": {
-              "fromEnvVar": null,
-              "value": "fancy-provider"
-            },
-            "output": null,
-            "config": {
-              "engineType": "binary"
-            },
-            "binaryTargets": [
-              {
-                "fromEnvVar": null,
-                "value": "TEST_PLATFORM",
-                "native": true
-              }
-            ],
-            "previewFeatures": [],
-            "sourceFilePath": "schema.prisma"
-          }
-        ],
-        "datasources": [
-          {
-            "name": "db",
-            "provider": "sqlite",
-            "activeProvider": "sqlite",
-            "url": {
-              "fromEnvVar": null,
-              "value": "file:../hello.db"
-            },
-            "schemas": [],
-            "sourceFilePath": "schema.prisma"
-          }
-        ],
-        "warnings": []
-      }""
-    `)
-  })
   test('with engineType="library"', async () => {
     const libraryConfig = await getConfig({
-      ignoreEnvVarErrors: false,
       datamodel: `
       datasource db {
         provider = "sqlite"
-        url      = "file:../hello.db"
       }
 
       generator gen {
@@ -202,10 +121,6 @@ describe('getConfig', () => {
             "name": "db",
             "provider": "sqlite",
             "activeProvider": "sqlite",
-            "url": {
-              "fromEnvVar": null,
-              "value": "file:../hello.db"
-            },
             "schemas": [],
             "sourceFilePath": "schema.prisma"
           }

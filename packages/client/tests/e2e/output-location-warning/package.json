@@ -7,11 +7,12 @@
   },
   "dependencies": {
     "@prisma/client": "/tmp/prisma-client-0.0.0.tgz",
+    "@prisma/client-runtime-utils": "/tmp/prisma-client-runtime-utils-0.0.0.tgz",
     "db": "./custom"
   },
   "devDependencies": {
     "@types/jest": "29.5.12",
-    "@types/node": "18.19.76",
+    "@types/node": "~20.19.0",
     "jest": "29.7.0",
     "prisma": "/tmp/prisma-0.0.0.tgz"
   }

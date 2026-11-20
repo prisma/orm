@@ -1,8 +1,7 @@
+import { DbNull, Decimal, JsonNull } from '@prisma/client-runtime-utils'
 import { Writer } from '@prisma/ts-builders'
-import Decimal from 'decimal.js'
 
 import { FieldRefImpl } from '../model/FieldRef'
-import { objectEnumValues } from '../types/exported/ObjectEnums'
 import { ArgumentsRenderingTree, buildArgumentsRenderingTree } from './ArgumentsRenderingTree'
 import { inactiveColors } from './base'
 import { ObjectValue } from './ObjectValue'
@@ -120,7 +119,7 @@ test('Date', () => {
 
 test('DbNull', () => {
   const tree = buildArgumentsRenderingTree({
-    where: { json: objectEnumValues.instances.DbNull },
+    where: { json: DbNull },
   })
 
   expect(printTree(tree)).toMatchInlineSnapshot(`
@@ -134,7 +133,7 @@ test('DbNull', () => {
 
 test('JsonNull', () => {
   const tree = buildArgumentsRenderingTree({
-    where: { json: objectEnumValues.instances.JsonNull },
+    where: { json: JsonNull },
   })
 
   expect(printTree(tree)).toMatchInlineSnapshot(`
@@ -148,7 +147,7 @@ test('JsonNull', () => {
 
 test('AnyNull', () => {
   const tree = buildArgumentsRenderingTree({
-    where: { json: objectEnumValues.instances.JsonNull },
+    where: { json: JsonNull },
   })
 
   expect(printTree(tree)).toMatchInlineSnapshot(`

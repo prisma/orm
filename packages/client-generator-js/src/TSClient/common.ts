@@ -5,7 +5,7 @@ import type { TSClientOptions } from './TSClient'
 
 export const commonCodeJS = ({
   runtimeBase,
-  runtimeNameJs,
+  runtimeName,
   browser,
   clientVersion,
   engineVersion,
@@ -17,12 +17,15 @@ ${
     ? `
 const {
   Decimal,
-  objectEnumValues,
+  DbNull,
+  JsonNull,
+  AnyNull,
+  NullTypes,
   makeStrictEnum,
   Public,
   getRuntime,
   skip
-} = require('${runtimeBase}/${runtimeNameJs}.js')
+} = require('${runtimeBase}/${runtimeName}.js')
 `
     : `
 const {
@@ -39,7 +42,10 @@ const {
   skip,
   Decimal,
   Debug,
-  objectEnumValues,
+  DbNull,
+  JsonNull,
+  AnyNull,
+  NullTypes,
   makeStrictEnum,
   Extensions,
   warnOnce,
@@ -47,7 +53,7 @@ const {
   Public,
   getRuntime,
   createParam,
-} = require('${runtimeBase}/${runtimeNameJs}.js')
+} = require('${runtimeBase}/${runtimeName}.js')
 `
 }
 
@@ -90,15 +96,11 @@ Prisma.defineExtension = ${notSupportOnBrowser('Extensions.defineExtension', bro
 /**
  * Shorthand utilities for JSON filtering
  */
-Prisma.DbNull = objectEnumValues.instances.DbNull
-Prisma.JsonNull = objectEnumValues.instances.JsonNull
-Prisma.AnyNull = objectEnumValues.instances.AnyNull
+Prisma.DbNull = DbNull
+Prisma.JsonNull = JsonNull
+Prisma.AnyNull = AnyNull
 
-Prisma.NullTypes = {
-  DbNull: objectEnumValues.classes.DbNull,
-  JsonNull: objectEnumValues.classes.JsonNull,
-  AnyNull: objectEnumValues.classes.AnyNull
-}
+Prisma.NullTypes = NullTypes
 
 ${buildPrismaSkipJs(generator.previewFeatures)}
 `
@@ -116,12 +118,12 @@ In case this error is unexpected for you, please report it in https://pris.ly/pr
 
 export const commonCodeTS = ({
   runtimeBase,
-  runtimeNameTs,
+  runtimeName,
   clientVersion,
   engineVersion,
   generator,
 }: TSClientOptions) => ({
-  tsWithoutNamespace: () => `import * as runtime from '${runtimeBase}/${runtimeNameTs}';
+  tsWithoutNamespace: () => `import * as runtime from '${runtimeBase}/${runtimeName}.js';
 import $Types = runtime.Types // general types
 import $Public = runtime.Types.Public
 import $Utils = runtime.Types.Utils
@@ -167,14 +169,6 @@ export import Decimal = runtime.Decimal
 export type DecimalJsLike = runtime.DecimalJsLike
 
 /**
- * Metrics
- */
-export type Metrics = runtime.Metrics
-export type Metric<T> = runtime.Metric<T>
-export type MetricHistogram = runtime.MetricHistogram
-export type MetricHistogramBucket = runtime.MetricHistogramBucket
-
-/**
 * Extensions
 */
 export import Extension = $Extensions.UserArgs
@@ -190,6 +184,7 @@ export import Exact = $Public.Exact
  */
 export type PrismaVersion = {
   client: string
+  engine: string
 }
 
 export const prismaVersion: PrismaVersion
@@ -290,6 +285,19 @@ export type Subset<T, U> = {
 };
 
 /**
+ * Resolved type of the argument passed to the \`PrismaClient\` constructor.
+ *
+ * When called without a narrower options type (the common case), this resolves
+ * to \`PrismaClientOptions\` directly, which produces a clear TypeScript error
+ * message (\`not assignable to parameter of type 'PrismaClientOptions'\`) when
+ * the argument is missing or incomplete. When the user supplies a narrower
+ * options type (e.g. via a literal), it falls back to \`Subset\` to keep
+ * filtering out unknown properties.
+ */
+export type PrismaClientConstructorArgs<Options extends PrismaClientOptions> =
+  [PrismaClientOptions] extends [Options] ? PrismaClientOptions : Subset<Options, PrismaClientOptions>;
+
+/**
  * SelectSubset
  * @desc From \`T\` pick properties that exist in \`U\`. Simple version of Intersection.
  * Additionally, it validates, if both select and include are present. If the case, it errors.
@@ -321,7 +329,7 @@ type Without<T, U> = { [P in Exclude<keyof T, keyof U>]?: never };
 type XOR<T, U> =
   T extends object ?
   U extends object ?
-    (Without<T, U> & U) | (Without<U, T> & T)
+    ((Without<T, U> & U) | (Without<U, T> & T)) & object
   : U : T
 
 

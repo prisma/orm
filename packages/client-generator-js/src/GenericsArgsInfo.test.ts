@@ -28,6 +28,7 @@ function field(name: string, inputTypes: DMMF.InputTypeRef[]): DMMF.SchemaArg {
     isRequired: false,
     isNullable: false,
     inputTypes,
+    isParameterizable: false,
   }
 }
 
@@ -150,6 +151,91 @@ describe('typeNeedsGenericModelArg', () => {
     const argsInfo = new GenericArgsInfo(dmmf([type]))
 
     expect(argsInfo.typeNeedsGenericModelArg(type)).toBe(true)
+  })
+
+  test('type reached through many fields is still found when it contains field refs', () => {
+    const shared = inputObjectType('Shared', [field('refField', [fieldRef('IntRef')])])
+    const middle = Array.from({ length: 50 }, (_, i) =>
+      inputObjectType(`Middle${i}`, [field('a', [inputObjectRef('Shared')]), field('b', [inputObjectRef('Shared')])]),
+    )
+    const root = inputObjectType(
+      'Root',
+      middle.map((m, i) => field(`f${i}`, [inputObjectRef(m.name)])),
+    )
+    const argsInfo = new GenericArgsInfo(dmmf([root, shared, ...middle]))
+
+    expect(argsInfo.typeNeedsGenericModelArg(root)).toBe(true)
+    for (const m of middle) {
+      expect(argsInfo.typeNeedsGenericModelArg(m)).toBe(true)
+    }
+  })
+
+  test('type reached through many fields is still false when nothing contains field refs', () => {
+    const shared = inputObjectType('Shared', [field('scalarField', [scalarRef('Int')])])
+    const middle = Array.from({ length: 50 }, (_, i) =>
+      inputObjectType(`Middle${i}`, [field('a', [inputObjectRef('Shared')]), field('b', [inputObjectRef('Shared')])]),
+    )
+    const root = inputObjectType(
+      'Root',
+      middle.map((m, i) => field(`f${i}`, [inputObjectRef(m.name)])),
+    )
+    const argsInfo = new GenericArgsInfo(dmmf([root, shared, ...middle]))
+
+    expect(argsInfo.typeNeedsGenericModelArg(root)).toBe(false)
+    expect(argsInfo.typeNeedsGenericModelArg(shared)).toBe(false)
+    for (const m of middle) {
+      expect(argsInfo.typeNeedsGenericModelArg(m)).toBe(false)
+    }
+  })
+
+  test('mutually recursive types find a field ref behind the loop', () => {
+    const a = inputObjectType('A', [field('toB', [inputObjectRef('B')])])
+    const b = inputObjectType('B', [field('toA', [inputObjectRef('A')]), field('toC', [inputObjectRef('C')])])
+    const c = inputObjectType('C', [field('refField', [fieldRef('IntRef')])])
+    const argsInfo = new GenericArgsInfo(dmmf([a, b, c]))
+
+    expect(argsInfo.typeNeedsGenericModelArg(a)).toBe(true)
+    expect(argsInfo.typeNeedsGenericModelArg(b)).toBe(true)
+  })
+
+  test('mutually recursive types without field refs do not require generic', () => {
+    const a = inputObjectType('A', [field('toB', [inputObjectRef('B')]), field('n', [scalarRef('Int')])])
+    const b = inputObjectType('B', [field('toA', [inputObjectRef('A')])])
+    const argsInfo = new GenericArgsInfo(dmmf([a, b]))
+
+    expect(argsInfo.typeNeedsGenericModelArg(a)).toBe(false)
+    expect(argsInfo.typeNeedsGenericModelArg(b)).toBe(false)
+  })
+
+  describe('densely connected input types', { timeout: 3000 }, () => {
+    const size = 600
+
+    function denseTypes(lastTypeFields: DMMF.SchemaArg[]) {
+      return Array.from({ length: size }, (_, index) =>
+        inputObjectType(`Input${index}`, [
+          ...Array.from({ length: size }, (_, target) => field(`to${target}`, [inputObjectRef(`Input${target}`)])),
+          ...(index === size - 1 ? lastTypeFields : []),
+        ]),
+      )
+    }
+
+    test('is false when no type contains field refs', () => {
+      const types = denseTypes([field('scalar', [scalarRef('Int')])])
+      const argsInfo = new GenericArgsInfo(dmmf(types))
+
+      for (const type of types) {
+        expect(argsInfo.typeNeedsGenericModelArg(type)).toBe(false)
+      }
+    })
+
+    test('is true for every type when one reachable type contains a field ref', () => {
+      const types = denseTypes([field('refField', [fieldRef('IntRef')])])
+      const argsInfo = new GenericArgsInfo(dmmf(types))
+
+      for (const type of types) {
+        expect(argsInfo.typeNeedsGenericModelArg(type)).toBe(true)
+      }
+    })
   })
 })
 

@@ -1,5 +1,4 @@
 export const builtInNames = [
-  'Metric',
   'Keys',
   'Key',
   'LogLevel',

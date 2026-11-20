@@ -9,8 +9,6 @@ import { BinaryType } from './BinaryType'
 const debug = Debug('prisma:fetch-engine:env')
 
 export const engineEnvVarMap = {
-  [BinaryType.QueryEngineBinary]: 'PRISMA_QUERY_ENGINE_BINARY',
-  [BinaryType.QueryEngineLibrary]: 'PRISMA_QUERY_ENGINE_LIBRARY',
   [BinaryType.SchemaEngineBinary]: 'PRISMA_SCHEMA_ENGINE_BINARY',
 }
 

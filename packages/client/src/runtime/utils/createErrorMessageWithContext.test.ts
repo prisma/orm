@@ -21,7 +21,7 @@ function mockFile(mockedPath: string, content: string) {
 }
 
 beforeAll(() => {
-  ;(globalThis as any).TARGET_BUILD_TYPE = 'library'
+  ;(globalThis as any).TARGET_BUILD_TYPE = 'client'
 })
 
 afterAll(() => {

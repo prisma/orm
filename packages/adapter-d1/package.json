@@ -2,24 +2,37 @@
   "name": "@prisma/adapter-d1",
   "version": "0.0.0",
   "description": "Prisma's driver adapter for Cloudflare D1",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
+  "main": "dist/index-node.js",
+  "module": "dist/index-node.mjs",
+  "types": "dist/index-node.d.ts",
   "exports": {
     ".": {
-      "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+      "types": "./dist/index-node.d.ts",
+      "node": {
+        "types": "./dist/index-node.d.ts",
+        "require": "./dist/index-node.js",
+        "import": "./dist/index-node.mjs"
       },
-      "import": {
-        "types": "./dist/index.d.mts",
-        "default": "./dist/index.mjs"
+      "workerd": {
+        "types": "./dist/index-workerd.d.ts",
+        "require": "./dist/index-workerd.js",
+        "import": "./dist/index-workerd.mjs"
+      },
+      "browser": {
+        "types": "./dist/index-workerd.d.ts",
+        "require": "./dist/index-workerd.js",
+        "import": "./dist/index-workerd.mjs"
+      },
+      "default": {
+        "types": "./dist/index-node.d.ts",
+        "require": "./dist/index-node.js",
+        "import": "./dist/index-node.mjs"
       }
     }
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/adapter-d1"
   },
   "scripts": {
@@ -40,7 +53,7 @@
   "license": "Apache-2.0",
   "sideEffects": false,
   "dependencies": {
-    "@cloudflare/workers-types": "^4.20250408.0",
+    "@cloudflare/workers-types": "^4.20251014.0",
     "@prisma/driver-adapter-utils": "workspace:*",
     "ky": "1.7.5"
   }

@@ -1,4 +1,5 @@
 import { enginesVersion } from '@prisma/engines'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { createErrorReport } from '../errorReporting'
 import { ErrorArea, RustPanic } from '../panic'
@@ -6,10 +7,12 @@ import { sendPanic } from '../sendPanic'
 
 const createErrorReportTag = 'error-report-creation-failed'
 
-jest.mock('../errorReporting', () => ({
-  ...jest.requireActual('../errorReporting'),
-  createErrorReport: jest.fn().mockImplementation(() => Promise.reject(new Error(createErrorReportTag))),
-}))
+vi.mock('../errorReporting', async () => {
+  return {
+    ...(await vi.importActual('../errorReporting')),
+    createErrorReport: vi.fn().mockImplementation(() => Promise.reject(new Error(createErrorReportTag))),
+  }
+})
 
 describe('sendPanic should fail when the error report creation fails', () => {
   const cliVersion = 'test-cli-version'
@@ -19,7 +22,7 @@ describe('sendPanic should fail when the error report creation fails', () => {
   const getDatabaseVersionSafe = () => Promise.resolve(undefined)
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   test("shouldn't mask any schema if no valid schema appears in RustPanic", async () => {

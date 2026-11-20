@@ -3,22 +3,27 @@ import os from 'node:os'
 import path from 'node:path'
 
 import Debug from '@prisma/debug'
-import { BinaryTarget, getNodeAPIName } from '@prisma/get-platform'
+import { BinaryTarget } from '@prisma/get-platform'
 import findCacheDir from 'find-cache-dir'
 import { ensureDir } from 'fs-extra'
-
-import { BinaryType } from './BinaryType'
 
 const debug = Debug('prisma:fetch-engine:cache-dir')
 
 export async function getRootCacheDir(): Promise<string | null> {
   if (os.platform() === 'win32') {
+    // `APPDATA` is a stable, user-level directory outside of any `node_modules` folder, so prefer it over
+    // `find-cache-dir`, which resolves a cache dir relative to the nearest `package.json` from `process.cwd()`.
+    // That makes it dependent on which package happens to trigger the download (e.g. `@prisma/engines`'s own
+    // postinstall script vs. running the `prisma` CLI later), so it can create multiple, duplicate cache
+    // directories nested inside `node_modules` that then get needlessly bundled into deployments.
+    // See https://github.com/prisma/prisma/issues/22574, https://github.com/prisma/prisma/issues/6670,
+    // https://github.com/prisma/prisma/issues/11577
+    if (process.env.APPDATA) {
+      return path.join(process.env.APPDATA, 'Prisma')
+    }
     const cacheDir = findCacheDir({ name: 'prisma', create: true })
     if (cacheDir) {
       return cacheDir
-    }
-    if (process.env.APPDATA) {
-      return path.join(process.env.APPDATA, 'Prisma')
     }
   }
   // if this is lambda, nope
@@ -71,14 +76,7 @@ export function getDownloadUrl({
     process.env.PRISMA_ENGINES_MIRROR ||
     'https://binaries.prisma.sh'
 
-  const finalExtension =
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-    binaryTarget === 'windows' && BinaryType.QueryEngineLibrary !== binaryName ? `.exe${extension}` : extension
-
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
-  if (binaryName === BinaryType.QueryEngineLibrary) {
-    binaryName = getNodeAPIName(binaryTarget, 'url')
-  }
+  const finalExtension = binaryTarget === 'windows' ? `.exe${extension}` : extension
 
   return `${baseUrl}/${channel}/${version}/${binaryTarget}/${binaryName}${finalExtension}`
 }

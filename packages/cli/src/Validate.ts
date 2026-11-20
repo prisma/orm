@@ -4,6 +4,7 @@ import type { PrismaConfigInternal } from '@prisma/config'
 import {
   arg,
   Command,
+  createSchemaPathInput,
   format,
   getConfig,
   getLintWarningsAsText,
@@ -11,48 +12,29 @@ import {
   handleLintPanic,
   HelpError,
   lintSchema,
-  loadEnvFile,
   logger,
   printSchemaLoadedMessage,
   validate,
 } from '@prisma/internals'
 import { bold, dim, red, underline } from 'kleur/colors'
 
+import type { CliDistributionIdentity } from './utils/cli-distribution-identity'
+
 /**
  * $ prisma validate
  */
 export class Validate implements Command {
-  public static new(): Validate {
-    return new Validate()
+  public static new(identity: CliDistributionIdentity): Validate {
+    return new Validate(identity)
   }
 
-  private static help = format(`
-Validate a Prisma schema.
+  constructor(private readonly identity: CliDistributionIdentity) {}
 
-${bold('Usage')}
-
-  ${dim('$')} prisma validate [options]
-
-${bold('Options')}
-
-  -h, --help   Display this help message
-    --config   Custom path to your Prisma config file
-    --schema   Custom path to your Prisma schema
-
-${bold('Examples')}
-
-  With an existing Prisma schema
-    ${dim('$')} prisma validate
-
-  With a Prisma config file
-    ${dim('$')} prisma validate --config=./prisma.config.ts
-
-  Or specify a Prisma schema path
-    ${dim('$')} prisma validate --schema=./schema.prisma
-
-`)
-
-  public async parse(argv: string[], config: PrismaConfigInternal): Promise<string | Error> {
+  public async parse(
+    argv: string[],
+    config: PrismaConfigInternal,
+    baseDir: string = process.cwd(),
+  ): Promise<string | Error> {
     const args = arg(argv, {
       '--help': Boolean,
       '-h': '--help',
@@ -69,9 +51,13 @@ ${bold('Examples')}
       return this.help()
     }
 
-    await loadEnvFile({ schemaPath: args['--schema'], printMessage: true, config })
-
-    const { schemaPath, schemas } = await getSchemaWithPath(args['--schema'], config.schema)
+    const { schemaPath, schemas } = await getSchemaWithPath({
+      schemaPath: createSchemaPathInput({
+        schemaPathFromArgs: args['--schema'],
+        schemaPathFromConfig: config.schema,
+        baseDir,
+      }),
+    })
     printSchemaLoadedMessage(schemaPath)
 
     const { lintDiagnostics } = handleLintPanic(() => {
@@ -90,10 +76,8 @@ ${bold('Examples')}
       schemas,
     })
 
-    // We could have a CLI flag to ignore env var validation
     await getConfig({
       datamodel: schemas,
-      ignoreEnvVarErrors: false,
     })
 
     const schemaRelativePath = path.relative(process.cwd(), schemaPath)
@@ -108,8 +92,36 @@ ${bold('Examples')}
   // help message
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${Validate.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
     }
-    return Validate.help
+    return createHelp(this.identity)
   }
+}
+
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
+Validate a Prisma schema.
+
+${bold('Usage')}
+
+  ${dim('$')} ${identity} validate [options]
+
+${bold('Options')}
+
+  -h, --help   Display this help message
+    --config   Custom path to your Prisma config file
+    --schema   Custom path to your Prisma schema
+
+${bold('Examples')}
+
+  With an existing Prisma schema
+    ${dim('$')} ${identity} validate
+
+  With a Prisma config file
+    ${dim('$')} ${identity} validate --config=./prisma7.config.ts
+
+  Or specify a Prisma schema path
+    ${dim('$')} ${identity} validate --schema=./schema.prisma
+
+`)
 }

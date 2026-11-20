@@ -1,5 +1,6 @@
 import type { QueryPlanNode, TransactionOptions } from '@prisma/client-engine-runtime'
 import type { ConnectionInfo, Provider } from '@prisma/driver-adapter-utils'
+import type { SqlCommenterQueryInfo } from '@prisma/sqlcommenter'
 
 import type { AccelerateExtensionFetch } from '../common/Engine'
 import type { InteractiveTransactionInfo } from '../common/types/Transaction'
@@ -12,6 +13,7 @@ export interface ExecutePlanParams {
   transaction: InteractiveTransactionInfo | undefined
   batchIndex: number | undefined
   customFetch?: AccelerateExtensionFetch
+  queryInfo: SqlCommenterQueryInfo
 }
 
 export interface ProviderAndConnectionInfo {

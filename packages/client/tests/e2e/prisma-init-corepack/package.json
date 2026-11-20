@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "version": "0.0.0",
+  "main": "index.js",
+  "scripts": {},
+  "dependencies": {
+    "@prisma/client": "/tmp/prisma-client-0.0.0.tgz",
+    "@prisma/client-runtime-utils": "/tmp/prisma-client-runtime-utils-0.0.0.tgz"
+  },
+  "devDependencies": {
+    "@types/jest": "29.5.12",
+    "@types/node": "~20.19.0",
+    "prisma": "/tmp/prisma-0.0.0.tgz",
+    "typescript": "5.9.3"
+  },
+  "packageManager": "pnpm@10.15.1"
+}

@@ -1,10 +1,6 @@
-import path from 'node:path'
-
-import { BinaryTarget, ClientEngineType, getClientEngineType } from '@prisma/internals'
 import * as ts from '@prisma/ts-builders'
 
 import { ModuleFormat } from '../../module-format'
-import { buildNFTAnnotations } from '../../utils/buildNFTAnnotations'
 import { GenerateContext } from '../GenerateContext'
 import { modelExports } from '../ModelExports'
 import { getPrismaClientClassDocComment } from '../PrismaClient'
@@ -13,15 +9,12 @@ import { TSClientOptions } from '../TSClient'
 const jsDocHeader = `/*
  * This file should be your main import to use Prisma. Through it you get access to all the models, enums, and input types.
  * If you're looking for something you can import in the client-side of your application, please refer to the \`browser.ts\` file instead.
- * 
+ *
  * 🟢 You can import this file directly.
  */
 `
 
 export function createClientFile(context: GenerateContext, options: TSClientOptions): string {
-  const clientEngineType = getClientEngineType(options.generator)
-  options.generator.config.engineType = clientEngineType
-
   const imports = [
     ts.moduleImport(context.runtimeImport).asNamespace('runtime'),
     ts.moduleImport(context.importFileName('./enums')).asNamespace('$Enums'),
@@ -33,11 +26,7 @@ export function createClientFile(context: GenerateContext, options: TSClientOpti
     ts.moduleExportFrom(context.importFileName('./enums')).asNamespace('$Enums'),
     ts.moduleExportFrom(context.importFileName('./enums')),
     ts
-      .moduleExport(
-        ts
-          .constDeclaration('PrismaClient')
-          .setValue(ts.functionCall('$Class.getPrismaClientClass', [ts.namedValue('__dirname')])),
-      )
+      .moduleExport(ts.constDeclaration('PrismaClient').setValue(ts.functionCall('$Class.getPrismaClientClass', [])))
       .setDocComment(getPrismaClientClassDocComment(context)),
     ts.moduleExport(
       ts
@@ -67,23 +56,12 @@ export function createClientFile(context: GenerateContext, options: TSClientOpti
     ),
   ].map((e) => ts.stringify(e))
 
-  const binaryTargets =
-    clientEngineType === ClientEngineType.Library
-      ? (Object.keys(options.binaryPaths.libqueryEngine ?? {}) as BinaryTarget[])
-      : (Object.keys(options.binaryPaths.queryEngine ?? {}) as BinaryTarget[])
-
-  // get relative output dir for it to be preserved even after bundling, or
-  // being moved around as long as we keep the same project dir structure.
-  const relativeOutdir = path.relative(process.cwd(), options.outputDir)
-
   return `${jsDocHeader}
 ${buildPreamble(options.edge, options.moduleFormat)}
 ${imports.join('\n')}
 
 ${exports.join('\n')}
 export { Prisma }
-
-${buildNFTAnnotations(options.edge || !options.copyEngine, clientEngineType, binaryTargets, relativeOutdir)}
 
 ${modelExports(context).join('\n')}
 `

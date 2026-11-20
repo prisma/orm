@@ -2,7 +2,7 @@ import { Providers } from '../_utils/providers'
 import { checkIfEmpty } from '../_utils/relationMode/checkIfEmpty'
 import testMatrix from './_matrix'
 
-/* eslint-disable @typescript-eslint/no-unused-vars, jest/no-identical-title */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 
 // @ts-ignore this is just for type checks
 declare let prisma: import('./generated/prisma/client').PrismaClient

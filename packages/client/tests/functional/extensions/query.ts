@@ -1601,7 +1601,7 @@ testMatrix.setupTestSuite(
             },
             $allModels: {
               async $allOperations({ operation, args, query, model }) {
-                // same as above but also check the the model is User in the if condition
+                // same as above but also check the model is User in the if condition
                 if (model === 'User' && operation === 'aggregate') {
                   const data = await query(args)
 
@@ -2093,10 +2093,5 @@ testMatrix.setupTestSuite(
   },
   {
     skipDefaultClientInstance: true,
-    skipDataProxy: {
-      // TODO: investigate this
-      reason: 'some tests fail with edge client and take a lot of time to run',
-      runtimes: ['edge'],
-    },
   },
 )

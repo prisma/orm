@@ -15,6 +15,29 @@ import semver from 'semver'
 const onlyPackages = process.env.ONLY_PACKAGES ? process.env.ONLY_PACKAGES.split(',') : null
 const skipPackages = process.env.SKIP_PACKAGES ? process.env.SKIP_PACKAGES.split(',') : null
 
+async function validatePrismaBotNpmToken(token: string): Promise<void> {
+  let response: Response
+  try {
+    response = await fetch('https://registry.npmjs.org/-/whoami', {
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    })
+  } catch (error) {
+    throw new Error(`Could not validate PRISMABOT_NPM_TOKEN with the npm registry: ${String(error)}`)
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      'PRISMABOT_NPM_TOKEN is invalid, expired, or revoked. Create a new npm access token and update the PRISMABOT_NPM_TOKEN GitHub Actions secret before publishing.',
+    )
+  }
+
+  if (!response.ok) {
+    throw new Error(`Could not validate PRISMABOT_NPM_TOKEN with the npm registry (HTTP ${response.status})`)
+  }
+}
+
 async function getLatestCommitHash(dir: string): Promise<string> {
   if (process.env.GITHUB_CONTEXT) {
     const context = JSON.parse(process.env.GITHUB_CONTEXT)
@@ -51,7 +74,13 @@ async function runResult(cwd: string, cmd: string): Promise<string> {
  * @param cwd cwd for running the command
  * @param cmd command to run
  */
-async function run(cwd: string, cmd: string, dry = false, hidden = false): Promise<void> {
+async function run(
+  cwd: string,
+  cmd: string,
+  dry = false,
+  hidden = false,
+  envOverrides: NodeJS.ProcessEnv = {},
+): Promise<void> {
   const args = [underline('./' + cwd).padEnd(20), bold(cmd)]
   if (dry) {
     args.push(dim('(dry)'))
@@ -70,7 +99,7 @@ async function run(cwd: string, cmd: string, dry = false, hidden = false): Promi
       shell: true,
       env: {
         ...process.env,
-        PRISMA_SKIP_POSTINSTALL_GENERATE: 'true',
+        ...envOverrides,
       },
     })
   } catch (_e) {
@@ -159,7 +188,10 @@ function getPrismaDependencies(dependencies?: { [name: string]: string }): strin
   if (!dependencies) {
     return []
   }
-  return Object.keys(dependencies).filter((d) => d.startsWith('@prisma') && !d.startsWith('@prisma/studio'))
+  return Object.keys(dependencies).filter(
+    (dependency) =>
+      (dependency.startsWith('@prisma') && !dependency.startsWith('@prisma/studio')) || dependency === 'prisma',
+  )
 }
 
 function getCircularDependencies(packages: Packages): string[][] {
@@ -463,13 +495,14 @@ async function publish() {
     '--dry-run': Boolean,
     '--release': String, // TODO What does that do? Can we remove this? probably
     '--test': Boolean,
+    '--custom-dist-tag': String,
   })
 
   if (!process.env.GITHUB_REF_NAME) {
     throw new Error(`Missing env var GITHUB_REF_NAME`)
   }
 
-  if (process.env.DRY_RUN) {
+  if (process.env.DRY_RUN === 'true') {
     console.log(blue(bold(`\nThe DRY_RUN env var is set, so we'll do a dry run!\n`)))
     args['--dry-run'] = true
   }
@@ -485,6 +518,10 @@ async function publish() {
     args['--release'] = process.env.RELEASE_VERSION
     // TODO: put this into a global variable VERSION
     // and then replace the args['--release'] with it
+  }
+
+  if (process.env.CUSTOM_DIST_TAG) {
+    args['--custom-dist-tag'] = process.env.CUSTOM_DIST_TAG
   }
 
   if (!args['--test'] && !args['--publish'] && !dryRun) {
@@ -531,7 +568,7 @@ async function publish() {
   console.log({ branch })
 
   // For branches that are named "integration/" we publish to the integration npm tag
-  if (branch && (process.env.FORCE_INTEGRATION_RELEASE || branch.startsWith('integration/'))) {
+  if (branch && (process.env.FORCE_INTEGRATION_RELEASE === 'true' || branch.startsWith('integration/'))) {
     prismaVersion = await getNewIntegrationVersion(packages, branch)
     tag = 'integration'
   }
@@ -552,6 +589,11 @@ async function publish() {
   } else {
     prismaVersion = await getNewDevVersion(packages)
     tag = 'dev'
+  }
+
+  if (args['--custom-dist-tag']) {
+    console.log(`Using custom dist tag: ${args['--custom-dist-tag']}`)
+    tag = args['--custom-dist-tag']
   }
 
   console.log({
@@ -583,7 +625,7 @@ async function publish() {
         throw new Error(`tagForEcosystemTestsCheck missing`)
       }
       const passing = await areEcosystemTestsPassing(tagForEcosystemTestsCheck)
-      if (!passing && !process.env.SKIP_ECOSYSTEMTESTS_CHECK) {
+      if (!passing && process.env.SKIP_ECOSYSTEMTESTS_CHECK !== 'true') {
         throw new Error(`We can't release, as the ecosystem-tests are not passing for the ${tag} npm tag!
 Check them out at https://github.com/prisma/ecosystem-tests/actions?query=workflow%3Atest+branch%3A${tag}`)
       }
@@ -704,6 +746,15 @@ async function publishPackages(
 
   const publishStr = dryRun ? `${bold('Dry publish')} ` : releaseVersion ? 'Releasing ' : 'Publishing '
 
+  let prismaBotNpmToken: string | undefined
+  if (!dryRun && !isSkipped('prisma')) {
+    prismaBotNpmToken = process.env.PRISMABOT_NPM_TOKEN
+    if (!prismaBotNpmToken) {
+      throw new Error('Missing env var PRISMABOT_NPM_TOKEN required to publish the prisma package')
+    }
+    await validatePrismaBotNpmToken(prismaBotNpmToken)
+  }
+
   if (releaseVersion) {
     console.log(red(bold(`RELEASE. This will release ${underline(releaseVersion)} on latest!!!`)))
     if (dryRun) {
@@ -760,8 +811,9 @@ async function publishPackages(
       const pkgDir = path.dirname(pkg.path)
 
       const newVersion = prismaVersion
+      const packageTag = pkgName === 'prisma' && tag === 'latest' ? 'prev' : tag
 
-      console.log(`\nPublishing ${magenta(`${pkgName}@${newVersion}`)} ${dim(`on ${tag}`)}`)
+      console.log(`\nPublishing ${magenta(`${pkgName}@${newVersion}`)} ${dim(`on ${packageTag}`)}`)
 
       // Why is this needed?
       // Was introduced in the first version of this script on Apr 14, 2020
@@ -804,7 +856,12 @@ async function publishPackages(
          *  - Your working directory is clean (there are no uncommitted changes).
          *  - The branch is up-to-date.
          */
-        await run(pkgDir, `pnpm publish --no-git-checks --access public --tag ${tag}`, dryRun)
+        const publishEnv: NodeJS.ProcessEnv = {}
+        if (pkgName === 'prisma' && prismaBotNpmToken) {
+          publishEnv.NODE_AUTH_TOKEN = prismaBotNpmToken
+        }
+
+        await run(pkgDir, `pnpm publish --no-git-checks --access public --tag ${packageTag}`, dryRun, false, publishEnv)
       }
     }
   }

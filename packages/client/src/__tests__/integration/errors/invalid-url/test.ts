@@ -29,7 +29,7 @@ describe('invalid connection string url parameter', () => {
           15 
           16 try {
         → 17   await prisma.user.findUnique(
-        The provided database string is invalid. The provided arguments are not supported in database URL. Please refer to the documentation in https://www.prisma.io/docs/reference/database-reference/connection-urls for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters.
+        The provided database string is invalid. The provided arguments are not supported in database URL. Please refer to the documentation in https://pris.ly/d/config-url for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters.
       `)
     }
   })
@@ -40,7 +40,7 @@ describe('invalid connection string url parameter', () => {
       await prisma.$connect()
     } catch (err) {
       expect(err).toMatchInlineSnapshot(
-        `The provided database string is invalid. The provided arguments are not supported in database URL. Please refer to the documentation in https://www.prisma.io/docs/reference/database-reference/connection-urls for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters.`,
+        `The provided database string is invalid. The provided arguments are not supported in database URL. Please refer to the documentation in https://pris.ly/d/config-url for constructing a correct connection string. In some cases, certain characters must be escaped. Please check the string for any illegal characters.`,
       )
     }
   })

@@ -6,17 +6,21 @@ import { TSClientOptions } from '../TSClient/TSClient'
  */
 export function buildQueryCompilerWasmModule(
   forceEdgeWasmLoader: boolean,
-  runtimeNameJs: TSClientOptions['runtimeNameJs'],
+  runtimeName: TSClientOptions['runtimeName'],
+  compilerBuild: TSClientOptions['compilerBuild'],
 ) {
-  if (runtimeNameJs === 'client' && !forceEdgeWasmLoader) {
+  const artifactName = `query_compiler_${compilerBuild}_bg`
+  if (runtimeName === 'client' && !forceEdgeWasmLoader) {
     return `config.compilerWasm = {
-      getRuntime: async () => require('./query_compiler_bg.js'),
+      getRuntime: async () => require('./${artifactName}.js'),
       getQueryCompilerWasmModule: async () => {
-        const queryCompilerWasmFilePath = require('path').join(config.dirname, 'query_compiler_bg.wasm')
-        const queryCompilerWasmFileBytes = require('fs').readFileSync(queryCompilerWasmFilePath)
+        const { Buffer } = require('node:buffer')
+        const { wasm } = require('./${artifactName}.wasm-base64.js')
+        const queryCompilerWasmFileBytes = Buffer.from(wasm, 'base64')
 
         return new WebAssembly.Module(queryCompilerWasmFileBytes)
-      }
+      },
+      importName: './${artifactName}.js',
     }`
   }
 
@@ -28,14 +32,15 @@ export function buildQueryCompilerWasmModule(
   // isn't able to handle dynamic imports with `import(#MODULE_NAME)`, which used
   // to lead to a runtime "No such module .prisma/client/#wasm-compiler-loader" error.
   // Related issue: https://github.com/vitest-dev/vitest/issues/5486.
-  if ((runtimeNameJs === 'client' && forceEdgeWasmLoader) || runtimeNameJs === 'wasm-compiler-edge') {
+  if ((runtimeName === 'client' && forceEdgeWasmLoader) || runtimeName === 'wasm-compiler-edge') {
     return `config.compilerWasm = {
-  getRuntime: async () => require('./query_compiler_bg.js'),
+  getRuntime: async () => require('./${artifactName}.js'),
   getQueryCompilerWasmModule: async () => {
     const loader = (await import('#wasm-compiler-loader')).default
     const compiler = (await loader).default
     return compiler
-  }
+  },
+  importName: './${artifactName}.js',
 }`
   }
 

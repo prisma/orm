@@ -1,6 +1,7 @@
+import readline from 'node:readline'
+
 import type { GeneratorConfig, GeneratorManifest, GeneratorOptions } from '@prisma/generator'
 
-import byline from './byline'
 import * as JsonRpc from './json-rpc'
 
 export interface Handler {
@@ -9,8 +10,13 @@ export interface Handler {
 }
 
 export function generatorHandler(handler: Handler): void {
-  byline(process.stdin).on('data', async (line) => {
-    const json = JSON.parse(String(line))
+  const stdinInterface = readline.createInterface({
+    input: process.stdin,
+    crlfDelay: Infinity,
+  })
+
+  stdinInterface.on('line', async (line: string) => {
+    const json = JSON.parse(line)
 
     if (json.method === 'generate' && json.params) {
       try {

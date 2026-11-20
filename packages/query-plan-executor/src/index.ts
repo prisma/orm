@@ -1,3 +1,4 @@
+export { version } from '../package.json'
 export { parseDuration } from './formats/duration'
 export { parseInteger } from './formats/numeric'
 export { parseSize } from './formats/size'

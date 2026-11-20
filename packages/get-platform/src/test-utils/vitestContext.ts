@@ -91,6 +91,7 @@ ${[...generateDirectoryTree(children, indent)].join('\n')}
         })
         // symlink to local client version in tmp dir
         c.fs.symlink(path.join(originalCwd, '..', 'client'), path.join(c.fs.cwd(), 'node_modules', '@prisma', 'client'))
+        c.fs.symlink(path.join(originalCwd, '..', 'config'), path.join(c.fs.cwd(), 'node_modules', '@prisma', 'config'))
       }
 
       c.cli = (...input) => {
@@ -253,7 +254,7 @@ export const vitestProcessExitContext =
       ctx.mocked['process.exit'] = vi.spyOn(process, 'exit').mockImplementation((number) => {
         throw new Error('process.exit: ' + number)
       })
-      ctx.recordedExitCode = () => ctx.mocked['process.exit'].mock.calls[0]?.[0] ?? 0
+      ctx.recordedExitCode = () => Number(ctx.mocked['process.exit'].mock.calls[0]?.[0] ?? 0)
     })
 
     afterEach(() => {

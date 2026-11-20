@@ -1,24 +1,27 @@
 import path from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 
-import { jestConsoleContext, jestContext } from '@prisma/get-platform'
+import { vitestConsoleContext, vitestContext } from '@prisma/get-platform/src/test-utils/vitestContext'
+import { describe, expect, test, vi } from 'vitest'
 
-import { getSchemaWithPath } from '../../cli/getSchema'
+import { getCliProvidedSchemaFile } from '../../cli/getSchema'
 import { formatSchema } from '../../engine-commands'
 import { extractSchemaContent, type MultipleSchemas } from '../../utils/schemaFileInput'
 import { fixturesPath } from '../__utils__/fixtures'
 
 if (process.env.CI) {
-  jest.setTimeout(20_000)
+  vi.setConfig({ testTimeout: 20_000 })
 }
 
-const ctx = jestContext.new().add(jestConsoleContext()).assemble()
+const ctx = vitestContext.new().add(vitestConsoleContext()).assemble()
 
 describe('schema wasm', () => {
   describe('diff', () => {
     async function testAgainstPreformatted(schemaFilename: string) {
-      const { schemas } = await getSchemaWithPath(path.join(fixturesPath, 'format', schemaFilename))
-      const { schemas: preformatted } = await getSchemaWithPath(path.join(fixturesPath, 'format', 'schema.prisma'))
+      const { schemas } = await getCliProvidedSchemaFile(path.join(fixturesPath, 'format', schemaFilename))
+      const { schemas: preformatted } = await getCliProvidedSchemaFile(
+        path.join(fixturesPath, 'format', 'schema.prisma'),
+      )
       const formattedByWasm = await formatSchema({ schemas })
 
       const preformattedContent: string[] = extractSchemaContent(preformatted)
@@ -49,7 +52,6 @@ describe('format custom options', () => {
   const schema = /* prisma */ `
   datasource db {
    provider = "sqlite"
-   url  = "file:dev.db"
   }
   
   model User {
@@ -68,7 +70,6 @@ describe('format custom options', () => {
     expect(formattedContent[0]).toMatchInlineSnapshot(`
       "datasource db {
         provider = "sqlite"
-        url      = "file:dev.db"
       }
 
       model User {
@@ -88,7 +89,6 @@ describe('format custom options', () => {
     expect(formattedContent[0]).toMatchInlineSnapshot(`
       "datasource db {
           provider = "sqlite"
-          url      = "file:dev.db"
       }
 
       model User {
@@ -104,7 +104,7 @@ describe('format custom options', () => {
 
 describe('format', () => {
   test('valid blog schemaPath', async () => {
-    const { schemas } = await getSchemaWithPath(path.join(fixturesPath, 'blog.prisma'))
+    const { schemas } = await getCliProvidedSchemaFile(path.join(fixturesPath, 'blog.prisma'))
     const formatted = await formatSchema({ schemas })
     const formattedContent: string[] = extractSchemaContent(formatted)
     expect(formattedContent.length).toBe(1)
@@ -119,7 +119,6 @@ describe('format', () => {
           `
       datasource db {
         provider = "sqlite"
-        url      = "file:dev.db"
       }
       
       generator client {
@@ -172,7 +171,6 @@ describe('format', () => {
 
       datasource db {
         provider = "cockroachdb"
-        url = env("TEST_POSTGRES_URI")
       }
 
       model SomeUser {
@@ -204,7 +202,6 @@ describe('format', () => {
 
       datasource db {
         provider = "cockroachdb"
-        url = env("TEST_POSTGRES_URI")
       }
 
       model SomeUser {
@@ -238,7 +235,6 @@ describe('format', () => {
 
       datasource db {
         provider = "cockroachdb"
-        url      = env("TEST_POSTGRES_URI")
       }
 
       model SomeUser {
@@ -265,7 +261,6 @@ describe('format', () => {
 
       datasource db {
         provider = "cockroachdb"
-        url      = env("TEST_POSTGRES_URI")
       }
 
       model SomeUser {

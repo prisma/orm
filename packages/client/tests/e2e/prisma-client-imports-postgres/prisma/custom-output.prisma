@@ -8,7 +8,6 @@ generator client {
 
 datasource db {
   provider = "postgres"
-  url      = "postgresql://prisma:prisma@localhost:5432/prisma"
 }
 
 model User {

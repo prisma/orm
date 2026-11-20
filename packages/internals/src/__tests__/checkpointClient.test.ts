@@ -1,4 +1,5 @@
 import * as checkpoint from 'checkpoint-client'
+import { describe, expect, test } from 'vitest'
 
 describe('checkpointClient', () => {
   test('check async signature', async () => {

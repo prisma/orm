@@ -7,7 +7,6 @@ describe('dmmf', () => {
     const datamodel = `
       datasource db {
         provider = "mysql"
-        url      = env("MY_MYSQL_DB")
       }
       
       model User {
@@ -47,6 +46,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "equals",
           },
@@ -60,6 +60,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "in",
           },
@@ -73,6 +74,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "notIn",
           },
@@ -92,6 +94,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "not",
           },
@@ -122,6 +125,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "equals",
           },
@@ -135,6 +139,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "in",
           },
@@ -148,6 +153,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "notIn",
           },
@@ -167,6 +173,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "not",
           },
@@ -180,7 +187,6 @@ describe('dmmf', () => {
     const datamodel = `
       datasource db {
         provider = "postgresql"
-        url      = env("MY_POSTGRES_DB")
       }
       
       model User {
@@ -220,6 +226,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "equals",
           },
@@ -239,6 +246,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "in",
           },
@@ -258,6 +266,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "notIn",
           },
@@ -277,6 +286,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "not",
           },
@@ -307,6 +317,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "equals",
           },
@@ -326,6 +337,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "in",
           },
@@ -345,6 +357,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "notIn",
           },
@@ -364,6 +377,7 @@ describe('dmmf', () => {
               },
             ],
             "isNullable": false,
+            "isParameterizable": true,
             "isRequired": false,
             "name": "not",
           },
@@ -377,7 +391,6 @@ describe('dmmf', () => {
     const datamodel = `
       datasource db {
         provider = "sqlite"
-        url      = "file:./dev.db"
       }
 
       model User {

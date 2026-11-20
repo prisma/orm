@@ -1,14 +1,10 @@
-import events from 'node:events'
+import path from 'node:path'
+import timers from 'node:timers/promises'
+import { Worker } from 'node:worker_threads'
 
-import { serve, ServerType } from '@hono/node-server'
 import { afterAll, beforeAll, test } from '@jest/globals'
-import { context, trace } from '@opentelemetry/api'
-import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks'
-import { BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
-import * as QueryPlanExecutor from '@prisma/query-plan-executor'
-import path from 'path'
 
-import type { Client } from '../../../src/runtime/getPrismaClient'
+import type { Client, PrismaClientOptions } from '../../../src/runtime/getPrismaClient'
 import { checkMissingProviders } from './checkMissingProviders'
 import {
   getTestSuiteClientMeta,
@@ -16,18 +12,23 @@ import {
   getTestSuiteConfigs,
   getTestSuiteFolderPath,
   getTestSuiteMeta,
+  TestSuiteMeta,
 } from './getTestSuiteInfo'
 import { getTestSuitePlan } from './getTestSuitePlan'
+import type {
+  QpeWorkerReadyResponse,
+  QpeWorkerResponse,
+  QpeWorkerShutdownMessage,
+  QpeWorkerStartMessage,
+} from './qpe-worker'
 import {
   getPrismaClientInternalArgs,
   setupTestSuiteClient,
   setupTestSuiteClientDriverAdapter,
 } from './setupTestSuiteClient'
 import { DatasourceInfo, dropTestSuiteDatabase, setupTestSuiteDatabase, setupTestSuiteDbURI } from './setupTestSuiteEnv'
-import { stopMiniProxyQueryEngine } from './stopMiniProxyQueryEngine'
 import { ClientMeta, CliMeta, MatrixOptions } from './types'
 
-export type TestSuiteMeta = ReturnType<typeof getTestSuiteMeta>
 export type TestCallbackSuiteMeta = TestSuiteMeta & { generatedFolder: string }
 
 /**
@@ -71,7 +72,22 @@ function setupTestSuiteMatrix(
   ) => void,
   options?: MatrixOptions,
 ) {
-  const originalEnv = process.env
+  const originalEnv = { ...process.env }
+  const restoreEnv = () => {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in originalEnv)) {
+        delete process.env[key]
+      }
+    }
+
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+  }
   const suiteMeta = getTestSuiteMeta()
   const cliMeta = getTestSuiteCliMeta()
   const suiteConfigs = getTestSuiteConfigs(suiteMeta)
@@ -99,51 +115,12 @@ function setupTestSuiteMatrix(
 
     describeFn(name, () => {
       const clients = [] as any[]
-      const datasourceInfo = setupTestSuiteDbURI({ suiteConfig: suiteConfig.matrixOptions, clientMeta })
-      let server: { qpe: QueryPlanExecutor.Server; net: ServerType } | undefined
+      const datasourceInfo = setupTestSuiteDbURI({ suiteConfig: suiteConfig.matrixOptions })
+      let qpeWorker: Worker | undefined
 
       // we inject modified env vars, and make the client available as globals
       beforeAll(async () => {
-        // Set up the global context manager and the global tracer provider.
-        // They are used by the query plan executor server, as well as by tracing tests.
-        context.setGlobalContextManager(new AsyncLocalStorageContextManager())
-        trace.setGlobalTracerProvider(new BasicTracerProvider())
-
         globalThis['datasourceInfo'] = datasourceInfo // keep it here before anything runs
-
-        if (clientMeta.runtime === 'client' && clientMeta.clientEngineExecutor === 'remote') {
-          const qpe = await QueryPlanExecutor.Server.create({
-            databaseUrl: datasourceInfo.databaseUrl,
-            maxResponseSize: QueryPlanExecutor.parseSize('128 MiB'),
-            queryTimeout: QueryPlanExecutor.parseDuration('PT30S'),
-            maxTransactionTimeout: QueryPlanExecutor.parseDuration('PT1M'),
-            maxTransactionWaitTime: QueryPlanExecutor.parseDuration('PT1M'),
-            perRequestLogContext: {
-              logFormat: 'text',
-              logLevel: 'warn',
-            },
-          })
-
-          const hostname = '127.0.0.1'
-
-          const net = serve({
-            fetch: qpe.fetch,
-            hostname,
-            port: 0,
-          })
-
-          await events.once(net, 'listening')
-          const address = net.address()
-          if (address === null) {
-            throw new Error('query plan executor server did not start')
-          }
-          if (typeof address === 'string') {
-            throw new Error('query plan executor must be listening on TCP and not Unix socket')
-          }
-
-          server = { qpe, net }
-          datasourceInfo.accelerateUrl = `prisma://${hostname}:${address.port}/?api_key=1&use_http=1`
-        }
 
         // If using D1 Driver adapter
         // We need to setup wrangler bindings to the D1 db (using miniflare under the hood)
@@ -172,6 +149,43 @@ function setupTestSuiteMatrix(
 
         globalThis['loaded'] = clientModule
 
+        if (clientMeta.clientEngineExecutor === 'remote') {
+          qpeWorker = new Worker(path.join(__dirname, 'qpe-worker-entry.cjs'))
+
+          const qpeStartupTimeoutMs = 60_000
+
+          const { hostname, port } = await new Promise<QpeWorkerReadyResponse>((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+              void qpeWorker!
+                .terminate()
+                .catch((err) => console.error('Error terminating QPE worker due to startup timeout:', err))
+              qpeWorker = undefined
+              reject(new Error(`QPE worker startup timed out after ${qpeStartupTimeoutMs}ms`))
+            }, qpeStartupTimeoutMs).unref()
+
+            qpeWorker!.once('message', (response: QpeWorkerResponse) => {
+              clearTimeout(timeoutId)
+              switch (response.type) {
+                case 'ready':
+                  resolve(response)
+                  break
+                case 'error':
+                  reject(new Error(response.message))
+                  break
+                default:
+                  reject(new Error(`Unexpected response type: ${response.type}`))
+              }
+            })
+
+            qpeWorker!.postMessage({
+              type: 'start',
+              databaseUrl: datasourceInfo.databaseUrl,
+            } satisfies QpeWorkerStartMessage)
+          })
+
+          datasourceInfo.accelerateUrl = `prisma://${hostname}:${port}/?api_key=1&use_http=1`
+        }
+
         const internalArgs = () =>
           getPrismaClientInternalArgs({
             suiteConfig,
@@ -189,7 +203,13 @@ function setupTestSuiteMatrix(
         globalThis['newPrismaClient'] = (args: any) => {
           const { PrismaClient, Prisma } = clientModule
 
-          const options = { ...internalArgs(), ...newDriverAdapter(), ...args }
+          const options: PrismaClientOptions = {
+            ...internalArgs(),
+            ...newDriverAdapter(),
+            accelerateUrl: datasourceInfo.accelerateUrl,
+            ...args,
+          }
+
           const client = new PrismaClient(options)
 
           globalThis['Prisma'] = Prisma
@@ -213,8 +233,12 @@ function setupTestSuiteMatrix(
               suiteConfig,
               alterStatementCallback: options?.alterStatementCallback,
               cfWorkerBindings,
+              datasourceInfo,
             }),
-          dropDb: () => dropTestSuiteDatabase({ suiteMeta, suiteConfig, errors: [], cfWorkerBindings }).catch(() => {}),
+          dropDb: () =>
+            dropTestSuiteDatabase({ suiteMeta, suiteConfig, errors: [], cfWorkerBindings, datasourceInfo }).catch(
+              () => {},
+            ),
         }
       })
 
@@ -228,20 +252,35 @@ function setupTestSuiteMatrix(
             // sometimes we test connection errors. In that case,
             // disconnect might also fail, so ignoring the error here
           })
-
-          if (clientMeta.dataProxy) {
-            await stopMiniProxyQueryEngine({
-              client: client as Client,
-              datasourceInfo: globalThis['datasourceInfo'] as DatasourceInfo,
-            })
-          }
         }
         clients.length = 0
 
-        if (server) {
-          server.net.close()
-          await server.qpe.shutdown()
-          server = undefined
+        if (qpeWorker) {
+          try {
+            await Promise.race([
+              timers.setTimeout(5000, undefined, { ref: false }),
+
+              new Promise<void>((resolve, reject) => {
+                qpeWorker!.once('message', (response: QpeWorkerResponse) => {
+                  switch (response.type) {
+                    case 'shutdown-complete':
+                      resolve()
+                      break
+                    case 'error':
+                      reject(new Error(response.message))
+                      break
+                    default:
+                      reject(new Error(`Unexpected response type: ${response.type}`))
+                  }
+                })
+
+                qpeWorker!.postMessage({ type: 'shutdown' } satisfies QpeWorkerShutdownMessage)
+              }),
+            ])
+          } finally {
+            await qpeWorker.terminate()
+            qpeWorker = undefined
+          }
         }
 
         // CI=false: Only drop the db if not skipped, and if the db does not need to be reused.
@@ -250,9 +289,9 @@ function setupTestSuiteMatrix(
           const datasourceInfo = globalThis['datasourceInfo'] as DatasourceInfo
           process.env[datasourceInfo.envVarName] = datasourceInfo.databaseUrl
           process.env[datasourceInfo.directEnvVarName] = datasourceInfo.databaseUrl
-          await dropTestSuiteDatabase({ suiteMeta, suiteConfig, errors: [], cfWorkerBindings })
+          await dropTestSuiteDatabase({ suiteMeta, suiteConfig, errors: [], cfWorkerBindings, datasourceInfo })
         }
-        process.env = originalEnv
+        restoreEnv()
         delete globalThis['datasourceInfo']
         delete globalThis['loaded']
         delete globalThis['prisma']

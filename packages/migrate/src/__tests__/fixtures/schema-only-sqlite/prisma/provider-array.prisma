@@ -1,6 +1,5 @@
 datasource my_db {
     provider = ["postgresql", "sqlite"]
-    url      = "file:../dev.db"
 }
 
 generator client {

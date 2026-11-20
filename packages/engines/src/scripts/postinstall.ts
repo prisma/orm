@@ -5,8 +5,6 @@ import type { BinaryTarget } from '@prisma/get-platform'
 import fs from 'fs'
 import path from 'path'
 
-import { getCliQueryEngineBinaryType } from '..'
-
 const debug = Debug('prisma:download')
 
 const baseDir = path.join(__dirname, '../../')
@@ -23,10 +21,8 @@ async function main() {
     if (process.env.PRISMA_CLI_BINARY_TARGETS) {
       binaryTargets = process.env.PRISMA_CLI_BINARY_TARGETS.split(',')
     }
-    const cliQueryEngineBinaryType = getCliQueryEngineBinaryType()
 
     const binaries: BinaryDownloadConfiguration = {
-      [cliQueryEngineBinaryType]: baseDir,
       [BinaryType.SchemaEngineBinary]: baseDir,
     }
 

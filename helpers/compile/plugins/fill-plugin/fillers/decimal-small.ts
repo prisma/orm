@@ -6,11 +6,7 @@ class Decimal extends DecimalLight {
   }
 
   static random(sd = 20): Decimal {
-    if (
-      TARGET_BUILD_TYPE === 'wasm-engine-edge' ||
-      TARGET_BUILD_TYPE === 'wasm-compiler-edge' ||
-      TARGET_BUILD_TYPE === 'edge'
-    ) {
+    if (TARGET_BUILD_TYPE === 'wasm-compiler-edge') {
       const bytes = globalThis.crypto.getRandomValues(new Uint8Array(sd))
       const result = bytes.reduce((acc, byte) => acc + byte, '')
       return new DecimalLight(`0.${result.slice(0, sd)}`)

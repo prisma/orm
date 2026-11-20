@@ -12,15 +12,19 @@
     "@libsql/client": "0.8.1",
     "@neondatabase/serverless": "0.10.2",
     "@planetscale/database": "1.19.0",
+    "@prisma/adapter-d1": "workspace:*",
+    "@prisma/adapter-libsql": "workspace:*",
+    "@prisma/adapter-mariadb": "workspace:*",
     "@prisma/adapter-mssql": "workspace:*",
     "@prisma/adapter-neon": "workspace:*",
     "@prisma/adapter-pg": "workspace:*",
     "@prisma/adapter-planetscale": "workspace:*",
-    "@prisma/adapter-libsql": "workspace:*",
-    "@prisma/adapter-d1": "workspace:*",
-    "@prisma/adapter-mariadb": "workspace:*",
     "@prisma/client": "workspace:*",
+    "@prisma/client-runtime-utils": "workspace:*",
     "pg": "8.14.1",
     "prisma": "workspace:*"
+  },
+  "devDependencies": {
+    "wrangler": "4.45.0"
   }
 }

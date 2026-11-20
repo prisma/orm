@@ -1,15 +1,16 @@
-import { context } from '@opentelemetry/api'
+import { context, trace } from '@opentelemetry/api'
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks'
 import { registerInstrumentations } from '@opentelemetry/instrumentation'
-import { Resource } from '@opentelemetry/resources'
+import { resourceFromAttributes } from '@opentelemetry/resources'
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
   TraceIdRatioBasedSampler,
 } from '@opentelemetry/sdk-trace-base'
-import { SEMRESATTRS_SERVICE_NAME, SEMRESATTRS_SERVICE_VERSION } from '@opentelemetry/semantic-conventions'
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions'
 import { PrismaInstrumentation } from '@prisma/instrumentation'
+import { traceContext } from '@prisma/sqlcommenter-trace-context'
 
 import { NewPrismaClient } from '../_utils/types'
 import testMatrix from './_matrix'
@@ -29,14 +30,14 @@ beforeAll(() => {
 
   const basicTracerProvider = new BasicTracerProvider({
     sampler: new TraceIdRatioBasedSampler(0), // 0% sampling!!
-    resource: new Resource({
-      [SEMRESATTRS_SERVICE_NAME]: 'test-name',
-      [SEMRESATTRS_SERVICE_VERSION]: '1.0.0',
+    resource: resourceFromAttributes({
+      [ATTR_SERVICE_NAME]: 'test-name',
+      [ATTR_SERVICE_VERSION]: '1.0.0',
     }),
+    spanProcessors: [new SimpleSpanProcessor(inMemorySpanExporter)],
   })
 
-  basicTracerProvider.addSpanProcessor(new SimpleSpanProcessor(inMemorySpanExporter))
-  basicTracerProvider.register()
+  trace.setGlobalTracerProvider(basicTracerProvider)
 
   registerInstrumentations({
     instrumentations: [new PrismaInstrumentation()],
@@ -60,7 +61,10 @@ testMatrix.setupTestSuite(
     }
 
     beforeAll(() => {
-      prisma = newPrismaClient({ log: [{ emit: 'event', level: 'query' }] })
+      prisma = newPrismaClient({
+        log: [{ emit: 'event', level: 'query' }],
+        comments: [traceContext()],
+      })
 
       // @ts-expect-error - client not typed for log opts for cross generator compatibility - can be improved once we drop the prisma-client-js generator
       prisma.$on('query', (e) => queries.push(e.query))

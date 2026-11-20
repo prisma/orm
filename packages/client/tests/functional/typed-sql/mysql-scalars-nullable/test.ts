@@ -51,7 +51,8 @@ testMatrix.setupTestSuite(
 
     test('float - output', async () => {
       const result = await prisma.$queryRawTyped(sql.getFloat(id))
-      expect(result[0].float).toBe(12.3)
+      // Account for potential precision loss when storing the value as a FLOAT
+      expect(result[0].float).toBeOneOf([new Float32Array([12.3])[0], 12.3])
       expectTypeOf(result[0].float).toEqualTypeOf<number | null>()
     })
 

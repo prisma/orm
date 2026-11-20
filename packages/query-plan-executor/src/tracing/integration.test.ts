@@ -56,9 +56,9 @@ test('full flow with nested spans and context', async () => {
   expect(collector.spans.length).toEqual(3)
 
   // Find each span by name
-  const processSpan = collector.spans.find((s) => s.name === 'prisma:engine:process-data')
-  const parseSpan = collector.spans.find((s) => s.name === 'prisma:engine:parse-data')
-  const transformSpan = collector.spans.find((s) => s.name === 'prisma:engine:transform-data')
+  const processSpan = collector.spans.find((s) => s.name === 'prisma:accelerate:process-data')
+  const parseSpan = collector.spans.find((s) => s.name === 'prisma:accelerate:parse-data')
+  const transformSpan = collector.spans.find((s) => s.name === 'prisma:accelerate:transform-data')
 
   // Verify all spans exist
   expect(processSpan).toBeDefined()
@@ -223,9 +223,9 @@ test('handles errors correctly', async () => {
   expect(collector.spans.length).toEqual(3)
 
   // All spans should be recorded despite the error
-  expect(collector.spans.find((s) => s.name === 'prisma:engine:process-broken-data')).toBeDefined()
-  expect(collector.spans.find((s) => s.name === 'prisma:engine:first-step')).toBeDefined()
-  expect(collector.spans.find((s) => s.name === 'prisma:engine:error-step')).toBeDefined()
+  expect(collector.spans.find((s) => s.name === 'prisma:accelerate:process-broken-data')).toBeDefined()
+  expect(collector.spans.find((s) => s.name === 'prisma:accelerate:first-step')).toBeDefined()
+  expect(collector.spans.find((s) => s.name === 'prisma:accelerate:error-step')).toBeDefined()
 
   // ----- VERIFY OPENTELEMETRY SPANS -----
 

@@ -10,11 +10,6 @@ async function main() {
         level: 'query',
       },
     ],
-    datasources: {
-      db: {
-        url: 'file:dev.db',
-      },
-    },
   })
 
   prisma.$on('query', (a: Prisma.QueryEvent) => {

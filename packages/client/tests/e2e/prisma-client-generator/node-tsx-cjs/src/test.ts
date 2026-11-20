@@ -1,9 +1,14 @@
 import * as assert from 'node:assert/strict'
 
+import { PrismaLibSql } from '@prisma/adapter-libsql'
+
 import { PrismaClient } from './generated/prisma/client'
 
 async function main() {
-  const prisma = new PrismaClient()
+  const adapter = new PrismaLibSql({
+    url: 'file:./prisma/dev.db',
+  })
+  const prisma = new PrismaClient({ adapter })
 
   await prisma.user.deleteMany()
 

@@ -4,7 +4,7 @@ on:
   pull_request:
     paths-ignore:
       # Any update here needs to be done for all files
-      # (test.yml, benchmark.yml, release-ci.yml, bundle-size.yml, ci-aux-files.yml)
+      # (test.yml, benchmark.yml, publish.yml, bundle-size.yml, ci-aux-files.yml)
       - '*.md'
       - '*.bench.ts'
       - 'LICENSE'
@@ -27,16 +27,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
         with:
-          node-version: 18
+          node-version: '20.19.0'
           skip-tsc: true
           skip-build: true
 
-      - uses: andresz1/size-limit-action@v1
+      - uses: andresz1/size-limit-action@e7493a72a44b113341c0cf6186ab49c17c4b65c1 # v1.6.1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           build_script: bundle-size

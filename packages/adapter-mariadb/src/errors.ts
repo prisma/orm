@@ -1,4 +1,5 @@
 import { Error as DriverAdapterErrorObject, MappedError } from '@prisma/driver-adapter-utils'
+import type { SqlError } from 'mariadb'
 
 export function convertDriverError(error: unknown): DriverAdapterErrorObject {
   if (isDriverError(error)) {
@@ -15,10 +16,14 @@ export function convertDriverError(error: unknown): DriverAdapterErrorObject {
 export function mapDriverError(error: DriverError): MappedError {
   switch (error.errno) {
     case 1062: {
-      const index = error.sqlMessage?.split(' ').pop()?.split("'").at(1)?.split('.').pop()
+      const rawKey = error.sqlMessage?.split(' ').pop()?.split("'").at(1)
+      const keyParts = rawKey?.split('.')
+      const table = keyParts && keyParts.length > 1 ? keyParts.slice(0, -1).join('.') : undefined
+      const index = keyParts?.at(-1)
       return {
         kind: 'UniqueConstraintViolation',
         constraint: index !== undefined ? { index } : undefined,
+        table,
       }
     }
 
@@ -136,6 +141,7 @@ export function mapDriverError(error: DriverError): MappedError {
         code: error.errno,
         message: error.sqlMessage ?? 'N/A',
         state: error.sqlState ?? 'N/A',
+        cause: error.cause?.message ?? undefined,
       }
   }
 }
@@ -144,6 +150,7 @@ type DriverError = {
   errno: number
   sqlMessage: string | null
   sqlState: string | null
+  cause?: SqlError
 }
 
 function isDriverError(error: any): error is DriverError {

@@ -1,17 +1,14 @@
 import crypto from 'crypto'
 
-import { getSchemaWithPath } from './getSchema'
+import { getSchemaWithPath, SchemaPathInput } from './getSchema'
 
 /**
  * Get a unique identifier for the project by hashing
  * the directory with `schema.prisma`
  */
-export async function getProjectHash(
-  schemaPathFromArgs: string | undefined,
-  schemaPathFromConfig: string | undefined,
-): Promise<string> {
+export async function getProjectHash(schemaPath: SchemaPathInput): Promise<string> {
   // Default to cwd if the schema couldn't be found
-  const projectPath = (await getSchemaWithPath(schemaPathFromArgs, schemaPathFromConfig))?.schemaPath ?? process.cwd()
+  const projectPath = (await getSchemaWithPath({ schemaPath }))?.schemaPath ?? process.cwd()
 
   return crypto.createHash('sha256').update(projectPath).digest('hex').substring(0, 8)
 }

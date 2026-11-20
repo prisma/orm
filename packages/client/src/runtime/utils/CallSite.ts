@@ -51,10 +51,7 @@ export class EnabledCallSite implements CallSite {
         posixFile !== '<anonymous>' && // Ignore as we can not read an <anonymous> file
         !posixFile.includes('@prisma') && // Internal, unbundled code
         !posixFile.includes('/packages/client/src/runtime/') && // Runtime sources when source maps are used
-        !posixFile.endsWith('/runtime/binary.js') && // Bundled runtimes
-        !posixFile.endsWith('/runtime/library.js') &&
-        !posixFile.endsWith('/runtime/edge.js') &&
-        !posixFile.endsWith('/runtime/edge-esm.js') &&
+        !posixFile.endsWith('/runtime/client.js') && // Bundled runtimes
         !posixFile.startsWith('internal/') && // We don't want internal nodejs files
         !t.methodName.includes('new ') && // "new CallSite" call and maybe other constructors
         !t.methodName.includes('getCallSite') && // getCallSite function from this module
@@ -76,12 +73,7 @@ export class EnabledCallSite implements CallSite {
 }
 
 export function getCallSite(errorFormat: ErrorFormat): CallSite {
-  if (
-    errorFormat === 'minimal' ||
-    TARGET_BUILD_TYPE === 'wasm-engine-edge' ||
-    TARGET_BUILD_TYPE === 'wasm-compiler-edge' ||
-    TARGET_BUILD_TYPE === 'edge'
-  ) {
+  if (errorFormat === 'minimal' || TARGET_BUILD_TYPE === 'wasm-compiler-edge') {
     if (typeof $EnabledCallSite === 'function' && errorFormat !== 'minimal') {
       return new $EnabledCallSite()
     } else {

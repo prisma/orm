@@ -6,7 +6,7 @@ import type { PrismaClient } from './generated/prisma/client'
 declare let prisma: PrismaClient
 
 testMatrix.setupTestSuite(
-  ({ provider }, _suiteMeta, { runtime }) => {
+  ({ provider }, _suiteMeta) => {
     afterEach(async () => {
       await prisma.product.deleteMany({})
     })
@@ -123,7 +123,7 @@ testMatrix.setupTestSuite(
     })
 
     // TODO: Edge: skipped because of the error snapshot
-    testIf(runtime !== 'edge')('wrong field type', async () => {
+    test('wrong field type', async () => {
       const products = prisma.product.findMany({
         where: {
           properties1: {

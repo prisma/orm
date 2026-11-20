@@ -1,12 +1,13 @@
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+
 import * as useDebugImport from '../index'
 
 let Debug: typeof useDebugImport.default
 
-const importDebug = async () =>
-  await jest.isolateModulesAsync(async () => {
-    const mod = await import('../index')
-    Debug = mod.default
-  })
+const importDebug = async () => {
+  const mod = await import('../index')
+  Debug = mod.default
+}
 
 beforeEach(() => {
   delete process.env.DEBUG
@@ -18,12 +19,12 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  jest.resetModules()
-  jest.restoreAllMocks()
+  vi.resetModules()
+  vi.restoreAllMocks()
 })
 
 test('with a namespace', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test'
   process.env.DEBUG_COLORS = 'false'
@@ -37,7 +38,7 @@ test('with a namespace', async () => {
 })
 
 test('with colors', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test2'
   process.env.FORCE_COLOR = 'true'
@@ -48,12 +49,12 @@ test('with colors', async () => {
   debug('hello world')
 
   const consoleWarnParams = consoleWarn.mock.calls.map(mapper)
-  expect(consoleWarnParams[0][0]).toMatchInlineSnapshot(`"[32m[1mtest2[22m[39m hello world"`)
+  expect(consoleWarnParams[0][0]).toMatchInlineSnapshot(`"test2 hello world"`)
   expect(consoleWarnParams.length).toBe(1)
 })
 
 test('with multiple wild cards', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test3:*:*:*'
   process.env.DEBUG_COLORS = 'false'
@@ -67,7 +68,7 @@ test('with multiple wild cards', async () => {
 })
 
 test('with multiple wild cards and filter', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test4:*:query-engine:*'
   process.env.DEBUG_COLORS = 'false'
@@ -83,7 +84,7 @@ test('with multiple wild cards and filter', async () => {
 })
 
 test('with trailing wild cards', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test5:*:*'
   process.env.DEBUG_COLORS = 'false'
@@ -100,7 +101,7 @@ test('with trailing wild cards', async () => {
 })
 
 test('with trailing wild cards and filter', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test6:client:*'
   process.env.DEBUG_COLORS = 'false'
@@ -116,7 +117,7 @@ test('with trailing wild cards and filter', async () => {
 })
 
 test('with multiple wild cards and exclusion filter', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test7:*:*,-test7:*:*:init'
   process.env.DEBUG_COLORS = 'false'
@@ -132,7 +133,7 @@ test('with multiple wild cards and exclusion filter', async () => {
 })
 
 test('with multiple wild cards and multiple exclusion filters', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test8:*:*,-test8:*:*:init,-test8:pool:*'
   process.env.DEBUG_COLORS = 'false'
@@ -147,7 +148,7 @@ test('with multiple wild cards and multiple exclusion filters', async () => {
 })
 
 test('truncation when no wildcard is used', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test9:client'
   process.env.DEBUG_COLORS = 'false'
@@ -163,7 +164,7 @@ test('truncation when no wildcard is used', async () => {
 })
 
 test('object serialization', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test10:client'
   process.env.DEBUG_COLORS = 'false'
@@ -189,7 +190,7 @@ test('object serialization', async () => {
 })
 
 test('millisecond timestamps', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test11:client'
   process.env.DEBUG_COLORS = 'false'
@@ -204,7 +205,7 @@ test('millisecond timestamps', async () => {
 })
 
 test('wildcard can be used like a regex at the end', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test12:client*'
   process.env.DEBUG_COLORS = 'false'
@@ -222,7 +223,7 @@ test('wildcard can be used like a regex at the end', async () => {
 })
 
 test('wildcard can be used like a regex in the middle', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test13:client*init'
   process.env.DEBUG_COLORS = 'false'
@@ -238,7 +239,7 @@ test('wildcard can be used like a regex in the middle', async () => {
 })
 
 test('can manage complex inclusions and exclusions', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   // Accepted alternatives:
   // - Anything that starts with 'test14:', followed by any number of characters, then ':query-engine:',
@@ -265,7 +266,7 @@ test('can manage complex inclusions and exclusions', async () => {
 })
 
 test('regex characters do not mess with matching', async () => {
-  const consoleWarn = jest.spyOn(console, 'warn').mockImplementation()
+  const consoleWarn = vi.spyOn(console, 'warn')
 
   process.env.DEBUG = 'test15:\\w+'
   process.env.DEBUG_COLORS = 'false'
@@ -276,7 +277,7 @@ test('regex characters do not mess with matching', async () => {
   expect(consoleWarnParams.length).toBe(0)
 })
 
-// utility to to map the calls to the stderr mock this makes it easier to read
+// utility to map the calls to the stderr mock this makes it easier to read
 // snapshots and separates time diffs from the message logs
 const mapper = (call: any[]) => {
   const [args, time] = call as [string, string]

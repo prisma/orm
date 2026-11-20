@@ -1,8 +1,17 @@
 import * as Public from './core/public'
 
-export { objectEnumValues } from './core/types/exported/ObjectEnums'
 export { makeStrictEnum } from './strictEnum'
 export { getRuntime } from './utils/getRuntime'
-export { default as Decimal } from 'decimal.js'
+export {
+  AnyNull,
+  DbNull,
+  isAnyNull,
+  isDbNull,
+  isJsonNull,
+  isObjectEnumValue,
+  JsonNull,
+  NullTypes,
+} from '@prisma/client-runtime-utils'
+export { Decimal } from '@prisma/client-runtime-utils'
 
 export { Public }

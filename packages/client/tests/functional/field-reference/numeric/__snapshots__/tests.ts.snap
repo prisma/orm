@@ -7,7 +7,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -19,7 +19,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -31,7 +31,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -43,7 +43,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -55,7 +55,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -67,7 +67,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -79,7 +79,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -91,7 +91,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -103,7 +103,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -115,7 +115,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -127,7 +127,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -139,7 +139,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -151,7 +151,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -163,7 +163,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -175,7 +175,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -187,7 +187,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -199,7 +199,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -211,7 +211,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -223,7 +223,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -235,7 +235,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -247,7 +247,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -259,7 +259,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -271,7 +271,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -283,7 +283,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -295,7 +295,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -307,7 +307,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -319,7 +319,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -331,7 +331,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -343,7 +343,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -355,7 +355,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -367,7 +367,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -379,7 +379,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -391,7 +391,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -403,7 +403,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -415,7 +415,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -427,7 +427,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -439,7 +439,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -451,7 +451,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -463,7 +463,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -475,7 +475,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -487,7 +487,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -499,7 +499,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -511,7 +511,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -523,7 +523,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -535,7 +535,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -547,7 +547,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -559,7 +559,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type BigInt but found Product.wrongType of type Int."
 `;
@@ -571,7 +571,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -583,7 +583,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Float but found Product.wrongType of type Int."
 `;
@@ -595,7 +595,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;
@@ -607,7 +607,7 @@ Invalid \`prisma.product.findMany()\` invocation in
 
   XX 
   XX // TODO: Edge: skipped because of the error snapshot
-  XX testIf(runtime !== 'edge')('wrong column numeric type', async () => {
+  XX test('wrong column numeric type', async () => {
 → XX   const products = prisma.product.findMany(
 Input error. Expected a referenced scalar field of type Int but found Product.wrongType of type Float."
 `;

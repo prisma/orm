@@ -4,15 +4,17 @@ import {
   arg,
   checkUnsupportedDataProxy,
   Command,
+  createSchemaPathInput,
   format,
+  getSchemaDatasourceProvider,
   HelpError,
   inferDirectoryConfig,
   isError,
-  loadEnvFile,
   loadSchemaContext,
   MigrateTypes,
+  validatePrismaConfigWithDatasource,
 } from '@prisma/internals'
-import { bold, dim, green, red } from 'kleur/colors'
+import { bold, dim, green, italic, red } from 'kleur/colors'
 
 import { Migrate } from '../Migrate'
 import { ensureDatabaseExists, parseDatasourceInfo } from '../utils/ensureDatabaseExists'
@@ -21,17 +23,15 @@ import { printFilesFromMigrationIds } from '../utils/printFiles'
 
 const debug = Debug('prisma:migrate:deploy')
 
-export class MigrateDeploy implements Command {
-  public static new(): MigrateDeploy {
-    return new MigrateDeploy()
-  }
-
-  private static help = format(`
+function renderHelp(cliCommand: string): string {
+  return format(`
 Apply pending migrations to update the database schema in production/staging
 
 ${bold('Usage')}
 
-  ${dim('$')} prisma migrate deploy [options]
+  ${dim('$')} ${cliCommand} migrate deploy [options]
+
+  The datasource URL configuration is read from the Prisma config file (e.g., ${italic('prisma7.config.ts')}).
 
 ${bold('Options')}
 
@@ -42,14 +42,22 @@ ${bold('Options')}
 ${bold('Examples')}
 
   Deploy your pending migrations to your production/staging database
-  ${dim('$')} prisma migrate deploy
+  ${dim('$')} ${cliCommand} migrate deploy
 
   Specify a schema
-  ${dim('$')} prisma migrate deploy --schema=./schema.prisma
+  ${dim('$')} ${cliCommand} migrate deploy --schema=./schema.prisma
 
 `)
+}
 
-  public async parse(argv: string[], config: PrismaConfigInternal): Promise<string | Error> {
+export class MigrateDeploy implements Command {
+  public static new(cliCommand: string): MigrateDeploy {
+    return new MigrateDeploy(cliCommand)
+  }
+
+  private constructor(private readonly cliCommand: string) {}
+
+  public async parse(argv: string[], config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(
       argv,
       {
@@ -70,18 +78,21 @@ ${bold('Examples')}
       return this.help()
     }
 
-    await loadEnvFile({ schemaPath: args['--schema'], printMessage: true, config })
-
     const schemaContext = await loadSchemaContext({
-      schemaPathFromArg: args['--schema'],
-      schemaPathFromConfig: config.schema,
+      schemaPath: createSchemaPathInput({
+        schemaPathFromArgs: args['--schema'],
+        schemaPathFromConfig: config.schema,
+        baseDir,
+      }),
     })
     const { migrationsDirPath } = inferDirectoryConfig(schemaContext, config)
 
-    checkUnsupportedDataProxy({ cmd: 'migrate deploy', schemaContext })
+    const cmd = `${this.cliCommand} migrate deploy`
+    const validatedConfig = validatePrismaConfigWithDatasource({ config, command: cmd })
 
-    const adapter = await config.adapter?.()
-    printDatasource({ datasourceInfo: parseDatasourceInfo(schemaContext.primaryDatasource), adapter })
+    checkUnsupportedDataProxy({ command: cmd, validatedConfig })
+
+    printDatasource({ datasourceInfo: parseDatasourceInfo(schemaContext.primaryDatasource, validatedConfig) })
 
     const schemaFilter: MigrateTypes.SchemaFilter = {
       externalTables: config.tables?.external ?? [],
@@ -89,25 +100,27 @@ ${bold('Examples')}
     }
 
     const migrate = await Migrate.setup({
-      adapter,
+      schemaEngineConfig: config,
+      baseDir,
       migrationsDirPath,
       schemaContext,
       schemaFilter,
       extensions: config['extensions'],
     })
 
-    // `ensureDatabaseExists` is not compatible with WebAssembly.
-    if (!adapter) {
-      try {
-        // Automatically create the database if it doesn't exist
-        const wasDbCreated = await ensureDatabaseExists(schemaContext.primaryDatasource)
-        if (wasDbCreated) {
-          process.stdout.write('\n' + wasDbCreated + '\n')
-        }
-      } catch (e) {
-        process.stdout.write('\n') // empty line
-        throw e
+    try {
+      // Automatically create the database if it doesn't exist
+      const successMessage = await ensureDatabaseExists(
+        baseDir,
+        getSchemaDatasourceProvider(schemaContext),
+        validatedConfig,
+      )
+      if (successMessage) {
+        process.stdout.write('\n' + successMessage + '\n')
       }
+    } catch (e) {
+      process.stdout.write('\n') // empty line
+      throw e
     }
 
     const listMigrationDirectoriesResult = await migrate.listMigrationDirectories()
@@ -144,15 +157,15 @@ ${bold('Examples')}
           'migration.sql': '',
         },
       )}
-      
+
 ${green('All migrations have been successfully applied.')}`
     }
   }
 
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${MigrateDeploy.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${renderHelp(this.cliCommand)}`)
     }
-    return MigrateDeploy.help
+    return renderHelp(this.cliCommand)
   }
 }

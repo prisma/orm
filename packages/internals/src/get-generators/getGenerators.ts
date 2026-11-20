@@ -1,5 +1,5 @@
 import Debug from '@prisma/debug'
-import { enginesVersion, getCliQueryEngineBinaryType } from '@prisma/engines'
+import { enginesVersion } from '@prisma/engines'
 import type {
   BinaryTargetsEnvValue,
   EngineType,
@@ -15,16 +15,15 @@ import pMap from 'p-map'
 import path from 'path'
 import { match } from 'ts-pattern'
 
-import { getDMMF, getEnvPaths, loadSchemaContext, mergeSchemas, SchemaContext } from '..'
+import { loadSchemaContext, SchemaContext } from '../cli/schemaContext'
+import { getDMMF, mergeSchemas } from '../engine-commands'
 import { Generator, InProcessGenerator, JsonRpcGenerator } from '../Generator'
 import { resolveOutput } from '../resolveOutput'
-import { extractPreviewFeatures } from '../utils/extractPreviewFeatures'
 import { missingDatasource } from '../utils/missingDatasource'
 import { missingModelMessage, missingModelMessageMongoDB } from '../utils/missingGeneratorMessage'
 import { parseBinaryTargetsEnvValue, parseEnvValue } from '../utils/parseEnvValue'
 import { pick } from '../utils/pick'
 import { printConfigWarnings } from '../utils/printConfigWarnings'
-import { binaryTypeToEngineType } from './utils/binaryTypeToEngineType'
 import { fixBinaryTargets } from './utils/fixBinaryTargets'
 import { getBinaryPathsByVersion } from './utils/getBinaryPathsByVersion'
 import { getEngineVersionForGenerator } from './utils/getEngineVersionForGenerator'
@@ -73,11 +72,10 @@ export type GetGeneratorOptions = {
   skipDownload?: boolean
   binaryPathsOverride?: BinaryPathsOverride
   generatorNames?: string[]
-  postinstall?: boolean
-  noEngine?: boolean
   allowNoModels?: boolean
   typedSql?: SqlQueryOutput[]
   extensions?: {}
+  cliCommand: string
 }
 /**
  * Makes sure that all generators have the binaries they deserve and returns a
@@ -108,15 +106,13 @@ export async function getGenerators(options: GetGeneratorOptions): Promise<Gener
     skipDownload,
     binaryPathsOverride,
     generatorNames = [],
-    postinstall,
-    noEngine,
     allowNoModels = true,
     typedSql,
   } = options
   // Fallback logic for prisma studio which still only passes a schema path
   const schemaContext =
     !options.schemaContext && schemaPath
-      ? await loadSchemaContext({ schemaPathFromArg: schemaPath, ignoreEnvVarErrors: true })
+      ? await loadSchemaContext({ schemaPath: { cliProvidedPath: schemaPath } })
       : options.schemaContext
 
   if (!schemaContext) {
@@ -129,20 +125,15 @@ export async function getGenerators(options: GetGeneratorOptions): Promise<Gener
 
   printConfigWarnings(schemaContext.warnings)
 
-  const previewFeatures = extractPreviewFeatures(schemaContext.generators)
-
-  const dmmf = await getDMMF({
-    datamodel: schemaContext.schemaFiles,
-    previewFeatures,
-  })
+  const dmmf = await getDMMF({ datamodel: schemaContext.schemaFiles })
 
   if (dmmf.datamodel.models.length === 0 && !allowNoModels) {
     // MongoDB needs extras for @id: @map("_id") @db.ObjectId
     if (schemaContext.primaryDatasource.provider === 'mongodb') {
-      throw new Error(missingModelMessageMongoDB)
+      throw new Error(missingModelMessageMongoDB(options.cliCommand))
     }
 
-    throw new Error(missingModelMessage)
+    throw new Error(missingModelMessage(options.cliCommand))
   }
 
   const generatorConfigs = filterGenerators(overrideGenerators || schemaContext.generators, generatorNames)
@@ -202,7 +193,6 @@ You need to define \`output\` in the generator block in the schema file.`,
         }
 
         const datamodel = mergeSchemas({ schemas: schemaContext.schemaFiles })
-        const envPaths = await getEnvPaths(schemaContext.schemaPath, { cwd: generatorConfig.output.value! })
 
         const options: GeneratorOptions = {
           datamodel,
@@ -212,10 +202,7 @@ You need to define \`output\` in the generator block in the schema file.`,
           otherGenerators: skipIndex(generatorConfigs, index),
           schemaPath: schemaContext.schemaPath, // TODO:(schemaPath) can we get rid of schema path passing here?
           version: version || enginesVersion, // this version makes no sense anymore and should be ignored
-          postinstall,
-          noEngine,
           allowNoModels,
-          envPaths,
           typedSql,
         }
 
@@ -287,11 +274,8 @@ generator gen {
       }
     }
 
-    const queryEngineBinaryType = getCliQueryEngineBinaryType()
-    const queryEngineType = binaryTypeToEngineType(queryEngineBinaryType)
-
     debug('neededVersions', JSON.stringify(neededVersions, null, 2))
-    const { binaryPathsByVersion, binaryTarget } = await getBinaryPathsByVersion({
+    const { binaryPathsByVersion } = await getBinaryPathsByVersion({
       neededVersions,
       // We're lazily computing the binary target here, to avoid printing the
       // `Prisma failed to detect the libssl/openssl version to use` warning
@@ -313,26 +297,6 @@ generator gen {
         const generatorBinaryPaths = pick(binaryPaths ?? {}, generator.manifest.requiresEngines)
         debug({ generatorBinaryPaths })
         generator.setBinaryPaths(generatorBinaryPaths)
-
-        // in case cli engine version !== client engine version
-        // we need to re-generate the dmmf and pass it into the generator
-        if (
-          engineVersion !== version &&
-          generator.options &&
-          generator.manifest.requiresEngines.includes(queryEngineType) &&
-          generatorBinaryPaths[queryEngineType] &&
-          generatorBinaryPaths[queryEngineType]?.[binaryTarget]
-        ) {
-          const customDmmf = await getDMMF({
-            datamodel: schemaContext.schemaFiles,
-            previewFeatures,
-          })
-          const options = { ...generator.options, dmmf: customDmmf }
-          debug('generator.manifest.prettyName', generator.manifest.prettyName)
-          debug('options', options)
-          debug('options.generator.binaryTargets', options.generator.binaryTargets)
-          generator.setOptions(options)
-        }
       }
     }
 
@@ -388,19 +352,6 @@ async function validateGenerators(generators: GeneratorConfig[]): Promise<void> 
   const binaryTarget = await getBinaryTargetForCurrentPlatform()
 
   for (const generator of generators) {
-    if (generator.config.platforms) {
-      throw new Error(
-        `The \`platforms\` field on the generator definition is deprecated. Please rename it to \`binaryTargets\`.`,
-      )
-    }
-
-    if (generator.config.pinnedBinaryTargets) {
-      throw new Error(
-        `The \`pinnedBinaryTargets\` field on the generator definition is deprecated.
-Please use the PRISMA_QUERY_ENGINE_BINARY env var instead to pin the binary target.`,
-      )
-    }
-
     if (generator.binaryTargets) {
       const binaryTargets =
         generator.binaryTargets && generator.binaryTargets.length > 0

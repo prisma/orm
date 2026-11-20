@@ -1,23 +1,19 @@
-import { CompilerWasmLoadingConfig, EngineWasmLoadingConfig, GetPrismaClientConfig } from '@prisma/client-common'
+import { CompilerWasmLoadingConfig, RuntimeDataModel } from '@prisma/client-common'
 import type { SqlDriverAdapterFactory } from '@prisma/driver-adapter-utils'
 import type { DataSource, GeneratorConfig } from '@prisma/generator'
-import { TracingHelper } from '@prisma/internals'
+import type { TracingHelper } from '@prisma/instrumentation-contract'
+import type { JsonQuery } from '@prisma/json-protocol'
+import type { SerializedParamGraph } from '@prisma/param-graph'
+import type { SqlCommenterPlugin } from '@prisma/sqlcommenter'
 
-import { Datasources } from '../../../getPrismaClient'
-import { PrismaClientInitializationError } from '../../errors/PrismaClientInitializationError'
-import { PrismaClientKnownRequestError } from '../../errors/PrismaClientKnownRequestError'
-import { PrismaClientUnknownRequestError } from '../../errors/PrismaClientUnknownRequestError'
-import type { prismaGraphQLToJSError } from '../../errors/utils/prismaGraphQLToJSError'
-import type { resolveDatasourceUrl } from '../../init/resolveDatasourceUrl'
 import type { LogEmitter } from './types/Events'
-import { JsonQuery } from './types/JsonProtocol'
-import type { Metrics, MetricsOptionsJson, MetricsOptionsPrometheus } from './types/Metrics'
 import type { QueryEngineResultData } from './types/QueryEngine'
 import type * as Transaction from './types/Transaction'
-import type { getBatchRequestPayload } from './utils/getBatchRequestPayload'
 
 export type BatchTransactionOptions = {
   isolationLevel?: Transaction.IsolationLevel
+  maxWait?: number
+  timeout?: number
 }
 
 export type TransactionOptions<InteractiveTransactionPayload> =
@@ -113,61 +109,33 @@ export interface Engine<InteractiveTransactionPayload = unknown> {
     headers: Transaction.TransactionHeaders,
     info: Transaction.InteractiveTransactionInfo<unknown>,
   ): Promise<void>
-  metrics(options: MetricsOptionsJson): Promise<Metrics>
-  metrics(options: MetricsOptionsPrometheus): Promise<string>
-  // Methods dedicated for the C/RN engine, other versions should throw error
-  applyPendingMigrations(): Promise<void>
 }
 
 export interface EngineConfig {
-  cwd: string
-  dirname: string
   enableDebugLogs?: boolean
-  allowTriggerPanic?: boolean // dangerous! https://github.com/prisma/prisma-engines/issues/764
   prismaPath?: string
-  generator?: GeneratorConfig
-  /**
-   * @remarks this field is used internally by Policy, do not rename or remove
-   */
-  overrideDatasources: Datasources
-  showColors?: boolean
   logQueries?: boolean
   logLevel?: 'info' | 'warn'
-  env: Record<string, string>
-  flags?: string[]
   clientVersion: string
-  engineVersion: string
   previewFeatures?: string[]
-  engineEndpoint?: string
   activeProvider?: string
   logEmitter: LogEmitter
   transactionOptions: Transaction.Options
 
   /**
-   * Instance of a Driver Adapter, e.g., like one provided by `@prisma/adapter-planetscale`.
-   * If set, this is only used in the library engine, and all queries would be performed through it,
-   * rather than Prisma's Rust drivers.
-   * @remarks only used by LibraryEngine.ts
+   * Instance of a Driver Adapter, e.g., like one provided by `@prisma/adapter-pg`.
    */
   adapter?: SqlDriverAdapterFactory
+
+  /**
+   * Prisma Accelerate URL allowing the client to connect through Accelerate instead of a direct database.
+   */
+  accelerateUrl?: string
 
   /**
    * The contents of the schema encoded into a string
    */
   inlineSchema: string
-
-  /**
-   * The contents of the datasource url saved in a string
-   * @remarks only used by DataProxyEngine.ts
-   * @remarks this field is used internally by Policy, do not rename or remove
-   */
-  inlineDatasources: GetPrismaClientConfig['inlineDatasources']
-
-  /**
-   * The string hash that was produced for a given schema
-   * @remarks only used by DataProxyEngine.ts
-   */
-  inlineSchemaHash: string
 
   /**
    * The helper for interaction with OTEL tracing
@@ -176,32 +144,47 @@ export interface EngineConfig {
   tracingHelper: TracingHelper
 
   /**
-   * Information about whether we have not found a schema.prisma file in the
-   * default location, and that we fell back to finding the schema.prisma file
-   * in the current working directory. This usually means it has been bundled.
-   */
-  isBundled?: boolean
-
-  /**
    * Web Assembly module loading configuration
    */
-  engineWasm?: EngineWasmLoadingConfig
   compilerWasm?: CompilerWasmLoadingConfig
 
   /**
-   * Allows Accelerate to use runtime utilities from the client. These are
-   * necessary for the AccelerateEngine to function correctly.
+   * SQL commenter plugins that add metadata to SQL queries as comments.
+   * Each plugin receives query context and returns key-value pairs.
    */
-  accelerateUtils?: {
-    resolveDatasourceUrl: typeof resolveDatasourceUrl
-    getBatchRequestPayload: typeof getBatchRequestPayload
-    prismaGraphQLToJSError: typeof prismaGraphQLToJSError
-    PrismaClientUnknownRequestError: typeof PrismaClientUnknownRequestError
-    PrismaClientInitializationError: typeof PrismaClientInitializationError
-    PrismaClientKnownRequestError: typeof PrismaClientKnownRequestError
-    debug: (...args: any[]) => void
-    engineVersion: string
-    clientVersion: string
+  sqlCommenters?: SqlCommenterPlugin[]
+
+  /**
+   * Parameterization schema (ParamGraph) for schema-aware query parameterization.
+   * Enables precise parameterization based on DMMF metadata.
+   */
+  parameterizationSchema: SerializedParamGraph
+
+  /**
+   * Runtime data model for enum lookups during parameterization.
+   */
+  runtimeDataModel: RuntimeDataModel
+
+  /**
+   * Optional maximum size for the query plan cache. If not provided, a default size will be used.
+   * A value of `0` can be used to disable the cache entirely. A higher cache size can improve
+   * performance for applications that execute a large number of unique queries, while a smaller
+   * cache size can reduce memory usage.
+   */
+  queryPlanCacheMaxSize?: number
+}
+
+/**
+ * Used by `@prisma/extension-accelerate` until we migrate it to a better API.
+ */
+export interface AccelerateEngineConfig extends EngineConfig {
+  /**
+   * Allows Accelerate to use runtime utilities from the client. These are
+   * necessary for `@prisma/extension-accelerate` to function correctly.
+   * See <https://github.com/prisma/prisma-extension-accelerate/blob/b6ffa853f038780f5ab2fc01bff584ca251f645b/src/extension.ts#L518>
+   */
+  accelerateUtils: {
+    resolveDatasourceUrl: () => string
   }
 }
 

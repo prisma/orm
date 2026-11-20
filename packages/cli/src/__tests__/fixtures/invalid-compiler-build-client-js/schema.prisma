@@ -1,0 +1,8 @@
+generator client {
+  provider = "prisma-client-js"
+  compilerBuild = "invalid"
+}
+
+datasource db {
+  provider = "sqlite"
+}

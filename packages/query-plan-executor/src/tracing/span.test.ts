@@ -109,7 +109,7 @@ describe('SpanProxy', () => {
     const exported = proxy.endAndExport(endTime)
 
     // Verify the exported span
-    expect(exported.name).toEqual(`prisma:engine:${TEST_NAME}`)
+    expect(exported.name).toEqual(`prisma:accelerate:${TEST_NAME}`)
     expect(exported.kind).toEqual('client')
     expect(exported.id).toBeDefined()
     expect(exported.parentId).toBeDefined()
@@ -143,7 +143,7 @@ describe('SpanProxy', () => {
     const exported = proxy.endAndExport(now)
 
     // Verify the exported span
-    expect(exported.name).toEqual(`prisma:engine:${TEST_NAME}`)
+    expect(exported.name).toEqual(`prisma:accelerate:${TEST_NAME}`)
     expect(exported.kind).toEqual('internal') // Default value
     expect(exported.id).toBeDefined()
     expect(exported.parentId).toEqual(null)

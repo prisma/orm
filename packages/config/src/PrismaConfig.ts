@@ -1,52 +1,13 @@
-import {
-  Debug,
-  ErrorCapturingSqlMigrationAwareDriverAdapterFactory,
-  SqlMigrationAwareDriverAdapterFactory,
-} from '@prisma/driver-adapter-utils'
-import { Either, identity, Schema as Shape, Struct } from 'effect'
+import { Debug } from '@prisma/debug'
+import { Either, Schema as Shape } from 'effect'
 import { pipe } from 'effect/Function'
 
 import { defineConfig } from './defineConfig'
-import { PrismaConfigPackageJson, PrismaConfigPackageJsonShape } from './loadConfigFromPackageJson'
 import type { Simplify } from './utils'
 
 const debug = Debug('prisma:config:PrismaConfig')
 
-const SqlMigrationAwareDriverAdapterFactoryShape = Shape.declare(
-  (input: any): input is () => Promise<SqlMigrationAwareDriverAdapterFactory> => {
-    return typeof input === 'function'
-  },
-  {
-    identifier: 'SqlMigrationAwareDriverAdapterFactory',
-    encode: identity,
-    decode: identity,
-  },
-)
-
-export type SqlMigrationAwareDriverAdapterFactoryShape =
-  | undefined
-  | (() => Promise<SqlMigrationAwareDriverAdapterFactory>)
-
-const ErrorCapturingSqlMigrationAwareDriverAdapterFactoryShape = Shape.declare(
-  (input: any): input is () => Promise<ErrorCapturingSqlMigrationAwareDriverAdapterFactory> => {
-    return typeof input === 'function'
-  },
-  {
-    identifier: 'ErrorCapturingSqlMigrationAwareDriverAdapterFactory',
-    encode: identity,
-    decode: identity,
-  },
-)
-
 export type ExperimentalConfig = {
-  /**
-   * Enable experimental adapter support.
-   */
-  adapter?: boolean
-  /**
-   * Enable experimental Prisma Studio features.
-   */
-  studio?: boolean
   /**
    * Enable experimental external tables support.
    */
@@ -57,9 +18,21 @@ export type ExperimentalConfig = {
   extensions?: boolean
 }
 
+const DatasourceShape = Shape.Struct({
+  url: Shape.optional(Shape.String),
+  shadowDatabaseUrl: Shape.optional(Shape.String),
+})
+
+export type Datasource = {
+  url?: string
+  shadowDatabaseUrl?: string
+}
+
+export type SchemaEngineConfigInternal = {
+  datasource?: Datasource
+}
+
 const ExperimentalConfigShape = Shape.Struct({
-  adapter: Shape.optional(Shape.Boolean),
-  studio: Shape.optional(Shape.Boolean),
   externalTables: Shape.optional(Shape.Boolean),
   extensions: Shape.optional(Shape.Boolean),
 })
@@ -193,34 +166,11 @@ if (false) {
   __testTypedSqlConfigShapeValueB satisfies (typeof TypedSqlConfigShape)['Type']
 }
 
-export type PrismaStudioConfigShape = {
-  adapter: () => Promise<SqlMigrationAwareDriverAdapterFactory>
-}
-
-const PrismaStudioConfigShape = Shape.Struct({
-  /**
-   * Instantiates the Prisma driver adapter to use for Prisma Studio.
-   */
-  adapter: SqlMigrationAwareDriverAdapterFactoryShape,
-})
-
-declare const __testPrismaStudioConfigShapeValueA: (typeof PrismaStudioConfigShape)['Type']
-declare const __testPrismaStudioConfigShapeValueB: PrismaStudioConfigShape
-
-// eslint-disable-next-line no-constant-condition
-if (false) {
-  __testPrismaStudioConfigShapeValueA satisfies PrismaStudioConfigShape
-  __testPrismaStudioConfigShapeValueB satisfies (typeof PrismaStudioConfigShape)['Type']
-}
-
 // Ensure that the keys of the `PrismaConfig` type are the same as the keys of the `PrismaConfigInternal` type.
 // (Except for the internal only `loadedFromFile` property)
 // This prevents us from bugs caused by only updating one of the two types and shapes, without also updating the other one.
 declare const __testPrismaConfig: keyof (typeof PrismaConfigShape)['Type']
-declare const __testPrismaConfigInternal: keyof Omit<
-  (typeof PrismaConfigInternalShape)['Type'],
-  'loadedFromFile' | 'deprecatedPackageJson'
->
+declare const __testPrismaConfigInternal: keyof Omit<(typeof PrismaConfigInternalShape)['Type'], 'loadedFromFile'>
 
 // eslint-disable-next-line no-constant-condition
 if (false) {
@@ -231,9 +181,8 @@ if (false) {
 // Define the shape for the user-facing `PrismaConfig` type.
 const PrismaConfigShape = Shape.Struct({
   experimental: Shape.optional(ExperimentalConfigShape),
+  datasource: Shape.optional(DatasourceShape),
   schema: Shape.optional(Shape.String),
-  studio: Shape.optional(PrismaStudioConfigShape),
-  adapter: Shape.optional(SqlMigrationAwareDriverAdapterFactoryShape),
   migrations: Shape.optional(MigrationsConfigShape),
   tables: Shape.optional(TablesConfigShape),
   enums: Shape.optional(EnumsConfigShape),
@@ -252,17 +201,13 @@ export type PrismaConfig = {
    */
   experimental?: Simplify<ExperimentalConfig>
   /**
+   * The datasource configuration. Optional for most cases, but required for migration / introspection commands.
+   */
+  datasource?: Simplify<Datasource>
+  /**
    * The path to the schema file, or path to a folder that shall be recursively searched for *.prisma files.
    */
   schema?: string
-  /**
-   * The Driver Adapter used for Prisma CLI.
-   */
-  adapter?: () => Promise<SqlMigrationAwareDriverAdapterFactory>
-  /**
-   * The configuration for Prisma Studio.
-   */
-  studio?: Simplify<PrismaStudioConfigShape>
   /**
    * Configuration for Prisma migrations.
    */
@@ -298,16 +243,6 @@ if (false) {
  */
 function validateExperimentalFeatures(config: PrismaConfig): Either.Either<PrismaConfig, Error> {
   const experimental = config.experimental || {}
-
-  // Check adapter configuration
-  if (config.adapter && !experimental.adapter) {
-    return Either.left(new Error('The `adapter` configuration requires `experimental.adapter` to be set to `true`.'))
-  }
-
-  // Check studio configuration
-  if (config.studio && !experimental.studio) {
-    return Either.left(new Error('The `studio` configuration requires `experimental.studio` to be set to `true`.'))
-  }
 
   // Check external tables configuration
   if (config.tables?.external && !experimental.externalTables) {
@@ -359,55 +294,12 @@ const PRISMA_CONFIG_INTERNAL_BRAND = Symbol.for('PrismaConfigInternal')
 // Define the shape for the `PrismaConfigInternal` type.
 // We don't want people to construct this type directly (structurally), so we turn it opaque via a branded type.
 const PrismaConfigInternalShape = Shape.Struct({
-  ...Struct.omit(PrismaConfigShape.fields, 'adapter'),
-  adapter: Shape.optional(ErrorCapturingSqlMigrationAwareDriverAdapterFactoryShape),
+  ...PrismaConfigShape.fields,
   loadedFromFile: Shape.NullOr(Shape.String),
-  deprecatedPackageJson: Shape.NullOr(
-    Shape.Struct({
-      config: PrismaConfigPackageJsonShape,
-      loadedFromFile: Shape.String,
-    }),
-  ),
 })
 
-type _PrismaConfigInternal = Omit<PrismaConfig, 'adapter'> & {
-  /**
-   * The Driver Adapter used for Prisma CLI.
-   */
-  adapter?: () => Promise<ErrorCapturingSqlMigrationAwareDriverAdapterFactory>
-  /**
-   * The path from where the config was loaded.
-   * It's set to `null` if no config file was found and only default config is applied.
-   */
+type _PrismaConfigInternal = PrismaConfig & {
   loadedFromFile: string | null
-  /**
-   * The deprecated Prisma configuration from `package.json#prisma`.
-   * This is set to `null` if no `package.json#prisma` config was found.
-   * The configuration read from the Prisma config file (e.g., `prisma.config.ts`) takes precedence over
-   * this `package.json#prisma` config.
-   * @deprecated
-   */
-  deprecatedPackageJson: {
-    /**
-     * The Prisma configuration from `package.json#prisma`.
-     * @deprecated
-     */
-    config: PrismaConfigPackageJson
-
-    /**
-     * The path from where the `package.json` config was loaded.
-     * @deprecated
-     */
-    loadedFromFile: string
-  } | null
-}
-
-declare const __testPrismaConfigInternalValueA: (typeof PrismaConfigInternalShape)['Type']
-declare const __testPrismaConfigInternalValueB: _PrismaConfigInternal
-// eslint-disable-next-line no-constant-condition
-if (false) {
-  __testPrismaConfigInternalValueA satisfies _PrismaConfigInternal
-  __testPrismaConfigInternalValueB satisfies (typeof PrismaConfigInternalShape)['Type']
 }
 
 /**

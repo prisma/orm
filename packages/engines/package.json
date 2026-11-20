@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/engines"
   },
   "license": "Apache-2.0",
@@ -15,14 +15,13 @@
     "@swc/core": "1.11.5",
     "@swc/jest": "0.2.37",
     "@types/jest": "29.5.14",
-    "@types/node": "18.19.76",
+    "@types/node": "~20.19.24",
     "execa": "5.1.1",
-    "typescript": "5.4.5",
-    "vitest": "3.2.4"
+    "typescript": "5.4.5"
   },
   "dependencies": {
     "@prisma/debug": "workspace:*",
-    "@prisma/engines-version": "6.18.0-2.ba2627112b75424f26505fb83167ce78db40fc57",
+    "@prisma/engines-version": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@prisma/fetch-engine": "workspace:*",
     "@prisma/get-platform": "workspace:*"
   },

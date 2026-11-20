@@ -1,4 +1,9 @@
 import { build } from '../../../helpers/compile/build'
-import { adapterConfig } from '../../../helpers/compile/configs'
+import { createBundledConfig } from '../../../helpers/compile/configs'
 
-void build(adapterConfig)
+const bundleConfig = createBundledConfig([
+  { entry: 'src/index-node.ts', outfile: 'dist/index-node' },
+  { entry: 'src/index-workerd.ts', outfile: 'dist/index-workerd' },
+])
+
+void build(bundleConfig)

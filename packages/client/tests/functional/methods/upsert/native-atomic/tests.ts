@@ -232,7 +232,7 @@ testMatrix.setupTestSuite(
           name,
         },
         create: {
-          // Because the the where 'name' is 'not' equal to the create 'name'
+          // Because the where 'name' is 'not' equal to the create 'name'
           name: name + '1',
         },
         update: {
@@ -248,7 +248,7 @@ testMatrix.setupTestSuite(
           name,
         },
         create: {
-          // Because the the where 'name' is 'equal' to the create 'name'
+          // Because the where 'name' is 'equal' to the create 'name'
           name,
         },
         update: {

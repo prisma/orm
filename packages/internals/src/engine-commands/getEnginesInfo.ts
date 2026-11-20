@@ -23,7 +23,6 @@ export type EngineInfo = {
 }
 
 export type BinaryMatrix<T> = {
-  'query-engine': T
   'schema-engine': T
 }
 

@@ -1,9 +1,0 @@
-{
-  // https://typestrong.org/ts-node/docs/imports/
-  "compilerOptions": {
-    "module": "ESNext", // required!, needs to be ES6, ES2015, ES2020, ESNext, if not set errors with "ReferenceError: exports is not defined"
-    "moduleResolution": "Node", // required!
-    "esModuleInterop": true, // required!
-    "strict": true // optional but recommended
-  }
-}

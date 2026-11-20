@@ -7,6 +7,7 @@ import {
   type TransactionOptions,
 } from '@prisma/client-engine-runtime'
 import type { ConnectionInfo, SqlDriverAdapter, SqlDriverAdapterFactory } from '@prisma/driver-adapter-utils'
+import type { SqlCommenterPlugin } from '@prisma/sqlcommenter'
 
 import type { InteractiveTransactionInfo } from '../common/types/Transaction'
 import type { ExecutePlanParams, Executor, ProviderAndConnectionInfo } from './Executor'
@@ -17,6 +18,7 @@ export interface LocalExecutorOptions {
   tracingHelper: TracingHelper
   onQuery?: (event: QueryEvent) => void
   provider?: SchemaProvider
+  sqlCommenters?: SqlCommenterPlugin[]
 }
 
 export class LocalExecutor implements Executor {
@@ -24,12 +26,19 @@ export class LocalExecutor implements Executor {
   readonly #driverAdapter: SqlDriverAdapter
   readonly #transactionManager: TransactionManager
   readonly #connectionInfo?: ConnectionInfo
+  readonly #interpreter: QueryInterpreter
 
   constructor(options: LocalExecutorOptions, driverAdapter: SqlDriverAdapter, transactionManager: TransactionManager) {
     this.#options = options
     this.#driverAdapter = driverAdapter
     this.#transactionManager = transactionManager
     this.#connectionInfo = driverAdapter.getConnectionInfo?.()
+    this.#interpreter = QueryInterpreter.forSql({
+      onQuery: this.#options.onQuery,
+      tracingHelper: this.#options.tracingHelper,
+      provider: this.#options.provider,
+      connectionInfo: this.#connectionInfo,
+    })
   }
 
   static async connect(options: LocalExecutorOptions): Promise<LocalExecutor> {
@@ -58,21 +67,26 @@ export class LocalExecutor implements Executor {
     return Promise.resolve({ provider: this.#driverAdapter.provider, connectionInfo })
   }
 
-  async execute({ plan, placeholderValues, transaction, batchIndex }: ExecutePlanParams): Promise<unknown> {
+  async execute({
+    plan,
+    placeholderValues: scope,
+    transaction,
+    batchIndex,
+    queryInfo,
+  }: ExecutePlanParams): Promise<unknown> {
     const queryable = transaction
       ? await this.#transactionManager.getTransaction(transaction, batchIndex !== undefined ? 'batch query' : 'query')
       : this.#driverAdapter
 
-    const interpreter = QueryInterpreter.forSql({
+    return await this.#interpreter.run(plan, {
+      queryable,
       transactionManager: transaction ? { enabled: false } : { enabled: true, manager: this.#transactionManager },
-      placeholderValues,
-      onQuery: this.#options.onQuery,
-      tracingHelper: this.#options.tracingHelper,
-      provider: this.#options.provider,
-      connectionInfo: this.#connectionInfo,
+      scope,
+      sqlCommenter: this.#options.sqlCommenters && {
+        plugins: this.#options.sqlCommenters,
+        queryInfo,
+      },
     })
-
-    return await interpreter.run(plan, queryable)
   }
 
   async startTransaction(options: TransactionOptions): Promise<InteractiveTransactionInfo> {

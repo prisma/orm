@@ -1,6 +1,5 @@
 datasource my_db {
     provider = "cockroachdb"
-    url      = env("TEST_COCKROACH_URI_MIGRATE")
 }
 
 generator client {

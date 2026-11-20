@@ -50,10 +50,6 @@ suite
     printSize('./node_modules/.prisma/client')
     printSize('./node_modules/.prisma/client/index.d.ts')
     printSize('./node_modules/.prisma/client/index.js')
-    // For GitHub CI
-    if (process.env.CI) {
-      printSize('./node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node')
-    }
     execaSync('rm', ['-rf', `./dotPlusAtPrismaClientFolder.zip`], {
       stdout: 'pipe',
       cwd: __dirname,

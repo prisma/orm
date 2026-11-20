@@ -1,5 +1,7 @@
 #!/usr/bin/env tsx
 
+import path from 'node:path'
+
 import { loadConfigFromFile } from '@prisma/config'
 import Debug from '@prisma/debug'
 import { enginesVersion } from '@prisma/engines-version'
@@ -51,46 +53,73 @@ const args = arg(
 async function main(): Promise<number> {
   // create a new CLI with our subcommands
   const cli = CLI.new({
-    migrate: MigrateCommand.new({
-      dev: MigrateDev.new(),
-      status: MigrateStatus.new(),
-      resolve: MigrateResolve.new(),
-      reset: MigrateReset.new(),
-      deploy: MigrateDeploy.new(),
-      diff: MigrateDiff.new(),
-    }),
-    db: DbCommand.new({
-      execute: DbExecute.new(),
-      pull: DbPull.new(),
-      push: DbPush.new(),
-      // drop: DbDrop.new(),
-      seed: DbSeed.new(),
-    }),
+    migrate: MigrateCommand.new(
+      {
+        dev: MigrateDev.new('prisma'),
+        status: MigrateStatus.new('prisma'),
+        resolve: MigrateResolve.new('prisma'),
+        reset: MigrateReset.new('prisma'),
+        deploy: MigrateDeploy.new('prisma'),
+        diff: MigrateDiff.new('prisma'),
+      },
+      'prisma',
+    ),
+    db: DbCommand.new(
+      {
+        execute: DbExecute.new('prisma'),
+        pull: DbPull.new('prisma'),
+        push: DbPush.new('prisma'),
+        // drop: DbDrop.new('prisma'),
+        seed: DbSeed.new('prisma'),
+      },
+      'prisma',
+    ),
   })
 
-  const { config, error } = await loadConfigFromFile({ configFile: args['--config'] })
+  const configFile = args['--config']
+  const baseDir = configFile ? path.resolve(configFile, '..') : process.cwd()
+
+  const { config, error } = await loadConfigFromFile({ configFile })
   if (error) {
     console.error(`Failed to load config file: ${error._tag}`)
     return 1
   }
 
-  // Execute the command
-  const result = await cli.parse(commandArray, config)
-  // Did it error?
-  if (result instanceof HelpError) {
-    console.error(result)
-    // TODO: We could do like Bash (and other)
-    // = return an exit status of 2 to indicate incorrect usage like invalid options or missing arguments.
-    // https://tldp.org/LDP/abs/html/exitcodes.html
-    return 1
-  } else if (isError(result)) {
-    console.error(result)
+  if (!config) {
+    console.error('`prisma7.config.ts` not found')
     return 1
   }
 
-  // Success
-  console.log(result)
-  return 0
+  try {
+    // Execute the command
+    const result = await cli.parse(commandArray, config, baseDir)
+    // Did it error?
+    if (result instanceof HelpError) {
+      console.error(result)
+      // TODO: We could do like Bash (and other)
+      // = return an exit status of 2 to indicate incorrect usage like invalid options or missing arguments.
+      // https://tldp.org/LDP/abs/html/exitcodes.html
+      return 1
+    } else if (isError(result)) {
+      console.error(result)
+      return 1
+    }
+
+    // Success
+    console.log(result)
+    return 0
+  } catch (error) {
+    if (error.rustStack) {
+      await handlePanic({
+        error,
+        cliVersion: packageVersion,
+        enginesVersion,
+        command: commandArray.join(' '),
+        getDatabaseVersionSafe: (args) => getDatabaseVersionSafe(args, config, baseDir),
+      })
+    }
+    throw error
+  }
 }
 
 /**
@@ -103,30 +132,10 @@ main()
     }
   })
   .catch((error) => {
-    if (error.rustStack) {
-      handlePanic({
-        error,
-        cliVersion: packageVersion,
-        enginesVersion,
-        command: commandArray.join(' '),
-        getDatabaseVersionSafe,
-      })
-        .catch((e) => {
-          if (Debug.enabled('migrate')) {
-            console.error(red(bold('Error: ')) + e.stack)
-          } else {
-            console.error(red(bold('Error: ')) + e.message)
-          }
-        })
-        .finally(() => {
-          process.exit(1)
-        })
+    if (Debug.enabled('migrate')) {
+      console.error(red(bold('Error: ')) + error.stack)
     } else {
-      if (Debug.enabled('migrate')) {
-        console.error(red(bold('Error: ')) + error.stack)
-      } else {
-        console.error(red(bold('Error: ')) + error.message)
-      }
-      process.exit(1)
+      console.error(red(bold('Error: ')) + error.message)
     }
+    process.exit(1)
   })

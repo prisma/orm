@@ -6,7 +6,7 @@ This package contains the driver adapter for Prisma ORM that enables usage of th
 
 ## Usage
 
-This section explains how you can use it with Prisma ORM and the `@prisma/adapter-mariadb` driver adapter. Be sure that the `DATABASE_URL` environment variable is set to your MariaDB/MySQL connection string (e.g. in a `.env` file).
+This section explains how you can use it with Prisma ORM and the `@prisma/adapter-mariadb` driver adapter. Be sure that the `DATABASE_URL` environment variable is set to your MariaDB/MySQL connection string (e.g. loaded using `dotenv` from a `.env` file).
 
 ### 1. Install the dependencies
 

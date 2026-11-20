@@ -17,6 +17,7 @@ export const QueryRequestBody = z.object({
   operation: z.string().min(1),
   plan: z.record(z.string(), z.unknown()),
   params: z.record(z.string(), z.unknown()),
+  comments: z.record(z.string(), z.string()).optional(),
 })
 
 export type QueryRequestBody = z.infer<typeof QueryRequestBody>
@@ -49,6 +50,7 @@ export const TransactionStartRequestBody = z.object({
   isolationLevel: z
     .enum(['READ UNCOMMITTED', 'READ COMMITTED', 'REPEATABLE READ', 'SNAPSHOT', 'SERIALIZABLE'])
     .optional(),
+  newTxId: z.string().optional(),
 })
 
 export type TransactionStartRequestBody = z.infer<typeof TransactionStartRequestBody>

@@ -12,6 +12,7 @@
     "neon:ws": "DATABASE_URL=\"${JS_NEON_DATABASE_URL}\" \"tsx ./src/neon.ws.ts\"",
     "neon:http": "DATABASE_URL=\"${JS_NEON_DATABASE_URL}\" \"tsx ./src/neon.http.ts\"",
     "prisma:pg": "DATABASE_URL=\"${JS_PG_DATABASE_URL}\" \"pnpm prisma:db:push:postgres && pnpm prisma:db:execute:postgres\"",
+    "ppg": "DATABASE_URL=\"${JS_PPG_DATABASE_URL}\" \"tsx src/ppg.ts\"",
     "pg": "DATABASE_URL=\"${JS_PG_DATABASE_URL}\" \"tsx ./src/pg.ts\"",
     "prisma:planetscale": "DATABASE_URL=\"${JS_PLANETSCALE_DATABASE_URL}\" \"pnpm prisma:db:push:mysql && pnpm prisma:db:execute:mysql\"",
     "planetscale": "DATABASE_URL=\"${JS_PLANETSCALE_DATABASE_URL}\" \"tsx ./src/planetscale.ts\""
@@ -25,6 +26,7 @@
     "@prisma/adapter-neon": "../../packages/adapter-neon",
     "@prisma/adapter-pg": "../../packages/adapter-pg",
     "@prisma/adapter-planetscale": "../../packages/adapter-planetscale",
+    "@prisma/adapter-ppg": "../../packages/adapter-ppg",
     "@prisma/client": "../../packages/client",
     "@prisma/driver-adapter-utils": "../../packages/driver-adapter-utils",
     "pg": "../../packages/adapter-pg/node_modules/pg",
@@ -32,7 +34,7 @@
     "undici": "5.27.2"
   },
   "devDependencies": {
-    "@types/node": "18.19.76",
+    "@types/node": "~20.19.0",
     "@types/pg": "../../packages/adapter-pg/node_modules/@types/pg",
     "prisma": "../../packages/cli",
     "tsx": "4.1.2",

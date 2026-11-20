@@ -1,3 +1,5 @@
+import util from 'node:util'
+
 import { zValidator } from '@hono/zod-validator'
 import { QueryPlanNode, TransactionManagerError, UserFacingError } from '@prisma/client-engine-runtime'
 import { Context, Hono } from 'hono'
@@ -62,7 +64,7 @@ function createHonoServer(app: App, options: Options) {
   return server
     .onError((error, c) => {
       log.error('Error processing request', {
-        error,
+        error: util.inspect(error),
         method: c.req.method,
         pathname: c.req.path,
         requestId: c.get('requestId'),
@@ -81,11 +83,18 @@ function createHonoServer(app: App, options: Options) {
     })
     .post('/query', zValidator('json', QueryRequestBody), async (c) => {
       const request = c.req.valid('json')
-      const data = await app.query(request.plan as QueryPlanNode, request.params, c.get('resourceLimits'), null)
+      const data = await app.query(
+        request.plan as QueryPlanNode,
+        request.params,
+        request.comments,
+        c.get('resourceLimits'),
+        null,
+      )
       return c.json({ data } satisfies QueryResponseBody)
     })
     .post('/transaction/start', zValidator('json', TransactionStartRequestBody), async (c) => {
       const result = await app.startTransaction(c.req.valid('json'), c.get('resourceLimits'))
+      c.header('Prisma-Transaction-Id', result.id)
       return c.json(result satisfies TransactionStartResponseBody)
     })
     .post('/transaction/:txId/query', zValidator('json', QueryRequestBody), async (c) => {
@@ -93,6 +102,7 @@ function createHonoServer(app: App, options: Options) {
       const data = await app.query(
         request.plan as QueryPlanNode,
         request.params,
+        request.comments,
         c.get('resourceLimits'),
         c.req.param('txId'),
       )

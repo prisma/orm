@@ -1,0 +1,14 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/compatibility-client"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Note {
+  id    Int    @id @default(autoincrement())
+  value String
+}

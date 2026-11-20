@@ -4,6 +4,7 @@ import { $ } from 'zx'
 
 import { executeSteps } from '../_utils/executeSteps'
 import { retry } from '../_utils/retry'
+import { stopProcess, waitForWranglerReady } from '../_utils/wrangler'
 
 void executeSteps({
   setup: async () => {
@@ -15,16 +16,13 @@ void executeSteps({
       const wranglerProcess = $`pnpm wrangler dev --ip 127.0.0.1 --port 8787 src/index.ts`.nothrow()
 
       try {
-        // wait for the server to be fully ready
-        for await (const line of wranglerProcess.stdout) {
-          if (line.includes('Ready')) break
-        }
+        await waitForWranglerReady(wranglerProcess)
 
-        await timers.setTimeout(100)
+        await timers.setTimeout(1000)
 
         return await $`curl http://localhost:8787/ -s`
       } finally {
-        await wranglerProcess.kill()
+        await stopProcess(wranglerProcess).catch(() => {})
       }
     }, 3)
 

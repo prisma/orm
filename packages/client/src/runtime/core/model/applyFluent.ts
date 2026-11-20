@@ -84,11 +84,9 @@ export function applyFluent(
   // we retrieve the model that is described from the DMMF
   const dmmfModel = client._runtimeDataModel.models[dmmfModelName]
 
-  // map[field.name] === field, basically for quick access
-  const dmmfModelFieldMap = dmmfModel.fields.reduce(
-    (acc, field) => ({ ...acc, [field.name]: field }),
-    {} as { [dmmfModelFieldName: string]: DMMF.Field },
-  )
+  // map[field.name] === field, basically for quick access; built lazily and
+  // only when the fluent API is actually chained on, so plain queries pay nothing
+  let dmmfModelFieldMap: { [dmmfModelFieldName: string]: DMMF.Field } | undefined
 
   // we return a regular model action but proxy its return
   return (userArgs?: UserArgs) => {
@@ -108,6 +106,7 @@ export function applyFluent(
         if (!ownKeys.includes(prop)) return target[prop]
 
         // here we are sure that prop is a field of type object
+        dmmfModelFieldMap ??= Object.fromEntries(dmmfModel.fields.map((field) => [field.name, field] as const))
         const dmmfModelName = dmmfModelFieldMap[prop].type
         const modelArgs = [dmmfModelName, modelAction, prop] as const
         const dataArgs = [nextDataPath, nextUserArgs] as const

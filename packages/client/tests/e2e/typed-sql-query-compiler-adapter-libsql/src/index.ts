@@ -1,10 +1,10 @@
-import { PrismaLibSQL } from '@prisma/adapter-libsql'
+import { PrismaLibSql } from '@prisma/adapter-libsql'
 
 import { PrismaClient } from './generated/prisma/client'
 import { conversionByVariant, filterTrackingEvents, getTrackingEvents } from './generated/prisma/sql'
 
 async function main() {
-  const adapter = new PrismaLibSQL({
+  const adapter = new PrismaLibSql({
     url: 'file:./prisma/dev.db',
   })
   const prisma = new PrismaClient({ adapter })

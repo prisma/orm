@@ -1,4 +1,4 @@
-import { Decimal } from 'decimal.js'
+import { Decimal } from '@prisma/client-runtime-utils'
 
 import type { Input } from '../../__helpers__/integrationTest'
 

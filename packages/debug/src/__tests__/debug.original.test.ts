@@ -1,4 +1,5 @@
 // copied from the original debug tests
+import { describe, it } from 'vitest'
 
 import Debug from '../index'
 

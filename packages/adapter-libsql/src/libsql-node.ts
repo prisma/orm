@@ -1,8 +1,8 @@
 import { type Client, type Config, createClient } from '@libsql/client'
 
-import { PrismaLibSQLAdapterFactoryBase } from './libsql'
+import { PrismaLibSqlAdapterFactoryBase } from './libsql'
 
-export class PrismaLibSQLAdapterFactory extends PrismaLibSQLAdapterFactoryBase {
+export class PrismaLibSqlAdapterFactory extends PrismaLibSqlAdapterFactoryBase {
   createClient(config: Config): Client {
     return createClient(config)
   }

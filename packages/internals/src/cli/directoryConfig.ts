@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import { PrismaConfigInternal } from '@prisma/config'
+import type { PrismaConfig } from '@prisma/config'
 
 import { SchemaContext } from './schemaContext'
 
@@ -10,15 +10,15 @@ export type DirectoryConfig = {
   migrationsDirPath: string
 }
 
+/**
+ * TODO: `config` should very likely be mandatory here.
+ */
 export function inferDirectoryConfig(
   schemaContext?: SchemaContext | null,
-  config?: PrismaConfigInternal,
+  config?: Pick<PrismaConfig, 'views' | 'typedSql' | 'migrations'>,
   cwd: string = process.cwd(),
 ): DirectoryConfig {
   const baseDir =
-    // All default paths are relative to the `schema.prisma` file that contains the primary datasource.
-    // That schema file should usually be the users "root" aka main schema file.
-    schemaContext?.primaryDatasourceDirectory ??
     // If no primary datasource exists we use the schemaRootDir.
     // `schemaRootDir` is either the directory the user supplied as schemaPath or the directory the single schema file is in.
     schemaContext?.schemaRootDir ??

@@ -1,1 +1,1 @@
-export { PrismaBetterSQLite3AdapterFactory as PrismaBetterSQLite3 } from './better-sqlite3'
+export { PrismaBetterSqlite3AdapterFactory as PrismaBetterSqlite3 } from './better-sqlite3'

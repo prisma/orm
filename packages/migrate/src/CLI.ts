@@ -14,7 +14,7 @@ export class CLI implements Command {
 
   private constructor(private readonly cmds: Commands) {}
 
-  async parse(argv: string[], config: PrismaConfigInternal): Promise<string | Error> {
+  async parse(argv: string[], config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(argv, {
       '--help': Boolean,
       '-h': '--help',
@@ -50,7 +50,7 @@ export class CLI implements Command {
         argsForCmd = args._.slice(1)
       }
 
-      return cmd.parse(argsForCmd, config)
+      return cmd.parse(argsForCmd, config, baseDir)
     }
     // unknown command
     return unknownCommand(this.help() as string, args._[0])

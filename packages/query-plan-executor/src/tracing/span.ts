@@ -142,7 +142,7 @@ export class SpanProxy implements Span {
       parentId,
       attributes,
       links,
-      name: `prisma:engine:${this.#name}`,
+      name: `prisma:accelerate:${this.#name}`,
       kind: serializeSpanKind(this.#kind),
       startTime: this.#startTime,
       endTime: instantToHrTime(endTime),

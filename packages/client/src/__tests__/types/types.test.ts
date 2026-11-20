@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { getClientEngineType, getPackedPackage } from '@prisma/internals'
+import { getPackedPackage } from '@prisma/internals'
 import tsd, { formatter } from 'tsd'
 
 import { compileFile } from '../../utils/compileFile'
@@ -30,7 +30,10 @@ describe('valid types', () => {
 
     const indexPath = path.join(dir, 'test.ts')
     const tsdTestPath = path.join(dir, 'index.test-d.ts')
-    const engineSpecificTestPath = path.join(dir, `test.${getClientEngineType()}.ts`)
+
+    // Originally, this would test `test.library.ts` and `test.binary.ts` files.
+    // TODO: port them to `test.client.ts`.
+    const engineSpecificTestPath = path.join(dir, `test.client.ts`)
 
     if (fs.existsSync(tsdTestPath)) {
       await runTsd(dir)

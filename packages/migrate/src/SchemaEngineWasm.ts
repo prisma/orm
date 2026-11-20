@@ -1,5 +1,5 @@
 import Debug from '@prisma/debug'
-import type { ErrorCapturingSqlDriverAdapterFactory, ErrorRegistry } from '@prisma/driver-adapter-utils'
+import type { ErrorCapturingSqlMigrationAwareDriverAdapterFactory, ErrorRegistry } from '@prisma/driver-adapter-utils'
 import {
   assertAlways,
   ErrorArea,
@@ -26,7 +26,7 @@ export type SchemaEngineInput<M extends keyof SchemaEngineMethods> = Parameters<
 export type SchemaEngineOutput<M extends keyof SchemaEngineMethods> = ReturnType<wasm.SchemaEngineWasm[M]>
 
 interface SchemaEngineWasmSetupInput {
-  adapter: ErrorCapturingSqlDriverAdapterFactory
+  adapter: ErrorCapturingSqlMigrationAwareDriverAdapterFactory
   enabledPreviewFeatures?: string[]
   schemaContext?: SchemaContext
 }

@@ -19,6 +19,10 @@ export class TracingHandler implements TracingHelper {
     this.#tracer = tracer
   }
 
+  isEnabled(): boolean {
+    return true
+  }
+
   runInChildSpan<R>(nameOrOptions: string | ExtendedSpanOptions, callback: (span?: Span, context?: Context) => R): R {
     const options = normalizeSpanOptions(nameOrOptions)
     return new SpanScope(options, this.#tracer).run(callback)

@@ -1,0 +1,12 @@
+datasource db {
+  provider = "cockroachdb"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id   Int    @id @map("_id")
+  name String
+}

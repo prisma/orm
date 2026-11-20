@@ -1,6 +1,7 @@
+import type { MultipleSchemas } from '@prisma/get-dmmf'
+
 import { SchemaContext } from '../cli/schemaContext'
 import { MigrateTypes } from '../migrateTypes'
-import { MultipleSchemas } from './schemaFileInput'
 
 export function toSchemasContainer(schemas: MultipleSchemas): MigrateTypes.SchemasContainer {
   return {
@@ -8,10 +9,13 @@ export function toSchemasContainer(schemas: MultipleSchemas): MigrateTypes.Schem
   }
 }
 
-export function toSchemasWithConfigDir(schemaContext: SchemaContext): MigrateTypes.SchemasWithConfigDir {
+export function toSchemasWithConfigDir(
+  schemaContext: SchemaContext,
+  configDir: string,
+): MigrateTypes.SchemasWithConfigDir {
   return {
     files: multipleSchemasToSchemaContainers(schemaContext.schemaFiles),
-    configDir: schemaContext.primaryDatasourceDirectory,
+    configDir,
   }
 }
 

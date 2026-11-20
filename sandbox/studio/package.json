@@ -1,0 +1,33 @@
+{
+  "private": true,
+  "name": "studio-test",
+  "description": "Test package for Prisma Studio CLI command",
+  "type": "module",
+  "scripts": {
+    "studio:bun": "bun --bun run ../../packages/cli/build/index.js studio --config ./prisma.config.ts",
+    "studio:bun:sqlite": "PROVIDER=sqlite pnpm studio:bun",
+    "studio:deno": "deno run -A --unstable-detect-cjs ../../packages/cli/build/index.js studio --config ./prisma.config.ts",
+    "studio:deno:sqlite": "PROVIDER=sqlite pnpm studio:deno",
+    "studio:node": "node --experimental-sqlite ../../packages/cli/build/index.js studio --config ./prisma.config.ts",
+    "studio:node:debug": "DEBUG=prisma:* pnpm studio:node",
+    "studio:node:mysql": "PROVIDER=mysql pnpm studio:node",
+    "studio:node:mysql:debug": "PROVIDER=mysql pnpm studio:node:debug",
+    "studio:node:postgres": "PROVIDER=postgres pnpm studio:node",
+    "studio:node:postgres:debug": "PROVIDER=postgres pnpm studio:node:debug",
+    "studio:node:sqlite": "PROVIDER=sqlite pnpm studio:node",
+    "studio:node:sqlite:debug": "PROVIDER=sqlite pnpm studio:node:debug"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/config": "../../packages/config",
+    "better-sqlite3": "^12.4.6",
+    "dotenv": "^17.2.3",
+    "mysql2": "^3.15.3",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

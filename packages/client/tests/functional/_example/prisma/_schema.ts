@@ -10,7 +10,6 @@ export default testMatrix.setupSchema(({ provider, randomString, previewFeatures
     
     datasource db {
       provider = "${provider}"
-      url      = env("DATABASE_URI_${provider}")
     }
     
     model User {

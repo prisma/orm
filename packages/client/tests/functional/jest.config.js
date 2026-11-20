@@ -18,6 +18,7 @@ module.exports = () => {
     setupFilesAfterEnv: ['./_utils/setupFilesAfterEnv.ts'],
     testTimeout,
     collectCoverage: process.env.CI ? true : false,
+    prettierPath: '../../../../node_modules/prettier2',
   }
 
   if (process.env['JEST_JUNIT_DISABLE'] !== 'true') {

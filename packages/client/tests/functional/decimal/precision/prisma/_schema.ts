@@ -9,7 +9,6 @@ export default testMatrix.setupSchema(({ provider, precision, scale }) => {
   
   datasource db {
     provider = "${provider}"
-    url      = env("DATABASE_URI_${provider}")
   }
   
   model TestModel {

@@ -1,7 +1,7 @@
 import type { DataSource, GeneratorConfig } from '@prisma/generator'
-import { EngineSpan, EngineTraceEvent } from '@prisma/internals'
+import type { EngineSpan, EngineTraceEvent } from '@prisma/instrumentation-contract'
+import type { JsonBatchQuery } from '@prisma/json-protocol'
 
-import { JsonBatchQuery } from './JsonProtocol'
 import { RequestError } from './RequestError'
 import { IsolationLevel } from './Transaction'
 
@@ -69,7 +69,7 @@ export type QueryEngineBatchResult<T> = WithErrorsAndResultExtensions<{
 
 export type QueryEngineResultExtensions = {
   logs?: EngineTraceEvent[]
-  traces?: EngineSpan[]
+  spans?: EngineSpan[]
 }
 
 export type QueryEngineBatchRequest = QueryEngineBatchGraphQLRequest | JsonBatchQuery

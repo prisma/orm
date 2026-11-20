@@ -3,7 +3,7 @@ import type * as DMMF from '@prisma/dmmf'
 import * as ts from '@prisma/ts-builders'
 import indent from 'indent-string'
 
-import { runtimeImport, runtimeImportedType } from '../utils/runtimeImport'
+import { runtimeImportedType } from '../utils/runtimeImport'
 import { TAB_SIZE } from './constants'
 import { GenerateContext } from './GenerateContext'
 import { TSClientOptions } from './TSClient'
@@ -39,20 +39,22 @@ function batchingTransactionDefinition(context: GenerateContext) {
         ])
         \`\`\`
 
-        Read more in our [docs](https://www.prisma.io/docs/concepts/components/prisma-client/transactions).
+        Read more in our [docs](https://www.prisma.io/docs/orm/prisma-client/queries/transactions).
       `,
     )
     .addGenericParameter(ts.genericParameter('P').extends(ts.array(tsx.prismaPromise(ts.anyType))))
     .addParameter(ts.parameter('arg', ts.arraySpread(ts.namedType('P'))))
     .setReturnType(tsx.promise(ts.namedType('runtime.Types.Utils.UnwrapTuple').addGenericArgument(ts.namedType('P'))))
 
+  const options = ts.objectType().formatInline()
+  options.add(ts.property('maxWait', ts.numberType).optional())
+  options.add(ts.property('timeout', ts.numberType).optional())
+
   if (context.dmmf.hasEnumInNamespace('TransactionIsolationLevel', 'prisma')) {
-    const options = ts
-      .objectType()
-      .formatInline()
-      .add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
-    method.addParameter(ts.parameter('options', options).optional())
+    options.add(ts.property('isolationLevel', ts.namedType('Prisma.TransactionIsolationLevel')).optional())
   }
+
+  method.addParameter(ts.parameter('options', options).optional())
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
 }
@@ -73,9 +75,7 @@ function interactiveTransactionDefinition(context: GenerateContext) {
 
   const callbackType = ts
     .functionType()
-    .addParameter(
-      ts.parameter('prisma', tsx.omit(ts.namedType('PrismaClient'), ts.namedType('runtime.ITXClientDenyList'))),
-    )
+    .addParameter(ts.parameter('prisma', tsx.omit(ts.namedType('PrismaClient'), itxTransactionClientDenyList(context))))
     .setReturnType(returnType)
 
   const method = ts
@@ -86,6 +86,14 @@ function interactiveTransactionDefinition(context: GenerateContext) {
     .setReturnType(returnType)
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
+}
+
+function itxTransactionClientDenyList(context: GenerateContext) {
+  if (!context.isSqlProvider()) {
+    return ts.unionType([ts.namedType('runtime.ITXClientDenyList'), ts.stringLiteral('$transaction')])
+  }
+
+  return ts.namedType('runtime.ITXClientDenyList')
 }
 
 function queryRawDefinition(context: GenerateContext) {
@@ -102,7 +110,7 @@ function queryRawDefinition(context: GenerateContext) {
    * const result = await prisma.$queryRaw\`SELECT * FROM User WHERE id = \${1} OR email = \${'user@email.com'};\`
    * \`\`\`
    *
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+   * Read more in our [docs](https://pris.ly/d/raw-queries).
    */
   $queryRaw<T = unknown>(query: TemplateStringsArray | Prisma.Sql, ...values: any[]): Prisma.PrismaPromise<T>;
 
@@ -114,7 +122,7 @@ function queryRawDefinition(context: GenerateContext) {
    * const result = await prisma.$queryRawUnsafe('SELECT * FROM User WHERE id = $1 OR email = $2;', 1, 'user@email.com')
    * \`\`\`
    *
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+   * Read more in our [docs](https://pris.ly/d/raw-queries).
    */
   $queryRawUnsafe<T = unknown>(query: string, ...values: any[]): Prisma.PrismaPromise<T>;`
 }
@@ -133,7 +141,7 @@ function executeRawDefinition(context: GenerateContext) {
    * const result = await prisma.$executeRaw\`UPDATE User SET cool = \${true} WHERE email = \${'user@email.com'};\`
    * \`\`\`
    *
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+   * Read more in our [docs](https://pris.ly/d/raw-queries).
    */
   $executeRaw<T = unknown>(query: TemplateStringsArray | Prisma.Sql, ...values: any[]): Prisma.PrismaPromise<number>;
 
@@ -145,7 +153,7 @@ function executeRawDefinition(context: GenerateContext) {
    * const result = await prisma.$executeRawUnsafe('UPDATE User SET cool = $1 WHERE email = $2 ;', true, 'user@email.com')
    * \`\`\`
    *
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+   * Read more in our [docs](https://pris.ly/d/raw-queries).
    */
   $executeRawUnsafe<T = unknown>(query: string, ...values: any[]): Prisma.PrismaPromise<number>;`
 }
@@ -186,30 +194,6 @@ function queryRawTypedDefinition(context: GenerateContext) {
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
 }
 
-function metricDefinition(context: GenerateContext) {
-  if (!context.isPreviewFeatureOn('metrics')) {
-    return ''
-  }
-
-  const property = ts
-    .property('$metrics', ts.namedType(`runtime.${runtimeImport('MetricsClient')}`))
-    .setDocComment(
-      ts.docComment`
-        Gives access to the client metrics in json or prometheus format.
-
-        @example
-        \`\`\`
-        const metrics = await prisma.$metrics.json()
-        // or
-        const metrics = await prisma.$metrics.prometheus()
-        \`\`\`
-    `,
-    )
-    .readonly()
-
-  return ts.stringify(property, { indentLevel: 1, newLine: 'leading' })
-}
-
 function runCommandRawDefinition(context: GenerateContext) {
   // we do not generate `$runCommandRaw` definitions if not supported
   if (!context.dmmf.mappings.otherOperations.write.includes('runCommandRaw')) {
@@ -230,18 +214,10 @@ function runCommandRawDefinition(context: GenerateContext) {
       })
       \`\`\`
 
-      Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+      Read more in our [docs](https://pris.ly/d/raw-queries).
     `)
 
   return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
-}
-
-function eventRegistrationMethodDeclaration(runtimeName: TSClientOptions['runtimeName']) {
-  if (runtimeName === 'binary') {
-    return `$on<V extends (LogOpts | 'beforeExit')>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : V extends 'beforeExit' ? () => runtime.Types.Utils.JsPromise<void> : Prisma.LogEvent) => void): PrismaClient;`
-  } else {
-    return `$on<V extends LogOpts>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : Prisma.LogEvent) => void): PrismaClient;`
-  }
 }
 
 export function getPrismaClientClassDocComment({ dmmf }: GenerateContext): ts.DocComment {
@@ -263,12 +239,14 @@ export function getPrismaClientClassDocComment({ dmmf }: GenerateContext): ts.Do
     Type-safe database client for TypeScript
     @example
     \`\`\`
-    const prisma = new PrismaClient()
+    const prisma = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL })
+    })
     // Fetch zero or more ${capitalize(example.plural)}
     const ${uncapitalize(example.plural)} = await prisma.${uncapitalize(example.model)}.findMany()
     \`\`\`
 
-    Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client).
+    Read more in our [docs](https://pris.ly/d/client).
   `
 }
 
@@ -296,7 +274,7 @@ export interface PrismaClientConstructor {
     LogOpts extends LogOptions<Options> = LogOptions<Options>,
     OmitOpts extends Prisma.PrismaClientOptions['omit'] = Options extends { omit: infer U } ? U : Prisma.PrismaClientOptions['omit'],
     ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs
-  >(options?: Prisma.Subset<Options, Prisma.PrismaClientOptions> ): PrismaClient<LogOpts, OmitOpts, ExtArgs>
+  >(options: Prisma.PrismaClientConstructorArgs<Options>): PrismaClient<LogOpts, OmitOpts, ExtArgs>
 }
 
 ${this.jsDoc}
@@ -307,7 +285,7 @@ export interface PrismaClient<
 > {
   [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['other'] }
 
-  ${eventRegistrationMethodDeclaration(this.runtimeName)}
+  $on<V extends LogOpts>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : Prisma.LogEvent) => void): PrismaClient;
 
   /**
    * Connect with the database
@@ -326,8 +304,6 @@ ${[
   batchingTransactionDefinition(this.context),
   interactiveTransactionDefinition(this.context),
   runCommandRawDefinition(this.context),
-  metricDefinition(this.context),
-  this.applyPendingMigrationsDefinition(),
   extendsPropertyDefinition(),
 ]
   .filter((d) => d !== null)
@@ -358,20 +334,5 @@ get ${methodName}(): Prisma.${m.model}Delegate<${generics.join(', ')}>;`
       2,
     )}
 }`
-  }
-
-  private applyPendingMigrationsDefinition(this: PrismaClientClass) {
-    if (this.runtimeName !== 'react-native') {
-      return null
-    }
-
-    const method = ts
-      .method('$applyPendingMigrations')
-      .setReturnType(tsx.promise(ts.voidType))
-      .setDocComment(
-        ts.docComment`Tries to apply pending migrations one by one. If a migration fails to apply, the function will stop and throw an error. You are responsible for informing the user and possibly blocking the app as we cannot guarantee the state of the database.`,
-      )
-
-    return ts.stringify(method, { indentLevel: 1, newLine: 'leading' })
   }
 }

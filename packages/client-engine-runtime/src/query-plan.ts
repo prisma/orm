@@ -67,7 +67,12 @@ export type DynamicArgType = ArgType | { arity: 'tuple'; elements: ArgType[] }
 export type Fragment =
   | { type: 'stringChunk'; chunk: string }
   | { type: 'parameter' }
-  | { type: 'parameterTuple' }
+  | {
+      type: 'parameterTuple'
+      itemPrefix: string
+      itemSeparator: string
+      itemSuffix: string
+    }
   | {
       type: 'parameterTupleList'
       itemPrefix: string
@@ -88,14 +93,32 @@ export type JoinExpression = {
   isRelationUnique: boolean
 }
 
-export type QueryPlanNode =
+/**
+ * Query plan nodes that are free of side effects and can be interpreted synchronously
+ * without touching the database. The `Rest` parameter controls what other nodes may
+ * appear in child positions: with the default `never` the tree is fully pure, while
+ * `PureQueryPlanNode<ImpureQueryPlanNode>` describes a tree of pure nodes that may
+ * contain impure nodes anywhere inside.
+ */
+export type PureQueryPlanNode<Rest = never> =
   | {
       type: 'value'
       args: PrismaValue
+      /**
+       * Present when this node is the result of evaluating an impure node during
+       * query plan purification. Never produced by the query compiler.
+       */
+      lastInsertId?: string
+      /**
+       * Present when this node holds an already-evaluated runtime result (e.g. from
+       * an evaluated impure query plan node) and does not need to be traversed and copied
+       * by evaluateArg.
+       */
+      isEvaluated?: boolean
     }
   | {
       type: 'seq'
-      args: QueryPlanNode[]
+      args: (PureQueryPlanNode<Rest> | Rest)[]
     }
   | {
       type: 'get'
@@ -106,8 +129,11 @@ export type QueryPlanNode =
   | {
       type: 'let'
       args: {
-        bindings: QueryPlanBinding[]
-        expr: QueryPlanNode
+        bindings: {
+          name: string
+          expr: PureQueryPlanNode<Rest> | Rest
+        }[]
+        expr: PureQueryPlanNode<Rest> | Rest
       }
     }
   | {
@@ -117,55 +143,49 @@ export type QueryPlanNode =
       }
     }
   | {
-      type: 'query'
-      args: QueryPlanDbQuery
-    }
-  | {
-      type: 'execute'
-      args: QueryPlanDbQuery
-    }
-  | {
       type: 'reverse'
-      args: QueryPlanNode
+      args: PureQueryPlanNode<Rest> | Rest
     }
   | {
       type: 'sum'
-      args: QueryPlanNode[]
+      args: (PureQueryPlanNode<Rest> | Rest)[]
     }
   | {
       type: 'concat'
-      args: QueryPlanNode[]
+      args: (PureQueryPlanNode<Rest> | Rest)[]
     }
   | {
       type: 'unique'
-      args: QueryPlanNode
+      args: PureQueryPlanNode<Rest> | Rest
     }
   | {
       type: 'required'
-      args: QueryPlanNode
+      args: PureQueryPlanNode<Rest> | Rest
     }
   | {
       type: 'join'
       args: {
-        parent: QueryPlanNode
-        children: JoinExpression[]
+        parent: PureQueryPlanNode<Rest> | Rest
+        children: {
+          child: PureQueryPlanNode<Rest> | Rest
+          on: [left: string, right: string][]
+          parentField: string
+          isRelationUnique: boolean
+        }[]
+        canAssumeStrictEquality: boolean
       }
     }
   | {
       type: 'mapField'
       args: {
         field: string
-        records: QueryPlanNode
+        records: PureQueryPlanNode<Rest> | Rest
       }
-    }
-  | {
-      type: 'transaction'
-      args: QueryPlanNode
     }
   | {
       type: 'dataMap'
       args: {
-        expr: QueryPlanNode
+        expr: PureQueryPlanNode<Rest> | Rest
         structure: ResultNode
         enums: Record<string, Record<string, string>>
       }
@@ -173,17 +193,17 @@ export type QueryPlanNode =
   | {
       type: 'validate'
       args: {
-        expr: QueryPlanNode
+        expr: PureQueryPlanNode<Rest> | Rest
         rules: DataRule[]
       } & ValidationError
     }
   | {
       type: 'if'
       args: {
-        value: QueryPlanNode
+        value: PureQueryPlanNode<Rest> | Rest
         rule: DataRule
-        then: QueryPlanNode
-        else: QueryPlanNode
+        then: PureQueryPlanNode<Rest> | Rest
+        else: PureQueryPlanNode<Rest> | Rest
       }
     }
   | {
@@ -192,32 +212,56 @@ export type QueryPlanNode =
   | {
       type: 'diff'
       args: {
-        from: QueryPlanNode
-        to: QueryPlanNode
+        from: PureQueryPlanNode<Rest> | Rest
+        to: PureQueryPlanNode<Rest> | Rest
         fields: string[]
       }
     }
   | {
       type: 'initializeRecord'
       args: {
-        expr: QueryPlanNode
+        expr: PureQueryPlanNode<Rest> | Rest
         fields: Record<string, FieldInitializer>
       }
     }
   | {
       type: 'mapRecord'
       args: {
-        expr: QueryPlanNode
+        expr: PureQueryPlanNode<Rest> | Rest
         fields: Record<string, FieldOperation>
       }
     }
   | {
       type: 'process'
       args: {
-        expr: QueryPlanNode
+        expr: PureQueryPlanNode<Rest> | Rest
         operations: InMemoryOps
       }
     }
+
+/**
+ * Query plan nodes that perform database I/O: individual queries and statements,
+ * and subtrees executed within a transaction.
+ */
+export type ImpureQueryPlanNode =
+  | {
+      type: 'query'
+      args: QueryPlanDbQuery
+    }
+  | {
+      type: 'execute'
+      args: QueryPlanDbQuery
+    }
+  | {
+      type: 'transaction'
+      args: QueryPlanNode
+    }
+
+/**
+ * A query plan as emitted by the query compiler: a tree of pure nodes that may
+ * contain impure nodes anywhere inside.
+ */
+export type QueryPlanNode = ImpureQueryPlanNode | PureQueryPlanNode<ImpureQueryPlanNode>
 
 export type FieldInitializer = { type: 'value'; value: PrismaValue } | { type: 'lastInsertId' }
 
@@ -229,7 +273,7 @@ export type FieldOperation =
   | { type: 'divide'; value: PrismaValue }
 
 export type Pagination = {
-  cursor: Record<string, PrismaValue> | null
+  cursor: Record<string, unknown> | null
   take: number | null
   skip: number | null
 }
@@ -261,7 +305,7 @@ export type DataRule =
 
 export type ValidationError =
   | {
-      error_identifier: 'RELATION_VIOLATION'
+      errorIdentifier: 'RELATION_VIOLATION'
       context: {
         relation: string
         modelA: string
@@ -269,7 +313,7 @@ export type ValidationError =
       }
     }
   | {
-      error_identifier: 'MISSING_RELATED_RECORD'
+      errorIdentifier: 'MISSING_RELATED_RECORD'
       context: {
         model: string
         relation: string
@@ -279,19 +323,19 @@ export type ValidationError =
       }
     }
   | {
-      error_identifier: 'MISSING_RECORD'
+      errorIdentifier: 'MISSING_RECORD'
       context: {
         operation: string
       }
     }
   | {
-      error_identifier: 'INCOMPLETE_CONNECT_INPUT'
+      errorIdentifier: 'INCOMPLETE_CONNECT_INPUT'
       context: {
         expectedRows: number
       }
     }
   | {
-      error_identifier: 'INCOMPLETE_CONNECT_OUTPUT'
+      errorIdentifier: 'INCOMPLETE_CONNECT_OUTPUT'
       context: {
         expectedRows: number
         relation: string
@@ -299,7 +343,7 @@ export type ValidationError =
       }
     }
   | {
-      error_identifier: 'RECORDS_NOT_CONNECTED'
+      errorIdentifier: 'RECORDS_NOT_CONNECTED'
       context: {
         relation: string
         parent: string

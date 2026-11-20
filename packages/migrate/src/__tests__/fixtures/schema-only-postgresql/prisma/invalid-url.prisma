@@ -1,4 +1,3 @@
 datasource my_db {
   provider = "postgresql"
-  url      = "postgresql://johndoe:randompassword@doesnotexist:5432/mydb?schema=public"
 }

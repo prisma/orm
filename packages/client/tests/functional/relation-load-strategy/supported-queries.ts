@@ -9,8 +9,8 @@ import testMatrix from './_matrix'
 // @ts-ignore
 import type { Prisma as PrismaNamespace, PrismaClient } from './generated/prisma/client'
 
-let prisma: PrismaClient<PrismaNamespace.PrismaClientOptions, 'query'>
-declare const newPrismaClient: NewPrismaClient<PrismaClient, typeof PrismaClient>
+let prisma: PrismaClient<'query'>
+declare const newPrismaClient: NewPrismaClient<typeof prisma, typeof PrismaClient>
 
 testMatrix.setupTestSuite(
   (suiteConfig, _suiteMeta, _clientMeta, cliMeta) => {
@@ -127,50 +127,48 @@ testMatrix.setupTestSuite(
         })
 
         test('findMany', async () => {
-          await expect(
-            prisma.user.findMany({
-              relationLoadStrategy,
-              select: {
-                login: true,
-                posts: {
-                  select: {
-                    title: true,
-                    comments: {
-                      select: {
-                        author: {
-                          select: { login: true },
-                        },
-                        body: true,
+          const users = await prisma.user.findMany({
+            relationLoadStrategy,
+            select: {
+              login: true,
+              posts: {
+                select: {
+                  title: true,
+                  comments: {
+                    select: {
+                      author: {
+                        select: { login: true },
                       },
+                      body: true,
                     },
                   },
                 },
               },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            [
-              {
-                "login": "author",
-                "posts": [
-                  {
-                    "comments": [
-                      {
-                        "author": {
-                          "login": "commenter",
-                        },
-                        "body": "a comment",
+            },
+          })
+
+          expect(users).toMatchObject([
+            {
+              login: 'author',
+              posts: [
+                {
+                  comments: [
+                    {
+                      author: {
+                        login: 'commenter',
                       },
-                    ],
-                    "title": "first post",
-                  },
-                ],
-              },
-              {
-                "login": "commenter",
-                "posts": [],
-              },
-            ]
-          `)
+                      body: 'a comment',
+                    },
+                  ],
+                  title: 'first post',
+                },
+              ],
+            },
+            {
+              login: 'commenter',
+              posts: [],
+            },
+          ])
 
           await expectQueryCountAtLeast({
             join: 1,
@@ -181,49 +179,47 @@ testMatrix.setupTestSuite(
         })
 
         test('findFirst', async () => {
-          await expect(
-            prisma.user.findFirst({
-              relationLoadStrategy,
-              where: {
-                login: 'author',
-              },
-              select: {
-                login: true,
-                posts: {
-                  select: {
-                    title: true,
-                    comments: {
-                      select: {
-                        author: {
-                          select: {
-                            login: true,
-                          },
+          const user = await prisma.user.findFirst({
+            relationLoadStrategy,
+            where: {
+              login: 'author',
+            },
+            select: {
+              login: true,
+              posts: {
+                select: {
+                  title: true,
+                  comments: {
+                    select: {
+                      author: {
+                        select: {
+                          login: true,
                         },
-                        body: true,
                       },
+                      body: true,
                     },
                   },
                 },
               },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            {
-              "login": "author",
-              "posts": [
-                {
-                  "comments": [
-                    {
-                      "author": {
-                        "login": "commenter",
-                      },
-                      "body": "a comment",
+            },
+          })
+
+          expect(user).toMatchObject({
+            login: 'author',
+            posts: [
+              {
+                comments: [
+                  {
+                    author: {
+                      login: 'commenter',
                     },
-                  ],
-                  "title": "first post",
-                },
-              ],
-            }
-          `)
+                    body: 'a comment',
+                  },
+                ],
+                title: 'first post',
+              },
+            ],
+          })
 
           await expectQueryCountAtLeast({
             join: 1,
@@ -234,49 +230,47 @@ testMatrix.setupTestSuite(
         })
 
         test('findFirstOrThrow', async () => {
-          await expect(
-            prisma.user.findFirstOrThrow({
-              relationLoadStrategy,
-              where: {
-                login: 'author',
-              },
-              select: {
-                login: true,
-                posts: {
-                  select: {
-                    title: true,
-                    comments: {
-                      select: {
-                        author: {
-                          select: {
-                            login: true,
-                          },
+          const user = await prisma.user.findFirstOrThrow({
+            relationLoadStrategy,
+            where: {
+              login: 'author',
+            },
+            select: {
+              login: true,
+              posts: {
+                select: {
+                  title: true,
+                  comments: {
+                    select: {
+                      author: {
+                        select: {
+                          login: true,
                         },
-                        body: true,
                       },
+                      body: true,
                     },
                   },
                 },
               },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            {
-              "login": "author",
-              "posts": [
-                {
-                  "comments": [
-                    {
-                      "author": {
-                        "login": "commenter",
-                      },
-                      "body": "a comment",
+            },
+          })
+
+          expect(user).toMatchObject({
+            login: 'author',
+            posts: [
+              {
+                comments: [
+                  {
+                    author: {
+                      login: 'commenter',
                     },
-                  ],
-                  "title": "first post",
-                },
-              ],
-            }
-          `)
+                    body: 'a comment',
+                  },
+                ],
+                title: 'first post',
+              },
+            ],
+          })
 
           await expectQueryCountAtLeast({
             join: 1,
@@ -287,49 +281,47 @@ testMatrix.setupTestSuite(
         })
 
         test('findUnique', async () => {
-          await expect(
-            prisma.user.findUnique({
-              relationLoadStrategy,
-              where: {
-                login: 'author',
-              },
-              select: {
-                login: true,
-                posts: {
-                  select: {
-                    title: true,
-                    comments: {
-                      select: {
-                        author: {
-                          select: {
-                            login: true,
-                          },
+          const user = await prisma.user.findUnique({
+            relationLoadStrategy,
+            where: {
+              login: 'author',
+            },
+            select: {
+              login: true,
+              posts: {
+                select: {
+                  title: true,
+                  comments: {
+                    select: {
+                      author: {
+                        select: {
+                          login: true,
                         },
-                        body: true,
                       },
+                      body: true,
                     },
                   },
                 },
               },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            {
-              "login": "author",
-              "posts": [
-                {
-                  "comments": [
-                    {
-                      "author": {
-                        "login": "commenter",
-                      },
-                      "body": "a comment",
+            },
+          })
+
+          expect(user).toMatchObject({
+            login: 'author',
+            posts: [
+              {
+                comments: [
+                  {
+                    author: {
+                      login: 'commenter',
                     },
-                  ],
-                  "title": "first post",
-                },
-              ],
-            }
-          `)
+                    body: 'a comment',
+                  },
+                ],
+                title: 'first post',
+              },
+            ],
+          })
 
           await expectQueryCountAtLeast({
             join: 1,
@@ -340,49 +332,47 @@ testMatrix.setupTestSuite(
         })
 
         test('findUniqueOrThrow', async () => {
-          await expect(
-            prisma.user.findUniqueOrThrow({
-              relationLoadStrategy,
-              where: {
-                login: 'author',
-              },
-              select: {
-                login: true,
-                posts: {
-                  select: {
-                    title: true,
-                    comments: {
-                      select: {
-                        author: {
-                          select: {
-                            login: true,
-                          },
+          const user = await prisma.user.findUniqueOrThrow({
+            relationLoadStrategy,
+            where: {
+              login: 'author',
+            },
+            select: {
+              login: true,
+              posts: {
+                select: {
+                  title: true,
+                  comments: {
+                    select: {
+                      author: {
+                        select: {
+                          login: true,
                         },
-                        body: true,
                       },
+                      body: true,
                     },
                   },
                 },
               },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            {
-              "login": "author",
-              "posts": [
-                {
-                  "comments": [
-                    {
-                      "author": {
-                        "login": "commenter",
-                      },
-                      "body": "a comment",
+            },
+          })
+
+          expect(user).toMatchObject({
+            login: 'author',
+            posts: [
+              {
+                comments: [
+                  {
+                    author: {
+                      login: 'commenter',
                     },
-                  ],
-                  "title": "first post",
-                },
-              ],
-            }
-          `)
+                    body: 'a comment',
+                  },
+                ],
+                title: 'first post',
+              },
+            ],
+          })
 
           await expectQueryCountAtLeast({
             join: 1,
@@ -393,47 +383,45 @@ testMatrix.setupTestSuite(
         })
 
         test('create', async () => {
-          await expect(
-            prisma.user.create({
-              relationLoadStrategy,
-              data: {
-                login: 'reader',
-                comments: {
-                  create: {
-                    post: {
-                      connect: { id: postId },
-                    },
-                    body: 'most insightful indeed!',
+          const user = await prisma.user.create({
+            relationLoadStrategy,
+            data: {
+              login: 'reader',
+              comments: {
+                create: {
+                  post: {
+                    connect: { id: postId },
                   },
+                  body: 'most insightful indeed!',
                 },
               },
-              select: {
-                login: true,
-                comments: {
-                  select: {
-                    post: {
-                      select: {
-                        title: true,
-                      },
+            },
+            select: {
+              login: true,
+              comments: {
+                select: {
+                  post: {
+                    select: {
+                      title: true,
                     },
-                    body: true,
                   },
+                  body: true,
                 },
               },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            {
-              "comments": [
-                {
-                  "body": "most insightful indeed!",
-                  "post": {
-                    "title": "first post",
-                  },
+            },
+          })
+
+          expect(user).toMatchObject({
+            login: 'reader',
+            comments: [
+              {
+                body: 'most insightful indeed!',
+                post: {
+                  title: 'first post',
                 },
-              ],
-              "login": "reader",
-            }
-          `)
+              },
+            ],
+          })
 
           await expectQueryCountAtLeast({
             join: 6,
@@ -444,44 +432,42 @@ testMatrix.setupTestSuite(
         })
 
         test('update', async () => {
-          await expect(
-            prisma.user.update({
-              relationLoadStrategy,
-              where: {
-                login: 'author',
-              },
-              data: {
-                login: 'distinguished author',
-              },
-              select: {
-                login: true,
-                posts: {
-                  select: {
-                    title: true,
-                    comments: {
-                      select: {
-                        body: true,
-                      },
+          const user = await prisma.user.update({
+            relationLoadStrategy,
+            where: {
+              login: 'author',
+            },
+            data: {
+              login: 'distinguished author',
+            },
+            select: {
+              login: true,
+              posts: {
+                select: {
+                  title: true,
+                  comments: {
+                    select: {
+                      body: true,
                     },
                   },
                 },
               },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            {
-              "login": "distinguished author",
-              "posts": [
-                {
-                  "comments": [
-                    {
-                      "body": "a comment",
-                    },
-                  ],
-                  "title": "first post",
-                },
-              ],
-            }
-          `)
+            },
+          })
+
+          expect(user).toMatchObject({
+            login: 'distinguished author',
+            posts: [
+              {
+                comments: [
+                  {
+                    body: 'a comment',
+                  },
+                ],
+                title: 'first post',
+              },
+            ],
+          })
 
           await expectQueryCountAtLeast({
             join: 4,
@@ -492,41 +478,39 @@ testMatrix.setupTestSuite(
         })
 
         test('delete', async () => {
-          await expect(
-            prisma.user.delete({
-              relationLoadStrategy,
-              where: {
-                login: 'author',
-              },
-              select: {
-                login: true,
-                posts: {
-                  select: {
-                    title: true,
-                    comments: {
-                      select: {
-                        body: true,
-                      },
+          const user = await prisma.user.delete({
+            relationLoadStrategy,
+            where: {
+              login: 'author',
+            },
+            select: {
+              login: true,
+              posts: {
+                select: {
+                  title: true,
+                  comments: {
+                    select: {
+                      body: true,
                     },
                   },
                 },
               },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            {
-              "login": "author",
-              "posts": [
-                {
-                  "comments": [
-                    {
-                      "body": "a comment",
-                    },
-                  ],
-                  "title": "first post",
-                },
-              ],
-            }
-          `)
+            },
+          })
+
+          expect(user).toMatchObject({
+            login: 'author',
+            posts: [
+              {
+                comments: [
+                  {
+                    body: 'a comment',
+                  },
+                ],
+                title: 'first post',
+              },
+            ],
+          })
 
           await expectQueryCountAtLeast({
             join: 4,
@@ -537,45 +521,43 @@ testMatrix.setupTestSuite(
         })
 
         test('upsert', async () => {
-          await expect(
-            prisma.user.upsert({
-              relationLoadStrategy,
-              where: {
-                login: 'commenter',
-              },
-              create: {
-                login: 'commenter',
-              },
-              update: {
-                login: 'ardent commenter',
-              },
-              select: {
-                login: true,
-                comments: {
-                  select: {
-                    post: {
-                      select: {
-                        title: true,
-                      },
+          const user = await prisma.user.upsert({
+            relationLoadStrategy,
+            where: {
+              login: 'commenter',
+            },
+            create: {
+              login: 'commenter',
+            },
+            update: {
+              login: 'ardent commenter',
+            },
+            select: {
+              login: true,
+              comments: {
+                select: {
+                  post: {
+                    select: {
+                      title: true,
                     },
-                    body: true,
                   },
+                  body: true,
                 },
               },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            {
-              "comments": [
-                {
-                  "body": "a comment",
-                  "post": {
-                    "title": "first post",
-                  },
+            },
+          })
+
+          expect(user).toMatchObject({
+            login: 'ardent commenter',
+            comments: [
+              {
+                body: 'a comment',
+                post: {
+                  title: 'first post',
                 },
-              ],
-              "login": "ardent commenter",
-            }
-          `)
+              },
+            ],
+          })
 
           await expectQueryCountAtLeast({
             join: 5,
@@ -586,30 +568,26 @@ testMatrix.setupTestSuite(
         })
 
         test('create with no relation selection', async () => {
-          await expect(
-            prisma.user.create({
-              // Doesn't influence the generated queries in this case as we only select scalars.
-              relationLoadStrategy,
-              data: {
-                login: 'reader',
-                comments: {
-                  create: {
-                    post: {
-                      connect: { id: postId },
-                    },
-                    body: 'most insightful indeed!',
+          const user = await prisma.user.create({
+            // Doesn't influence the generated queries in this case as we only select scalars.
+            relationLoadStrategy,
+            data: {
+              login: 'reader',
+              comments: {
+                create: {
+                  post: {
+                    connect: { id: postId },
                   },
+                  body: 'most insightful indeed!',
                 },
               },
-              select: {
-                login: true,
-              },
-            }),
-          ).resolves.toMatchInlineSnapshot(`
-            {
-              "login": "reader",
-            }
-          `)
+            },
+            select: {
+              login: true,
+            },
+          })
+
+          expect(user).toEqual({ login: 'reader' })
 
           // Query count is equal in this test since no relations are loaded.
           await expectQueryCountAtLeast({

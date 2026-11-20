@@ -1,8 +1,6 @@
-import { type TracingHelper, version } from '@prisma/internals'
+import { clearGlobalTracingHelper, setGlobalTracingHelper, type TracingHelper } from '@prisma/instrumentation-contract'
 
 import { getTracingHelper } from './TracingHelper'
-
-const majorVersion = version.split('.')[0]
 
 function createMockTracingHelper(): TracingHelper {
   return {
@@ -15,6 +13,14 @@ function createMockTracingHelper(): TracingHelper {
 }
 
 describe('DynamicTracingHelper', () => {
+  beforeEach(() => {
+    clearGlobalTracingHelper()
+  })
+
+  afterEach(() => {
+    clearGlobalTracingHelper()
+  })
+
   it('should return 00 traceparent when tracing is disabled', () => {
     const helper = getTracingHelper()
 
@@ -25,11 +31,9 @@ describe('DynamicTracingHelper', () => {
     expect(ending).toEqual('00')
   })
 
-  it('picks up the fallback tracing helper', () => {
+  it('picks up the global tracing helper', () => {
     const mockTracingHelper = createMockTracingHelper()
-    globalThis.PRISMA_INSTRUMENTATION = {
-      helper: mockTracingHelper,
-    }
+    setGlobalTracingHelper(mockTracingHelper)
 
     getTracingHelper().isEnabled()
 
@@ -37,34 +41,22 @@ describe('DynamicTracingHelper', () => {
     expect(mockTracingHelper.isEnabled).toHaveBeenCalledTimes(1)
   })
 
-  it('picks up the versioned tracing helper', () => {
+  it('returns disabled helper after clearing global', () => {
     const mockTracingHelper = createMockTracingHelper()
-    globalThis[`V${majorVersion}_PRISMA_INSTRUMENTATION`] = {
-      helper: mockTracingHelper,
-    }
+    setGlobalTracingHelper(mockTracingHelper)
 
+    // Verify it's using the mock
     getTracingHelper().isEnabled()
-
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(mockTracingHelper.isEnabled).toHaveBeenCalledTimes(1)
-  })
 
-  it('prefers the versioned tracing helper over the fallback helper', () => {
-    const mockVersionedTracingHelper = createMockTracingHelper()
-    const mockFallbackTracingHelper = createMockTracingHelper()
+    // Clear and verify fallback to disabled helper
+    clearGlobalTracingHelper()
 
-    globalThis[`V${majorVersion}_PRISMA_INSTRUMENTATION`] = {
-      helper: mockVersionedTracingHelper,
-    }
-    globalThis.PRISMA_INSTRUMENTATION = {
-      helper: mockFallbackTracingHelper,
-    }
+    const helper = getTracingHelper()
+    const result = helper.getTraceParent()
+    const [ending] = result.split('-').reverse()
 
-    getTracingHelper().isEnabled()
-
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(mockVersionedTracingHelper.isEnabled).toHaveBeenCalledTimes(1)
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(mockFallbackTracingHelper.isEnabled).not.toHaveBeenCalled()
+    expect(ending).toEqual('00')
   })
 })

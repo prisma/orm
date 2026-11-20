@@ -3,21 +3,21 @@ import { Script } from 'node:vm'
 
 import { D1Database, D1PreparedStatement, D1Result } from '@cloudflare/workers-types'
 import { faker } from '@faker-js/faker'
-import { defaultTestConfig } from '@prisma/config'
+import type { PrismaConfigInternal } from '@prisma/config'
 import { assertNever } from '@prisma/internals'
-import * as miniProxy from '@prisma/mini-proxy'
-import { execa } from 'execa'
+import { MigrateDiff } from '@prisma/migrate'
 import fs from 'fs-extra'
+import { temporaryFile } from 'tempy'
 import { match } from 'ts-pattern'
 
 import { DbDrop } from '../../../../migrate/src/commands/DbDrop'
 import { DbExecute } from '../../../../migrate/src/commands/DbExecute'
 import { DbPush } from '../../../../migrate/src/commands/DbPush'
-import type { NamedTestSuiteConfig } from './getTestSuiteInfo'
+import { buildPrismaConfig } from './config-builder'
+import type { NamedTestSuiteConfig, TestSuiteMeta } from './getTestSuiteInfo'
 import { getTestSuiteFolderPath, getTestSuiteSchemaPath, testSuiteHasTypedSql } from './getTestSuiteInfo'
 import { AdapterProviders, Providers } from './providers'
-import type { TestSuiteMeta } from './setupTestSuiteMatrix'
-import { AlterStatementCallback, ClientMeta } from './types'
+import { AlterStatementCallback } from './types'
 
 const DB_NAME_VAR = 'PRISMA_DB_NAME'
 
@@ -146,28 +146,38 @@ export async function setupTestSuiteDatabase({
   errors = [],
   alterStatementCallback,
   cfWorkerBindings,
+  datasourceInfo,
 }: {
   suiteMeta: TestSuiteMeta
   suiteConfig: NamedTestSuiteConfig
   errors?: Error[]
   alterStatementCallback?: AlterStatementCallback
   cfWorkerBindings?: { [key: string]: unknown }
+  datasourceInfo: DatasourceInfo
 }) {
   const schemaPath = getTestSuiteSchemaPath({ suiteMeta, suiteConfig })
+  const testDirectoryPath = getTestSuiteFolderPath({ suiteMeta, suiteConfig })
   const consoleInfoMock = jest.spyOn(console, 'info').mockImplementation()
 
   try {
     if (suiteConfig.matrixOptions.driverAdapter === AdapterProviders.JS_D1) {
-      await setupTestSuiteDatabaseD1({ schemaPath, cfWorkerBindings: cfWorkerBindings!, alterStatementCallback })
+      await setupTestSuiteDatabaseD1({
+        schemaPath,
+        testDirectoryPath,
+        cfWorkerBindings: cfWorkerBindings!,
+        alterStatementCallback,
+        prismaConfig: buildPrismaConfig({ suiteMeta, suiteConfig, datasourceInfo }),
+      })
     } else {
-      const dbPushParams = ['--schema', schemaPath, '--skip-generate']
+      const dbPushParams = [] as string[]
 
       // we reuse and clean the db when it is explicitly required
       if (process.env.TEST_REUSE_DATABASE === 'true') {
         dbPushParams.push('--force-reset')
       }
 
-      await DbPush.new().parse(dbPushParams, defaultTestConfig())
+      const runtimeConfig = buildPrismaConfig({ suiteMeta, suiteConfig, datasourceInfo })
+      await DbPush.new('prisma').parse(dbPushParams, runtimeConfig, testDirectoryPath)
 
       if (
         suiteConfig.matrixOptions.driverAdapter === AdapterProviders.VITESS_8 ||
@@ -178,7 +188,7 @@ export async function setupTestSuiteDatabase({
       }
     }
 
-    if (alterStatementCallback) {
+    if (alterStatementCallback && suiteConfig.matrixOptions.driverAdapter !== AdapterProviders.JS_D1) {
       const { provider } = suiteConfig.matrixOptions
       const prismaDir = path.dirname(schemaPath)
       const timestamp = new Date().getTime()
@@ -194,9 +204,13 @@ export async function setupTestSuiteDatabase({
         alterStatementCallback(provider),
       )
 
-      await DbExecute.new().parse(
-        ['--file', `${prismaDir}/migrations/${timestamp}/migration.sql`, '--schema', `${schemaPath}`],
-        defaultTestConfig(),
+      const runtimeConfig = buildPrismaConfig({ suiteMeta, suiteConfig, datasourceInfo })
+      const testDirectoryPath = getTestSuiteFolderPath({ suiteMeta, suiteConfig })
+
+      await DbExecute.new('prisma').parse(
+        ['--file', `${prismaDir}/migrations/${timestamp}/migration.sql`],
+        runtimeConfig,
+        testDirectoryPath,
       )
     }
 
@@ -213,6 +227,7 @@ export async function setupTestSuiteDatabase({
         errors,
         alterStatementCallback: undefined,
         cfWorkerBindings,
+        datasourceInfo,
       }) // retry logic
     }
   }
@@ -225,28 +240,21 @@ export async function setupTestSuiteDatabase({
  */
 export async function setupTestSuiteDatabaseD1({
   schemaPath,
+  testDirectoryPath,
   cfWorkerBindings,
   alterStatementCallback,
+  prismaConfig,
 }: {
   schemaPath: string
+  testDirectoryPath: string
   cfWorkerBindings: { [key: string]: unknown }
   alterStatementCallback?: AlterStatementCallback
+  prismaConfig: PrismaConfigInternal
 }) {
   // Cleanup the database
   await prepareD1Database({ cfWorkerBindings })
 
-  // Use `migrate diff` to get the DDL statements
-  const diffResult = await execa(
-    '../cli/src/bin.ts',
-    ['migrate', 'diff', '--from-empty', '--to-schema-datamodel', schemaPath, '--script'],
-    {
-      env: {
-        DEBUG: process.env.DEBUG,
-      },
-    },
-  )
-  const sqlStatements = diffResult.stdout
-
+  const sqlStatements = await getD1MigrationScript({ schemaPath, prismaConfig, testDirectoryPath })
   const d1Client = cfWorkerBindings.MY_DATABASE as D1Database
 
   // Execute the DDL statements
@@ -273,6 +281,34 @@ export async function setupTestSuiteDatabaseD1({
   }
 }
 
+async function getD1MigrationScript({
+  schemaPath,
+  prismaConfig,
+  testDirectoryPath,
+}: {
+  schemaPath: string
+  prismaConfig: PrismaConfigInternal
+  testDirectoryPath: string
+}): Promise<string> {
+  const sqlScriptPath = temporaryFile()
+
+  const diffResult = await MigrateDiff.new('prisma').parse(
+    ['--from-empty', '--to-schema', schemaPath, '--script', '--output', sqlScriptPath],
+    prismaConfig,
+    testDirectoryPath,
+  )
+
+  if (diffResult instanceof Error) {
+    throw diffResult
+  }
+
+  const ddlStatements = await fs.readFile(sqlScriptPath, 'utf-8')
+
+  await fs.remove(sqlScriptPath)
+
+  return ddlStatements
+}
+
 /**
  * Drop the database for the generated schema of the test suite.
  */
@@ -281,21 +317,23 @@ export async function dropTestSuiteDatabase({
   suiteConfig,
   errors = [],
   cfWorkerBindings,
+  datasourceInfo,
 }: {
   suiteMeta: TestSuiteMeta
   suiteConfig: NamedTestSuiteConfig
   errors?: Error[]
   cfWorkerBindings?: { [key: string]: unknown }
+  datasourceInfo: DatasourceInfo
 }) {
-  const schemaPath = getTestSuiteSchemaPath({ suiteMeta, suiteConfig })
-
   if (suiteConfig.matrixOptions.driverAdapter === AdapterProviders.JS_D1) {
     return await prepareD1Database({ cfWorkerBindings: cfWorkerBindings! })
   }
 
   try {
     const consoleInfoMock = jest.spyOn(console, 'info').mockImplementation()
-    await DbDrop.new().parse(['--schema', schemaPath, '--force', '--preview-feature'], defaultTestConfig())
+    const runtimeConfig = buildPrismaConfig({ suiteConfig, suiteMeta, datasourceInfo })
+    const testDirectory = getTestSuiteFolderPath({ suiteMeta, suiteConfig })
+    await DbDrop.new('prisma').parse(['--force', '--preview-feature'], runtimeConfig, testDirectory)
     consoleInfoMock.mockRestore()
   } catch (e) {
     errors.push(e as Error)
@@ -303,7 +341,13 @@ export async function dropTestSuiteDatabase({
     if (errors.length > 2) {
       throw new Error(errors.map((e) => `${e.message}\n${e.stack}`).join(`\n`))
     } else {
-      await dropTestSuiteDatabase({ suiteMeta, suiteConfig, errors, cfWorkerBindings }) // retry logic
+      await dropTestSuiteDatabase({
+        suiteMeta,
+        suiteConfig,
+        errors,
+        cfWorkerBindings,
+        datasourceInfo,
+      }) // retry logic
     }
   }
 }
@@ -365,10 +409,8 @@ export type DatasourceInfo = {
  */
 export function setupTestSuiteDbURI({
   suiteConfig,
-  clientMeta,
 }: {
   suiteConfig: NamedTestSuiteConfig['matrixOptions']
-  clientMeta: ClientMeta
 }): DatasourceInfo {
   const { provider, driverAdapter } = suiteConfig
 
@@ -387,20 +429,11 @@ export function setupTestSuiteDbURI({
     databaseUrl = databaseUrl.replace(DB_NAME_VAR, dbId)
   }
 
-  let accelerateUrl: string | undefined
-  if (clientMeta.dataProxy) {
-    accelerateUrl = miniProxy.generateConnectionString({
-      databaseUrl,
-      envVar: envVarName,
-      port: miniProxy.defaultServerConfig.port,
-    })
-  }
-
   return {
     directEnvVarName,
     envVarName,
     databaseUrl,
-    accelerateUrl,
+    accelerateUrl: undefined,
   }
 }
 

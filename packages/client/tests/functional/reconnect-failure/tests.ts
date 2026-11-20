@@ -15,7 +15,7 @@ testMatrix.setupTestSuite(
       // Ensure that the db is down
       await db.dropDb()
 
-      prisma = newPrismaClient()
+      prisma = newPrismaClient({})
 
       // Try sending a query without a spawned database
       await expect(prisma.user.findMany()).rejects.toThrow()
@@ -30,13 +30,6 @@ testMatrix.setupTestSuite(
   {
     skipDb: true, // So we can manually spawn the database
     skipDefaultClientInstance: true, // So we can manually call connect for this test
-    skipDataProxy: {
-      runtimes: ['node', 'edge'],
-      reason: `
-        Fails with Data Proxy: error is an instance of InvalidDatasourceError
-        instead of Prisma.PrismaClientInitializationError.
-      `,
-    },
     optOut: {
       from: [Providers.MONGODB],
       reason: 'First query does not fail even when database does not exist.',

@@ -9,13 +9,13 @@
   "homepage": "https://www.prisma.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/fetch-engine"
   },
   "bugs": "https://github.com/prisma/prisma/issues",
   "enginesOverride": {},
   "devDependencies": {
-    "@types/node": "18.19.76",
+    "@types/node": "~20.19.24",
     "@types/progress": "2.0.7",
     "del": "6.1.1",
     "execa": "8.0.1",
@@ -37,7 +37,7 @@
   },
   "dependencies": {
     "@prisma/debug": "workspace:*",
-    "@prisma/engines-version": "6.18.0-2.ba2627112b75424f26505fb83167ce78db40fc57",
+    "@prisma/engines-version": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@prisma/get-platform": "workspace:*"
   },
   "scripts": {

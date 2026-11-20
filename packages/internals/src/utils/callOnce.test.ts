@@ -1,7 +1,9 @@
+import { expect, test, vi } from 'vitest'
+
 import { callOnceOnSuccess } from './callOnce'
 
 test('returns the result correctly', async () => {
-  const wrapper = callOnceOnSuccess(jest.fn().mockResolvedValue('hello'))
+  const wrapper = callOnceOnSuccess(vi.fn().mockResolvedValue('hello'))
   await expect(wrapper()).resolves.toBe('hello')
 })
 
@@ -11,7 +13,7 @@ test('forwards the arguments correctly', async () => {
 })
 
 test('сalls wrapped function only once before promise resolves', async () => {
-  const wrapped = jest.fn().mockResolvedValue('hello')
+  const wrapped = vi.fn().mockResolvedValue('hello')
   const wrapper = callOnceOnSuccess(wrapped)
   void wrapper()
   void wrapper()
@@ -21,7 +23,7 @@ test('сalls wrapped function only once before promise resolves', async () => {
 })
 
 test('caches the result when it succeeds', async () => {
-  const wrapped = jest.fn().mockResolvedValue('hello')
+  const wrapped = vi.fn().mockResolvedValue('hello')
   const wrapper = callOnceOnSuccess(wrapped)
   await wrapper()
   await wrapper()
@@ -32,7 +34,7 @@ test('caches the result when it succeeds', async () => {
 })
 
 test('does not cache the result when it fails', async () => {
-  const wrapped = jest.fn().mockRejectedValue(new Error('hello'))
+  const wrapped = vi.fn().mockRejectedValue(new Error('hello'))
   const wrapper = callOnceOnSuccess(wrapped)
 
   await Promise.allSettled([wrapper(), wrapper()])

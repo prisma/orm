@@ -4,10 +4,10 @@ import * as checkpoint from 'checkpoint-client'
 import paths from 'env-paths'
 import fs from 'fs'
 import path from 'path'
-import readline from 'readline'
 
 import { CommandState, daysSinceFirstCommand, loadOrInitializeCommandState } from '../commandState'
-import { EventCapture, PosthogEventCapture } from './capture'
+import { clackPrompts, type Prompts } from '../prompts'
+import { EventCapture, PosthogEventCapture, PUBLIC_POSTHOG_NPS_PROJECT_KEY } from './capture'
 import { NpsStatusLookup, ProdNpsStatusLookup, Timeframe } from './status'
 
 type NpsConfig = {
@@ -24,11 +24,6 @@ type NpsSurveyEvent = {
   feedback?: string
 }
 
-type ReadlineInterface = {
-  question: (query: string) => Promise<string>
-  write: (message: string) => void
-}
-
 const promptTimeoutSecs = 30
 
 const debug = Debug('prisma:cli:nps')
@@ -39,60 +34,23 @@ export async function handleNpsSurvey() {
     return
   }
 
-  if ('Deno' in globalThis) {
-    // For some reason merely creating the readline interface on Deno
-    // doesn't allow `prisma generate` to finish until Enter is pressed.
-    return
-  }
-
   const now = new Date()
 
-  const rl = readline.promises.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  })
-
-  rl.on('error', (err) => {
-    debug(`A readline error occurred while handling NPS survey: ${err}`)
-  })
-  rl.on('SIGINT', () => {
-    rl.write('Received SIGINT, closing the survey.\n')
-    rl.close()
-  })
-
   const status = new ProdNpsStatusLookup()
-  const eventCapture = new PosthogEventCapture()
+  const eventCapture = new PosthogEventCapture(PUBLIC_POSTHOG_NPS_PROJECT_KEY)
 
   await loadOrInitializeCommandState()
-    .then((state) => handleNpsSurveyImpl(now, status, createSafeReadlineProxy(rl), eventCapture, state))
+    .then((state) => handleNpsSurveyImpl(now, status, clackPrompts, eventCapture, state))
     .catch((err) => {
       // we don't want to propagate NPS survey errors, so we catch them here and log them
       debug(`An error occurred while handling NPS survey: ${err}`)
     })
-    .finally(() => rl.close())
-}
-
-/**
- * Creates a proxy that aborts the readline interface when the underlying stream closes.
- */
-export function createSafeReadlineProxy(rl: readline.promises.Interface): ReadlineInterface {
-  const controller = new AbortController()
-  rl.on('close', () => controller.abort())
-
-  const rlProxy = new Proxy(rl, {
-    get(target, prop, receiver) {
-      controller.signal.throwIfAborted()
-      return Reflect.get(target, prop, receiver)
-    },
-  })
-
-  return rlProxy
 }
 
 export async function handleNpsSurveyImpl(
   now: Date,
   statusLookup: NpsStatusLookup,
-  rl: ReadlineInterface,
+  prompts: Prompts,
   eventCapture: EventCapture,
   commandState: CommandState,
 ) {
@@ -118,41 +76,51 @@ export async function handleNpsSurveyImpl(
     return
   }
 
-  const result = await collectFeedback(rl)
+  const result = await collectFeedback(prompts)
 
-  if (result.rating) {
-    await submitSurveyEvent({ rating: result.rating, ...result }, eventCapture)
-    rl.write('Thanks for your feedback!\n')
+  // A rating of 0 is the strongest signal the survey can collect, so this
+  // checks for an answer rather than for a truthy one.
+  if (result.rating !== undefined) {
+    await submitSurveyEvent({ ...result, rating: result.rating }, eventCapture)
+    prompts.message('Thanks for your feedback!')
   }
 
   await writeConfig({ acknowledgedTimeframe: status.currentTimeframe })
 }
 
-async function collectFeedback(rl: ReadlineInterface): Promise<NpsSurveyResult> {
-  const question = rl.question(
-    'How likely are you to recommend Prisma?\n\n' +
-      'Enter a number from 0 to 10 (0 = not at all, 10 = extremely likely) and press Enter — ' +
-      'or leave blank to skip and not be asked again.\n\n' +
+async function collectFeedback(prompts: Prompts): Promise<NpsSurveyResult> {
+  const ratingAnswer = await prompts.text({
+    message:
+      'How likely are you to recommend Prisma?\n' +
+      'Enter a number from 0 to 10 (0 = not at all, 10 = extremely likely), ' +
+      'or leave blank to skip and not be asked again.\n' +
       `This prompt closes in ${promptTimeoutSecs}s and can be suppressed with --no-hints. ` +
-      'Learn more: https://pris.ly/why-nps\n\n' +
-      'Rating: ',
-  )
-  const ratingAnswer = await timeout(question, promptTimeoutSecs * 1000)
-  if (ratingAnswer === undefined) {
-    rl.write(`No response received within ${promptTimeoutSecs} seconds. Exiting the survey.\n`)
+      'Learn more: https://pris.ly/why-nps',
+    placeholder: '0-10',
+    timeoutMs: promptTimeoutSecs * 1000,
+  })
+
+  if (ratingAnswer.status === 'timeout') {
+    prompts.message(`No response received within ${promptTimeoutSecs} seconds. Exiting the survey.`)
     return {}
   }
 
-  const rating = parseInt(ratingAnswer.trim(), 10)
+  if (ratingAnswer.status === 'cancelled') {
+    return {}
+  }
+
+  const rating = parseInt(ratingAnswer.value.trim(), 10)
   if (isNaN(rating) || rating < 0 || rating > 10) {
-    rl.write('Not received a valid rating. Exiting the survey.\n')
+    prompts.message('Not received a valid rating. Exiting the survey.')
     return {}
   }
 
-  const feedbackAnswer = await rl.question(
-    'Optional: Provide additional feedback or press Enter to skip.\n' + 'Additional feedback: ',
-  )
-  const feedback = feedbackAnswer.trim() === '' ? undefined : feedbackAnswer
+  const feedbackAnswer = await prompts.text({
+    message: 'Optional: Provide additional feedback, or leave blank to skip.',
+    timeoutMs: promptTimeoutSecs * 1000,
+  })
+  const feedback =
+    feedbackAnswer.status === 'answered' && feedbackAnswer.value.trim() !== '' ? feedbackAnswer.value : undefined
 
   return { rating, feedback }
 }
@@ -190,23 +158,6 @@ async function writeConfig(config: NpsConfig) {
 async function submitSurveyEvent(event: NpsSurveyEvent, eventCapture: EventCapture) {
   const signature = await checkpoint.getSignature()
   await eventCapture.capture(signature, 'NPS feedback', event)
-}
-
-/**
- * Wraps a promise with a timeout. If the provided promise does not resolve within the given
- * time, the returned promise resolves to `undefined`.
- */
-function timeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
-  return new Promise((resolve) => {
-    const timeoutId = setTimeout(() => {
-      resolve(undefined)
-    }, ms)
-
-    return promise.then((result) => {
-      clearTimeout(timeoutId)
-      resolve(result)
-    })
-  })
 }
 
 function isWithinTimeframe(date: Date, timeframe: Timeframe): boolean {

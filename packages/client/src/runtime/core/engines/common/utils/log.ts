@@ -1,4 +1,4 @@
-import { PrismaClientRustError } from '../../../errors/PrismaClientRustError'
+import { PrismaClientRustError } from '@prisma/client-runtime-utils'
 
 export type LogLevel = 'info' | 'trace' | 'debug' | 'warn' | 'error' | 'query'
 export interface RawRustLog {
@@ -23,31 +23,6 @@ export function getMessage(log: string | PrismaClientRustError): string {
   }
 }
 
-export function getBacktrace(log: RustLog): string {
-  if (log.fields?.message) {
-    let str = log.fields?.message
-    if (log.fields?.file) {
-      str += ` in ${log.fields.file}`
-      if (log.fields?.line) {
-        str += `:${log.fields.line}`
-      }
-      if (log.fields?.column) {
-        str += `:${log.fields.column}`
-      }
-    }
-    if (log.fields?.reason) {
-      str += `\n${log.fields?.reason}`
-    }
-    return str
-  }
-
-  return 'Unknown error'
-}
-
-export function isPanic(err: RustLog): boolean {
-  return err.fields?.message === 'PANIC'
-}
-
 export function isRustLog(e: any): e is RustLog {
   return e.timestamp && typeof e.level === 'string' && typeof e.target === 'string'
 }
@@ -58,35 +33,11 @@ export function isRustErrorLog(e: any): e is RustLog {
 
 export type LogFields = { [key: string]: any }
 
-export interface PanicLogFields {
-  message: 'PANIC'
-  reason: string
-  file: string
-  line: string
-  column: number
-}
-
-export interface InfoLogFields {
-  message: string
-  'log.target': string
-  'log.module_path': string
-  'log.file': string
-  'log.line': number
-}
-
 export interface QueryLogFields {
   query: string
   item_type: string
   params: string
   duration_ms: number
-}
-
-export interface Log {
-  message: string
-  level: LogLevel
-  date: Date
-  application: string
-  [key: string]: string | Date
 }
 
 export function convertLog(rustLog: RawRustLog): RustLog {

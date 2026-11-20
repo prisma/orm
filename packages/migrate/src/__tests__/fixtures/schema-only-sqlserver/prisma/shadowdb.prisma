@@ -1,7 +1,5 @@
 datasource my_db {
   provider          = "sqlserver"
-  url               = env("TEST_MSSQL_JDBC_URI_MIGRATE")
-  shadowDatabaseUrl = env("TEST_MSSQL_SHADOWDB_JDBC_URI_MIGRATE")
 }
 
 model Blog {

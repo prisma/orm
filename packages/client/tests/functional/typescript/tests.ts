@@ -20,7 +20,7 @@ function getAllTestSuiteTypeChecks(fileNames: string[]) {
   // currently used to resolve `@prisma/client/runtime` for client extensions for default-index.d.ts
   // this tells it that imports from `@prisma/client/runtime` should be resolved to the runtime folder
   options.paths ??= {}
-  options.paths['@prisma/client/runtime/library'] = [path.resolve(__dirname, '..', '..', '..', 'runtime', 'library')]
+  options.paths['@prisma/client/runtime/client'] = [path.resolve(__dirname, '..', '..', '..', 'runtime', 'client')]
 
   const program = ts.createProgram(fileNames, {
     ...options,

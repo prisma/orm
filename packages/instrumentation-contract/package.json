@@ -1,0 +1,44 @@
+{
+  "name": "@prisma/instrumentation-contract",
+  "version": "0.0.0",
+  "description": "Shared types and utilities for Prisma instrumentation",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://www.prisma.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/instrumentation-contract"
+  },
+  "bugs": "https://github.com/prisma/prisma/issues",
+  "scripts": {
+    "dev": "DEV=true tsx helpers/build.ts",
+    "build": "tsx helpers/build.ts",
+    "prepublishOnly": "pnpm run build",
+    "test": "vitest run"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "devDependencies": {
+    "@opentelemetry/api": "1.9.0"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.8"
+  }
+}

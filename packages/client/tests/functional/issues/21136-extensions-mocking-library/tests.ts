@@ -3,7 +3,7 @@ import { expectTypeOf } from 'expect-type'
 import { Providers } from '../../_utils/providers'
 import testMatrix from './_matrix'
 // @ts-ignore
-import type $ from './generated/prisma/client'
+import type * as $ from './generated/prisma/client'
 
 declare let prisma: $.PrismaClient
 

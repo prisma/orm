@@ -1,3 +1,7 @@
+import { type IsolationLevel } from '@prisma/json-protocol'
+
+export { type IsolationLevel }
+
 export type Options = {
   /** Timeout for starting the transaction */
   maxWait?: number
@@ -7,9 +11,13 @@ export type Options = {
 
   /** Transaction isolation level */
   isolationLevel?: IsolationLevel
-}
 
-export type IsolationLevel = 'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | 'Snapshot' | 'Serializable'
+  /**
+   * Used for nested interactive transactions. When provided, the engine may
+   * re-use an existing open transaction instead of opening a new one.
+   */
+  newTxId?: string
+}
 
 export type InteractiveTransactionInfo<Payload = unknown> = {
   /**
@@ -19,8 +27,7 @@ export type InteractiveTransactionInfo<Payload = unknown> = {
 
   /**
    * Arbitrary payload the meaning of which depends on the `Engine` implementation.
-   * For example, `DataProxyEngine` needs to associate different API endpoints with transactions.
-   * In `LibraryEngine` and `BinaryEngine` it is currently not used.
+   * It is currently not used in `LibraryEngine`.
    */
   payload: Payload
 }

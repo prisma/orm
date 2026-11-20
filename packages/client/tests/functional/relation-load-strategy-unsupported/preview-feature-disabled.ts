@@ -5,18 +5,17 @@ import type { PrismaClient } from './generated/prisma/client'
 
 declare let prisma: PrismaClient
 
-testMatrix.setupTestSuite(
-  ({ provider }, _suiteMeta, _clientMeta, cliMeta) => {
-    const relationJoinsDisabled = !cliMeta.previewFeatures.includes('relationJoins')
+testMatrix.setupTestSuite(({ provider }, _suiteMeta, _clientMeta, cliMeta) => {
+  const relationJoinsDisabled = !cliMeta.previewFeatures.includes('relationJoins')
 
-    describeIf(relationJoinsDisabled)('relationLoadStrategy with no relationJoins preview feature', () => {
-      test('findMany', async () => {
-        await expect(
-          prisma.user.findMany({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+  describeIf(relationJoinsDisabled)('relationLoadStrategy with no relationJoins preview feature', () => {
+    test('findMany', async () => {
+      await expect(
+        prisma.user.findMany({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.findMany()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -37,18 +36,18 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('findFirst', async () => {
-        await expect(
-          prisma.user.findFirst({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            where: {
-              login: 'user',
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('findFirst', async () => {
+      await expect(
+        prisma.user.findFirst({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          where: {
+            login: 'user',
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.findFirst()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -71,18 +70,18 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('findFirstOrThrow', async () => {
-        await expect(
-          prisma.user.findFirstOrThrow({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            where: {
-              login: 'user',
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('findFirstOrThrow', async () => {
+      await expect(
+        prisma.user.findFirstOrThrow({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          where: {
+            login: 'user',
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.findFirstOrThrow()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -105,18 +104,18 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('findUnique', async () => {
-        await expect(
-          prisma.user.findUnique({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            where: {
-              login: 'user',
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('findUnique', async () => {
+      await expect(
+        prisma.user.findUnique({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          where: {
+            login: 'user',
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.findUnique()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -134,18 +133,18 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('findUniqueOrThrow', async () => {
-        await expect(
-          prisma.user.findUniqueOrThrow({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            where: {
-              login: 'user',
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('findUniqueOrThrow', async () => {
+      await expect(
+        prisma.user.findUniqueOrThrow({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          where: {
+            login: 'user',
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.findUniqueOrThrow()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -163,18 +162,18 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('create', async () => {
-        await expect(
-          prisma.user.create({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            data: {
-              login: 'user',
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('create', async () => {
+      await expect(
+        prisma.user.create({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          data: {
+            login: 'user',
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.create()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -192,21 +191,21 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('update', async () => {
-        await expect(
-          prisma.user.update({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            where: {
-              login: 'user',
-            },
-            data: {
-              login: 'new-user',
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('update', async () => {
+      await expect(
+        prisma.user.update({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          where: {
+            login: 'user',
+          },
+          data: {
+            login: 'new-user',
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.update()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -227,18 +226,18 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('delete', async () => {
-        await expect(
-          prisma.user.delete({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            where: {
-              login: 'user',
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('delete', async () => {
+      await expect(
+        prisma.user.delete({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          where: {
+            login: 'user',
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.delete()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -256,24 +255,24 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('upsert', async () => {
-        await expect(
-          prisma.user.upsert({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            where: {
-              login: 'user',
-            },
-            create: {
-              login: 'user',
-            },
-            update: {
-              login: 'new-user',
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('upsert', async () => {
+      await expect(
+        prisma.user.upsert({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          where: {
+            login: 'user',
+          },
+          create: {
+            login: 'user',
+          },
+          update: {
+            login: 'new-user',
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.upsert()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -297,18 +296,18 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('aggregate', async () => {
-        await expect(
-          prisma.user.aggregate({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            _count: {
-              _all: true,
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('aggregate', async () => {
+      await expect(
+        prisma.user.aggregate({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          _count: {
+            _all: true,
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.aggregate()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -335,16 +334,16 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('groupBy', async () => {
-        await expect(
-          prisma.user.groupBy({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            by: 'id',
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('groupBy', async () => {
+      await expect(
+        prisma.user.groupBy({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          by: 'id',
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.groupBy()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -368,16 +367,16 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      testIf(![Providers.SQLITE, Providers.SQLSERVER, Providers.MONGODB].includes(provider))('createMany', async () => {
-        await expect(
-          prisma.user.createMany({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            data: [{ login: 'user' }],
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    testIf(![Providers.SQLITE, Providers.SQLSERVER, Providers.MONGODB].includes(provider))('createMany', async () => {
+      await expect(
+        prisma.user.createMany({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          data: [{ login: 'user' }],
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.createMany()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -398,24 +397,22 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      testIf([Providers.SQLSERVER, Providers.MONGODB].includes(provider))(
-        'createMany (sqlserver, mongodb)',
-        async () => {
-          await expect(
-            prisma.user.createMany({
-              // @ts-expect-error
-              relationLoadStrategy: 'query',
-              data: [{ login: 'user' }],
-            }),
-          ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    testIf([Providers.SQLSERVER, Providers.MONGODB].includes(provider))('createMany (sqlserver, mongodb)', async () => {
+      await expect(
+        prisma.user.createMany({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          data: [{ login: 'user' }],
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
             "
             Invalid \`prisma.user.createMany()\` invocation in
             /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
 
-              XX 'createMany (sqlserver, mongodb)',
-              XX async () => {
+              XX 
+              XX testIf([Providers.SQLSERVER, Providers.MONGODB].includes(provider))('createMany (sqlserver, mongodb)', async () => {
               XX   await expect(
             → XX     prisma.user.createMany({
                         relationLoadStrategy: "query",
@@ -429,19 +426,18 @@ testMatrix.setupTestSuite(
 
             Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
           `)
-        },
-      )
+    })
 
-      test('updateMany', async () => {
-        await expect(
-          prisma.user.updateMany({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-            data: {
-              login: 'user',
-            },
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('updateMany', async () => {
+      await expect(
+        prisma.user.updateMany({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+          data: {
+            login: 'user',
+          },
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.updateMany()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -461,15 +457,15 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('deleteMany', async () => {
-        await expect(
-          prisma.user.deleteMany({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('deleteMany', async () => {
+      await expect(
+        prisma.user.deleteMany({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.deleteMany()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -486,15 +482,15 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
+    })
 
-      test('count', async () => {
-        await expect(
-          prisma.user.count({
-            // @ts-expect-error
-            relationLoadStrategy: 'query',
-          }),
-        ).rejects.toMatchPrismaErrorInlineSnapshot(`
+    test('count', async () => {
+      await expect(
+        prisma.user.count({
+          // @ts-expect-error
+          relationLoadStrategy: 'query',
+        }),
+      ).rejects.toMatchPrismaErrorInlineSnapshot(`
           "
           Invalid \`prisma.user.count()\` invocation in
           /client/tests/functional/relation-load-strategy-unsupported/preview-feature-disabled.ts:0:0
@@ -521,13 +517,6 @@ testMatrix.setupTestSuite(
 
           Unknown argument \`relationLoadStrategy\`. Available options are marked with ?."
         `)
-      })
     })
-  },
-  {
-    skipDataProxy: {
-      runtimes: ['edge'],
-      reason: 'Errors are formatted differently in edge client, so snapshots mismatch',
-    },
-  },
-)
+  })
+})
