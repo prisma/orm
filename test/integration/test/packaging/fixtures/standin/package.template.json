@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "A target package from outside this repository, for the packaging test. Not named package.json, so the workspace does not adopt it; the test writes it as package.json with the version of the published packages filled in.",
+  "keywords": ["prisma-orm-extension"],
   "exports": {
     "./config": {
       "types": "./dist/config.d.ts",

@@ -5,6 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "Prisma 8 for SQLite: the one package a SQLite application installs",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist",
     "skills"

@@ -6,6 +6,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "MySQL configuration, contract builder and control client for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "scripts": {
     "build": "tsdown",
     "emit": "node ../../../../1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/fixtures/prisma.config.ts",

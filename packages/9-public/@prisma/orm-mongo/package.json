@@ -5,6 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "Prisma 8 for MongoDB: the one package a MongoDB application installs",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist",
     "skills"
