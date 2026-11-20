@@ -6,6 +6,7 @@ import { createCli, telemetryCommandGroup } from '@prisma/cli-engine';
 import { version as CLI_VERSION } from '../../package.json' with { type: 'json' };
 import { createControlClient } from '../control-api/client';
 import type { CreateControlClient } from '../control-api/types';
+import { BIN_NAME } from './bin-name';
 import { contractEmitCommand } from './contract/emit';
 import { contractInferCommand } from './contract/infer';
 import { contractPrintCommand } from './contract/print';
@@ -34,17 +35,6 @@ import { refDeleteCommand } from './ref/delete';
 import { refListCommand } from './ref/list';
 import { refSetCommand } from './ref/set';
 import { resolveTelemetryHooks } from './telemetry/reporting';
-
-/**
- * This repo's stand-in for the unified Prisma CLI: it mounts the ORM command
- * family exactly the way the real host does — every command at its family
- * key, which spells the unified CLI's mount path (`contract format`,
- * `db migrate`, `migration ref …`, `orm init`) — same command paths, same
- * `prisma.config.ts`, so examples and e2e tests exercise the commands as
- * users run them. The real host lives in the prisma-cli repo and consumes
- * {@link ormCommandFamily} from this package's exports.
- */
-export const BIN_NAME = 'prisma';
 
 export const TELEMETRY_DOCS_URL = 'https://www.prisma.io/docs/cli/telemetry';
 
@@ -126,6 +116,15 @@ export function createBinCommands(createClient: CreateControlClient): MountedTre
 
 export const BIN_COMMANDS: MountedTree = createBinCommands(createControlClient);
 
+/**
+ * This repo's stand-in for the unified Prisma CLI: it mounts the ORM command
+ * family exactly the way the real host does — every command at its family
+ * key, which spells the unified CLI's mount path (`contract format`,
+ * `db migrate`, `migration ref …`, `orm init`) — same command paths, same
+ * `prisma.config.ts`, so examples and e2e tests exercise the commands as
+ * users run them. The real host lives in the prisma-cli repo and consumes
+ * {@link ormCommandFamily} from this package's exports.
+ */
 export function createOrmCli(): Cli {
   return createCli({
     name: BIN_NAME,

@@ -104,8 +104,8 @@ describe('--delete with a namespace of the origin contract', () => {
     });
 
     expect(questions).toEqual([
-      'This change would delete the data of model "billing.Invoice".\nThe operation of the plan that does this: Drop table "invoice".\nThe contract no longer has namespace "billing".\nrename works once the contract has the model under its new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go.',
-      'This change would delete the data of model "billing.Receipt".\nThe operation of the plan that does this: Drop table "receipt".\nrename works once the contract has the model under its new name; delete lets its data go.',
+      'This change would delete the data of model "billing.Invoice".\nThe contract no longer has namespace "billing".\nThe operation of the plan that does this: Drop table "invoice".\ndelete billing lets the data of every model and field of namespace "billing" go; rename works once you add the model to the contract under its new name and run `{bin} contract emit`; delete lets its data go.',
+      'This change would delete the data of model "billing.Receipt".\nThe operation of the plan that does this: Drop table "receipt".\nrename works once you add the model to the contract under its new name and run `{bin} contract emit`; delete lets its data go.',
     ]);
   });
 
@@ -141,7 +141,7 @@ describe('--delete with a namespace of the origin contract', () => {
     });
 
     expect(await firstQuestion(renamed, ['finance'])).toBe(
-      'This change would delete the data of model "billing.Invoice".\nThe operation of the plan that does this: Drop table "invoice".\nThe contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:finance keeps the data of namespace "billing" under namespace "finance".',
+      'This change would delete the data of model "billing.Invoice".\nThe contract no longer has namespace "billing".\nThe operation of the plan that does this: Drop table "invoice".\ndelete billing lets the data of every model and field of namespace "billing" go; rename billing:finance keeps the data of namespace "billing" under namespace "finance"; rename keeps its data under the new name, "finance.Invoice" or "finance.Receipt"; delete lets its data go.',
     );
   });
 
@@ -153,7 +153,7 @@ describe('--delete with a namespace of the origin contract', () => {
     });
 
     expect(await firstQuestion(renamed, ['finance', 'ledger'])).toBe(
-      'This change would delete the data of model "billing.Invoice".\nThe operation of the plan that does this: Drop table "invoice".\nThe contract no longer has namespace "billing".\nrename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:<new namespace> keeps the data of namespace "billing" under namespace "finance" or "ledger".',
+      'This change would delete the data of model "billing.Invoice".\nThe contract no longer has namespace "billing".\nThe operation of the plan that does this: Drop table "invoice".\ndelete billing lets the data of every model and field of namespace "billing" go; rename billing:<new namespace> keeps the data of namespace "billing" under namespace "finance" or "ledger"; rename keeps its data under the new name, "finance.Invoice" or "ledger.Receipt"; delete lets its data go.',
     );
   });
 

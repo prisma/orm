@@ -7,10 +7,11 @@ import {
 export function question(subject: string, namespace?: string): PlanQuestion {
   return planQuestion({
     headline: `Removing model "${subject}" would delete its data.`,
-    named: `model "${subject}"`,
+    subjectInList: `model "${subject}"`,
     operations: [`Drop ${subject}`],
     notes: [],
     keepDataWays: [],
+    keepDataWaysNamingSubject: [],
     answers: [
       {
         flag: { verb: 'delete', text: subject },
@@ -19,7 +20,7 @@ export function question(subject: string, namespace?: string): PlanQuestion {
         promptMeaning: 'delete lets its data go',
       },
     ],
-    whenDeleted: [],
+    alsoGiveWhenDeleted: [],
     effect: 'deletes data',
     subject,
     ...(namespace === undefined

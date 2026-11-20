@@ -2,7 +2,11 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { PromptSurface, StatementSurface } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
-import { questionText, refusalText } from '../control-api/statements/plan-question-text';
+import {
+  type MisdirectedFlag,
+  questionText,
+  refusalText,
+} from '../control-api/statements/plan-question-text';
 import {
   type AnsweredWithoutAsking,
   type AnswerPlanQuestions,
@@ -14,6 +18,7 @@ import {
 import { statementFlag } from '../control-api/statements/statement-flag';
 import { errorConsentUnused } from '../utils/cli-errors';
 import { chooseAction } from '../utils/next-actions';
+import { BIN_NAME } from './bin-name';
 
 /**
  * The answers the `--delete` values give when one of them names a namespace of the questions: the
@@ -55,12 +60,17 @@ function namespaceDeletes(
   return answered;
 }
 
-/** The flag a question last refused, and why, which a `CLI.PROMPT_INVALID` from the engine is about. */
+/** The flag or typed answer a question last refused, and why, which a `CLI.PROMPT_INVALID` from the engine is about. */
 interface Refused {
   readonly question: PlanQuestion;
   readonly verb: PlanQuestionVerb;
   readonly text: string;
   readonly reason: string;
+}
+
+/** The engine puts the CLI's name in place of `{bin}` in what it prints, but not in what it asks. */
+function withBinName(text: string): string {
+  return text.replaceAll('{bin}', BIN_NAME);
 }
 
 /** What the engine asks: the question's text, with the removed namespace and its verbs when `withNamespace`. */
@@ -83,14 +93,14 @@ function engineQuestion(
           },
         };
   return {
-    question: questionText(shown, withNamespace),
+    question: withBinName(questionText(shown, withNamespace)),
     subject: question.subject,
     verbs: question.verbs,
     forms: question.forms,
     validate: (verb: PlanQuestionVerb, text: string) => {
       const reason = question.validate(verb, text);
       refusals.last = reason === undefined ? undefined : { question, verb, text, reason };
-      return reason;
+      return reason === undefined ? undefined : withBinName(reason);
     },
   };
 }
@@ -227,17 +237,51 @@ function rebuilt(
   });
 }
 
+/** Whether a value names a subject as the engine matches them: the subject itself, or the subject and a colon. */
+function namesSubject(text: string, subject: string): boolean {
+  return text === subject || text.startsWith(`${subject}:`);
+}
+
+/**
+ * The flags the engine left unconsumed that name a subject of the questions with a verb no
+ * question about that subject takes, as `--allow` of a removed model: the engine lists them
+ * nowhere, so the refusal says to remove them.
+ */
+function misdirectedFlags(
+  questions: readonly PlanQuestion[],
+  statements: StatementSurface,
+): readonly MisdirectedFlag[] {
+  return statements.values().flatMap(({ verb, text }) => {
+    const about = questions.filter(({ subject }) => namesSubject(text, subject));
+    const [first] = about;
+    if (first === undefined || about.some(({ verbs }) => verbs.some((each) => each === verb)))
+      return [];
+    return [{ verb, text, subjectInList: first.subjectInList }];
+  });
+}
+
+/** A refused value as the user gave it: the flag, or the answer typed at the prompt. */
+function givenAs(refused: Refused, statements: StatementSurface): string {
+  const flag = statementFlag({ verb: refused.verb, text: refused.text });
+  return statements
+    .values()
+    .some(({ verb, text }) => verb === refused.verb && text === refused.text)
+    ? flag
+    : `"${refused.verb} ${refused.text}"`;
+}
+
 /**
  * The engine's errors about the questions, rebuilt from the questions: its refusal to go on
  * without flags says what the change would do, the operations that do it, the flags that did
  * nothing, and each flag with what it means; its refusal of a flag or typed answer a question
- * rejected says what was given, why it does not fit, and what the change would do. Code,
- * severity, docs link and meta stay the engine's.
+ * rejected says what was given, as it was given, why it does not fit, and what the change would
+ * do. Code, severity, docs link and meta stay the engine's.
  */
 function rebuiltError(
   error: unknown,
   questions: readonly PlanQuestion[],
   refused: Refused | undefined,
+  statements: StatementSurface,
 ): unknown {
   if (!CliStructuredError.is(error)) return error;
   if (isConsentRequired(error)) {
@@ -246,6 +290,7 @@ function rebuiltError(
         verb: String(verb),
         values: strings(values),
       })),
+      misdirected: misdirectedFlags(questions, statements),
       confirm: strings(error.meta?.['confirm']),
       yes: error.message.includes('--yes'),
     });
@@ -253,7 +298,7 @@ function rebuiltError(
   }
   if (hasCode(error, 'CLI.PROMPT_INVALID') && refused !== undefined) {
     return rebuilt(error, {
-      summary: `${statementFlag({ verb: refused.verb, text: refused.text })} does not fit this change: ${refused.reason}`,
+      summary: `${givenAs(refused, statements)} does not fit this change: ${refused.reason}`,
       why: refused.question.headline,
       nextActions: [],
     });
@@ -274,15 +319,46 @@ export function promptPlanQuestions(
 ): AnswerPlanQuestions {
   return async (questions, answeredWithoutAsking = []) => {
     takeConsentsAnsweredWithoutAsking(questions, answeredWithoutAsking, statements);
+    refuseRepeatedConsents(questions, statements);
     const refusals: { last: Refused | undefined } = { last: undefined };
     return answering(
       prompt,
       statements,
       refusals,
     )(questions).catch((error: unknown) => {
-      throw rebuiltError(error, questions, refusals.last);
+      throw rebuiltError(error, questions, refusals.last, statements);
     });
   };
+}
+
+/**
+ * Refuses a second `--delete` or `--allow` of a subject before anything is asked, with the error
+ * the control API gives for it: one flag answers every question about its subject, so the second
+ * did nothing.
+ */
+function refuseRepeatedConsents(
+  questions: readonly PlanQuestion[],
+  statements: StatementSurface,
+): void {
+  for (const verb of ['delete', 'allow'] as const) {
+    const taking = questions.filter(({ verbs }) => verbs.includes(verb));
+    const given = statements
+      .values()
+      .filter((value) => value.verb === verb)
+      .map(({ text }) => text);
+    if (taking.length === 0 || given.length === 0) continue;
+    const repeated = matchConsents(
+      verb,
+      taking.map(({ subject, removedNamespace }) => ({ text: subject, removedNamespace })),
+      given,
+    ).unused.filter(({ alreadyAnsweredBy }) => alreadyAnsweredBy !== undefined);
+    if (repeated.length > 0) {
+      throw errorConsentUnused(
+        repeated,
+        questions.map(({ subject }) => subject),
+      );
+    }
+  }
 }
 
 /**

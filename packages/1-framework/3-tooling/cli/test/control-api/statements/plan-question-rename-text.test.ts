@@ -27,7 +27,7 @@ describe('the rename of a removed field when the contract adds several fields', 
         "prompts": [
           "Removing field "Shop.legacy" would delete its values.
       The operation of the plan that does this: Drop column "legacy" from "shop".
-      rename keeps the values under the new name; delete lets them go.",
+      rename keeps the values under the new name, "rating" or "score"; delete lets them go.",
         ],
         "refusal": {
           "nextActions": [

@@ -1,4 +1,5 @@
 import { asNamespaceId } from '@internal/contract/types';
+import type { CliStructuredError } from '@internal/errors/control';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import { questionText } from '../../../src/control-api/statements/plan-question-text';
@@ -142,7 +143,7 @@ describe('questions about storage when the origin contract is unknown', () => {
     ]);
     expect(ORIGIN_SNAPSHOT_RECOVERY.join('\n')).toContain('--dry-run');
     expect(ORIGIN_SNAPSHOT_RECOVERY.join('\n')).toContain(
-      '`prisma db update --advance-ref <name> --dry-run`',
+      '`{bin} db update --advance-ref <name> --dry-run`',
     );
     expect(ORIGIN_SNAPSHOT_RECOVERY.join('\n')).toContain(
       'with the same `--db` as this command if it has one',
@@ -208,7 +209,7 @@ describe('questions about access', () => {
     expect(subjects).toEqual(['finance.Invoice.number', 'finance.Invoice']);
   });
 
-  it('ask once per model, and say access would change when one of its operations can go either way', async () => {
+  it('ask once per model, and say access would widen when one of its operations widens it', async () => {
     const user = { kind: 'model', namespaceId: asNamespaceId('app'), model: 'T' } as const;
     const asked: string[] = [];
     const result = await askPlanQuestions({
@@ -246,7 +247,7 @@ describe('questions about access', () => {
     });
 
     expect(asked).toEqual([
-      'Access to the data of "T" would change.\nThe operations of the plan that do this:\n- Drop RLS policy "readers" on "T"\n- Disable row-level security on "T"\nallow lets the plan make these changes.',
+      'Access to the data of "T" would widen.\nThe operations of the plan that do this:\n- Drop RLS policy "readers" on "T"\n- Disable row-level security on "T"\nallow lets the plan make these changes.',
     ]);
     expect(
       result.ok &&
@@ -293,22 +294,48 @@ describe('allow statements given as pre-answers', () => {
     return { asked, result };
   };
 
-  it('answer every access change of their model with one flag', async () => {
+  it('answer every access change of their model with one flag, each at its position', async () => {
     const { asked, result } = ask([{ verb: 'allow', text: 'T' }]);
 
-    expect((await result).ok).toBe(true);
-    expect(asked).toEqual([]);
+    const outcome = await result;
+    expect({
+      asked,
+      consented:
+        outcome.ok &&
+        outcome.value.consented.map(({ verb, text, operationIndex }) => ({
+          verb,
+          text,
+          operationIndex,
+        })),
+    }).toEqual({
+      asked: [],
+      consented: [
+        { verb: 'allow', text: 'T', operationIndex: 0 },
+        { verb: 'allow', text: 'T', operationIndex: 1 },
+      ],
+    });
   });
 
-  it('refuse a second allow of the same model', async () => {
+  it('refuse a second allow of the same model, saying the first already allowed it', async () => {
     const { result } = ask([
       { verb: 'allow', text: 'T' },
       { verb: 'allow', text: 'T' },
     ]);
 
     const outcome = await result;
-    expect(!outcome.ok && outcome.failure).toMatchObject({
-      code: 'MIGRATION.STATEMENT_ANSWERS_NO_QUESTION',
+    const failure = !outcome.ok ? (outcome.failure as CliStructuredError) : undefined;
+    expect({
+      code: failure?.code,
+      summary: failure?.message,
+      why: failure?.why,
+      nextActions: failure?.nextActions,
+      meta: failure?.meta,
+    }).toEqual({
+      code: 'CLI.CONSENT_UNUSED',
+      summary: '--allow T was given, but the question about T was already answered by --allow T.',
+      why: 'The run asked about T.',
+      nextActions: [{ kind: 'user-choice', label: 'Give one flag per question.' }],
+      meta: { unused: [{ verb: 'allow', values: ['T'] }], asked: ['T'] },
     });
   });
 });

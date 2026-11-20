@@ -196,3 +196,51 @@ describe('a refusal about access changes', () => {
     expect(error).toBeInstanceOf(InternalError);
   });
 });
+
+describe('a refusal of a typed answer', () => {
+  it('quotes the answer as it was typed, not as a flag, and shows the prompt with the name of the CLI', async () => {
+    const shown: string[] = [];
+    const prompt = {
+      statements: vi.fn(
+        async (
+          asked: readonly {
+            readonly question: string;
+            readonly validate: (verb: string, text: string) => string | undefined;
+          }[],
+        ) => {
+          const reason = asked[0]?.validate('delete', 'Bug:x');
+          shown.push(asked[0]?.question ?? '', reason ?? '');
+          throw new CliStructuredError(
+            'CLI.PROMPT_INVALID',
+            `"delete Bug:x" is not valid: ${reason}`,
+          );
+        },
+      ),
+    } as unknown as PromptSurface;
+    const statements: StatementSurface = { take: vi.fn(() => []), values: () => [] };
+    const asked = planQuestion({
+      ...question('Bug'),
+      keepDataWays: ['To keep it, run `{bin} contract emit`.'],
+      validate: (_verb, text) => (text === 'Bug' ? undefined : 'give it as --delete Bug.'),
+    });
+
+    const error = await promptPlanQuestions(
+      prompt,
+      statements,
+    )([asked]).catch((caught: unknown) => caught);
+
+    expect({ shown, error: refusalOf(error) }).toEqual({
+      shown: [
+        'Removing model "Bug" would delete its data.\nThe operation of the plan that does this: Drop Bug.\nTo keep it, run `prisma contract emit`.\ndelete lets its data go.',
+        'give it as --delete Bug.',
+      ],
+      error: {
+        code: 'CLI.PROMPT_INVALID',
+        message: '"delete Bug:x" does not fit this change: give it as --delete Bug.',
+        why: 'Removing model "Bug" would delete its data.',
+        nextActions: [],
+        meta: undefined,
+      },
+    });
+  });
+});

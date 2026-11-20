@@ -13,7 +13,7 @@ import {
   type PlanQuestion,
 } from '../../../src/control-api/statements/plan-questions';
 
-export const NO_FLAGS = { unmatched: [], confirm: [], yes: false };
+export const NO_FLAGS = { unmatched: [], misdirected: [], confirm: [], yes: false };
 
 /** The questions a run asks about a plan's losses and access changes, each answered with delete or allow. */
 export async function askedAbout(input: {

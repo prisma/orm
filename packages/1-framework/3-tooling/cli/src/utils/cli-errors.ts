@@ -30,6 +30,13 @@ import type { RefResolutionError } from '@internal/migration-tools/ref-resolutio
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
+import {
+  addAndEmit,
+  candidateRenames,
+  candidatesFact,
+  missingNameFact,
+  type RenameToMissingName,
+} from '../control-api/statements/missing-new-name';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
 import { chooseAction, editFileAction, runCommandAction } from './next-actions';
@@ -666,6 +673,24 @@ export function errorStatementUnresolved(
       meta: { statement: statement.text, verb: statement.verb },
     },
   );
+}
+
+/**
+ * A rename's old name is gone from the contract, and its new name, in the same model, enum, value
+ * object or contract, is not there either: the contract source may name it, but the emitted
+ * contract does not, or the name is mistyped.
+ */
+export function errorRenameToMissingName(
+  statement: WrittenStatement,
+  rename: RenameToMissingName,
+): ActionableCliError {
+  const fix = addAndEmit(rename);
+  return new ActionableCliError('MIGRATION.STATEMENT_UNRESOLVED', missingNameFact(rename), {
+    ...ifDefined('why', candidatesFact(rename)),
+    fix,
+    nextActions: [fix, ...candidateRenames(rename)].map(chooseAction),
+    meta: { statement: statement.text, verb: statement.verb },
+  });
 }
 
 /**

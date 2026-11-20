@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveStatements } from '../../../src/control-api/statements/resolve-statements';
 import { renameStatements } from '../../../src/control-api/statements/statement-text';
-import { contractOf, expectFailure, expectValue } from './statement-fixtures';
+import { contractOf, expectFailure, expectValue, failureShape } from './statement-fixtures';
 
 const UNRESOLVED = 'MIGRATION.STATEMENT_UNRESOLVED';
 const INVALID = 'MIGRATION.STATEMENT_INVALID';
@@ -72,15 +72,25 @@ describe('resolveStatements, namespace renames', () => {
     );
   });
 
-  it('refuses a new name the destination has as no namespace, listing its namespaces', () => {
+  it('refuses a namespace the contract still has', () => {
     const failure = expectFailure(resolve(['billing:finance'], billing, billing), UNRESOLVED);
     expect(failure.why).toBe(
       'Namespace "billing" still exists in the destination contract, so it was not renamed.',
     );
+  });
+
+  it('refuses a new name the contract has as no namespace, naming the namespaces it adds and how to add it', () => {
     const elsewhere = contractOf({ app: { models: { User: {} } }, ledger: {} });
-    expect(expectFailure(resolve(['billing:finance'], billing, elsewhere), UNRESOLVED).why).toBe(
-      'The destination contract has no namespace "finance" (namespaces: app, ledger).',
-    );
+    expect(failureShape(resolve(['billing:finance'], billing, elsewhere))).toEqual({
+      code: UNRESOLVED,
+      summary: 'The contract has no namespace "finance" to rename "billing" to.',
+      why: 'The contract adds namespace "ledger".',
+      nextActions: [
+        'If namespace "billing" was renamed to "finance", add namespace "finance" to the contract, run `{bin} contract emit`, and run this command again.',
+        'If namespace "billing" was renamed to "ledger": --rename billing:ledger',
+      ],
+      meta: { statement: 'billing:finance', verb: 'rename' },
+    });
   });
 
   it('refuses a new name the origin already has as a namespace', () => {

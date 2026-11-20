@@ -536,11 +536,11 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
             contract,
             operationsBefore(orderedResolutions, aggregate.app.spaceId),
           ),
-          ...consented.map((entry) =>
+          ...oneEntryPerFlag(consented).map(({ entry, allowed }) =>
             reportConsentStatement(
               entry,
-              entry.verb === 'allow' && entry.operationIndex !== undefined
-                ? [entry.operationIndex]
+              entry.verb === 'allow'
+                ? allowed
                 : run.subjects.dataLoss
                     .filter(
                       ({ subject }) =>
@@ -758,6 +758,29 @@ function plannedOperations(
       ...ifDefined('loss', loss),
     };
   });
+}
+
+/**
+ * The consented subjects as the flags that consented to them: one `--allow` allows every access
+ * change of its subject, each recorded at its own position, so its entries become one with all of
+ * those positions; `allowed` is empty for a `delete`.
+ */
+function oneEntryPerFlag(
+  consented: readonly ConsentedSubject[],
+): readonly { readonly entry: ConsentedSubject; readonly allowed: readonly number[] }[] {
+  const flags = new Map<string, { entry: ConsentedSubject; allowed: number[] }>();
+  for (const entry of consented) {
+    const key = `${entry.verb}:${migrationSubjectKey(entry.subject)}`;
+    const flag = flags.get(key) ?? { entry, allowed: [] };
+    if (entry.verb === 'allow' && entry.operationIndex !== undefined) {
+      flag.allowed.push(entry.operationIndex);
+    }
+    flags.set(key, flag);
+  }
+  return [...flags.values()].map(({ entry, allowed }) => ({
+    entry,
+    allowed: [...allowed].sort((left, right) => left - right),
+  }));
 }
 
 /** How many operations the spaces applied before `spaceId` list ahead of it in `operations`. */

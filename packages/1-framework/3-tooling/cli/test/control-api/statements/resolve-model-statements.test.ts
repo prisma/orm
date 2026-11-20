@@ -2,7 +2,7 @@ import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { resolveStatements } from '../../../src/control-api/statements/resolve-statements';
 import { renameStatements } from '../../../src/control-api/statements/statement-text';
-import { contractOf, expectFailure, expectValue } from './statement-fixtures';
+import { contractOf, expectFailure, expectValue, failureShape } from './statement-fixtures';
 
 const UNRESOLVED = 'MIGRATION.STATEMENT_UNRESOLVED';
 const INVALID = 'MIGRATION.STATEMENT_INVALID';
@@ -95,15 +95,18 @@ describe('resolveStatements, model renames', () => {
       expect(failure.why).not.toContain('app.M20');
     });
 
-    it('refuses a new name the destination does not have, naming the models it has', () => {
+    it('refuses a new name the contract does not have, naming the models it adds and how to add the model', () => {
       const { origin, destination } = profileToUser;
-      expectFailure(
-        resolve(['Profile:Account'], origin, destination),
-        UNRESOLVED,
-        'destination contract',
-        'app.Post',
-        'app.User',
-      );
+      expect(failureShape(resolve(['Profile:Account'], origin, destination))).toEqual({
+        code: UNRESOLVED,
+        summary: 'The contract has no model "Account" to rename "Profile" to.',
+        why: 'The contract adds model "User".',
+        nextActions: [
+          'If model "Profile" was renamed to "Account", add model "Account" to the contract, run `{bin} contract emit`, and run this command again.',
+          'If model "Profile" was renamed to "User": --rename Profile:User',
+        ],
+        meta: { statement: 'Profile:Account', verb: 'rename' },
+      });
     });
 
     it('refuses a new name the origin already has', () => {

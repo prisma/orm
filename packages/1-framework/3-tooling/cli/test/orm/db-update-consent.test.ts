@@ -44,7 +44,7 @@ describe('db update questions', () => {
         { kind: 'user-choice', label: 'If the data in "audit_old" can go: --delete audit_old' },
         {
           kind: 'user-choice',
-          label: `If model "Legacy" was renamed, first add it to the contract under its new name; then keep its data: --rename 'Legacy:<new name>'`,
+          label: `If model "Legacy" was renamed, add it to the contract under its new name and run \`prisma-test contract emit\`; then keep its data: --rename 'Legacy:<new name>'`,
         },
         { kind: 'user-choice', label: 'If the data of model "Legacy" can go: --delete Legacy' },
         { kind: 'user-choice', label: 'To allow the change to "User": --allow User' },

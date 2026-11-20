@@ -28,6 +28,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import {
+  errorRenameToMissingName,
   errorStatementInvalid,
   errorStatementOriginUnknown,
   errorStatementUnresolved,
@@ -1421,7 +1422,106 @@ function resolveOneNameStatement(
   }
   if (asNamespace.ok) return resolveNamespaceRename(state, statement, asNamespace.value);
   if (fromModel.ok) return undefined;
+  const added = namesAdded(namespacesOf(state.origin), namespacesOf(state.destination));
+  if (
+    !namespacesOf(state.destination).includes(from) &&
+    !namespacesOf(state.destination).includes(to)
+  ) {
+    return notOk(
+      errorRenameToMissingName(statement, { entity: 'namespace', from, to, candidates: added }),
+    );
+  }
   return notOk(unresolved(statement, asNamespace.failure));
+}
+
+/** The models the destination contract has and the origin does not, without those a rename names. */
+function modelsAdded(state: ResolutionState): readonly ModelCoordinate[] {
+  return Object.entries(state.destination.contract.domain.namespaces).flatMap(
+    ([namespaceId, namespace]) =>
+      Object.keys(namespace.models).flatMap((model) => {
+        const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
+        const renamedTo = state.renamedTo.has(`${MODEL_RENAMES}:${qualifiedModel(coordinate)}`);
+        return renamedTo || modelAt(state.origin.contract, coordinate) !== undefined
+          ? []
+          : [coordinate];
+      }),
+  );
+}
+
+function namesAdded(before: readonly string[], after: readonly string[]): readonly string[] {
+  return after.filter((name) => !before.includes(name));
+}
+
+/**
+ * A rename whose old name the destination contract no longer has, and whose new name, written in
+ * the same model, enum or value object, or as a model, the destination does not have either: said
+ * in the user's terms, with the names the destination adds there that it can be instead.
+ */
+function renameToMissingName(
+  state: ResolutionState,
+  statement: ParsedRename,
+  from: SideReading,
+): CliStructuredError | undefined {
+  const parent = statement.from.slice(0, -1).join('.');
+  const sameParent = statement.to.slice(0, -1).join('.') === parent;
+  const name = statement.to.at(-1) ?? '';
+  const written = (each: string) => (parent === '' ? each : `${parent}.${each}`);
+  const missing = (candidates: readonly string[]) =>
+    errorRenameToMissingName(statement, {
+      entity: ENTITY_WORDS[from.entity],
+      from: statement.from.join('.'),
+      to: statement.to.join('.'),
+      candidates: candidates.map(written),
+    });
+  switch (from.entity) {
+    case 'model': {
+      if (modelAt(state.destination.contract, from.coordinate) !== undefined) return undefined;
+      const [first, second] = statement.to;
+      const lookup =
+        second === undefined
+          ? lookupModel(state.destination, undefined, first)
+          : lookupModel(state.destination, first, second);
+      if (lookup.kind !== 'missing') return undefined;
+      return errorRenameToMissingName(statement, {
+        entity: 'model',
+        from: statement.from.join('.'),
+        to: statement.to.join('.'),
+        candidates: modelsAdded(state).map((model) =>
+          modelStatementText(state.destination.contract, model),
+        ),
+      });
+    }
+    case 'field': {
+      const destination = from.destinationModel;
+      const model =
+        destination === undefined ? undefined : modelAt(state.destination.contract, destination);
+      if (destination === undefined || model === undefined || !sameParent) return undefined;
+      if (hasField(model, from.coordinate.field) || hasField(model, name)) return undefined;
+      return missing(
+        namesAdded(fieldNames(from.model), Object.keys(model.fields)).filter(
+          (field) =>
+            !state.renamedTo.has(`${FIELD_RENAMES}:${qualifiedField({ ...destination, field })}`),
+        ),
+      );
+    }
+    case 'enumValue': {
+      if (!sameParent) return undefined;
+      const { namespaceId, enum: enumName, member } = from.coordinate;
+      const lookup = lookupEnum(state.destination, namespaceId, enumName);
+      if (lookup.kind !== 'found' || lookup.members.includes(member)) return undefined;
+      if (lookup.members.includes(name)) return undefined;
+      return missing(namesAdded(from.members, lookup.members));
+    }
+    case 'valueObjectField': {
+      if (!sameParent) return undefined;
+      const { namespaceId, valueObject, field } = from.coordinate;
+      const lookup = lookupValueObject(state.destination, namespaceId, valueObject);
+      if (lookup.kind !== 'found') return undefined;
+      const fields = Object.keys(lookup.valueObject.fields);
+      if (fields.includes(field) || fields.includes(name)) return undefined;
+      return missing(namesAdded(from.fields, fields));
+    }
+  }
 }
 
 function resolveStatement(
@@ -1442,6 +1542,8 @@ function resolveStatement(
   const from = readSide(state, 'old', statement.from);
   if (!from.ok) return notOk(oldSideRefusal(state, statement, later, from.failure));
   const to = readSide(state, 'new', statement.to);
+  const missingNewName = to.ok ? undefined : renameToMissingName(state, statement, from.value);
+  if (missingNewName !== undefined) return notOk(missingNewName);
   if (
     !to.ok &&
     (from.value.entity === 'enumValue' || from.value.entity === 'valueObjectField') &&

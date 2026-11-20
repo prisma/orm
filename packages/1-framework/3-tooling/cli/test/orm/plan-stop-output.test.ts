@@ -294,3 +294,43 @@ describe('the output when a flag names the subject in a form it does not take', 
     });
   });
 });
+
+describe('the output when a --rename gives a name the contract does not have', () => {
+  it('says the contract has no such field, names the field it adds, and plans the rename the printed line gives', async () => {
+    const project = await shopProject();
+    const script = { ...removedLegacy, statementsResolveDataLoss: true };
+
+    const refused = await harness(project, { script }).run(
+      ['migration', 'plan', '--rename', 'Shop.legacy:Shop.nope', '--json'],
+      { cwd: project.dir },
+    );
+    const renameLine = labelsOf(errorOf(refused)).find((label) => label.endsWith('Shop.rating'));
+    const followed = await harness(project, { script }).run(
+      ['migration', 'plan', ...flagsOf(renameLine ?? '')],
+      { cwd: project.dir },
+    );
+
+    expect({ error: errorOf(refused), exitCode: followed.exitCode }).toEqual({
+      error: {
+        code: 'MIGRATION.STATEMENT_UNRESOLVED',
+        severity: 'error',
+        summary: 'The contract has no field "Shop.nope" to rename "Shop.legacy" to.',
+        why: 'The contract adds field "Shop.rating".',
+        nextActions: [
+          {
+            kind: 'user-choice',
+            label:
+              'If field "Shop.legacy" was renamed to "Shop.nope", add field "Shop.nope" to the contract, run `prisma-test contract emit`, and run this command again.',
+          },
+          {
+            kind: 'user-choice',
+            label:
+              'If field "Shop.legacy" was renamed to "Shop.rating": --rename Shop.legacy:Shop.rating',
+          },
+        ],
+        meta: { statement: 'Shop.legacy:Shop.nope', verb: 'rename' },
+      },
+      exitCode: 0,
+    });
+  });
+});

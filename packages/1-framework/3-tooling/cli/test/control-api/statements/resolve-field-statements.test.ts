@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveStatements } from '../../../src/control-api/statements/resolve-statements';
 import { renameStatements } from '../../../src/control-api/statements/statement-text';
-import { contractOf, expectFailure, expectValue } from './statement-fixtures';
+import { contractOf, expectFailure, expectValue, failureShape } from './statement-fixtures';
 
 const UNRESOLVED = 'MIGRATION.STATEMENT_UNRESOLVED';
 const INVALID = 'MIGRATION.STATEMENT_INVALID';
@@ -170,14 +170,18 @@ describe('resolveStatements, field renames', () => {
       );
     });
 
-    it('refuses a new field the destination model does not have, naming its fields', () => {
+    it('refuses a new field the contract does not have, naming the fields it adds and how to add the field', () => {
       const { origin, destination } = nameToFullName;
-      expectFailure(
-        resolve(['User.name:User.email'], origin, destination),
-        UNRESOLVED,
-        'destination model "app.User" has no field "email"',
-        'fullName, id',
-      );
+      expect(failureShape(resolve(['User.name:User.email'], origin, destination))).toEqual({
+        code: UNRESOLVED,
+        summary: 'The contract has no field "User.email" to rename "User.name" to.',
+        why: 'The contract adds field "User.fullName".',
+        nextActions: [
+          'If field "User.name" was renamed to "User.email", add field "User.email" to the contract, run `{bin} contract emit`, and run this command again.',
+          'If field "User.name" was renamed to "User.fullName": --rename User.name:User.fullName',
+        ],
+        meta: { statement: 'User.name:User.email', verb: 'rename' },
+      });
     });
 
     it('refuses a new field the origin model already has', () => {

@@ -174,7 +174,7 @@ export function expectFailure<T>(
     expect(text).toContain(fragment);
   }
   if (code === 'MIGRATION.STATEMENT_INVALID' || code === 'MIGRATION.STATEMENT_UNRESOLVED') {
-    expect(result.failure.nextActions?.map((action) => action.label)).toEqual([result.failure.fix]);
+    expect(result.failure.nextActions?.[0]?.label).toBe(result.failure.fix);
   }
   return result.failure;
 }
@@ -184,4 +184,12 @@ export function expectValue<T>(result: Result<T, CliStructuredError>): T {
     throw new Error(`Expected success, got ${result.failure.code}: ${result.failure.why}`);
   }
   return result.value;
+}
+
+/** A failure as a user reads it: its code, summary, why, next actions and meta. */
+export function failureShape<T>(result: Result<T, CliStructuredError>): unknown {
+  if (result.ok)
+    throw new Error(`Expected a failure, got success: ${JSON.stringify(result.value)}`);
+  const { code, message, why, nextActions, meta } = result.failure;
+  return { code, summary: message, why, nextActions: nextActions?.map(({ label }) => label), meta };
 }

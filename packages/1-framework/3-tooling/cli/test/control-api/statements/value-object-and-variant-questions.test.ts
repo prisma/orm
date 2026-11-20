@@ -193,14 +193,14 @@ describe('a question about a value object field', () => {
 
     it('names every new required field', async () => {
       expect([await askedText(true), await askedText(false)]).toEqual([
-        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required fields "GeoPoint.latitude" and "GeoPoint.longitude" still need a value: add --backfill GeoPoint.latitude --backfill GeoPoint.longitude to write them in migration.ts.\nrename keeps the values under the new name; delete lets them go.',
-        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required fields "GeoPoint.latitude" and "GeoPoint.longitude".\nrename keeps the values under the new name; delete lets them go.',
+        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required fields "GeoPoint.latitude" and "GeoPoint.longitude" still need a value: add --backfill GeoPoint.latitude --backfill GeoPoint.longitude to write them in migration.ts.\nrename keeps the values under the new name, "latitude" or "longitude"; delete lets them go.',
+        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the existing objects get a temporary value in the new required fields "GeoPoint.latitude" and "GeoPoint.longitude".\nrename keeps the values under the new name, "latitude" or "longitude"; delete lets them go.',
       ]);
     });
 
     it('names under migration plan only the new required fields the run does not backfill', async () => {
       expect(await askedText(true, [{ verb: 'backfill', text: 'GeoPoint.latitude' }])).toBe(
-        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "GeoPoint.longitude" still needs a value: add --backfill GeoPoint.longitude to write it in migration.ts.\nrename keeps the values under the new name; delete lets them go.',
+        'Removing value object field "GeoPoint.lat" would delete its values.\nThe operation of the plan that does this: Remove key.\nIf the values go, the new required field "GeoPoint.longitude" still needs a value: add --backfill GeoPoint.longitude to write it in migration.ts.\nrename keeps the values under the new name, "latitude" or "longitude"; delete lets them go.',
       );
     });
   });
@@ -248,7 +248,7 @@ describe('a question about a value object field', () => {
       {
         subject: 'GeoPoint.lng',
         question:
-          'Removing value object field "GeoPoint.lng" would delete its values.\nThe operations of the plan that do this:\n- Remove key "lng" at path "$" in column "location" of "place"\n- Remove key "lng" at path "$[*]" in column "stops" of "trip"\nrename works once the contract has the value object field under its new name; delete lets them go.',
+          'Removing value object field "GeoPoint.lng" would delete its values.\nThe operations of the plan that do this:\n- Remove key "lng" at path "$" in column "location" of "place"\n- Remove key "lng" at path "$[*]" in column "stops" of "trip"\nrename works once you add the value object field to the contract under its new name and run `{bin} contract emit`; delete lets them go.',
         verbs: ['rename', 'delete'],
       },
     ]);
@@ -355,7 +355,7 @@ describe('a question about a removed variant', () => {
       {
         subject: 'Bug',
         question:
-          'Removing model "Bug" would delete its data.\nThe operations of the plan that do this:\n- Drop column "severity" of "tasks"\n- Delete the rows of "tasks" that hold value "bug" in column "type"\nrename works once the contract has the model under its new name; delete lets its data go.',
+          'Removing model "Bug" would delete its data.\nThe operations of the plan that do this:\n- Drop column "severity" of "tasks"\n- Delete the rows of "tasks" that hold value "bug" in column "type"\nrename works once you add the model to the contract under its new name and run `{bin} contract emit`; delete lets its data go.',
         verbs: ['rename', 'delete'],
       },
     ]);

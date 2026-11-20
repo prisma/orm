@@ -1,11 +1,16 @@
 import { asNamespaceId } from '@internal/contract/types';
 import type { MigrationSubject } from '@internal/framework-components/control';
+import type { PromptSurface, StatementSurface } from '@prisma/cli-engine';
+import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { describe, expect, it } from 'vitest';
 import { questionText, refusalText } from '../../../src/control-api/statements/plan-question-text';
 import type {
   KeepDataEditAdvice,
   PlanQuestion,
+  PlanQuestionVerb,
 } from '../../../src/control-api/statements/plan-questions';
+import { resolveStatements } from '../../../src/control-api/statements/resolve-statements';
+import { promptPlanQuestions } from '../../../src/orm/plan-question-prompt';
 import {
   dbUpdateKeepDataEditAdvice,
   migrationPlanKeepDataEditAdvice,
@@ -124,15 +129,95 @@ function everyKindOfQuestion(
   });
 }
 
-/** The CLI's own reasons for refusing a flag or a typed answer that names the subject in a form it does not take. */
-function rejections(question: PlanQuestion): readonly string[] {
-  return question.verbs.flatMap((verb) => {
-    const reason = question.validate(verb, 'nope');
-    return reason === undefined ? [] : [reason];
+/** Wrong values for a question: no new name, a new name the contract does not have, one it had before, and another subject. */
+function wrongValues(question: PlanQuestion): readonly string[] {
+  const parent = question.subject.slice(0, question.subject.lastIndexOf('.') + 1);
+  const hadBefore = [
+    ['Shop.legacy', 'age'],
+    ['.Legacy', 'Shop'],
+    ['Status.ARCHIVED', 'OPEN'],
+    ['GeoPoint.note', 'lat'],
+  ].flatMap(([suffix, name]) =>
+    question.subject.endsWith(suffix ?? '') ? [`${question.subject}:${parent}${name}`] : [],
+  );
+  return [
+    'nope',
+    `${question.subject}:${parent}nope`,
+    ...hadBefore,
+    `${question.subject}x:${parent}nope`,
+    'billing:nope',
+  ];
+}
+
+/** The CLI's own reasons for refusing a flag or a typed answer that does not fit, each with the value refused. */
+function rejections(
+  question: PlanQuestion,
+): readonly { readonly verb: PlanQuestionVerb; readonly text: string; readonly reason: string }[] {
+  return question.verbs.flatMap((verb) =>
+    wrongValues(question).flatMap((text) => {
+      const reason = question.validate(verb, text);
+      return reason === undefined ? [] : [{ verb, text, reason }];
+    }),
+  );
+}
+
+/**
+ * What the engine shows when a typed answer does not fit, and the `CLI.PROMPT_INVALID` the CLI
+ * rebuilds from it: the question text and the reason as the engine is given them, then the
+ * rebuilt summary and `why`.
+ */
+async function rebuiltPromptInvalid(
+  question: PlanQuestion,
+  verb: PlanQuestionVerb,
+  text: string,
+): Promise<{ readonly shown: readonly string[]; readonly rebuilt: readonly string[] }> {
+  const statements: StatementSurface = { take: () => [], values: () => [] };
+  const shown: string[] = [];
+  const prompt = {
+    statements: async (
+      asked: readonly {
+        readonly question: string;
+        readonly validate: (verb: string, text: string) => string | undefined;
+      }[],
+    ) => {
+      const reason = asked[0]?.validate(verb, text) ?? '';
+      shown.push(asked[0]?.question ?? '', reason);
+      throw new CliStructuredError(
+        'CLI.PROMPT_INVALID',
+        `"${verb} ${text}" is not valid: ${reason}`,
+      );
+    },
+  } as unknown as PromptSurface;
+  const error = await promptPlanQuestions(
+    prompt,
+    statements,
+  )([question]).catch((thrown: unknown) => thrown);
+  if (!CliStructuredError.is(error)) throw new Error('Expected the rebuilt CLI.PROMPT_INVALID');
+  return { shown, rebuilt: [error.message, error.why ?? ''] };
+}
+
+/** The errors a `--rename` flag to a name the contract does not have gets, for each kind of subject. */
+function missingNameFlagErrors(): readonly string[] {
+  return [
+    'Shop.legacy:Shop.nope',
+    'Legacy:Nope',
+    'Status.ARCHIVED:Status.NOPE',
+    'GeoPoint.note:GeoPoint.nope',
+    'billing:nope',
+  ].flatMap((text) => {
+    const resolved = resolveStatements({
+      statements: [{ verb: 'rename', text }],
+      origin: { kind: 'contract', contract: origin },
+      destination,
+    });
+    if (resolved.ok) throw new Error(`Expected --rename ${text} to fail`);
+    const { message, why, nextActions } = resolved.failure;
+    return [message, why ?? '', ...(nextActions ?? []).map(({ label }) => label)];
   });
 }
 
-const TOOL_WORDS = /statement|question|\banswer|\basks? about|needs \d+ answers/i;
+const TOOL_WORDS =
+  /statement|question|\banswer|\basks? about|needs \d+ answers|origin contract|destination contract|\bresolve/i;
 
 describe('the texts built when a plan stops to ask', () => {
   it('never use the words of the tool, alone or beside other questions, with flags that did nothing and --yes', async () => {
@@ -143,18 +228,29 @@ describe('the texts built when a plan stops to ask', () => {
     ]);
     const flags = {
       unmatched: [{ verb: 'delete', values: ['nope'] }],
+      misdirected: [{ verb: 'allow', text: 'Legacy', subjectInList: 'model "Legacy"' }],
       confirm: ['postgres'],
       yes: true,
     };
-    const texts = runs.flatMap((questions) => [
-      ...questions.map((each) => questionText(each, true)),
-      ...questions.flatMap(rejections),
-      ...[questions, ...questions.map((question) => [question])].flatMap((open) => {
+    const refused = runs.flatMap((questions) =>
+      questions.flatMap((question) => rejections(question).map((each) => ({ question, ...each }))),
+    );
+    const prompted = await Promise.all(
+      refused.map(({ question, verb, text }) => rebuiltPromptInvalid(question, verb, text)),
+    );
+    const refusalTexts = runs.flatMap((questions) =>
+      [questions, ...questions.map((question) => [question])].flatMap((open) => {
         const refusal = refusalText(open, flags);
         return [refusal.summary, refusal.why ?? '', ...refusal.nextActions];
       }),
-    ]);
-    const joined = texts.join('\n');
+    );
+    const texts = [
+      ...runs.flatMap((questions) => questions.map((each) => questionText(each, true))),
+      ...refused.map(({ reason }) => reason),
+      ...prompted.flatMap(({ shown, rebuilt }) => [...shown, ...rebuilt]),
+      ...missingNameFlagErrors(),
+    ];
+    const joined = [...texts, ...refusalTexts].join('\n');
 
     expect({
       questions: runs.map((questions) => questions.length),
@@ -171,8 +267,35 @@ describe('the texts built when a plan stops to ask', () => {
         'The contract no longer has namespace "billing".',
         'give it as --delete',
         'rename needs the new name',
+        'the contract has no field "app.Shop.nope" to rename "app.Shop.legacy" to. The contract adds field "app.Shop.rating".',
+        'the contract had field "app.Shop.age" before this change too',
+        'the contract has no namespace "nope" to rename "billing" to.',
+        'The rename\'s old name is not "app.Shop.legacy"',
+        '"rename app.Shop.legacy:app.Shop.nope" does not fit this change',
+        'add field "app.Shop.nope" to the contract, run `prisma contract emit`, and run this command again.',
+        'and run `prisma contract emit`; delete',
+        '"delete nope" does not fit this change: give it as --delete',
+        'The contract has no enum value "Status.NOPE" to rename "Status.ARCHIVED" to.',
+        'The contract has no value object field "GeoPoint.nope" to rename "GeoPoint.note" to.',
+        'add it to the contract under its new name and run `{bin} contract emit`',
+        'For field "app.Shop.legacy": target advice on keeping it.',
+        'If "audit" or "audit_age" was renamed, keep its data',
+        '--yes does not allow this: it would delete data, can change or lose data and would change who can read and write data.',
+        'This change would lose data and change access:',
+        'Remove --allow Legacy: this change does not change access to model "Legacy".',
+        'Access to the data of "app.Shop" would widen.',
       ].filter((text) => !joined.includes(text)),
-      toolWords: texts.filter((text) => TOOL_WORDS.test(text)),
-    }).toEqual({ questions: [12, 12, 12], reachesEveryBuilder: [], toolWords: [] });
+      toolWords: [...texts, ...refusalTexts].filter((text) => TOOL_WORDS.test(text)),
+      promptsWithoutTheBinary: prompted
+        .flatMap(({ shown }) => shown)
+        .filter((text) => text.includes('{bin}')),
+      refusalsNamingTheBinary: refusalTexts.filter((text) => /\bprisma /.test(text)),
+    }).toEqual({
+      questions: [12, 12, 12],
+      reachesEveryBuilder: [],
+      toolWords: [],
+      promptsWithoutTheBinary: [],
+      refusalsNamingTheBinary: [],
+    });
   });
 });

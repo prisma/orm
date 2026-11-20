@@ -30,11 +30,11 @@ describe('the texts of a removed model', () => {
       The operations of the plan that do this:
       - Drop table "legacy"
       - Drop table "legacy_audit"
-      rename works once the contract has the model under its new name; delete lets its data go.",
+      rename works once you add the model to the contract under its new name and run \`{bin} contract emit\`; delete lets its data go.",
         ],
         "refusal": {
           "nextActions": [
-            "If the model was renamed, first add it to the contract under its new name; then keep its data: --rename 'Legacy:<new name>'",
+            "If the model was renamed, add it to the contract under its new name and run \`{bin} contract emit\`; then keep its data: --rename 'Legacy:<new name>'",
             "If its data can go: --delete Legacy",
           ],
           "summary": "Removing model "Legacy" would delete its data.",
@@ -102,11 +102,11 @@ describe('the texts of a removed enum value', () => {
         "prompts": [
           "Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.
       The operation of the plan that does this: Remove value "archived" from "Task"."status".
-      rename works once the contract has the enum value under its new name; delete removes it from the data.",
+      rename works once you add the enum value to the contract under its new name and run \`{bin} contract emit\`; delete removes it from the data.",
         ],
         "refusal": {
           "nextActions": [
-            "If the enum value was renamed, first add it to the contract under its new name; then keep it in the data: --rename 'Status.ARCHIVED:Status.<new name>'",
+            "If the enum value was renamed, add it to the contract under its new name and run \`{bin} contract emit\`; then keep it in the data: --rename 'Status.ARCHIVED:Status.<new name>'",
             "If it can go from the data: --delete Status.ARCHIVED",
           ],
           "summary": "Removing enum value "Status.ARCHIVED" would remove it from the data that holds it.",
@@ -148,11 +148,11 @@ describe('the texts of a removed value object field', () => {
         "prompts": [
           "Removing value object field "GeoPoint.note" would delete its values.
       The operation of the plan that does this: Remove key "note" from "place"."location".
-      rename works once the contract has the value object field under its new name; delete lets them go.",
+      rename works once you add the value object field to the contract under its new name and run \`{bin} contract emit\`; delete lets them go.",
         ],
         "refusal": {
           "nextActions": [
-            "If the value object field was renamed, first add it to the contract under its new name; then keep its values: --rename 'GeoPoint.note:GeoPoint.<new name>'",
+            "If the value object field was renamed, add it to the contract under its new name and run \`{bin} contract emit\`; then keep its values: --rename 'GeoPoint.note:GeoPoint.<new name>'",
             "If the values can go: --delete GeoPoint.note",
           ],
           "summary": "Removing value object field "GeoPoint.note" would delete its values.",
@@ -192,12 +192,12 @@ describe('the texts of a model of a removed namespace', () => {
       {
         "prompts": [
           "This change would delete the data of model "billing.Invoice".
-      The operation of the plan that does this: Drop table "invoice".
       The contract no longer has namespace "billing".
-      rename keeps its data under the new name; delete lets its data go; delete billing lets the data of every model and field of namespace "billing" go; rename billing:finance keeps the data of namespace "billing" under namespace "finance".",
+      The operation of the plan that does this: Drop table "invoice".
+      delete billing lets the data of every model and field of namespace "billing" go; rename billing:finance keeps the data of namespace "billing" under namespace "finance"; rename keeps its data under the new name, "finance.Invoice" or "finance.Receipt"; delete lets its data go.",
           "This change would delete the data of model "billing.Receipt".
       The operation of the plan that does this: Drop table "receipt".
-      rename keeps its data under the new name; delete lets its data go.",
+      rename keeps its data under the new name, "finance.Invoice" or "finance.Receipt"; delete lets its data go.",
         ],
         "refusal": {
           "nextActions": [
@@ -209,9 +209,8 @@ describe('the texts of a model of a removed namespace', () => {
             "If the data of model "billing.Receipt" can go: --delete billing.Receipt",
           ],
           "summary": "This change would lose data: model "billing.Invoice", model "billing.Receipt".",
-          "why": "The contract no longer has namespace "billing".
-
-      This change would delete the data of model "billing.Invoice".
+          "why": "This change would delete the data of model "billing.Invoice".
+      The contract no longer has namespace "billing".
       The operation of the plan that does this: Drop table "invoice".
 
       This change would delete the data of model "billing.Receipt".
@@ -264,17 +263,17 @@ describe('the texts of storage no model stores', () => {
           "This change would delete the data in "public.user.age", named by its storage name because the contract before this change is not known.
       The operation of the plan that does this: Drop column "age" from "user".
       If it was renamed, keep its data: store a snapshot of the contract before this change, which is the contract the database was last updated to, then run this command again, and it gives the --rename to use.
-      1. Put the contract source back to the version the database is at, and run \`prisma contract emit\`.
-      2. Run \`prisma db update --advance-ref <name> --dry-run\`, with the same \`--db\` as this command if it has one, and check that it plans no operations. Then run it again without \`--dry-run\`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.
-      3. Put the new contract source back, run \`prisma contract emit\`, and run this command again with \`--advance-ref <name>\`.
+      1. Put the contract source back to the version the database is at, and run \`{bin} contract emit\`.
+      2. Run \`{bin} db update --advance-ref <name> --dry-run\`, with the same \`--db\` as this command if it has one, and check that it plans no operations. Then run it again without \`--dry-run\`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.
+      3. Put the new contract source back, run \`{bin} contract emit\`, and run this command again with \`--advance-ref <name>\`.
       delete lets the data go.",
         ],
         "refusal": {
           "nextActions": [
             "If it was renamed, keep its data: store a snapshot of the contract before this change, which is the contract the database was last updated to, then run this command again, and it gives the --rename to use.",
-            "1. Put the contract source back to the version the database is at, and run \`prisma contract emit\`.",
-            "2. Run \`prisma db update --advance-ref <name> --dry-run\`, with the same \`--db\` as this command if it has one, and check that it plans no operations. Then run it again without \`--dry-run\`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.",
-            "3. Put the new contract source back, run \`prisma contract emit\`, and run this command again with \`--advance-ref <name>\`.",
+            "1. Put the contract source back to the version the database is at, and run \`{bin} contract emit\`.",
+            "2. Run \`{bin} db update --advance-ref <name> --dry-run\`, with the same \`--db\` as this command if it has one, and check that it plans no operations. Then run it again without \`--dry-run\`: the database matches that contract, so this changes nothing in it, and it stores the contract snapshot. If the dry run plans operations, the database has drifted from that contract; settle that before you go on.",
+            "3. Put the new contract source back, run \`{bin} contract emit\`, and run this command again with \`--advance-ref <name>\`.",
             "If the data can go: --delete public.user.age",
           ],
           "summary": "This change would delete the data in "public.user.age", named by its storage name because the contract before this change is not known.",
@@ -361,7 +360,7 @@ describe('the texts of an access change', () => {
     }).toMatchInlineSnapshot(`
       {
         "prompts": [
-          "Access to the data of "User" would change.
+          "Access to the data of "User" would widen.
       The operations of the plan that do this:
       - Disable row-level security on "user"
       - Drop policy "readers" on "user"
@@ -372,7 +371,7 @@ describe('the texts of an access change', () => {
             "nextActions": [
               "To allow both changes: --allow User",
             ],
-            "summary": "Access to the data of "User" would change.",
+            "summary": "Access to the data of "User" would widen.",
             "why": "The operations of the plan that do this:
       - Disable row-level security on "user"
       - Drop policy "readers" on "user"",
