@@ -12,7 +12,8 @@ reviews:
       instructions: >-
         Decimal, bigint and 64-bit integer types exist to hold values a JavaScript number would round, so flag
         a change that routes such a value through a number for convenience: Number() or parseFloat() on it
-        without a check that proves the value fits exactly (a range check before the conversion is fine), or
+        without a check that proves the conversion is exact (a safe-integer range check is enough for a bigint or
+        64-bit integer, but not for a Decimal, since 1.0000000000000001 passes a range check and becomes 1), or
         an override of valueOf or Symbol.toPrimitive on a value class meant to make <, >, == or arithmetic
         work. A string-returning override is wrong too, because < then compares "10" and "2" as text. Native
         bigint operators are already exact. Decimal has no exact operators, since JavaScript has no operator
