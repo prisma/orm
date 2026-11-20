@@ -10,7 +10,7 @@ This page lists the projects in priority order, by stream. Work the streams in p
 
 **Progress column:** one symbol, then done/total where the row has countable units. ✅ done · 🟡 code done, waiting on review or docs · 🔄 in progress · ⏳ not started · ❓ needs a decision from Will. The units are the slices, pull requests, tickets or items the Status column names; a row with no units yet has no count.
 
-States were last checked against GitHub and Linear on 2026-11-19, 22:00 UTC.
+States were last checked against GitHub and Linear on 2026-11-20, 02:00 UTC.
 
 ## How far from GA
 
