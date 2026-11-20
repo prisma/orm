@@ -40,6 +40,7 @@ export async function askedAbout(input: {
   readonly temporaryValues?: readonly { readonly subject: MigrationSubject }[];
   /** The renames the plan carries out. */
   readonly statements?: readonly StatementText[];
+  readonly destinationRef?: string;
 }): Promise<readonly PlanQuestion[]> {
   const asked: PlanQuestion[] = [];
   await askPlanQuestions<PlannedQuestions, never>({
@@ -64,6 +65,7 @@ export async function askedAbout(input: {
     origin: input.origin,
     originKnown: input.originKnown ?? true,
     destination: input.destination,
+    ...(input.destinationRef === undefined ? {} : { destinationRef: input.destinationRef }),
     ...(input.keepDataEditAdvice === undefined
       ? {}
       : { keepDataEditAdvice: input.keepDataEditAdvice }),

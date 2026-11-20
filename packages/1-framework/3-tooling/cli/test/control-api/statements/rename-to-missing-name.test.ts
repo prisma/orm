@@ -1,5 +1,6 @@
 import { asNamespaceId } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
+import { questionText } from '../../../src/control-api/statements/plan-question-text';
 import { resolveStatements } from '../../../src/control-api/statements/resolve-statements';
 import { askedAbout } from './plan-question-fixtures';
 import { contractOf, expectValue, failureShape } from './statement-fixtures';
@@ -203,6 +204,75 @@ describe('the new names a removed model can have', () => {
         ],
         meta: { statement: 'app.Bug:app.Nope', verb: 'rename' },
       },
+    });
+  });
+});
+
+describe('a removed field when the command plans to a ref', () => {
+  it('says at the prompt and in the refusal to add the new name and run again without --to', async () => {
+    const [question] = await askedAbout({
+      origin,
+      destination: contractOf({ app: { models: { Shop: { fields: ['id'] } } } }),
+      destinationRef: 'next',
+      losses: [
+        {
+          label: 'Drop column "legacy" from "shop"',
+          subject: { kind: 'field', namespaceId: app, model: 'Shop', field: 'legacy' },
+        },
+      ],
+    });
+
+    expect({
+      prompt: question === undefined ? undefined : questionText(question),
+      refusal: question?.answers.map(({ meaning }) => meaning),
+      typed: question?.validate('rename', 'Shop.legacy:Shop.nope'),
+    }).toEqual({
+      prompt:
+        'Removing field "Shop.legacy" would delete its values.\nThe operation of the plan that does this: Drop column "legacy" from "shop".\nrename works only once the contract has the field under its new name: stop this command, add it to the contract, run `prisma contract emit`, and run this command again without --to next; delete lets the values go.',
+      refusal: [
+        'If the field was renamed, add it to the contract under its new name and run `{bin} contract emit`, then run this command without --to next and keep its values',
+        'If the values can go',
+      ],
+      typed:
+        'the contract --to next names has no field "Shop.nope" to rename "Shop.legacy" to. If field "Shop.legacy" was renamed to "Shop.nope", stop this command, add field "Shop.nope" to the contract, run `{bin} contract emit`, and run this command again without --to next.',
+    });
+  });
+});
+
+describe('a --rename to a name the contract had before the change too', () => {
+  it('says so as the prompt does, and the --rename it offers in place of the one given resolves', () => {
+    const resolve = (text: string) =>
+      resolveStatements({
+        statements: [{ verb: 'rename', text }],
+        origin: { kind: 'contract', contract: origin },
+        destination,
+      });
+    const refused = failureShape(resolve('Shop.legacy:Shop.id')) as {
+      readonly nextActions: readonly string[];
+    };
+    const printed = refused.nextActions[0]?.split(': ').at(-1)?.replace('--rename ', '') ?? '';
+
+    expect({ refused, followed: expectValue(resolve(printed)) }).toEqual({
+      refused: {
+        code: 'MIGRATION.STATEMENT_UNRESOLVED',
+        summary:
+          'The contract had field "Shop.id" before this change too, so one change cannot make it the new name of "Shop.legacy".',
+        why: 'The contract adds fields "Shop.rating" and "Shop.score".',
+        nextActions: [
+          'If field "Shop.legacy" was renamed to "Shop.rating", put this in place of --rename Shop.legacy:Shop.id: --rename Shop.legacy:Shop.rating',
+          'If field "Shop.legacy" was renamed to "Shop.score", put this in place of --rename Shop.legacy:Shop.id: --rename Shop.legacy:Shop.score',
+          'If "Shop.legacy" takes the name of field "Shop.id", which this change renames or removes, make the change in two migrations: first change the contract so that "Shop.id" has its new name or is gone, and plan only that; then rename "Shop.legacy" to "Shop.id" with --rename Shop.legacy:Shop.id.',
+        ],
+        meta: { statement: 'Shop.legacy:Shop.id', verb: 'rename' },
+      },
+      followed: [
+        {
+          kind: 'rename',
+          entity: 'field',
+          from: { namespaceId: app, model: 'Shop', field: 'legacy' },
+          to: { namespaceId: app, model: 'Shop', field: 'rating' },
+        },
+      ],
     });
   });
 });
