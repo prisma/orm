@@ -7,6 +7,8 @@ import type {
   ContractSerializer,
   DiffSubjectGranularity,
   MigratableTargetDescriptor,
+  MigrationAccessChange,
+  MigrationPlanOperation,
   SchemaVerifier,
 } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
@@ -117,6 +119,10 @@ export interface SqlControlTargetDescriptor<
    * family entity kind.
    */
   readonly classifyEntityKind: (nodeKind: string) => string | undefined;
+  /** The operations of one recorded migration that change who can read or write rows; the family instance's `accessChangesOf` delegates here. */
+  readonly accessChangesOf: (
+    operations: readonly MigrationPlanOperation[],
+  ) => readonly MigrationAccessChange[];
   createPlanner(adapter: SqlControlAdapter<TTargetId>): SqlMigrationPlanner<TTargetDetails>;
   createRunner(family: SqlControlFamilyInstance): SqlMigrationRunner<TTargetDetails>;
 }

@@ -18,6 +18,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildPathNotFoundFailure,
   executeMigrate,
+  neverPlannedSpaceFailure,
   unreachableSpaceFailure,
 } from '../../src/control-api/operations/migrate';
 import type { CliInvocation } from '../../src/utils/printed-command';
@@ -336,6 +337,49 @@ describe('executeMigrate with no path to the target', () => {
         fromHash: DELETED,
         targetHash: ELSEWHERE,
       },
+    });
+  });
+
+  it('advises installing a version that ships migrations when an extension space has none', () => {
+    const failure = neverPlannedSpaceFailure(
+      { spaceId: 'pgvector', targetHash: ELSEWHERE },
+      { appSpaceId: 'app', migrationsDir: 'migrations', invocation: invocationIn('/project') },
+    );
+
+    expect(failure.toEnvelope()).toMatchObject({
+      code: 'MIGRATION.PATH_UNREACHABLE',
+      summary: 'No on-disk migrations for extension space "pgvector"',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label: 'Install a version of the extension that ships its migrations',
+        },
+        {
+          kind: 'run-command',
+          label: 'List the migrations of extension space "pgvector"',
+          command: '{bin} migration list --space pgvector',
+        },
+        {
+          kind: 'run-command',
+          label: 'Run db migrate again',
+          command: '{bin} db migrate --db <url>',
+        },
+      ],
+      meta: { kind: 'neverPlanned', spaceId: 'pgvector', targetHash: ELSEWHERE },
+    });
+  });
+
+  it('advises planning the first migration when the application space has none', () => {
+    const failure = neverPlannedSpaceFailure(
+      { spaceId: 'app', targetHash: ELSEWHERE },
+      { appSpaceId: 'app', migrationsDir: 'migrations', invocation: invocationIn('/project') },
+    );
+
+    expect(failure.toEnvelope()).toMatchObject({
+      nextActions: expect.arrayContaining([
+        expect.objectContaining({ command: '{bin} migration plan --name <slug>' }),
+      ]),
+      meta: { kind: 'neverPlanned', spaceId: 'app', targetHash: ELSEWHERE },
     });
   });
 });

@@ -118,6 +118,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: null, statements: [] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.ok).toBe(true);
@@ -168,6 +169,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: origin, statements: [statement] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(received).toEqual({ fromContract: origin, statements: [statement] });
@@ -210,6 +212,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: null, statements: [statement] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.assertNotOk()).toEqual({
@@ -264,6 +267,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: origin, statements: [statement] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.ok).toBe(true);
@@ -309,6 +313,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: null, statements: [] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.ok).toBe(true);
@@ -366,6 +371,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: null, statements: [] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.ok).toBe(true);
@@ -424,6 +430,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: null, statements: [] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.ok).toBe(false);
@@ -468,6 +475,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: null, statements: [] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.ok).toBe(false);
@@ -526,6 +534,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: null, statements: [] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.ok).toBe(false);
@@ -584,6 +593,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: null, statements: [] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.ok).toBe(true);
@@ -616,6 +626,7 @@ describe('planMigration', () => {
       operationPolicy: POLICY,
       appSpace: { fromContract: null, statements: [] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(result.ok).toBe(false);

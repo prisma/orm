@@ -100,6 +100,7 @@ describe('executeMigrateShowPlan', () => {
         familyId: 'sql',
         create: vi.fn().mockReturnValue({
           deserializeContract: (json: unknown) => json,
+          accessChangesOf: () => [],
         }),
       },
       target: {

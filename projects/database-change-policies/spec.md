@@ -130,7 +130,7 @@ The next actions depend on the database's change policy:
 | Code | Raised when | Next actions |
 |---|---|---|
 | `MIGRATION.CHANGE_POLICY_FORBIDS` | A command needs a strategy the database's change policy does not include | When `reconcile` is refused: author a migration with `prisma migration plan` and deploy it. When `migrate` is refused: run `prisma db update`. |
-| `MIGRATION.DATA_PROTECTION_FORBIDS` | A run or plan contains an operation the data protection policy forbids. `meta` lists each operation and its subject. | Change the contract or the migration so it does not lose data or widen access. For a loss, carry the data first with a data transform. |
+| `MIGRATION.DATA_PROTECTION_FORBIDS` | A run or plan contains an operation the data protection policy forbids. `meta` lists each operation and its subject. | Change the contract or the migration so it does not lose data or widen access: state a rename, convert a type change, or keep the data. Really dropping data takes a change to the database's policy by its owner first. |
 | `MIGRATION.POLICY_MISMATCH` | A ref declares a policy that differs from the database's. `why` lists each differing setting with both values. | Make the ref match the database, or have whoever owns the database apply the ref's policies. |
 
 ### Composer

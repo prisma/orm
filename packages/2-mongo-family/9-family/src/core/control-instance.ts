@@ -6,6 +6,7 @@ import type {
   ControlStack,
   CoreSchemaView,
   MarkerHashes,
+  MigrationAccessChange,
   MigrationPlanOperation,
   OperationPreview,
   OperationPreviewCapable,
@@ -436,6 +437,10 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
 
     storageNameOf(operation: MigrationPlanOperation): string {
       return mongoStorageNameOf(operation);
+    },
+
+    accessChangesOf(): readonly MigrationAccessChange[] {
+      return [];
     },
   };
 }

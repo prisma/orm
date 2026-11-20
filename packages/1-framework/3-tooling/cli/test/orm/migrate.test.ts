@@ -120,7 +120,10 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
       familyId: FAMILY,
       version: '1.0.0',
       emission: {},
-      create: () => ({ deserializeContract: (json: unknown) => json }),
+      create: () => ({
+        deserializeContract: (json: unknown) => json,
+        accessChangesOf: () => [],
+      }),
     },
     target: {
       kind: 'target',

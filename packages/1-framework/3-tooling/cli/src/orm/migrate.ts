@@ -455,6 +455,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             refName: target.refName,
           },
           storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+          accessChangesOf: (operations) => familyInstance.accessChangesOf(operations),
           migrationsDir,
           invocation: cliInvocation(ctx, args.flags.db),
           readLedger: (spaceId) => client.readLedger(spaceId),

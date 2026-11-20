@@ -128,12 +128,13 @@ function fakeFamily(
 ): ControlFamilyInstance<'sql', unknown> {
   const used: Pick<
     ControlFamilyInstance<'sql', unknown>,
-    'familyId' | 'deserializeContract' | 'readAllMarkers'
+    'familyId' | 'deserializeContract' | 'readAllMarkers' | 'accessChangesOf'
   > = {
     familyId: 'sql',
     deserializeContract: (json) =>
       blindCast<Contract, 'the snapshots in this test are written from Contract values'>(json),
     readAllMarkers: async () => markers,
+    accessChangesOf: () => [],
   };
   return blindCast<
     ControlFamilyInstance<'sql', unknown>,

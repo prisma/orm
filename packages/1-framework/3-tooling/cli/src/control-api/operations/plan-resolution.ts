@@ -5,7 +5,7 @@ import type { MigrationGraph } from '@internal/migration-tools/graph';
 import { assertHashIsGraphNode, isGraphNode } from '@internal/migration-tools/migration-graph';
 import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import { parseContractRef } from '@internal/migration-tools/ref-resolution';
-import type { Refs } from '@internal/migration-tools/refs';
+import type { NamedRef, Refs } from '@internal/migration-tools/refs';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import {
   CliStructuredError,
@@ -269,6 +269,8 @@ export interface ResolveToForPlanInput {
 export interface ResolvedContractRef {
   readonly hash: string;
   readonly contract: Contract;
+  /** The ref `--to` named, with the policies it declares; `undefined` when `--to` named no ref. */
+  readonly ref: NamedRef | undefined;
 }
 
 export async function resolveToForPlan(
@@ -306,5 +308,14 @@ export async function resolveToForPlan(
   }
 
   const { hash, contract } = resolution.value;
-  return ok({ hash, contract });
+  const { provenance } = refResult.value;
+  const entry = provenance.kind === 'ref' ? refs[provenance.refName] : undefined;
+  return ok({
+    hash,
+    contract,
+    ref:
+      provenance.kind === 'ref' && entry !== undefined
+        ? { name: provenance.refName, ...entry }
+        : undefined,
+  });
 }

@@ -530,7 +530,7 @@ describe('migration plan', () => {
         { verb: 'delete', description: 'delete model "Legacy"' },
         { verb: 'delete', description: 'delete storage "audit_log"' },
       ]);
-      expect(answerQuestions).toHaveBeenCalledWith([]);
+      expect(answerQuestions).toHaveBeenCalledWith([], []);
     });
 
     it('refuses delete and allow statements given to the control API that answer no question', async () => {

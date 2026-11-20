@@ -73,13 +73,14 @@ export function resetMigrateShowMocks(): void {
 export async function writePkg(
   dir: string,
   base: Omit<MigrationMetadata, 'migrationHash'>,
+  ops: readonly MigrationPlanOperation[] = OPS,
 ): Promise<string> {
   const dirName = `20260101_100000_${base.to.slice(7, 13)}`;
   const metadata: MigrationMetadata = {
     ...base,
-    migrationHash: computeMigrationHash(base, [...OPS]),
+    migrationHash: computeMigrationHash(base, [...ops]),
   };
-  await writeMigrationPackage(join(dir, dirName), metadata, [...OPS]);
+  await writeMigrationPackage(join(dir, dirName), metadata, [...ops]);
   return dirName;
 }
 
@@ -158,7 +159,11 @@ export function ormConfig(
       familyId: FAMILY,
       version: '1.0.0',
       emission: {},
-      create: () => ({ deserializeContract: (json: unknown) => json }),
+      create: () => ({
+        deserializeContract: (json: unknown) => json,
+        storageNameOf: (operation: MigrationPlanOperation) => operation.id,
+        accessChangesOf: () => [],
+      }),
     },
     target: {
       kind: 'target',
