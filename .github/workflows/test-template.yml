@@ -556,7 +556,8 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       contains(inputs.jobsToRun, '-all-') ||
-      contains(inputs.jobsToRun, '-client-')
+      contains(inputs.jobsToRun, '-client-') ||
+      contains(inputs.jobsToRun, '-query-plan-executor-')
     strategy:
       fail-fast: false
       matrix:
