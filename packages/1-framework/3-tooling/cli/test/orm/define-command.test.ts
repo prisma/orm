@@ -74,6 +74,31 @@ describe('defineOrmCommand', () => {
     });
   });
 
+  describe('a handler that throws because the run was cancelled', () => {
+    it('settles as cancelled, not as an unexpected error', async () => {
+      const cancel = new AbortController();
+      const cli = createTestCli({
+        commands: {
+          wait: defineOrmCommand({
+            help: { summary: 'Waits until the run is cancelled' },
+            handler: (_args, ctx) => {
+              setTimeout(() => cancel.abort(), 0);
+              return new Promise<never>((_, reject) => {
+                ctx.signal.addEventListener('abort', () => reject(ctx.signal.reason), {
+                  once: true,
+                });
+              });
+            },
+          }),
+        },
+      });
+
+      const run = await cli.run(['wait', '--json'], { cwd: process.cwd(), abort: cancel.signal });
+
+      expect(terminalEnvelope(run)).toMatchObject({ ok: false, error: { code: 'CLI.ABORTED' } });
+    });
+  });
+
   describe('a handler that throws a bare Error', () => {
     it('settles as CLI.UNEXPECTED with an empty next-action list', async () => {
       const run = await cliThatThrows(new Error('connection reset')).run(['boom', '--json'], {
