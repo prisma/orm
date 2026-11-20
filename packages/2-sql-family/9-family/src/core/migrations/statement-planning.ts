@@ -264,6 +264,17 @@ function leaveOutShared(moving: string, deleteTexts: readonly string[]): string 
   return `Run the command again without this rename to plan the change without moving them: it then says what the change would delete. If it offers this same rename for ${moving}, that is refused again for the same reason; let the data go in its place with ${deletes} (at the prompt, type delete), which plans the change and deletes the data.`;
 }
 
+/**
+ * A field left out of a column rename keeps its values in the column the others keep, so the run
+ * without the rename deletes none of them and asks nothing about them.
+ */
+function leaveInSharedColumn(change: ColumnChange, others: string): string {
+  const moving = fieldsText(change.renames.map((renamed) => renamed.from));
+  const destination = fieldsText(change.renames.map((renamed) => renamed.to));
+  const starts = change.renames.length === 1 ? 'starts' : 'start';
+  return `Run the command again without this rename to plan the change without moving them: the values of ${moving} then stay in column "${change.from}" as values of ${others}, and ${destination} ${starts} without them. That run does not delete the values of ${moving}, so it does not ask about them.`;
+}
+
 const HAND_WRITTEN_WITH_MIGRATION_PLAN =
   'To keep the data with migration plan, write this change as a hand-written migration instead: ';
 
@@ -738,10 +749,7 @@ class StatementPlanner<TCall extends CallWithCompanions> {
         ? `${label}: column "${from}" also stores ${others}`
         : `${label}: column "${to}" also stores ${others}, whose values are not in column "${from}"`,
       shared.kind === 'split'
-        ? `A column rename moves the values of every row, and the values of ${others} do not move to column "${to}". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. ${leaveOutShared(
-            fieldsText(moving),
-            moving.map((field) => fieldStatementText(this.#fromContract, field)),
-          )} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the values of ${fieldsText(moving)} into column "${to}"`)}`
+        ? `A column rename moves the values of every row, and the values of ${others} do not move to column "${to}". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. ${leaveInSharedColumn(change, others)} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the values of ${fieldsText(moving)} into column "${to}"`)}`
         : `A column rename moves the values of one column, and column "${to}" would also store the values of ${others}. Moving the values of two columns into one is a data migration, which a plan does not write. ${leaveOutShared(
             fieldsText(moving),
             moving.map((field) => fieldStatementText(this.#fromContract, field)),

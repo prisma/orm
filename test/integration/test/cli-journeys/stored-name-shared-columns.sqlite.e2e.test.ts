@@ -1,10 +1,11 @@
 /**
  * Fields of a base and a variant that share a column, kept by a hand-written migration (SQLite).
  *
- * The SQLite twin of `stored-name-shared-columns.e2e.test.ts`. Each journey runs through `migration plan` only, since a hand-written migration is the route its refusal offers there.
+ * The SQLite twin of `stored-name-shared-columns.e2e.test.ts`. C1 and C2 run through `migration plan` only, since a hand-written migration is the route their refusal offers there.
  *
  * - C1: `Task.title` and `Bug.label` share column `title`, and `--rename Bug.label:Bug.heading` moves `Bug` to a column of its own. The statement is refused, since the values of `Task.title` would not move. The hand-written migration its advice describes adds column `heading` and copies the label of each bug into it.
  * - C2: `Task.a` moves from column `x` to `z`, and `--rename Bug.b:Bug.c` moves `Bug` from column `y` to `z` too. The statement is refused, since column `z` would also store the values of `Task.a`. The hand-written migration its advice describes renames `x` to `z`, copies `b` of each bug into it, and drops `y`. A bug row then holds `b` in `z` and loses its value of `a`, since the destination stores both fields of a bug in that one column: this journey keeps the variant's field.
+ * - C3: the same refusal as C1, with either command, and then what its advice says: the run without the rename asks nothing and only adds column `heading`. The labels stay in column `title`, as values of `Task.title`, and `heading` starts without them.
  *
  * Each journey reads every row back and ends with `db verify --schema-only` clean and a further plan empty.
  */
@@ -13,9 +14,11 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import { timeouts } from '../utils/journey-test-helpers';
 import {
+  COMMANDS,
   emit,
   expectSettled,
   migrateByHand,
+  planAndApply,
   refusal,
   rows,
   sqliteJourney,
@@ -54,7 +57,7 @@ const SPLIT_REFUSAL = {
     {
       kind: 'user-choice',
       label:
-        'A column rename moves the values of every row, and the values of field "Task.title" do not move to column "heading". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. Run the command again without this rename to plan the change without moving them: it then says what the change would delete. If it offers this same rename for field "Bug.label", that is refused again for the same reason; let the data go in its place with --delete Bug.label (at the prompt, type delete), which plans the change and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values of field "Bug.label" into column "heading" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        'A column rename moves the values of every row, and the values of field "Task.title" do not move to column "heading". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. Run the command again without this rename to plan the change without moving them: the values of field "Bug.label" then stay in column "title" as values of field "Task.title", and field "Bug.heading" starts without them. That run does not delete the values of field "Bug.label", so it does not ask about them. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values of field "Bug.label" into column "heading" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
     },
   ],
   meta: {
@@ -63,7 +66,7 @@ const SPLIT_REFUSAL = {
         kind: 'statementRefused',
         summary:
           'Cannot rename column "task"."title" to "heading": column "title" also stores field "Task.title"',
-        why: 'A column rename moves the values of every row, and the values of field "Task.title" do not move to column "heading". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. Run the command again without this rename to plan the change without moving them: it then says what the change would delete. If it offers this same rename for field "Bug.label", that is refused again for the same reason; let the data go in its place with --delete Bug.label (at the prompt, type delete), which plans the change and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values of field "Bug.label" into column "heading" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+        why: 'A column rename moves the values of every row, and the values of field "Task.title" do not move to column "heading". Moving the values of one field out of a column it shares with others is a data migration, which a plan does not write. Run the command again without this rename to plan the change without moving them: the values of field "Bug.label" then stay in column "title" as values of field "Task.title", and field "Bug.heading" starts without them. That run does not delete the values of field "Bug.label", so it does not ask about them. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the values of field "Bug.label" into column "heading" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
         location: {
           entityKind: 'table',
           entityName: 'task',
@@ -86,6 +89,8 @@ const SPLIT_REFUSAL = {
   },
   docsUrl: 'https://docs.prisma.io/docs/orm/v8/reference/error-reference#MIGRATION.PLANNING_FAILED',
 };
+
+const ADD_HEADING = { label: 'Add column heading on task', operationClass: 'additive' };
 
 const MERGE_REFUSAL = {
   code: 'MIGRATION.PLANNING_FAILED',
@@ -231,4 +236,42 @@ withTempDir(({ createTempDir }) => {
       timeouts.spinUpPpgDev,
     );
   });
+
+  describe.each(COMMANDS)(
+    'Journey C3 (SQLite): the advice of the refusal of a variant field leaving a shared column, followed with %s',
+    (command) => {
+      it(
+        'plans the change without the rename, asks nothing, and leaves the labels in column title',
+        async () => {
+          const journey = sqliteJourney(createTempDir, command);
+          await start(
+            journey,
+            tasks('title String?', 'label String? @map("title")'),
+            `INSERT INTO "task" (id, type, title, scope) VALUES (1, 'bug', 'crash', NULL), (2, 'epic', 'plan', 'big'), (3, 'bug', NULL, NULL)`,
+            'C3.01',
+          );
+          await emit(journey, tasks('title String?', 'heading String?'), 'C3.02');
+          expect(
+            await refusal(journey, ['--rename', 'Bug.label:Bug.heading'], 'C3.03'),
+            'C3.03: the statement is refused',
+          ).toEqual(SPLIT_REFUSAL);
+
+          expect(
+            await planAndApply(journey, [], 'C3.04'),
+            'C3.04: without the rename, the run asks nothing and only adds column heading',
+          ).toEqual([ADD_HEADING]);
+          expect(
+            await rows(journey, 'SELECT id, type, title, heading FROM "task" ORDER BY id'),
+            'C3.05: the labels stay in title, and heading starts without them',
+          ).toEqual([
+            { id: 1, type: 'bug', title: 'crash', heading: null },
+            { id: 2, type: 'epic', title: 'plan', heading: null },
+            { id: 3, type: 'bug', title: null, heading: null },
+          ]);
+          await expectSettled(journey, 'C3.06');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
 });
