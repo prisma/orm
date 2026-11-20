@@ -171,7 +171,9 @@ describe('PrismaPgAdapterFactory', () => {
         { schema: 'my_schema' },
       )
       const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBe('-c statement_timeout=1000 -c search_path=my_schema,public')
+      expect(adapter.underlyingDriver().options.options).toBe(
+        '-c statement_timeout=1000 -c search_path=my_schema,public',
+      )
       await adapter.dispose()
     })
 
