@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import {
@@ -7,8 +8,9 @@ import {
 import { contractHashAtMarker } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
+import { errorInvalidRefName } from '@internal/migration-tools/errors';
 import { isLiveMarkerRef } from '@internal/migration-tools/ref-resolution';
-import type { RefEntry } from '@internal/migration-tools/refs';
+import { advanceRef, type RefEntry, validateRefName } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -38,7 +40,6 @@ import {
 import {
   advanceRefSafely,
   type ContractIR,
-  computeMigrateRefAdvancementName,
   preflightRefAdvancement,
 } from '../control-api/operations/ref-advancement';
 import {
@@ -118,42 +119,112 @@ function statusAction(invocation: CliInvocation): NextAction {
   );
 }
 
+type RefAdvancementDecision =
+  | { readonly kind: 'advance'; readonly name: string }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'notInCI' };
+
 /**
- * Writes the ref after the migrations have applied. Every failure is returned as its reason: the
- * database has already moved, so a ref that cannot be written must not fail the run.
+ * The rule of ADR 327: `db` from the config outside CI, the named ref in every case, nothing under
+ * `--db` or `--no-advance-ref`.
+ */
+function refAdvancementDecision(
+  flags: {
+    readonly advanceRef: string | undefined;
+    readonly noAdvanceRef: boolean | undefined;
+    readonly db: string | undefined;
+  },
+  inCI: boolean,
+): RefAdvancementDecision {
+  if (flags.noAdvanceRef === true || (flags.advanceRef === undefined && flags.db !== undefined)) {
+    return { kind: 'none' };
+  }
+  if (flags.advanceRef !== undefined) {
+    return { kind: 'advance', name: flags.advanceRef };
+  }
+  return inCI ? { kind: 'notInCI' } : { kind: 'advance', name: DEFAULT_ADVANCE_REF };
+}
+
+const DEFAULT_ADVANCE_REF = 'db';
+
+interface RefWriteFailure {
+  readonly reason: string;
+  readonly causeCode: string | undefined;
+}
+
+function refWriteFailure(error: unknown): RefWriteFailure {
+  const code = Reflect.get(Object(error), 'code');
+  return {
+    reason: error instanceof Error ? error.message : String(error),
+    causeCode: typeof code === 'string' ? code : undefined,
+  };
+}
+
+/**
+ * Writes the ref after the migrations have applied. Every failure is returned, not thrown: the
+ * database has already moved, so a ref that cannot be written must not fail the run. With no
+ * `contractIR`, the store already holds the snapshot, so only the pointer is written.
  */
 async function writeAdvancedRef(args: {
   readonly refsDir: string;
   readonly migrationsDir: string;
   readonly name: string;
   readonly hash: string;
-  readonly contractIR: ContractIR;
-}): Promise<Result<void, string>> {
+  readonly contractIR: ContractIR | null;
+}): Promise<Result<void, RefWriteFailure>> {
   try {
-    const advanced = await advanceRefSafely(args);
-    return advanced.ok ? ok(undefined) : notOk(advanced.failure.message);
+    if (args.contractIR === null) {
+      await advanceRef(args.refsDir, args.name, args.hash);
+      return ok(undefined);
+    }
+    const advanced = await advanceRefSafely({ ...args, contractIR: args.contractIR });
+    return advanced.ok ? ok(undefined) : notOk(refWriteFailure(advanced.failure));
   } catch (error) {
-    return notOk(error instanceof Error ? error.message : String(error));
+    return notOk(refWriteFailure(error));
   }
 }
 
 function refNotWrittenDiagnostic(
   ref: { readonly name: string; readonly hash: string },
-  reason: string,
+  failure: RefWriteFailure,
   invocation: CliInvocation,
 ): Diagnostic {
   return {
     code: 'MIGRATION.MIGRATE_REF_NOT_WRITTEN',
     severity: 'warn',
     summary: `Migrations applied, but ref "${ref.name}" was not written`,
-    why: `The database is at contract ${ref.hash}, and ref "${ref.name}" could not be moved there: ${reason}`,
+    why: `The database is at contract ${ref.hash}, and ref "${ref.name}" could not be moved there: ${failure.reason}`,
     nextActions: [
       runCommandAction(
         `Point ref "${ref.name}" at the contract the database is at`,
         cliCommand(invocation, 'migration ref set', [shellQuoted(ref.name), ref.hash]),
       ),
     ],
-    meta: { name: ref.name, hash: ref.hash, reason },
+    meta: {
+      name: ref.name,
+      hash: ref.hash,
+      reason: failure.reason,
+      ...ifDefined('causeCode', failure.causeCode),
+    },
+  };
+}
+
+function refNotAdvancedInCIDiagnostic(invocation: CliInvocation): Diagnostic {
+  return {
+    code: 'MIGRATION.MIGRATE_REF_NOT_ADVANCED_IN_CI',
+    severity: 'info',
+    summary: `Ref "${DEFAULT_ADVANCE_REF}" was not advanced, because the CLI detected that it runs in CI`,
+    why: 'Outside CI, db migrate moves the db ref to the contract the database is at. The CLI detects CI from the CI environment variable, unless it is false, and from the variables CI services set, such as BUILD_NUMBER or GITHUB_ACTIONS.',
+    nextActions: [
+      runCommandAction(
+        `Advance ref "${DEFAULT_ADVANCE_REF}" in CI too`,
+        cliCommand(invocation, 'db migrate', [
+          ...(invocation.rerunArgs ?? []),
+          '--advance-ref',
+          DEFAULT_ADVANCE_REF,
+        ]),
+      ),
+    ],
   };
 }
 
@@ -318,10 +389,13 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         'it would take.\n' +
         "After a successful apply it advances the db ref to the database's new\n" +
         'contract, so the next migration plan starts there. It does so only when\n' +
-        'the connection comes from prisma.config.ts and the CI environment variable\n' +
-        'is unset: never with --db, and never in CI. --advance-ref <name> advances\n' +
-        'that ref instead, in every case; --no-advance-ref advances none. A ref\n' +
-        'that cannot be written is a warning: the migrations have already applied.',
+        'the connection comes from prisma.config.ts and the CLI does not detect CI:\n' +
+        'never with --db, and never in CI. The CLI detects CI when the CI variable\n' +
+        'is set to anything but false, or when a variable that CI services set is\n' +
+        'present, such as BUILD_NUMBER or GITHUB_ACTIONS; it then says so.\n' +
+        '--advance-ref <name> advances that ref instead, in every case;\n' +
+        '--no-advance-ref advances none. A ref that cannot be written is a warning:\n' +
+        'the migrations have already applied.',
       examples: [
         'db migrate',
         'db migrate --db $DATABASE_URL',
@@ -571,28 +645,34 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           }
         }
 
-        // The last thing before the apply: the snapshot the ref advance will
-        // write is rendered now, so a contract that cannot be snapshotted
-        // refuses the run before any migration executes.
-        const refName = computeMigrateRefAdvancementName({
-          noAdvanceRef: args.flags.noAdvanceRef === true,
-          inCI: ctx.isCI,
-          ...ifDefined('advanceRef', args.flags.advanceRef),
-          ...ifDefined('db', args.flags.db),
-        });
-        let advancement: { readonly name: string; readonly contractIR: ContractIR } | null = null;
-        if (refName !== null) {
-          const preflight = await preflightRefAdvancement({
-            name: refName,
-            contractJson: snapshotContractJson,
-            contractJsonPath: snapshotContractPath,
-            config: ctx.config,
-            client,
-          });
-          if (!preflight.ok) {
-            return notOk(normalizeError(preflight.failure));
+        // The last thing before the apply: a snapshot the store does not hold yet is rendered
+        // now, so a contract that cannot be snapshotted refuses the run before any migration
+        // executes.
+        const decision = refAdvancementDecision(args.flags, ctx.isCI);
+        let advancement: {
+          readonly name: string;
+          readonly contractIR: ContractIR | null;
+        } | null = null;
+        const targetHash = refEntry?.hash ?? appContract.storage.storageHash;
+        if (decision.kind === 'advance' && targetHash !== EMPTY_CONTRACT_HASH) {
+          if (existsSync(contractSnapshotDir(migrationsDir, targetHash))) {
+            if (!validateRefName(decision.name)) {
+              return notOk(normalizeError(errorInvalidRefName(decision.name)));
+            }
+            advancement = { name: decision.name, contractIR: null };
+          } else {
+            const preflight = await preflightRefAdvancement({
+              name: decision.name,
+              contractJson: snapshotContractJson,
+              contractJsonPath: snapshotContractPath,
+              config: ctx.config,
+              client,
+            });
+            if (!preflight.ok) {
+              return notOk(normalizeError(preflight.failure));
+            }
+            advancement = { name: decision.name, contractIR: preflight.value };
           }
-          advancement = { name: refName, contractIR: preflight.value };
         }
 
         const applied = await client.migrate({
@@ -627,6 +707,14 @@ export function createMigrateCommand(createClient: CreateControlClient) {
               refNotWrittenDiagnostic(ref, written.failure, cliInvocation(ctx, args.flags.db)),
             );
           }
+        }
+        if (decision.kind === 'notInCI') {
+          diagnostics.push(
+            refNotAdvancedInCIDiagnostic({
+              ...cliInvocation(ctx, args.flags.db),
+              rerunArgs: rerunFlags(args.flags),
+            }),
+          );
         }
 
         document = {

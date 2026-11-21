@@ -7,7 +7,10 @@ import {
   schemaCheckWhy,
 } from '@internal/framework-components/control';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
-import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
+import {
+  contractSnapshotDir,
+  writeContractSnapshot,
+} from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
@@ -264,7 +267,7 @@ describe('migrate', () => {
       expect(mocks.renderContractDts).not.toHaveBeenCalled();
     });
 
-    it('is not advanced when the CI variable is set', async () => {
+    it('is not advanced when the CI variable is set, and says why', async () => {
       const cwd = await buildProject();
 
       const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], {
@@ -275,6 +278,99 @@ describe('migrate', () => {
       expect(run.exitCode).toBe(0);
       expect(run.presented?.data).toMatchObject({ advancedRef: null });
       expect(existsSync(refsDirOf(cwd))).toBe(false);
+      expect(envelopeOf(run.json)).toMatchObject({
+        ok: true,
+        diagnostics: [
+          {
+            code: 'MIGRATION.MIGRATE_REF_NOT_ADVANCED_IN_CI',
+            severity: 'info',
+            summary: 'Ref "db" was not advanced, because the CLI detected that it runs in CI',
+            nextActions: [
+              {
+                kind: 'run-command',
+                label: 'Advance ref "db" in CI too',
+                command: 'prisma-test db migrate --advance-ref db',
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    it('is not advanced when a CI service variable is set without CI', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], {
+        cwd,
+        env: { BUILD_NUMBER: '17' },
+      });
+
+      expect(run.presented?.data).toMatchObject({ advancedRef: null });
+      expect(envelopeOf(run.json)).toMatchObject({
+        diagnostics: [{ code: 'MIGRATION.MIGRATE_REF_NOT_ADVANCED_IN_CI' }],
+      });
+    });
+
+    it('prints why it was not advanced in CI', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate'], {
+        cwd,
+        env: { CI: 'true' },
+      });
+
+      const stderr = stripAnsi(run.stderr);
+      expect(stderr).toContain(
+        'Ref "db" was not advanced, because the CLI detected that it runs in CI',
+      );
+      expect(stderr).toContain('prisma-test db migrate --advance-ref db');
+    });
+
+    it('says nothing about CI when another flag decides', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--db', 'postgres://other/db', '--json'],
+        { cwd, env: { CI: 'true' } },
+      );
+
+      expect(envelopeOf(run.json)).toMatchObject({ ok: true, diagnostics: [] });
+    });
+
+    it('does not render a snapshot the store already holds', async () => {
+      const cwd = await buildProject();
+      await writeContractSnapshot(join(cwd, 'migrations'), C2, {
+        contractJson: { storage: { storageHash: C2, namespaces: {} } },
+        contractDts: SNAPSHOT_CONTRACT_DTS,
+      });
+      mocks.renderContractDts.mockResolvedValue(
+        notOk({ code: 'RENDER_FAILED', summary: 'Failed to render contract types' }),
+      );
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({ advancedRef: { name: 'db', hash: C2 } });
+      expect(await dbRefHash(cwd)).toBe(C2);
+      expect(mocks.renderContractDts).not.toHaveBeenCalled();
+    });
+
+    it('keeps the code of the error that stopped the ref write', async () => {
+      const cwd = await buildProject();
+      mocks.migrate.mockResolvedValue(ok({ ...appliedSuccess(), markerHash: C1 }));
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
+
+      expect(run.exitCode).toBe(0);
+      expect(envelopeOf(run.json)).toMatchObject({
+        diagnostics: [
+          {
+            code: 'MIGRATION.MIGRATE_REF_NOT_WRITTEN',
+            meta: { name: 'db', hash: C1, causeCode: 'MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH' },
+          },
+        ],
+      });
+      expect(await dbRefHash(cwd)).toBeUndefined();
     });
 
     it('is advanced when the CI variable is false', async () => {
@@ -344,7 +440,7 @@ describe('migrate', () => {
                 command: `prisma-test migration ref set db ${C2} --config prisma.config.ts`,
               },
             ],
-            meta: { name: 'db', hash: C2 },
+            meta: { name: 'db', hash: C2, causeCode: 'EACCES' },
           },
         ],
       });

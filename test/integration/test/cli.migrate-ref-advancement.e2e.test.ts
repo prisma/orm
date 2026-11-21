@@ -206,6 +206,47 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
+      'moves db back to the contract a rollback with --to <dir>^ applies',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          const project = await seedPlannedMigration(createTempDir, connectionString);
+          const refsDir = appRefsDir(project.testDir);
+          await runMigrate(project, ['--no-color']);
+          replaceInFileOrThrow(
+            project.contractPath,
+            '        email: field.column(textColumn),\n',
+            '        email: field.column(textColumn),\n        nickname: field.column(textColumn).optional(),\n',
+          );
+          await emitContract(project);
+          await runMigrationPlan(project, ['--name', 'nickname', '--no-color']);
+          const second = getLatestMigrationDir(project.testDir)!;
+          await runMigrate(project, ['--no-color']);
+          expect(refPointerHash(refsDir, 'db')).not.toBe(project.toHash);
+          await runMigrationPlan(project, [
+            '--from',
+            second,
+            '--to',
+            `${second}^`,
+            '--name',
+            'back',
+            '--delete',
+            'User.nickname',
+            '--no-color',
+          ]);
+
+          const rollback = await runMigrate(project, ['--to', `${second}^`, '--json']);
+
+          expect(rollback.presented?.data).toMatchObject({
+            markerHash: project.toHash,
+            advancedRef: { name: 'db', hash: project.toHash },
+          });
+          expect(refPointerHash(refsDir, 'db')).toBe(project.toHash);
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
       'does not advance any ref when the connection is passed with --db',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {

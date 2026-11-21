@@ -1829,9 +1829,13 @@ A warning diagnostic (not a hard failure) in `migration status`: the database's 
 
 Runner-level failure during apply: the plan asserts an origin contract, but the database marker is missing, or its storage hash (or profile hash) differs from the plan's origin: the database is not at the state the plan was computed from. Re-plan from the database's actual state. `db init`, `db update` and `db migrate` report it with this code. Payload: `expectedOriginStorageHash` plus `markerStorageHash`/`markerProfileHash` depending on the branch.
 
+### MIGRATION.MIGRATE_REF_NOT_ADVANCED_IN_CI
+
+An `info` diagnostic on a successful `db migrate` that took its connection from `prisma.config.ts` and was given neither `--advance-ref` nor `--no-advance-ref`: the `db` ref was not advanced only because the CLI detected that it runs in CI. The CLI detects CI when the `CI` environment variable is set to anything but `false`, or when a variable that CI services set is present, such as `BUILD_NUMBER`, `BUILD_ID` or `GITHUB_ACTIONS`. On a developer's machine, a shell or `.env` that sets one of these turns advancement off, and this diagnostic is how that shows. The next action is the same `db migrate` with `--advance-ref db`; outside CI, unsetting the variable or setting `CI=false` restores the default. Payload: none.
+
 ### MIGRATION.MIGRATE_REF_NOT_WRITTEN
 
-A warning diagnostic on a successful `db migrate`: the migrations applied, but the ref the command advances afterwards (`db`, or the name given with `--advance-ref`) or its contract snapshot could not be written, for example because the refs directory is on a read-only filesystem. The command exits 0, because the database has already moved and failing would tell a pipeline to retry an apply that happened. The JSON document's `advancedRef` is `null`. The next action is `migration ref set <name> <hash>`, which writes the ref at the contract the database is at once the directory is writable. Payload: `name`, `hash`, `reason`.
+A warning diagnostic on a successful `db migrate`: the migrations applied, but the ref the command advances afterwards (`db`, or the name given with `--advance-ref`) or its contract snapshot could not be written, for example because the refs directory is on a read-only filesystem. The command exits 0, because the database has already moved and failing would tell a pipeline to retry an apply that happened. The JSON document's `advancedRef` is `null`. The next action is `migration ref set <name> <hash>`, which writes the ref at the contract the database is at once the directory is writable. Payload: `name`, `hash`, `reason`, and `causeCode`, the code of the error that stopped the write when it had one: a Prisma code such as `MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH`, or a system error code such as `EACCES`.
 
 ### MIGRATION.MISSING_INVARIANTS
 

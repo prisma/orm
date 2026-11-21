@@ -27,7 +27,7 @@ export function cliInvocation(
 export function rerunFlags(flags: {
   readonly to: string | undefined;
   readonly advanceRef: string | undefined;
-  readonly noAdvanceRef?: boolean | undefined;
+  readonly noAdvanceRef: boolean | undefined;
   readonly permitPolicyChange: boolean | undefined;
 }): readonly string[] {
   return [

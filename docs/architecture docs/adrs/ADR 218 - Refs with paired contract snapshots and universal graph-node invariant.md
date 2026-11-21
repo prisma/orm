@@ -128,7 +128,7 @@ Ref advancement is **implicit** for dev-shaped reconciliation commands and **opt
 |---|---|---|
 | `db init` | Advances `db` when `--db` is omitted (project default URL) | `--advance-ref <name>` |
 | `db update` | Same | `--advance-ref <name>`; **no** implicit advance with any explicit `--db` (even one naming the default URL) unless `--advance-ref` is explicit |
-| `migrate` | **None** | `--advance-ref <name>` only |
+| `migrate` (superseded by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md)) | **None** | `--advance-ref <name>` only |
 | `ref set` | Sets `<name>` (always explicit) | N/A — user names the ref |
 | `db sign` (added after this ADR) | Advances `db` whether or not `--db` is given — sign never mutates the schema, and adoption normally names the database with `--db`; `--no-advance-ref` skips it | `--advance-ref <name>`; `--no-advance-ref` |
 
@@ -177,7 +177,7 @@ export function computeRefAdvancementName(options: {
 
 ## Alternatives considered
 
-### Implicit `db` ref advancement on `migrate`
+### Implicit `db` ref advancement on `migrate` (superseded by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md))
 
 **Rejected.** Would make `db` behave like a magic reserved ref and blur the boundary between "apply migrations" and "record dev iteration state." Production-shaped commands must be explicit; dev-shaped commands own the implicit default.
 

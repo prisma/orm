@@ -36,21 +36,6 @@ export function computeRefAdvancementName(options: {
   return null;
 }
 
-export function computeMigrateRefAdvancementName(options: {
-  readonly advanceRef?: string;
-  readonly noAdvanceRef: boolean;
-  readonly db?: string;
-  readonly inCI: boolean;
-}): string | null {
-  if (options.noAdvanceRef) {
-    return null;
-  }
-  if (options.inCI && options.advanceRef === undefined) {
-    return null;
-  }
-  return computeRefAdvancementName(options);
-}
-
 /**
  * Everything `executeRefAdvancement` needs, produced before a command does the
  * work that precedes the ref write: the ref name is validated and the
