@@ -56,7 +56,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { databaseStorageHash: FROM, invocation: PROJECT },
+      { planFrom: FROM, invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([
@@ -69,7 +69,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { databaseStorageHash: undefined, invocation: PROJECT },
+      { planFrom: undefined, invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([
@@ -81,7 +81,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: adding },
-      { databaseStorageHash: FROM, invocation: PROJECT },
+      { planFrom: FROM, invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([

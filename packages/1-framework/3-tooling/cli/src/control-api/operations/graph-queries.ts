@@ -4,7 +4,8 @@
 
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { MigrationGraph } from '@internal/migration-tools/graph';
-import { findPath } from '@internal/migration-tools/migration-graph';
+import { findPath, isGraphNode } from '@internal/migration-tools/migration-graph';
+import type { Refs } from '@internal/migration-tools/refs';
 
 /** True when the on-disk graph contains a path fromHash → toHash. */
 export function hasMigrationPath(graph: MigrationGraph, fromHash: string, toHash: string): boolean {
@@ -48,4 +49,25 @@ export function planOriginArgument(graph: MigrationGraph, originHash: string): s
   const tips = tipsReachableFrom(graph, EMPTY_CONTRACT_HASH);
   if (tips.length !== 1) return UNKNOWN_PLAN_ORIGIN;
   return tips[0] === EMPTY_CONTRACT_HASH ? '@empty' : tips[0];
+}
+
+/**
+ * What a `migration plan` for a database whose marker names `markerHash` passes to `--from`, or
+ * `undefined` when no plan can start where the database is: `migration plan` starts only from a
+ * contract a migration records ({@link planOriginArgument}), or, while the space has no migrations,
+ * from a ref, which it baselines. A database with no marker plans like an empty one.
+ */
+export function databasePlanFrom(args: {
+  readonly graph: MigrationGraph;
+  readonly refs: Refs;
+  readonly markerHash: string | undefined;
+}): string | undefined {
+  const { graph, refs, markerHash } = args;
+  if (markerHash === undefined) {
+    return planOriginArgument(graph, EMPTY_CONTRACT_HASH) ?? '@empty';
+  }
+  if (isGraphNode(markerHash, graph)) return markerHash;
+  if (graph.nodes.size > 0) return undefined;
+  const names = Object.keys(refs).filter((name) => refs[name]?.hash === markerHash);
+  return names.includes('db') ? 'db' : names.sort()[0];
 }

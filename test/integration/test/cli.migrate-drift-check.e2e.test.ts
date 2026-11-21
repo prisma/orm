@@ -12,6 +12,7 @@ import {
   runDbInit,
   runDbUpdate,
   runMigrate,
+  runOnEngine,
   setupJourney,
   swapContract,
 } from './utils/journey-test-helpers';
@@ -33,6 +34,18 @@ function printedArgs(error: MigrateErrorJson, label: string, command: string): s
     .split(/\s+/)
     .filter((arg) => arg !== '')
     .map((arg) => (arg === '<slug>' ? 'planned-as-advised' : arg.replace(/^'(.*)'$/, '$1')));
+}
+
+/** The error advises no `migration plan`, and each command it prints runs. */
+async function expectOnlyRunnableCommands(ctx: JourneyContext, error: MigrateErrorJson) {
+  const commands = (error.nextActions ?? []).flatMap((action) =>
+    action.command === undefined ? [] : [action.command.split(/\s+/).slice(1)],
+  );
+  expect(commands.map((words) => words.slice(0, 2).join(' '))).toEqual(['migration list']);
+  for (const words of commands) {
+    const run = await runOnEngine(ctx, words);
+    expect(run.exitCode, run.stderr).toBe(0);
+  }
 }
 
 interface MigrateErrorJson {
@@ -369,6 +382,47 @@ withTempDir(({ createTempDir }) => {
             expect(plan.exitCode, plan.stderr).toBe(0);
             const apply = await runMigrate(ctx, printedArgs(err, 'Apply it', 'db migrate'));
             expect(apply.exitCode, apply.stderr).toBe(0);
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'prints no migration plan for a --show from a contract no migration records',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          await withJourney(createTempDir, connectionString, async (ctx) => {
+            expect((await runContractEmit(ctx)).exitCode).toBe(0);
+            expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
+            const initialHash = migrationTo(ctx, getLatestMigrationDir(ctx)!);
+            swapContract(ctx, 'contract-additive');
+            expect((await runContractEmit(ctx)).exitCode).toBe(0);
+
+            const show = ['--show', '--from', '@contract', '--to', initialHash, '--json'];
+            const err = parseJsonOutput<MigrateErrorJson>(await runMigrate(ctx, show));
+            expect(err.code).toBe('MIGRATION.PATH_UNREACHABLE');
+            await expectOnlyRunnableCommands(ctx, err);
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'prints no migration plan for a db migrate --to @empty that no migration reaches',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          await withJourney(createTempDir, connectionString, async (ctx) => {
+            expect((await runContractEmit(ctx)).exitCode).toBe(0);
+            expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
+            expect((await runMigrate(ctx)).exitCode).toBe(0);
+
+            const err = parseJsonOutput<MigrateErrorJson>(
+              await runMigrate(ctx, ['--to', '@empty', '--json']),
+            );
+            expect(err.code).toBe('MIGRATION.PATH_UNREACHABLE');
+            await expectOnlyRunnableCommands(ctx, err);
           });
         });
       },

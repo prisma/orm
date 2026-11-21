@@ -513,6 +513,12 @@ export interface DbUpdateSuccess
    * graph ends at it: the origin a `migration plan` for this database starts from.
    */
   readonly databaseStorageHash?: string;
+  /**
+   * What a `migration plan` for this database passes to `--from`: the contract the database is at,
+   * the end of the history for a database with no marker, or the ref a project with no migrations
+   * baselines from. Absent when no plan can start where the database is.
+   */
+  readonly planFrom?: string;
   /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;

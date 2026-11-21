@@ -90,13 +90,14 @@ describe('errorStatementNeedsMigrationFile', () => {
         { verb: 'backfill', text: 'User.email' },
       ],
       undefined,
+      '@empty',
     ).toEnvelope();
 
     expect(envelope).toMatchObject({
       code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
       summary: 'db update cannot carry out "--convert User.years" and "--backfill User.email"',
       why: expect.stringContaining('db update has no migration file to fill'),
-      fix: 'Plan the change with {bin} migration plan --rename User.age:User.years --convert User.years --delete Legacy --backfill User.email, fill in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with {bin} db migrate. Or leave out these statements: db update then asks before it loses any data.',
+      fix: 'Plan the change with {bin} migration plan --from @empty --rename User.age:User.years --convert User.years --delete Legacy --backfill User.email, fill in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with {bin} db migrate. Or leave out these statements: db update then asks before it loses any data.',
       meta: {
         statements: [
           { verb: 'convert', text: 'User.years' },
@@ -106,9 +107,35 @@ describe('errorStatementNeedsMigrationFile', () => {
     });
   });
 
+  it('prints no migration plan when no plan can start where the database is', () => {
+    const envelope = errorStatementNeedsMigrationFile(
+      [{ verb: 'convert', text: 'User.years' }],
+      [{ verb: 'convert', text: 'User.years' }],
+      undefined,
+      undefined,
+    ).toEnvelope();
+
+    expect({
+      why: envelope.why,
+      fix: envelope.fix,
+      commands: commandOf(
+        errorStatementNeedsMigrationFile(
+          [{ verb: 'convert', text: 'User.years' }],
+          [{ verb: 'convert', text: 'User.years' }],
+          undefined,
+          undefined,
+        ),
+      ),
+    }).toEqual({
+      why: '--convert of a field asks for a migration file with a slot for the code that converts its values, and db update has no migration file to fill: it applies its plan directly. No migration records the contract the database is at, so `migration plan` cannot plan from it either.',
+      fix: 'Leave out these statements: db update then asks before it loses any data.',
+      commands: [],
+    });
+  });
+
   it('gives the reason of each statement it refuses, and only those', () => {
     const why = (refused: readonly { verb: 'convert' | 'backfill'; text: string }[]) =>
-      errorStatementNeedsMigrationFile(refused, refused, undefined).toEnvelope().why;
+      errorStatementNeedsMigrationFile(refused, refused, undefined, '@empty').toEnvelope().why;
 
     expect([
       why([{ verb: 'backfill', text: 'GeoPoint.seen' }]),
@@ -128,6 +155,7 @@ describe('errorStatementNeedsMigrationFile', () => {
         configPath: 'app/prisma.config.ts',
         dbGiven: false,
       },
+      '@empty',
     ).toEnvelope();
 
     expect({
@@ -141,11 +169,14 @@ describe('errorStatementNeedsMigrationFile', () => {
             configPath: 'app/prisma.config.ts',
             dbGiven: false,
           },
+          '@empty',
         ),
       ),
     }).toEqual({
-      fix: 'Plan the change with {bin} migration plan --convert User.years --config app/prisma.config.ts, fill in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with {bin} db migrate --config app/prisma.config.ts. Or leave out these statements: db update then asks before it loses any data.',
-      commands: ['{bin} migration plan --convert User.years --config app/prisma.config.ts'],
+      fix: 'Plan the change with {bin} migration plan --from @empty --convert User.years --config app/prisma.config.ts, fill in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with {bin} db migrate --config app/prisma.config.ts. Or leave out these statements: db update then asks before it loses any data.',
+      commands: [
+        '{bin} migration plan --from @empty --convert User.years --config app/prisma.config.ts',
+      ],
     });
   });
 
@@ -157,10 +188,11 @@ describe('errorStatementNeedsMigrationFile', () => {
       ],
       [{ verb: 'backfill', text: 'User.$(x)' }],
       undefined,
+      '@empty',
     );
 
     expect(commandOf(error)).toEqual([
-      `{bin} migration plan --rename 'Old'\\''s:New' --backfill 'User.$(x)'`,
+      `{bin} migration plan --from @empty --rename 'Old'\\''s:New' --backfill 'User.$(x)'`,
     ]);
     expect(error.toEnvelope().fix).toContain(`--backfill 'User.$(x)'`);
   });

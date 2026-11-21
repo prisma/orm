@@ -57,7 +57,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
           planStartsFromMarker: false,
         },
       },
-      { databaseStorageHash: FROM, invocation: WITH_STATEMENTS },
+      { planFrom: FROM, invocation: WITH_STATEMENTS },
     );
 
     expect(labels(error)).toEqual([
@@ -70,7 +70,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsHoldingValue: [rowsHoldingValue] },
-      { databaseStorageHash: undefined, invocation: WITH_STATEMENTS },
+      { planFrom: undefined, invocation: WITH_STATEMENTS },
     );
 
     expect(labels(error)[1]).toBe(
@@ -141,7 +141,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
         failure,
         { rowsHoldingValue: several },
         {
-          databaseStorageHash: FROM,
+          planFrom: FROM,
           invocation: {
             ...PROJECT,
             statementArgs: ['--delete Status.ARCHIVED', '--delete Prio.Low'],
@@ -159,7 +159,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
       const error = dbUpdateRunnerFailureError(
         failure,
         { rowsHoldingValue: several },
-        { databaseStorageHash: undefined, invocation: PROJECT },
+        { planFrom: undefined, invocation: PROJECT },
       );
 
       expect(labels(error)[1]).toBe(

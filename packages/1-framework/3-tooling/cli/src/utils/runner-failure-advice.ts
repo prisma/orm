@@ -101,33 +101,42 @@ function changeValueAdvice(change: FailedTypeChangeReport, rerun: string): Runne
 /** The way out of a failed cast for `db update`, which plans and applies in one step. */
 export function dbUpdateFailedTypeChangeAdvice(
   change: FailedTypeChangeReport,
-  databaseStorageHash: string | undefined,
+  planFrom: string | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
-  const plan = printedPlanCommand(invocation, databaseStorageHash, [
+  const changeValue = changeValueAdvice(change, quoted(dbUpdateRerun(invocation)));
+  if (planFrom === undefined) {
+    return [
+      chooseAction(
+        `${failedTypeChangeText(change)} No migration records the contract the database is at, so \`migration plan\` cannot plan the change from it`,
+      ),
+      ...changeValue,
+    ];
+  }
+  const plan = printedPlanCommand(invocation, planFrom, [
     statementFlag({ verb: 'convert', text: change.field }),
   ]);
   return [
     chooseAction(
       `${failedTypeChangeText(change)} Plan the change with ${quoted(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
     ),
-    ...changeValueAdvice(change, quoted(dbUpdateRerun(invocation))),
+    ...changeValue,
   ];
 }
 
 /** The way out of rows without a value for `db update`, which plans and applies in one step. */
 export function dbUpdateRowsWithoutValueAdvice(
   reports: readonly RowsWithoutValueReport[],
-  databaseStorageHash: string | undefined,
+  planFrom: string | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const flags = backfillFlags(reports);
   const planned =
-    flags.length === 0
+    flags.length === 0 || planFrom === undefined
       ? []
       : [
           chooseAction(
-            `Plan it with ${quoted(printedPlanCommand(invocation, databaseStorageHash, flags))}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+            `Plan it with ${quoted(printedPlanCommand(invocation, planFrom, flags))}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
           ),
         ];
   const [first] = reports;
@@ -241,7 +250,7 @@ function storedValuesText(reports: readonly RowsHoldingValueReport[]): string {
 /** The way out when the data of required columns holds stored values `db update` removes. */
 export function dbUpdateRowsHoldingValueAdvice(
   reports: readonly RowsHoldingValueReport[],
-  databaseStorageHash: string | undefined,
+  planFrom: string | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const others = otherStatements(invocation, reports);
@@ -249,7 +258,7 @@ export function dbUpdateRowsHoldingValueAdvice(
   const rename = chooseAction(
     `${newMember(reports, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, ...renameFlags(reports)]))}`,
   );
-  if (databaseStorageHash === undefined) {
+  if (planFrom === undefined) {
     return [
       rename,
       chooseAction(
@@ -259,7 +268,7 @@ export function dbUpdateRowsHoldingValueAdvice(
   }
   const swaps = swapCalls(reports);
   if (swaps === undefined) return [rename];
-  const plan = printedPlanCommand(invocation, databaseStorageHash, [...others, ...deletes]);
+  const plan = printedPlanCommand(invocation, planFrom, [...others, ...deletes]);
   return [
     rename,
     chooseAction(
@@ -316,21 +325,21 @@ function fixRowsFirst(report: RowsFailingCheckReport, rerun: string): NextAction
 /** The way out when existing rows fail a check `db update` adds: it cannot keep the data while the check it replaces holds. */
 export function dbUpdateRowsFailingCheckAdvice(
   report: RowsFailingCheckReport,
-  databaseStorageHash: string | undefined,
+  planFrom: string | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const update = dbUpdateRerun(invocation);
   const { replacedCheck } = report;
   if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
   const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
-  if (databaseStorageHash === undefined) {
+  if (planFrom === undefined) {
     return [
       chooseAction(
         `${cannotKeep}, and no migration ends at the contract the database is at, so ${quoted(cliCommand(invocation, 'migration plan'))} cannot plan from it. Drop check "${replacedCheck}" in the database yourself, update those rows to fit check "${report.check}", then re-run ${quoted(update)}`,
       ),
     ];
   }
-  const plan = printedPlanCommand(invocation, databaseStorageHash, invocation.statementArgs ?? []);
+  const plan = printedPlanCommand(invocation, planFrom, invocation.statementArgs ?? []);
   return [
     chooseAction(
       `${cannotKeep}. Plan the change with ${quoted(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation)}`,
@@ -380,8 +389,8 @@ export function dbInitRowsWithoutValueAdvice(
 interface FailedMigrationText {
   readonly directory: string;
   readonly name: string;
-  /** The contract the migration starts from, or `undefined` for the empty contract, which `migration plan` takes as its default origin and does not accept as `--from`. */
-  readonly from: string | undefined;
+  /** What `migration plan --from` takes to name the contract the migration starts from. */
+  readonly from: string;
   readonly nodeCommand: string;
   readonly invocation: CliInvocation;
 }
@@ -395,7 +404,7 @@ function failedMigrationText(
   return {
     directory,
     name: dirName.slice(dirName.indexOf('_') + 1),
-    from: failed.from === EMPTY_CONTRACT_HASH ? undefined : failed.from,
+    from: failed.from === EMPTY_CONTRACT_HASH ? '@empty' : failed.from,
     nodeCommand: selfEmitCommand(invocation, join(failed.directory, 'migration.ts')),
     invocation,
   };
@@ -459,7 +468,7 @@ function migrateFailedTypeChangeAdvice(
   if (failedMigration === undefined) {
     return [
       chooseAction(
-        `${changeText} Plan the type change again with ${quoted(printedPlanCommand(invocation, undefined, [convert]))}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateAgain(invocation)}`,
+        `${changeText} Find the migration that changes field "${change.field}" with ${quoted(cliCommand(invocation, 'migration list'))}, delete its directory (copy any code you wrote in its migration.ts first), plan it again from the contract it starts from with \`${convert}\`, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateAgain(invocation)}`,
       ),
       ...changeValueAdvice(change, dbMigrateAgain(invocation)),
     ];
@@ -602,23 +611,20 @@ function migrateSchemaCheckAdvice(
   invocation: CliInvocation,
 ): RunnerAdvice {
   const emit = quoted(cliCommand(invocation, 'contract emit'));
-  const plan = printedPlanCommand(
-    invocation,
-    failedMigration?.from,
-    failedMigration === undefined ? [] : ['--name', failedMigration.name],
-  );
-  const directory =
-    failedMigration === undefined
-      ? "the failed migration's directory"
-      : `\`${failedMigration.directory}\``;
   const { file, run } = failedMigrationFile(failedMigration);
+  const fixMigration = editFileAction(
+    `If ${file} does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, ${run}, and run ${dbMigrateAgain(invocation)}`,
+  );
+  if (failedMigration === undefined) return [fixMigration];
+  const plan = printedPlanCommand(invocation, failedMigration.from, [
+    '--name',
+    failedMigration.name,
+  ]);
   return [
     editFileAction(
-      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete ${directory} (copy any code you wrote in its migration.ts first), plan it again with ${quoted(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}`,
+      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quoted(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}`,
     ),
-    editFileAction(
-      `If ${file} does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, ${run}, and run ${dbMigrateAgain(invocation)}`,
-    ),
+    fixMigration,
   ];
 }
 

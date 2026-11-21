@@ -328,7 +328,7 @@ describe('db update questions', () => {
   });
 
   it('refuses --backfill before it plans anything, naming migration plan and keeping a two-name --convert for the control API to resolve', async () => {
-    mocks.readMarker.mockResolvedValueOnce({ storageHash: 'c'.repeat(64) });
+    mocks.readMarker.mockResolvedValueOnce(null);
     const run = await harness().run(
       [
         'db',
@@ -353,7 +353,7 @@ describe('db update questions', () => {
         nextActions: [
           expect.objectContaining({
             command:
-              'prisma-test migration plan --rename User.years:User.age --convert User.age --backfill User.email',
+              'prisma-test migration plan --from @empty --rename User.years:User.age --convert User.age --backfill User.email',
           }),
           expect.anything(),
         ],
@@ -375,7 +375,9 @@ describe('db update questions', () => {
       error: {
         code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
         nextActions: [
-          expect.objectContaining({ command: 'prisma-test migration plan --backfill User.email' }),
+          expect.objectContaining({
+            command: 'prisma-test migration plan --from <contract> --backfill User.email',
+          }),
           expect.anything(),
         ],
       },
@@ -392,7 +394,9 @@ describe('db update questions', () => {
       error: {
         code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
         nextActions: [
-          expect.objectContaining({ command: 'prisma-test migration plan --backfill User.email' }),
+          expect.objectContaining({
+            command: 'prisma-test migration plan --from <contract> --backfill User.email',
+          }),
           expect.anything(),
         ],
       },

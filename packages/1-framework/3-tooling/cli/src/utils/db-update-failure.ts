@@ -14,40 +14,31 @@ import { runnerFailureError } from './runner-failure-error';
 import { schemaCheckIssues } from './schema-check-issues';
 
 /**
- * A failed `db update` apply as the CLI reports it. `databaseStorageHash` is the contract the
- * database is at when a migration of the graph ends at it: the origin a `migration plan` for this
- * database starts from.
+ * A failed `db update` apply as the CLI reports it. `planFrom` is what a `migration plan` for this
+ * database passes to `--from`, or `undefined` when no plan can start where the database is.
  */
 export function dbUpdateRunnerFailureError(
   failure: MigrationRunnerFailure,
   facts: RunnerFailureFacts,
   context: {
-    readonly databaseStorageHash: string | undefined;
+    readonly planFrom: string | undefined;
     readonly invocation: CliInvocation;
   },
 ): CliStructuredError {
-  const { databaseStorageHash, invocation } = context;
+  const { planFrom, invocation } = context;
   const update = dbUpdateRerun(invocation);
   const { blockingObjects } = failure.meta;
   const advice =
     blockingObjects !== undefined
       ? blockingObjectsAdvice(blockingObjects, update)
       : facts.failedTypeChange !== undefined
-        ? dbUpdateFailedTypeChangeAdvice(facts.failedTypeChange, databaseStorageHash, invocation)
+        ? dbUpdateFailedTypeChangeAdvice(facts.failedTypeChange, planFrom, invocation)
         : facts.rowsWithoutValue !== undefined
-          ? dbUpdateRowsWithoutValueAdvice(facts.rowsWithoutValue, databaseStorageHash, invocation)
+          ? dbUpdateRowsWithoutValueAdvice(facts.rowsWithoutValue, planFrom, invocation)
           : facts.rowsHoldingValue !== undefined
-            ? dbUpdateRowsHoldingValueAdvice(
-                facts.rowsHoldingValue,
-                databaseStorageHash,
-                invocation,
-              )
+            ? dbUpdateRowsHoldingValueAdvice(facts.rowsHoldingValue, planFrom, invocation)
             : facts.rowsFailingCheck !== undefined
-              ? dbUpdateRowsFailingCheckAdvice(
-                  facts.rowsFailingCheck,
-                  databaseStorageHash,
-                  invocation,
-                )
+              ? dbUpdateRowsFailingCheckAdvice(facts.rowsFailingCheck, planFrom, invocation)
               : schemaCheckIssues(failure) !== undefined
                 ? [
                     editFileAction(

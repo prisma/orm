@@ -17,7 +17,7 @@ interface AdviceInput extends Omit<RunnerFailureFacts, 'failedMigration'> {
   readonly why: string | undefined;
   readonly failedMigration?: FailedMigrationOnDisk;
   readonly schemaIssues?: readonly SchemaDiffIssue[];
-  readonly databaseStorageHash?: string;
+  readonly planFrom?: string;
   readonly conflicts?: undefined;
   /** Whether the database is as it was before the failed apply; the SQL runners say it is. */
   readonly databaseUnchanged?: boolean | undefined;
@@ -65,7 +65,7 @@ export function migrateError(input: AdviceInput, invocation: CliInvocation) {
 
 export function dbUpdateError(input: AdviceInput, invocation: CliInvocation) {
   return dbUpdateRunnerFailureError(runnerFailureOf(input), factsOf(input), {
-    databaseStorageHash: input.databaseStorageHash,
+    planFrom: input.planFrom,
     invocation,
   });
 }

@@ -1,6 +1,7 @@
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { describe, expect, it } from 'vitest';
 import {
+  databasePlanFrom,
   hasMigrationPath,
   planOriginArgument,
   UNKNOWN_PLAN_ORIGIN,
@@ -58,5 +59,41 @@ describe('planOriginArgument', () => {
   it('plans from the empty database when no migration starts from it', () => {
     const baselined = buildGraph([entry(HASH_A, HASH_B, 'm1')]);
     expect(planOriginArgument(baselined, EMPTY_CONTRACT_HASH)).toBe('@empty');
+  });
+});
+
+describe('databasePlanFrom', () => {
+  const OFF_GRAPH = `${'d'.repeat(64)}`;
+  const ref = (hash: string) => ({ hash, invariants: [] });
+
+  it('plans from the contract the database is at when a migration records it', () => {
+    expect(databasePlanFrom({ graph, refs: {}, markerHash: HASH_A })).toBe(HASH_A);
+  });
+
+  it('plans a database with no marker from where the history ends', () => {
+    expect(databasePlanFrom({ graph, refs: {}, markerHash: undefined })).toBe(HASH_B);
+  });
+
+  it('plans a database with no marker from the empty contract when there are no migrations', () => {
+    expect(databasePlanFrom({ graph: buildGraph([]), refs: {}, markerHash: undefined })).toBe(
+      '@empty',
+    );
+  });
+
+  it('plans from the ref that names the database contract while there are no migrations', () => {
+    expect(
+      databasePlanFrom({
+        graph: buildGraph([]),
+        refs: { db: ref(OFF_GRAPH), staging: ref(OFF_GRAPH) },
+        markerHash: OFF_GRAPH,
+      }),
+    ).toBe('db');
+  });
+
+  it('cannot plan when nothing records the contract the database is at', () => {
+    expect([
+      databasePlanFrom({ graph: buildGraph([]), refs: {}, markerHash: OFF_GRAPH }),
+      databasePlanFrom({ graph, refs: { db: ref(OFF_GRAPH) }, markerHash: OFF_GRAPH }),
+    ]).toEqual([undefined, undefined]);
   });
 });

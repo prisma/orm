@@ -727,7 +727,7 @@ async function executeMigrationPlanCommandInner(
     (conflicts: readonly MigrationPlannerConflict[]) =>
       planningRefusedError(conflicts, {
         invocation: invocationOf(options),
-        from: fromHash ?? undefined,
+        from: options.from ?? (isAutoBaseline ? 'db' : (fromHash ?? '@empty')),
         to: options.to,
         statements: texts,
         resolved,

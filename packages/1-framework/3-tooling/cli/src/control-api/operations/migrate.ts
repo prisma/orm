@@ -44,6 +44,8 @@ import {
   type CliStructuredError,
   errorMigrationHasUnfilledPlaceholders,
   errorPathUnreachable,
+  noPlanReaches,
+  type PathUnreachable,
   type PathUnreachableMeta,
   type PlanArguments,
   planThenApply,
@@ -1021,6 +1023,13 @@ export function unreachableSpaceFailure(
   },
 ): CliStructuredError {
   if (space.spaceId === run.appSpaceId) {
+    const unplannable = unplannablePathReason(space, run.appGraph);
+    if (unplannable !== undefined) {
+      return errorPathUnreachable(
+        pathNotFound(space.spaceId, space.fromHash, space.targetHash),
+        noPlanReaches(unplannable, run.invocation),
+      );
+    }
     return buildPathNotFoundFailure(
       space.spaceId,
       space.fromHash,
@@ -1039,6 +1048,23 @@ export function unreachableSpaceFailure(
     command: 'db migrate',
     invocation: run.invocation,
   });
+}
+
+/**
+ * Why no `migration plan` can author the path, or `undefined` when one can: `migration plan` starts
+ * only from a contract a migration records, and does not plan to the empty contract.
+ */
+function unplannablePathReason(
+  space: { readonly fromHash: string; readonly targetHash: string },
+  appGraph: MigrationGraph,
+): string | undefined {
+  if (!isGraphNode(space.fromHash, appGraph)) {
+    return `No migration records the contract the path starts from (${space.fromHash}), and \`migration plan\` plans only from a contract a migration records. Pass \`--from\` a contract the migration history holds`;
+  }
+  if (space.targetHash === EMPTY_CONTRACT_HASH) {
+    return '`migration plan` does not plan a migration to the empty contract, so no command can author a path to it. Pass `--to` a contract the migration history reaches';
+  }
+  return undefined;
 }
 
 /**
@@ -1099,16 +1125,17 @@ export function buildPathNotFoundFailure(
   plan: PlanArguments,
   invocation: CliInvocation,
 ): CliStructuredError {
+  const failure = pathNotFound(spaceId, fromHash, targetHash);
+  return errorPathUnreachable(failure, planThenApply(failure.meta, plan, invocation));
+}
+
+function pathNotFound(spaceId: string, fromHash: string, targetHash: string): PathUnreachable {
   const fromText = fromHash === EMPTY_CONTRACT_HASH ? 'the empty contract' : `"${fromHash}"`;
-  const meta: PathUnreachableMeta = { spaceId, fromHash, targetHash, kind: 'pathUnreachable' };
-  return errorPathUnreachable(
-    {
-      summary: 'Current contract has no planned migration path',
-      why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
-      meta,
-    },
-    planThenApply(meta, plan, invocation),
-  );
+  return {
+    summary: 'Current contract has no planned migration path',
+    why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
+    meta: { spaceId, fromHash, targetHash, kind: 'pathUnreachable' },
+  };
 }
 
 function failedMigrationOnDisk(

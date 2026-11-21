@@ -406,4 +406,36 @@ describe('executeMigrate with no path to the target', () => {
     expect(toArgumentFor({ kind: 'hash', hash: ELSEWHERE }, graph)).toBeUndefined();
     expect(toArgumentFor(undefined, graph)).toBeUndefined();
   });
+
+  describe('when no migration plan can author the path', () => {
+    const graph = reconstructGraph([
+      {
+        dirName: '20260101T0000_initial',
+        dirPath: '/project/migrations/app/20260101T0000_initial',
+        metadata: {
+          migrationHash: 'sha256:initial',
+          from: EMPTY_CONTRACT_HASH,
+          to: APP_HEAD,
+          providedInvariants: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+        ops: [CREATE_TABLE],
+      },
+    ]);
+    const commandsOf = (from: string, target: string) =>
+      unreachableSpaceFailure(
+        { spaceId: 'app', fromHash: from, targetHash: target },
+        { appSpaceId: 'app', appGraph: graph, target: undefined, invocation: invocationIn('/p') },
+      )
+        .toEnvelope()
+        .nextActions?.flatMap((action) => ('command' in action ? [action.command] : []));
+
+    it('prints no plan from a contract no migration records', () => {
+      expect(commandsOf(ELSEWHERE, APP_HEAD)).toEqual(['{bin} migration list']);
+    });
+
+    it('prints no plan to the empty contract', () => {
+      expect(commandsOf(APP_HEAD, EMPTY_CONTRACT_HASH)).toEqual(['{bin} migration list']);
+    });
+  });
 });

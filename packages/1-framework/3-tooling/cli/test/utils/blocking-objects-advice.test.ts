@@ -18,7 +18,7 @@ describe('the advice for an operation that objects in the database block', () =>
         blocked,
         {},
         {
-          databaseStorageHash: undefined,
+          planFrom: undefined,
           invocation: { ...PROJECT, rerunArgs: ['--delete', 'billing'] },
         },
       ).fix,

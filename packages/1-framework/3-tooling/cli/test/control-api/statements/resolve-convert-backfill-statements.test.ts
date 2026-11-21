@@ -274,11 +274,12 @@ describe('the migration plan command the db update refusal prints', () => {
         [rename('User.age:User.years'), convert('User.years')],
         [convert('User.years')],
         undefined,
+        '@empty',
       ).toEnvelope().nextActions ?? []
     ).flatMap((action) =>
       'command' in action && typeof action.command === 'string' ? [action.command] : [],
     );
-    const words = (command ?? '').split(' ').slice(3);
+    const words = (command ?? '').split(' ').slice(5);
     const statements = words.flatMap((word, index) => {
       const verb = word.slice(2);
       const text = words[index + 1];

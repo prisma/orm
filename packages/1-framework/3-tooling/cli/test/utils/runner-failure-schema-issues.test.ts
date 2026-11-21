@@ -78,7 +78,7 @@ function migrateError(
 
 function dbUpdateError(failure: MigrationRunnerFailure) {
   return dbUpdateRunnerFailureError(failure, runnerFailureFacts(failure, []), {
-    databaseStorageHash: undefined,
+    planFrom: undefined,
     invocation,
   });
 }
@@ -113,18 +113,18 @@ describe('a failed schema check after apply', () => {
       expect(error.cause).toBe(failure);
     });
 
-    it('plans the first migration again without --from, which does not take the empty contract', () => {
+    it('plans the first migration again from the empty contract', () => {
       expect(
         migrateError(schemaCheckFailure([explained]), {
           directory: `${PROJECT}/migrations/app/20261015T1200_initial`,
           from: EMPTY_CONTRACT_HASH,
         }).fix,
-      ).toContain('plan it again with `{bin} migration plan --name initial`,');
+      ).toContain('plan it again with `{bin} migration plan --from @empty --name initial`,');
     });
 
-    it('says to carry written code over when the runner names no migration', () => {
+    it('prints no migration plan when the runner names no migration', () => {
       expect(migrateError(schemaCheckFailure([explained])).fix).toBe(
-        `${CONTRACT_CAUSE("the failed migration's directory", '{bin} migration plan')}. Or: ${MIGRATION_CAUSE('the migration.ts of the failed migration', 'run that file with node')}.`,
+        `${MIGRATION_CAUSE('the migration.ts of the failed migration', 'run that file with node')}.`,
       );
     });
 

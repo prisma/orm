@@ -97,11 +97,11 @@ function twoRuns(
 }
 
 /**
- * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with `migration plan` from the contract the database is at, when a migration ends there and the target gives edits, answering with `--delete` each kept subject whose edits it gives, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no migration ends there.
+ * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with `migration plan`, when a plan can start where the database is and the target gives edits, answering with `--delete` each kept subject whose edits it gives, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no migration ends there.
  */
 export function dbUpdateKeepDataEditAdvice(
   invocation: CliInvocation,
-  databaseStorageHash: string | undefined,
+  planFrom: string | undefined,
 ): KeepDataEditAdvice {
   return (subject, kept): KeepDataAdvice => {
     const deleteFlag = statementFlag({ verb: 'delete', text: subject.text });
@@ -111,12 +111,12 @@ export function dbUpdateKeepDataEditAdvice(
       : `db update cannot keep that data in one run, and ${deleteFlag} removes it.`;
     const runs = twoRuns(invocation, subject, kept);
     const runWays = runs === undefined ? [] : [runs];
-    if (databaseStorageHash === undefined || subject.edits.length === 0) {
+    if (planFrom === undefined || subject.edits.length === 0) {
       return { lead, ways: runWays };
     }
     const edited = kept.filter(({ edits }) => edits.length > 0);
     const deletes = edited.map(({ text }) => statementFlag({ verb: 'delete', text }));
-    const plan = printedPlanCommand(invocation, databaseStorageHash, [
+    const plan = printedPlanCommand(invocation, planFrom, [
       ...otherStatements(invocation, [subject.text]).filter((flag) => !deletes.includes(flag)),
       ...deletes,
     ]);

@@ -18,7 +18,7 @@ describe('the advice for a type change whose cast failed', () => {
           ...runnerFailed,
           conflicts: undefined,
           failedTypeChange: { field: 'User.age', by: 'cast', reason: 'value' },
-          databaseStorageHash: FROM,
+          planFrom: FROM,
         },
         FROM_PROJECT,
       ).fix,
@@ -61,7 +61,23 @@ describe('the advice for a type change whose cast failed', () => {
   });
 
   it('says the database has no cast between the types when it has none', () => {
-    expect([
+    expect(
+      dbUpdateError(
+        {
+          ...runnerFailed,
+          conflicts: undefined,
+          failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' },
+          planFrom: FROM,
+        },
+        FROM_PROJECT,
+      ).fix,
+    ).toMatch(
+      /^The database has no cast from the old type of field "T\.d" to its new type\. Plan the change with `\{bin\} migration plan --from [0-9a-f]+ --convert T\.d`/,
+    );
+  });
+
+  it('prints no migration plan for db update when no migration records the contract the database is at', () => {
+    expect(
       dbUpdateError(
         {
           ...runnerFailed,
@@ -70,18 +86,9 @@ describe('the advice for a type change whose cast failed', () => {
         },
         FROM_PROJECT,
       ).fix,
-      migrateError(
-        { ...runnerFailed, failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' } },
-        FROM_PROJECT,
-      ).fix,
-    ]).toEqual([
-      expect.stringMatching(
-        /^The database has no cast from the old type of field "T\.d" to its new type\. Plan the change with `\{bin\} migration plan --convert T\.d`/,
-      ),
-      expect.stringMatching(
-        /^The database has no cast from the old type of field "T\.d" to its new type\. Plan the type change again with `\{bin\} migration plan --convert T\.d`/,
-      ),
-    ]);
+    ).toBe(
+      'The database has no cast from the old type of field "T.d" to its new type. No migration records the contract the database is at, so `migration plan` cannot plan the change from it.',
+    );
   });
 
   it('points db migrate to the conversion in the failed migration when the conversion left a value the new type cannot hold', () => {
@@ -102,14 +109,14 @@ describe('the advice for a type change whose cast failed', () => {
     );
   });
 
-  it('says to run the migration.ts with node before db migrate when the failed migration is unknown', () => {
+  it('names no migration plan without an origin when the failed migration is unknown', () => {
     expect(
       migrateError(
         { ...runnerFailed, failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' } },
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      'The database has no cast from the old type of field "T.d" to its new type. Plan the type change again with `{bin} migration plan --convert T.d`, write the conversion in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate`.',
+      'The database has no cast from the old type of field "T.d" to its new type. Find the migration that changes field "T.d" with `{bin} migration list`, delete its directory (copy any code you wrote in its migration.ts first), plan it again from the contract it starts from with `--convert T.d`, write the conversion in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate`.',
     );
   });
 

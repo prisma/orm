@@ -17,8 +17,8 @@ import { runWrittenFile } from './runner-failure-advice';
 /**
  * The planner's refusal as the CLI reports it. When a conflict can be written by hand, its next
  * actions are the conflicts' own advice, which says what to write, then the plan to write it in:
- * the run's statements without the ones the conflict leaves out, from the contract the database is
- * at when that is known.
+ * the run's statements without the ones the conflict leaves out, from `context.from`. With no
+ * `from`, no plan can start where the database is, and the refusal prints none.
  */
 export function planningRefusedError(
   conflicts: readonly MigrationPlannerConflict[],
@@ -39,7 +39,7 @@ export function planningRefusedError(
       (statements ?? []).map((statement) => JSON.stringify(statement)),
     ),
   );
-  if (leaveOut.size === 0) return refused;
+  if (leaveOut.size === 0 || context.from === undefined) return refused;
   const planned = context.statements.filter(({ verb }) => verb !== 'delete' && verb !== 'allow');
   const left = planned.filter((_, index) => {
     const resolved = context.resolved[index];

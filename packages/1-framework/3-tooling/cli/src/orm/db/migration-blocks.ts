@@ -138,14 +138,18 @@ function previewBlocks(preview: OperationPreview | undefined): readonly Block[] 
 function temporaryValueBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
-  databaseStorageHash: string | undefined,
+  planFrom: string | undefined,
 ): readonly Block[] {
   const get = result.mode === 'plan' ? 'would get' : 'got';
+  const choose = (field: string) =>
+    planFrom === undefined
+      ? ''
+      : ` To choose the value, plan a migration with ${printedPlanCommand(invocation, planFrom, [statementFlag({ verb: 'backfill', text: field })])} instead.`;
   return (result.temporaryValues ?? []).map(
     ({ field, value }): Block => ({
       kind: 'summary',
       status: 'warn',
-      text: `Field "${field}" ${get} the temporary value ${value} where existing data has none. To choose the value, plan a migration with ${printedPlanCommand(invocation, databaseStorageHash, [statementFlag({ verb: 'backfill', text: field })])} instead.`,
+      text: `Field "${field}" ${get} the temporary value ${value} where existing data has none.${choose(field)}`,
     }),
   );
 }
@@ -252,14 +256,14 @@ function questionBlocks(result: MigrationCommandResult): readonly Block[] {
 function planBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
-  databaseStorageHash: string | undefined,
+  planFrom: string | undefined,
 ): readonly Block[] {
   const planned = result.plannedAdvanceRef;
   return [
     { kind: 'summary', status: 'ok', text: planSummaryText(result) },
     ...plannerWarningBlocks(result),
     ...operationBlocks(result),
-    ...temporaryValueBlocks(result, invocation, databaseStorageHash),
+    ...temporaryValueBlocks(result, invocation, planFrom),
     ...appliedStatementBlocks(result.appliedStatements ?? []),
     ...questionBlocks(result),
     {
@@ -348,14 +352,14 @@ function permittedStatementBlocks(result: MigrationCommandResult): readonly Bloc
 function applyBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
-  databaseStorageHash: string | undefined,
+  planFrom: string | undefined,
 ): readonly Block[] {
   const advanced = result.advancedRef;
   return [
     { kind: 'summary', status: 'ok', text: applySummaryText(result) },
     ...plannerWarningBlocks(result),
     ...operationBlocks(result),
-    ...temporaryValueBlocks(result, invocation, databaseStorageHash),
+    ...temporaryValueBlocks(result, invocation, planFrom),
     ...appliedStatementBlocks(result.appliedStatements ?? []),
     ...permittedStatementBlocks(result),
     ...fallbackMarkerBlocks(result),
@@ -376,17 +380,17 @@ function applyBlocks(
 
 /**
  * What a `db init` / `db update` result looks like in human mode. Printed commands repeat
- * `invocation`, and a printed `migration plan` starts from `databaseStorageHash`, the contract the
- * database was at before the run, when a migration on disk ends at it.
+ * `invocation`, and a printed `migration plan` passes `planFrom` to `--from`; with no `planFrom`, no
+ * plan can start where the database was before the run, and none is printed.
  */
 export function migrationResultBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
-  databaseStorageHash: string | undefined,
+  planFrom: string | undefined,
 ): readonly Block[] {
   return result.mode === 'plan'
-    ? planBlocks(result, invocation, databaseStorageHash)
-    : applyBlocks(result, invocation, databaseStorageHash);
+    ? planBlocks(result, invocation, planFrom)
+    : applyBlocks(result, invocation, planFrom);
 }
 
 /** Where the user goes next, as typed actions rather than trailing prose. */

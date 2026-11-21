@@ -709,9 +709,9 @@ const MIGRATION_PLAN_VERBS: readonly string[] = ['rename', 'delete', 'convert', 
  * `refused`, `--convert` or `--backfill` statements that ask for code the user writes, were given
  * to `db update`, which applies its plan directly and so has no migration file whose slot the user
  * could fill. `statements` are every statement the user gave, in the order given: the `migration
- * plan` command the error suggests carries each one that command accepts, and starts from
- * `databaseStorageHash`, the contract the database is at, when it is known. Its commands repeat the
- * `--config` of `invocation`.
+ * plan` command the error suggests carries each one that command accepts, and passes `planFrom` to
+ * `--from`; with no `planFrom`, no plan can start where the database is, and the error suggests
+ * none. Its commands repeat the `--config` of `invocation`.
  */
 function needsMigrationFileReason(refused: readonly StatementText[]): string {
   const converts = refused.some(({ verb }) => verb === 'convert');
@@ -728,21 +728,34 @@ export function errorStatementNeedsMigrationFile(
   statements: readonly StatementText[],
   refused: readonly StatementText[],
   invocation: CliInvocation | undefined,
-  databaseStorageHash?: string,
+  planFrom: string | undefined,
 ): ActionableCliError {
   const written = refused.map(({ verb, text }) => `"--${verb} ${text}"`);
   const listed =
     written.length === 1 ? written[0] : `${written.slice(0, -1).join(', ')} and ${written.at(-1)}`;
+  const why = `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`;
+  if (planFrom === undefined) {
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+      `db update cannot carry out ${listed}`,
+      {
+        why: `${why} No migration records the contract the database is at, so \`migration plan\` cannot plan from it either.`,
+        fix: 'Leave out these statements: db update then asks before it loses any data.',
+        nextActions: [chooseAction('Run db update without these statements')],
+        meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
+      },
+    );
+  }
   const plan = printedPlanCommand(
     invocation,
-    databaseStorageHash,
+    planFrom,
     statements.filter(({ verb }) => MIGRATION_PLAN_VERBS.includes(verb)).map(statementFlag),
   );
   return new ActionableCliError(
     'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
     `db update cannot carry out ${listed}`,
     {
-      why: `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`,
+      why,
       fix: `Plan the change with ${plan}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with ${cliCommand(invocation, 'db migrate')}. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
         runCommandAction('Plan the change into a migration file to fill in', plan),
@@ -1028,6 +1041,18 @@ export function planThenApply(
       runCommandAction('Inspect the on-disk graph', listCommand),
       runCommandAction('Inspect a bundle in the path you expected', showCommand),
     ],
+  };
+}
+
+/**
+ * The advice when no `migration plan` can author the missing path: `reason` says why, and the
+ * advice points at the graph.
+ */
+export function noPlanReaches(reason: string, invocation: CliInvocation): PathUnreachableAdvice {
+  const listCommand = cliCommand(invocation, 'migration list');
+  return {
+    fix: [`${reason}.`, `Inspect the on-disk graph with \`${listCommand}\`.`].join('\n'),
+    nextActions: [chooseAction(reason), runCommandAction('Inspect the on-disk graph', listCommand)],
   };
 }
 

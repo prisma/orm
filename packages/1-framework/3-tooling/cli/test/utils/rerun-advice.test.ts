@@ -157,7 +157,7 @@ describe('advice that repeats a failed db migrate', () => {
   });
 });
 
-const UPDATE_CASES: readonly (AdviceCase & { readonly databaseStorageHash?: string })[] = [
+const UPDATE_CASES: readonly (AdviceCase & { readonly planFrom?: string })[] = [
   {
     kind: 'blocking objects',
     meta: { blockingObjects: [{ kind: 'view', name: 'v' }] },
@@ -167,7 +167,7 @@ const UPDATE_CASES: readonly (AdviceCase & { readonly databaseStorageHash?: stri
   {
     kind: 'a cast that failed on a value',
     facts: { failedTypeChange: { field: 'User.age', by: 'cast', reason: 'value' } },
-    databaseStorageHash: FROM,
+    planFrom: FROM,
     reruns: [true],
   },
   { kind: 'rows failing a new check', facts: { rowsFailingCheck: { check: 'c' } }, reruns: [true] },
@@ -191,7 +191,7 @@ function updateCommands(
   invocation: CliInvocation,
 ): readonly string[] {
   const error = dbUpdateRunnerFailureError(failure(entry.meta), entry.facts, {
-    databaseStorageHash: entry.databaseStorageHash,
+    planFrom: entry.planFrom,
     invocation,
   });
   return commandsIn(error.fix, 'db update').map((command) =>
