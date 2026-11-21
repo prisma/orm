@@ -72,18 +72,29 @@ describe('normalize_timestamp', () => {
     expect(normalize_timestamp('2026-09-02 05:00:00')).toBe('2026-09-02T05:00:00+00:00')
   })
 
-  it('prepends + to expanded years (>9999) to satisfy ISO 8601', () => {
-    expect(normalize_timestamp('202609-02-05 05:00:00')).toBe('+202609-02-05T05:00:00+00:00')
+  it.each([
+    ['10000-01-01 00:00:00', '+010000-01-01T00:00:00+00:00'],
+    ['99999-12-31 23:59:59', '+099999-12-31T23:59:59+00:00'],
+    ['202609-02-05 05:00:00', '+202609-02-05T05:00:00+00:00'],
+  ])('formats expanded year %s as %s', (input, expected) => {
+    const result = normalize_timestamp(input)
+    expect(result).toBe(expected)
+    expect(Number.isNaN(new Date(result).getTime())).toBe(false)
   })
 })
 
 describe('normalize_timestamptz', () => {
   it('leaves standard 4-digit years unaffected', () => {
-    // Note: Postgres timestamptz wire format includes the timezone offset
     expect(normalize_timestamptz('2026-09-02 05:00:00+00')).toBe('2026-09-02T05:00:00+00:00')
   })
 
-  it('prepends + to expanded years (>9999) to satisfy ISO 8601', () => {
-    expect(normalize_timestamptz('202609-02-05 05:00:00+00')).toBe('+202609-02-05T05:00:00+00:00')
+  it.each([
+    ['10000-01-01 00:00:00+00', '+010000-01-01T00:00:00+00:00'],
+    ['99999-12-31 23:59:59+00', '+099999-12-31T23:59:59+00:00'],
+    ['202609-02-05 05:00:00+00', '+202609-02-05T05:00:00+00:00'],
+  ])('formats expanded year %s as %s', (input, expected) => {
+    const result = normalize_timestamptz(input)
+    expect(result).toBe(expected)
+    expect(Number.isNaN(new Date(result).getTime())).toBe(false)
   })
 })

@@ -309,12 +309,12 @@ function normalize_date(date: string): string {
 
 export function normalize_timestamp(time: string): string {
   const iso = `${time.replace(' ', 'T')}+00:00`
-  return /^\d{5,}/.test(iso) ? '+' + iso : iso
+  return iso.replace(/^(\d{5,})(?=-)/, (_, year: string) => `+${year.padStart(6, '0')}`)
 }
 
 export function normalize_timestamptz(time: string): string {
   const iso = time.replace(' ', 'T').replace(/[+-]\d{2}(:\d{2})?$/, '+00:00')
-  return /^\d{5,}/.test(iso) ? '+' + iso : iso
+  return iso.replace(/^(\d{5,})(?=-)/, (_, year: string) => `+${year.padStart(6, '0')}`)
 }
 
 /*
