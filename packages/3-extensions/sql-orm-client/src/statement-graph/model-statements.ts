@@ -1,6 +1,19 @@
-import { type AnyExpression, SelectAst, type TableSource } from '@internal/sql-relational-core/ast';
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
+import {
+  type AnyExpression,
+  collectOrderedParamRefs,
+  type InsertAst,
+  SelectAst,
+  type TableSource,
+} from '@internal/sql-relational-core/ast';
+import { targetDisplayNameOf } from '@internal/sql-relational-core/plan';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { resolveRowIdentityColumns, supportsDefaultInInsert } from '../collection-contract';
+import {
+  bindParameterLimitOf,
+  resolveRowIdentityColumns,
+  supportsDefaultInInsert,
+} from '../collection-contract';
 import type { CollectionTables } from '../collection-tables';
 import { loadsIncludesPerRelation } from '../include-strategy';
 import {
@@ -12,6 +25,7 @@ import {
   returningProjection,
   updateAst,
 } from '../mutation-statements';
+import { ormError } from '../orm-errors';
 import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-plan-select';
 import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
@@ -87,16 +101,43 @@ export function addInsert(
 ): NodeId {
   const { contract } = context;
   const groups = supportsDefaultInInsert(contract) ? [rows] : groupRowsByColumnSignature(rows);
-  const inserted = new Insert(
-    groups.map((group) => insertAst(contract, table, group, conflict)),
-    owner,
-    junction,
-  );
+  const asts = groups.map((group) => insertAst(contract, table, group, conflict));
+  requireBindParametersWithinLimit(contract, asts, owner);
+  const inserted = new Insert(asts, owner, junction);
   return graph.add(inserted, {
     payload: keys.map(({ from, columns }) => new PayloadData(from, columns)),
     state: graph.stateEdgesFor(inserted),
     requires: [...requires],
   });
+}
+
+function requireBindParametersWithinLimit(
+  contract: Contract<SqlStorage>,
+  asts: readonly InsertAst[],
+  owner: WrittenRowOwner,
+): void {
+  const limit = bindParameterLimitOf(contract);
+  if (limit === undefined) return;
+  for (const ast of asts) {
+    const parameters = collectOrderedParamRefs(ast).length;
+    if (parameters <= limit) continue;
+    throw ormError(
+      'ORM.ARGUMENT_INVALID',
+      `${owner.operation}() on model "${owner.modelName}" would bind ${parameters} parameters in one INSERT statement; ${targetDisplayNameOf(contract.target)} allows ${limit} per statement.`,
+      {
+        why: 'The database rejects a statement past its bind-parameter limit with a driver error that reads as a broken connection, so the ORM refuses the write before sending it; nothing was written.',
+        fix: `Split the rows into smaller batches so no single INSERT statement binds more than ${limit} parameters.`,
+        meta: {
+          problem: 'too-many-bind-parameters',
+          method: `${owner.operation}()`,
+          model: owner.modelName,
+          parameters,
+          limit,
+          target: contract.target,
+        },
+      },
+    );
+  }
 }
 
 export interface RowsRead {

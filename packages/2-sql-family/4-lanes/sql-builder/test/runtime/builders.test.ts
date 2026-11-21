@@ -18,6 +18,7 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it, vi } from 'vitest';
 import { sql } from '../../src/runtime/sql';
 import { contract as contractJson } from '../fixtures/contract';
@@ -749,6 +750,67 @@ describe('INSERT multi-row', () => {
   it('empty array throws at build time', () => {
     expect(() => db().public.users.insert([]).build()).toThrow(
       'insert() called with an empty row array — at least one row is required',
+    );
+  });
+
+  it('refuses a build whose one statement binds more parameters than the target allows', () => {
+    const rows = Array.from({ length: 21_846 }, (_, i) => ({
+      id: i + 1,
+      name: `u${i}`,
+      email: `u${i}@example.test`,
+    }));
+
+    expect(() => db().public.users.insert(rows).build()).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message:
+          'insert() on table "users" would bind 65538 parameters in one INSERT statement; PostgreSQL allows 65535 per statement.',
+        meta: expect.objectContaining({
+          problem: 'too-many-bind-parameters',
+          method: 'insert()',
+          table: 'users',
+          parameters: 65_538,
+          limit: 65_535,
+          target: 'postgres',
+        }),
+      }),
+    );
+  });
+
+  it('keeps building at exactly the target limit', () => {
+    const rows = Array.from({ length: 21_845 }, (_, i) => ({
+      id: i + 1,
+      name: `u${i}`,
+      email: `u${i}@example.test`,
+    }));
+
+    expect(() => db().public.users.insert(rows).build()).not.toThrow();
+  });
+
+  it('names MySQL and its own limit on a mysql target', () => {
+    const mysqlContract = blindCast<
+      Contract,
+      'the dsl reads contract.target as a plain string field'
+    >({ ...sqlContract, target: 'mysql' });
+    const d = sql({
+      context: { ...stubBase, contract: mysqlContract } as unknown as ExecutionContext<
+        typeof mysqlContract
+      >,
+      rawCodecInferer: stubInferer,
+    });
+    const rows = Array.from({ length: 21_846 }, (_, i) => ({
+      id: i + 1,
+      name: `u${i}`,
+      email: `u${i}@example.test`,
+    }));
+
+    expect(() => d.public.users.insert(rows).build()).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message:
+          'insert() on table "users" would bind 65538 parameters in one INSERT statement; MySQL allows 65535 per statement.',
+        meta: expect.objectContaining({ limit: 65_535, target: 'mysql' }),
+      }),
     );
   });
 

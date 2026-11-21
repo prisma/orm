@@ -1,6 +1,7 @@
 import { type Contract, soleDomainNamespaceId } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import { blindCast } from '@internal/utils/casts';
 import { Collection } from '../src/collection';
 import type { RelatedCollection } from '../src/relation-mutations';
 import type { MockRuntime, TestContract } from './helpers';
@@ -73,6 +74,12 @@ export function withoutDefaultInInsert(contract: TestContract = baseContract): T
     delete capabilities['sql']['defaultInInsert'];
   }
   return deserializeTestContract(raw);
+}
+
+export function withTarget(contract: TestContract, target: string): TestContract {
+  return blindCast<TestContract, 'the graph builders read contract.target as a plain string field'>(
+    { ...contract, target },
+  );
 }
 
 export function withoutCapabilityKeys(
