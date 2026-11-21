@@ -31,7 +31,8 @@ Provide SQLite transport and connection management. Execute SQL statements and m
 - **Statement Release**: When a read stops part-way, because reading a row raises an error or the reader stops early, `query()` resets its statement, so no read lock stays behind. A statement that SQLite itself fails on is reset by SQLite
 - **Query Explanation**: Execute `EXPLAIN QUERY PLAN` queries for query analysis
 - **Persistent Connection**: Top-level `execute()`/`query()`/`explain()` reuse a persistent connection opened at `connect()` time
-- **Scoped Connections**: `acquireConnection()` opens fresh `DatabaseSync` handles for isolated scopes (transactions)
+- **Connection Reuse**: `acquireConnection()` hands out the idle connection released by the previous scope when one is available, and opens a fresh `DatabaseSync` otherwise, so concurrent transactions never share a session. `release()` returns a clean connection to the driver's idle slot; a connection released with an open transaction, an unfinished read, or a failed `COMMIT` is closed instead. `destroy()` always closes and evicts. `close()` closes the idle slot beside the persistent connection
+- **Statement Reuse**: Every connection keeps its own cache of compiled statements keyed by SQL text, so repeated SQL skips `db.prepare`'s compile step across transactions. A statement with an unfinished read is not shared; a second concurrent reader of the same SQL compiles its own
 - **Transaction Support**: `BEGIN`/`COMMIT`/`ROLLBACK` via `SqliteTransactionImpl`
 - **PRAGMA Configuration**: Enables `PRAGMA foreign_keys = ON` and `PRAGMA busy_timeout = 5000` on every opened connection
 - **Error Normalization**: Maps SQLite extended error codes to SQL state codes (23505 unique, 23503 FK, 23502 NOT NULL) and distinguishes transient (BUSY/LOCKED) from permanent errors
@@ -53,7 +54,7 @@ flowchart TD
     subgraph "SQLite Driver"
         DRIVER[Driver]
         CONN[Persistent Connection]
-        SCOPED[Scoped Connection]
+        IDLE[Idle Connection]
     end
 
     subgraph "SQLite"
@@ -63,9 +64,9 @@ flowchart TD
     RT --> ADAPTER
     ADAPTER --> DRIVER
     DRIVER --> CONN
-    DRIVER --> SCOPED
+    DRIVER --> IDLE
     CONN --> DB
-    SCOPED --> DB
+    IDLE --> DB
     DB --> DRIVER
     DRIVER --> RT
 ```
@@ -73,10 +74,13 @@ flowchart TD
 ## Components
 
 ### Driver (`sqlite-driver.ts`)
-- `SqliteBoundDriver`: main driver implementation wrapping `DatabaseSync`
-- `SqliteConnectionImpl`: connection wrapper with `execute()`, `query()`, `explain()`, `beginTransaction()`
+- `SqliteBoundDriver`: main driver implementation wrapping `DatabaseSync`, holding the idle connection slot
+- `SqliteConnectionImpl`: connection wrapper with `execute()`, `query()`, `explain()`, `beginTransaction()`; `release()` returns it to the idle slot, `destroy()` closes it
 - `SqliteTransactionImpl`: transaction wrapper adding `commit()` and `rollback()`
 - `createBoundDriverFromBinding()`: factory that creates and immediately connects a driver
+
+### Statement cache (`statement-cache.ts`)
+- `SqliteStatementCache`: per-connection cache of compiled `StatementSync` objects keyed by SQL text (least-recently-used, 256 entries); refuses to share a statement with an unfinished read
 
 ### Error Normalization (`normalize-error.ts`)
 - Maps SQLite extended `errcode` to structured `SqlQueryError` / `SqlConnectionError`
