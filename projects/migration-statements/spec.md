@@ -6,7 +6,12 @@
 
 The migration planner diffs two states and cannot tell intent from the diff. A renamed model looks exactly like a dropped table plus a created one, and a removed model looks the same as one the user forgot. Today the planner plans the destruction and relies on a blanket consent prompt, or on a hand-written migration, to keep rows safe. Projects that use `db update` and keep no migration history cannot hand-write anything.
 
-This project makes two things true. The planner refuses any operation that loses data unless the user has said what they mean about that operation. And the user says it on the command line, in the vocabulary of their contract, as a statement the planner acts on: a rename, a deletion, a conversion or a backfill. Nothing is inferred, nothing is asked, and nothing is written into the contract source.
+This project makes two things true.
+
+1. **A command that would lose data stops first.** `migration plan` and `db update` do not drop a table, drop a column, or change a type in a way that loses values until the user has told the command what they intend.
+2. **The user tells it with a flag that uses the names in their contract.** `--rename Profile:User` means the model was renamed, so keep its rows. `--delete Legacy` means the model is gone, so drop its rows. `--convert User.age` and `--backfill User.email` say the user will write how the values change. The flags name models and fields, never tables or columns.
+
+The command never guesses what the user intended, and nothing about intent is written into the contract source. In a terminal the command asks. In a script it stops with an error that prints the flags.
 
 This is the second attempt. The first stated intent in the contract source with `@@hint(was:)` and was shelved on 2026-10-05 as unintuitive. Its planner substrate is reused; its contract section is not.
 
@@ -83,7 +88,7 @@ The reasoning and the alternatives rejected are in [`design-notes.md`](./design-
 1. **Statements are the only source of intent.** The planner never infers a rename, never asks whether a drop is one, and never reads intent from the contract. A change with no statement is planned as the diff shows it, and refused if that loses data.
 2. **Contract vocabulary only.** A statement names namespaces, models, fields and values as the contract source names them. The framework resolves every coordinate against the origin and destination contracts before any family code runs; the family receives resolved entities, never names to look up.
 3. **One statement surface, both commands.** `migration plan` and `db update` accept the same statements with the same meaning, and the plan a statement produces is the same whichever command ran it. `db update` obtains its origin contract from the marker hash through the snapshot store.
-4. **Refusal names the way out.** When either command refuses, the error lists every destructive operation with the rename and delete statements that would resolve it, spelled exactly as the user would type them. In a terminal the same list is the consent question, asked per operation.
+4. **When a command stops, its error prints the flags that let it continue.** For each thing that would lose data, the error says what would be lost and prints each flag that answers it, written exactly as the user would type it, such as `--delete Legacy`. A user can copy a flag from the error, run the command again, and it works. In a terminal the command asks the same thing as a question, once for each thing that would lose data.
 5. **An unusable statement is an error.** A coordinate that does not resolve in the contract it must resolve in, a rename whose new name already exists in the origin, a statement the control policy forbids, or a rename and convert statement with no origin contract: each fails before anything is planned, naming what was searched and what was found. Running the same statements twice fails the second time.
 6. **Statements compose in order.** Each statement is applied to the working copy of the origin before the next is resolved, so `--rename Profile:User --rename User.name:User.fullName` is valid and the second statement uses the new table name. A swap is refused with a message.
 7. **Same output as the hand-written route.** A plan produced from statements writes a `migration.ts` whose calls a user could have written by hand, and re-running that file reproduces `ops.json`. Statements are never recorded anywhere; the migration file is the record.
