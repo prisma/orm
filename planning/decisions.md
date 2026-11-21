@@ -92,6 +92,8 @@ Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgen
 
 - The Prisma Studio command (stream 3, row 1b) stays Must, no longer marked urgent. Will expects it to be a small piece of work (Will, 2026-11-20). Until it ships, the docs tell Prisma 8 users to run `npx prisma@prev studio`.
 
+- Querying other contract spaces gets a research task before GA (stream 6, row 13). We want the feature in Prisma 8 and it may need a breaking change, so before GA we find out whether it does, with a spike if needed (Will, 2026-11-20). This changes the earlier placement, which put the whole feature after GA as optional. Building it can still follow GA if the research finds no breaking change.
+
 ## Changes of 2026-11-18
 
 - New Must work, owned by Will: capabilities by database version (stream 6, row 10). It lands before GA because it changes contract content and the names users import.

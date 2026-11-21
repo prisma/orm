@@ -23,8 +23,8 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
 | Query features | 9 of 11 (82%) | `████████░░` | 2 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
-| Work found along the way | 4 of 8 (50%) | `█████░░░░░` | 1 | 3 |
-| **All streams** | **33 of 45 (73%)** | `███████░░░` | **6** | **6** |
+| Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
+| **All streams** | **33 of 46 (72%)** | `███████░░░` | **6** | **7** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -117,7 +117,7 @@ Test: the getting-started eval passes, in few steps and with no workarounds.
 
 ## Stream 6: Work found along the way
 
-**GA readiness:** 4 of 8 Must projects done (50%). 1 in progress, 3 not started.
+**GA readiness:** 4 of 9 Must projects done (44%). 1 in progress, 4 not started.
 
 Work found after the plan was made goes here, so the first five streams keep the scope they started with (Will, 2026-10-21).
 
@@ -136,6 +136,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 | 10 | ⏳ | Capabilities by database version: a target offers one profile per supported database version, the user names the profile in the import, and a database is signed only if it provides the capabilities the contract requires | Must | Will | Added 2026-11-18. Not started; no code. Preliminary design on branch `design/capabilities-by-database-version`, in `projects/capabilities-by-database-version/design-notes.md`. No ticket. It changes contract content and the names users import, so it lands before GA | Settle the open points in the design, then spec |
 | 11 | ⏳ | PostgreSQL `Json` fields refuse a value that is not JSON. Today the codecs store a changed value with no error: a `Date` becomes text, an `undefined` member is dropped, `NaN` becomes `null` | Not decided | Will | Not started. TML-3778, backlog. MongoDB, MySQL and MariaDB already refuse such a value, and the check they share is in `@internal/type-implementations/json`, so the change is small. It makes writes fail that succeed today, so it has to land before GA if it lands at all | Place it for GA |
 | 12 | ⏳ | Remove the deprecated type names before GA, or keep them through Prisma 8. The decision records keep a renamed name "for one release line" and do not say whether the release candidates are that line | Not decided | Will | Not started, no ticket. The names: PostgreSQL `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit`; `sql.String(n)` on every SQL database; MongoDB `Int64`; SQLite `BigIntNumber`. Each still works and warns `PSL_DEPRECATED_SCALAR_NAME`. Removing one is breaking, so names that ship in 8.0 stay until Prisma 9 | Decide: remove before GA or keep |
+| 13 | ⏳ | Querying other contract spaces: find out whether it needs a breaking change. An application's queries reach only its own contract space today; we want them to reach the models of another space, such as an extension pack's, in Prisma 8 | Must (research, and a spike if needed) | Will | Added 2026-11-20. Not started, no ticket. Building the feature can follow GA. What must happen before GA is the research, because a breaking change it needs cannot land after 8.0 | Research the design; spike if the answer is unclear |
 
 ## Databases
 
@@ -159,7 +160,7 @@ Outside the streams: MongoDB contracts written in TypeScript, PSL or Prisma 6 bu
 
 ## After GA
 
-Query linting, querying across contract spaces, performance work, migration runner service, the BetterAuth flow, referential actions on MongoDB. `@hint(was: oldName)` was listed here; migration statements replace it (stream 1, row 7).
+Query linting, building querying across contract spaces (the research into whether it needs a breaking change is before GA: stream 6, row 13), performance work, migration runner service, the BetterAuth flow, referential actions on MongoDB. `@hint(was: oldName)` was listed here; migration statements replace it (stream 1, row 7).
 
 ## Never
 
