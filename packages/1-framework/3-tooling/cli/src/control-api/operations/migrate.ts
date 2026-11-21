@@ -45,6 +45,7 @@ import {
   errorMigrationHasUnfilledPlaceholders,
   errorPathUnreachable,
   type PathUnreachableMeta,
+  type PlanArguments,
   planThenApply,
 } from '../../utils/cli-errors';
 import {
@@ -77,6 +78,7 @@ import {
   forbiddingSettingsOfRun,
   refuseForbiddenChanges,
 } from './database-policies';
+import { planOriginArgument } from './graph-queries';
 import { noInvariantPathError } from './no-invariant-path';
 import {
   buildPerSpaceBreakdown,
@@ -279,7 +281,8 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
           },
           {
             appSpaceId: aggregate.app.spaceId,
-            toArgument: toArgumentFor(target, aggregate.app.graph()),
+            appGraph: aggregate.app.graph(),
+            target,
             invocation: options.invocation,
           },
         ),
@@ -1012,7 +1015,8 @@ export function unreachableSpaceFailure(
   space: { readonly spaceId: string; readonly fromHash: string; readonly targetHash: string },
   run: {
     readonly appSpaceId: string;
-    readonly toArgument: string | undefined;
+    readonly appGraph: MigrationGraph;
+    readonly target: MigrateTarget | undefined;
     readonly invocation: CliInvocation;
   },
 ): CliStructuredError {
@@ -1021,7 +1025,10 @@ export function unreachableSpaceFailure(
       space.spaceId,
       space.fromHash,
       space.targetHash,
-      run.toArgument,
+      {
+        from: planOriginArgument(run.appGraph, space.fromHash),
+        to: toArgumentFor(run.target, run.appGraph),
+      },
       run.invocation,
     );
   }
@@ -1071,7 +1078,7 @@ export function buildNeverPlannedFailure(
       why: `migrate is replay-only: a contract space that declares managed storage elements must have an authored migration graph on disk. Space "${spaceId}" has no migrations under \`${migrationsDir}/${spaceId}/\` but its head ref targets "${targetHash}".`,
       meta,
     },
-    planThenApply(meta, undefined, invocation),
+    planThenApply(meta, { from: undefined, to: undefined }, invocation),
   );
 }
 
@@ -1089,7 +1096,7 @@ export function buildPathNotFoundFailure(
   spaceId: string,
   fromHash: string,
   targetHash: string,
-  toArgument: string | undefined,
+  plan: PlanArguments,
   invocation: CliInvocation,
 ): CliStructuredError {
   const fromText = fromHash === EMPTY_CONTRACT_HASH ? 'the empty contract' : `"${fromHash}"`;
@@ -1100,7 +1107,7 @@ export function buildPathNotFoundFailure(
       why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
       meta,
     },
-    planThenApply(meta, toArgument, invocation),
+    planThenApply(meta, plan, invocation),
   );
 }
 

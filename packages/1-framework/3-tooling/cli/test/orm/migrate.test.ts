@@ -432,11 +432,17 @@ describe('migrate', () => {
     const cwd = await buildProject();
     mocks.migrate.mockResolvedValue(
       notOk(
-        buildPathNotFoundFailure('app', EMPTY_CONTRACT_HASH, C2, C2, {
-          cwd,
-          configPath: undefined,
-          dbGiven: false,
-        }),
+        buildPathNotFoundFailure(
+          'app',
+          EMPTY_CONTRACT_HASH,
+          C2,
+          { from: undefined, to: C2 },
+          {
+            cwd,
+            configPath: undefined,
+            dbGiven: false,
+          },
+        ),
       ),
     );
 

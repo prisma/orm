@@ -243,7 +243,7 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         APP_HEAD,
         ELSEWHERE,
-        undefined,
+        { from: APP_HEAD, to: undefined },
         invocationIn(projectDir),
       ).toEnvelope(),
     );
@@ -259,7 +259,7 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         ELSEWHERE,
         APP_HEAD,
-        undefined,
+        { from: ELSEWHERE, to: undefined },
         invocationIn(projectDir),
       ).toEnvelope(),
     );
@@ -279,13 +279,13 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         APP_HEAD,
         ELSEWHERE,
-        'production',
+        { from: APP_HEAD, to: 'production' },
         invocationIn(projectDir),
       ).toEnvelope(),
     );
   });
 
-  it('reports PATH_UNREACHABLE from the empty contract when the database has no marker', async () => {
+  it('advises planning from where the history ends when the database has no marker', async () => {
     const projectDir = await projectWithOneAppEdge();
 
     const result = await migrate({ projectDir, markers: new Map(), refHash: ELSEWHERE });
@@ -295,7 +295,7 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         EMPTY_CONTRACT_HASH,
         ELSEWHERE,
-        undefined,
+        { from: APP_HEAD, to: undefined },
         invocationIn(projectDir),
       ).toEnvelope(),
     );
@@ -306,7 +306,8 @@ describe('executeMigrate with no path to the target', () => {
       { spaceId: 'pgvector', fromHash: DELETED, targetHash: ELSEWHERE },
       {
         appSpaceId: 'app',
-        toArgument: 'production',
+        appGraph: reconstructGraph([]),
+        target: undefined,
         invocation: {
           ...invocationIn('/project'),
           rerunArgs: ['--to', 'production', '--advance-ref', 'production'],

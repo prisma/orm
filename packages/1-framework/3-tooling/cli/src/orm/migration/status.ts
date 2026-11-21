@@ -13,7 +13,8 @@ import {
   type ContractMarkerRecordLike,
   contractHashAtMarker,
 } from '@internal/migration-tools/aggregate';
-import { isInSpaceHistory } from '@internal/migration-tools/migration-graph';
+import type { MigrationGraph } from '@internal/migration-tools/graph';
+import { isGraphNode, isInSpaceHistory } from '@internal/migration-tools/migration-graph';
 import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry, Refs } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
@@ -33,7 +34,7 @@ import {
   loadContractRawSafely,
   refusePackageCorruptionOnAggregate,
 } from '../../control-api/operations/contract-space-aggregate-loader';
-import { hasMigrationPath } from '../../control-api/operations/graph-queries';
+import { hasMigrationPath, planOriginArgument } from '../../control-api/operations/graph-queries';
 import {
   refuseMissingInvariantPath,
   refuseUnknownInvariants,
@@ -68,6 +69,7 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import { cliInvocation, printedPlanCommand } from '../../utils/printed-command';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
@@ -151,14 +153,34 @@ function describeOrigin(origin: StatusOrigin): string {
     : 'the database state';
 }
 
-/** What a status path aims at: the app space's target, which `--to` may name, or an extension space's head. */
+/**
+ * What a status path aims at: the app space's target, which `--to` may name, with the
+ * `migration plan` that authors the missing path, or an extension space's head.
+ */
 export type StatusTarget =
   | {
       readonly kind: 'app';
       readonly explicitTarget: boolean;
       readonly refName: string | undefined;
+      readonly planCommand: string;
     }
   | { readonly kind: 'extension'; readonly spaceId: string };
+
+/**
+ * The `--to` of a `migration plan` that reaches the target `--to` named: the ref by its name, or a
+ * contract a migration names by its hash. The emitted contract, which `migration plan --to` cannot
+ * resolve until a migration names it, is where `migration plan` goes without `--to`.
+ */
+function planTargetFlags(
+  to: string | undefined,
+  refName: string | undefined,
+  targetHash: string,
+  graph: MigrationGraph,
+): readonly string[] {
+  if (to === undefined) return [];
+  if (refName !== undefined) return ['--to', shellQuoted(refName)];
+  return isGraphNode(targetHash, graph) ? ['--to', targetHash] : [];
+}
 
 export function buildNoPathSummary(args: {
   readonly origin: StatusOrigin;
@@ -172,13 +194,13 @@ export function buildNoPathSummary(args: {
     return `No migration path from ${markerPart} to the head of extension space \`${target.spaceId}\` (${targetShort}).`;
   }
   if (!target.explicitTarget) {
-    return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`;
+    return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`${target.planCommand}\` to author one.`;
   }
   const targetLabel =
     target.refName !== undefined
       ? `the target (${targetShort} via \`${target.refName}\`)`
       : `the target (${targetShort})`;
-  return `No migration path from ${markerPart} to ${targetLabel}. Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
+  return `No migration path from ${markerPart} to ${targetLabel}. Run \`${target.planCommand}\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
 }
 
 export function buildStatusHeadline(args: {
@@ -379,6 +401,7 @@ export const migrationStatusCommand = defineOrmCommand({
     }
 
     const appGraph = aggregate.app.graph();
+    const invocation = cliInvocation(ctx, undefined);
     const refContext = { graph: appGraph, refs, contractHash };
 
     let toRef: ContractRef | undefined;
@@ -525,7 +548,16 @@ export const migrationStatusCommand = defineOrmCommand({
           origin,
           targetHash,
           target: isAppSpace
-            ? { kind: 'app', explicitTarget: to !== undefined, refName: activeRefName }
+            ? {
+                kind: 'app',
+                explicitTarget: to !== undefined,
+                refName: activeRefName,
+                planCommand: printedPlanCommand(invocation, planOriginArgument(graph, originHash), [
+                  ...planTargetFlags(to, activeRefName, targetHash, graph),
+                  '--name',
+                  '<name>',
+                ]),
+              }
             : { kind: 'extension', spaceId: entry.space },
         };
       }

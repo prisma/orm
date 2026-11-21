@@ -25,7 +25,6 @@ import {
   errorTargetMigrationNotSupported,
   errorUnexpected,
 } from '@internal/errors/control';
-import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { RefResolutionError } from '@internal/migration-tools/ref-resolution';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
@@ -985,8 +984,14 @@ export interface PathUnreachableAdvice {
   readonly nextActions: readonly NextAction[];
 }
 
+/** What the advised `migration plan` passes to `--from` and `--to`; `undefined` leaves a flag out. */
+export interface PlanArguments {
+  readonly from: string | undefined;
+  readonly to: string | undefined;
+}
+
 /**
- * The advice to plan the missing migration in the app space and apply it. `toArgument` is what
+ * The advice to plan the missing migration in the app space and apply it. `plan.to` is what
  * `--to` takes to name the target, or `undefined` for the emitted contract: `migration plan` and
  * `db migrate` target it without `--to`, and `migration plan --to` resolves only a contract that a
  * migration or a ref names. A space with no migrations has no such contract, so neither of its
@@ -995,15 +1000,11 @@ export interface PathUnreachableAdvice {
  */
 export function planThenApply(
   meta: PathUnreachableMeta,
-  toArgument: string | undefined,
+  plan: PlanArguments,
   invocation: CliInvocation,
 ): PathUnreachableAdvice {
-  const from =
-    meta.kind === 'neverPlanned' || meta.fromHash === EMPTY_CONTRACT_HASH
-      ? undefined
-      : meta.fromHash;
-  const to = meta.kind === 'neverPlanned' || toArgument === undefined ? [] : ['--to', toArgument];
-  const planCommand = printedPlanCommand(invocation, from, [...to, '--name', '<slug>']);
+  const to = meta.kind === 'neverPlanned' || plan.to === undefined ? [] : ['--to', plan.to];
+  const planCommand = printedPlanCommand(invocation, plan.from, [...to, '--name', '<slug>']);
   const applyCommand =
     meta.kind === 'neverPlanned'
       ? cliCommand(invocation, 'db migrate')

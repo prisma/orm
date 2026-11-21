@@ -223,7 +223,7 @@ describe('migration status with reserved contract references', () => {
 
     expect(run.exitCode).toBe(0);
     expect(run.presented?.data).toMatchObject({
-      summary: `No migration path from the --from contract (${HASH_HEAD.slice(0, 12)}) to the target (${HASH_BASE.slice(0, 12)}). Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`,
+      summary: `No migration path from the --from contract (${HASH_HEAD.slice(0, 12)}) to the target (${HASH_BASE.slice(0, 12)}). Run \`{bin} migration plan --from ${HASH_HEAD} --to ${HASH_BASE} --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`,
     });
   });
 

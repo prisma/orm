@@ -350,6 +350,32 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
+      'prints commands that run on an empty database when no db ref names a plan origin',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          await withJourney(createTempDir, connectionString, async (ctx) => {
+            expect((await runContractEmit(ctx)).exitCode).toBe(0);
+            expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
+            swapContract(ctx, 'contract-additive');
+            expect((await runContractEmit(ctx)).exitCode).toBe(0);
+
+            const err = parseJsonOutput<MigrateErrorJson>(await runMigrate(ctx, ['--json']));
+            expect(err.code).toBe('MIGRATION.PATH_UNREACHABLE');
+
+            const plan = await planMigrationAndSelfEmit(
+              ctx,
+              printedArgs(err, 'Plan the missing edge', 'migration plan'),
+            );
+            expect(plan.exitCode, plan.stderr).toBe(0);
+            const apply = await runMigrate(ctx, printedArgs(err, 'Apply it', 'db migrate'));
+            expect(apply.exitCode, apply.stderr).toBe(0);
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
       'prints commands that run when the unreachable target is a contract a migration names',
       async () => {
         await withDevDatabase(async ({ connectionString }) => {

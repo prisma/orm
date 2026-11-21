@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { buildNoPathSummary, buildStatusHeadline } from '../../src/orm/migration/status';
 
+const PLAN = '{bin} migration plan --from aaaa --name <name>';
+const PLAN_TO_PROD = '{bin} migration plan --from aaaa --to prod --name <name>';
+
 describe('buildNoPathSummary', () => {
-  it('names the live contract when no --to was passed', () => {
+  it('names the live contract and the plan that reaches it when no --to was passed', () => {
     expect(
       buildNoPathSummary({
         origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: false, refName: undefined },
+        target: { kind: 'app', explicitTarget: false, refName: undefined, planCommand: PLAN },
       }),
     ).toBe(
-      "No migration path from the database state (aaaaaaaaaaaa) to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --name <name>` to author one.",
+      "No migration path from the database state (aaaaaaaaaaaa) to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --from aaaa --name <name>` to author one.",
     );
   });
 
@@ -19,10 +22,10 @@ describe('buildNoPathSummary', () => {
       buildNoPathSummary({
         origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: true, refName: 'prod' },
+        target: { kind: 'app', explicitTarget: true, refName: 'prod', planCommand: PLAN_TO_PROD },
       }),
     ).toBe(
-      'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb via `prod`). Run `{bin} migration plan --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
+      'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb via `prod`). Run `{bin} migration plan --from aaaa --to prod --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
     );
   });
 
@@ -31,10 +34,10 @@ describe('buildNoPathSummary', () => {
       buildNoPathSummary({
         origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: true, refName: undefined },
+        target: { kind: 'app', explicitTarget: true, refName: undefined, planCommand: PLAN },
       }),
     ).toBe(
-      'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb). Run `{bin} migration plan --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
+      'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb). Run `{bin} migration plan --from aaaa --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
     );
   });
 
@@ -43,10 +46,10 @@ describe('buildNoPathSummary', () => {
       buildNoPathSummary({
         origin: { kind: 'database', marker: undefined },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: false, refName: undefined },
+        target: { kind: 'app', explicitTarget: false, refName: undefined, planCommand: PLAN },
       }),
     ).toBe(
-      "No migration path from the database state to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --name <name>` to author one.",
+      "No migration path from the database state to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --from aaaa --name <name>` to author one.",
     );
   });
 
@@ -55,10 +58,10 @@ describe('buildNoPathSummary', () => {
       buildNoPathSummary({
         origin: { kind: 'offline', hash: 'a'.repeat(64) },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: true, refName: undefined },
+        target: { kind: 'app', explicitTarget: true, refName: undefined, planCommand: PLAN },
       }),
     ).toBe(
-      'No migration path from the --from contract (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb). Run `{bin} migration plan --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
+      'No migration path from the --from contract (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb). Run `{bin} migration plan --from aaaa --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
     );
   });
 
