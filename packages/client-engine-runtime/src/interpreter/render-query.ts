@@ -27,7 +27,7 @@ export function renderQuery(
     case 'rawSql':
       return [renderRawSql(dbQuery.sql, args, dbQuery.argTypes)]
     case 'templateSql': {
-      const chunks = dbQuery.chunkable ? chunkParams(dbQuery.fragments, args, maxChunkSize) : [args]
+      const chunks = dbQuery.chunkable ? chunkParams(dbQuery.fragments, args, dbQuery.argTypes, maxChunkSize) : [args]
       return chunks.map((params) => {
         const rendered = renderTemplateSql(dbQuery.fragments, dbQuery.placeholderFormat, params, dbQuery.argTypes)
         if (maxChunkSize !== undefined && rendered.args.length > maxChunkSize) {
@@ -225,9 +225,13 @@ function* pairFragmentsWithParams<Types>(
         }
 
         const value = params[index]
+        const argType = argTypes?.[index]
+        const values = Array.isArray(value) ? value : [value]
         // A tuple is rendered as an `IN` list, where repeated values don't change the result but
-        // still cost a bind parameter each, e.g. the same foreign key of many parent rows.
-        yield { ...fragment, value: Array.isArray(value) ? [...new Set(value)] : [value], argType: argTypes?.[index] }
+        // still cost a bind parameter each, e.g. the same foreign key of many parent rows. Values
+        // of a tuple-typed argument are flattened tuples, so dropping single elements would split them.
+        const isTupleTyped = argType?.arity === 'tuple'
+        yield { ...fragment, value: isTupleTyped ? values : [...new Set(values)], argType }
         index++
         break
       }
@@ -278,12 +282,17 @@ function* flattenedFragmentParams<Type extends DeepReadonly<DynamicArgType> | un
   }
 }
 
-function chunkParams(fragments: DeepReadonly<Fragment[]>, params: unknown[], maxChunkSize?: number): unknown[][] {
+function chunkParams(
+  fragments: DeepReadonly<Fragment[]>,
+  params: unknown[],
+  argTypes: DeepReadonly<DynamicArgType[]>,
+  maxChunkSize?: number,
+): unknown[][] {
   // Find out the total number of parameters once flattened and what the maximum number of
   // parameters in a single fragment is.
   let totalParamCount = 0
   let maxParamsPerFragment = 0
-  for (const fragment of pairFragmentsWithParams(fragments, params, undefined)) {
+  for (const fragment of pairFragmentsWithParams(fragments, params, argTypes)) {
     let paramSize = 0
     for (const _ of flattenedFragmentParams(fragment)) {
       void _
@@ -294,7 +303,7 @@ function chunkParams(fragments: DeepReadonly<Fragment[]>, params: unknown[], max
   }
 
   let chunkedParams: unknown[][] = [[]]
-  for (const fragment of pairFragmentsWithParams(fragments, params, undefined)) {
+  for (const fragment of pairFragmentsWithParams(fragments, params, argTypes)) {
     switch (fragment.type) {
       case 'parameter': {
         for (const params of chunkedParams) {

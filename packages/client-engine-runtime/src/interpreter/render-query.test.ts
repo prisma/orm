@@ -329,6 +329,44 @@ test('chunks an IN template by its distinct values', () => {
   ])
 })
 
+test.each([true, false])('keeps whole tuples of a tuple-typed IN template (chunkable: %s)', (chunkable) => {
+  expect(
+    renderQuery(
+      {
+        type: 'templateSql',
+        fragments: [
+          { type: 'stringChunk', chunk: 'SELECT * FROM posts WHERE ("authorId", "blogId") IN ' },
+          { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
+        ],
+        placeholderFormat: {
+          prefix: '$',
+          hasNumbering: true,
+        } satisfies PlaceholderFormat,
+        args: [[1, 2, 1, 3]],
+        argTypes: [
+          {
+            arity: 'tuple',
+            elements: [
+              { arity: 'scalar', scalarType: 'int' },
+              { arity: 'scalar', scalarType: 'int' },
+            ],
+          },
+        ],
+        chunkable,
+      } satisfies QueryPlanDbQuery,
+      {} as ScopeBindings,
+      {},
+      TEST_MAX_CHUNK_SIZE,
+    ),
+  ).toEqual([
+    {
+      sql: 'SELECT * FROM posts WHERE ("authorId", "blogId") IN ($1,$2,$3,$4)',
+      args: [1, 2, 1, 3],
+      argTypes: Array.from({ length: 4 }, () => ({ arity: 'scalar', scalarType: 'int' })),
+    },
+  ])
+})
+
 test('keeps repeated rows in INSERT VALUES template', () => {
   expect(
     renderQuery(
