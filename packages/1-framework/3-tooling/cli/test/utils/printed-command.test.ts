@@ -38,6 +38,15 @@ describe('rerunFlags', () => {
       flags: { to: 'production', advanceRef: 'my db', permitPolicyChange: true },
       args: ['--to', 'production', '--advance-ref', "'my db'", '--permit-policy-change'],
     },
+    {
+      flags: {
+        to: undefined,
+        advanceRef: undefined,
+        noAdvanceRef: true,
+        permitPolicyChange: false,
+      },
+      args: ['--no-advance-ref'],
+    },
     { flags: { to: undefined, advanceRef: undefined, permitPolicyChange: false }, args: [] },
     { flags: { to: undefined, advanceRef: undefined, permitPolicyChange: undefined }, args: [] },
   ])('repeats exactly the flags given: $args', ({ flags, args }) => {

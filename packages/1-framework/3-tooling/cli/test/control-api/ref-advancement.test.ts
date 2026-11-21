@@ -10,6 +10,7 @@ import {
   advanceRefSafely,
   buildRefAdvancementFields,
   type ContractIR,
+  computeMigrateRefAdvancementName,
   computeRefAdvancementName,
   executeRefAdvancement,
   preflightRefAdvancement,
@@ -67,6 +68,23 @@ describe('computeRefAdvancementName', () => {
 
   it('returns null when advanceRef is omitted and db is provided', () => {
     expect(computeRefAdvancementName({ db: 'postgres://localhost/db' })).toBe(null);
+  });
+});
+
+describe('computeMigrateRefAdvancementName', () => {
+  const URL = 'postgres://localhost/db';
+
+  it.each([
+    ['the config connection', {}, 'db'],
+    ['--db', { db: URL }, null],
+    ['CI', { inCI: true }, null],
+    ['--no-advance-ref', { noAdvanceRef: true }, null],
+    ['--advance-ref under --db', { advanceRef: 'staging', db: URL }, 'staging'],
+    ['--advance-ref under CI', { advanceRef: 'staging', inCI: true }, 'staging'],
+  ] as const)('names the ref to advance with %s', (_, options, expected) => {
+    expect(computeMigrateRefAdvancementName({ noAdvanceRef: false, inCI: false, ...options })).toBe(
+      expected,
+    );
   });
 });
 

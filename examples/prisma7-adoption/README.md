@@ -75,7 +75,7 @@ From then on, you edit `prisma/schema.prisma` as before, and Prisma 8 plans and 
 # edit prisma/schema.prisma in the Prisma 7 dialect
 pnpm exec prisma contract emit
 pnpm exec prisma migration plan --name add-comments
-pnpm exec prisma db migrate --advance-ref db
+pnpm exec prisma db migrate
 pnpm exec prisma db verify --strict       # zero findings, nothing unclaimed
 pnpm exec prisma db verify                # zero findings
 pnpm exec prisma7 migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script --config prisma7.config.ts
@@ -94,7 +94,7 @@ The test runs that loop three times, then makes two edits that plan nothing, the
 What each step does:
 
 - **The first `migration plan` writes two packages.** `migrations/app/` has no migrations yet, only the `db` ref that `prisma db sign` wrote. So the first plan first writes a baseline package, from an empty database to the signed contract. It then writes the package for your change, from the signed contract to the new one. There is no separate baseline step. `db migrate` never runs the baseline on this database, because the database's marker already sits at the signed contract. The baseline is there so that a fresh database, such as a new developer's or a CI database, can be built from `migrations/` alone. The test proves it: `prisma db migrate` against a second, empty database applies all five packages and the citext pack's migration, which creates the extension before the tables, and `db verify --strict` then passes with nothing unclaimed.
-- **`db migrate --advance-ref db` moves the `db` ref along with the marker.** Plain `db migrate` moves only the database marker. The next `migration plan` starts from the `db` ref, so without the flag it would plan from the contract before your last change.
+- **`db migrate` moves the `db` ref along with the marker.** The next `migration plan` starts from the `db` ref, so it plans only your next change. It does this when the connection comes from `prisma.config.ts` and the `CI` environment variable is unset; in CI, or with `--db`, pass `--advance-ref db` to move it.
 - **`db verify --strict` passes with nothing unclaimed.** Strict mode fails on any table no contract declares, but it leaves out `_prisma_migrations`: that table is Prisma 7's migration ledger, not part of your application's schema. `prisma contract infer` leaves it out for the same reason. Any finding is real drift.
 - **`prisma7 migrate diff` shows Prisma 7 agrees with the database.** An empty migration means the tables, indexes and constraints Prisma 8 created are the ones Prisma 7 would have created from the same schema.
 - **A destructive plan is not confirmed at a prompt.** `migration plan` writes the package to `migrations/app/<timestamp>_<name>/`, marks the destructive operations in its output, and prints the SQL. Review that package before running `db migrate`; nothing else asks. The only prompt comes when the first plan's baseline itself would destroy data, and a baseline that only creates the existing schema never does.

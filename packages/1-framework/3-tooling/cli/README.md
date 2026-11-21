@@ -1208,13 +1208,14 @@ prisma migration status [--db <url>] [--to <contract>] [--from <contract>] [--sp
 Apply planned migrations to the database. Executes previously planned migrations (created by `migration plan`). Compares the database marker against the migration graph to determine which migrations are pending, then executes them sequentially. Each migration runs in its own transaction. Does not plan new migrations — run `migration plan` first.
 
 ```bash
-prisma db migrate [--db <url>] [--to <contract>] [--advance-ref <name>] [--show] [--from <contract>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
+prisma db migrate [--db <url>] [--to <contract>] [--advance-ref <name> | --no-advance-ref] [--show] [--from <contract>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 **Options:**
 - `--db <url>`: Database connection string (optional; defaults to `config.db.connection`)
 - `--to <contract>`: Target contract reference (hash, prefix, ref name, migration directory, `<dir>^`, `@contract`, `@db`, or `@empty`). When omitted, applies toward the emitted `contract.json`; `--to @contract` does the same. When `--to` resolves to another on-disk graph node, verification and apply use the snapshot store entry for that node's hash — so a planned rollback or other arbitrary-target edge applies without editing contract source. A ref name is a `--to` form; refs live in `migrations/<space>/refs/<name>.json`.
-- `--advance-ref <name>`: After a successful apply, advance the named ref to the new marker
+- `--advance-ref <name>`: After a successful apply, advance the named ref instead of `db`, whether or not `--db` is given and in CI too
+- `--no-advance-ref`: Apply without advancing any ref or writing any snapshot. Combining it with `--advance-ref` is refused with `CLI.ADVANCE_REF_ARG_CONFLICT`
 - `--show`: Preview the migration route without applying anything (read-only)
 - `--from <contract>`: The origin for the `--show` preview, with the same forms as `--to`. Defaults to the database marker. A contract other than `@db` makes the preview start offline; it still reads the database when `--to` is `@db`.
 - `--config <path>`: Path to `prisma.config.ts`
@@ -1231,6 +1232,7 @@ prisma db migrate [--db <url>] [--to <contract>] [--advance-ref <name>] [--show]
 6. Executes each pending migration in order using the target's `MigrationRunner`
 7. Each migration runs in its own transaction with prechecks, postchecks, and idempotency checks enabled
 8. After each migration, the runner runs the migration's post-checks and verifies the resulting state matches the target contract's storage hash, then updates the marker/ledger
+9. Advances the `db` ref to the new marker when the connection comes from `config.db.connection` (no `--db`) and the CI environment variable is unset, so the next `migration plan` starts from the contract the database is at. A ref that cannot be written is the warning `MIGRATION.MIGRATE_REF_NOT_WRITTEN` and the command still exits 0; its next action is the `migration ref set` that writes it
 
 **Rollback workflow:** When no on-disk edge reaches the target (for example `db migrate --to <migration-dir>^`), the command refuses with `MIGRATION.PATH_UNREACHABLE` and suggests planning the missing edge with `migration plan --from <current> --to <target> --name <slug>`, then re-running `db migrate --to <target>`. No contract-source edit is required. When the target is the emitted contract, the suggested commands have no `--to`: both target the emitted contract by default, and `migration plan --to` resolves only a contract that a migration or a ref names.
 

@@ -13,7 +13,12 @@ import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
-import type { CliStructuredError, NextAction, Result } from '@prisma/cli-engine/protocol';
+import type {
+  CliStructuredError,
+  Diagnostic,
+  NextAction,
+  Result,
+} from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import { createControlClient } from '../control-api/client';
@@ -33,6 +38,7 @@ import {
 import {
   advanceRefSafely,
   type ContractIR,
+  computeMigrateRefAdvancementName,
   preflightRefAdvancement,
 } from '../control-api/operations/ref-advancement';
 import {
@@ -40,13 +46,14 @@ import {
   resolveContractRef,
   retryCommandFor,
 } from '../control-api/operations/ref-resolution';
+import { shellQuoted } from '../control-api/statements/statement-flag';
 import type {
   CreateControlClient,
   MigratePathDecision,
   MigrateTarget,
   PerSpaceExecutionEntry,
 } from '../control-api/types';
-import { errorContractValidationFailed } from '../utils/cli-errors';
+import { errorAdvanceRefArgConflict, errorContractValidationFailed } from '../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../utils/command-helpers';
 import { ALL_CONTRACT_REF_FORMS } from '../utils/contract-ref-forms';
 import { contractValidationMeta } from '../utils/contract-validation-meta';
@@ -109,6 +116,45 @@ function statusAction(invocation: CliInvocation): NextAction {
     'Check every space against the database',
     cliCommand(invocation, 'migration status'),
   );
+}
+
+/**
+ * Writes the ref after the migrations have applied. Every failure is returned as its reason: the
+ * database has already moved, so a ref that cannot be written must not fail the run.
+ */
+async function writeAdvancedRef(args: {
+  readonly refsDir: string;
+  readonly migrationsDir: string;
+  readonly name: string;
+  readonly hash: string;
+  readonly contractIR: ContractIR;
+}): Promise<Result<void, string>> {
+  try {
+    const advanced = await advanceRefSafely(args);
+    return advanced.ok ? ok(undefined) : notOk(advanced.failure.message);
+  } catch (error) {
+    return notOk(error instanceof Error ? error.message : String(error));
+  }
+}
+
+function refNotWrittenDiagnostic(
+  ref: { readonly name: string; readonly hash: string },
+  reason: string,
+  invocation: CliInvocation,
+): Diagnostic {
+  return {
+    code: 'MIGRATION.MIGRATE_REF_NOT_WRITTEN',
+    severity: 'warn',
+    summary: `Migrations applied, but ref "${ref.name}" was not written`,
+    why: `The database is at contract ${ref.hash}, and ref "${ref.name}" could not be moved there: ${reason}`,
+    nextActions: [
+      runCommandAction(
+        `Point ref "${ref.name}" at the contract the database is at`,
+        cliCommand(invocation, 'migration ref set', [shellQuoted(ref.name), ref.hash]),
+      ),
+    ],
+    meta: { name: ref.name, hash: ref.hash, reason },
+  };
 }
 
 function fromField(from: string): string | undefined {
@@ -269,10 +315,17 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         'migrations in canonical order (extensions alphabetically, then app). It\n' +
         'replays the on-disk migration graph and never invents an edge. Use --to to\n' +
         'target a specific contract and --show for a read-only preview of the route\n' +
-        'it would take.',
+        'it would take.\n' +
+        "After a successful apply it advances the db ref to the database's new\n" +
+        'contract, so the next migration plan starts there. It does so only when\n' +
+        'the connection comes from prisma.config.ts and the CI environment variable\n' +
+        'is unset: never with --db, and never in CI. --advance-ref <name> advances\n' +
+        'that ref instead, in every case; --no-advance-ref advances none. A ref\n' +
+        'that cannot be written is a warning: the migrations have already applied.',
       examples: [
         'db migrate',
         'db migrate --db $DATABASE_URL',
+        'db migrate --no-advance-ref',
         'db migrate --to production',
         'db migrate --show',
         'db migrate --show --from @contract --to production',
@@ -286,8 +339,11 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           placeholder: 'contract',
         }),
         advanceRef: flag.string({
-          brief: 'Advance the named ref to the post-apply marker after success',
+          brief: 'Advance the named ref, instead of db, to the post-apply marker after success',
           placeholder: 'name',
+        }),
+        noAdvanceRef: flag.boolean({
+          brief: 'Apply without advancing any ref (no ref file or snapshot is written)',
         }),
         show: flag.boolean({ brief: 'Preview the migration route without applying (read-only)' }),
         permitPolicyChange: permitPolicyChangeFlag,
@@ -299,6 +355,12 @@ export function createMigrateCommand(createClient: CreateControlClient) {
     },
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
+      if (args.flags.noAdvanceRef && args.flags.advanceRef !== undefined) {
+        return notOk(
+          normalizeError(errorAdvanceRefArgConflict({ advanceRef: args.flags.advanceRef })),
+        );
+      }
+
       // `migrate` walks every contract space, so the header names the root they
       // all live under rather than the app subspace.
       const migrationsRelative = displayPath(migrationsDirFor(ctx.config), ctx.cwd);
@@ -430,6 +492,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
       }
 
       let document: MigrateDocument;
+      const diagnostics: Diagnostic[] = [];
       try {
         await client.connect(dbConnection);
         const appGraph = aggregate.app.graph();
@@ -511,10 +574,16 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         // The last thing before the apply: the snapshot the ref advance will
         // write is rendered now, so a contract that cannot be snapshotted
         // refuses the run before any migration executes.
+        const refName = computeMigrateRefAdvancementName({
+          noAdvanceRef: args.flags.noAdvanceRef === true,
+          inCI: ctx.isCI,
+          ...ifDefined('advanceRef', args.flags.advanceRef),
+          ...ifDefined('db', args.flags.db),
+        });
         let advancement: { readonly name: string; readonly contractIR: ContractIR } | null = null;
-        if (args.flags.advanceRef !== undefined) {
+        if (refName !== null) {
           const preflight = await preflightRefAdvancement({
-            name: args.flags.advanceRef,
+            name: refName,
             contractJson: snapshotContractJson,
             contractJsonPath: snapshotContractPath,
             config: ctx.config,
@@ -523,7 +592,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           if (!preflight.ok) {
             return notOk(normalizeError(preflight.failure));
           }
-          advancement = { name: args.flags.advanceRef, contractIR: preflight.value };
+          advancement = { name: refName, contractIR: preflight.value };
         }
 
         const applied = await client.migrate({
@@ -544,17 +613,20 @@ export function createMigrateCommand(createClient: CreateControlClient) {
 
         let advancedRef: { name: string; hash: string } | null = null;
         if (advancement !== null) {
-          const advanced = await advanceRefSafely({
+          const ref = { name: advancement.name, hash: value.markerHash };
+          const written = await writeAdvancedRef({
             refsDir,
             migrationsDir,
-            name: advancement.name,
-            hash: value.markerHash,
+            ...ref,
             contractIR: advancement.contractIR,
           });
-          if (!advanced.ok) {
-            return notOk(normalizeError(advanced.failure));
+          if (written.ok) {
+            advancedRef = ref;
+          } else {
+            diagnostics.push(
+              refNotWrittenDiagnostic(ref, written.failure, cliInvocation(ctx, args.flags.db)),
+            );
           }
-          advancedRef = { name: advanced.value.name, hash: advanced.value.hash };
         }
 
         document = {
@@ -590,7 +662,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
 
       return ok(
         ctx.present(
-          { data: document },
+          { data: document, ...(diagnostics.length === 0 ? {} : { diagnostics }) },
           applyPresentations({
             document,
             migrationsDir: migrationsRelative,

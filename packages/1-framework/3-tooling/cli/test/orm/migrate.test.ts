@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import {
   type MigrationPlanOperation,
   migrationRunnerFailure,
@@ -197,6 +197,10 @@ beforeEach(() => {
   mocks.renderContractDts.mockReset().mockResolvedValue(ok({ contractDts: RENDERED_CONTRACT_DTS }));
 });
 
+function refsDirOf(cwd: string): string {
+  return join(cwd, 'migrations', 'app', 'refs');
+}
+
 function harness(config: Record<string, unknown>) {
   return createOrmTestCli({ commands, groups: BIN_GROUPS, orm: config });
 }
@@ -223,12 +227,156 @@ describe('migrate', () => {
       migrationsTotal: 1,
       markerHash: C2,
       summary: 'Applied 2 migration(s)',
-      advancedRef: null,
+      advancedRef: { name: 'db', hash: C2 },
     });
-    expect(mocks.renderContractDts).not.toHaveBeenCalled();
+  });
+
+  describe('the db ref', () => {
+    async function dbRefHash(cwd: string): Promise<string | undefined> {
+      const path = join(refsDirOf(cwd), 'db.json');
+      if (!existsSync(path)) return undefined;
+      return (JSON.parse(await readFile(path, 'utf-8')) as { hash: string }).hash;
+    }
+
+    it('advances to the marker when the connection comes from the config', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({ advancedRef: { name: 'db', hash: C2 } });
+      expect(await dbRefHash(cwd)).toBe(C2);
+      const storeDir = contractSnapshotDir(join(cwd, 'migrations'), C2);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(SNAPSHOT_CONTRACT_DTS);
+    });
+
+    it('is not advanced when the connection is passed with --db', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--db', 'postgres://other/db', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({ advancedRef: null });
+      expect(existsSync(refsDirOf(cwd))).toBe(false);
+      expect(mocks.renderContractDts).not.toHaveBeenCalled();
+    });
+
+    it('is not advanced when the CI variable is set', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], {
+        cwd,
+        env: { CI: 'true' },
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({ advancedRef: null });
+      expect(existsSync(refsDirOf(cwd))).toBe(false);
+    });
+
+    it('is advanced when the CI variable is false', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], {
+        cwd,
+        env: { CI: 'false' },
+      });
+
+      expect(run.presented?.data).toMatchObject({ advancedRef: { name: 'db', hash: C2 } });
+    });
+
+    it('is not advanced with --no-advance-ref', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--no-advance-ref', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({ advancedRef: null });
+      expect(existsSync(refsDirOf(cwd))).toBe(false);
+      expect(mocks.renderContractDts).not.toHaveBeenCalled();
+    });
+
+    it('refuses --advance-ref together with --no-advance-ref before connecting', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--advance-ref', 'staging', '--no-advance-ref', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run.json)).toMatchObject({
+        ok: false,
+        error: { code: 'CLI.ADVANCE_REF_ARG_CONFLICT' },
+      });
+      expect(mocks.connect).not.toHaveBeenCalled();
+    });
+
+    it('warns and still succeeds when the ref cannot be written', async () => {
+      const cwd = await buildProject();
+      await mkdir(refsDirOf(cwd), { recursive: true });
+      await chmod(refsDirOf(cwd), 0o555);
+
+      const run = await harness(ormConfig(cwd))
+        .run(['db', 'migrate', '--config', 'prisma.config.ts', '--json'], { cwd })
+        .finally(() => chmod(refsDirOf(cwd), 0o755));
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({ ok: true, advancedRef: null });
+      expect(envelopeOf(run.json)).toMatchObject({
+        ok: true,
+        diagnostics: [
+          {
+            code: 'MIGRATION.MIGRATE_REF_NOT_WRITTEN',
+            severity: 'warn',
+            summary: 'Migrations applied, but ref "db" was not written',
+            why: expect.stringContaining('EACCES'),
+            nextActions: [
+              {
+                kind: 'run-command',
+                label: 'Point ref "db" at the contract the database is at',
+                command: `prisma-test migration ref set db ${C2} --config prisma.config.ts`,
+              },
+            ],
+            meta: { name: 'db', hash: C2 },
+          },
+        ],
+      });
+      expect(await dbRefHash(cwd)).toBeUndefined();
+    });
   });
 
   describe('--advance-ref', () => {
+    it('advances the named ref instead of db under --db', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--db', 'postgres://other/db', '--advance-ref', 'staging', '--json'],
+        { cwd },
+      );
+
+      expect(run.presented?.data).toMatchObject({ advancedRef: { name: 'staging', hash: C2 } });
+      expect(existsSync(join(refsDirOf(cwd), 'staging.json'))).toBe(true);
+      expect(existsSync(join(refsDirOf(cwd), 'db.json'))).toBe(false);
+    });
+
+    it('advances the named ref when the CI variable is set', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--advance-ref', 'staging', '--json'],
+        { cwd, env: { CI: 'true' } },
+      );
+
+      expect(run.presented?.data).toMatchObject({ advancedRef: { name: 'staging', hash: C2 } });
+    });
+
     it('advances the ref with a snapshot whose types were rendered before applying', async () => {
       const cwd = await buildProject();
 
