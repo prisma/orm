@@ -225,7 +225,9 @@ function* pairFragmentsWithParams<Types>(
         }
 
         const value = params[index]
-        yield { ...fragment, value: Array.isArray(value) ? value : [value], argType: argTypes?.[index] }
+        // A tuple is rendered as an `IN` list, where repeated values don't change the result but
+        // still cost a bind parameter each, e.g. the same foreign key of many parent rows.
+        yield { ...fragment, value: Array.isArray(value) ? [...new Set(value)] : [value], argType: argTypes?.[index] }
         index++
         break
       }

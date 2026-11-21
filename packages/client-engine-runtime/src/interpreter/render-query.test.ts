@@ -236,6 +236,139 @@ test("transforms IN template, doesn't touch scalar list", () => {
   ])
 })
 
+test('deduplicates repeated values in IN template', () => {
+  expect(
+    renderQuery(
+      {
+        type: 'templateSql',
+        fragments: [
+          { type: 'stringChunk', chunk: 'SELECT * FROM users WHERE "userId" IN ' },
+          { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
+          { type: 'stringChunk', chunk: ' OFFSET ' },
+          { type: 'parameter' },
+        ],
+        placeholderFormat: {
+          prefix: '$',
+          hasNumbering: true,
+        } satisfies PlaceholderFormat,
+        args: [[1, 1, 2, 1, 3, 2], 0],
+        argTypes: Array.from({ length: 2 }, () => ({ arity: 'scalar', scalarType: 'int' })),
+        chunkable: true,
+      } satisfies QueryPlanDbQuery,
+      {} as ScopeBindings,
+      {},
+    ),
+  ).toEqual([
+    {
+      sql: 'SELECT * FROM users WHERE "userId" IN ($1,$2,$3) OFFSET $4',
+      args: [1, 2, 3, 0],
+      argTypes: Array.from({ length: 4 }, () => ({ arity: 'scalar', scalarType: 'int' })),
+    },
+  ])
+})
+
+test('keeps values in IN template that are not strictly equal', () => {
+  const firstDate = new Date('2024-01-01T00:00:00.000Z')
+  const secondDate = new Date('2024-01-01T00:00:00.000Z')
+
+  expect(
+    renderQuery(
+      {
+        type: 'templateSql',
+        fragments: [
+          { type: 'stringChunk', chunk: 'SELECT * FROM users WHERE "userId" IN ' },
+          { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
+        ],
+        placeholderFormat: {
+          prefix: '$',
+          hasNumbering: true,
+        } satisfies PlaceholderFormat,
+        args: [{ prisma__type: 'param', prisma__value: { name: 'ids', type: 'Any' } }],
+        argTypes: [{ arity: 'scalar', scalarType: 'unknown' }],
+        chunkable: true,
+      } satisfies QueryPlanDbQuery,
+      { ids: [1, '1', 1n, '1', firstDate, secondDate, 1n] } as ScopeBindings,
+      {},
+    ),
+  ).toEqual([
+    {
+      sql: 'SELECT * FROM users WHERE "userId" IN ($1,$2,$3,$4,$5)',
+      args: [1, '1', 1n, firstDate, secondDate],
+      argTypes: Array.from({ length: 5 }, () => ({ arity: 'scalar', scalarType: 'unknown' })),
+    },
+  ])
+})
+
+test('chunks an IN template by its distinct values', () => {
+  expect(
+    renderQuery(
+      {
+        type: 'templateSql',
+        fragments: [
+          { type: 'stringChunk', chunk: 'SELECT * FROM users WHERE "userId" IN ' },
+          { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
+        ],
+        placeholderFormat: {
+          prefix: '$',
+          hasNumbering: true,
+        } satisfies PlaceholderFormat,
+        args: [Array.from({ length: 50 }, (_, i) => (i % 2) + 1)],
+        argTypes: [{ arity: 'scalar', scalarType: 'int' }],
+        chunkable: true,
+      } satisfies QueryPlanDbQuery,
+      {} as ScopeBindings,
+      {},
+      TEST_MAX_CHUNK_SIZE,
+    ),
+  ).toEqual([
+    {
+      sql: 'SELECT * FROM users WHERE "userId" IN ($1,$2)',
+      args: [1, 2],
+      argTypes: Array.from({ length: 2 }, () => ({ arity: 'scalar', scalarType: 'int' })),
+    },
+  ])
+})
+
+test('keeps repeated rows in INSERT VALUES template', () => {
+  expect(
+    renderQuery(
+      {
+        type: 'templateSql',
+        fragments: [
+          { type: 'stringChunk', chunk: 'INSERT INTO "public"."Post" ("authorId", "title") VALUES ' },
+          {
+            type: 'parameterTupleList',
+            itemPrefix: '(',
+            itemSeparator: ',',
+            itemSuffix: ')',
+            groupSeparator: ',',
+          },
+        ],
+        placeholderFormat: {
+          prefix: '$',
+          hasNumbering: true,
+        } satisfies PlaceholderFormat,
+        args: [
+          [
+            [1, 'a'],
+            [1, 'a'],
+          ],
+        ],
+        argTypes: [{ arity: 'scalar', scalarType: 'unknown' }],
+        chunkable: true,
+      } satisfies QueryPlanDbQuery,
+      {} as ScopeBindings,
+      {},
+    ),
+  ).toEqual([
+    {
+      sql: 'INSERT INTO "public"."Post" ("authorId", "title") VALUES ($1,$2),($3,$4)',
+      args: [1, 'a', 1, 'a'],
+      argTypes: Array.from({ length: 4 }, () => ({ arity: 'scalar', scalarType: 'unknown' })),
+    },
+  ])
+})
+
 test('transforms INSERT VALUES template', () => {
   expect(
     renderQuery(
