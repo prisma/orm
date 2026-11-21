@@ -14,7 +14,7 @@ This reference is for the author of a package that adds a database target to Pri
 | `/init` | the init contribution | `prisma orm init` |
 | `/runtime` | your client factory | the application's `db.ts` |
 
-`/contract-builder` (the TypeScript contract builder bound to your target) and `/control` (a client for scripts) are conventions Prisma's packages follow. The Postgres package is the reference for all of these: `packages/3-targets/postgres/` in the prisma/orm repository, whose `9-facade` folder is the package applications install.
+`/contract-builder` (the TypeScript contract builder bound to your target) and `/control` (a client for scripts) are conventions Prisma's packages follow. Two more are, at the layer beneath the client factory: `/target/runtime` (the runtime target descriptor a decomposed install composes — for Postgres, `@prisma/orm-postgres/target/runtime`, whose default export carries `sessionSettings`, the codec, query-operation and collection-method contributions) and `/driver/runtime` (the runtime driver descriptor, plus the pool factory — `createPgPool(config, sessionSettings)` on Postgres). The Postgres package is the reference for all of these: `packages/3-targets/postgres/` in the prisma/orm repository, whose `9-facade` folder is the package applications install.
 
 ## Generated files import from your package
 

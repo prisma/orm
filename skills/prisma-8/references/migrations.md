@@ -707,6 +707,28 @@ After planning or applying, you can inspect the migration graph offline:
 
 For the full graph topology: `pnpm prisma migration graph` (also supports `--legend`, `--ascii`, `--dot`, `--json`).
 
+## Reading migration packages in a script
+
+The same on-disk format the commands above render is readable programmatically, from `@prisma/orm-<target>/migration-tools/io` (e.g. `@prisma/orm-postgres/migration-tools/io`) — the reader the CLI itself uses, for a script that audits a project's migrations or checks a migration package's integrity outside the CLI:
+
+- `readMigrationPackage(dir, options)` reads one package directory and returns its `OnDiskMigrationPackage` (`migration.json` + `ops.json`, validated). `options` takes `migrationsDir` — the project's top-level migrations directory, which the contract snapshots resolve against — and an optional `verifySnapshotContent` check for the end-contract snapshot.
+- `readMigrationsDir(migrationsRoot, options)` reads a graph directory. It never throws on a bad package: the result's `packages` keeps every package it could read (hash-mismatched ones included, represented rather than fatal) and `problems` carries one `PackageLoadProblem` per package it could not — `hashMismatch` (stored vs recomputed `migrationHash`), `providedInvariantsMismatch`, or `packageUnloadable` (that one is omitted from `packages`). A directory that does not exist reads as an empty graph, not an error.
+
+Migration packages live per contract space, under `<migrationsDir>/<spaceId>/` (`app` is the application's own space id), so a script reads the space's directory and passes the top-level migrations directory as the option:
+
+```typescript
+import { readMigrationsDir } from '@prisma/orm-postgres/migration-tools/io';
+
+const { packages, problems } = await readMigrationsDir('prisma/migrations/app', {
+  migrationsDir: 'prisma/migrations',
+});
+for (const problem of problems) {
+  console.error(`${problem.dirName}: ${problem.kind}`);
+}
+```
+
+A `hashMismatch` problem is the programmatic form of `MIGRATION.HASH_MISMATCH`: `ops.json` / `migration.json` were edited without self-emitting, and the fix is the same (see *Workflow — Recover from `MIGRATION.HASH_MISMATCH`*). Editing the files directly is still not supported — the reader is for auditing, not for authoring.
+
 ## `@@control` and DDL scope
 
 Objects whose `@@control` policy excludes them from Prisma 8's managed surface are omitted from planned DDL. The four policies are: `managed` (Prisma plans and applies DDL), `tolerated` (object may exist, no DDL emitted), `external` (object is expected to exist, no DDL), `observed` (Prisma reads but never writes). Declare `@@control(managed|tolerated|external|observed)` in your schema; see `references/contract.md` and [`packages/2-sql-family/2-authoring/contract-psl/README.md`](https://github.com/prisma/orm/blob/main/packages/2-sql-family/2-authoring/contract-psl/README.md) for authoring syntax.
