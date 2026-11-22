@@ -413,9 +413,9 @@ export function createMigrateCommand(
         'everything else, the CLI detects CI when CI is set or when a variable that\n' +
         'CI services set is present, such as BUILD_NUMBER or GITHUB_ACTIONS; it then\n' +
         'says so.\n' +
-        '--advance-ref <name> advances that ref instead, in every case;\n' +
-        '--no-advance-ref advances none. A ref that cannot be written is a warning:\n' +
-        'the migrations have already applied.',
+        '--advance-ref <name> advances that ref instead, also with --db and in CI;\n' +
+        '--no-advance-ref advances none. No ref advances to the empty contract. A ref\n' +
+        'that cannot be written is a warning: the migrations have already applied.',
       examples: [
         'db migrate',
         'db migrate --db $DATABASE_URL',
