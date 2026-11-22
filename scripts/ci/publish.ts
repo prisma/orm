@@ -585,7 +585,8 @@ async function publish() {
     console.log(`Using custom dist tag: ${args['--custom-dist-tag']}`)
     tag = args['--custom-dist-tag']
   }
-  const prismaTag = isSkipped('prisma') ? undefined : getPackageDistTag('prisma', tag)
+  const publishesPrisma = (args['--publish'] || dryRun) && !isSkipped('prisma')
+  const prismaTag = publishesPrisma ? getPackageDistTag('prisma', tag) : undefined
 
   console.log({
     patchBranch,
