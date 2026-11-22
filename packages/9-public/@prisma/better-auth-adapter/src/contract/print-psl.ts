@@ -1,0 +1,246 @@
+import type { ComparedModel, ContractComparison } from './compare';
+import { idLineOf, pslTypeOf } from './compare';
+import type { ExpectedField, ExpectedModel, ReferentialAction } from './expected-models';
+import { lowerFirst, upperFirst } from './identifiers';
+
+/** One field line, as its columns: name, type, then attributes when there are any. */
+type FieldLine = readonly [name: string, type: string, attributes?: string | undefined];
+
+export interface PrintedBlock {
+  /** The model's name: as printed for a missing model, as in the contract for an existing one. */
+  readonly modelName: string;
+  readonly existing: boolean;
+  readonly fieldLines: readonly string[];
+  readonly attributeLines: readonly string[];
+}
+
+export interface PrintedPsl {
+  readonly blocks: readonly PrintedBlock[];
+  readonly notes: readonly string[];
+  readonly text: string;
+}
+
+interface Target {
+  readonly name: string;
+  readonly namespaceId: string;
+  readonly existing: boolean;
+  readonly taken: Set<string>;
+  readonly fields: FieldLine[];
+  readonly backRelations: FieldLine[];
+  readonly attributes: string[];
+}
+
+const actionNames: Readonly<Record<ReferentialAction, string>> = {
+  cascade: 'Cascade',
+  'no action': 'NoAction',
+  restrict: 'Restrict',
+  'set null': 'SetNull',
+  'set default': 'SetDefault',
+};
+
+function targetFor(model: ComparedModel, comparison: ContractComparison): Target | undefined {
+  const betterAuthFields = ['id', ...model.expected.fields.map((field) => field.name)];
+  switch (model.status) {
+    case 'missing':
+      return {
+        name: upperFirst(model.expected.physicalName),
+        namespaceId: comparison.namespace ?? comparison.defaultNamespace,
+        existing: false,
+        taken: new Set(betterAuthFields),
+        fields: [],
+        backRelations: [],
+        attributes: [],
+      };
+    case 'found':
+      return {
+        name: model.found.name,
+        namespaceId: model.found.namespaceId,
+        existing: true,
+        taken: new Set([
+          ...betterAuthFields,
+          ...Object.keys(model.found.model.fields),
+          ...Object.keys(model.found.model.relations),
+        ]),
+        fields: [],
+        backRelations: [],
+        attributes: [],
+      };
+    case 'ambiguous':
+      return undefined;
+  }
+}
+
+function typeName(of: Target, from: Target): string {
+  return of.namespaceId === from.namespaceId ? of.name : `${of.namespaceId}.${of.name}`;
+}
+
+function scalarLine(field: ExpectedField, comparison: ContractComparison): FieldLine {
+  const optional = field.attribute.required === false ? '?' : '';
+  const type = `${pslTypeOf(field.attribute, comparison.idStrategy)}${optional}`;
+  return field.attribute.unique === true ? [field.name, type, '@unique'] : [field.name, type];
+}
+
+function idLine(comparison: ContractComparison): FieldLine {
+  const [name = 'id', type = 'String', ...attributes] = idLineOf(comparison.idStrategy).split(' ');
+  return [name, type, attributes.join(' ')];
+}
+
+function relationFieldName(foreignKey: string, holder: Target): string {
+  const stripped = foreignKey.endsWith('Id') ? foreignKey.slice(0, -2) : foreignKey;
+  return stripped === '' || stripped === foreignKey || holder.taken.has(stripped)
+    ? `${foreignKey}Relation`
+    : stripped;
+}
+
+function foreignKeyCount(expected: ExpectedModel, referenced: string): number {
+  return expected.fields.filter((field) => field.reference?.model === referenced).length;
+}
+
+function indexLines(expected: ExpectedModel): string[] {
+  const lines = [
+    ...expected.fields
+      .filter((field) => field.attribute.index === true && field.attribute.unique !== true)
+      .map((field) => `@@index([${field.name}])`),
+    ...expected.indexes.map(
+      (index) => `${index.unique ? '@@unique' : '@@index'}([${index.fields.join(', ')}])`,
+    ),
+  ];
+  return [...new Set(lines)];
+}
+
+function alignedLines(lines: readonly FieldLine[]): string[] {
+  const nameWidth = Math.max(0, ...lines.map(([name]) => name.length));
+  const typeWidth = Math.max(0, ...lines.map(([, type]) => type.length));
+  return lines.map(([name, type, attributes]) =>
+    attributes === undefined || attributes === ''
+      ? `${name.padEnd(nameWidth)} ${type}`
+      : `${name.padEnd(nameWidth)} ${type.padEnd(typeWidth)} ${attributes}`,
+  );
+}
+
+function blockText(block: PrintedBlock, indent: string): string {
+  const body = [...block.fieldLines.map((line) => `  ${line}`)];
+  if (block.attributeLines.length > 0) {
+    body.push('', ...block.attributeLines.map((line) => `  ${line}`));
+  }
+  return [`model ${block.modelName} {`, ...body, '}']
+    .map((line) => (line === '' ? '' : `${indent}${line}`))
+    .join('\n');
+}
+
+/** PSL text for printed blocks; blocks of missing models go inside a `namespace` block when the adapter's `namespace` option is set. */
+export function renderBlocks(
+  blocks: readonly PrintedBlock[],
+  namespace: string | undefined,
+): string {
+  const chunks: string[] = [];
+  let run: PrintedBlock[] = [];
+  const flush = () => {
+    if (run.length === 0) return;
+    const inner = run.map((block) => blockText(block, '  ')).join('\n\n');
+    chunks.push(`namespace ${namespace} {\n${inner}\n}`);
+    run = [];
+  };
+  for (const block of blocks) {
+    if (namespace !== undefined && !block.existing) {
+      run.push(block);
+      continue;
+    }
+    flush();
+    chunks.push(blockText(block, ''));
+  }
+  flush();
+  return chunks.join('\n\n');
+}
+
+/**
+ * The PSL that adds what the comparison found missing: whole models for missing models, and the missing fields and new back-relation fields of existing models.
+ */
+export function printPsl(comparison: ContractComparison): PrintedPsl {
+  const targets = new Map<string, Target>();
+  for (const model of comparison.models) {
+    const target = targetFor(model, comparison);
+    if (target !== undefined) targets.set(model.expected.physicalName, target);
+  }
+  const notes: string[] = [];
+
+  for (const model of comparison.models) {
+    const holder = targets.get(model.expected.physicalName);
+    if (holder === undefined) continue;
+    if (model.status === 'found') {
+      for (const name of model.missingFields) {
+        const field = model.expected.fields.find((candidate) => candidate.name === name);
+        holder.fields.push(
+          field === undefined ? idLine(comparison) : scalarLine(field, comparison),
+        );
+      }
+      continue;
+    }
+    holder.fields.push(idLine(comparison));
+    for (const field of model.expected.fields) {
+      holder.fields.push(scalarLine(field, comparison));
+      const reference = field.reference;
+      if (reference === undefined) continue;
+      const referenced = targets.get(reference.model);
+      const optional = field.attribute.required === false;
+
+      let action = reference.onDelete;
+      if ((action === 'set null' && !optional) || action === 'set default') {
+        notes.push(
+          `${holder.name}.${field.name}: Better Auth asks for onDelete ${action}, which needs ${action === 'set null' ? 'an optional field' : 'a default'}; NoAction is printed instead`,
+        );
+        action = 'no action';
+      }
+
+      const relationName = relationFieldName(field.name, holder);
+      holder.taken.add(relationName);
+
+      let relationLabel: string | undefined;
+      if (referenced !== undefined) {
+        const list = field.attribute.unique !== true;
+        const base = `${lowerFirst(holder.name)}${list ? 's' : ''}`;
+        const named =
+          referenced.taken.has(base) || foreignKeyCount(model.expected, reference.model) > 1;
+        const backName = named ? `${base}By${upperFirst(field.name)}` : base;
+        relationLabel = named ? `"${holder.name}_${field.name}"` : undefined;
+        referenced.taken.add(backName);
+        referenced.backRelations.push([
+          backName,
+          `${typeName(holder, referenced)}${list ? '[]' : '?'}`,
+          relationLabel === undefined ? undefined : `@relation(${relationLabel})`,
+        ]);
+      }
+
+      const referencedType =
+        referenced === undefined ? upperFirst(reference.model) : typeName(referenced, holder);
+      const relationArguments = [
+        ...(relationLabel === undefined ? [] : [relationLabel]),
+        `fields: [${field.name}]`,
+        `references: [${reference.field}]`,
+        `onDelete: ${actionNames[action]}`,
+      ].join(', ');
+      holder.fields.push([
+        relationName,
+        `${referencedType}${optional ? '?' : ''}`,
+        `@relation(${relationArguments})`,
+      ]);
+    }
+    holder.attributes.push(
+      ...indexLines(model.expected),
+      `@@map("${model.expected.physicalName}")`,
+    );
+  }
+
+  const blocks: PrintedBlock[] = [];
+  for (const target of targets.values()) {
+    const lines = [...target.fields, ...target.backRelations];
+    if (lines.length === 0) continue;
+    blocks.push({
+      modelName: target.name,
+      existing: target.existing,
+      fieldLines: alignedLines(lines),
+      attributeLines: target.attributes,
+    });
+  }
+  return { blocks, notes, text: renderBlocks(blocks, comparison.namespace) };
+}
