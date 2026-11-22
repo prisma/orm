@@ -10,7 +10,7 @@ This page lists the projects in priority order, by stream. Work the streams in p
 
 **Progress column:** one symbol, then done/total where the row has countable units. ✅ done · 🟡 code done, waiting on review or docs · 🔄 in progress · ⏳ not started · ❓ needs a decision from Will. The units are the slices, pull requests, tickets or items the Status column names; a row with no units yet has no count.
 
-States were last checked against GitHub and Linear on 2026-11-20, 10:00 UTC.
+States were last checked against GitHub and Linear on 2026-11-22, 00:00 UTC.
 
 ## How far from GA
 
@@ -21,10 +21,10 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Foundations and breaking changes | 8 of 8 (100%) | `██████████` | 0 | 0 |
 | Upgrade path from Prisma 7 | 7 of 7 (100%) | `██████████` | 0 | 0 |
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
-| Query features | 9 of 11 (82%) | `████████░░` | 2 | 0 |
+| Query features | 10 of 11 (91%) | `█████████░` | 1 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
 | Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
-| **All streams** | **33 of 46 (72%)** | `███████░░░` | **6** | **7** |
+| **All streams** | **34 of 46 (74%)** | `███████░░░` | **5** | **7** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -70,7 +70,7 @@ Test: an existing Prisma 7 database can be signed by Prisma 8.
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | ✅ 5/5 | Emulator controls in the `prisma` CLI: start, stop, list, reset | Must, urgent | Will | Done 2026-10-21. `prisma dev --detach`, `prisma dev stop`, `prisma dev url` and `prisma emulator list` ship in `prisma@8.0.0-rc.24`, and the docs slice merged. Reset was not built | Decide whether reset is still needed |
-| 1b | ⏳ | A Prisma Studio command in the `prisma` CLI | Must | Serhii | Not started, no ticket. Small, by Will's estimate. Prisma 8's `prisma` has no Studio command; Prisma 7's `prisma studio` has no replacement. Until it has, a docs PR in review tells Prisma 8 users to run Studio with `npx prisma@prev studio` |  |
+| 1b | ⏳ | A Prisma Studio command in the `prisma` CLI | Must | Serhii | Not started, no ticket. Small, by Will's estimate. Prisma 8's `prisma` has no Studio command; Prisma 7's `prisma studio` has no replacement. Until it has, the docs tell Prisma 8 users to run Studio with `npx prisma@prev studio` (merged 2026-11-20) |  |
 | 2 | 🔄 2/4 | VS Code extension: formatter without the CLI, go-to-definition, multi-file PSL, emulator controls | Must | Serhii | Go-to-definition and multi-file PSL done. Rename merged. File watching approved, not merged; a fix to removing a file watcher merged 2026-10-20. Formatter without the CLI unverified. Emulator controls wait on row 1 | Merge the file-watching PR. Verify the formatter works without the CLI |
 | 3 | ⏳ | Make the extension's handling of local and remote Prisma Postgres match the CLI and its emulators | Must | Serhii | Not started |  |
 | 4 | ✅ 1/1 | Multi-file PSL | Must | Serhii | Done 2026-09-30 | |
@@ -78,15 +78,15 @@ Test: an existing Prisma 7 database can be signed by Prisma 8.
 
 ## Stream 4: Query features
 
-**GA readiness:** 9 of 11 Must projects done (82%). 2 in progress, 0 not started.
+**GA readiness:** 10 of 11 Must projects done (91%). 1 in progress, 0 not started.
 
 Everything here is additive, so nothing here can block a breaking change.
 
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | ✅ 2/2 | Transaction options: isolation levels and timeouts | Must | Serhii | Done 2026-11-13. Isolation levels merged 2026-11-11, and timeouts for callback transactions 2026-11-13 |  |
-| 1b | 🔄 6/7 | Nested transactions | Must | Serhii | 7 slices in `projects/nested-transactions/`. Merged 2026-11-16 and 2026-11-17: savepoints on the drivers and the runtime, and a transaction inside a transaction is an activity that finalizes as a savepoint. Merged 2026-11-18: a handle's `transaction(fn)` runs through `withTransaction`. Merged 2026-11-19: `tx.transaction(cb)` runs a nested transaction in a savepoint on Postgres, then on MySQL, SQLite and Supabase. In review: ORM writes inside a transaction run in a savepoint | Review the ORM writes PR |
-| 2 | 🔄 9/11 | Nested writes on relations: `update`, `delete`, `upsert`, `set`, `connectOrCreate` | Must | Serhii | 11 slices in `projects/nested-mutations/`. Merged since 2026-11-17: connect, disconnect and filtered writes on a variant, and create-on-conflict (`onConflict: 'skip'` and `'connect'` on a nested create, 2026-11-18 and 2026-11-19). Single-row writes, 5 PRs: refuse disconnect on a required foreign key and disconnect on many-to-one relations merged; nested update and delete of one related row on one-to-many and one-to-one approved; on many-to-one and many-to-many in review. Left: nested `upsert`, no PR | Merge the approved single-row writes PRs and review the rest. Start nested `upsert` |
+| 1b | ✅ 7/7 | Nested transactions | Must | Serhii | Done 2026-11-20. 7 slices in `projects/nested-transactions/`. Merged 2026-11-16 and 2026-11-17: savepoints on the drivers and the runtime, and a transaction inside a transaction is an activity that finalizes as a savepoint. Merged 2026-11-18: a handle's `transaction(fn)` runs through `withTransaction`. Merged 2026-11-19: `tx.transaction(cb)` runs a nested transaction in a savepoint on Postgres, then on MySQL, SQLite and Supabase. The last slice, ORM writes inside a transaction run in a savepoint, merged 2026-11-20, and the close-out with its decision record merged the same day |  |
+| 2 | 🔄 10/13 | Nested writes on relations: `update`, `delete`, `upsert`, `set`, `connectOrCreate` | Must | Serhii | 13 slices in `projects/nested-mutations/`; two were added on 2026-11-19 and 2026-11-20 from the review of single-row writes. Merged since 2026-11-17: connect, disconnect and filtered writes on a variant, and create-on-conflict (`onConflict: 'skip'` and `'connect'` on a nested create, 2026-11-18 and 2026-11-19). Single-row writes, nested update and delete of one related row on every kind of relation, finished 2026-11-20. Left: nested `upsert`, no PR; `update()` reuses its first `SELECT` as the read-back, in review; and a write returns the rows it matched, no PR | Review the read-back PR. Start nested `upsert` |
 | 3 | ✅ 1/1 | Design the replacement for `omit` | Must (design only) | Will | Design done (Will, 2026-10-07) |  |
 | 4 | ⏳ | Expressions in updates (what `increment` and `decrement` did in Prisma 7) | When there is time | Serhii | Not designed | |
 | 5 | ✅ 1/1 | A query that fails when nothing matches (what `firstOrThrow` did in Prisma 7) | Must | Serhii | `firstOrThrow` on collections merged 2026-10-08 |  |
@@ -111,7 +111,7 @@ Test: the getting-started eval passes, in few steps and with no workarounds.
 | 2 | ✅ 3/3 | Correct the query reference in the shipped skill, which promises features that do not exist | Must, urgent | Will | Done 2026-11-18. Back-references merged 2026-11-13. The skill fix merged 2026-11-18: data transforms match the code, the skill names only published packages, and the self-join example is fixed. TML-3346, TML-3440 and TML-3365 are Done |  |
 | 3 | 🔄 1/11 | Docs gaps found by the eval: 11 items, 5 high | Must | Will | 1 of 11 merged. The rest not re-checked | Re-check the 11 items against prisma/web |
 | 4 | ❓ | ORM scenario for the eval: decide the project, then build it | Must | Will | Not decided | Decide the project |
-| 5 | 🔄 | Docs restructure | Must | Will | The docs audit draft is active again, updated 2026-10-22. Three new pages merged 2026-10-23: a database on your machine, Advanced PostgreSQL, and supported versions. More merged 2026-10-29: Types for your code, Money and decimals, a Vercel deployment guide, and extension pages. The docs update for rc.21 and rc.22 merged 2026-10-30. Seven small audit items merged 2026-11-17. One `/getting-started` page, and fixes to wrong facts on the migration and CLI pages, merged 2026-11-18 | |
+| 5 | 🔄 | Docs restructure | Must | Will | The docs audit draft is active again, updated 2026-10-22. Three new pages merged 2026-10-23: a database on your machine, Advanced PostgreSQL, and supported versions. More merged 2026-10-29: Types for your code, Money and decimals, a Vercel deployment guide, and extension pages. The docs update for rc.21 and rc.22 merged 2026-10-30. Seven small audit items merged 2026-11-17. One `/getting-started` page, and fixes to wrong facts on the migration and CLI pages, merged 2026-11-18. Nine PRs that bring the docs and guides in line with ORM rc.24 and CLI rc.34 merged 2026-11-20 and 2026-11-21 | |
 | 6 | ✅ | Document that cursor pagination starts after the cursor row | Aim | Will | Done 2026-11-18, in the route-by-route upgrade guide | |
 | 7 | ⏳ | Update the records that contradict the code | Aim | Will | Not started |  |
 
