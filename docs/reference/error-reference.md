@@ -519,7 +519,7 @@ No contract marker (database signature) is found in the database at all. `db ver
 
 ### CONTRACT.MARKER_READ_FAILED
 
-A driver-level failure occurred while reading the contract marker table: connectivity, permissions, or locking problems rather than bad marker content. Raised whenever a CLI/control operation reads the marker, and by the runtime when its first query on a database connection reads the marker (with the default `verifyMarker`) and that read fails; the runtime retries the read on its next query. An error whose code is in the `DRIVER` namespace, such as `DRIVER.NOT_CONNECTED`, is raised as itself, not wrapped in this code. Payload: `space`.
+A driver-level failure occurred while reading the contract marker table: connectivity, permissions, or locking problems rather than bad marker content. Raised whenever a CLI/control operation reads the marker, and by the runtime when it reads the marker before its first use of the database (with the default `verifyMarker`) and that read fails. That first use is the first query, or the first connection taken to hold, so the error can come from a query, from `connection()`, from `transaction()`, from an ORM write that opens a transaction, or from a Supabase role-bound call. Every call waiting on the read fails with it, and the runtime reads again on the next call. An error whose code is in the `DRIVER` namespace, such as `DRIVER.NOT_CONNECTED`, is raised as itself, not wrapped in this code. Payload: `space`.
 
 ### CONTRACT.MARKER_REQUIRED
 
