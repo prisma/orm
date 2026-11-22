@@ -527,7 +527,7 @@ export interface DbUpdateSuccess
    * The `--from` and `--to` of a `migration plan` that takes this database, as it was before the
    * run, where the run went. Each is a contract reference, the default, or why no `migration plan`
    * can start or end there; `--from` can also be a choice for the user. Its `migrationsToTarget`
-   * is for the CLI's own advice and is not part of the public API.
+   * exists for the CLI's own advice only, and its shape may change in any release without notice.
    */
   readonly migrationPlan?: MigrationPlanArguments;
   /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
