@@ -127,6 +127,24 @@ const foreignKeyNamedUser: BetterAuthOptions = {
   ],
 };
 
+const relationNameTaken: BetterAuthOptions = {
+  plugins: [
+    plugin({
+      note: {
+        fields: {
+          user: { type: 'string', references: { model: 'user', field: 'id' } },
+          userRelation: { type: 'string', required: false },
+        },
+      },
+    }),
+  ],
+};
+
+const backRelationNameTaken: BetterAuthOptions = {
+  ...twoForeignKeysToOneModel,
+  user: { additionalFields: { invitationsByInviterId: { type: 'string', required: false } } },
+};
+
 const renamedModelsAndFields: BetterAuthOptions = {
   user: { modelName: 'member', fields: { email: 'emailAddress', name: 'displayName' } },
   session: { modelName: 'login', fields: { userId: 'memberId', token: 'sessionToken' } },
@@ -143,6 +161,8 @@ const cases: readonly {
   { name: 'a table with two foreign keys to one model', options: twoForeignKeysToOneModel },
   { name: 'a self-reference', options: selfReference },
   { name: 'a foreign key named user', options: foreignKeyNamedUser },
+  { name: 'a taken relation field name', options: relationNameTaken },
+  { name: 'a taken back-relation field name', options: backRelationNameTaken },
   {
     name: 'serial ids',
     options: { ...everyFirstPartyPlugin, advanced: { database: { generateId: 'serial' } } },
@@ -288,6 +308,25 @@ describe('printed relation names', () => {
         'User',
         '@relation(fields: [user], references: [id], onDelete: Cascade)',
       ),
+    );
+  });
+
+  it('appends _ to a relation field name that is taken', () => {
+    const { text } = printPsl(compare(sqlite(), relationNameTaken));
+    expect(text).toMatch(
+      fieldLine(
+        'userRelation_',
+        'User',
+        '@relation(fields: [user], references: [id], onDelete: Cascade)',
+      ),
+    );
+  });
+
+  it('appends _ to a back-relation field name that is taken', () => {
+    const { text } = printPsl(compare(sqlite(), backRelationNameTaken));
+    expect(text).toMatch(fieldLine('invitationsByInviterId', 'String?'));
+    expect(text).toMatch(
+      fieldLine('invitationsByInviterId_', 'Invitation[]', '@relation("Invitation_inviterId")'),
     );
   });
 

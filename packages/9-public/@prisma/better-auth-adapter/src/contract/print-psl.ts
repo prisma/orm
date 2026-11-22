@@ -1,5 +1,5 @@
 import type { ComparedModel, ContractComparison } from './compare';
-import { idLineOf, pslTypeOf } from './compare';
+import { idFieldOf, pslTypeOf } from './compare';
 import type { ExpectedField, ExpectedModel, ReferentialAction } from './expected-models';
 import { lowerFirst, upperFirst } from './identifiers';
 import type { FoundModel } from './model-lookup';
@@ -86,14 +86,20 @@ function scalarLine(field: ExpectedField, comparison: ContractComparison): Field
 }
 
 function idLine(comparison: ContractComparison): FieldLine {
-  const [name = 'id', type = 'String', ...attributes] = idLineOf(comparison.idStrategy).split(' ');
-  return [name, type, attributes.join(' ')];
+  const { name, type, attributes } = idFieldOf(comparison.idStrategy);
+  return [name, type, attributes];
+}
+
+function freeName(name: string, target: Target): string {
+  let free = name;
+  while (target.taken.has(free)) free = `${free}_`;
+  return free;
 }
 
 function relationFieldName(foreignKey: string, holder: Target): string {
   const stripped = foreignKey.endsWith('Id') ? foreignKey.slice(0, -2) : foreignKey;
   return stripped === '' || stripped === foreignKey || holder.taken.has(stripped)
-    ? `${foreignKey}Relation`
+    ? freeName(`${foreignKey}Relation`, holder)
     : stripped;
 }
 
@@ -209,7 +215,7 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
         const base = `${lowerFirst(holder.name)}${list ? 's' : ''}`;
         const named =
           referenced.taken.has(base) || foreignKeyCount(model.expected, reference.model) > 1;
-        const backName = named ? `${base}By${upperFirst(field.name)}` : base;
+        const backName = named ? freeName(`${base}By${upperFirst(field.name)}`, referenced) : base;
         relationLabel = named ? `"${holder.name}_${field.name}"` : undefined;
         referenced.taken.add(backName);
         referenced.backRelations.push([

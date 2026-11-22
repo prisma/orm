@@ -8,7 +8,7 @@ import { type CodecKind, codecKind } from './codec-kinds';
 import { type ExpectedField, type ExpectedModel, expectedModels } from './expected-models';
 import { type FoundModel, findModel, type SqlContract } from './model-lookup';
 
-/** How Better Auth fills `id`: it sends a string, sends a serial number's value from the database, or sends nothing. */
+/** How `id` gets its value: Better Auth sends a string (`string`) or a UUID string (`uuid`), or sends none and the contract fills it (`serial`, an autoincrement number; `database`, a default or an `onCreate` generator). */
 export type IdStrategy = 'string' | 'uuid' | 'serial' | 'database';
 
 export type ComparedModel =
@@ -39,7 +39,6 @@ export interface ContractComparison {
   readonly models: readonly ComparedModel[];
   readonly problems: readonly ContractProblem[];
   readonly idStrategy: IdStrategy;
-  /** The adapter's `namespace` option. */
   readonly namespace: string | undefined;
   /** The namespace a model printed outside a `namespace` block belongs to. */
   readonly defaultNamespace: string;
@@ -74,7 +73,7 @@ function idStrategyOf(options: BetterAuthOptions): IdStrategy {
   return 'string';
 }
 
-export function isIdReference(attribute: DBFieldAttribute): boolean {
+function isIdReference(attribute: DBFieldAttribute): boolean {
   return attribute.references?.field === 'id';
 }
 
@@ -106,15 +105,26 @@ export function pslTypeOf(attribute: DBFieldAttribute, idStrategy: IdStrategy): 
   }
 }
 
-export function idLineOf(idStrategy: IdStrategy): string {
+export interface IdField {
+  readonly name: 'id';
+  readonly type: string;
+  readonly attributes: string;
+}
+
+export function idFieldOf(idStrategy: IdStrategy): IdField {
   switch (idStrategy) {
     case 'serial':
-      return 'id Int @id @default(autoincrement())';
+      return { name: 'id', type: 'Int', attributes: '@id @default(autoincrement())' };
     case 'database':
-      return 'id String @id @onCreate(uuid())';
+      return { name: 'id', type: 'String', attributes: '@id @onCreate(uuid())' };
     default:
-      return 'id String @id';
+      return { name: 'id', type: 'String', attributes: '@id' };
   }
+}
+
+export function idLineOf(idStrategy: IdStrategy): string {
+  const { name, type, attributes } = idFieldOf(idStrategy);
+  return `${name} ${type} ${attributes}`;
 }
 
 /** What a contract field holds, as the message names it, when its type is wrong for every Better Auth field. */

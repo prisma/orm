@@ -74,7 +74,7 @@ function resolveReference(
 }
 
 /**
- * The models Better Auth's table description asks for, keyed by physical model name, in Better Auth's table order.
+ * The models Better Auth's table description asks for, one per physical model name, in Better Auth's table order.
  */
 export function expectedModels(
   tables: BetterAuthDBSchema,
