@@ -253,6 +253,12 @@ export interface DbUpdateOptions extends PlannerWarningsListener {
   /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
   readonly permitPolicyChange?: boolean;
   /**
+   * The storage hash of the emitted contract, the one at the config's contract path that
+   * `migration new` writes to. It differs from `contract` when `ref` names another contract. When
+   * absent, failure advice takes `contract` as the emitted one without `ref`, and as unknown with it.
+   */
+  readonly emittedContractHash?: string;
+  /**
    * On-disk migrations directory. Always required — every `db update`
    * routes through the per-space flow, which reads on-disk
    * `refs/head.json` and extension destination contracts from this

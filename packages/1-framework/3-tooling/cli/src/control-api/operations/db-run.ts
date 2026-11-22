@@ -194,6 +194,7 @@ export type ExecuteRunOptions<
         readonly acceptAccessChanges: boolean;
         readonly ref?: NamedRef;
         readonly permitPolicyChange: boolean;
+        readonly emittedContractHash?: string;
       }
   );
 
@@ -254,10 +255,10 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   // 2. Read live DB state (markers + schema).
   const markerRows = await familyInstance.readAllMarkers({ driver });
   const ref = options.action === 'dbUpdate' ? options.ref : undefined;
+  const emittedContractHash =
+    options.action === 'dbUpdate' ? options.emittedContractHash : undefined;
   const appSpace = appSpaceOf(aggregate, {
-    hash:
-      options.invocation.emittedHash ??
-      (ref === undefined ? contract.storage.storageHash : undefined),
+    hash: emittedContractHash ?? (ref === undefined ? contract.storage.storageHash : undefined),
   });
   const migrationPlan: MigrationPlanArguments = migrationPlanForDatabase(
     appSpace,

@@ -22,8 +22,6 @@ export interface CliInvocation {
   readonly rerunArgs?: readonly string[];
   /** The run's statements, as flags, which another command that plans the same change repeats. */
   readonly statementArgs?: readonly string[];
-  /** The storage hash of the contract at the config's contract path, which `migration new` writes to, when the CLI read it. */
-  readonly emittedHash?: string;
 }
 
 /** The invocation of a command run with `ctx`, given `--db` when `db` is defined. */

@@ -355,6 +355,32 @@ describe('db update --to bundle resolution', () => {
     ]);
   });
 
+  it('hands the client the emitted contract hash, not the hash of the contract --to names', async () => {
+    const { cwd } = await setupFixture();
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
+      hash: HASH_B,
+      invariants: [],
+    });
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ok: true,
+        mode: 'plan',
+        plan: { operations: [], preview: undefined },
+        destination: { storageHash: HASH_B },
+        appliedStatements: [],
+        dataLoss: [],
+        accessChanges: [],
+        summary: 'Plan ready',
+      }),
+    );
+
+    await harness(cwd).run(['db', 'update', '--to', 'production', '--dry-run', '--json'], { cwd });
+
+    const [options] = mocks.dbUpdate.mock.calls[0]!;
+    expect(options.contract.storage.storageHash).toBe(HASH_B);
+    expect(options.emittedContractHash).toBe(HASH_A);
+  });
+
   it('hands the client the whole ref --to names, and no ref for a migration name', async () => {
     const { cwd, dirNext } = await setupFixture();
     const policies = { change: ['migrate'] } as const;

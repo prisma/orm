@@ -183,7 +183,7 @@ async function runToProduction(options: {
   readonly forbidDataLoss?: boolean;
   readonly invariants?: readonly string[];
   readonly marker?: ContractMarkerRecord;
-  readonly emittedHash?: string;
+  readonly emittedContractHash?: string;
   readonly migrateOnly?: boolean;
 }) {
   const dir = createTestProjectDir('db-update-advice-target');
@@ -210,10 +210,10 @@ async function runToProduction(options: {
     ControlFamilyInstance<'sql', unknown>
   >;
   const result = await executeDbUpdate({
-    invocation: {
-      ...GIVEN,
-      ...(options.emittedHash === undefined ? {} : { emittedHash: options.emittedHash }),
-    },
+    invocation: GIVEN,
+    ...(options.emittedContractHash === undefined
+      ? {}
+      : { emittedContractHash: options.emittedContractHash }),
     driver: { close: vi.fn() } as unknown as ControlDriverInstance<'sql', 'postgres'>,
     adapter: {} as unknown as ControlAdapterInstance<'sql', 'postgres'>,
     familyInstance: familyAt(options.marker ?? marker),
@@ -431,14 +431,14 @@ describe('db update --to <ref> when the migrations on disk that lead there lack 
 
 describe('db update --to <ref> refused on a database at the ref contract that lacks an invariant no migration provides', () => {
   const atDestination: ContractMarkerRecord = { ...marker, storageHash: DESTINATION_HASH };
-  const refused = (emittedHash: string | undefined) =>
+  const refused = (emittedContractHash: string | undefined) =>
     runToProduction({
       mode: 'plan',
       migrationToRef: true,
       invariants: ['seeded'],
       marker: atDestination,
       migrateOnly: true,
-      ...(emittedHash === undefined ? {} : { emittedHash }),
+      ...(emittedContractHash === undefined ? {} : { emittedContractHash }),
     }).then(({ result }) => adviceOf(result));
 
   it('names migration new from the ref contract when that contract is the emitted one', async () => {
@@ -452,8 +452,8 @@ describe('db update --to <ref> refused on a database at the ref contract that la
     ['not known', undefined],
   ])(
     'says to emit the ref contract before migration new when the emitted contract is %s',
-    async (_, emittedHash) => {
-      expect(await refused(emittedHash)).toContain(
+    async (_, emittedContractHash) => {
+      expect(await refused(emittedContractHash)).toContain(
         `Emit that contract with \`{bin} contract emit\` from a contract source that describes it, then write a migration from it to itself with \`{bin} migration new --from ${DESTINATION_HASH}\`, add to its migration.ts`,
       );
     },

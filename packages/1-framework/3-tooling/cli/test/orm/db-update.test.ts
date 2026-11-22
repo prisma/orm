@@ -1282,8 +1282,8 @@ describe('db update', () => {
           dbGiven: false,
           rerunArgs: [],
           statementArgs: [],
-          emittedHash: 'a'.repeat(64),
         },
+        emittedContractHash: 'a'.repeat(64),
       }),
     );
   });
