@@ -35,6 +35,7 @@ The application code names only published packages. `package.json` and `tsconfig
 - Replace `"extends": ["@repo/tsconfig/base"]` in `tsconfig.json` with your own compiler options, for example the ones `create-next-app` writes, and remove the `@repo/tsconfig` dependency.
 - Remove `@repo/test-utils`, `@prisma/dev`, `vitest`, `pathe`, `test/` and `vitest.config.ts`, which only the smoke test uses.
 - Remove `biome.jsonc`, the `lint` script and `turbo.json`, which belong to this repository's tooling.
+- Remove `migrations/` from `.gitignore`. `prisma db init` writes that folder, and your project should commit it; this repository leaves it out so that running the example changes no tracked file.
 
 ## Add a Better Auth plugin
 
