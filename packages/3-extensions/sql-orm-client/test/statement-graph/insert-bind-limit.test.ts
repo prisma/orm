@@ -1,7 +1,17 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
-import { createAllGraph } from '../../src/statement-graph/collection-graphs';
-import { baseContract, createCollectionFor, withTarget } from '../collection-fixtures';
-import { getTestContext } from '../helpers';
+import { parseMutationInput } from '../../src/relation-mutations';
+import { createAllGraph, createGraph } from '../../src/statement-graph/collection-graphs';
+import { executeGraph } from '../../src/statement-graph/run-graph';
+import type { RelationMutator } from '../../src/types';
+import {
+  baseContract,
+  createCollectionFor,
+  relatedCollectionOf,
+  withTarget,
+} from '../collection-fixtures';
+import { createMockRuntime, getTestContext } from '../helpers';
 import { printGraph } from './print-graph';
 
 const users = createCollectionFor('User').collection.select('id', 'name');
@@ -86,13 +96,68 @@ describe('createAllGraph bind-parameter limit', () => {
     expect(printGraph(graph)).toBe(['n1 Insert users 16384 rows', 'result: n1'].join('\n'));
   });
 
-  it('refuses createAndCount() the same way', () => {
+  it('refuses createAndCount() the same way and names createAndCount() as the operation', () => {
     const thrown = thrownOf(() => createAllGraph(target, overWireLimitRows, undefined, 'count'));
 
     expect(thrown).toMatchObject({
       code: 'ORM.ARGUMENT_INVALID',
-      meta: { problem: 'too-many-bind-parameters', method: 'createAll()' },
+      message:
+        'createAndCount() on model "User" would bind 65536 parameters in one INSERT statement; PostgreSQL allows 65535 per statement.',
+      meta: { problem: 'too-many-bind-parameters', method: 'createAndCount()' },
     });
+  });
+});
+
+describe('nested insert bind-parameter limit', () => {
+  // 21,845 rows x 3 columns pass the construction-time check at exactly 65,535 parameters.
+  const postRows = Array.from({ length: 21_845 }, (_, i) => ({
+    id: i + 1,
+    title: `p${i}`,
+    views: 0,
+  }));
+
+  function nestedGraphOf() {
+    return createGraph(
+      target,
+      parseMutationInput(
+        target.context.contract,
+        'public',
+        'User',
+        {
+          id: 1,
+          name: 'Ada',
+          email: 'ada@example.com',
+          posts: (postsMutator: RelationMutator<Contract<SqlStorage>, 'Post'>) =>
+            postsMutator.create(postRows),
+        } as never,
+        relatedCollectionOf(target.context),
+      ),
+    );
+  }
+
+  it('refuses a nested multi-row insert whose parent-key payload pushes it past the limit, before sending', async () => {
+    const graph = nestedGraphOf();
+    const runtime = createMockRuntime();
+    // The parent's read-back row feeds the child's PayloadData edge.
+    runtime.setNextResults([[{ id: 1 }]]);
+
+    // The shared parent-key parameter of the payload joins the 65,535 row parameters, pushing the
+    // statement to 65,536, one past the limit, at the moment withPayload applies it.
+    await expect(executeGraph(graph, { runtime, context: target.context })).rejects.toMatchObject({
+      code: 'ORM.ARGUMENT_INVALID',
+      message:
+        'create() on model "Post" would bind 65536 parameters in one INSERT statement; PostgreSQL allows 65535 per statement.',
+      meta: expect.objectContaining({
+        problem: 'too-many-bind-parameters',
+        method: 'create()',
+        model: 'Post',
+        parameters: 65_536,
+        limit: 65_535,
+        target: 'postgres',
+      }),
+    });
+    // The parent insert ran; only the nested insert is refused.
+    expect(runtime.executions).toHaveLength(1);
   });
 });
 

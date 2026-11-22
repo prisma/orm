@@ -306,8 +306,12 @@ export function createAllGraph(
     return b.graph;
   }
   const rows = createRowsOf(collection, data);
+  // The diagnostics name the requested API: the count terminal is createAndCount(), the
+  // rows-returning bulk call is createAll() (create() when it carries one row).
+  const operation =
+    returns === 'count' ? 'createAndCount' : rows.length === 1 ? 'create' : 'createAll';
   if (conflict !== undefined) {
-    const method = returns === 'rows' ? 'createAll()' : 'createAndCount()';
+    const method = `${operation}()`;
     const { modelName, state } = collection;
     requireRowsThatCanConflict(
       collection.context.contract,
@@ -327,7 +331,7 @@ export function createAllGraph(
       keys: [],
       requires: [],
       owner: {
-        operation: rows.length === 1 ? 'create' : 'createAll',
+        operation,
         modelName: collection.modelName,
       },
       returns,
