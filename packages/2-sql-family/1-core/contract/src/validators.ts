@@ -868,8 +868,8 @@ export function validateModelStorageReferences(contract: Contract<SqlStorage>): 
       }
 
       const storageTable = modelStorage.table;
-      const storageNs = contract.storage.namespaces[storageNamespaceId];
-      const rawTable = storageNs?.entries.table?.[storageTable];
+      const storageNs = ownEntry(contract.storage.namespaces, storageNamespaceId);
+      const rawTable = ownEntry(storageNs?.entries.table, storageTable);
       if (rawTable === undefined) {
         throw new ContractValidationError(
           `Model "${qualifiedName}" references non-existent table "${storageNamespaceId}.${storageTable}"`,
@@ -1080,8 +1080,8 @@ export function validateSqlStorageConsistency(contract: Contract<SqlStorage>): v
       }
 
       if (fk.target.spaceId === undefined) {
-        const targetNamespace = contract.storage.namespaces[fk.target.namespaceId];
-        const referencedRaw = targetNamespace?.entries.table?.[fk.target.tableName];
+        const targetNamespace = ownEntry(contract.storage.namespaces, fk.target.namespaceId);
+        const referencedRaw = ownEntry(targetNamespace?.entries.table, fk.target.tableName);
         if (referencedRaw === undefined) {
           throw new ContractValidationError(
             `Namespace "${namespaceId}" table "${tableName}" foreignKey references non-existent table "${fk.target.namespaceId}.${fk.target.tableName}"`,
@@ -1221,6 +1221,13 @@ function validateToOneRelationNullabilityAgainstStorage(contract: Contract<SqlSt
   }
 }
 
+function ownEntry<Entry>(
+  entries: Readonly<Record<string, Entry>> | undefined,
+  name: string,
+): Entry | undefined {
+  return entries !== undefined && Object.hasOwn(entries, name) ? entries[name] : undefined;
+}
+
 /** Storage column lookup for through-consistency validation. */
 function lookupStorageColumn(
   contract: Contract<SqlStorage>,
@@ -1228,12 +1235,15 @@ function lookupStorageColumn(
   tableName: string,
   columnName: string,
 ): StorageColumn | undefined {
-  const rawTable = contract.storage.namespaces[namespaceId]?.entries.table?.[tableName];
+  const rawTable = ownEntry(
+    ownEntry(contract.storage.namespaces, namespaceId)?.entries.table,
+    tableName,
+  );
   if (rawTable === undefined) {
     return undefined;
   }
   const table = blindCast<StorageTable, 'structurally validated storage table'>(rawTable);
-  return table.columns[columnName];
+  return ownEntry(table.columns, columnName);
 }
 
 function describeColumnType(column: StorageColumn): string {
