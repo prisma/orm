@@ -59,6 +59,25 @@ Pull requests 1 and 2 touch different files, except the facades' `package.json` 
 - After the release with pull request 1: tell them the version. Their package must name its two modules in the same version, because that release removes the `package.json` lookup their interim setup relies on.
 - After the release with pull request 3: tell them the version and point them to the author guide.
 
+## Where this stands
+
+All three pull requests are merged, with the SQL contract builder fix that the SQL Server team's first attempt turned up ([prisma/orm#31148](https://github.com/prisma/orm/pull/31148)). None of it is in a released version, so the purpose in [spec.md](spec.md) is not met yet: `prisma orm init --target @prisma/orm-sqlite` is still refused, because the released packages do not carry the `prisma-orm-extension` keyword.
+
+The project waits for the next regular release. No release is cut for this project alone. Reaching a user takes two releases: an ORM release, then a `prisma` CLI release, because the CLI pins `@prisma/orm-toolchain` to an exact version.
+
+After both releases:
+
+- [ ] Repeat the run from published packages with no version forced: `prisma orm init --target @prisma/orm-sqlite`, `contract emit`, `migration plan`, typecheck and one query. A run on 2026-11-21 with the toolchain forced to the dev build `8.0.0-rc.24-dev.37` passed all but the direct `--target` form and the query, which it did not cover.
+- [ ] Check what `init --target` does for a package that has no `latest` tag.
+- [ ] Send the SQL Server team the versions and the note.
+- [ ] The SQL Server team confirms, in their repository, that their package works with `init` and `contract emit`.
+
+Riding with the close-out pull request:
+
+- [ ] The SQLite error for a refused table name says `A table in namespace "__unbound__"`, which shows an internal name to the user.
+
+Not part of this project: the same unsafe reads and writes of name-keyed objects exist outside the SQL contract builder ([TML-3905](https://linear.app/prisma-company/issue/TML-3905)).
+
 ## Close-out
 
 - [ ] Verify every item of the definition of done in [spec.md](spec.md).
