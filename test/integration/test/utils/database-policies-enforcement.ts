@@ -108,6 +108,31 @@ export function definePolicyEnforcementJourneys(
   );
 
   it(
+    'advises db migrate alone when the migrations on disk already lead to the contract db update and db sign were refused',
+    async (test) => {
+      await withProject(test, async (project) => {
+        await migrationsOnlyDatabase(project);
+        const next = await planTo(project, 'next', 'next');
+        const recovery = (migrate: string) =>
+          `The planned migrations already lead there: apply them with \`${migrate}\`.`;
+
+        const update = errorOf(await runDbUpdate(project.ctx, ['--json']));
+        const sign = errorOf(await runDbSign(project.ctx, ['--json']));
+
+        expect(update['nextActions']).toEqual([
+          { kind: 'user-choice', label: recovery(`prisma-test db migrate --to ${next}`) },
+        ]);
+        expect(sign['nextActions']).toEqual([
+          { kind: 'user-choice', label: recovery('prisma-test db migrate') },
+        ]);
+        const migrated = await runMigrate(project.ctx);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+      });
+    },
+    timeout,
+  );
+
+  it(
     'advises, for db update --to a ref that permits only migrations, a plan to that ref and a db migrate that both run',
     async (test) => {
       await withProject(test, async (project) => {

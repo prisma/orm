@@ -31,7 +31,6 @@ import {
   type ContractMarkerRecordLike,
   type ContractSpaceAggregate,
   collectAggregateNamespaces,
-  contractHashAtMarker,
   type PlannerError,
   planMigration,
   requireHeadRef,
@@ -116,7 +115,7 @@ import {
   permittedSettingsOfRun,
   refuseForbiddenChanges,
 } from './database-policies';
-import { hasMigrationPath } from './graph-queries';
+import { migrationsLeadToTarget } from './graph-queries';
 import { stripOperations } from './migration-helpers';
 import { structuralPathOf } from './no-invariant-path';
 import {
@@ -265,10 +264,13 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     ),
   );
   const migrationPlanOrigin = migrationPlan.from;
-  const migrationsReachTarget = hasMigrationPath(
+  const migrationsReachTarget = migrationsLeadToTarget(
     aggregate.app.graph(),
-    contractHashAtMarker(markerRows.get(aggregate.app.spaceId) ?? undefined),
-    contract.storage.storageHash,
+    markerRows.get(aggregate.app.spaceId),
+    {
+      hash: contract.storage.storageHash,
+      invariants: (options.action === 'dbUpdate' ? options.ref?.invariants : undefined) ?? [],
+    },
   );
 
   // 2c. The database's policies decide whether `db update` may move it, before anything is planned.

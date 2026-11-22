@@ -67,7 +67,7 @@ export function errorChangePolicyForbids(args: {
   /** The `migration plan` the advice to author a migration prints: from the database, to where the run goes. */
   readonly migrationPlan: MigrationPlanArguments;
   /** Whether the migrations on disk already lead from the database to the target. */
-  readonly migrationsReachTarget?: boolean;
+  readonly migrationsReachTarget: boolean;
   readonly invocation: CliInvocation | undefined;
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;

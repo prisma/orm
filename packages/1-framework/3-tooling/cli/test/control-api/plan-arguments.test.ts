@@ -12,6 +12,7 @@ import {
   type MigrationPlanArgument,
   migrationPlanArguments,
   migrationPlanChoice,
+  migrationPlanFromForStatements,
   migrationPlanFromRun,
   migrationPlanReplacing,
   migrationPlanTo,
@@ -123,6 +124,18 @@ describe('migrationPlanArguments names a --from migration plan resolves to the i
       packages: () => [pkg(E, A), pkg(A, B)],
       start: { kind: 'contract', hash: A },
       startsAt: B,
+    },
+    {
+      name: 'a database a rollback brought back, for a plan to the emitted contract: where it is',
+      packages: () => [pkg(E, A), pkg(A, B), pkg(B, A)],
+      start: { kind: 'contract', hash: A },
+      startsAt: A,
+    },
+    {
+      name: 'a database before a rollback cycle a later migration leaves: past the cycle',
+      packages: () => [pkg(E, A), pkg(A, B), pkg(B, A), pkg(A, C)],
+      start: { kind: 'contract', hash: A },
+      startsAt: C,
     },
     {
       name: 'an empty database, from where its history ends',
@@ -337,5 +350,37 @@ describe('migrationPlanFromRun names the start a run of migration plan resolved'
     const resolution: FromResolution = run.value;
     const argument = migrationPlanFromRun(undefined, resolution);
     expect(await resolvedStart(aggregateSpace, argument)).toBe(resolution.fromHash);
+  });
+});
+
+describe('a plan that carries a statement never starts at @empty', () => {
+  it('drops @empty from the choice, and each candidate left resolves', async () => {
+    const aggregateSpace = space([], { db: ref(OFF_GRAPH) });
+    const argument = migrationPlanFromForStatements(
+      fromOf(aggregateSpace, { kind: 'unknown', reason: 'The CLI could not read the database' }),
+    );
+    if (argument.kind !== 'ambiguous') throw new Error(`expected a choice, got ${argument.kind}`);
+    expect(argument.candidates).toEqual(['db']);
+    for (const candidate of argument.candidates) {
+      expect(await resolvedStart(aggregateSpace, { kind: 'reference', reference: candidate })).toBe(
+        OFF_GRAPH,
+      );
+    }
+  });
+
+  it('names no start, and says why, when @empty was the only one', () => {
+    const aggregateSpace = space([]);
+    expect(migrationPlanFromForStatements(fromOf(aggregateSpace, { kind: 'unmarked' }))).toEqual({
+      kind: 'none',
+      reason: expect.stringContaining(
+        'A plan from `@empty` creates every model, so its statements name nothing it can resolve',
+      ),
+    });
+  });
+
+  it('names no start for an empty database whose plan would start at @empty', () => {
+    expect(
+      migrationPlanFromForStatements({ kind: 'reference', reference: '@empty' }),
+    ).toMatchObject({ kind: 'none' });
   });
 });

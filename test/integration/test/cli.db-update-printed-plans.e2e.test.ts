@@ -103,7 +103,7 @@ withTempDir(({ createTempDir }) => {
         expect(error.code).toBe('MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE');
         expect(printedPlans(adviceText(error))).toEqual([]);
         expect(error.why).toContain(
-          'No migration can be planned for them either. The database has no marker, so this plan is for an empty database. A database that is not empty needs adopting first: record the contract it matches with `prisma-test db sign`, then plan from there. A plan from `@empty` creates every model, so its statements name nothing it can resolve.',
+          'No migration can be planned for them either. The database has no marker, so a plan from `@empty` fits only an empty database. A database that is not empty needs adopting first: emit the contract that describes it as it is, before your change, and record it with `prisma-test db sign`, then plan from there. A plan from `@empty` creates every model, so its statements name nothing it can resolve.',
         );
       }),
       timeouts.spinUpPpgDev,

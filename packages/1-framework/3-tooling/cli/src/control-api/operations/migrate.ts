@@ -242,6 +242,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     permitPolicyChange: options.permitPolicyChange ?? false,
     targetHash: appTargetHash,
     migrationPlan: appMigrationPlan(appSpaceOf(aggregate), markerRows, { kind: 'emitted' }),
+    migrationsReachTarget: false,
     invocation: options.invocation,
   });
   if (!checkedPolicies.ok) {

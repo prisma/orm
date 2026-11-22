@@ -1,9 +1,10 @@
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
-import type {
-  MigrationPlanArgument,
-  MigrationPlanTargetArgument,
-  RunnablePlanArgument,
+import {
+  type MigrationPlanArgument,
+  type MigrationPlanTargetArgument,
+  migrationPlanFromForStatements,
+  type RunnablePlanArgument,
 } from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { chooseAction, runCommandAction } from './next-actions';
@@ -124,7 +125,7 @@ export function printedPlan(
   flags: readonly string[],
 ): PrintedPlan {
   const { to = { kind: 'default' } as const } = plan;
-  const from = withStatements(plan.from, flags);
+  const from = carriesStatement(flags) ? migrationPlanFromForStatements(plan.from) : plan.from;
   if (from.kind === 'none' || to.kind === 'none') {
     const reasons = [from, to].flatMap((argument) =>
       argument.kind === 'none' ? [argument.reason] : [],
@@ -145,29 +146,7 @@ const STATEMENT_FLAGS: ReadonlySet<string> = new Set([
 ]);
 
 function carriesStatement(flags: readonly string[]): boolean {
-  return flags.some((flag) => STATEMENT_FLAGS.has(flag.split(/\s+/)[0] ?? ''));
-}
-
-const EMPTY_ORIGIN_STATEMENTS =
-  'A plan from `@empty` creates every model, so its statements name nothing it can resolve';
-
-/**
- * `from` for a plan with `flags`: a plan that carries a statement cannot start at `@empty`, so that
- * start is dropped, and with no start left there is no plan.
- */
-function withStatements(
-  from: MigrationPlanArgument,
-  flags: readonly string[],
-): MigrationPlanArgument {
-  if (!carriesStatement(flags)) return from;
-  if (from.kind === 'reference' && from.reference === '@empty') {
-    return { kind: 'none', reason: EMPTY_ORIGIN_STATEMENTS };
-  }
-  if (from.kind !== 'ambiguous' || !from.candidates.includes('@empty')) return from;
-  const candidates = from.candidates.filter((candidate) => candidate !== '@empty');
-  return candidates.length === 0
-    ? { kind: 'none', reason: `${from.reason}. ${EMPTY_ORIGIN_STATEMENTS}` }
-    : { ...from, candidates };
+  return flags.some((flag) => STATEMENT_FLAGS.has(flag.split(/[\s=]/)[0] ?? ''));
 }
 
 /**

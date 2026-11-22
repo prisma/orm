@@ -64,6 +64,14 @@ describe('printedPlan', () => {
     });
   });
 
+  it('prints no plan from @empty for a statement written as --<verb>=<value>', () => {
+    expect(
+      printedPlan(undefined, { from: { kind: 'reference', reference: '@empty' } }, [
+        '--delete=-legacy',
+      ]),
+    ).toMatchObject({ kind: 'none' });
+  });
+
   it('names the candidates for a choice, and gives it as a choice, not a command', () => {
     const plan = printedPlan(
       PROJECT,

@@ -194,7 +194,7 @@ withTempDir(({ createTempDir }) => {
             action.kind === 'user-choice' ? action.label : '',
           );
           expect(planChoice).toBe(
-            'Plan the missing edge with `prisma-test migration plan --from @empty --name <slug>`. The database has no marker, so this plan is for an empty database. A database that is not empty needs adopting first: record the contract it matches with `prisma-test db sign`, then plan from there.',
+            'Plan the missing edge with `prisma-test migration plan --from @empty --name <slug>`. The database has no marker, so a plan from `@empty` fits only an empty database. A database that is not empty needs adopting first: emit the contract that describes it as it is, before your change, and record it with `prisma-test db sign`, then plan from there.',
           );
           expect(applyChoice).toBe('Then apply it with `prisma-test db migrate`');
           const [planCommand, migrateCommand] = [planChoice, applyChoice].map(

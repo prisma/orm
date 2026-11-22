@@ -7,6 +7,7 @@ import {
   appMigrationsDir,
   getMigrationDirs,
   type JourneyContext,
+  latestMigrationDirName,
   parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
@@ -165,6 +166,42 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
+      'when a rollback brought the database back, plans from where it is',
+      inJourney(async (ctx) => {
+        expect((await runContractEmit(ctx)).exitCode).toBe(0);
+        const initial = await planned(ctx, ['--name', 'initial']);
+        await emit(ctx, 'contract-additive');
+        const addName = await planned(ctx, ['--from', initial, '--name', 'add-name']);
+        expect((await runMigrate(ctx)).exitCode).toBe(0);
+        await planned(ctx, [
+          '--from',
+          addName,
+          '--to',
+          `${latestMigrationDirName(ctx)}^`,
+          '--name',
+          'drop-name',
+          '--delete',
+          'User.name',
+        ]);
+        expect((await runMigrate(ctx, ['--to', initial])).exitCode).toBe(0);
+        await emit(ctx, 'contract-phone');
+
+        const summary = await statusSummary(ctx);
+        expect(advisedPlanArgs(summary)).toEqual([
+          '--from',
+          initial,
+          '--name',
+          'planned-as-advised',
+        ]);
+        await planAsAdvised(ctx, summary);
+
+        expect((await runMigrate(ctx)).exitCode).toBe(0);
+        expect(await statusSummary(ctx)).toBe('Up to date');
+      }),
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
       'when the database is empty and no db ref names an origin',
       inJourney(async (ctx) => {
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
@@ -231,7 +268,7 @@ withTempDir(({ createTempDir }) => {
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         const summary = await statusSummary(ctx);
         expect(summary).toBe(
-          'No migrations found. Run `{bin} migration plan --from @empty --name <name>` to author the first. The database has no marker, so this plan is for an empty database. A database that is not empty needs adopting first: record the contract it matches with `{bin} db sign`, then plan from there.',
+          'No migrations found. Run `{bin} migration plan --from @empty --name <name>` to author the first. The database has no marker, so a plan from `@empty` fits only an empty database. A database that is not empty needs adopting first: emit the contract that describes it as it is, before your change, and record it with `{bin} db sign`, then plan from there.',
         );
         await planAsAdvised(ctx, summary);
         expect((await runMigrate(ctx)).exitCode).toBe(0);
@@ -253,7 +290,7 @@ withTempDir(({ createTempDir }) => {
 
           const summary = await statusSummary(ctx);
           expect(summary).toContain(
-            'A database that is not empty needs adopting first: record the contract it matches with `{bin} db sign`',
+            'A database that is not empty needs adopting first: emit the contract that describes it as it is, before your change, and record it with `{bin} db sign`',
           );
           const sign = await runDbSign(ctx);
           expect(sign.exitCode, sign.stderr).toBe(0);
@@ -265,6 +302,34 @@ withTempDir(({ createTempDir }) => {
           expect((await runMigrate(ctx)).exitCode).toBe(0);
           expect(await statusSummary(ctx)).toBe('Up to date');
         }),
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'with no migrations and --to a ref, prints the plan that ends at the ref, which runs',
+      inJourney(async (ctx) => {
+        expect((await runContractEmit(ctx)).exitCode).toBe(0);
+        expect((await runDbUpdate(ctx)).exitCode).toBe(0);
+        const production = await runDbUpdate(ctx, ['--advance-ref', 'production']);
+        expect(production.exitCode, production.stderr).toBe(0);
+        await emit(ctx, 'contract-additive');
+        expect((await runDbUpdate(ctx)).exitCode).toBe(0);
+        await emit(ctx, 'contract-v3');
+
+        const summary = await statusSummary(ctx, ['--to', 'production']);
+        expect(advisedPlanArgs(summary)).toEqual([
+          '--from',
+          'db',
+          '--to',
+          'production',
+          '--name',
+          'planned-as-advised',
+        ]);
+        await planAsAdvised(ctx, summary, ['--delete', 'User.name']);
+
+        expect((await runMigrate(ctx, ['--to', 'production'])).exitCode).toBe(0);
+        expect(await statusSummary(ctx, ['--to', 'production'])).toBe('Up to date');
+      }),
       timeouts.spinUpPpgDev,
     );
 

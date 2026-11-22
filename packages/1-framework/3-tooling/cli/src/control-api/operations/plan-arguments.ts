@@ -109,7 +109,7 @@ export function migrationPlanChoice(space: PlanSpace | undefined, reason: string
 
 /** Why a database with no marker in a space with no migrations gets a plan from `@empty` only as a choice. */
 const NO_MARKER_REASON =
-  'The database has no marker, so this plan is for an empty database. A database that is not empty needs adopting first: record the contract it matches with `{bin} db sign`, then plan from there';
+  'The database has no marker, so a plan from `@empty` fits only an empty database. A database that is not empty needs adopting first: emit the contract that describes it as it is, before your change, and record it with `{bin} db sign`, then plan from there';
 
 /**
  * The `--from` that makes `migration plan` start where a database at `position` is. A contract a
@@ -212,6 +212,24 @@ export function migrationPlanArguments(
       : startAtPosition(space, position),
     to,
   };
+}
+
+const EMPTY_ORIGIN_STATEMENTS =
+  'A plan from `@empty` creates every model, so its statements name nothing it can resolve';
+
+/**
+ * `from` for a plan that carries `--rename`, `--delete`, `--convert` or `--backfill`: such a plan
+ * cannot start at `@empty`, so that start is dropped, and with no start left there is no plan.
+ */
+export function migrationPlanFromForStatements(from: MigrationPlanArgument): MigrationPlanArgument {
+  if (from.kind === 'reference' && from.reference === '@empty') {
+    return { kind: 'none', reason: EMPTY_ORIGIN_STATEMENTS };
+  }
+  if (from.kind !== 'ambiguous' || !from.candidates.includes('@empty')) return from;
+  const candidates = from.candidates.filter((candidate) => candidate !== '@empty');
+  return candidates.length === 0
+    ? { kind: 'none', reason: `${from.reason}. ${EMPTY_ORIGIN_STATEMENTS}` }
+    : { ...from, candidates };
 }
 
 /**

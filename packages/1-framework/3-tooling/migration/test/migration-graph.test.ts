@@ -678,9 +678,21 @@ describe('historyEndsFrom', () => {
     expect(historyEndsFrom(graph, E)).toEqual(['H1']);
   });
 
-  it('finds no end in a cycle', () => {
+  it('ends a history whose last migration rolls back at each contract of that cycle', () => {
     const graph = reconstructGraph(chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H2', 'H1', 'm3']));
-    expect(historyEndsFrom(graph, E)).toEqual([]);
+    expect(historyEndsFrom(graph, E)).toEqual(['H1', 'H2']);
+  });
+
+  it('ends at the start when a rollback brought the history back to it', () => {
+    const graph = reconstructGraph(chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H2', 'H1', 'm3']));
+    expect(historyEndsFrom(graph, 'H1')).toEqual(['H1']);
+  });
+
+  it('passes over a rollback cycle that a later migration leaves', () => {
+    const graph = reconstructGraph(
+      chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H2', 'H1', 'm3'], ['H1', 'H3', 'm4']),
+    );
+    expect(historyEndsFrom(graph, 'H1')).toEqual(['H3']);
   });
 
   it('is the start itself when no migration leaves it', () => {

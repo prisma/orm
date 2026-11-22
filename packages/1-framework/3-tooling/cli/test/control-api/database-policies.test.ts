@@ -9,8 +9,9 @@ import { reference } from '../utils/plan-origins';
 const TARGET = 'b'.repeat(64);
 
 function check(args: {
-  readonly command: 'db update' | 'db migrate';
+  readonly command: 'db update' | 'db migrate' | 'db sign';
   readonly inForce: DatabasePolicies;
+  readonly migrationsReachTarget?: boolean;
   readonly declared?: { readonly change: readonly ('migrate' | 'reconcile')[] };
   readonly permitPolicyChange: boolean;
 }) {
@@ -25,11 +26,31 @@ function check(args: {
     permitPolicyChange: args.permitPolicyChange,
     targetHash: TARGET,
     migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
+    migrationsReachTarget: args.migrationsReachTarget ?? false,
     invocation: undefined,
   });
 }
 
 describe('checkRunPolicies', () => {
+  it.each(['db update', 'db sign'] as const)(
+    'advises %s, refused on a database that changes only through migrations, to run db migrate alone when migrations already lead to the target',
+    (command) => {
+      const recovery =
+        'The planned migrations already lead there: apply them with `{bin} db migrate`.';
+      const result = check({
+        command,
+        inForce: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+        permitPolicyChange: false,
+        migrationsReachTarget: true,
+      });
+
+      expect(result.ok ? undefined : result.failure.toEnvelope()).toMatchObject({
+        fix: recovery,
+        nextActions: [{ kind: 'user-choice', label: recovery }],
+      });
+    },
+  );
+
   it('refuses db update when the database changes only through migrations, naming the marker', () => {
     const result = check({
       command: 'db update',
@@ -86,6 +107,7 @@ describe('checkRunPolicies', () => {
       permitPolicyChange: true,
       targetHash: TARGET,
       migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
+      migrationsReachTarget: false,
       invocation: undefined,
     });
     const reconcile = '{bin} db update --to production --permit-policy-change';

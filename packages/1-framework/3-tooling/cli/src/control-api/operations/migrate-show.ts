@@ -259,6 +259,7 @@ export async function executeMigrateShowPlan(
         permitPolicyChange: options.permitPolicyChange ?? false,
         targetHash,
         migrationPlan: appMigrationPlan(appSpaceOf(aggregate), allMarkers, { kind: 'emitted' }),
+        migrationsReachTarget: false,
         invocation: options.invocation,
       });
       if (!permitted.ok) {
