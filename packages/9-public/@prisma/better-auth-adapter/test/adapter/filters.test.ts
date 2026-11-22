@@ -1,4 +1,5 @@
 import type { Where } from '@better-auth/core/db/adapter';
+import { blindCast } from '@prisma/orm-framework/utils/casts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prismaAdapter } from '../../src/adapter';
 import {
@@ -123,8 +124,13 @@ describe.each(targets)('filters on %s', (target) => {
       expect(await ids([text('ne', null)])).toEqual(nonNull);
     });
 
-    it('in drops null entries, and an empty list matches no row', async () => {
-      expect(await ids([text('in', ['ab'])])).toEqual(['8']);
+    it('in and not_in drop null entries, and an empty list matches no row', async () => {
+      const withNull = blindCast<
+        string[],
+        "Better Auth's Where type has no null list entries, but its callers can pass them"
+      >(['ab', null]);
+      expect(await ids([text('in', withNull)])).toEqual(['8']);
+      expect(await ids([text('not_in', withNull)])).toEqual(['1', '2', '4', '5', '6', '7']);
       expect(await ids([{ field: 'n', operator: 'in', value: [] }])).toEqual([]);
     });
 

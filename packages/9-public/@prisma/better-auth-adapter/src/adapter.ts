@@ -134,11 +134,19 @@ function customAdapter({
       return { found, collection: lookups.collection(orm, found) };
     };
 
+    const selectionOf = (model: string): readonly string[] => {
+      const fields = selections.get(model);
+      if (fields === undefined) {
+        throw new BetterAuthError(`Better Auth's table description has no model "${model}".`);
+      }
+      return fields;
+    };
+
     const selected = (model: string, select: readonly string[] | undefined): readonly string[] => {
       const fields =
         select !== undefined && select.length > 0
           ? select.map((field) => getFieldName({ model, field }))
-          : (selections.get(model) ?? ['id']);
+          : selectionOf(model);
       for (const field of fields) assertFieldName(model, field);
       return fields;
     };

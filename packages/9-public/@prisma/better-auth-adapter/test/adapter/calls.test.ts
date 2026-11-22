@@ -126,8 +126,9 @@ model Legacy {
   });
 
   describe("Better Auth's atomic fallbacks", () => {
-    it('consume a verification row once under four concurrent calls', async () => {
-      const adapter = adapterOver(client);
+    it('consume a verification row once when four concurrent calls have all read it', async () => {
+      const { client: recorded, recording } = recordingClient(client);
+      const adapter = adapterOver(recorded);
       await adapter.create({
         model: 'verification',
         data: {
@@ -145,6 +146,12 @@ model Legacy {
             where: [{ field: 'identifier', value: 'consume-once' }],
           }),
         ),
+      );
+      const reads = recording.calls.filter((call) => call === 'first').length;
+      const firstDelete = recording.calls.indexOf('deleteAndCount');
+      expect(reads).toBe(4);
+      expect(recording.calls.slice(0, firstDelete).filter((call) => call === 'first')).toHaveLength(
+        4,
       );
       expect(consumed.filter((row) => row !== null)).toHaveLength(1);
       expect(

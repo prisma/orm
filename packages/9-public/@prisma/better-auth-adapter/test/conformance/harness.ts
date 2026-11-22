@@ -26,25 +26,18 @@ import { timeouts } from '../timeouts';
 
 type Client = ReturnType<typeof openSqliteClient> | ReturnType<typeof openPostgresClient>;
 
-export interface ConformanceRun {
-  /** How many times the suites asked for a new database. */
-  readonly migrations: () => number;
-}
-
 /**
  * Runs Better Auth's seven published adapter suites against the adapter on one database. Each change of Better Auth's configuration gets a database built from the PSL the adapter prints for it.
  */
-export async function runConformanceSuites(target: TargetName): Promise<ConformanceRun> {
+export async function runConformanceSuites(target: TargetName): Promise<void> {
   const contracts = await createContractFixture();
   const workDir = contracts.workDir;
   const server: PostgresServer | undefined =
     target === 'postgres' ? await startPostgresServer() : undefined;
   const emptyContract = contracts.emptyContract(target);
   let client: Client | undefined;
-  let migrations = 0;
 
   const runMigrations = async (betterAuthOptions: BetterAuthOptions) => {
-    migrations += 1;
     const emitted = await emitContract(
       target,
       pslForConfiguration(emptyContract, betterAuthOptions),
@@ -91,5 +84,4 @@ export async function runConformanceSuites(target: TargetName): Promise<Conforma
     ],
   });
   execute();
-  return { migrations: () => migrations };
 }
