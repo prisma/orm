@@ -134,7 +134,7 @@ function unansweredSubjects(error: CliStructuredError): ReadonlySet<string> | un
 
 /**
  * The engine's refusal to answer, led by the ways to keep the data that the unanswered questions
- * name: the next actions give them first, so they are not repeated in why.
+ * name: the next actions give them first, so they are not repeated in the summary or why.
  */
 function ledByKeepDataWays(error: unknown, questions: readonly PlanQuestion[]): unknown {
   if (!isConsentRequired(error) || !CliStructuredError.is(error)) return error;
