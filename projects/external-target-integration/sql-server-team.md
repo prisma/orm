@@ -2,7 +2,7 @@
 
 For the team building a SQL Server target for Prisma 8 in their own repository. This replaces the mechanism proposed in [prisma/orm#31008](https://github.com/prisma/orm/pull/31008).
 
-**Status:** the first half, generated files importing from your package, is merged in [prisma/orm#31078](https://github.com/prisma/orm/pull/31078) and will be in the next release candidate after `8.0.0-rc.24`. Section 1 describes it as built. The second half, `prisma orm init`, is being built now, so the names in section 2 can still change. We will post in the Discord thread when each part is released, with the version to pin.
+**Status:** both halves are merged and will be in the next release candidate after `8.0.0-rc.24`. Generated files importing from your package is [prisma/orm#31078](https://github.com/prisma/orm/pull/31078), and `prisma orm init --target <your package>` is [prisma/orm#31128](https://github.com/prisma/orm/pull/31128). Sections 1 and 2 describe them as built. You also need the `prisma` CLI release that follows it, because the CLI pins the toolchain version. We will post in the Discord thread when both are released, with the versions to pin.
 
 ## The outcome
 
