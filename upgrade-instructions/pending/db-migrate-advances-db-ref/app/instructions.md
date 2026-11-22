@@ -6,7 +6,7 @@ changes:
     detection:
       glob: "**/{*.json,*.sh,*.bash,*.zsh,*.yml,*.yaml,*.toml,*.md,*.mdx,*.ts,*.mts,*.js,*.mjs,*.cjs,Dockerfile*,*.dockerfile,Procfile*,Makefile,justfile}"
       matches:
-        - '(?<![\w-])db(?:\s+|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)migrate\b(?:(?=[^\n]*--advance-ref\b)|(?![^\n]*--(?:db|no-advance-ref)\b))'
+        - '(?<![\w-])db(?:\s+|\s*\\\n\s*|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)migrate\b(?:(?=[^\n]*--advance-ref\b)|(?![^\n]*--(?:db|no-advance-ref)\b))'
 ---
 
 # `db migrate` advances the `db` ref
