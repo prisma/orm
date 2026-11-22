@@ -49,7 +49,7 @@ function pkg(from: string, to: string): OnDiskMigrationPackage {
   };
 }
 
-/** A space whose contracts all resolve, as a ref's or a migration's, so the result depends only on the graph and the position. */
+/** A space where every contract it names loads, so a test fails only when the derived argument is wrong. */
 function space(packages: readonly OnDiskMigrationPackage[], refs: Refs = {}) {
   const created = createAggregateContractSpace({
     spaceId: 'app',
@@ -74,7 +74,7 @@ function space(packages: readonly OnDiskMigrationPackage[], refs: Refs = {}) {
   return created;
 }
 
-function rulesSpace(aggregateSpace: AggregateContractSpace) {
+function planSpaceOf(aggregateSpace: AggregateContractSpace) {
   return { graph: aggregateSpace.graph(), refs: aggregateSpace.refs };
 }
 
@@ -100,7 +100,7 @@ function fromOf(
   position: DatabasePosition,
   end: PlanEnd = { kind: 'emitted' },
 ): MigrationPlanArgument {
-  return migrationPlanArguments(rulesSpace(aggregateSpace), position, end).from;
+  return migrationPlanArguments(planSpaceOf(aggregateSpace), position, end).from;
 }
 
 describe('migrationPlanArguments names a --from migration plan resolves to the intended start', () => {
@@ -261,7 +261,7 @@ describe('migrationPlanReplacing names the --from that plans a failed migration 
     const packages = [pkg(E, A), failed];
     const aggregateSpace = space(packages);
     const argument = migrationPlanReplacing(
-      { ...rulesSpace(aggregateSpace), packages },
+      { ...planSpaceOf(aggregateSpace), packages },
       { from: A, dirName: failed.dirName },
     );
     const remaining = space([packages[0]!]);
@@ -272,7 +272,7 @@ describe('migrationPlanReplacing names the --from that plans a failed migration 
     const failed = pkg(E, A);
     expect(
       migrationPlanReplacing(
-        { ...rulesSpace(space([failed])), packages: [failed] },
+        { ...planSpaceOf(space([failed])), packages: [failed] },
         { from: E, dirName: failed.dirName },
       ),
     ).toEqual({ kind: 'reference', reference: '@empty' });
@@ -283,7 +283,7 @@ describe('migrationPlanReplacing names the --from that plans a failed migration 
     const packages = [pkg(E, C), failed];
     expect(
       migrationPlanReplacing(
-        { ...rulesSpace(space(packages)), packages },
+        { ...planSpaceOf(space(packages)), packages },
         { from: A, dirName: failed.dirName },
       ),
     ).toMatchObject({ kind: 'none' });
@@ -294,7 +294,7 @@ describe('migrationPlanTo names a --to migration plan resolves to the intended e
   it('leaves --to out for a contract hash that is the one the run was given', () => {
     expect(
       migrationPlanTo(
-        { ...rulesSpace(space([pkg(E, A)])), emittedHash: OFF_GRAPH },
+        { ...planSpaceOf(space([pkg(E, A)])), emittedHash: OFF_GRAPH },
         { kind: 'contract', hash: OFF_GRAPH },
       ),
     ).toEqual({ kind: 'default' });
@@ -303,7 +303,7 @@ describe('migrationPlanTo names a --to migration plan resolves to the intended e
   it('names none for a contract no migration records, which migration plan refuses', async () => {
     const aggregateSpace = space([pkg(E, A)]);
     expect(
-      migrationPlanTo(rulesSpace(aggregateSpace), { kind: 'contract', hash: OFF_GRAPH }),
+      migrationPlanTo(planSpaceOf(aggregateSpace), { kind: 'contract', hash: OFF_GRAPH }),
     ).toMatchObject({ kind: 'none' });
     expect((await resolveToForPlan(OFF_GRAPH, { space: aggregateSpace })).ok).toBe(false);
   });
@@ -313,14 +313,14 @@ describe('migrationPlanTo names a --to migration plan resolves to the intended e
     { name: 'a contract a migration records', end: { kind: 'contract', hash: A }, endsAt: A },
   ])('$name', async ({ end, endsAt }) => {
     const aggregateSpace = space([pkg(E, A)], { production: ref(B) });
-    const argument = migrationPlanTo(rulesSpace(aggregateSpace), end);
+    const argument = migrationPlanTo(planSpaceOf(aggregateSpace), end);
     if (argument.kind !== 'reference') throw new Error(`not a reference: ${argument.kind}`);
     const resolved = await resolveToForPlan(argument.reference, { space: aggregateSpace });
     expect(resolved.ok && resolved.value.hash).toBe(endsAt);
   });
 
   it('leaves --to out for the emitted contract', () => {
-    expect(migrationPlanTo(rulesSpace(space([pkg(E, A)])), { kind: 'emitted' })).toEqual({
+    expect(migrationPlanTo(planSpaceOf(space([pkg(E, A)])), { kind: 'emitted' })).toEqual({
       kind: 'default',
     });
   });
@@ -328,7 +328,7 @@ describe('migrationPlanTo names a --to migration plan resolves to the intended e
   it('names none for the empty contract, which migration plan refuses', async () => {
     const aggregateSpace = space([pkg(E, A)]);
     expect(
-      migrationPlanTo(rulesSpace(aggregateSpace), { kind: 'contract', hash: E }),
+      migrationPlanTo(planSpaceOf(aggregateSpace), { kind: 'contract', hash: E }),
     ).toMatchObject({ kind: 'none' });
     expect((await resolveToForPlan('@empty', { space: aggregateSpace })).ok).toBe(false);
   });

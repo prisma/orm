@@ -1,7 +1,9 @@
 /**
  * The arguments `migration plan` takes, derived from where a plan should start and end: the inverse
  * of `resolveFromForPlan` and `resolveToForPlan` in `plan-resolution.ts`. Advice that prints a
- * `migration plan` asks here, so it names only what those resolvers accept.
+ * `migration plan` from where a database is asks here, so it names only what those resolvers
+ * accept. A few messages print a fixed command that always resolves: `--from @empty`, `--from` a
+ * ref whose contract a migration records, or no `--from` when there are no migrations.
  */
 
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
