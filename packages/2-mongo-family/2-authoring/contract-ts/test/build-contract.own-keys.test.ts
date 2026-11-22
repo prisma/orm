@@ -8,6 +8,7 @@ import { defineContract, field, model, valueObject } from '../src/contract-build
 import type { ContractDefinition, FieldNode, ModelNode } from '../src/contract-definition';
 import { enumType, member } from '../src/enum-type';
 import { nameIndexes } from '../src/name-indexes';
+import { refusalError } from '../src/refusal-errors';
 import { mongoFamilyPack, mongoTargetPack, type } from './mongo-test-packs';
 
 const codecLookup = extractCodecLookup([mongoFamilyPack, mongoTargetPack]);
@@ -56,11 +57,6 @@ function contractOf(overrides: Partial<ContractDefinition>): MongoContract {
   return built.value.contract;
 }
 
-function refusalsOf(overrides: Partial<ContractDefinition>) {
-  const built = build(overrides);
-  return built.ok ? [] : built.failure.refusals.map(({ kind, key }) => ({ kind, key }));
-}
-
 function collectionsOf(contract: MongoContract) {
   return contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries['collection'] ?? {};
 }
@@ -107,19 +103,30 @@ describe('Mongo contract names every object has as a property', () => {
 
   it('refuses __proto__ as the name of a model, collection, value object, enum or root', () => {
     const Proto = enumType('__proto__', { codecId: 'mongo/string@1' }, member('A', 'a'));
+    const built = build({
+      models: [stored('__proto__', 'users'), stored('User', '__proto__')],
+      valueObjects: [{ name: '__proto__', fields: [street] }],
+      enums: Object.fromEntries([['__proto__', Proto]]),
+      roots: Object.fromEntries([['__proto__', 'User']]),
+    });
+    const reason =
+      'is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.';
+    const refused = (message: string, meta: Record<string, string>) => ({
+      code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
+      message: `${message} ${reason}`,
+      meta: { name: '__proto__', ...meta, reason: 'name-not-a-key' },
+    });
     expect(
-      refusalsOf({
-        models: [stored('__proto__', 'users'), stored('User', '__proto__')],
-        valueObjects: [{ name: '__proto__', fields: [street] }],
-        enums: Object.fromEntries([['__proto__', Proto]]),
-        roots: Object.fromEntries([['__proto__', 'User']]),
+      (built.ok ? [] : built.failure.refusals).map((refusal) => {
+        const error = refusalError(refusal);
+        return { code: error.code, message: error.message, meta: error.meta };
       }),
     ).toEqual([
-      { kind: 'nameUnsupported', key: { kind: 'model', model: '__proto__' } },
-      { kind: 'nameUnsupported', key: { kind: 'collectionSettings', model: 'User' } },
-      { kind: 'nameUnsupported', key: { kind: 'valueObject', valueObject: '__proto__' } },
-      { kind: 'nameUnsupported', key: { kind: 'enum', enumName: '__proto__' } },
-      { kind: 'nameUnsupported', key: { kind: 'model', model: 'User' } },
+      refused('A model', { kind: 'model' }),
+      refused('The collection of model "User"', { kind: 'collection', modelName: 'User' }),
+      refused('A value object', { kind: 'valueObject' }),
+      refused('An enum', { kind: 'enum' }),
+      refused('A root of model "User"', { kind: 'root', modelName: 'User' }),
     ]);
   });
 
@@ -132,10 +139,15 @@ describe('Mongo contract names every object has as a property', () => {
       defineContract({ family: mongoFamilyPack, target: mongoTargetPack, models: { User } }),
     ).toThrow(
       expect.objectContaining({
-        code: 'CONTRACT.ARGUMENT_INVALID',
+        code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
         message:
           'The collection of model "User" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.',
-        meta: { kind: 'collection', name: '__proto__', reason: 'name-unsupported' },
+        meta: {
+          name: '__proto__',
+          kind: 'collection',
+          modelName: 'User',
+          reason: 'name-not-a-key',
+        },
       }),
     );
   });

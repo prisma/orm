@@ -177,7 +177,7 @@ function unsupportedNameSubject(
     case 'enum':
       return 'An enum';
     case 'root':
-      return 'A root';
+      return refusal.key.kind === 'model' ? `A root of model "${refusal.key.model}"` : 'A root';
     case 'collection':
       return refusal.key.kind === 'collectionSettings'
         ? `The collection of model "${refusal.key.model}"`
@@ -214,9 +214,18 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
       );
     case 'nameUnsupported':
       return contractError(
-        'CONTRACT.ARGUMENT_INVALID',
+        'CONTRACT.NAME_UNUSABLE_AS_KEY',
         `${unsupportedNameSubject(refusal)} is named "${refusal.name}", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.`,
-        { meta: { kind: refusal.subject, name: refusal.name, reason: 'name-unsupported' } },
+        {
+          meta: {
+            name: refusal.name,
+            kind: refusal.subject,
+            ...(refusal.subject !== 'model' && 'model' in refusal.key
+              ? { modelName: refusal.key.model }
+              : {}),
+            reason: 'name-not-a-key',
+          },
+        },
       );
     case 'storedNameDuplicate':
       return contractError(
