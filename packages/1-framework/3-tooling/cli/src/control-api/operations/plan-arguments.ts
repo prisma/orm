@@ -156,7 +156,7 @@ function startAtEndOf(graph: MigrationGraph, hash: string, history: string): Mig
   if (ends.length === 1 && onlyEnd !== undefined) return reference(onlyEnd);
   return {
     kind: 'ambiguous',
-    reason: ends.length === 0 ? `${history} has no end` : `${history} has more than one end`,
+    reason: `${history} has more than one end`,
     candidates: ends,
   };
 }

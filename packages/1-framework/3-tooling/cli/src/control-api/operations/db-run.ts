@@ -115,7 +115,6 @@ import {
   permittedSettingsOfRun,
   refuseForbiddenChanges,
 } from './database-policies';
-import { migrationsLeadToTarget } from './graph-queries';
 import { stripOperations } from './migration-helpers';
 import { structuralPathOf } from './no-invariant-path';
 import {
@@ -264,21 +263,14 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     ),
   );
   const migrationPlanOrigin = migrationPlan.from;
-  const migrationsReachTarget = migrationsLeadToTarget(
-    aggregate.app.graph(),
-    markerRows.get(aggregate.app.spaceId),
-    {
-      hash: contract.storage.storageHash,
-      invariants: (options.action === 'dbUpdate' ? options.ref?.invariants : undefined) ?? [],
-    },
-  );
 
   // 2c. The database's policies decide whether `db update` may move it, before anything is planned.
   let checkedPolicies: CheckedDatabasePolicies | undefined;
   if (options.action === 'dbUpdate') {
     const checked = checkRunPolicies({
       command: 'db update',
-      appSpaceId: aggregate.app.spaceId,
+      app: appSpaceOf(aggregate),
+      markers: markerRows,
       inForce: databasePoliciesInForce(
         markerRows,
         aggregate.app.spaceId,
@@ -287,8 +279,6 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       ref: options.ref,
       permitPolicyChange: options.permitPolicyChange,
       targetHash: contract.storage.storageHash,
-      migrationPlan,
-      migrationsReachTarget,
       invocation: options.invocation,
     });
     if (!checked.ok) {

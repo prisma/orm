@@ -33,7 +33,7 @@ import {
   type SpacePathOutcome,
   unreachableSpaceFailure,
 } from './migrate';
-import { appMigrationPlan, appSpaceOf, databasePositionOf } from './plan-arguments';
+import { appSpaceOf, databasePositionOf } from './plan-arguments';
 import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
@@ -253,13 +253,12 @@ export async function executeMigrateShowPlan(
       // The preview refuses a run the database's policies would refuse, with the same envelope.
       const permitted = checkRunPolicies({
         command: 'db migrate',
-        appSpaceId: aggregate.app.spaceId,
+        app: appSpaceOf(aggregate),
+        markers: allMarkers,
         inForce,
         ref: namedRef,
         permitPolicyChange: options.permitPolicyChange ?? false,
         targetHash,
-        migrationPlan: appMigrationPlan(appSpaceOf(aggregate), allMarkers, { kind: 'emitted' }),
-        migrationsReachTarget: false,
         invocation: options.invocation,
       });
       if (!permitted.ok) {

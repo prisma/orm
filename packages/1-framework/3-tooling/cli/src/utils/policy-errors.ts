@@ -66,8 +66,8 @@ export function errorChangePolicyForbids(args: {
   readonly ref?: { readonly name: string; readonly permitPolicyChange: boolean } | undefined;
   /** The `migration plan` the advice to author a migration prints: from the database, to where the run goes. */
   readonly migrationPlan: MigrationPlanArguments;
-  /** Whether the migrations on disk already lead from the database to the target. */
-  readonly migrationsReachTarget: boolean;
+  /** Whether the database needs migrations to reach the target, and whether they are on disk. */
+  readonly migrations: MigrationsToTarget;
   readonly invocation: CliInvocation | undefined;
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;
@@ -116,17 +116,26 @@ export function errorChangePolicyForbids(args: {
         : [],
   );
   const plan = printedPlan(invocation, args.migrationPlan, []);
-  const recovery = args.migrationsReachTarget
-    ? `The planned migrations already lead there: apply them with \`${migrate}\`.`
-    : plan.kind === 'none'
-      ? `No migration can be planned to move it. ${plan.reason}.`
-      : `Author a migration with ${quotedPlan(plan)}, then apply it with \`${migrate}\`.`;
+  const recovery =
+    args.migrations === 'none-needed'
+      ? 'The database is already at this contract, so there is no migration for `db migrate` to apply.'
+      : args.migrations === 'on-disk'
+        ? `The planned migrations already lead there: apply them with \`${migrate}\`.`
+        : plan.kind === 'none'
+          ? `No migration can be planned to move it. ${plan.reason}.`
+          : `Author a migration with ${quotedPlan(plan)}, then apply it with \`${migrate}\`.`;
   return new ActionableCliError(
     'MIGRATION.CHANGE_POLICY_FORBIDS',
     `${policyHolder} permits only migrations`,
     { why, fix: recovery, nextActions: [chooseAction(recovery)], meta },
   );
 }
+
+/**
+ * Whether a database needs migrations to reach a target: none, because it is already there; ones
+ * already on disk; or ones still to author.
+ */
+export type MigrationsToTarget = 'none-needed' | 'on-disk' | 'missing';
 
 export type DataProtectionCheckedCommand = 'db migrate' | 'db update' | 'migration plan';
 

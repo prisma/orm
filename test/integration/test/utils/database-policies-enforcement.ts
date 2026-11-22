@@ -123,10 +123,33 @@ export function definePolicyEnforcementJourneys(
           { kind: 'user-choice', label: recovery(`prisma-test db migrate --to ${next}`) },
         ]);
         expect(sign['nextActions']).toEqual([
-          { kind: 'user-choice', label: recovery('prisma-test db migrate') },
+          { kind: 'user-choice', label: recovery(`prisma-test db migrate --to ${next}`) },
         ]);
         const migrated = await runMigrate(project.ctx);
         expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'advises, for db sign of an older contract the migrations lead to, a db migrate that stops at that contract',
+    async (test) => {
+      await withProject(test, async (project) => {
+        await migrationsOnlyDatabase(project);
+        const next = await planTo(project, 'next', 'next');
+        await planTo(project, 'unique', 'unique');
+
+        const sign = errorOf(await runDbSign(project.ctx, [next, '--json']));
+        const [advice] = (sign['nextActions'] ?? []) as readonly { readonly label: string }[];
+        expect(advice?.label).toBe(
+          `The planned migrations already lead there: apply them with \`prisma-test db migrate --to ${next}\`.`,
+        );
+        const [migrate] = printedCommands(advice?.label ?? '');
+        expect(migrate?.slice(0, 2)).toEqual(['db', 'migrate']);
+        const migrated = await runMigrate(project.ctx, [...(migrate ?? []).slice(2)]);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+        expect((await appMarker(project))?.storageHash).toBe(next);
       });
     },
     timeout,

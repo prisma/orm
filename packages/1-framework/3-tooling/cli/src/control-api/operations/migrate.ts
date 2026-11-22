@@ -80,7 +80,6 @@ import {
 } from './database-policies';
 import { noInvariantPathError } from './no-invariant-path';
 import {
-  appMigrationPlan,
   appSpaceOf,
   type DatabasePosition,
   databasePositionOf,
@@ -236,13 +235,12 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   // recovery the change policy permits.
   const checkedPolicies = checkRunPolicies({
     command: 'db migrate',
-    appSpaceId: aggregate.app.spaceId,
+    app: appSpaceOf(aggregate),
+    markers: markerRows,
     inForce,
     ref,
     permitPolicyChange: options.permitPolicyChange ?? false,
     targetHash: appTargetHash,
-    migrationPlan: appMigrationPlan(appSpaceOf(aggregate), markerRows, { kind: 'emitted' }),
-    migrationsReachTarget: false,
     invocation: options.invocation,
   });
   if (!checkedPolicies.ok) {

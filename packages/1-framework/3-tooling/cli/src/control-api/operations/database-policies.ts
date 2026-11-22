@@ -10,6 +10,10 @@ import {
   databasePolicyDifferences,
   withDeclaredDatabasePolicies,
 } from '@internal/framework-components/control';
+import {
+  type ContractMarkerRecordLike,
+  contractHashAtMarker,
+} from '@internal/migration-tools/aggregate';
 import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -26,10 +30,17 @@ import {
   errorChangePolicyForbids,
   errorDataProtectionForbids,
   errorPolicyMismatch,
+  type MigrationsToTarget,
   type PolicySource,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
-import type { MigrationPlanArguments } from './plan-arguments';
+import { migrationsLeadToTarget } from './graph-queries';
+import {
+  appMigrationPlan,
+  type MigrationPlanArguments,
+  type PlanEnd,
+  type PlanSpace,
+} from './plan-arguments';
 
 /**
  * The database's policies in force: what the application space's marker records, filled from
@@ -76,18 +87,19 @@ const STRATEGY_OF: Record<ChangePolicyCheckedCommand, ChangeStrategy> = {
  */
 export function checkRunPolicies(args: {
   readonly command: ChangePolicyCheckedCommand;
-  readonly appSpaceId: string;
+  /** The application space, whose migrations and refs the refusal's advice names. */
+  readonly app: PlanSpace & { readonly spaceId: string };
+  /** The markers the run read, which say where the database is. */
+  readonly markers: ReadonlyMap<string, ContractMarkerRecordLike | null>;
   readonly inForce: DatabasePolicies;
   readonly ref: NamedRef | undefined;
   readonly permitPolicyChange: boolean;
+  /** The contract the run moves the database to: the ref's, when there is one. */
   readonly targetHash: string;
-  /** The `migration plan` a refusal of `db update` or `db sign` prints: from the database, to where the run goes. */
-  readonly migrationPlan: MigrationPlanArguments;
-  /** Whether the migrations on disk already lead from the database to the target, so `db migrate` alone moves it. */
-  readonly migrationsReachTarget: boolean;
   readonly invocation: CliInvocation | undefined;
 }): Result<CheckedDatabasePolicies, CliStructuredError> {
-  const { appSpaceId, inForce, ref } = args;
+  const { app, inForce, ref } = args;
+  const appSpaceId = app.spaceId;
   const declared = ref?.policies;
   const differences = declared === undefined ? [] : databasePolicyDifferences(declared, inForce);
   if (ref !== undefined && differences.length > 0 && !args.permitPolicyChange) {
@@ -111,8 +123,7 @@ export function checkRunPolicies(args: {
             ? { kind: 'ref', refName: ref.name }
             : { kind: 'marker' },
         targetHash: args.targetHash,
-        migrationPlan: args.migrationPlan,
-        migrationsReachTarget: args.migrationsReachTarget,
+        ...migrationsToTarget(args),
         ref:
           ref === undefined
             ? undefined
@@ -122,6 +133,32 @@ export function checkRunPolicies(args: {
     );
   }
   return ok({ inForce, toWrite });
+}
+
+/**
+ * What a refusal of `db update` or `db sign` advises to move the database to the target through
+ * migrations: the `migration plan` that ends there, and whether migrations are needed at all.
+ */
+function migrationsToTarget(args: {
+  readonly app: PlanSpace & { readonly spaceId: string };
+  readonly markers: ReadonlyMap<string, ContractMarkerRecordLike | null>;
+  readonly ref: NamedRef | undefined;
+  readonly targetHash: string;
+}): { readonly migrationPlan: MigrationPlanArguments; readonly migrations: MigrationsToTarget } {
+  const { app, markers, ref, targetHash } = args;
+  const end: PlanEnd =
+    ref === undefined ? { kind: 'contract', hash: targetHash } : { kind: 'ref', name: ref.name };
+  const marker = markers.get(app.spaceId);
+  const migrations: MigrationsToTarget =
+    contractHashAtMarker(marker) === targetHash
+      ? 'none-needed'
+      : migrationsLeadToTarget(app.graph, marker, {
+            hash: targetHash,
+            invariants: ref?.invariants ?? [],
+          })
+        ? 'on-disk'
+        : 'missing';
+  return { migrationPlan: appMigrationPlan(app, markers, end), migrations };
 }
 
 /** The data protection levels a checked run obeys: those it records when it consents to a change, otherwise those in force. */
