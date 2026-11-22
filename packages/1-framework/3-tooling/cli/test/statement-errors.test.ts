@@ -112,7 +112,7 @@ describe('errorStatementNeedsMigrationFile', () => {
       code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
       summary: 'db update cannot carry out "--convert User.years" and "--backfill User.email"',
       why: expect.stringContaining('db update has no migration file to fill'),
-      fix: 'Plan the change with `{bin} migration plan --from db --rename User.age:User.years --convert User.years --delete Legacy --backfill User.email`, fill in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate`. Or leave out these statements: db update then asks before it loses any data.',
+      fix: 'Plan the change with `{bin} migration plan --from db --rename User.age:User.years --convert User.years --delete Legacy --backfill User.email`, fill in the migration.ts it writes, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate`. Or leave out these statements: db update then asks before it loses any data.',
       meta: {
         statements: [
           { verb: 'convert', text: 'User.years' },
@@ -193,7 +193,7 @@ describe('errorStatementNeedsMigrationFile', () => {
         ),
       ),
     }).toEqual({
-      fix: 'Plan the change with `{bin} migration plan --from db --convert User.years --config app/prisma.config.ts`, fill in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate --config app/prisma.config.ts`. Or leave out these statements: db update then asks before it loses any data.',
+      fix: 'Plan the change with `{bin} migration plan --from db --convert User.years --config app/prisma.config.ts`, fill in the migration.ts it writes, run `node <migration directory>/migration.ts --config app/prisma.config.ts` for the directory it writes, and apply it with `{bin} db migrate --config app/prisma.config.ts`. Or leave out these statements: db update then asks before it loses any data.',
       commands: [
         '{bin} migration plan --from db --convert User.years --config app/prisma.config.ts',
       ],

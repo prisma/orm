@@ -330,7 +330,7 @@ describe('errorDataProtectionForbids advice', () => {
       {
         kind: 'user-choice',
         label:
-          "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with `{bin} migration plan --from db --convert <field> --config app.config.ts`. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.",
+          "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with `{bin} migration plan --from db --convert <field> --config app.config.ts`, run `node <migration directory>/migration.ts --config app.config.ts` for the directory it writes, and apply it with `{bin} db migrate --config app.config.ts --db <url>`. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.",
       },
     ]);
   });
@@ -359,11 +359,11 @@ describe('errorDataProtectionForbids advice', () => {
     });
 
     expect(fix).toContain(
-      'For a type change, write the conversion with `{bin} migration plan --from db --to production --convert <field>`.',
+      'For a type change, write the conversion with `{bin} migration plan --from db --to production --convert <field>`, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate --to production --db <url>`.',
     );
   });
 
-  it('points a type change at the migrations on disk that already lead to the ref, and plans nothing beside them', () => {
+  it('points a type change at the migrations on disk that already lead to the ref, and plans no second path', () => {
     const { fix } = errorDataProtectionForbids({
       spaceId: 'app',
       command: 'db update',
@@ -383,12 +383,16 @@ describe('errorDataProtectionForbids advice', () => {
         },
       ],
       invocation: { ...invocation, rerunArgs: ['--to', 'production', '--permit-policy-change'] },
-      migrationPlan: { from: reference('db'), to: reference('production'), migrationsOnDisk: true },
+      migrationPlan: {
+        from: reference('db'),
+        to: reference('production'),
+        migrationsToTarget: { kind: 'on-disk' },
+      },
     });
 
     expect(fix).not.toContain('{bin} migration plan');
     expect(fix).toContain(
-      'Migrations on disk already lead from the database to that contract, so a migration planned now would run beside them. For a type change, write the conversion in the migration.ts of the one that changes the field, run that migration.ts with `node`, and apply them with `{bin} db migrate --to production --permit-policy-change --db <url>`.',
+      'Migrations on disk already lead from the database to `production`, so a migration planned now would be a second path between the same two contracts, and `db migrate` applies only one of them. For a type change, write the conversion in the migration.ts of the one that changes the field, run that migration.ts with `node`, and apply them with `{bin} db migrate --to production --permit-policy-change --db <url>`.',
     );
   });
 

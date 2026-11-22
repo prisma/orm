@@ -26,10 +26,10 @@ import {
 import {
   type DatabasePosition,
   databasePositionOf,
-  dbUpdateMigrationPlan,
   type MigrationPlanArguments,
   migrationPlanArguments,
   migrationPlanChoice,
+  migrationPlanForDatabase,
   migrationPlanTo,
   type PlanEnd,
   type PlanSpace,
@@ -607,7 +607,7 @@ async function migrationPlanIfReachable(
         : databasePositionOf(read.marker?.storageHash);
   if (space !== undefined) {
     return read?.kind === 'read'
-      ? dbUpdateMigrationPlan(space, read.marker, end)
+      ? migrationPlanForDatabase(space, read.marker, end)
       : migrationPlanArguments(space, position, end);
   }
   return {

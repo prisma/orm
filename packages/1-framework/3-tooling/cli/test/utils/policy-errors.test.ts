@@ -46,7 +46,6 @@ describe('errorChangePolicyForbids', () => {
         command: 'db update',
         change: ['migrate'],
         source: { kind: 'marker' },
-        migrations: 'missing',
         targetHash: TARGET,
         migrationPlan: { from: NOT_RECORDED, to: { kind: 'default' } },
         invocation: undefined,
@@ -55,7 +54,7 @@ describe('errorChangePolicyForbids', () => {
   });
 
   it('refuses db update on a database that changes only through migrations', () => {
-    const recovery = `Author a migration with \`{bin} migration plan --from ${TARGET}\`, then apply it with \`{bin} db migrate --db <url>\`.`;
+    const recovery = `Author a migration with \`{bin} migration plan --from ${TARGET}\`, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate --db <url>\`.`;
 
     expect(
       errorChangePolicyForbids({
@@ -63,7 +62,6 @@ describe('errorChangePolicyForbids', () => {
         command: 'db update',
         change: ['migrate'],
         source: { kind: 'marker' },
-        migrations: 'missing',
         targetHash: TARGET,
         migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation,
@@ -87,7 +85,6 @@ describe('errorChangePolicyForbids', () => {
         command: 'db sign',
         change: ['migrate'],
         source: { kind: 'marker' },
-        migrations: 'missing',
         targetHash: TARGET,
         migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation,
@@ -108,7 +105,6 @@ describe('errorChangePolicyForbids', () => {
         command: 'db migrate',
         change: ['reconcile'],
         source: { kind: 'marker' },
-        migrations: 'missing',
         targetHash: TARGET,
         migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation,
@@ -126,7 +122,7 @@ describe('errorChangePolicyForbids', () => {
   });
 
   it("names the ref when db update is refused by the ref's declaration, and applies the migration to the ref with the flag the user gave", () => {
-    const recovery = `Author a migration with \`{bin} migration plan --from ${TARGET} --config app.config.ts\`, then apply it with \`{bin} db migrate --to production --permit-policy-change --config app.config.ts --db <url>\`.`;
+    const recovery = `Author a migration with \`{bin} migration plan --from ${TARGET} --config app.config.ts\`, run \`node <migration directory>/migration.ts --config app.config.ts\` for the directory it writes, and apply it with \`{bin} db migrate --to production --permit-policy-change --config app.config.ts --db <url>\`.`;
 
     expect(
       errorChangePolicyForbids({
@@ -134,7 +130,6 @@ describe('errorChangePolicyForbids', () => {
         command: 'db update',
         change: ['migrate'],
         source: { kind: 'ref', refName: 'production' },
-        migrations: 'missing',
         targetHash: TARGET,
         migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation: { ...invocation, configPath: 'app.config.ts' },
@@ -161,7 +156,6 @@ describe('errorChangePolicyForbids', () => {
         command: 'db migrate',
         change: ['reconcile'],
         source: { kind: 'ref', refName: 'production' },
-        migrations: 'missing',
         targetHash: TARGET,
         migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation: { ...invocation, configPath: 'app.config.ts' },
@@ -193,7 +187,6 @@ describe('errorChangePolicyForbids', () => {
           command: 'db migrate',
           change: ['reconcile'],
           source: { kind: 'marker' },
-          migrations: 'missing',
           targetHash: TARGET,
           migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
           ref: { name: 'production', permitPolicyChange },
@@ -209,7 +202,7 @@ describe('errorChangePolicyForbids', () => {
   );
 
   it("names the ref the user gave when the marker's policy refuses db update", () => {
-    const recovery = `Author a migration with \`{bin} migration plan --from ${TARGET}\`, then apply it with \`{bin} db migrate --to production --db <url>\`.`;
+    const recovery = `Author a migration with \`{bin} migration plan --from ${TARGET}\`, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate --to production --db <url>\`.`;
 
     expect(
       errorChangePolicyForbids({
@@ -217,7 +210,6 @@ describe('errorChangePolicyForbids', () => {
         command: 'db update',
         change: ['migrate'],
         source: { kind: 'marker' },
-        migrations: 'missing',
         targetHash: TARGET,
         migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         ref: { name: 'production', permitPolicyChange: false },

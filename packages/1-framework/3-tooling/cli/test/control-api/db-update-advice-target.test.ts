@@ -178,6 +178,7 @@ async function runToProduction(options: {
   readonly runner?: MigrationRunnerResult;
   readonly statements?: readonly { readonly verb: 'backfill'; readonly text: string }[];
   readonly forbidDataLoss?: boolean;
+  readonly invariants?: readonly string[];
 }) {
   const dir = createTestProjectDir('db-update-advice-target');
   tempDirs.push(dir);
@@ -190,7 +191,8 @@ async function runToProduction(options: {
   }
   const refs = join(migrationsDir, 'app', 'refs');
   await writeRef(refs, 'db', { hash: ORIGIN_HASH, invariants: [] });
-  await writeRef(refs, 'production', { hash: DESTINATION_HASH, invariants: [] });
+  const invariants = options.invariants ?? [];
+  await writeRef(refs, 'production', { hash: DESTINATION_HASH, invariants });
   if (options.migrationToRef) await writeMigrationToRef(migrationsDir);
   const asked: PlanQuestion[] = [];
   const migrations = {
@@ -220,7 +222,7 @@ async function runToProduction(options: {
     ref: {
       name: 'production',
       hash: DESTINATION_HASH,
-      invariants: [],
+      invariants,
       ...(options.forbidDataLoss === true
         ? { policies: { dataProtection: { dataLoss: 'data-loss-forbidden' as const } } }
         : {}),
@@ -245,6 +247,7 @@ const PLAN_TO_PRODUCTION_END = {
 const PLAN_TO_PRODUCTION = {
   from: { kind: 'reference', reference: 'db' },
   to: { kind: 'reference', reference: 'production' },
+  migrationsToTarget: { kind: 'not-on-disk', missingInvariants: [] },
 };
 
 describe('db update --to <ref> with no migration on disk that leads there', () => {
@@ -294,7 +297,7 @@ describe('db update --to <ref> with no migration on disk that leads there', () =
     });
 
     expect(adviceOf(result)).toContain(
-      'For a type change, write the conversion with `{bin} migration plan --from db --to production --convert <field>`.',
+      `For a type change, write the conversion with \`{bin} migration plan --from db --to production --convert <field>\`, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with ${APPLY}.`,
     );
   });
 
@@ -321,9 +324,11 @@ describe('db update --to <ref> with no migration on disk that leads there', () =
 });
 
 describe('db update --to <ref> when migrations on disk already lead there', () => {
-  const ON_DISK = `Migrations on disk already lead from the database to that contract, so a migration planned now would run beside them: apply them with ${APPLY}`;
+  const ON_DISK_REASON =
+    'Migrations on disk already lead from the database to `production`, so a migration planned now would be a second path between the same two contracts, and `db migrate` applies only one of them';
+  const ON_DISK = `${ON_DISK_REASON}. Apply them with ${APPLY}`;
 
-  it('says to apply them after a failed apply, and plans nothing beside them', async () => {
+  it('says to apply them after a failed apply, and plans no second path', async () => {
     const { result } = await runToProduction({
       mode: 'apply',
       migrationToRef: true,
@@ -344,12 +349,12 @@ describe('db update --to <ref> when migrations on disk already lead there', () =
       {
         from: { kind: 'reference', reference: ORIGIN_HASH },
         ...PLAN_TO_PRODUCTION_END,
-        migrationsOnDisk: true,
+        migrationsToTarget: { kind: 'on-disk' },
       },
       {
         from: { kind: 'reference', reference: ORIGIN_HASH },
         ...PLAN_TO_PRODUCTION_END,
-        migrationsOnDisk: true,
+        migrationsToTarget: { kind: 'on-disk' },
       },
     ]);
   });
@@ -364,7 +369,7 @@ describe('db update --to <ref> when migrations on disk already lead there', () =
     const advice = adviceOf(result);
     expect(advice).not.toContain('{bin} migration plan');
     expect(result.ok ? undefined : (result.failure as { readonly why?: string }).why).toContain(
-      'Migrations on disk already lead from the database to that contract',
+      ON_DISK_REASON,
     );
     expect(advice).toContain(`apply the migrations with ${APPLY}`);
   });
@@ -394,5 +399,22 @@ describe('db update --to <ref> when migrations on disk already lead there', () =
     const questions = asked.map(({ question }) => question).join('\n');
     expect(questions).not.toContain('{bin} migration plan');
     expect(questions).toContain(APPLY);
+  });
+});
+
+describe('db update --to <ref> when the migrations on disk that lead there lack an invariant it requires', () => {
+  it('plans a migration to the ref that provides the invariant after a failed apply', async () => {
+    const { result } = await runToProduction({
+      mode: 'apply',
+      migrationToRef: true,
+      runner: RUNNER_FAILED,
+      invariants: ['seeded'],
+    });
+
+    const advice = adviceOf(result);
+    expect(advice).toContain('`{bin} migration plan --from');
+    expect(advice).toContain('--to production');
+    expect(advice).toContain('add to it a `dataTransform` with `invariantId` "seeded"');
+    expect(advice).toContain(APPLY);
   });
 });

@@ -32,18 +32,20 @@ describe('migrationsToTarget', () => {
   ]);
 
   it('is on-disk when a migration path leads from the marker to the target', () => {
-    expect(migrationsToTarget(graph, marker(HASH_A), { hash: HASH_B, invariants: [] })).toBe(
-      'on-disk',
+    expect(migrationsToTarget({ graph }, marker(HASH_A), { hash: HASH_B, invariants: [] })).toEqual(
+      { kind: 'on-disk' },
     );
   });
 
   it('starts a database with no marker at the empty contract', () => {
-    expect(migrationsToTarget(graph, undefined, { hash: HASH_B, invariants: [] })).toBe('on-disk');
+    expect(migrationsToTarget({ graph }, undefined, { hash: HASH_B, invariants: [] })).toEqual({
+      kind: 'on-disk',
+    });
   });
 
   it('needs none when the database is already at the target, where db migrate does nothing', () => {
-    expect(migrationsToTarget(graph, marker(HASH_B), { hash: HASH_B, invariants: [] })).toBe(
-      'none-needed',
+    expect(migrationsToTarget({ graph }, marker(HASH_B), { hash: HASH_B, invariants: [] })).toEqual(
+      { kind: 'none-needed' },
     );
   });
 
@@ -53,28 +55,51 @@ describe('migrationsToTarget', () => {
       { ...entry(HASH_B, HASH_B, 'm2'), invariants: ['seeded'] },
     ]);
     expect(
-      migrationsToTarget(seeds, marker(HASH_B), { hash: HASH_B, invariants: ['seeded'] }),
-    ).toBe('on-disk');
+      migrationsToTarget({ graph: seeds }, marker(HASH_B), {
+        hash: HASH_B,
+        invariants: ['seeded'],
+      }),
+    ).toEqual({ kind: 'on-disk' });
   });
 
-  it('reports the invariants missing when the database is at the target and no migration provides one it lacks', () => {
+  it('names the invariants no migration provides when the database is at the target', () => {
     expect(
-      migrationsToTarget(graph, marker(HASH_B), { hash: HASH_B, invariants: ['seeded'] }),
-    ).toBe('invariants-missing');
+      migrationsToTarget({ graph }, marker(HASH_B), {
+        hash: HASH_B,
+        invariants: ['seeded', 'indexed'],
+      }),
+    ).toEqual({ kind: 'invariants-not-on-disk', missingInvariants: ['indexed', 'seeded'] });
   });
 
-  it('is missing when no path from elsewhere provides an invariant the target requires', () => {
+  it('names the --from of migration new when the target is the emitted contract and a migration ends there', () => {
+    const target = { hash: HASH_B, invariants: ['seeded'] };
     expect(
-      migrationsToTarget(graph, marker(HASH_A), {
+      [HASH_B, HASH_A].map((emittedHash) =>
+        migrationsToTarget({ graph, emittedHash }, marker(HASH_B), target),
+      ),
+    ).toEqual([
+      { kind: 'invariants-not-on-disk', missingInvariants: ['seeded'], newMigrationFrom: HASH_B },
+      { kind: 'invariants-not-on-disk', missingInvariants: ['seeded'] },
+    ]);
+  });
+
+  it('is not on disk when no path from elsewhere provides an invariant the target requires', () => {
+    expect(
+      migrationsToTarget({ graph }, marker(HASH_A), {
         hash: HASH_B,
         invariants: ['backfill-email'],
       }),
-    ).toBe('missing');
+    ).toEqual({ kind: 'not-on-disk', missingInvariants: ['backfill-email'] });
   });
 
   it('counts an invariant a migration on the path provides, or the marker already records', () => {
     const target = { hash: HASH_B, invariants: ['backfill-email', 'seeded'] };
-    expect(migrationsToTarget(withInvariant, marker(HASH_A, ['seeded']), target)).toBe('on-disk');
-    expect(migrationsToTarget(withInvariant, marker(HASH_A), target)).toBe('missing');
+    expect(
+      migrationsToTarget({ graph: withInvariant }, marker(HASH_A, ['seeded']), target),
+    ).toEqual({ kind: 'on-disk' });
+    expect(migrationsToTarget({ graph: withInvariant }, marker(HASH_A), target)).toEqual({
+      kind: 'not-on-disk',
+      missingInvariants: ['backfill-email', 'seeded'],
+    });
   });
 });

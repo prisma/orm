@@ -244,16 +244,59 @@ describe('advice after a failed db update --to when migrations on disk already l
     adviceAfterDbUpdate({
       from: reference(FROM),
       to: reference('production'),
-      migrationsOnDisk: true,
+      migrationsToTarget: { kind: 'on-disk' },
     }),
-  )('plans no migration beside them, and applies them with the flags given: %s', (_, adviceOf) => {
+  )('plans no second path, and applies them with the flags given: %s', (_, adviceOf) => {
     const advice = adviceOf(GIVEN);
     expect(advice).not.toContain('{bin} migration plan');
-    expect(advice).toContain('Migrations on disk already lead from the database to that contract');
+    expect(advice).toContain(
+      'Migrations on disk already lead from the database to `production`, so a migration planned now would be a second path between the same two contracts, and `db migrate` applies only one of them.',
+    );
     expect(new Set(commandsIn(advice, 'db migrate'))).toEqual(
       new Set(['{bin} db migrate --to production --permit-policy-change']),
     );
   });
+});
+
+describe('advice after a failed db update --to a ref whose invariant no migration on disk provides', () => {
+  it.each(
+    adviceAfterDbUpdate({
+      from: reference(FROM),
+      to: reference('production'),
+      migrationsToTarget: { kind: 'not-on-disk', missingInvariants: ['seeded'] },
+    }),
+  )('plans a migration that provides it: %s', (_, adviceOf) => {
+    const advice = adviceOf(GIVEN);
+    expect(advice).toContain(`{bin} migration plan --from ${FROM} --to production`);
+    expect(advice).toContain('add to it a `dataTransform` with `invariantId` "seeded"');
+    expect(new Set(commandsIn(advice, 'db migrate'))).toEqual(
+      new Set(['{bin} db migrate --to production --permit-policy-change']),
+    );
+  });
+
+  it.each(
+    adviceAfterDbUpdate({
+      from: reference(FROM),
+      to: reference('production'),
+      migrationsToTarget: {
+        kind: 'invariants-not-on-disk',
+        missingInvariants: ['seeded'],
+        newMigrationFrom: FROM,
+      },
+    }),
+  )(
+    'when the database is already at the ref, writes that migration with migration new: %s',
+    (_, adviceOf) => {
+      const advice = adviceOf(GIVEN);
+      expect(advice).not.toContain('{bin} migration plan');
+      expect(advice).toContain(
+        `Write a migration from that contract to itself with \`{bin} migration new --from ${FROM}\`, add to its migration.ts a \`dataTransform\` with \`invariantId\` "seeded"`,
+      );
+      expect(new Set(commandsIn(advice, 'db migrate'))).toEqual(
+        new Set(['{bin} db migrate --to production --permit-policy-change']),
+      );
+    },
+  );
 });
 
 /** Every piece of advice after a failed db update that prints a `migration plan` to `TO_PRODUCTION`. */

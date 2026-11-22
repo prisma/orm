@@ -149,7 +149,7 @@ describe('a question about a value object field', () => {
 
     expect(asked).toEqual([
       'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
-      'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required field "GeoPoint.latitude" gets no temporary value: plan the change with `{bin} migration plan --from db --backfill GeoPoint.latitude` to write its value in migration.ts.',
+      'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required field "GeoPoint.latitude" gets no temporary value: plan the change with `{bin} migration plan --from db --backfill GeoPoint.latitude` to write its value in migration.ts, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate`.',
       `Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required field "GeoPoint.latitude" gets no temporary value: no migration can be planned to write its value either. ${NOT_RECORDED_REASON}.`,
     ]);
   });

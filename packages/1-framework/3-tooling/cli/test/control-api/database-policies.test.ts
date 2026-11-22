@@ -27,16 +27,22 @@ function check(args: {
   readonly graph?: MigrationGraph;
   readonly markerHash?: string;
 }) {
+  const ref =
+    args.ref ??
+    (args.declared === undefined
+      ? undefined
+      : { name: 'production', hash: TARGET, invariants: [], policies: args.declared });
   return checkRunPolicies({
     command: args.command,
-    app: { spaceId: 'app', graph: args.graph ?? buildGraph([]), refs: {}, emittedHash: TARGET },
+    app: {
+      spaceId: 'app',
+      graph: args.graph ?? buildGraph([]),
+      refs: ref === undefined ? {} : { [ref.name]: ref },
+      emittedHash: TARGET,
+    },
     markers: new Map([['app', { storageHash: args.markerHash ?? ORIGIN, invariants: [] }]]),
     inForce: args.inForce,
-    ref:
-      args.ref ??
-      (args.declared === undefined
-        ? undefined
-        : { name: 'production', hash: TARGET, invariants: [], policies: args.declared }),
+    ref,
     permitPolicyChange: args.permitPolicyChange,
     targetHash: TARGET,
     invocation: undefined,
@@ -51,7 +57,7 @@ describe('checkRunPolicies', () => {
   it.each(['db update', 'db sign'] as const)(
     'advises %s, refused on a database that changes only through migrations, to run db migrate to the target alone when migrations already lead there',
     (command) => {
-      const recovery = `The planned migrations already lead there: apply them with \`{bin} db migrate --to ${TARGET}\`.`;
+      const recovery = `Migrations on disk already lead from the database to \`${TARGET}\`, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them. Apply them with \`{bin} db migrate --to ${TARGET}\`, which names the migration.ts to change if one of them fails.`;
       const result = check({
         command,
         inForce: MIGRATE_ONLY,
@@ -80,7 +86,7 @@ describe('checkRunPolicies', () => {
           }),
         ),
       ).toBe(
-        'The database is already at this contract, so there is no migration for `db migrate` to apply.',
+        `No migration can be planned to move it. The database is already at \`${TARGET}\` and records every invariant it requires, so there is no migration to apply.`,
       );
     },
   );
@@ -97,7 +103,7 @@ describe('checkRunPolicies', () => {
         }),
       ),
     ).toBe(
-      `Author a migration with \`{bin} migration plan --from ${ORIGIN} --to production\`, add a \`dataTransform\` with \`invariantId\` "seeded" to the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, then apply it with \`{bin} db migrate --to production\`.`,
+      `Author a migration with \`{bin} migration plan --from ${ORIGIN} --to production\`, add to it a \`dataTransform\` with \`invariantId\` "seeded", run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate --to production\`.`,
     );
   });
 
@@ -115,8 +121,26 @@ describe('checkRunPolicies', () => {
 
     expect(recovery).not.toContain('migration plan');
     expect(recovery).toBe(
-      'The database is at this contract, but no migration on disk provides the invariants "indexed", "seeded" it requires and the database does not record. Add a migration from this contract to itself that runs a `dataTransform` with `invariantId` set to each of them, run its migration.ts with `node`, then apply it with `{bin} db migrate --to production --permit-policy-change`.',
+      `No migration can be planned to move it. The database is at \`production\`, but no migration on disk provides the invariants "indexed", "seeded" it requires and the database does not record, and a plan from a contract to itself is empty. Write a migration from that contract to itself with \`{bin} migration new --from ${TARGET}\`, add to its migration.ts a \`dataTransform\` for each of the invariants "indexed", "seeded", with that invariant as its \`invariantId\`, run \`node <migration directory>/migration.ts\` for its directory, and apply it with \`{bin} db migrate --to production --permit-policy-change\`.`,
     );
+  });
+
+  it('names no migration new command when the emitted contract is not the one the database is at', () => {
+    const recovery = recoveryOf(
+      check({
+        command: 'db update',
+        inForce: MIGRATE_ONLY,
+        permitPolicyChange: false,
+        graph: LEADS_TO_TARGET,
+        markerHash: ORIGIN,
+        ref: { name: 'staging', hash: ORIGIN, invariants: ['seeded'] },
+      }),
+    );
+
+    expect(recovery).toContain(
+      'Write a migration from that contract to itself, add to its migration.ts a `dataTransform` with `invariantId` "seeded",',
+    );
+    expect(recovery).not.toContain('migration new');
   });
 
   it('advises db migrate when the database is at the ref contract but lacks an invariant a migration on disk provides', () => {
@@ -133,7 +157,7 @@ describe('checkRunPolicies', () => {
         }),
       ),
     ).toBe(
-      'The planned migrations already lead there: apply them with `{bin} db migrate --to production`.',
+      'Migrations on disk already lead from the database to `production`, so a migration planned now would be a second path between the same two contracts, and `db migrate` applies only one of them. Apply them with `{bin} db migrate --to production`, which names the migration.ts to change if one of them fails.',
     );
   });
 

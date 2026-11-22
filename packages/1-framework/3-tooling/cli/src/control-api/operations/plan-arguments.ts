@@ -16,7 +16,7 @@ import {
 } from '@internal/migration-tools/migration-graph';
 import type { OnDiskMigrationPackage } from '@internal/migration-tools/package';
 import type { Refs } from '@internal/migration-tools/refs';
-import { migrationsToTarget } from './graph-queries';
+import { type MigrationsToTarget, migrationsToTarget } from './graph-queries';
 import type { FromResolution } from './plan-resolution';
 
 /**
@@ -49,14 +49,13 @@ export type RunnablePlanArgument = Extract<
 >;
 
 /**
- * What a `migration plan` takes for `--from` and `--to`. `migrationsOnDisk` is set when migrations
- * on disk already lead from where the database is to `to`: `db migrate` applies them, and a
- * migration planned from `from` would run beside them, so advice prints no plan.
+ * What a `migration plan` takes for `--from` and `--to`, and, when the database's marker was read,
+ * how the database reaches `to` through migrations, which decides whether advice prints the plan.
  */
 export interface MigrationPlanArguments {
   readonly from: MigrationPlanArgument;
   readonly to: MigrationPlanTargetArgument;
-  readonly migrationsOnDisk?: true;
+  readonly migrationsToTarget?: MigrationsToTarget;
 }
 
 /**
@@ -258,34 +257,20 @@ export function migrationPlanReplacing(
   return startAtPosition({ graph, refs: space.refs }, { kind: 'contract', hash: failed.from });
 }
 
-/** The `migration plan` for the application space's database, at its marker in `markers`, to `end`. */
-export function appMigrationPlan(
-  app: PlanSpace & { readonly spaceId: string },
-  markers: ReadonlyMap<string, { readonly storageHash: string } | null>,
-  end: PlanEnd,
-): MigrationPlanArguments {
-  return migrationPlanArguments(
-    app,
-    databasePositionOf(markers.get(app.spaceId)?.storageHash),
-    end,
-  );
-}
-
 /**
- * The `migration plan` that advice after a `db update` prints to take the database at `marker` to
- * `end`, marked `migrationsOnDisk` when migrations on disk already lead there and provide every
- * invariant the end requires that the database does not record.
+ * The `migration plan` that takes the database at `marker` to `end`, with how it reaches `end`
+ * through migrations when the contract `end` names is known.
  */
-export function dbUpdateMigrationPlan(
+export function migrationPlanForDatabase(
   space: PlanSpace,
   marker: ContractMarkerRecordLike | null | undefined,
   end: PlanEnd,
 ): MigrationPlanArguments {
   const plan = migrationPlanArguments(space, databasePositionOf(marker?.storageHash), end);
   const target = planEndContract(space, end);
-  return target !== undefined && migrationsToTarget(space.graph, marker, target) === 'on-disk'
-    ? { ...plan, migrationsOnDisk: true }
-    : plan;
+  return target === undefined
+    ? plan
+    : { ...plan, migrationsToTarget: migrationsToTarget(space, marker, target) };
 }
 
 /** The contract `end` names, with the invariants a ref requires; undefined when it is not known. */

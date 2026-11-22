@@ -30,11 +30,9 @@ import {
   type PolicySource,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
-import { type MigrationsToTarget, migrationsToTarget, missingInvariants } from './graph-queries';
 import {
-  appMigrationPlan,
   type MigrationPlanArguments,
-  type PlanEnd,
+  migrationPlanForDatabase,
   type PlanSpace,
 } from './plan-arguments';
 
@@ -119,7 +117,13 @@ export function checkRunPolicies(args: {
             ? { kind: 'ref', refName: ref.name }
             : { kind: 'marker' },
         targetHash: args.targetHash,
-        ...migrationsToRunTarget(args),
+        migrationPlan: migrationPlanForDatabase(
+          app,
+          args.markers.get(app.spaceId),
+          ref === undefined
+            ? { kind: 'contract', hash: args.targetHash }
+            : { kind: 'ref', name: ref.name },
+        ),
         ref:
           ref === undefined
             ? undefined
@@ -129,33 +133,6 @@ export function checkRunPolicies(args: {
     );
   }
   return ok({ inForce, toWrite });
-}
-
-/**
- * What a refusal of `db update` or `db sign` advises to move the database to the target through
- * migrations: the `migration plan` that ends there, whether migrations are needed at all, and the
- * invariants the target requires that the database does not record.
- */
-function migrationsToRunTarget(args: {
-  readonly app: PlanSpace & { readonly spaceId: string };
-  readonly markers: ReadonlyMap<string, ContractMarkerRecordLike | null>;
-  readonly ref: NamedRef | undefined;
-  readonly targetHash: string;
-}): {
-  readonly migrationPlan: MigrationPlanArguments;
-  readonly migrations: MigrationsToTarget;
-  readonly missingInvariants: readonly string[];
-} {
-  const { app, markers, ref, targetHash } = args;
-  const end: PlanEnd =
-    ref === undefined ? { kind: 'contract', hash: targetHash } : { kind: 'ref', name: ref.name };
-  const marker = markers.get(app.spaceId);
-  const target = { hash: targetHash, invariants: ref?.invariants ?? [] };
-  return {
-    migrationPlan: appMigrationPlan(app, markers, end),
-    migrations: migrationsToTarget(app.graph, marker, target),
-    missingInvariants: [...missingInvariants(marker, target)].sort(),
-  };
 }
 
 /** The data protection levels a checked run obeys: those it records when it consents to a change, otherwise those in force. */

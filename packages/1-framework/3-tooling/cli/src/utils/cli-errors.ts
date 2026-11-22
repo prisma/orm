@@ -41,13 +41,11 @@ import {
   type CliInvocation,
   cliCommand,
   dbMigrateRerun,
-  dbUpdateApplyCommand,
-  MIGRATIONS_ON_DISK,
   planAction,
   printedChoicePlan,
   printedPath,
   printedPlan,
-  printedUpdatePlan,
+  printedWayToTarget,
   quotedPlan,
   selfEmitCommand,
 } from './printed-command';
@@ -758,17 +756,17 @@ export function errorStatementNeedsMigrationFile(
   const listed =
     written.length === 1 ? written[0] : `${written.slice(0, -1).join(', ')} and ${written.at(-1)}`;
   const why = `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`;
-  const plan = printedUpdatePlan(
+  const plan = printedWayToTarget(
     invocation,
     migrationPlan,
     statements.filter(({ verb }) => MIGRATION_PLAN_VERBS.includes(verb)).map(statementFlag),
   );
-  if (plan.kind === 'onDisk') {
+  if (plan.kind === 'on-disk') {
     return new ActionableCliError(
       'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
       `db update cannot carry out ${listed}`,
       {
-        why: `${why} ${MIGRATIONS_ON_DISK}.`,
+        why: `${why} ${plan.reason}.`,
         fix: `Write what these statements ask for in the migration.ts of the migration on disk that changes the field, run that migration.ts with \`node\`, and apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`,
         nextActions: [
           runCommandAction('Apply the migrations on disk', plan.apply),
@@ -795,7 +793,7 @@ export function errorStatementNeedsMigrationFile(
     `db update cannot carry out ${listed}`,
     {
       why,
-      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`${dbUpdateApplyCommand(invocation, migrationPlan.to)}\`. Or leave out these statements: db update then asks before it loses any data.`,
+      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, ${plan.finish}. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
         planAction('Plan the change into a migration file to fill in', plan),
         chooseAction('Or run db update without these statements'),

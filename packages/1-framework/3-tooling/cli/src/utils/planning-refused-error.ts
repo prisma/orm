@@ -12,14 +12,7 @@ import {
   errorMigrationPlanningFailed,
 } from './cli-errors';
 import { chooseAction } from './next-actions';
-import {
-  type CliInvocation,
-  dbUpdateApplyCommand,
-  MIGRATIONS_ON_DISK,
-  printedUpdatePlan,
-  quotedPlan,
-} from './printed-command';
-import { runWrittenFile } from './runner-failure-advice';
+import { type CliInvocation, printedWayToTarget, quotedPlan } from './printed-command';
 
 /**
  * The planner's refusal as the CLI reports it. When a conflict can be written by hand, its next
@@ -51,17 +44,17 @@ export function planningRefusedError(
     return resolved !== undefined && leaveOut.has(JSON.stringify(resolved));
   });
   const kept = context.statements.filter((statement) => !left.includes(statement));
-  const plan = printedUpdatePlan(
+  const plan = printedWayToTarget(
     context.invocation,
     context.migrationPlan,
     kept.map(statementFlag),
   );
   const action = chooseAction(
-    plan.kind === 'onDisk'
-      ? `${MIGRATIONS_ON_DISK}. To write the rewrites by hand, add the rewrites the message describes to the migration.ts of the one that makes the change, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\``
+    plan.kind === 'on-disk'
+      ? `${plan.reason}. To write the rewrites by hand, add the rewrites the message describes to the migration.ts of the one that makes the change, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\``
       : plan.kind === 'none'
         ? `The rewrites cannot be written by hand in a migration. ${plan.reason}`
-        : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${runWrittenFile(context.invocation, dbUpdateApplyCommand(context.invocation, context.migrationPlan.to))}`,
+        : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${plan.finish}`,
   );
   const reasons = conflicts.flatMap(({ why }) => (why === undefined ? [] : [why]));
   return new ActionableCliError(refused.code, refused.message, {

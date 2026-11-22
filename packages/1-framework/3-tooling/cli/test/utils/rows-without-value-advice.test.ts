@@ -28,7 +28,7 @@ describe('the advice for rows a required field has no value for', () => {
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      `Set a value in those 3 rows. Or: Keep the field optional in the contract source. Or: Plan it with \`{bin} migration plan --from ${DATABASE} --backfill Item.note\`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\`.`,
+      `Set a value in those 3 rows. Or: Keep the field optional in the contract source. Or: Plan it with \`{bin} migration plan --from ${DATABASE} --backfill Item.note\`, fill the backfill steps in the migration.ts it writes, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`.`,
     );
   });
 
@@ -49,7 +49,7 @@ describe('the advice for rows a required field has no value for', () => {
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill 'My Model.code' --backfill 'My Model.role'\`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\`. Or: Make the fields optional in the contract source.`,
+      `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill 'My Model.code' --backfill 'My Model.role'\`, fill the backfill steps in the migration.ts it writes, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`. Or: Make the fields optional in the contract source.`,
     );
   });
 
@@ -249,7 +249,7 @@ describe('the advice for rows a required field has no value for', () => {
         withConfig,
       ).fix,
     ]).toEqual([
-      'Plan it with `{bin} migration plan --from db --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate --config app/prisma.config.ts`. Or: Make the field optional in the contract source.',
+      'Plan it with `{bin} migration plan --from db --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run `node <migration directory>/migration.ts --config app/prisma.config.ts` for the directory it writes, and apply it with `{bin} db migrate --config app/prisma.config.ts`. Or: Make the field optional in the contract source.',
       'Make field "Item.note" optional in the contract source, run `{bin} db init --config app/prisma.config.ts`, then make it required with `{bin} db update --config app/prisma.config.ts`, which says how to give the rows a value.',
     ]);
   });
@@ -299,7 +299,7 @@ describe('the advice for rows a required field has no value for', () => {
     ]).toEqual([
       'The backfill step of field "Item.note" left those rows without a value. Make its run fill every row in the migration.ts of the failed migration, run that file with node, and re-run `{bin} db migrate --config app/prisma.config.ts --db <url>`.',
       'Resolve the cause the failure names, then re-run `{bin} db migrate --config app/prisma.config.ts --db <url>`.',
-      'Plan it with `{bin} migration plan --from db --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate --config app/prisma.config.ts --db <url>`. Or: Make the field optional in the contract source.',
+      'Plan it with `{bin} migration plan --from db --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run `node <migration directory>/migration.ts --config app/prisma.config.ts` for the directory it writes, and apply it with `{bin} db migrate --config app/prisma.config.ts --db <url>`. Or: Make the field optional in the contract source.',
     ]);
   });
 
@@ -316,7 +316,7 @@ describe('the advice for rows a required field has no value for', () => {
         ?.length,
     ]).toEqual([
       [
-        `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill Task.type\`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\``,
+        `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill Task.type\`, fill the backfill steps in the migration.ts it writes, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\``,
       ],
       1,
     ]);
@@ -336,7 +336,7 @@ describe('the advice for rows a required field has no value for', () => {
       migrateError({ ...runnerFailed, rowsWithoutValue, failedMigration }, FROM_PROJECT).fix,
       migrateError({ ...runnerFailed, rowsWithoutValue }, FROM_PROJECT).fix,
     ]).toEqual([
-      `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill Task.type --backfill Task.dueAt\`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\`. Or: Make field "Task.dueAt" optional in the contract source.`,
+      `Plan it with \`{bin} migration plan --from ${DATABASE} --backfill Task.type --backfill Task.dueAt\`, fill the backfill steps in the migration.ts it writes, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`. Or: Make field "Task.dueAt" optional in the contract source.`,
       `To keep the fields required, delete ${replan}. Or: Make field "Task.dueAt" optional in the contract source, and plan it again.`,
       'Make field "Task.dueAt" optional in the contract source, and plan the migration again.',
     ]);

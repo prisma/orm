@@ -26,7 +26,7 @@ import {
   STORE_ORIGIN_SNAPSHOT_STEPS,
   type UnusedConsent,
 } from '../../utils/cli-errors';
-import { type CliInvocation, printedUpdatePlan, quotedPlan } from '../../utils/printed-command';
+import { type CliInvocation, printedWayToTarget, quotedPlan } from '../../utils/printed-command';
 import type { MigrationPlanArguments } from '../operations/plan-arguments';
 import type { ConsentVerb } from './parse-consent';
 import { resolveStatements } from './resolve-statements';
@@ -327,14 +327,14 @@ function backfillPlanText(
 ): string {
   const flags = fields.map((each) => statementFlag({ verb: 'backfill', text: each }));
   if (migrationPlan === undefined) return `this command plans no migration that writes ${values}`;
-  const plan = printedUpdatePlan(migrationPlan.invocation, migrationPlan, flags);
+  const plan = printedWayToTarget(migrationPlan.invocation, migrationPlan, flags);
   switch (plan.kind) {
-    case 'onDisk':
-      return `migrations on disk already lead to this contract, so apply them with \`${plan.apply}\` instead, which says how to write ${values} if they leave it out`;
+    case 'on-disk':
+      return `${plan.reason}. Apply them with \`${plan.apply}\` instead, which says how to write ${values} if they leave it out`;
     case 'none':
       return `no migration can be planned to write ${values} either. ${plan.reason}`;
     default:
-      return `plan the change with ${quotedPlan(plan)} to write ${values} in migration.ts`;
+      return `plan the change with ${quotedPlan(plan)} to write ${values} in migration.ts, ${plan.finish}`;
   }
 }
 

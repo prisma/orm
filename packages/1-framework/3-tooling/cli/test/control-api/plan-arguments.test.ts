@@ -9,10 +9,10 @@ import type { Refs } from '@internal/migration-tools/refs';
 import { describe, expect, it, vi } from 'vitest';
 import {
   type DatabasePosition,
-  dbUpdateMigrationPlan,
   type MigrationPlanArgument,
   migrationPlanArguments,
   migrationPlanChoice,
+  migrationPlanForDatabase,
   migrationPlanFromForStatements,
   migrationPlanFromRun,
   migrationPlanReplacing,
@@ -395,7 +395,7 @@ describe('a plan that carries a statement never starts at @empty', () => {
   });
 });
 
-describe('dbUpdateMigrationPlan', () => {
+describe('migrationPlanForDatabase', () => {
   const graph = buildGraph([entry(E, A, 'm1'), entry(A, B, 'm2')]);
   const refs: Refs = {
     production: { hash: B, invariants: [] },
@@ -404,27 +404,41 @@ describe('dbUpdateMigrationPlan', () => {
   const planSpace = { graph, refs, emittedHash: B };
   const at = (storageHash: string) => ({ storageHash, invariants: [] });
 
-  it('marks the plan when migrations on disk lead from the database to the ref', () => {
-    expect(dbUpdateMigrationPlan(planSpace, at(A), { kind: 'ref', name: 'production' })).toEqual({
-      from: { kind: 'reference', reference: A },
-      to: { kind: 'reference', reference: 'production' },
-      migrationsOnDisk: true,
-    });
-  });
-
-  it('marks the plan to the emitted contract when migrations on disk lead there', () => {
-    expect(dbUpdateMigrationPlan(planSpace, at(A), { kind: 'emitted' }).migrationsOnDisk).toBe(
-      true,
+  it('says migrations on disk lead from the database to the ref', () => {
+    expect(migrationPlanForDatabase(planSpace, at(A), { kind: 'ref', name: 'production' })).toEqual(
+      {
+        from: { kind: 'reference', reference: A },
+        to: { kind: 'reference', reference: 'production' },
+        migrationsToTarget: { kind: 'on-disk' },
+      },
     );
   });
 
-  it('leaves the plan unmarked when no migration leads there, or none provides an invariant the ref requires', () => {
+  it('says migrations on disk lead to the emitted contract', () => {
+    expect(
+      migrationPlanForDatabase(planSpace, at(A), { kind: 'emitted' }).migrationsToTarget,
+    ).toEqual({ kind: 'on-disk' });
+  });
+
+  it('names the invariants the ref requires that no migration on disk provides', () => {
     expect(
       [
-        dbUpdateMigrationPlan(planSpace, at(C), { kind: 'ref', name: 'production' }),
-        dbUpdateMigrationPlan(planSpace, at(A), { kind: 'ref', name: 'seeded' }),
-        dbUpdateMigrationPlan(planSpace, at(B), { kind: 'ref', name: 'production' }),
-      ].map(({ migrationsOnDisk }) => migrationsOnDisk),
-    ).toEqual([undefined, undefined, undefined]);
+        migrationPlanForDatabase(planSpace, at(C), { kind: 'ref', name: 'production' }),
+        migrationPlanForDatabase(planSpace, at(A), { kind: 'ref', name: 'seeded' }),
+        migrationPlanForDatabase(planSpace, at(B), { kind: 'ref', name: 'seeded' }),
+        migrationPlanForDatabase(planSpace, at(B), { kind: 'ref', name: 'production' }),
+      ].map(({ migrationsToTarget }) => migrationsToTarget),
+    ).toEqual([
+      { kind: 'not-on-disk', missingInvariants: [] },
+      { kind: 'not-on-disk', missingInvariants: ['seeded'] },
+      { kind: 'invariants-not-on-disk', missingInvariants: ['seeded'], newMigrationFrom: B },
+      { kind: 'none-needed' },
+    ]);
+  });
+
+  it('says nothing of migrations when the contract the end names is not known', () => {
+    expect(
+      migrationPlanForDatabase(planSpace, at(A), { kind: 'ref', name: 'unknown' }),
+    ).not.toHaveProperty('migrationsToTarget');
   });
 });

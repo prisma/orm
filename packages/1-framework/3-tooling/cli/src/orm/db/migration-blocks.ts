@@ -18,8 +18,7 @@ import { declaredSettingsText } from '../../utils/policy-errors';
 import {
   type CliInvocation,
   cliCommand,
-  MIGRATIONS_ON_DISK,
-  printedUpdatePlan,
+  printedWayToTarget,
   quotedPlan,
 } from '../../utils/printed-command';
 import { appliedStatementBlocks } from '../statement-blocks';
@@ -154,16 +153,16 @@ function temporaryValueBlocks(
   const choose = (field: string): string => {
     if (result.mode === 'apply') return ' To choose another value, update those rows.';
     if (migrationPlan === undefined) return '';
-    const plan = printedUpdatePlan(invocation, migrationPlan, [
+    const plan = printedWayToTarget(invocation, migrationPlan, [
       statementFlag({ verb: 'backfill', text: field }),
     ]);
     switch (plan.kind) {
-      case 'onDisk':
-        return ` ${MIGRATIONS_ON_DISK}. To fill the rows as they do, apply them with \`${plan.apply}\` instead.`;
+      case 'on-disk':
+        return ` ${plan.reason}. To fill the rows as they do, apply them with \`${plan.apply}\` instead.`;
       case 'none':
         return ` No migration can be planned to choose it. ${plan.reason}.`;
       default:
-        return ` To choose the value, plan a migration with ${quotedPlan(plan)} instead.`;
+        return ` To choose the value instead, plan a migration with ${quotedPlan(plan)}, ${plan.finish}.`;
     }
   };
   const get = result.mode === 'plan' ? 'would get' : 'got';

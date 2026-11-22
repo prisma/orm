@@ -250,7 +250,7 @@ describe('db update --rename', () => {
     expect(dryRun.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from db --backfill User.email\` instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value instead, plan a migration with \`prisma-test migration plan --from db --backfill User.email\`, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`prisma-test db migrate\`.`,
     });
     expect(applied.presented?.presentation.human).toContainEqual({
       kind: 'summary',
@@ -282,7 +282,7 @@ describe('db update --rename', () => {
     );
   });
 
-  it('points a temporary value at the migrations on disk that already lead to the ref, and plans none beside them', async () => {
+  it('points a temporary value at the migrations on disk that already lead to the ref, and plans no second path', async () => {
     mocks.dbUpdate.mockResolvedValueOnce(
       ok({
         ...planSuccess(),
@@ -290,7 +290,7 @@ describe('db update --rename', () => {
         migrationPlan: {
           from: reference('db'),
           to: reference('production'),
-          migrationsOnDisk: true,
+          migrationsToTarget: { kind: 'on-disk' },
         },
       }),
     );
@@ -302,7 +302,7 @@ describe('db update --rename', () => {
     expect(run.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: 'Field "User.email" would get the temporary value \'\' where existing data has none. Migrations on disk already lead from the database to that contract, so a migration planned now would run beside them. To fill the rows as they do, apply them with `prisma-test db migrate --to production` instead.',
+      text: 'Field "User.email" would get the temporary value \'\' where existing data has none. Migrations on disk already lead from the database to `production`, so a migration planned now would be a second path between the same two contracts, and `db migrate` applies only one of them. To fill the rows as they do, apply them with `prisma-test db migrate --to production` instead.',
     });
   });
 
@@ -339,7 +339,7 @@ describe('db update --rename', () => {
     expect(run.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from ${MARKER_HASH} --backfill User.email\` instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value instead, plan a migration with \`prisma-test migration plan --from ${MARKER_HASH} --backfill User.email\`, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`prisma-test db migrate\`.`,
     });
     expect(run.presented?.data).not.toHaveProperty('databaseStorageHash');
     expect(run.presented?.data).not.toHaveProperty('migrationPlan');
@@ -667,7 +667,7 @@ describe('db update --rename', () => {
       temporaryValue: {
         kind: 'summary',
         status: 'warn',
-        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from db --backfill User.email --config 'my app/prisma.config.ts'\` instead.`,
+        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value instead, plan a migration with \`prisma-test migration plan --from db --backfill User.email --config 'my app/prisma.config.ts'\`, run \`node <migration directory>/migration.ts --config 'my app/prisma.config.ts'\` for the directory it writes, and apply it with \`prisma-test db migrate --advance-ref qa --config 'my app/prisma.config.ts' --db <url>\`.`,
       },
     });
   });

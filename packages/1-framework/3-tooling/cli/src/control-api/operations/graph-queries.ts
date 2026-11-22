@@ -8,6 +8,7 @@ import {
 } from '@internal/migration-tools/aggregate';
 import type { MigrationGraph } from '@internal/migration-tools/graph';
 import { findPath, findPathWithInvariants } from '@internal/migration-tools/migration-graph';
+import { ifDefined } from '@internal/utils/defined';
 
 /** True when the on-disk graph contains a path fromHash → toHash. */
 export function hasMigrationPath(graph: MigrationGraph, fromHash: string, toHash: string): boolean {
@@ -15,7 +16,7 @@ export function hasMigrationPath(graph: MigrationGraph, fromHash: string, toHash
 }
 
 /** The invariants `target` requires that the database at `marker` does not record. */
-export function missingInvariants(
+function missingInvariants(
   marker: ContractMarkerRecordLike | null | undefined,
   target: { readonly invariants: readonly string[] },
 ): ReadonlySet<string> {
@@ -28,20 +29,44 @@ export function missingInvariants(
  * - `none-needed`: it is at the target and records every invariant the target requires;
  * - `on-disk`: a path on disk leads there and provides every such invariant it does not record, so
  *   `db migrate` alone moves it;
- * - `invariants-missing`: it is at the target, but no migration on disk provides an invariant it
- *   lacks, and `migration plan` cannot author one, because a plan from a contract to itself is empty;
- * - `missing`: a migration still has to be authored.
+ * - `invariants-not-on-disk`: it is at the target, but no migration on disk provides
+ *   `missingInvariants`, and `migration plan` cannot write one, because a plan from a contract to
+ *   itself is empty. `newMigrationFrom` is the `--from` that makes `migration new` write a migration
+ *   from the target to itself, present when the emitted contract is the target and a migration ends
+ *   there;
+ * - `not-on-disk`: a migration has to be planned, and it has to provide `missingInvariants`.
  */
-export type MigrationsToTarget = 'none-needed' | 'on-disk' | 'invariants-missing' | 'missing';
+export type MigrationsToTarget =
+  | { readonly kind: 'none-needed' }
+  | { readonly kind: 'on-disk' }
+  | {
+      readonly kind: 'invariants-not-on-disk';
+      readonly missingInvariants: readonly string[];
+      readonly newMigrationFrom?: string;
+    }
+  | { readonly kind: 'not-on-disk'; readonly missingInvariants: readonly string[] };
 
 export function migrationsToTarget(
-  graph: MigrationGraph,
+  space: { readonly graph: MigrationGraph; readonly emittedHash?: string },
   marker: ContractMarkerRecordLike | null | undefined,
   target: { readonly hash: string; readonly invariants: readonly string[] },
 ): MigrationsToTarget {
   const from = contractHashAtMarker(marker);
   const missing = missingInvariants(marker, target);
-  if (from === target.hash && missing.size === 0) return 'none-needed';
-  if (findPathWithInvariants(graph, from, target.hash, missing) !== null) return 'on-disk';
-  return from === target.hash ? 'invariants-missing' : 'missing';
+  if (from === target.hash && missing.size === 0) return { kind: 'none-needed' };
+  if (findPathWithInvariants(space.graph, from, target.hash, missing) !== null) {
+    return { kind: 'on-disk' };
+  }
+  const missingInvariantIds = [...missing].sort();
+  if (from !== target.hash) return { kind: 'not-on-disk', missingInvariants: missingInvariantIds };
+  const newMigrationFrom =
+    space.emittedHash === target.hash &&
+    (space.graph.reverseChain.get(target.hash)?.length ?? 0) > 0
+      ? target.hash
+      : undefined;
+  return {
+    kind: 'invariants-not-on-disk',
+    missingInvariants: missingInvariantIds,
+    ...ifDefined('newMigrationFrom', newMigrationFrom),
+  };
 }

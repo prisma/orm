@@ -6,20 +6,12 @@ import {
   type MigrationDataLossKind,
   movedDatabasePoliciesWhy,
 } from '@internal/framework-components/control';
-import type { MigrationsToTarget } from '../control-api/operations/graph-queries';
 import type { MigrationPlanArguments } from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
 import { type DataProtectionSetting, FORBIDDEN_LEVEL } from './data-protection-settings';
 import { chooseAction, runCommandAction } from './next-actions';
-import {
-  type CliInvocation,
-  cliCommand,
-  MIGRATIONS_ON_DISK,
-  printedPlan,
-  printedUpdatePlan,
-  quotedPlan,
-} from './printed-command';
+import { type CliInvocation, cliCommand, printedWayToTarget, quotedPlan } from './printed-command';
 
 /** `change: migrate; dataProtection.dataLoss: data-loss-forbidden`: the declared side of each difference. */
 export function declaredSettingsText(differences: readonly DatabasePolicyDifference[]): string {
@@ -72,12 +64,8 @@ export function errorChangePolicyForbids(args: {
   readonly targetHash: string;
   /** The ref the user named, and whether they gave `--permit-policy-change`, which the advised command repeats. */
   readonly ref?: { readonly name: string; readonly permitPolicyChange: boolean } | undefined;
-  /** The `migration plan` the advice to author a migration prints: from the database, to where the run goes. */
+  /** The `migration plan` from the database to where the run goes, with how migrations reach it. */
   readonly migrationPlan: MigrationPlanArguments;
-  /** Whether the database needs migrations to reach the target, and whether they are on disk. */
-  readonly migrations: MigrationsToTarget;
-  /** The invariants the target requires that the database does not record. */
-  readonly missingInvariants?: readonly string[];
   readonly invocation: CliInvocation | undefined;
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;
@@ -125,29 +113,13 @@ export function errorChangePolicyForbids(args: {
         ? ['--to', shellQuoted(target.reference)]
         : [],
   );
-  const plan = printedPlan(invocation, args.migrationPlan, []);
-  const missingInvariants = args.missingInvariants ?? [];
-  const invariants = missingInvariants.map((id) => JSON.stringify(id)).join(', ');
-  const provideInvariants =
-    missingInvariants.length === 0
-      ? ''
-      : `, add ${missingInvariants.length === 1 ? `a \`dataTransform\` with \`invariantId\` ${invariants}` : `a \`dataTransform\` for each of the invariants ${invariants}, with that \`invariantId\`,`} to the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints,`;
-  const recovery = ((): string => {
-    switch (args.migrations) {
-      case 'none-needed':
-        return 'The database is already at this contract, so there is no migration for `db migrate` to apply.';
-      case 'on-disk':
-        return `The planned migrations already lead there: apply them with \`${migrate}\`.`;
-      case 'invariants-missing':
-        return missingInvariants.length === 1
-          ? `The database is at this contract, but no migration on disk provides the invariant ${invariants} it requires and the database does not record. Add a migration from this contract to itself that runs a \`dataTransform\` with \`invariantId\` ${invariants}, run its migration.ts with \`node\`, then apply it with \`${migrate}\`.`
-          : `The database is at this contract, but no migration on disk provides the invariants ${invariants} it requires and the database does not record. Add a migration from this contract to itself that runs a \`dataTransform\` with \`invariantId\` set to each of them, run its migration.ts with \`node\`, then apply it with \`${migrate}\`.`;
-      case 'missing':
-        return plan.kind === 'none'
-          ? `No migration can be planned to move it. ${plan.reason}.`
-          : `Author a migration with ${quotedPlan(plan)}${provideInvariants === '' ? ',' : provideInvariants} then apply it with \`${migrate}\`.`;
-    }
-  })();
+  const way = printedWayToTarget(invocation, args.migrationPlan, [], migrate);
+  const recovery =
+    way.kind === 'on-disk'
+      ? `${way.text}.`
+      : way.kind === 'none'
+        ? `No migration can be planned to move it. ${way.reason}.`
+        : `Author a migration with ${quotedPlan(way)}, ${way.finish}.`;
   return new ActionableCliError(
     'MIGRATION.CHANGE_POLICY_FORBIDS',
     `${policyHolder} permits only migrations`,
@@ -253,14 +225,14 @@ function typeChangeSentence(
 ): string {
   if (migrationPlan === undefined)
     return 'For a type change, state the conversion with --convert <field>.';
-  const plan = printedUpdatePlan(invocation, migrationPlan, ['--convert', '<field>']);
+  const plan = printedWayToTarget(invocation, migrationPlan, ['--convert', '<field>']);
   switch (plan.kind) {
-    case 'onDisk':
-      return `${MIGRATIONS_ON_DISK}. For a type change, write the conversion in the migration.ts of the one that changes the field, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\`.`;
+    case 'on-disk':
+      return `${plan.reason}. For a type change, write the conversion in the migration.ts of the one that changes the field, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\`.`;
     case 'none':
       return `A type change cannot be written as a migration here. ${plan.reason}.`;
     default:
-      return `For a type change, write the conversion with ${quotedPlan(plan)}.`;
+      return `For a type change, write the conversion with ${quotedPlan(plan)}, ${plan.finish}.`;
   }
 }
 

@@ -6,14 +6,7 @@ import type {
   KeptSubject,
 } from '../control-api/statements/plan-questions';
 import { statementFlag } from '../control-api/statements/statement-flag';
-import {
-  type CliInvocation,
-  cliCommand,
-  dbUpdateApplyCommand,
-  MIGRATIONS_ON_DISK,
-  printedUpdatePlan,
-  quotedPlan,
-} from './printed-command';
+import { type CliInvocation, cliCommand, printedWayToTarget, quotedPlan } from './printed-command';
 import { runWrittenFile } from './runner-failure-advice';
 
 function editsText(edits: readonly KeepDataEdit[]): string {
@@ -131,15 +124,15 @@ export function dbUpdateKeepDataEditAdvice(
       return { lead, ways: runWays };
     }
     const deletes = edited.map(({ text }) => statementFlag({ verb: 'delete', text }));
-    const plan = printedUpdatePlan(invocation, migrationPlan, [
+    const plan = printedWayToTarget(invocation, migrationPlan, [
       ...otherStatements(invocation, [subject.text]).filter((flag) => !deletes.includes(flag)),
       ...deletes,
     ]);
-    if (plan.kind === 'onDisk') {
+    if (plan.kind === 'on-disk') {
       return {
         lead,
         ways: [
-          `${MIGRATIONS_ON_DISK}. To keep it, in the migration.ts of the one that removes it ${editsText(edited.flatMap(({ edits }) => edits))}, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\`.`,
+          `${plan.reason}. To keep it, in the migration.ts of the one that removes it ${editsText(edited.flatMap(({ edits }) => edits))}, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\`.`,
           ...(swaps ? [] : runWays),
         ],
       };
@@ -153,7 +146,7 @@ export function dbUpdateKeepDataEditAdvice(
     return {
       lead,
       ways: [
-        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation, dbUpdateApplyCommand(invocation, migrationPlan.to))}.`,
+        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${plan.finish}.`,
         ...(swaps ? [] : runWays),
       ],
     };

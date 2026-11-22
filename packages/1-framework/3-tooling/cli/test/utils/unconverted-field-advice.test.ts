@@ -24,7 +24,7 @@ describe('the advice for a type change whose cast failed', () => {
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      `A value of field "User.age" cannot be converted to its new type by the database's cast. Plan the change with \`{bin} migration plan --from ${FROM} --convert User.age\`, write the conversion in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\`. Or: Change the value the failure names so the database's cast accepts it, then re-run \`{bin} db update\`.`,
+      `A value of field "User.age" cannot be converted to its new type by the database's cast. Plan the change with \`{bin} migration plan --from ${FROM} --convert User.age\`, write the conversion in the migration.ts it writes, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`. Or: Change the value the failure names so the database's cast accepts it, then re-run \`{bin} db update\`.`,
     );
   });
 

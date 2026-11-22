@@ -191,7 +191,7 @@ describe('executeDbUpdate, database policies', () => {
     });
 
     expect(result.ok ? undefined : result.failure.toEnvelope().fix).toBe(
-      'Author a migration with `{bin} migration plan --from @empty --to dev`, then apply it with `{bin} db migrate --to dev`.',
+      'Author a migration with `{bin} migration plan --from @empty --to dev`, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate --to dev`.',
     );
   });
 

@@ -50,14 +50,6 @@ export function dbMigrateRerun(invocation: CliInvocation): string {
   return cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? []);
 }
 
-/** The `db migrate` that applies a migration a `migration plan` to `to` writes. */
-export function dbMigrateToCommand(
-  invocation: CliInvocation | undefined,
-  to: MigrationPlanTargetArgument = { kind: 'default' },
-): string {
-  return cliCommand(invocation, 'db migrate', to.kind === 'none' ? [] : argumentWords('--to', to));
-}
-
 /**
  * The `db migrate` that applies what a failed `db update` advises to plan to `to`. It repeats the
  * flags the user gave `db update`, which `db migrate` takes with the same meaning: `--to`, and
@@ -163,32 +155,103 @@ export function printedPlan(
 }
 
 /**
- * What advice after a `db update` prints to move the database where the run was going: a
- * {@link PrintedPlan}, or, under `onDisk`, the `db migrate` that applies the migrations on disk that
- * already lead there, where a planned migration would run beside them.
+ * What advice prints to move the database where a run was going, by how it gets there through
+ * migrations:
+ * - a {@link PrintedPlan} that runs or is a choice: plan a migration with it, then `finish`, which
+ *   adds any invariant the target requires, runs the migration.ts it writes and applies it with
+ *   `apply`;
+ * - `on-disk`: migrations on disk lead there; `reason` says why no plan is printed, `text` says to
+ *   apply them with `apply`;
+ * - `none`: no `migration plan` moves it, for `reason`, which says what does where something can.
  */
-export type PrintedUpdatePlan =
-  | PrintedPlan
-  | { readonly kind: 'onDisk'; readonly apply: string; readonly text: string };
+export type PrintedWayToTarget =
+  | (Exclude<PrintedPlan, { readonly kind: 'none' }> & { readonly finish: string })
+  | { readonly kind: 'none'; readonly reason: string }
+  | {
+      readonly kind: 'on-disk';
+      readonly reason: string;
+      readonly apply: string;
+      readonly text: string;
+    };
 
-/** The `migration plan` from `plan.from` to `plan.to` with `flags`, or the `db migrate` that applies the migrations on disk that lead there. */
-export function printedUpdatePlan(
+/**
+ * How advice moves the database `plan` describes to `plan.to`: with the `migration plan` from
+ * `plan.from` with `flags`, by applying migrations on disk, or why neither can. `apply` is the
+ * `db migrate` that applies the result, by default the one that follows `db update`.
+ */
+export function printedWayToTarget(
   invocation: CliInvocation | undefined,
   plan: MigrationPlanArguments,
   flags: readonly string[],
-): PrintedUpdatePlan {
-  if (plan.migrationsOnDisk !== true) return printedPlan(invocation, plan, flags);
-  const apply = dbUpdateApplyCommand(invocation, plan.to);
-  return {
-    kind: 'onDisk',
-    apply,
-    text: `${MIGRATIONS_ON_DISK}: apply them with \`${apply}\`, which names the migration.ts to change if one of them fails`,
-  };
+  apply: string = dbUpdateApplyCommand(invocation, plan.to),
+): PrintedWayToTarget {
+  const target = targetText(plan.to);
+  const migrations = plan.migrationsToTarget ?? { kind: 'not-on-disk', missingInvariants: [] };
+  switch (migrations.kind) {
+    case 'none-needed':
+      return {
+        kind: 'none',
+        reason: `The database is already at ${target} and records every invariant it requires, so there is no migration to apply`,
+      };
+    case 'on-disk': {
+      const reason = `Migrations on disk already lead from the database to ${target}, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them`;
+      return {
+        kind: 'on-disk',
+        reason,
+        apply,
+        text: `${reason}. Apply them with \`${apply}\`, which names the migration.ts to change if one of them fails`,
+      };
+    }
+    case 'invariants-not-on-disk': {
+      const { missingInvariants, newMigrationFrom } = migrations;
+      const write =
+        newMigrationFrom === undefined
+          ? 'Write a migration from that contract to itself'
+          : `Write a migration from that contract to itself with \`${cliCommand(invocation, 'migration new', ['--from', newMigrationFrom])}\``;
+      return {
+        kind: 'none',
+        reason: `The database is at ${target}, but no migration on disk provides ${invariantsText(missingInvariants)} it requires and the database does not record, and a plan from a contract to itself is empty. ${write}, add to its migration.ts ${transformsText(missingInvariants)}, run \`${writtenMigrationRunCommand(invocation)}\` for its directory, and apply it with \`${apply}\``,
+      };
+    }
+    case 'not-on-disk': {
+      const printed = printedPlan(invocation, plan, flags);
+      if (printed.kind === 'none') return printed;
+      const { missingInvariants } = migrations;
+      const provide =
+        missingInvariants.length === 0 ? '' : `add to it ${transformsText(missingInvariants)}, `;
+      return {
+        ...printed,
+        finish: `${provide}run \`${writtenMigrationRunCommand(invocation)}\` for the directory it writes, and apply it with \`${apply}\``,
+      };
+    }
+  }
 }
 
-/** Why advice prints no `migration plan` when migrations on disk already lead where the run was going. */
-export const MIGRATIONS_ON_DISK =
-  'Migrations on disk already lead from the database to that contract, so a migration planned now would run beside them';
+function targetText(to: MigrationPlanTargetArgument): string {
+  switch (to.kind) {
+    case 'reference':
+      return `\`${to.reference}\``;
+    case 'default':
+      return 'the emitted contract';
+    case 'none':
+      return 'the contract the run moves it to';
+  }
+}
+
+function quotedInvariants(invariants: readonly string[]): string {
+  return invariants.map((id) => JSON.stringify(id)).join(', ');
+}
+
+function invariantsText(invariants: readonly string[]): string {
+  return `${invariants.length === 1 ? 'the invariant' : 'the invariants'} ${quotedInvariants(invariants)}`;
+}
+
+/** The `dataTransform` operations that provide `invariants`: each carries one `invariantId`. */
+function transformsText(invariants: readonly string[]): string {
+  return invariants.length === 1
+    ? `a \`dataTransform\` with \`invariantId\` ${quotedInvariants(invariants)}`
+    : `a \`dataTransform\` for each of the invariants ${quotedInvariants(invariants)}, with that invariant as its \`invariantId\``;
+}
 
 const STATEMENT_FLAGS: ReadonlySet<string> = new Set([
   '--rename',
@@ -264,10 +327,12 @@ export function selfEmitCommand(invocation: CliInvocation, migrationTs: string):
 }
 
 /** The command that runs the `migration.ts` a `migration plan` writes, with its directory a placeholder. */
-export function writtenMigrationRunCommand(invocation: CliInvocation): string {
-  return ['node', '<migration directory>/migration.ts', ...configWords(invocation.configPath)].join(
-    ' ',
-  );
+export function writtenMigrationRunCommand(invocation: CliInvocation | undefined): string {
+  return [
+    'node',
+    '<migration directory>/migration.ts',
+    ...configWords(invocation?.configPath),
+  ].join(' ');
 }
 
 /** A path as advice prints it: relative to the directory the CLI ran in. */
