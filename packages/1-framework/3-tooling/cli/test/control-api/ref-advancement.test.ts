@@ -418,7 +418,7 @@ describe('writeAdvancedRef', () => {
         snapshot: { kind: 'stored' },
       },
       writePointer,
-    );
+    ).finally(() => rm(migrationsDir, { recursive: true, force: true }));
 
     expect(written).toMatchObject({
       ok: false,
