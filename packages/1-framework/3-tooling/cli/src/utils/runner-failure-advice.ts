@@ -25,6 +25,7 @@ import {
   dbMigrateRerun,
   dbMigrateToCommand,
   dbUpdateRerun,
+  type PrintedPlan,
   printedPath,
   printedPlan,
   quotedPlan,
@@ -427,21 +428,25 @@ function failedMigrationText(
   };
 }
 
-/** "plan it again with" the `migration plan` that replaces the deleted migration, or why none can. */
-function planAgain(failed: FailedMigrationText, flags: readonly string[]): string {
-  const plan = printedPlan(failed.invocation, { from: failed.replanFrom }, [
+/** The `migration plan` that replaces the failed migration once its directory is deleted. */
+function replacingPlan(failed: FailedMigrationText, flags: readonly string[]): PrintedPlan {
+  return printedPlan(failed.invocation, { from: failed.replanFrom }, [
     '--name',
     failed.name,
     ...flags,
   ]);
-  return plan.kind === 'none'
-    ? `plan it again, though no plan can start where it did once it is deleted (${plan.reason})`
-    : `plan it again with ${quotedPlan(plan)}`;
+}
+
+function keepFailedMigration(failed: FailedMigrationText, reason: string): NextAction {
+  return chooseAction(
+    `Keep \`${failed.directory}\`: no migration plan can replace it once it is deleted. ${reason}`,
+  );
 }
 
 /**
  * Planning the failed migration again with `flags`. `opening` is the words before the directory,
- * so the sentence can start the advice or follow why it is needed.
+ * so the sentence can start the advice or follow why it is needed. When no plan can replace the
+ * migration, the advice is to keep it.
  */
 function replan(
   opening: string,
@@ -450,10 +455,12 @@ function replan(
   except: string | undefined = undefined,
   afterPlan = `fill in the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(failed.invocation)}`,
 ): NextAction {
+  const plan = replacingPlan(failed, flags);
+  if (plan.kind === 'none') return keepFailedMigration(failed, plan.reason);
   const others =
     except === undefined ? OTHER_STATEMENTS : `${OTHER_STATEMENTS} except any ${except}`;
   return chooseAction(
-    `${opening} \`${failed.directory}\` (copy any code you wrote in its migration.ts first), ${planAgain(failed, flags)}, ${others}, ${afterPlan}`,
+    `${opening} \`${failed.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quotedPlan(plan)}, ${others}, ${afterPlan}`,
   );
 }
 
@@ -534,6 +541,8 @@ function migrateRowsWithoutValueAdvice(
     flags.length === 0 || failedMigration === undefined
       ? undefined
       : replan(opening, flags, failedMigration);
+  const replaceable =
+    failedMigration !== undefined && replacingPlan(failedMigration, flags).kind !== 'none';
   const one = reports.length === 1;
   if (reports.every(({ reason }) => reason === 'nullValues')) {
     const rerun = chooseAction(
@@ -552,27 +561,28 @@ function migrateRowsWithoutValueAdvice(
                   `Keep ${fields.text} optional in the contract source, and plan the migration again`,
                 )
               : keepOptional(fields.text, fields.one ? 'it' : 'them', failedMigration, invocation),
-          ];
+          ].filter((action) => action !== undefined);
     return [rerun, ...(backfill === undefined ? [] : [backfill]), ...keep];
   }
   if (first?.reason === 'nullValues') {
     const notEnough =
       'The migration also adds a required field the existing rows have no value for, so setting values is not enough.';
     const backfill = again(`${notEnough} Delete`);
-    if (backfill !== undefined) {
+    if (backfill !== undefined && replaceable) {
       return [backfill];
     }
     const newFields = optionalFields(
       reports.filter(({ reason }) => reason === 'newField'),
       'the new fields',
     );
-    return newFields === undefined
-      ? [resolveTheCause(invocation)]
-      : [
-          editFileAction(
+    return [
+      ...(backfill === undefined ? [] : [backfill]),
+      newFields === undefined
+        ? resolveTheCause(invocation)
+        : editFileAction(
             `${notEnough} Make ${newFields.text} optional in the contract source, and plan the migration again`,
           ),
-        ];
+    ];
   }
   const fields = theFields(reports);
   const required = again(`To keep ${fields} required, delete`);
@@ -617,14 +627,17 @@ function resolveTheCause(invocation: CliInvocation): NextAction {
   );
 }
 
+/** Keeping `fields` optional by planning the failed migration again; none when no plan can replace it. */
 function keepOptional(
   fields: string,
   pronoun: string,
   failedMigration: FailedMigrationText,
   invocation: CliInvocation,
-): NextAction {
+): NextAction | undefined {
+  const plan = replacingPlan(failedMigration, []);
+  if (plan.kind === 'none') return undefined;
   return editFileAction(
-    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and ${planAgain(failedMigration, [])}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and plan it again with ${quotedPlan(plan)}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
   );
 }
 
@@ -649,9 +662,12 @@ function migrateSchemaCheckAdvice(
     `If ${file} does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, ${run}, and run ${dbMigrateAgain(invocation)}`,
   );
   if (failedMigration === undefined) return [fixMigration];
+  const plan = replacingPlan(failedMigration, []);
+  if (plan.kind === 'none')
+    return [keepFailedMigration(failedMigration, plan.reason), fixMigration];
   return [
     editFileAction(
-      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), ${planAgain(failedMigration, [])}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}`,
+      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quotedPlan(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}`,
     ),
     fixMigration,
   ];
