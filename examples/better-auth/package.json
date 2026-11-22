@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "emit": "prisma contract emit",
-    "emit:check": "pnpm emit && git diff --exit-code src/prisma/contract.json src/prisma/contract.d.ts",
+    "emit:check": "pnpm emit && git diff --exit-code prisma/contract.json prisma/contract.d.ts",
     "db:init": "prisma db init",
     "test": "vitest run",
     "typecheck": "tsc --project tsconfig.json --noEmit",
