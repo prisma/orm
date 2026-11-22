@@ -162,7 +162,7 @@ export function printedPlan(
  * - a {@link PrintedPlan} that runs or is a choice: plan a migration with it, then `afterPlan`,
  *   which adds any invariant the target requires, runs the migration.ts it writes and applies it
  *   with `apply`;
- * - `at-target`: the database is already there, as `text` says, and there is nothing to move;
+ * - `at-target`: the database is already there, as `reason` says, and there is nothing to move;
  * - `on-disk`: migrations on disk lead there; `reason` says why no plan is printed, `text` says to
  *   apply them with `apply`;
  * - `none`: no `migration plan` moves it, for `reason`, which says what does where something can.
@@ -170,7 +170,7 @@ export function printedPlan(
 export type PrintedWayToTarget =
   | (Exclude<PrintedPlan, { readonly kind: 'none' }> & { readonly afterPlan: string })
   | { readonly kind: 'none'; readonly reason: string }
-  | { readonly kind: 'at-target'; readonly text: string }
+  | { readonly kind: 'at-target'; readonly reason: string }
   | {
       readonly kind: 'on-disk';
       readonly reason: string;
@@ -195,7 +195,7 @@ export function printedWayToTarget(
     case 'none-needed':
       return {
         kind: 'at-target',
-        text: `The database is already at ${target} and records every invariant it requires, so there is no migration to apply`,
+        reason: `The database is already at ${target} and records every invariant it requires, so there is no migration to apply`,
       };
     case 'on-disk': {
       const reason = `Migrations on disk already lead from the database to ${target}, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them`;

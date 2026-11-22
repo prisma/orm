@@ -160,9 +160,8 @@ function temporaryValueBlocks(
       case 'on-disk':
         return ` ${plan.reason}. To fill the rows as they do, apply them with \`${plan.apply}\` instead.`;
       case 'none':
-        return ` No migration can be planned to choose it. ${plan.reason}.`;
       case 'at-target':
-        return ` ${plan.text}.`;
+        return ` No migration can be planned to choose it. ${plan.reason}.`;
       default:
         return ` To choose the value instead, plan a migration with ${quotedPlan(plan)}, ${plan.afterPlan}.`;
     }

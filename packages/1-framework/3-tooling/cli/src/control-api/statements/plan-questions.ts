@@ -332,9 +332,8 @@ function backfillPlanText(
     case 'on-disk':
       return `${plan.reason}. Apply them with \`${plan.apply}\` instead, which says how to write ${values} if they leave it out`;
     case 'none':
-      return `no migration can be planned to write ${values} either. ${plan.reason}`;
     case 'at-target':
-      return `no migration writes ${values} here. ${plan.text}`;
+      return `no migration can be planned to write ${values} either. ${plan.reason}`;
     default:
       return `plan the change with ${quotedPlan(plan)} to write ${values} in migration.ts, ${plan.afterPlan}`;
   }

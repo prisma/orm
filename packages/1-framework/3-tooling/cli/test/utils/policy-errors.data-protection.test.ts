@@ -425,6 +425,38 @@ describe('errorDataProtectionForbids advice', () => {
     expect(fix).not.toContain('migration plan --');
   });
 
+  it('says why a type change cannot be written as a migration when the database is already at the target', () => {
+    const { fix } = errorDataProtectionForbids({
+      spaceId: 'app',
+      command: 'db update',
+      refusals: [
+        {
+          setting: 'dataLoss',
+          source: { kind: 'marker' },
+          operations: [
+            {
+              spaceId: 'app',
+              operationId: 'column.user.age.type',
+              subject: 'User.age',
+              label: 'Change the type of column "age"',
+              loss: 'typeChange',
+            },
+          ],
+        },
+      ],
+      invocation,
+      migrationPlan: {
+        from: { kind: 'reference', reference: 'db' },
+        to: { kind: 'default' },
+        migrationsToTarget: { kind: 'none-needed' },
+      },
+    });
+
+    expect(fix).toContain(
+      'A type change cannot be written as a migration here. The database is already at the emitted contract and records every invariant it requires, so there is no migration to apply.',
+    );
+  });
+
   it.each(['db migrate', 'db update', 'migration plan'] as const)(
     'never offers --permit-policy-change, --delete or --allow from %s',
     (command) => {

@@ -97,6 +97,25 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     ]);
   });
 
+  it('on db update with the database already at the target, says to drop the old check and fix the rows in the database', () => {
+    const error = dbUpdateRunnerFailureError(
+      failure,
+      { rowsFailingCheck: replacing },
+      {
+        migrationPlan: {
+          ...toEmitted(originOf(FROM)),
+          migrationsToTarget: { kind: 'none-needed' },
+        },
+        invocation: PROJECT,
+      },
+    );
+
+    expect(labels(error)).toEqual([
+      '`{bin} db update` cannot keep this data, and no migration can be planned for it. The database is already at the emitted contract and records every invariant it requires, so there is no migration to apply.' +
+        ' Drop check "user_address_shape_9a7e984c" in the database yourself, update those rows to fit check "user_address_shape_5c02601b", then re-run `{bin} db update`',
+    ]);
+  });
+
   it('on db update, says to fix the rows first when the check replaces none', () => {
     const error = dbUpdateRunnerFailureError(
       failure,

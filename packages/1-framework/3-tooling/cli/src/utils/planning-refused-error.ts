@@ -52,11 +52,9 @@ export function planningRefusedError(
   const action = chooseAction(
     plan.kind === 'on-disk'
       ? `${plan.reason}. To write the rewrites by hand, add the rewrites the message describes to the migration.ts of the one that makes the change, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\``
-      : plan.kind === 'none'
+      : plan.kind === 'none' || plan.kind === 'at-target'
         ? `The rewrites cannot be written by hand in a migration. ${plan.reason}`
-        : plan.kind === 'at-target'
-          ? plan.text
-          : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${plan.afterPlan}`,
+        : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${plan.afterPlan}`,
   );
   const reasons = conflicts.flatMap(({ why }) => (why === undefined ? [] : [why]));
   return new ActionableCliError(refused.code, refused.message, {

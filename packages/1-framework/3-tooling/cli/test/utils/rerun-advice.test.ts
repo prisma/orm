@@ -299,6 +299,50 @@ describe('advice after a failed db update --to a ref whose invariant no migratio
   );
 });
 
+describe('advice after a failed db update when the database is already at the target', () => {
+  const AT_TARGET =
+    'The database is already at `production` and records every invariant it requires, so there is no migration to apply';
+  const atTarget: MigrationPlanArguments = {
+    from: reference(FROM),
+    to: reference('production'),
+    migrationsToTarget: { kind: 'none-needed' },
+  };
+
+  it('for rows that hold a removed enum value, says to change the stored values in the database', () => {
+    const error = dbUpdateRunnerFailureError(
+      failure(),
+      {
+        rowsHoldingValue: [{ enumValue: 'Status.OLD', enumName: 'Status', value: 'old', rows: 1 }],
+      },
+      { migrationPlan: atTarget, invocation: GIVEN },
+    );
+
+    expect(error.nextActions?.at(-1)?.label).toBe(
+      `No migration can be planned to keep that data. ${AT_TARGET}. To keep that data under another stored value, change the stored value "old" to one the enum keeps in the database yourself, then re-run \`{bin} db update --to production --permit-policy-change --delete Status.OLD\``,
+    );
+  });
+
+  const leads: Readonly<Record<string, string>> = {
+    'a cast that failed': 'No migration can be planned for the change.',
+    'rows without a value for a new field': 'No migration can be planned to backfill those rows.',
+    'rows that hold a removed enum value': 'No migration can be planned to keep that data.',
+    'rows failing a check that replaces another': 'and no migration can be planned for it.',
+    'keeping the data of an enum member': 'No migration can be planned to keep it.',
+    'a statement that needs a migration file': 'No migration can be planned for them either.',
+    'rewrites the planner asks to write by hand':
+      'The rewrites cannot be written by hand in a migration.',
+  };
+
+  it.each(adviceAfterDbUpdate(atTarget))(
+    'says why no migration is offered before it says the database is there: %s',
+    (kind, adviceOf) => {
+      const advice = adviceOf(GIVEN);
+      expect(advice).toContain(`${leads[kind]} ${AT_TARGET}`);
+      expect(advice).not.toContain('{bin} migration plan');
+    },
+  );
+});
+
 /** Every piece of advice after a failed db update that prints a `migration plan` to `TO_PRODUCTION`. */
 function adviceAfterDbUpdate(
   plan: MigrationPlanArguments,

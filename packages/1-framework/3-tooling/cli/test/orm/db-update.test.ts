@@ -306,6 +306,29 @@ describe('db update --rename', () => {
     });
   });
 
+  it('says why no migration chooses a temporary value when the database is already at the target', async () => {
+    mocks.dbUpdate.mockResolvedValueOnce(
+      ok({
+        ...planSuccess(),
+        temporaryValues: [{ field: 'User.email', value: "''" }],
+        migrationPlan: {
+          ...toEmitted(reference('db')),
+          migrationsToTarget: { kind: 'none-needed' },
+        },
+      }),
+    );
+    const run = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.presented?.presentation.human).toContainEqual({
+      kind: 'summary',
+      status: 'warn',
+      text: 'Field "User.email" would get the temporary value \'\' where existing data has none. No migration can be planned to choose it. The database is already at the emitted contract and records every invariant it requires, so there is no migration to apply.',
+    });
+  });
+
   it('suggests no migration plan for a temporary value when no plan can start where the database is', async () => {
     mocks.dbUpdate.mockResolvedValue(
       ok({ ...planSuccess(), temporaryValues: [{ field: 'User.email', value: "''" }] }),

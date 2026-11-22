@@ -776,24 +776,12 @@ export function errorStatementNeedsMigrationFile(
       },
     );
   }
-  if (plan.kind === 'none') {
+  if (plan.kind === 'none' || plan.kind === 'at-target') {
     return new ActionableCliError(
       'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
       `db update cannot carry out ${listed}`,
       {
         why: `${why} No migration can be planned for them either. ${plan.reason}.`,
-        fix: 'Leave out these statements: db update then asks before it loses any data.',
-        nextActions: [chooseAction('Run db update without these statements')],
-        meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
-      },
-    );
-  }
-  if (plan.kind === 'at-target') {
-    return new ActionableCliError(
-      'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
-      `db update cannot carry out ${listed}`,
-      {
-        why: `${why} ${plan.text}.`,
         fix: 'Leave out these statements: db update then asks before it loses any data.',
         nextActions: [chooseAction('Run db update without these statements')],
         meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },

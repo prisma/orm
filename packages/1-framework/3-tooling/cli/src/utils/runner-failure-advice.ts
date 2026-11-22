@@ -127,7 +127,7 @@ export function dbUpdateFailedTypeChangeAdvice(
   if (plan.kind === 'none' || plan.kind === 'at-target') {
     return [
       chooseAction(
-        `${failedTypeChangeText(change)} ${plan.kind === 'none' ? `No migration can be planned for the change. ${plan.reason}` : plan.text}`,
+        `${failedTypeChangeText(change)} No migration can be planned for the change. ${plan.reason}`,
       ),
       ...changeValue,
     ];
@@ -151,9 +151,9 @@ export function dbUpdateRowsWithoutValueAdvice(
   const planned =
     flags.length === 0
       ? []
-      : plan.kind === 'on-disk' || plan.kind === 'at-target'
+      : plan.kind === 'on-disk'
         ? [chooseAction(plan.text)]
-        : plan.kind === 'none'
+        : plan.kind === 'none' || plan.kind === 'at-target'
           ? [chooseAction(`No migration can be planned to backfill those rows. ${plan.reason}`)]
           : [
               chooseAction(
@@ -280,10 +280,8 @@ export function dbUpdateRowsHoldingValueAdvice(
     `${newMember(reports, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, ...renameFlags(reports)]))}`,
   );
   const plan = printedWayToTarget(invocation, migrationPlan, [...others, ...deletes]);
-  if (plan.kind === 'on-disk' || plan.kind === 'at-target') {
-    return [rename, chooseAction(plan.text)];
-  }
-  if (plan.kind === 'none') {
+  if (plan.kind === 'on-disk') return [rename, chooseAction(plan.text)];
+  if (plan.kind === 'none' || plan.kind === 'at-target') {
     return [
       rename,
       chooseAction(
@@ -370,10 +368,8 @@ export function dbUpdateRowsFailingCheckAdvice(
   if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
   const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
   const plan = printedWayToTarget(invocation, migrationPlan, invocation.statementArgs ?? []);
-  if (plan.kind === 'on-disk' || plan.kind === 'at-target') {
-    return [chooseAction(`${cannotKeep}. ${plan.text}`)];
-  }
-  if (plan.kind === 'none') {
+  if (plan.kind === 'on-disk') return [chooseAction(`${cannotKeep}. ${plan.text}`)];
+  if (plan.kind === 'none' || plan.kind === 'at-target') {
     return [
       chooseAction(
         `${cannotKeep}, and no migration can be planned for it. ${plan.reason}. Drop check "${replacedCheck}" in the database yourself, update those rows to fit check "${report.check}", then re-run ${quoted(update)}`,

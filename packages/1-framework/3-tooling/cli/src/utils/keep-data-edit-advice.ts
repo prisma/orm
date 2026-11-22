@@ -137,13 +137,12 @@ export function dbUpdateKeepDataEditAdvice(
         ],
       };
     }
-    if (plan.kind === 'none') {
+    if (plan.kind === 'none' || plan.kind === 'at-target') {
       return {
         lead,
         ways: [`No migration can be planned to keep it. ${plan.reason}.`, ...runWays],
       };
     }
-    if (plan.kind === 'at-target') return { lead, ways: [`${plan.text}.`, ...runWays] };
     return {
       lead,
       ways: [
