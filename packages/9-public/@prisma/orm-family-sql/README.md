@@ -20,7 +20,7 @@ Applications receive it as an exact-pinned dependency of a SQL facade (`@prisma/
 
 ## SQL driver errors
 
-A SQL statement that fails surfaces as a `SqlQueryError`, and a connection that fails as a `SqlConnectionError`; both carry no dotted code — route on `kind` and the metadata fields instead. The classes are the same modules every SQL facade's driver throws, so `instanceof` and `SqlQueryError.is(...)` hold across the family. `isUniqueConstraintViolation(error)` classifies a unique or primary-key violation from the driver-normalized `sqlState` (`'23505'`), without knowing any target's own error shape:
+A SQL statement that fails surfaces as a `SqlQueryError`, and a connection that fails as a `SqlConnectionError`; both carry no dotted code — route on `kind` and the metadata fields instead. The drivers classify from the underlying error's own code: an error that carries none (a plain pg `Error`, for example) surfaces unchanged, so it matches neither `kind` nor `instanceof` checks — treat an unclassified `Error` on a SQL path as unknown and inspect its `cause`. The classes are the same modules every SQL facade's driver throws, so `instanceof` and `SqlQueryError.is(...)` hold across the family. `isUniqueConstraintViolation(error)` classifies a unique or primary-key violation from the driver-normalized `sqlState` (`'23505'`), without knowing any target's own error shape:
 
 ```ts
 import { SqlQueryError, isUniqueConstraintViolation } from '@prisma/orm-family-sql/errors';

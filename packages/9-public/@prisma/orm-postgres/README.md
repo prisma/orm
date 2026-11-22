@@ -54,12 +54,12 @@ Beneath the client factories the facade also publishes the layers they are built
 
 | Entrypoint | Surface |
 | --- | --- |
-| `/relational-core/expression` | the expression helpers: `param(value, { codecId })` wraps a value whose codec the raw-SQL lane cannot infer (the fix `RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION` names), `toExpr(value, codec?)` lifts a value into an AST expression, `buildOperation(spec)` builds a custom operation's AST |
+| `/relational-core/expression` | the expression helpers: `param(value, { codecId })` wraps a literal value whose codec the raw-SQL lane cannot infer (the fix `RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION` names; a query fragment interpolates directly and must not be wrapped), `toExpr(value, codec?)` lifts an expression or a raw value into an AST expression — a raw value requires `codec` (without one it throws `RUNTIME.PARAM_REF_CODEC_REQUIRED`), an expression does not, `buildOperation(spec)` builds a custom operation's AST |
 | `/relational-core/ast` | the relational AST classes a plan's query is built from (`ColumnRef`, `ParamRef`, `LiteralExpr`, `BinaryExpr`, `TableSource`, …) |
 | `/relational-core/types` | the plan and scope types: `SqlOrmPlan`, the shape `db.query(plan)` and `db.execute(plan)` accept |
 | `/driver/runtime` | `createPgPool(config, sessionSettings)` and `createPgClient(config, sessionSettings)` — a pool or client whose every session starts with the session settings the target declares |
 | `/target/runtime` | the Postgres runtime target descriptor (the default export), with `sessionSettings` and the codec, query-operation and collection-method contributions a decomposed install composes |
-| `/migration-tools/io` | the migration package reader: `readMigrationPackage(dir, options)` reads one package, `readMigrationsDir(root, options)` reads the graph directory and reports load problems instead of throwing |
+| `/migration-tools/io` | the migration package reader: `readMigrationPackage(dir, options)` reads one package, `readMigrationsDir(root, options)` reads the graph directory, returns per-package load problems in `problems`, skips directories without `migration.json` silently, and throws for filesystem errors while listing the root or stat-ing an entry |
 
 ```ts
 import { param } from '@prisma/orm-postgres/relational-core/expression';

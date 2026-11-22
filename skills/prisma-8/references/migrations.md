@@ -711,16 +711,16 @@ For the full graph topology: `pnpm prisma migration graph` (also supports `--leg
 
 The same on-disk format the commands above render is readable programmatically, from `@prisma/orm-<target>/migration-tools/io` (e.g. `@prisma/orm-postgres/migration-tools/io`) — the reader the CLI itself uses, for a script that audits a project's migrations or checks a migration package's integrity outside the CLI:
 
-- `readMigrationPackage(dir, options)` reads one package directory and returns its `OnDiskMigrationPackage` (`migration.json` + `ops.json`, validated). `options` takes `migrationsDir` — the project's top-level migrations directory, which the contract snapshots resolve against — and an optional `verifySnapshotContent` check for the end-contract snapshot.
-- `readMigrationsDir(migrationsRoot, options)` reads a graph directory. It never throws on a bad package: the result's `packages` keeps every package it could read (hash-mismatched ones included, represented rather than fatal) and `problems` carries one `PackageLoadProblem` per package it could not — `hashMismatch` (stored vs recomputed `migrationHash`), `providedInvariantsMismatch`, or `packageUnloadable` (that one is omitted from `packages`). A directory that does not exist reads as an empty graph, not an error.
+- `readMigrationPackage(dir, options)` reads one package directory and returns its `OnDiskMigrationPackage` (`migration.json` + `ops.json`, validated). `options` takes `migrationsDir` — the project's top-level migrations directory, which the contract snapshots resolve against — and an optional `verifySnapshotContent` check for the end-contract snapshot. On a snapshot-content mismatch, the tolerant read omits `endContractJson` without adding a `PackageLoadProblem`, and the migration hash still passes because it covers only the manifest and operations — so an audit that checks only `problems` misses it; snapshot-integrity checks must read through the strict store (`readContractSnapshotJson` from `@prisma/orm-<target>/migration-tools/contract-snapshot-store`), which reports the mismatch as `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`.
+- `readMigrationsDir(migrationsRoot, options)` reads a graph directory. It never throws on a bad package: the result's `packages` keeps every package it could read (hash-mismatched ones included, represented rather than fatal) and `problems` carries one `PackageLoadProblem` per package it could not — `hashMismatch` (stored vs recomputed `migrationHash`), `providedInvariantsMismatch`, or `packageUnloadable` (that one is omitted from `packages`). A directory that does not exist reads as an empty graph, not an error. A subdirectory without `migration.json` (one that lost its manifest but keeps `ops.json`, say) is skipped before loading — no `packageUnloadable` is reported for it — so an audit that relies on `problems` should also check the expected package directories exist. Filesystem errors do throw: a failure listing the root other than its absence, and a failure stat-ing an entry (a broken symlink, say).
 
-Migration packages live per contract space, under `<migrationsDir>/<spaceId>/` (`app` is the application's own space id), so a script reads the space's directory and passes the top-level migrations directory as the option:
+Migration packages live per contract space, under `<migrationsDir>/<spaceId>/` (`app` is the application's own space id), so a script reads the space's directory and passes the top-level migrations directory as the option. The default `migrations.dir` is `migrations` (relative to the config file); on a project that keeps the default, both paths are `migrations`-rooted as below — on a project that configures `migrations.dir`, pass paths that match it, or the read sees a directory that does not exist and audits nothing:
 
 ```typescript
 import { readMigrationsDir } from '@prisma/orm-postgres/migration-tools/io';
 
-const { packages, problems } = await readMigrationsDir('prisma/migrations/app', {
-  migrationsDir: 'prisma/migrations',
+const { packages, problems } = await readMigrationsDir('migrations/app', {
+  migrationsDir: 'migrations',
 });
 for (const problem of problems) {
   console.error(`${problem.dirName}: ${problem.kind}`);
