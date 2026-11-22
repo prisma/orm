@@ -22,12 +22,12 @@ export interface CollectionValidatorsInput extends ModelValidatorSources {
 export function deriveCollectionValidators(
   input: CollectionValidatorsInput,
 ): Record<string, MongoValidator> {
-  const validators: Record<string, MongoValidator> = {};
+  const validators = new Map<string, MongoValidator>();
 
   for (const [collectionName, modelNames] of Object.entries(collectionRootModelsOf(input.models))) {
     if (!isManaged(collectionName, input.controlPolicies)) continue;
     const schemas = modelNames.map((modelName) => {
-      const model = input.models[modelName];
+      const model = Object.hasOwn(input.models, modelName) ? input.models[modelName] : undefined;
       assertDefined(
         model,
         `Root model "${modelName}" of collection "${collectionName}" is missing`,
@@ -36,10 +36,11 @@ export function deriveCollectionValidators(
     });
     const [only, ...others] = schemas;
     assertDefined(only, `Collection "${collectionName}" has no root model`);
-    validators[collectionName] = validatorOf(
-      others.length === 0 ? only : { bsonType: 'object', anyOf: schemas },
+    validators.set(
+      collectionName,
+      validatorOf(others.length === 0 ? only : { bsonType: 'object', anyOf: schemas }),
     );
   }
 
-  return validators;
+  return Object.fromEntries(validators);
 }

@@ -1394,6 +1394,7 @@ export function interpretPslDocumentToMongoContract(
     const discriminator = polymorphism.discriminators.get(pslModel);
     const base = polymorphism.bases.get(pslModel);
     modelSites.set(pslModel.name, {
+      declaration: { source: diagnosticSource(sources, pslModel.node.syntax), span: pslModel.span },
       indexes,
       ...ifDefined('discriminator', discriminator),
       ...ifDefined('base', base),
@@ -1416,7 +1417,12 @@ export function interpretPslDocumentToMongoContract(
   }
 
   const valueObjects: ValueObjectNode[] = [];
+  const valueObjectSites = new Map<string, Site>();
   for (const compositeType of allCompositeTypes) {
+    valueObjectSites.set(compositeType.name, {
+      source: diagnosticSource(sources, compositeType.node.syntax),
+      span: compositeType.span,
+    });
     const fields: FieldNode[] = [];
     for (const field of Object.values(compositeType.fields)) {
       const siteKey = fieldSiteKey(compositeType.name, field.name);
@@ -1496,6 +1502,7 @@ export function interpretPslDocumentToMongoContract(
     models: withoutMergedIndexSites(modelSites, removedIndexes),
     fields: fieldSites,
     enums: enumSites,
+    valueObjects: valueObjectSites,
   };
   const built = buildMongoContractFromDefinition(definition, codecLookup, input.dataTypes);
   for (const refusal of built.ok ? [] : built.failure.refusals) {

@@ -297,6 +297,16 @@ function isUnknownRecord(value: unknown): value is Record<string, unknown> {
 
 const LIST_INDEX = /^\d+$/;
 
+/** Stores `value` as an own key of `target`, so a key named `__proto__` is a key rather than the prototype. */
+function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 function rejectLiteralPlaceholder(literal: MongoAggLiteral): MongoAggLiteral {
   rejectExprPlaceholder(literal.value);
   return literal;
@@ -1205,7 +1215,7 @@ export class MongoCollectionImpl<
     field: ContractField | undefined,
   ): void {
     const [head = path] = path.split('.');
-    if (field === undefined && this.#modelFields()[head] !== undefined) {
+    if (field === undefined && Object.hasOwn(this.#modelFields(), head)) {
       rejectUnknownPathPlaceholder(value, path);
     }
     if (field?.type.kind === 'valueObject') {
@@ -1216,15 +1226,17 @@ export class MongoCollectionImpl<
 
   #fieldAtPath(path: string): ContractField | undefined {
     const [head, ...rest] = path.split('.');
+    const fields = this.#modelFields();
     let field: ContractField | undefined =
-      head === undefined ? undefined : this.#modelFields()[head];
+      head === undefined || !Object.hasOwn(fields, head) ? undefined : fields[head];
     for (const segment of rest) {
       if (field?.many && LIST_INDEX.test(segment)) {
         field = { ...field, many: false };
         continue;
       }
       if (field?.type.kind !== 'valueObject') return undefined;
-      field = this.#valueObjectAt(field.type)?.fields[segment];
+      const valueObjectFields = this.#valueObjectAt(field.type)?.fields ?? {};
+      field = Object.hasOwn(valueObjectFields, segment) ? valueObjectFields[segment] : undefined;
     }
     return field;
   }
@@ -1357,8 +1369,8 @@ export class MongoCollectionImpl<
     const doc: Record<string, MongoValue> = {};
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) continue;
-      const fieldDef = voDef.fields[key];
-      doc[key] = this.#wrapFieldValue(value, fieldDef, `${path}.${key}`, purpose);
+      const fieldDef = Object.hasOwn(voDef.fields, key) ? voDef.fields[key] : undefined;
+      defineOwn(doc, key, this.#wrapFieldValue(value, fieldDef, `${path}.${key}`, purpose));
     }
     return doc;
   }
@@ -1471,7 +1483,7 @@ export class MongoCollectionImpl<
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
       if (value !== undefined) {
-        result[key] = value;
+        defineOwn(result, key, value);
       }
     }
     return result;
