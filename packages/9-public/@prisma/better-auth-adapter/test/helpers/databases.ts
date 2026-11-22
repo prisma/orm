@@ -10,7 +10,7 @@ import sqlite from '@prisma/orm-sqlite/runtime';
 import { contractFromJson as sqliteContractFromJson } from '@prisma/orm-sqlite/static';
 import { join } from 'pathe';
 import pg from 'pg';
-import type { SqlContract } from '../../src/contract/model-lookup';
+import type { SqlContract } from '../../src/models/model-lookup';
 
 export type TargetName = 'sqlite' | 'postgres';
 

@@ -4,9 +4,13 @@ import { resolveStorageTable } from '@prisma/orm-family-sql/contract/resolve-sto
 import type { SqlModelStorage } from '@prisma/orm-family-sql/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@prisma/orm-framework/contract/default-namespace';
 import type { ContractField, ContractModelBase } from '@prisma/orm-framework/contract/types';
+import {
+  checkedModels,
+  type ExpectedField,
+  type ExpectedModel,
+} from '../models/better-auth-models';
+import { type FoundModel, findModel, type SqlContract } from '../models/model-lookup';
 import { type CodecKind, codecKind } from './codec-kinds';
-import { checkedModels, type ExpectedField, type ExpectedModel } from './expected-models';
-import { type FoundModel, findModel, type SqlContract } from './model-lookup';
 
 /** How `id` gets its value: Better Auth sends a string (`string`) or a UUID string (`uuid`), or sends none and the contract fills it (`serial`, an autoincrement number; `database`, a default or an `onCreate` generator). */
 export type IdStrategy = 'string' | 'uuid' | 'serial' | 'database';

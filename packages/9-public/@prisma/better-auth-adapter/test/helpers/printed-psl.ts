@@ -1,8 +1,8 @@
 import type { BetterAuthOptions } from '@better-auth/core';
 import { getAuthTables } from '@better-auth/core/db';
 import { type ContractComparison, compareContract } from '../../src/contract/compare';
-import type { SqlContract } from '../../src/contract/model-lookup';
 import { type PrintedPsl, printPsl } from '../../src/contract/print-psl';
+import type { SqlContract } from '../../src/models/model-lookup';
 
 export interface AdapterOptionsForComparison {
   readonly namespace?: string;

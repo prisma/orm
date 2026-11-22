@@ -1,8 +1,8 @@
+import type { ExpectedField, ExpectedModel, ReferentialAction } from '../models/better-auth-models';
+import { lowerFirst, upperFirst } from '../models/identifiers';
+import type { FoundModel } from '../models/model-lookup';
 import type { ComparedModel, ContractComparison } from './compare';
 import { idFieldOf, pslTypeOf } from './compare';
-import type { ExpectedField, ExpectedModel, ReferentialAction } from './expected-models';
-import { lowerFirst, upperFirst } from './identifiers';
-import type { FoundModel } from './model-lookup';
 
 /** One field line, as its columns: name, type, then attributes when there are any. */
 type FieldLine = readonly [name: string, type: string, attributes?: string | undefined];

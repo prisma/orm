@@ -1,7 +1,7 @@
 import type { JoinConfig } from '@better-auth/core/db/adapter';
 import type { ContractRelation } from '@prisma/orm-framework/contract/types';
-import type { FoundModel } from './contract/model-lookup';
-import type { ModelLookups } from './lookups';
+import type { ModelLookups } from './collections';
+import type { FoundModel } from './models/model-lookup';
 import type { OrmCollection, Row } from './orm';
 
 /** A joined model served by `include`: the relation's rows move to the join description's key. */

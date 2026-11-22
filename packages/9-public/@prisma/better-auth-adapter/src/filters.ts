@@ -1,8 +1,8 @@
 import type { CleanedWhere } from '@better-auth/core/db/adapter';
 import { BetterAuthError } from '@better-auth/core/error';
 import { all, and, or } from '@prisma/orm-family-sql/orm-client';
-import { assertFieldName } from './contract/identifiers';
-import type { FoundModel } from './contract/model-lookup';
+import { assertFieldName } from './models/identifiers';
+import type { FoundModel } from './models/model-lookup';
 import {
   asCondition,
   type Condition,

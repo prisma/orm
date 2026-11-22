@@ -1,5 +1,5 @@
 import { afterAll, beforeAll } from 'vitest';
-import type { SqlContract } from '../../src/contract/model-lookup';
+import type { SqlContract } from '../../src/models/model-lookup';
 import { createWorkDir, emitContract, type TargetName, targets, type WorkDir } from './databases';
 import { pslHeader } from './printed-psl';
 

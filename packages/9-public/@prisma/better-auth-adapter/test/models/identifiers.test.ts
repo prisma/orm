@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertFieldName, assertModelName, isPslIdentifier } from '../../src/contract/identifiers';
+import { assertFieldName, assertModelName, isPslIdentifier } from '../../src/models/identifiers';
 
 describe('isPslIdentifier', () => {
   it.each(['user', 'User', 'two_factor', '_hidden', 'a1'])('accepts %s', (name) => {

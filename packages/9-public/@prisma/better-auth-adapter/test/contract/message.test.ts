@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from '@better-auth/core';
 import { twoFactor } from 'better-auth/plugins';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { contractMessage } from '../../src/contract/message';
-import type { SqlContract } from '../../src/contract/model-lookup';
+import type { SqlContract } from '../../src/models/model-lookup';
 import { useContractFixture } from '../helpers/contract-fixture';
 import { compare, pslForConfiguration } from '../helpers/printed-psl';
 

@@ -12,13 +12,17 @@ import {
 } from '@better-auth/core/db/adapter';
 import { BetterAuthError } from '@better-auth/core/error';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
-import { betterAuthModels } from './contract/expected-models';
-import { assertFieldName } from './contract/identifiers';
-import type { FoundModel, SqlContract } from './contract/model-lookup';
-import { contractMismatch, createContractCheck, registerContractCheck } from './contract-check';
+import { createModelLookups, type ModelLookups } from './collections';
+import {
+  contractMismatch,
+  createContractCheck,
+  registerContractCheck,
+} from './contract/contract-check';
 import { fieldOf, unsupportedError, whereFilter } from './filters';
 import { moveJoinedRows, planJoins } from './joins';
-import { createModelLookups, type ModelLookups } from './lookups';
+import { betterAuthModels } from './models/better-auth-models';
+import { assertFieldName } from './models/identifiers';
+import type { FoundModel, SqlContract } from './models/model-lookup';
 import type { PrismaAdapterOptions } from './options';
 import { callMethod, hasMethod, type OrmCollection, type Row } from './orm';
 

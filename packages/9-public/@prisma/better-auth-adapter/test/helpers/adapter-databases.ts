@@ -1,5 +1,5 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from '@better-auth/core';
-import type { SqlContract } from '../../src/contract/model-lookup';
+import type { SqlContract } from '../../src/models/model-lookup';
 import { createContractFixture } from './contract-fixture';
 import {
   applyContract,

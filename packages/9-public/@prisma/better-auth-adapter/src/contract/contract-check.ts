@@ -2,10 +2,10 @@ import type { BetterAuthOptions } from '@better-auth/core';
 import type { BetterAuthDBSchema } from '@better-auth/core/db';
 import * as internal from '@better-auth/core/db/internal';
 import { BetterAuthError } from '@better-auth/core/error';
-import { compareContract } from './contract/compare';
-import { isInvalidNameError } from './contract/identifiers';
-import { contractMessage } from './contract/message';
-import type { SqlContract } from './contract/model-lookup';
+import { isInvalidNameError } from '../models/identifiers';
+import type { SqlContract } from '../models/model-lookup';
+import { compareContract } from './compare';
+import { contractMessage } from './message';
 
 export interface ContractCheckInput {
   readonly contract: SqlContract;

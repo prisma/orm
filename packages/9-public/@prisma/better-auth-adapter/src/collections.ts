@@ -1,6 +1,6 @@
 import { BetterAuthError } from '@better-auth/core/error';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@prisma/orm-framework/contract/default-namespace';
-import { type FoundModel, findModel, type SqlContract } from './contract/model-lookup';
+import { type FoundModel, findModel, type SqlContract } from './models/model-lookup';
 import { isOrmCollection, type OrmCollection, property } from './orm';
 
 export interface ModelLookups {

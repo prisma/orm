@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { findModel, type SqlContract } from '../../src/contract/model-lookup';
+import { findModel, type SqlContract } from '../../src/models/model-lookup';
 import { useContractFixture } from '../helpers/contract-fixture';
 
 const fixture = useContractFixture();
