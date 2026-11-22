@@ -119,6 +119,15 @@ function planned(dataLoss: readonly MigrationDataLoss[]): MigrationPlannerResult
   } as MigrationPlannerResult;
 }
 
+const TYPE_CHANGE: readonly MigrationDataLoss[] = [
+  {
+    operationIndex: 0,
+    subject: { kind: 'field', namespaceId: app, model: 'Place', field: 'id' },
+    loss: 'typeChange',
+    label: 'Change the type of id',
+  } as MigrationDataLoss,
+];
+
 const RUNNER_FAILED: MigrationRunnerResult = notOk(
   migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'The check failed', {
     meta: {
@@ -168,6 +177,7 @@ async function runToProduction(options: {
   readonly planner?: MigrationPlannerResult;
   readonly runner?: MigrationRunnerResult;
   readonly statements?: readonly { readonly verb: 'backfill'; readonly text: string }[];
+  readonly forbidDataLoss?: boolean;
 }) {
   const dir = createTestProjectDir('db-update-advice-target');
   tempDirs.push(dir);
@@ -207,7 +217,14 @@ async function runToProduction(options: {
     },
     targetId: 'postgres',
     statements: options.statements ?? [],
-    ref: { name: 'production', hash: DESTINATION_HASH, invariants: [] },
+    ref: {
+      name: 'production',
+      hash: DESTINATION_HASH,
+      invariants: [],
+      ...(options.forbidDataLoss === true
+        ? { policies: { dataProtection: { dataLoss: 'data-loss-forbidden' as const } } }
+        : {}),
+    },
     permitPolicyChange: true,
   }).catch((error: unknown) => notOk(error as { readonly fix?: string }));
   return { result, asked };
@@ -266,6 +283,19 @@ describe('db update --to <ref> with no migration on disk that leads there', () =
       '`{bin} migration plan --from db --to production --backfill GeoPoint.latitude`',
     );
     expect(advice).toContain(APPLY);
+  });
+
+  it('plans the conversion to the ref when its data protection policy refuses a type change', async () => {
+    const { result } = await runToProduction({
+      mode: 'apply',
+      migrationToRef: false,
+      planner: planned(TYPE_CHANGE),
+      forbidDataLoss: true,
+    });
+
+    expect(adviceOf(result)).toContain(
+      'For a type change, write the conversion with `{bin} migration plan --from db --to production --convert <field>`.',
+    );
   });
 
   it('plans to the ref in the questions an apply asks', async () => {
@@ -337,6 +367,21 @@ describe('db update --to <ref> when migrations on disk already lead there', () =
       'Migrations on disk already lead from the database to that contract',
     );
     expect(advice).toContain(`apply the migrations with ${APPLY}`);
+  });
+
+  it('says to write a refused type change in them', async () => {
+    const { result } = await runToProduction({
+      mode: 'apply',
+      migrationToRef: true,
+      planner: planned(TYPE_CHANGE),
+      forbidDataLoss: true,
+    });
+
+    const advice = adviceOf(result);
+    expect(advice).not.toContain('{bin} migration plan');
+    expect(advice).toContain(
+      `For a type change, write the conversion in the migration.ts of the one that changes the field, run that migration.ts with \`node\`, and apply them with ${APPLY}.`,
+    );
   });
 
   it('says to apply them in the questions an apply asks', async () => {
