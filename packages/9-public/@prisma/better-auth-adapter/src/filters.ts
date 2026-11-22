@@ -1,6 +1,7 @@
 import type { CleanedWhere } from '@better-auth/core/db/adapter';
 import { BetterAuthError } from '@better-auth/core/error';
 import { all, and, or } from '@prisma/orm-family-sql/orm-client';
+import { codecKind } from './models/codec-kinds';
 import { describeFieldType } from './models/field-type';
 import type { FoundModel } from './models/model-lookup';
 import {
@@ -14,10 +15,12 @@ import {
   type WhereTools,
 } from './orm';
 
-/** The codec id a raw expression over the field returns; a field that is not a single scalar supports no pattern or case-insensitive comparison. */
+/** The codec id a raw expression over the field returns. A field that is not a single scalar, or whose codec is known not to hold text, supports no pattern or case-insensitive comparison; a codec the table does not know is tried. */
 function scalarCodecIdOf(model: FoundModel, field: string, operator: string): string {
   const type = model.model.fields[field];
   if (type?.type.kind !== 'scalar' || type.many) throw unsupportedError(model, field, operator);
+  const kind = codecKind(type.type.codecId);
+  if (kind !== undefined && kind !== 'string') throw unsupportedError(model, field, operator);
   return type.type.codecId;
 }
 

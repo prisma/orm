@@ -255,6 +255,43 @@ describe('refused comparisons on postgres', () => {
       }),
     ).rejects.toThrow('Field "Probe.meta" (pg/json@1) does not support eq.');
   });
+
+  it('a pattern or case-insensitive filter on a Uuid field', async () => {
+    const psl = probePsl(databases, 'postgres').replace(
+      /(model Probe \{[^}]*\n\s+id\s+)String/,
+      '$1Uuid  ',
+    );
+    const client = await databases.open('postgres', psl);
+    const adapter = prismaAdapter(client)(probeOptions);
+    await expect(
+      adapter.findMany({
+        model: 'probe',
+        where: [{ field: 'id', operator: 'contains', value: '0000' }],
+      }),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        name: 'BetterAuthError',
+        message: 'Field "Probe.id" (pg/uuid@1) does not support contains.',
+      }),
+    );
+    await expect(
+      adapter.findMany({
+        model: 'probe',
+        where: [
+          {
+            field: 'id',
+            value: '00000000-0000-0000-0000-000000000000',
+            mode: 'insensitive',
+          },
+        ],
+      }),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        name: 'BetterAuthError',
+        message: 'Field "Probe.id" (pg/uuid@1) does not support eq.',
+      }),
+    );
+  });
 });
 
 describe.each(targets)('joins on %s', (target) => {

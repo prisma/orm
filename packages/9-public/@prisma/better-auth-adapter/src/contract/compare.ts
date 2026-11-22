@@ -9,10 +9,10 @@ import {
   type BetterAuthModel,
   managedModels,
 } from '../models/better-auth-models';
+import { type CodecKind, codecKind } from '../models/codec-kinds';
 import { describeFieldType } from '../models/field-type';
 import { invalidFieldNameMessage, invalidModelNameMessage } from '../models/identifiers';
 import { type FoundModel, findModel, type SqlContract } from '../models/model-lookup';
-import { type CodecKind, codecKind } from './codec-kinds';
 import { type IdStrategy, idStrategyOf, isIdReference } from './psl-types';
 
 export type ComparedModel =
