@@ -19,7 +19,7 @@ import { errorMigrationPlanningFailed } from '../../src/utils/cli-errors';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { stdoutErrorMeta, stdoutFrames } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
-import { NOT_RECORDED, reference } from '../utils/plan-origins';
+import { NOT_RECORDED, reference, toEmitted } from '../utils/plan-origins';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const REFUSAL =
@@ -233,10 +233,10 @@ describe('db update --rename', () => {
     const temporaryValues = [{ field: 'User.email', value: "''" }];
     mocks.dbUpdate
       .mockResolvedValueOnce(
-        ok({ ...planSuccess(), temporaryValues, migrationPlanOrigin: reference('db') }),
+        ok({ ...planSuccess(), temporaryValues, migrationPlan: toEmitted(reference('db')) }),
       )
       .mockResolvedValueOnce(
-        ok({ ...applySuccess(), temporaryValues, migrationPlanOrigin: reference('db') }),
+        ok({ ...applySuccess(), temporaryValues, migrationPlan: toEmitted(reference('db')) }),
       );
     const dryRun = await harness().run(['db', 'update', '--dry-run'], {
       cwd: projectDir,
@@ -258,6 +258,28 @@ describe('db update --rename', () => {
       text: `Field "User.email" got the temporary value '' where existing data has none. To choose another value, update those rows.`,
     });
     expect(applied.presented?.data).toMatchObject({ temporaryValues });
+  });
+
+  it('names the ref db update --to was given in the migration plan that chooses a temporary value', async () => {
+    mocks.dbUpdate.mockResolvedValueOnce(
+      ok({
+        ...planSuccess(),
+        temporaryValues: [{ field: 'User.email', value: "''" }],
+        migrationPlan: { from: reference('db'), to: reference('production') },
+      }),
+    );
+    const run = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.presented?.presentation.human).toContainEqual(
+      expect.objectContaining({
+        text: expect.stringContaining(
+          '`prisma-test migration plan --from db --to production --backfill User.email`',
+        ),
+      }),
+    );
   });
 
   it('suggests no migration plan for a temporary value when no plan can start where the database is', async () => {
@@ -282,7 +304,7 @@ describe('db update --rename', () => {
         ...planSuccess(),
         temporaryValues: [{ field: 'User.email', value: "''" }],
         databaseStorageHash: MARKER_HASH,
-        migrationPlanOrigin: reference(MARKER_HASH),
+        migrationPlan: toEmitted(reference(MARKER_HASH)),
       }),
     );
     const run = await harness().run(['db', 'update', '--dry-run'], {
@@ -296,7 +318,7 @@ describe('db update --rename', () => {
       text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from ${MARKER_HASH} --backfill User.email\` instead.`,
     });
     expect(run.presented?.data).not.toHaveProperty('databaseStorageHash');
-    expect(run.presented?.data).not.toHaveProperty('migrationPlanOrigin');
+    expect(run.presented?.data).not.toHaveProperty('migrationPlan');
   });
 
   it('lists what an apply would ask about on a dry run, in its output and its JSON', async () => {
@@ -583,7 +605,7 @@ describe('db update --rename', () => {
       ok({
         ...planSuccess(),
         temporaryValues: [{ field: 'User.email', value: "''" }],
-        migrationPlanOrigin: reference('db'),
+        migrationPlan: toEmitted(reference('db')),
       }),
     );
     const run = await harness().run(
@@ -1021,7 +1043,7 @@ describe('db update', () => {
           migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
           {},
           {
-            migrationPlanOrigin: NOT_RECORDED,
+            migrationPlan: toEmitted(NOT_RECORDED),
             invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
           },
         ),
@@ -1051,7 +1073,7 @@ describe('db update', () => {
             { meta: { blockingObjects: [{ kind: 'view', name: 'billing.v_paid' }] } },
           ),
           {},
-          { migrationPlanOrigin: NOT_RECORDED, invocation: options.invocation },
+          { migrationPlan: toEmitted(NOT_RECORDED), invocation: options.invocation },
         ),
       ),
     );
@@ -1106,7 +1128,7 @@ describe('db update', () => {
           migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
           {},
           {
-            migrationPlanOrigin: NOT_RECORDED,
+            migrationPlan: toEmitted(NOT_RECORDED),
             invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
           },
         ),
@@ -1152,7 +1174,7 @@ describe('db update', () => {
           migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
           {},
           {
-            migrationPlanOrigin: NOT_RECORDED,
+            migrationPlan: toEmitted(NOT_RECORDED),
             invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
           },
         ),
@@ -1179,7 +1201,7 @@ describe('db update', () => {
     mocks.dbUpdate.mockResolvedValue(
       notOk(
         dbUpdateRunnerFailureError(runnerFailure, runnerFailureFacts(runnerFailure, []), {
-          migrationPlanOrigin: NOT_RECORDED,
+          migrationPlan: toEmitted(NOT_RECORDED),
           invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
         }),
       ),

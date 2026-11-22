@@ -4,7 +4,11 @@ import type {
 } from '@internal/framework-components/control';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { basename, join } from 'pathe';
-import type { MigrationPlanArgument } from '../control-api/operations/plan-arguments';
+import type {
+  MigrationPlanArgument,
+  MigrationPlanArguments,
+  MigrationPlanTargetArgument,
+} from '../control-api/operations/plan-arguments';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type {
   FailedTypeChangeReport,
@@ -19,6 +23,7 @@ import {
   type CliInvocation,
   cliCommand,
   dbMigrateRerun,
+  dbMigrateToCommand,
   dbUpdateRerun,
   printedPath,
   printedPlan,
@@ -62,8 +67,8 @@ function quoted(command: string): string {
 }
 
 /** A `db migrate` command as advice prints it, for a migration that is not the one the user ran. */
-function dbMigrateCommand(invocation: CliInvocation): string {
-  return quoted(cliCommand(invocation, 'db migrate'));
+function dbMigrateCommand(invocation: CliInvocation, to?: MigrationPlanTargetArgument): string {
+  return quoted(dbMigrateToCommand(invocation, to));
 }
 
 /** The `db migrate` the user ran, as advice that repeats it prints it. */
@@ -72,8 +77,11 @@ function dbMigrateAgain(invocation: CliInvocation): string {
 }
 
 /** The steps after filling the migration.ts a `migration plan` wrote with no placeholders: run it, which writes its operations, and apply it. */
-export function runWrittenFile(invocation: CliInvocation): string {
-  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${dbMigrateCommand(invocation)}`;
+export function runWrittenFile(
+  invocation: CliInvocation,
+  to?: MigrationPlanTargetArgument,
+): string {
+  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${dbMigrateCommand(invocation, to)}`;
 }
 
 /** The step between filling a planned migration.ts and applying it, which writes its operations. */
@@ -107,11 +115,11 @@ function changeValueAdvice(change: FailedTypeChangeReport, rerun: string): Runne
 /** The way out of a failed cast for `db update`, which plans and applies in one step. */
 export function dbUpdateFailedTypeChangeAdvice(
   change: FailedTypeChangeReport,
-  origin: MigrationPlanArgument,
+  migrationPlan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const changeValue = changeValueAdvice(change, quoted(dbUpdateRerun(invocation)));
-  const plan = printedPlan(invocation, { from: origin }, [
+  const plan = printedPlan(invocation, migrationPlan, [
     statementFlag({ verb: 'convert', text: change.field }),
   ]);
   if (plan.kind === 'none') {
@@ -124,7 +132,7 @@ export function dbUpdateFailedTypeChangeAdvice(
   }
   return [
     chooseAction(
-      `${failedTypeChangeText(change)} Plan the change with ${quotedPlan(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+      `${failedTypeChangeText(change)} Plan the change with ${quotedPlan(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation, migrationPlan.to)}`,
     ),
     ...changeValue,
   ];
@@ -133,11 +141,11 @@ export function dbUpdateFailedTypeChangeAdvice(
 /** The way out of rows without a value for `db update`, which plans and applies in one step. */
 export function dbUpdateRowsWithoutValueAdvice(
   reports: readonly RowsWithoutValueReport[],
-  origin: MigrationPlanArgument,
+  migrationPlan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const flags = backfillFlags(reports);
-  const plan = printedPlan(invocation, { from: origin }, flags);
+  const plan = printedPlan(invocation, migrationPlan, flags);
   const planned =
     flags.length === 0
       ? []
@@ -145,7 +153,7 @@ export function dbUpdateRowsWithoutValueAdvice(
         ? [chooseAction(`No migration can be planned to backfill those rows. ${plan.reason}`)]
         : [
             chooseAction(
-              `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+              `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation, migrationPlan.to)}`,
             ),
           ];
   const [first] = reports;
@@ -259,7 +267,7 @@ function storedValuesText(reports: readonly RowsHoldingValueReport[]): string {
 /** The way out when the data of required columns holds stored values `db update` removes. */
 export function dbUpdateRowsHoldingValueAdvice(
   reports: readonly RowsHoldingValueReport[],
-  origin: MigrationPlanArgument,
+  migrationPlan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const others = otherStatements(invocation, reports);
@@ -267,7 +275,7 @@ export function dbUpdateRowsHoldingValueAdvice(
   const rename = chooseAction(
     `${newMember(reports, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, ...renameFlags(reports)]))}`,
   );
-  const plan = printedPlan(invocation, { from: origin }, [...others, ...deletes]);
+  const plan = printedPlan(invocation, migrationPlan, [...others, ...deletes]);
   if (plan.kind === 'none') {
     return [
       rename,
@@ -281,7 +289,7 @@ export function dbUpdateRowsHoldingValueAdvice(
   return [
     rename,
     chooseAction(
-      `To keep that data by hand, plan the change with ${quotedPlan(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}.\n${swaps}`,
+      `To keep that data by hand, plan the change with ${quotedPlan(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation, migrationPlan.to)}.\n${swaps}`,
     ),
   ];
 }
@@ -334,14 +342,14 @@ function fixRowsFirst(report: RowsFailingCheckReport, rerun: string): NextAction
 /** The way out when existing rows fail a check `db update` adds: it cannot keep the data while the check it replaces holds. */
 export function dbUpdateRowsFailingCheckAdvice(
   report: RowsFailingCheckReport,
-  origin: MigrationPlanArgument,
+  migrationPlan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const update = dbUpdateRerun(invocation);
   const { replacedCheck } = report;
   if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
   const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
-  const plan = printedPlan(invocation, { from: origin }, invocation.statementArgs ?? []);
+  const plan = printedPlan(invocation, migrationPlan, invocation.statementArgs ?? []);
   if (plan.kind === 'none') {
     return [
       chooseAction(
@@ -351,7 +359,7 @@ export function dbUpdateRowsFailingCheckAdvice(
   }
   return [
     chooseAction(
-      `${cannotKeep}. Plan the change with ${quotedPlan(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation)}`,
+      `${cannotKeep}. Plan the change with ${quotedPlan(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation, migrationPlan.to)}`,
     ),
   ];
 }

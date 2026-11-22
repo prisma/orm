@@ -1,6 +1,7 @@
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import {
   type MigrationPlanArgument,
+  type MigrationPlanArguments,
   migrationPlanArguments,
   type RunnablePlanArgument,
 } from '../../src/control-api/operations/plan-arguments';
@@ -23,6 +24,11 @@ export function originOf(hash: string | undefined): MigrationPlanArgument {
 
 /** Why no plan starts at {@link UNRECORDED}. */
 export const NOT_RECORDED_REASON = NOT_RECORDED.kind === 'none' ? NOT_RECORDED.reason : '';
+
+/** A `migration plan` from `from` to the emitted contract. */
+export function toEmitted(from: MigrationPlanArgument): MigrationPlanArguments {
+  return { from, to: { kind: 'default' } };
+}
 
 /** A contract reference a test names, as a `--from` or `--to`. */
 export function reference(value: string): RunnablePlanArgument {

@@ -117,12 +117,20 @@ describe('a question about a value object field', () => {
         {
           canConvert: false,
           temporaryValues: [],
-          migrationPlan: { from: reference('db'), invocation: undefined },
+          migrationPlan: {
+            from: reference('db'),
+            to: { kind: 'default' as const },
+            invocation: undefined,
+          },
         },
         {
           canConvert: false,
           temporaryValues: [],
-          migrationPlan: { from: NOT_RECORDED, invocation: undefined },
+          migrationPlan: {
+            from: NOT_RECORDED,
+            to: { kind: 'default' as const },
+            invocation: undefined,
+          },
         },
       ].map(async ({ canConvert, temporaryValues, migrationPlan }) => {
         const {

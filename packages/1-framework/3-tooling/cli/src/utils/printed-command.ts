@@ -49,6 +49,14 @@ export function dbMigrateRerun(invocation: CliInvocation): string {
   return cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? []);
 }
 
+/** The `db migrate` that applies a migration a `migration plan` to `to` writes. */
+export function dbMigrateToCommand(
+  invocation: CliInvocation | undefined,
+  to: MigrationPlanTargetArgument = { kind: 'default' },
+): string {
+  return cliCommand(invocation, 'db migrate', to.kind === 'none' ? [] : argumentWords('--to', to));
+}
+
 /** The `db update` the user ran, with the flags they gave and `statements`, by default the run's own. */
 export function dbUpdateRerun(
   invocation: CliInvocation,

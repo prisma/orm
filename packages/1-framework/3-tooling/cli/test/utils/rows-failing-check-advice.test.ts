@@ -2,7 +2,7 @@ import { migrationRunnerFailure } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
-import { NOT_RECORDED_REASON, originOf } from './plan-origins';
+import { NOT_RECORDED_REASON, originOf, reference, toEmitted } from './plan-origins';
 import { onDisk } from './runner-failure-errors';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
@@ -58,7 +58,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { migrationPlanOrigin: originOf(FROM), invocation: PROJECT },
+      { migrationPlan: toEmitted(originOf(FROM)), invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([
@@ -67,11 +67,28 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     expect(JSON.stringify(error.nextActions)).not.toContain('drift');
   });
 
+  it('on db update --to a ref, plans the change to that ref and applies to it', () => {
+    const error = dbUpdateRunnerFailureError(
+      failure,
+      { rowsFailingCheck: replacing },
+      { migrationPlan: { from: originOf(FROM), to: reference('production') }, invocation: PROJECT },
+    );
+
+    expect(labels(error)).toEqual([
+      expect.stringContaining(
+        'Plan the change with `{bin} migration plan --from sha256:0123 --to production`',
+      ),
+    ]);
+    expect(labels(error)).toEqual([
+      expect.stringContaining('apply it with `{bin} db migrate --to production`'),
+    ]);
+  });
+
   it('on db update with no migration at the database contract, says to drop the old check and fix the rows in the database', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { migrationPlanOrigin: originOf(undefined), invocation: PROJECT },
+      { migrationPlan: toEmitted(originOf(undefined)), invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([
@@ -84,7 +101,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: adding },
-      { migrationPlanOrigin: originOf(FROM), invocation: PROJECT },
+      { migrationPlan: toEmitted(originOf(FROM)), invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([

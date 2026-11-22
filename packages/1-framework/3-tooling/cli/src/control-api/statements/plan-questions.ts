@@ -27,7 +27,7 @@ import {
   type UnusedConsent,
 } from '../../utils/cli-errors';
 import { type CliInvocation, printedPlan, quotedPlan } from '../../utils/printed-command';
-import type { MigrationPlanArgument } from '../operations/plan-arguments';
+import type { MigrationPlanArguments } from '../operations/plan-arguments';
 import type { ConsentVerb } from './parse-consent';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
@@ -327,7 +327,7 @@ function backfillPlanText(
 ): string {
   const flags = fields.map((each) => statementFlag({ verb: 'backfill', text: each }));
   if (migrationPlan === undefined) return `this command plans no migration that writes ${values}`;
-  const plan = printedPlan(migrationPlan.invocation, { from: migrationPlan.from }, flags);
+  const plan = printedPlan(migrationPlan.invocation, migrationPlan, flags);
   return plan.kind === 'none'
     ? `no migration can be planned to write ${values} either. ${plan.reason}`
     : `plan the change with ${quotedPlan(plan)} to write ${values} in migration.ts`;
@@ -613,9 +613,8 @@ type DataLossContracts = StatementContracts & {
   readonly temporaryValues: readonly { readonly subject: MigrationSubject }[];
 };
 
-/** Where a `migration plan` a question names starts, and how the CLI was run. */
-export interface QuestionMigrationPlan {
-  readonly from: MigrationPlanArgument;
+/** Where a `migration plan` a question names starts and ends, and how the CLI was run. */
+export interface QuestionMigrationPlan extends MigrationPlanArguments {
   readonly invocation: CliInvocation | undefined;
 }
 

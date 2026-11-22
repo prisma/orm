@@ -1,5 +1,5 @@
 import type { EnumValueCoordinate, KeepDataEdit } from '@internal/framework-components/control';
-import type { MigrationPlanArgument } from '../control-api/operations/plan-arguments';
+import type { MigrationPlanArguments } from '../control-api/operations/plan-arguments';
 import type {
   KeepDataAdvice,
   KeepDataEditAdvice,
@@ -98,12 +98,13 @@ function twoRuns(
 }
 
 /**
- * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with `migration plan` from `origin` when the target gives edits, answering with `--delete` each kept subject whose edits it gives, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no plan can start where the database is.
+ * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with the `migration plan` `migrationPlan` gives when the target gives edits, answering with `--delete` each kept subject whose edits it gives, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no plan can start where the database is.
  */
 export function dbUpdateKeepDataEditAdvice(
   invocation: CliInvocation,
-  origin: MigrationPlanArgument,
+  migrationPlan: MigrationPlanArguments,
 ): KeepDataEditAdvice {
+  const origin = migrationPlan.from;
   return (subject, kept): KeepDataAdvice => {
     const deleteFlag = statementFlag({ verb: 'delete', text: subject.text });
     const swaps = subject.edits.some(({ swapsValues }) => swapsValues === true);
@@ -123,7 +124,7 @@ export function dbUpdateKeepDataEditAdvice(
       return { lead, ways: runWays };
     }
     const deletes = edited.map(({ text }) => statementFlag({ verb: 'delete', text }));
-    const plan = printedPlan(invocation, { from: origin }, [
+    const plan = printedPlan(invocation, migrationPlan, [
       ...otherStatements(invocation, [subject.text]).filter((flag) => !deletes.includes(flag)),
       ...deletes,
     ]);
@@ -136,7 +137,7 @@ export function dbUpdateKeepDataEditAdvice(
     return {
       lead,
       ways: [
-        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation)}.`,
+        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation, migrationPlan.to)}.`,
         ...(swaps ? [] : runWays),
       ],
     };

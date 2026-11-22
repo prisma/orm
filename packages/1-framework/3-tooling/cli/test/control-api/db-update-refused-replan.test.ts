@@ -126,7 +126,7 @@ afterEach(() => {
 });
 
 describe('executeDbUpdate when the plan with an answered rename is refused', () => {
-  async function refusedRun(options: { readonly dbRef: boolean }) {
+  async function refusedRun(options: { readonly dbRef: boolean; readonly toRef?: string }) {
     const dir = createTestProjectDir('db-update-refused-replan');
     tempDirs.push(dir);
     const migrationsDir = join(dir, 'migrations');
@@ -155,8 +155,23 @@ describe('executeDbUpdate when the plan with an answered rename is refused', () 
         questions.map(() => ({ verb: 'rename', text: 'Profile:User' })),
       targetId: 'postgres',
       statements: [{ verb: 'delete', text: 'Profile.nickname' }],
+      ...(options.toRef === undefined
+        ? {}
+        : { ref: { name: options.toRef, hash: DESTINATION_HASH, invariants: [] } }),
     });
   }
+
+  it('plans to the ref db update was given, and applies to it', async () => {
+    const result = await refusedRun({ dbRef: true, toRef: 'production' });
+
+    expect(result.ok ? undefined : result.failure.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label:
+          'To write the rewrites by hand, plan the change without --rename Profile:User with `{bin} migration plan --from db --to production --delete Profile.nickname`, add the rewrites the message describes to the migration.ts it writes, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate --to production`',
+      },
+    ]);
+  });
 
   it('advises the plan without the rename typed at the prompt, keeping the given delete', async () => {
     const result = await refusedRun({ dbRef: true });

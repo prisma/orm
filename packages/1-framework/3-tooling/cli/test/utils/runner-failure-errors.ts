@@ -11,7 +11,7 @@ import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import type { CliInvocation } from '../../src/utils/printed-command';
 import type { FailedMigrationOnDisk } from '../../src/utils/runner-failure-advice';
-import { originOf, reference } from './plan-origins';
+import { originOf, reference, toEmitted } from './plan-origins';
 
 /** A failed migration as a test states it: its directory, the contract it starts from, and its extension space. */
 export interface WrittenMigration {
@@ -80,7 +80,7 @@ export function migrateError(input: AdviceInput, invocation: CliInvocation) {
 
 export function dbUpdateError(input: AdviceInput, invocation: CliInvocation) {
   return dbUpdateRunnerFailureError(runnerFailureOf(input), factsOf(input), {
-    migrationPlanOrigin: originOf(input.planFrom),
+    migrationPlan: toEmitted(originOf(input.planFrom)),
     invocation,
   });
 }

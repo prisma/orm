@@ -729,8 +729,13 @@ async function executeMigrationPlanCommandInner(
     (conflicts: readonly MigrationPlannerConflict[]) =>
       planningRefusedError(conflicts, {
         invocation: invocationOf(options),
-        from: migrationPlanFromRun(options.from, fromResolution),
-        to: options.to,
+        migrationPlan: {
+          from: migrationPlanFromRun(options.from, fromResolution),
+          to:
+            options.to === undefined
+              ? { kind: 'default' }
+              : { kind: 'reference', reference: options.to },
+        },
         statements: texts,
         resolved,
       });

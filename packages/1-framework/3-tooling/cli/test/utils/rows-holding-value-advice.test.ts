@@ -2,7 +2,7 @@ import { migrationRunnerFailure } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
-import { NOT_RECORDED_REASON, originOf } from './plan-origins';
+import { NOT_RECORDED_REASON, originOf, toEmitted } from './plan-origins';
 import { onDisk } from './runner-failure-errors';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
@@ -59,7 +59,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
           planStartsFromMarker: false,
         },
       },
-      { migrationPlanOrigin: originOf(FROM), invocation: WITH_STATEMENTS },
+      { migrationPlan: toEmitted(originOf(FROM)), invocation: WITH_STATEMENTS },
     );
 
     expect(labels(error)).toEqual([
@@ -72,7 +72,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsHoldingValue: [rowsHoldingValue] },
-      { migrationPlanOrigin: originOf(undefined), invocation: WITH_STATEMENTS },
+      { migrationPlan: toEmitted(originOf(undefined)), invocation: WITH_STATEMENTS },
     );
 
     expect(labels(error)[1]).toBe(
@@ -144,7 +144,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
         failure,
         { rowsHoldingValue: several },
         {
-          migrationPlanOrigin: originOf(FROM),
+          migrationPlan: toEmitted(originOf(FROM)),
           invocation: {
             ...PROJECT,
             statementArgs: ['--delete Status.ARCHIVED', '--delete Prio.Low'],
@@ -162,7 +162,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
       const error = dbUpdateRunnerFailureError(
         failure,
         { rowsHoldingValue: several },
-        { migrationPlanOrigin: originOf(undefined), invocation: PROJECT },
+        { migrationPlan: toEmitted(originOf(undefined)), invocation: PROJECT },
       );
 
       expect(labels(error)[1]).toBe(

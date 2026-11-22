@@ -41,7 +41,7 @@ import type { CliInvocation } from '../utils/printed-command';
 import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
-import type { MigrationPlanArgument } from './operations/plan-arguments';
+import type { MigrationPlanArguments } from './operations/plan-arguments';
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
 import type { AnswerPlanQuestions } from './statements/plan-questions';
 import type { AppliedStatementReport } from './statements/report-applied-statements';
@@ -513,15 +513,16 @@ export interface DbUpdateSuccess
    * The storage hash of the contract the database was at before the run, when a migration records
    * it.
    *
-   * @deprecated Use `migrationPlanOrigin`, which says what `migration plan --from` takes in every
+   * @deprecated Use `migrationPlan.from`, which says what `migration plan --from` takes in every
    * case this field leaves out.
    */
   readonly databaseStorageHash?: string;
   /**
-   * The `--from` a `migration plan` for this database takes, as it was before the run: a contract
-   * reference, a choice for the user, or why no `migration plan` can start there.
+   * The `--from` and `--to` of a `migration plan` that takes this database, as it was before the
+   * run, where the run went. Each is a contract reference, the default, or why no `migration plan`
+   * can start or end there; `--from` can also be a choice for the user.
    */
-  readonly migrationPlanOrigin?: MigrationPlanArgument;
+  readonly migrationPlan?: MigrationPlanArguments;
   /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;

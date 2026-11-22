@@ -3,7 +3,7 @@ import {
   errorStatementNeedsMigrationFile,
   errorStatementOriginUnknown,
 } from '../src/utils/cli-errors';
-import { NOT_RECORDED, reference } from './utils/plan-origins';
+import { NOT_RECORDED, reference, toEmitted } from './utils/plan-origins';
 
 const HASH = 'sha256:abc';
 const DIR = 'migrations/snapshots/sha256:abc';
@@ -77,6 +77,20 @@ describe('errorStatementNeedsMigrationFile', () => {
     );
   }
 
+  it('plans to the ref db update was given, and applies to it', () => {
+    const envelope = errorStatementNeedsMigrationFile(
+      [{ verb: 'backfill', text: 'User.email' }],
+      [{ verb: 'backfill', text: 'User.email' }],
+      undefined,
+      { from: reference('db'), to: reference('production') },
+    ).toEnvelope();
+
+    expect(envelope.fix).toContain(
+      '`{bin} migration plan --from db --to production --backfill User.email`',
+    );
+    expect(envelope.fix).toContain('apply it with `{bin} db migrate --to production`');
+  });
+
   it('names the refused statements, and gives migration plan every statement it accepts, in the order given', () => {
     const envelope = errorStatementNeedsMigrationFile(
       [
@@ -91,7 +105,7 @@ describe('errorStatementNeedsMigrationFile', () => {
         { verb: 'backfill', text: 'User.email' },
       ],
       undefined,
-      reference('db'),
+      toEmitted(reference('db')),
     ).toEnvelope();
 
     expect(envelope).toMatchObject({
@@ -113,7 +127,7 @@ describe('errorStatementNeedsMigrationFile', () => {
       [{ verb: 'convert', text: 'User.years' }],
       [{ verb: 'convert', text: 'User.years' }],
       undefined,
-      NOT_RECORDED,
+      toEmitted(NOT_RECORDED),
     ).toEnvelope();
 
     expect({
@@ -124,7 +138,7 @@ describe('errorStatementNeedsMigrationFile', () => {
           [{ verb: 'convert', text: 'User.years' }],
           [{ verb: 'convert', text: 'User.years' }],
           undefined,
-          NOT_RECORDED,
+          toEmitted(NOT_RECORDED),
         ),
       ),
     }).toEqual({
@@ -136,8 +150,12 @@ describe('errorStatementNeedsMigrationFile', () => {
 
   it('gives the reason of each statement it refuses, and only those', () => {
     const why = (refused: readonly { verb: 'convert' | 'backfill'; text: string }[]) =>
-      errorStatementNeedsMigrationFile(refused, refused, undefined, reference('db')).toEnvelope()
-        .why;
+      errorStatementNeedsMigrationFile(
+        refused,
+        refused,
+        undefined,
+        toEmitted(reference('db')),
+      ).toEnvelope().why;
 
     expect([
       why([{ verb: 'backfill', text: 'GeoPoint.seen' }]),
@@ -157,7 +175,7 @@ describe('errorStatementNeedsMigrationFile', () => {
         configPath: 'app/prisma.config.ts',
         dbGiven: false,
       },
-      reference('db'),
+      toEmitted(reference('db')),
     ).toEnvelope();
 
     expect({
@@ -171,7 +189,7 @@ describe('errorStatementNeedsMigrationFile', () => {
             configPath: 'app/prisma.config.ts',
             dbGiven: false,
           },
-          reference('db'),
+          toEmitted(reference('db')),
         ),
       ),
     }).toEqual({
@@ -190,7 +208,7 @@ describe('errorStatementNeedsMigrationFile', () => {
       ],
       [{ verb: 'backfill', text: 'User.$(x)' }],
       undefined,
-      reference('db'),
+      toEmitted(reference('db')),
     );
 
     expect(commandOf(error)).toEqual([

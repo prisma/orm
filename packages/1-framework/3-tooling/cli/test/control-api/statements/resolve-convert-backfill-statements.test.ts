@@ -8,7 +8,7 @@ import {
   type StatementText,
 } from '../../../src/control-api/statements/statement-text';
 import { errorStatementNeedsMigrationFile } from '../../../src/utils/cli-errors';
-import { reference } from '../../utils/plan-origins';
+import { reference, toEmitted } from '../../utils/plan-origins';
 import { contractOf, expectFailure, expectValue } from './statement-fixtures';
 
 const UNRESOLVED = 'MIGRATION.STATEMENT_UNRESOLVED';
@@ -275,7 +275,7 @@ describe('the migration plan command the db update refusal prints', () => {
         [rename('User.age:User.years'), convert('User.years')],
         [convert('User.years')],
         undefined,
-        reference('db'),
+        toEmitted(reference('db')),
       ).toEnvelope().nextActions ?? []
     ).flatMap((action) =>
       'command' in action && typeof action.command === 'string' ? [action.command] : [],

@@ -30,7 +30,6 @@ import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import {
-  type MigrationPlanArgument,
   type MigrationPlanArguments,
   migrationPlanChoice,
   type PlanSpace,
@@ -42,6 +41,7 @@ import {
   type CliInvocation,
   cliCommand,
   dbMigrateRerun,
+  dbMigrateToCommand,
   planAction,
   printedChoicePlan,
   printedPath,
@@ -750,7 +750,7 @@ export function errorStatementNeedsMigrationFile(
   statements: readonly StatementText[],
   refused: readonly StatementText[],
   invocation: CliInvocation | undefined,
-  origin: MigrationPlanArgument,
+  migrationPlan: MigrationPlanArguments,
 ): ActionableCliError {
   const written = refused.map(({ verb, text }) => `"--${verb} ${text}"`);
   const listed =
@@ -758,7 +758,7 @@ export function errorStatementNeedsMigrationFile(
   const why = `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`;
   const plan = printedPlan(
     invocation,
-    { from: origin },
+    migrationPlan,
     statements.filter(({ verb }) => MIGRATION_PLAN_VERBS.includes(verb)).map(statementFlag),
   );
   if (plan.kind === 'none') {
@@ -778,7 +778,7 @@ export function errorStatementNeedsMigrationFile(
     `db update cannot carry out ${listed}`,
     {
       why,
-      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`${cliCommand(invocation, 'db migrate')}\`. Or leave out these statements: db update then asks before it loses any data.`,
+      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`${dbMigrateToCommand(invocation, migrationPlan.to)}\`. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
         planAction('Plan the change into a migration file to fill in', plan),
         chooseAction('Or run db update without these statements'),
