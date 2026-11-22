@@ -12,7 +12,7 @@ function requireServerUrl(): string {
   const url = process.env['MARIADB_URL'];
   if (url !== undefined && url.length > 0) return url;
   throw new Error(
-    'MARIADB_URL is not set. These tests need a MariaDB server: run `docker compose up -d mariadb` at the repository root and set MARIADB_URL="mysql://root@127.0.0.1:3308/".',
+    'MARIADB_URL is not set. These tests need a MariaDB server: run `docker compose up -d --wait mariadb` at the repository root and set MARIADB_URL="mysql://root@127.0.0.1:3308/".',
   );
 }
 

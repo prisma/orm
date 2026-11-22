@@ -12,7 +12,7 @@ function requireServerUrl(): string {
   const url = process.env['MYSQL_URL'];
   if (url !== undefined && url.length > 0) return url;
   throw new Error(
-    'MYSQL_URL is not set. These tests need a MySQL server: run `docker compose up -d mysql` at the repository root and set MYSQL_URL="mysql://root:root@127.0.0.1:3307/?allowPublicKeyRetrieval=true".',
+    'MYSQL_URL is not set. These tests need a MySQL server: run `docker compose up -d --wait mysql` at the repository root and set MYSQL_URL="mysql://root:root@127.0.0.1:3307/?allowPublicKeyRetrieval=true".',
   );
 }
 

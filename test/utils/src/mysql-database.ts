@@ -29,7 +29,7 @@ export function requireMysqlServerUrl(variable: MysqlServerVariable = 'MYSQL_URL
   if (url !== undefined && url.length > 0) return url;
   const server = servers[variable];
   throw new Error(
-    `${variable} is not set. These tests need a ${server.name} server: run \`docker compose up -d ${server.service}\` at the repository root and set ${variable}="${server.url}".`,
+    `${variable} is not set. These tests need a ${server.name} server: run \`docker compose up -d --wait ${server.service}\` at the repository root and set ${variable}="${server.url}".`,
   );
 }
 

@@ -30,7 +30,7 @@
     "test:journeys": {
       "dependsOn": ["^build"],
       "inputs": ["src/**", "test/**", "dist/**"],
-      "env": ["TEST_TIMEOUT_MULTIPLIER", "MYSQL_URL"]
+      "env": ["TEST_TIMEOUT_MULTIPLIER"]
     },
     // `build` as well as `^build`: several packages import their own published
     // subpaths (e.g. `@internal/extension-pgvector/pack`), which resolve into

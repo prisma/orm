@@ -34,7 +34,7 @@ The marker upsert binds its values twice instead of naming a row alias, which Ma
 
 ## Testing
 
-The live tests need a MariaDB server and fail when `MARIADB_URL` is not set. `docker compose up -d mariadb` at the repository root starts MariaDB 10.11 for them: `MARIADB_URL='mysql://root@127.0.0.1:3308/' pnpm test`.
+The live tests need a MariaDB server and fail when `MARIADB_URL` is not set. `docker compose up -d --wait mariadb` at the repository root starts MariaDB 10.11 for them: `MARIADB_URL='mysql://root@127.0.0.1:3308/' pnpm test`.
 
 ## Exports
 

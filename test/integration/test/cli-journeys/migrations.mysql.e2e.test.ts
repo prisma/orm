@@ -1,6 +1,6 @@
 /**
  * MySQL end to end through the CLI: `migration plan`, `db migrate`, `db verify` and `db sign` on the
- * example contract, then a nullable column added and dropped again. Fails when `MYSQL_URL` is not set; `docker compose up -d mysql` starts the server.
+ * example contract, then a nullable column added and dropped again. Fails when `MYSQL_URL` is not set; `docker compose up -d --wait mysql` starts the server.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
