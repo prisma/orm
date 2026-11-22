@@ -357,6 +357,7 @@ describe('executeMigrate with no path to the target', () => {
         appSpaceId: 'app',
         appSpace: { graph: reconstructGraph([]), refs: {} },
         migrationsDir: 'migrations',
+        target: undefined,
         invocation: invocationIn('/project'),
       },
     );
@@ -391,6 +392,7 @@ describe('executeMigrate with no path to the target', () => {
         appSpaceId: 'app',
         appSpace: { graph: reconstructGraph([]), refs: {} },
         migrationsDir: 'migrations',
+        target: undefined,
         invocation: invocationIn('/project'),
       },
     );
@@ -406,6 +408,43 @@ describe('executeMigrate with no path to the target', () => {
       ]),
       meta: { kind: 'neverPlanned', spaceId: 'app', targetHash: ELSEWHERE },
     });
+  });
+
+  it('plans to the ref db migrate was given when the application space has no migrations', () => {
+    const failure = neverPlannedSpaceFailure(
+      { spaceId: 'app', liveMarker: null, targetHash: ELSEWHERE },
+      {
+        appSpaceId: 'app',
+        appSpace: { graph: reconstructGraph([]), refs: {}, emittedHash: APP_HEAD },
+        migrationsDir: 'migrations',
+        target: { kind: 'ref', ref: { name: 'production', hash: ELSEWHERE, invariants: [] } },
+        invocation: { ...invocationIn('/project'), rerunArgs: ['--to', 'production'] },
+      },
+    );
+
+    expect(JSON.stringify(failure.toEnvelope().nextActions)).toContain(
+      '{bin} migration plan --from @empty --to production --name <slug>',
+    );
+    expect(failure.toEnvelope().nextActions).toContainEqual(
+      expect.objectContaining({
+        label: expect.stringContaining('`{bin} db migrate --to production --db <url>`'),
+      }),
+    );
+  });
+
+  it('prints no plan when db migrate was given a contract no migration records and the application space has none', () => {
+    const failure = neverPlannedSpaceFailure(
+      { spaceId: 'app', liveMarker: null, targetHash: ELSEWHERE },
+      {
+        appSpaceId: 'app',
+        appSpace: { graph: reconstructGraph([]), refs: {}, emittedHash: APP_HEAD },
+        migrationsDir: 'migrations',
+        target: { kind: 'hash', hash: ELSEWHERE },
+        invocation: invocationIn('/project'),
+      },
+    );
+
+    expect(JSON.stringify(failure.toEnvelope())).not.toContain('migration plan --from');
   });
 
   it('maps the target db migrate was given to where migration plan ends', () => {

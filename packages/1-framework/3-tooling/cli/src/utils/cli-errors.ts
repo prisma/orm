@@ -32,7 +32,6 @@ import { join } from 'pathe';
 import {
   type MigrationPlanArgument,
   type MigrationPlanArguments,
-  type MigrationPlanTargetArgument,
   migrationPlanChoice,
   type PlanSpace,
 } from '../control-api/operations/plan-arguments';
@@ -1022,26 +1021,19 @@ export interface PathUnreachableAdvice {
 
 /**
  * The advice to plan the missing migration in the app space and apply it, or, when no `migration
- * plan` can author it, why not. A space with no migrations has no contract `--to` resolves, so
- * neither of its commands carries `--to`. Otherwise the apply step is the `db migrate` the user
- * ran, when its flags are known.
+ * plan` can author it, why not. The apply step is the `db migrate` the user ran, when its flags are
+ * known.
  */
 export function planThenApply(
-  meta: PathUnreachableMeta,
   plan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): PathUnreachableAdvice {
-  const target: MigrationPlanTargetArgument =
-    meta.kind === 'neverPlanned' ? { kind: 'default' } : plan.to;
-  const printed = printedPlan(invocation, { from: plan.from, to: target }, ['--name', '<slug>']);
+  const printed = printedPlan(invocation, plan, ['--name', '<slug>']);
   if (printed.kind === 'none') return noPlanReaches(printed.reason, invocation);
-  const to = target.kind === 'reference' ? ['--to', shellQuoted(target.reference)] : [];
+  const to = plan.to.kind === 'reference' ? ['--to', shellQuoted(plan.to.reference)] : [];
   const planStep =
     printed.kind === 'runs' ? printed.command : `${printed.command}\n     ${printed.fill}.`;
-  const applyCommand =
-    meta.kind === 'neverPlanned'
-      ? cliCommand(invocation, 'db migrate')
-      : cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? to);
+  const applyCommand = cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? to);
   const listCommand = cliCommand(invocation, 'migration list');
   const showCommand = cliCommand(invocation, 'migration show', ['<bundle>']);
   return {

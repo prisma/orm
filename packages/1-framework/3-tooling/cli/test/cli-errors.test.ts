@@ -64,11 +64,7 @@ describe('errorPathUnreachable', () => {
     };
     const envelope = errorPathUnreachable(
       failure,
-      planThenApply(
-        failure.meta,
-        { from: reference(fromHash), to: reference(targetHash) },
-        INVOCATION,
-      ),
+      planThenApply({ from: reference(fromHash), to: reference(targetHash) }, INVOCATION),
     ).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.PATH_UNREACHABLE');
     expect(envelope.fix).toContain(
@@ -79,27 +75,6 @@ describe('errorPathUnreachable', () => {
     expect(envelope.fix).toContain('{bin} migration show');
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
     expect(envelope.fix ?? '').toContain('Plan a rename with --rename old:new');
-  });
-
-  it('prescribes a bare plan command when the runner kind is neverPlanned (no graph to resolve --to against)', () => {
-    const failure: PathUnreachable = {
-      summary: 'No on-disk migrations for contract space "app"',
-      why: 'migrate is replay-only.',
-      meta: { spaceId: 'app', kind: 'neverPlanned', targetHash },
-    };
-    const envelope = errorPathUnreachable(
-      failure,
-      planThenApply(
-        failure.meta,
-        { from: reference('@empty'), to: reference(targetHash) },
-        INVOCATION,
-      ),
-    ).toEnvelope();
-    // A never-planned space has an EMPTY graph, and `--to <hash>` only
-    // resolves against graph nodes — the remediation must run verbatim.
-    expect(envelope.fix).toContain('{bin} migration plan --from @empty --name <slug>');
-    expect(envelope.fix).not.toContain('--to');
-    expect(envelope.fix).not.toContain('<unknown>');
   });
 
   it('composes buildPathNotFoundFailure why with the fix into one plan-then-apply sequence', () => {
@@ -268,19 +243,22 @@ describe('errorPathUnreachable', () => {
     ]);
   });
 
-  it('applies with a bare db migrate when the space has no migrations, whatever --to the run had', () => {
-    const error = buildNeverPlannedFailure('app', targetHash, 'migrations', reference('@empty'), {
-      ...INVOCATION,
-      rerunArgs: ['--to', 'production'],
-    });
+  it('plans to the ref the run named and applies with its flags when the space has no migrations', () => {
+    const error = buildNeverPlannedFailure(
+      'app',
+      targetHash,
+      'migrations',
+      { from: reference('@empty'), to: reference('production') },
+      { ...INVOCATION, rerunArgs: ['--to', 'production'] },
+    );
 
     expect(error.nextActions?.slice(0, 2)).toEqual([
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: '{bin} migration plan --from @empty --name <slug>',
+        command: '{bin} migration plan --from @empty --to production --name <slug>',
       },
-      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
+      { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate --to production' },
     ]);
   });
 
@@ -289,7 +267,7 @@ describe('errorPathUnreachable', () => {
       'app',
       targetHash,
       'migrations-postgres',
-      reference('@empty'),
+      { from: reference('@empty'), to: DEFAULT },
       INVOCATION,
     ).toEnvelope();
 
@@ -403,11 +381,7 @@ describe('typed next actions on the CLI factories', () => {
 
     const actions = errorPathUnreachable(
       failure,
-      planThenApply(
-        failure.meta,
-        { from: reference(fromHash), to: reference(targetHash) },
-        INVOCATION,
-      ),
+      planThenApply({ from: reference(fromHash), to: reference(targetHash) }, INVOCATION),
     ).nextActions;
 
     expect(actions.slice(0, 2)).toEqual([

@@ -317,6 +317,7 @@ export async function executeMigrateShowPlan(
           appSpaceId: aggregate.app.spaceId,
           appSpace: appSpaceOf(aggregate),
           migrationsDir,
+          target: requestedTarget,
           invocation: options.invocation,
         }),
       );

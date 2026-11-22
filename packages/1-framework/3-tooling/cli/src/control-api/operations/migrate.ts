@@ -83,7 +83,6 @@ import {
   appSpaceOf,
   type DatabasePosition,
   databasePositionOf,
-  type MigrationPlanArgument,
   type MigrationPlanArguments,
   migrationPlanArguments,
   migrationPlanReplacing,
@@ -279,6 +278,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
           appSpaceId: aggregate.app.spaceId,
           appSpace: appSpaceOf(aggregate),
           migrationsDir,
+          target,
           invocation: options.invocation,
         }),
       );
@@ -1009,6 +1009,7 @@ export function neverPlannedSpaceFailure(
     readonly appSpaceId: string;
     readonly appSpace: PlanSpace;
     readonly migrationsDir: string;
+    readonly target: MigrateTarget | undefined;
     readonly invocation: CliInvocation;
   },
 ): CliStructuredError {
@@ -1017,9 +1018,11 @@ export function neverPlannedSpaceFailure(
       space.spaceId,
       space.targetHash,
       run.migrationsDir,
-      migrationPlanArguments(run.appSpace, databasePositionOf(space.liveMarker?.storageHash), {
-        kind: 'emitted',
-      }).from,
+      migrationPlanArguments(
+        run.appSpace,
+        databasePositionOf(space.liveMarker?.storageHash),
+        planEndOf(run.target),
+      ),
       run.invocation,
     );
   }
@@ -1095,7 +1098,7 @@ export function buildNeverPlannedFailure(
   spaceId: string,
   targetHash: string,
   migrationsDir: string,
-  from: MigrationPlanArgument,
+  plan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): CliStructuredError {
   const meta: PathUnreachableMeta = { spaceId, targetHash, kind: 'neverPlanned' };
@@ -1105,7 +1108,7 @@ export function buildNeverPlannedFailure(
       why: `migrate is replay-only: a contract space that declares managed storage elements must have an authored migration graph on disk. Space "${spaceId}" has no migrations under \`${migrationsDir}/${spaceId}/\` but its head ref targets "${targetHash}".`,
       meta,
     },
-    planThenApply(meta, { from, to: { kind: 'default' } }, invocation),
+    planThenApply(plan, invocation),
   );
 }
 
@@ -1127,7 +1130,7 @@ export function buildPathNotFoundFailure(
   invocation: CliInvocation,
 ): CliStructuredError {
   const failure = pathNotFound(spaceId, fromHash, targetHash);
-  return errorPathUnreachable(failure, planThenApply(failure.meta, plan, invocation));
+  return errorPathUnreachable(failure, planThenApply(plan, invocation));
 }
 
 function pathNotFound(spaceId: string, fromHash: string, targetHash: string): PathUnreachable {
