@@ -27,6 +27,7 @@ import type {
   RelationNode,
   ValueObjectNode,
 } from './contract-definition';
+import { defineOwn } from './own-keys';
 
 export function storedNameOf(field: FieldNode): string {
   return field.storedName ?? field.fieldName;
@@ -183,7 +184,7 @@ export function buildValueObjects(
   const builtValueObjects: Record<string, ContractValueObject> = {};
 
   for (const valueObject of valueObjects ?? []) {
-    if (valueObject.name in builtValueObjects) {
+    if (Object.hasOwn(builtValueObjects, valueObject.name)) {
       refusals.push({
         kind: 'duplicateValueObject',
         key: { kind: 'valueObject', valueObject: valueObject.name },
@@ -198,9 +199,9 @@ export function buildValueObjects(
         });
       }
     }
-    builtValueObjects[valueObject.name] = {
+    defineOwn(builtValueObjects, valueObject.name, {
       fields: buildValueObjectMembers(valueObject.fields, namespaceId),
-    };
+    });
   }
 
   return builtValueObjects;
@@ -279,7 +280,7 @@ export function buildModels(input: {
 
   for (const model of models) {
     const { modelName } = model;
-    if (modelName in builtModels) {
+    if (Object.hasOwn(builtModels, modelName)) {
       refusals.push({ kind: 'duplicateModel', key: { kind: 'model', model: modelName } });
       continue;
     }
@@ -301,7 +302,7 @@ export function buildModels(input: {
               : [];
           });
 
-    builtModels[modelName] = {
+    defineOwn(builtModels, modelName, {
       fields: buildFields(model.fields, namespaceId),
       relations: Object.fromEntries(
         (model.relations ?? []).map((relation) => [
@@ -314,7 +315,7 @@ export function buildModels(input: {
       ...(model.base ? { base: crossRef(model.base.model, namespaceId) } : {}),
       ...(model.discriminator ? { discriminator: { field: model.discriminator.field } } : {}),
       ...(variants === undefined ? {} : { variants: Object.fromEntries(variants) }),
-    };
+    });
   }
 
   return builtModels;
@@ -336,7 +337,7 @@ export function buildRoots(
   const roots: Record<string, CrossReference> = {};
   for (const model of models) {
     if (!model.collection || model.owner || model.base) continue;
-    roots[model.collection] = crossRef(model.modelName, namespaceId);
+    defineOwn(roots, model.collection, crossRef(model.modelName, namespaceId));
   }
   return roots;
 }

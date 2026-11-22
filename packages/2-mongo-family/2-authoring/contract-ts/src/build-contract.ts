@@ -23,6 +23,7 @@ import { buildModels, buildRoots, buildValueObjects } from './build-models';
 import { decidePolymorphism, inheritVariantCollections } from './build-polymorphism';
 import { type BuildRefusal, type BuildWarning, validatorRefusalKey } from './build-refusals';
 import type { ContractDefinition } from './contract-definition';
+import { ownEntry } from './own-keys';
 
 /** Whether a refusal is about listing an enum in a collection validator, which matters only when collections get validators. */
 function isAboutEnumListing(refusal: MongoContractRefusal): boolean {
@@ -135,7 +136,7 @@ export function buildMongoContractFromDefinition(
     collections: Object.fromEntries(
       Object.entries(collections).map(([name, collection]) => [
         name,
-        { ...collection, ...ifDefined('validator', validators[name]) },
+        { ...collection, ...ifDefined('validator', ownEntry(validators, name)) },
       ]),
     ),
     valueSets: storageValueSets,
