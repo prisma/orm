@@ -9,7 +9,7 @@ import { buildGraph, entry } from './graph-helpers';
 /** The contract a database is at that no migration records. */
 export const UNRECORDED = 'c'.repeat(64);
 
-/** The origin of a database at a contract no migration records, as the rule says it. */
+/** The origin of a database at a contract no migration records. */
 export const NOT_RECORDED: MigrationPlanArgument = migrationPlanArguments(
   { graph: buildGraph([entry(EMPTY_CONTRACT_HASH, 'a'.repeat(64), 'initial')]), refs: {} },
   { kind: 'contract', hash: UNRECORDED },

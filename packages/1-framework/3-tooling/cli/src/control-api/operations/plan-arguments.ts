@@ -32,7 +32,7 @@ export type MigrationPlanArgument =
     }
   | { readonly kind: 'none'; readonly reason: string };
 
-/** What `--to` can be: no rule leaves the target for the user to choose. */
+/** What `--to` can be: the target is never left for the user to choose. */
 export type MigrationPlanTargetArgument = Exclude<
   MigrationPlanArgument,
   { readonly kind: 'ambiguous' }
@@ -51,8 +51,9 @@ export interface MigrationPlanArguments {
 }
 
 /**
- * The application space as the rules read it: its migration graph, its refs, and the hash of the
- * contract the run was given, the one contract `migration plan` targets that no migration records.
+ * What deriving a plan's arguments needs from the application space: its migration graph, its
+ * refs, and the hash of the contract the run was given, the one contract `migration plan` targets
+ * that no migration records.
  */
 export interface PlanSpace {
   readonly graph: MigrationGraph;
@@ -234,7 +235,7 @@ export function migrationPlanFromForStatements(from: MigrationPlanArgument): Mig
 
 /**
  * The `--from` that plans a failed migration again after its directory is deleted: the contract it
- * started from, as the rule names it in the graph without that migration.
+ * started from, as `--from` names it in the graph without that migration.
  */
 export function migrationPlanReplacing(
   space: PlanSpace & { readonly packages: readonly OnDiskMigrationPackage[] },
@@ -266,7 +267,7 @@ export function databasePositionOf(markerHash: string | undefined): DatabasePosi
   return { kind: 'contract', hash: markerHash };
 }
 
-/** The application space of `aggregate` as the rules read it. */
+/** The application space of `aggregate`, as a {@link PlanSpace}. */
 export function appSpaceOf(aggregate: {
   readonly app: {
     readonly spaceId: string;

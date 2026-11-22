@@ -176,7 +176,7 @@ export type StatusTarget =
     }
   | { readonly kind: 'extension'; readonly spaceId: string };
 
-/** Where `migration status` aims, as `migration plan` would end there: a ref, or a contract, which the rule tells from the emitted one. */
+/** Where `migration status` aims, as `migration plan` would end there: a ref, or a contract by its hash. */
 function statusPlanEnd(refName: string | undefined, targetHash: string): PlanEnd {
   return refName === undefined
     ? { kind: 'contract', hash: targetHash }

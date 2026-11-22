@@ -487,7 +487,7 @@ export function errorRefSetBundleNotFound(hash: string): ActionableCliError {
 
 /**
  * The choices a refusal of `migration plan`'s origin gives, for `reason`: a plan from a contract
- * the rule names, and the `db` ref pointed at one, which `migration ref set` takes only for a
+ * `migration plan` can start from, and the `db` ref pointed at one, which `migration ref set` takes only for a
  * contract a migration records.
  */
 function originChoices(space: PlanSpace, reason: string) {

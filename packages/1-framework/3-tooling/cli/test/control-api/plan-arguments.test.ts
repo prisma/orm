@@ -49,7 +49,7 @@ function pkg(from: string, to: string): OnDiskMigrationPackage {
   };
 }
 
-/** A space whose contracts all resolve, as a ref's or a migration's, so only the rules decide. */
+/** A space whose contracts all resolve, as a ref's or a migration's, so the result depends only on the graph and the position. */
 function space(packages: readonly OnDiskMigrationPackage[], refs: Refs = {}) {
   const created = createAggregateContractSpace({
     spaceId: 'app',
@@ -94,7 +94,7 @@ async function resolvedStart(
 
 const ref = (hash: string) => ({ hash, invariants: [] });
 
-/** The `--from` the rule names for a database at `position`, for a plan to the emitted contract unless `end` says otherwise. */
+/** The `--from` derived for a database at `position`, for a plan to the emitted contract unless `end` says otherwise. */
 function fromOf(
   aggregateSpace: AggregateContractSpace,
   position: DatabasePosition,
@@ -247,7 +247,7 @@ describe('the choice where the database is cannot be read names --from values mi
     });
   });
 
-  it('names none, with the empty-graph rule, for a contract no ref names while there are no migrations', () => {
+  it('names none for a contract no ref names while there are no migrations', () => {
     expect(fromOf(space([]), { kind: 'contract', hash: OFF_GRAPH })).toMatchObject({
       kind: 'none',
       reason: expect.stringContaining('`@empty` or a ref'),
