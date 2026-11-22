@@ -131,7 +131,7 @@ which contract the database is at.
 | `db:sign` | `prisma db sign` | Signs a database whose schema satisfies the contract |
 | `test` | `vitest run` | The whole flow against fresh databases at `MYSQL_URL` |
 
-`pnpm test` uses only the server part of `MYSQL_URL`. For each test file it creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI. `test/reads.test.ts` migrates with `db migrate`, seeds the rows and checks the whole result of each read. `test/events.test.ts` writes events and reads back their dates and times, and `test/products.test.ts` does the same for products. Without `MYSQL_URL` the tests are skipped.
+`pnpm test` uses only the server part of `MYSQL_URL`. For each test file it creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI. `test/reads.test.ts` migrates with `db migrate`, seeds the rows and checks the whole result of each read. `test/events.test.ts` writes events and reads back their dates and times, and `test/products.test.ts` does the same for products. The tests need the MySQL server and fail when `MYSQL_URL` is not set; `docker compose up -d mysql` starts it.
 
 ## What the migrations create
 

@@ -1,5 +1,5 @@
 /**
- * Journey: a MySQL schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` and `storage:` choice, emits each field as the explicit type it chooses, migrates, and `db verify` finds no difference, the `now()` defaults and an index on a `Duration` included. Each row is written through the raw SQL lane, with every value a parameter its column's codec encodes, and read back through the ORM, at the top level and through an include. A value with more fraction digits than its column holds is written rounded down. The database fills `@default(now())` for an instant, a date and a time of day, each within the time of the write. Changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the planner names. A bare `DateTime` emits the contract `DatetimeJsDate(3)` emits, as `DateTime` did before the convenience types. Skipped when `MYSQL_URL` is not set.
+ * Journey: a MySQL schema written with the convenience date and time types `DateTime`, `Date`, `Time` and `Duration`, with every `as:` and `storage:` choice, emits each field as the explicit type it chooses, migrates, and `db verify` finds no difference, the `now()` defaults and an index on a `Duration` included. Each row is written through the raw SQL lane, with every value a parameter its column's codec encodes, and read back through the ORM, at the top level and through an include. A value with more fraction digits than its column holds is written rounded down. The database fills `@default(now())` for an instant, a date and a time of day, each within the time of the write. Changing a `DateTime @default(now())` field to `Date` is a change `db verify` reports and the planner names. A bare `DateTime` emits the contract `DatetimeJsDate(3)` emits, as `DateTime` did before the convenience types. Fails when `MYSQL_URL` is not set; `docker compose up -d mysql` starts the server.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { JsonValue } from '@internal/contract/types';
@@ -202,8 +202,8 @@ withTempDir(({ createTempDir }) => {
   describe('Journey: the MySQL convenience date and time types', () => {
     it(
       'emit as the explicit type each chooses, migrate, verify, and read back the values written',
-      async (test) => {
-        await withMysqlDatabase(test, async ({ url }) => {
+      async () => {
+        await withMysqlDatabase(async ({ url }) => {
           const ctx = setup(createTempDir, url);
           const emitted = await emitContract(ctx, SCHEMA);
           expect(emittedTypes(emitted)).toEqual(COLUMN_TYPES);

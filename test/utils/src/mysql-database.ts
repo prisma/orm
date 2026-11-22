@@ -11,15 +11,26 @@ export interface MysqlTestDatabase {
   readonly url: string;
 }
 
-/** What a vitest test context offers to skip the test. */
-interface SkippableTest {
-  skip(note?: string): void;
-}
+const servers = {
+  MYSQL_URL: {
+    name: 'MySQL',
+    service: 'mysql',
+    url: 'mysql://root:root@127.0.0.1:3307/?allowPublicKeyRetrieval=true',
+  },
+  MARIADB_URL: { name: 'MariaDB', service: 'mariadb', url: 'mysql://root@127.0.0.1:3308/' },
+} as const;
 
-/** The URL of the MySQL or MariaDB server tests run against, from the environment variable `variable`, `MYSQL_URL` unless given, or `undefined` when it is not set. */
-export function mysqlServerUrl(variable = 'MYSQL_URL'): string | undefined {
+/** An environment variable that names the MySQL or MariaDB server tests run against. */
+export type MysqlServerVariable = keyof typeof servers;
+
+/** The URL of the server the environment variable `variable` names, `MYSQL_URL` unless given. Throws, saying how to start the server, when the variable is not set. */
+export function requireMysqlServerUrl(variable: MysqlServerVariable = 'MYSQL_URL'): string {
   const url = process.env[variable];
-  return url === undefined || url.length === 0 ? undefined : url;
+  if (url !== undefined && url.length > 0) return url;
+  const server = servers[variable];
+  throw new Error(
+    `${variable} is not set. These tests need a ${server.name} server: run \`docker compose up -d ${server.service}\` at the repository root and set ${variable}="${server.url}".`,
+  );
 }
 
 /**
@@ -66,18 +77,13 @@ function uniqueDatabaseName(): string {
 }
 
 /**
- * Runs `fn` with a database of its own on the server the environment variable `variable` names, `MYSQL_URL` unless given, and drops the database afterwards. Skips the test when the variable is not set. Each call creates a database with a unique name, so tests that share a server, as CI shards do, never see each other's tables. When the test fails, a failure to drop the database does not replace the test's error.
+ * Runs `fn` with a database of its own on the server the environment variable `variable` names, `MYSQL_URL` unless given, and drops the database afterwards. Throws when the variable is not set. Each call creates a database with a unique name, so tests that share a server, as CI shards do, never see each other's tables. When the test fails, a failure to drop the database does not replace the test's error.
  */
 export async function withMysqlDatabase<T>(
-  test: SkippableTest,
   fn: (database: MysqlTestDatabase) => Promise<T>,
-  variable = 'MYSQL_URL',
-): Promise<T | undefined> {
-  const serverUrl = mysqlServerUrl(variable);
-  if (serverUrl === undefined) {
-    test.skip(`${variable} is not set`);
-    return undefined;
-  }
+  variable: MysqlServerVariable = 'MYSQL_URL',
+): Promise<T> {
+  const serverUrl = requireMysqlServerUrl(variable);
   const name = uniqueDatabaseName();
   const url = new URL(serverUrl);
   url.pathname = `/${name}`;

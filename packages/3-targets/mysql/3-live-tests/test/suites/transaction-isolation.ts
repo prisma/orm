@@ -44,8 +44,8 @@ export function describeTransactionIsolation(server: LiveServer): void {
   describe(`${server.displayName} client transaction ownership`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('uses implicit activity transactions for ORM read-back, participates in explicit transactions, and leaves manual starts unconfigured', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('uses implicit activity transactions for ORM read-back, participates in explicit transactions, and leaves manual starts unconfigured', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         const observed = observeStarts(server);
         try {
           await using db = server.client({
@@ -126,8 +126,8 @@ export function describeTransactionIsolation(server: LiveServer): void {
       });
     });
 
-    it('discards timed callback ORM writes and uses a fresh session', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('discards timed callback ORM writes and uses a fresh session', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         const observed = observeStarts(server);
         try {
           await using db = server.client({
@@ -173,8 +173,8 @@ export function describeTransactionIsolation(server: LiveServer): void {
       });
     });
 
-    it('destroys a callback-owned connection after failed setup with a pending next-transaction setting', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('destroys a callback-owned connection after failed setup with a pending next-transaction setting', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         const failure = new Error('BEGIN unavailable after SET');
         const observed = observeStarts(server, failure);
         try {

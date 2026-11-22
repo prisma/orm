@@ -3,16 +3,14 @@ import { getEventsOn } from '../src/orm-client/get-events-on';
 import { createDb, type Db } from '../src/prisma/db';
 import { createEvent } from '../src/raw/create-event';
 import { copyProject, prisma } from './cli';
-import { createTestDatabase, mariadbServerUrl, type TestDatabase } from './database';
+import { createTestDatabase, type TestDatabase } from './database';
 
-const serverUrl = mariadbServerUrl();
-
-describe.skipIf(serverUrl === undefined)('events with DateTime, Date and Time fields', () => {
+describe('events with DateTime, Date and Time fields', () => {
   let database: TestDatabase;
   let db: Db;
 
   beforeAll(async () => {
-    database = await createTestDatabase(serverUrl ?? '');
+    database = await createTestDatabase();
     const project = await copyProject();
     try {
       const migrate = await prisma(project.dir, database.url, ['db', 'migrate']);

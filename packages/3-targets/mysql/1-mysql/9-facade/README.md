@@ -57,6 +57,6 @@ The ORM's writes also need these:
 
 ## Testing
 
-`test/fixtures/` holds a test contract of users, posts and roles in PSL with its emitted `generated/` files, which `pnpm fixtures:check` keeps stable. The live tests need `MYSQL_URL` and are skipped without it, except in CI, where `test/live-server.test.ts` fails without it. `docker compose up mysql` starts MySQL 8.4 for them: `MYSQL_URL='mysql://root:root@127.0.0.1:3307/mysql?allowPublicKeyRetrieval=true' pnpm test`. The server has no TLS, so the URL lets the driver fetch its public key to sign in with `caching_sha2_password`.
+`test/fixtures/` holds a test contract of users, posts and roles in PSL with its emitted `generated/` files, which `pnpm fixtures:check` keeps stable. The live tests need a MySQL server and fail when `MYSQL_URL` is not set. `docker compose up -d mysql` at the repository root starts MySQL 8.4 for them: `MYSQL_URL='mysql://root:root@127.0.0.1:3307/mysql?allowPublicKeyRetrieval=true' pnpm test`. The server has no TLS, so the URL lets the driver fetch its public key to sign in with `caching_sha2_password`.
 
 The ORM live tests (reads, includes, writes, raw SQL and transaction ownership) run against MySQL and MariaDB from one place, the private package `@internal/mysql-live-tests` (`packages/3-targets/mysql/3-live-tests`). This package keeps its own live tests of migrations and introspection.

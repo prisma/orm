@@ -129,10 +129,9 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
     ['the empty and edge defaults of bytes, text and JSON', 'edge-defaults'],
   ] as const)(
     'applies %s, which then verifies strictly, plans nothing more and signs as unchanged',
-    async ([, fixture], test) => {
+    async ([, fixture]) => {
       const { contract } = await emitFixture(fixture);
       await withMysqlDatabase(
-        test,
         ({ url }) =>
           withDriver(url, async (driver, family) => {
             const applied = await apply(
@@ -179,10 +178,9 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
     },
   );
 
-  it('applies the empty and edge defaults, whose reading a row inserted with only its key then holds', async (test) => {
+  it('applies the empty and edge defaults, whose reading a row inserted with only its key then holds', async () => {
     const { contract } = await emitFixture('edge-defaults');
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withDriver(url, async (driver, family) => {
           const applied = await apply(
@@ -227,10 +225,9 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
     ['json', 'unique', true],
   ] as const)(
     'applies a key on a %s field, @%s, only where the scalar type reference says MariaDB accepts it (%s)',
-    async ([key, kind, accepted], test) => {
+    async ([key, kind, accepted]) => {
       const contract = contractWithKeyOn(key, kind);
       await withMysqlDatabase(
-        test,
         ({ url }) =>
           withDriver(url, async (driver, family) => {
             const applied = await apply(
@@ -255,10 +252,9 @@ describe('migrating a MariaDB database', { timeout: timeouts.databaseOperation }
     },
   );
 
-  it('signs a database made by hand, creating the marker table first', async (test) => {
+  it('signs a database made by hand, creating the marker table first', async () => {
     const { contract } = await emitFixture('defaults');
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withDriver(url, async (driver, family) => {
           await driver.query(`CREATE TABLE \`Item\` (

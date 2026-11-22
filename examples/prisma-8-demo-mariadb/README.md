@@ -71,7 +71,7 @@ pnpm db:sign                                # records the contract the database 
 | `db:sign` | `prisma db sign` | Signs a database whose schema satisfies the contract |
 | `test` | `vitest run` | The whole flow against a fresh database at `MARIADB_URL` |
 
-`pnpm test` uses only the server part of `MARIADB_URL`. It creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI; `test/reads.test.ts`, `test/writes.test.ts`, `test/events.test.ts` and `test/products.test.ts` migrate a database and read and write it through `mariadb()`. Without `MARIADB_URL` the tests are skipped, except in CI, where they fail.
+`pnpm test` uses only the server part of `MARIADB_URL`. It creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI; `test/reads.test.ts`, `test/writes.test.ts`, `test/events.test.ts` and `test/products.test.ts` migrate a database and read and write it through `mariadb()`. The tests need the MariaDB server and fail when `MARIADB_URL` is not set; `docker compose up -d mariadb` starts it.
 
 ## What the migrations create
 
