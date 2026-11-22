@@ -3,6 +3,7 @@ import type { BetterAuthDBSchema } from '@better-auth/core/db';
 import * as internal from '@better-auth/core/db/internal';
 import { BetterAuthError } from '@better-auth/core/error';
 import { compareContract } from './contract/compare';
+import { isInvalidNameError } from './contract/identifiers';
 import { contractMessage } from './contract/message';
 import type { SqlContract } from './contract/model-lookup';
 
@@ -23,7 +24,13 @@ export function contractMismatchError(
 
 /** The mismatch error for a contract, or `undefined` when it holds everything Better Auth needs. */
 export function contractMismatch(input: ContractCheckInput): BetterAuthError | undefined {
-  const message = contractMessage(compareContract(input));
+  let message: string | undefined;
+  try {
+    message = contractMessage(compareContract(input));
+  } catch (error) {
+    if (isInvalidNameError(error)) return contractMismatchError(error.message);
+    throw error;
+  }
   return message === undefined ? undefined : contractMismatchError(message);
 }
 

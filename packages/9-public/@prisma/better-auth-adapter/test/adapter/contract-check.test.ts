@@ -147,3 +147,21 @@ describe.each(targets)('createSchema on %s', (target) => {
     });
   });
 });
+
+describe.each(targets)('a Better Auth name that is not an identifier on %s', (target) => {
+  const invalidName =
+    'Better Auth\'s model name "verification-token" is not a valid Prisma model name: use letters, digits and "_", not starting with a digit. Rename the model with Better Auth\'s "modelName" option.';
+  const options: BetterAuthOptions = { verification: { modelName: 'verification-token' } };
+
+  it('makes the check and createSchema fail with the mismatch code', async () => {
+    const client = await databases.open(
+      target,
+      pslForConfiguration(databases.emptyContract(target), {}),
+    );
+    const adapter = prismaAdapter(client)(options);
+    const check = schemaCheckFor(adapter);
+    if (check === undefined) throw new Error('No check registered');
+    await expect(Promise.resolve(check())).rejects.toThrow(mismatch(invalidName));
+    await expect(adapter.createSchema?.(options)).rejects.toThrow(mismatch(invalidName));
+  });
+});
