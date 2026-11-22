@@ -137,8 +137,9 @@ const DEFAULT_ADVANCE_REF = 'db';
 
 /**
  * Which ref a run advances: `db` when the connection comes from the config outside CI, the named
- * ref in every case, nothing under `--db` or `--no-advance-ref`. A named ref that could never be written, because its name is
- * invalid or the target is the empty contract, is refused; `db` is left where it is.
+ * ref in every case, nothing under `--db` or `--no-advance-ref`. A named ref that could never be
+ * written, because its name is invalid or the target is the empty contract, is refused; `db` is
+ * left where it is.
  */
 function refAdvancementDecision(
   flags: {
