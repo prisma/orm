@@ -18,6 +18,21 @@ describe('names every object has as a property', () => {
     expect(Object.keys(schema.tables)).toEqual(['constructor']);
   });
 
+  it('keep a table named __proto__ as a table of the schema IR', () => {
+    const schema = contractToSchemaIR(
+      contract(Object.fromEntries([['__proto__', table({ id: col({ codecId: 'pg/text@1' }) })]])),
+      {
+        annotationNamespace: 'pg',
+        dataTypeLookup: testTypeLookups.dataTypeLookup,
+        codecLookup: testTypeLookups.codecLookup,
+      },
+    );
+    expect({
+      tables: Object.keys(schema.tables),
+      plainPrototype: Object.getPrototypeOf(schema.tables) === Object.prototype,
+    }).toEqual({ tables: ['__proto__'], plainPrototype: true });
+  });
+
   it('are added and dropped tables and fields, never altered ones', () => {
     const cs = recordingHook((call) => [
       makeOp(`${call.event}-${call.tableName}.${call.fieldName}`),

@@ -19,7 +19,7 @@ import {
   makePslNamespaceEntries,
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
-import { isPslIdentifier } from '@internal/psl-parser';
+import { isPslIdentifier, NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser';
 import { type SqlColumnIR, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { invariant } from '@internal/utils/assertions';
 import { postgresError } from '../errors';
@@ -140,6 +140,7 @@ export async function inferPostgresPslContract(
       ) {
         continue;
       }
+      refuseNameNoContractHolds('table', `"${tableName}"`, tableName, { tableName });
       if (Object.hasOwn(tables, tableName)) {
         throw postgresError(
           'CONTRACT.INFER_UNSUPPORTED',
@@ -150,6 +151,10 @@ export async function inferPostgresPslContract(
         );
       }
       for (const column of Object.values(table.columns)) {
+        refuseNameNoContractHolds('column', `"${tableName}"."${column.name}"`, column.name, {
+          tableName,
+          columnName: column.name,
+        });
         const reported = column.reportedType;
         const owningSpaceId =
           reported?.kind === 'enum' && reported.schema !== undefined && reported.name !== undefined
@@ -518,4 +523,18 @@ export function buildPslDocumentAst(
   };
 
   return ast;
+}
+
+function refuseNameNoContractHolds(
+  kind: 'table' | 'column',
+  qualifiedName: string,
+  name: string,
+  meta: { readonly tableName: string; readonly columnName?: string },
+): void {
+  if (name !== NAME_THE_PSL_SOURCE_LOSES) return;
+  throw postgresError(
+    'CONTRACT.INFER_UNSUPPORTED',
+    `contract infer: ${kind} ${qualifiedName} has a name no contract can hold, because JavaScript reads it as the prototype of an object rather than as a key. Rename the ${kind} before re-running contract infer.`,
+    { meta },
+  );
 }

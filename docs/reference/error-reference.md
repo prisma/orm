@@ -495,7 +495,7 @@ The Postgres `fullTextIndex` helper also raises it when its fields are not one t
 
 ### CONTRACT.INFER_UNSUPPORTED
 
-`contract infer` is not available: either the configured family does not implement the `PslContractInferCapable` capability (no meta at that site), or the family supports inference but the database shape cannot be expressed yet: duplicate table names across schemas, a column typed by a native enum that an extension pack space already describes in another schema, or native enum adoption with content spanning multiple schemas. Meta at the shape sites: `tableName`, `columnName`, `schemas`.
+`contract infer` is not available: either the configured family does not implement the `PslContractInferCapable` capability (no meta at that site), or the family supports inference but the database shape cannot be expressed yet: duplicate table names across schemas, a column typed by a native enum that an extension pack space already describes in another schema, native enum adoption with content spanning multiple schemas, or a table or column named `__proto__`, a name no contract can hold because JavaScript reads it as the prototype of an object rather than as a key (rename it in the database first). Meta at the shape sites: `tableName`, `columnName`, `schemas`.
 
 ### CONTRACT.INTROSPECTION_UNSUPPORTED
 

@@ -31,4 +31,34 @@ describe('contract infer of tables named like properties every object has', () =
       })),
     ).toEqual([{ name: 'Constructor', fields: ['id', 'refId'] }]);
   });
+
+  it.each([
+    {
+      kind: 'table',
+      tables: Object.fromEntries([['__proto__', tableNamed('__proto__', 'id')]]),
+      meta: { tableName: '__proto__' },
+    },
+    {
+      kind: 'column',
+      tables: { thing: tableNamed('thing', '__proto__') },
+      meta: { tableName: 'thing', columnName: '__proto__' },
+    },
+  ])('refuses a $kind named __proto__, which no contract can hold', async ({ tables, meta }) => {
+    await expect(inferPslAstFromFlat(new SqlSchemaIR({ tables }))).rejects.toMatchObject({
+      code: 'CONTRACT.INFER_UNSUPPORTED',
+      meta,
+    });
+  });
 });
+
+function tableNamed(name: string, columnName: string) {
+  return {
+    name,
+    columns: Object.fromEntries([
+      [columnName, { name: columnName, typeText: 'int4', nullable: false }],
+    ]),
+    foreignKeys: [],
+    uniques: [],
+    indexes: [],
+  };
+}

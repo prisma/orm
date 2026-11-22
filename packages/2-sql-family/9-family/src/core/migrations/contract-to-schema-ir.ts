@@ -469,7 +469,12 @@ export function contractNamespaceToSchemaIR(
   const tables: Record<string, SqlTableIR> = {};
   for (const [tableName, tableDefRaw] of Object.entries(namespace.entries.table ?? {})) {
     StorageTable.assert(tableDefRaw, `namespaces.${namespaceId}.entries.table.${tableName}`);
-    tables[tableName] = convertTable(tableName, tableDefRaw, options, options, storage);
+    Object.defineProperty(tables, tableName, {
+      value: convertTable(tableName, tableDefRaw, options, options, storage),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   return new SqlSchemaIR({ tables });
 }
@@ -523,7 +528,12 @@ export function contractToSchemaIR(
           },
         );
       }
-      tables[tableName] = convertTable(tableName, tableDef, options, options, storage);
+      Object.defineProperty(tables, tableName, {
+        value: convertTable(tableName, tableDef, options, options, storage),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
   }
 
