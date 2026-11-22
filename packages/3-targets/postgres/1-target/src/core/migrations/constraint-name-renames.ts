@@ -6,6 +6,7 @@ import {
   defaultPrimaryKeyName,
   defaultUniqueName,
 } from '../default-constraint-names';
+import { ownEntry } from '../own-entry';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import { resolveNamespaceIdForDdlSchema } from './control-policy';
@@ -108,7 +109,7 @@ export function plannedConstraintNameRenames(
         ? UNBOUND_NAMESPACE_ID
         : namespace.schemaName;
     return Object.entries(namespace.tables).flatMap(([tableName, next]) => {
-      const previous = startTables[tableName];
+      const previous = ownEntry(startTables, tableName);
       const droppedConstraintNames = new Set(
         plannedCalls.flatMap((call) =>
           call.factoryName === 'dropConstraint' &&

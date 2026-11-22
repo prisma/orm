@@ -53,6 +53,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { ok, type Result } from '@internal/utils/result';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
+import { ownEntry } from '../own-entry';
 import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { postgresNodeStorageCoordinate } from '../schema-ir/node-storage-coordinate';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
@@ -1026,7 +1027,7 @@ function removedNamespaceSchemas(
     (schemaName) =>
       schemaName !== DEFAULT_NAMESPACE_ID &&
       !destination.has(schemaName) &&
-      schema.namespaces[schemaName] !== undefined,
+      ownEntry(schema.namespaces, schemaName) !== undefined,
   );
 }
 

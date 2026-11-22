@@ -119,8 +119,8 @@ export function planFieldEventCalls(
   );
 
   for (const namespaceId of namespaceIds) {
-    const priorNs = priorContract?.storage.namespaces[namespaceId];
-    const newNs = newContract.storage.namespaces[namespaceId];
+    const priorNs = ownEntry(priorContract?.storage.namespaces, namespaceId);
+    const newNs = ownEntry(newContract.storage.namespaces, namespaceId);
     const priorTables = underNewNames(priorNs?.entries.table, (tableName) =>
       newNameOf(namespaceId, tableName),
     );
@@ -132,8 +132,8 @@ export function planFieldEventCalls(
     );
 
     for (const tableName of tableNames) {
-      const priorTableRaw = priorTables?.[tableName];
-      const newTableRaw = newTables?.[tableName];
+      const priorTableRaw = ownEntry(priorTables, tableName);
+      const newTableRaw = ownEntry(newTables, tableName);
       const priorTable = StorageTable.is(priorTableRaw) ? priorTableRaw : undefined;
       const newTable = StorageTable.is(newTableRaw) ? newTableRaw : undefined;
       const priorColumns = underNewNames(priorTable?.columns, (columnName) =>
@@ -144,8 +144,8 @@ export function planFieldEventCalls(
         newTable ? Object.keys(newTable.columns) : [],
       );
       for (const fieldName of fieldNames) {
-        const priorField = priorColumns?.[fieldName];
-        const newField = newTable?.columns[fieldName];
+        const priorField = ownEntry(priorColumns, fieldName);
+        const newField = ownEntry(newTable?.columns, fieldName);
         const entry: FieldEntry = {
           namespaceId,
           tableName,
@@ -310,4 +310,11 @@ function unionSorted(a: readonly string[], b: readonly string[]): readonly strin
   for (const name of a) set.add(name);
   for (const name of b) set.add(name);
   return [...set].sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));
+}
+
+function ownEntry<Entry>(
+  entries: Readonly<Record<string, Entry>> | undefined,
+  name: string,
+): Entry | undefined {
+  return entries !== undefined && Object.hasOwn(entries, name) ? entries[name] : undefined;
 }

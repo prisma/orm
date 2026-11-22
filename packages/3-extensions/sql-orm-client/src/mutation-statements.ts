@@ -77,7 +77,7 @@ function toParamAssignments(
   const table = storageTableForContract(contract, namespaceId, tableName);
 
   for (const [column, value] of Object.entries(values)) {
-    if (!table.columns[column]) {
+    if (!Object.hasOwn(table.columns, column)) {
       throw ormError('ORM.COLUMN_UNKNOWN', `Unknown column "${column}" in table "${tableName}"`, {
         meta: { namespaceId, tableName, column },
       });
@@ -127,7 +127,7 @@ function normalizeInsertRows(
     const normalizedRow: Record<string, ParamRef | DefaultValueExpr> = {};
     for (const column of orderedColumns) {
       if (Object.hasOwn(row, column)) {
-        if (!table.columns[column]) {
+        if (!Object.hasOwn(table.columns, column)) {
           throw ormError(
             'ORM.COLUMN_UNKNOWN',
             `Unknown column "${column}" in table "${tableName}"`,

@@ -79,6 +79,19 @@ function wrapDecodeFailure(
   throw wrapped;
 }
 
+function ownValue(document: Readonly<Record<string, unknown>>, key: string): unknown {
+  return Object.hasOwn(document, key) ? document[key] : undefined;
+}
+
+function defineOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 /**
  * A document may leave out a nullable field entirely (Prisma 6 and the driver both omit it); the field's type says `null`, so an absent value reads as `null`.
  */
@@ -169,13 +182,11 @@ export async function decodeMongoRow(
         assign(nested);
         for (const [fk, fShape] of Object.entries(fieldShape.fields)) {
           walkField(
-            vObj[fk],
+            ownValue(vObj, fk),
             fShape,
             fieldShape.row ? fk : `${path}.${fk}`,
             fieldShape.row ? describeDocumentId(vObj['_id']) : documentId,
-            (v) => {
-              nested[fk] = v;
-            },
+            (v) => defineOwn(nested, fk, v),
           );
         }
         return;
@@ -210,9 +221,7 @@ export async function decodeMongoRow(
 
   const documentId = describeDocumentId(rowObj['_id']);
   for (const [k, fShape] of Object.entries(shape.fields)) {
-    walkField(rowObj[k], fShape, k, documentId, (v) => {
-      out[k] = v;
-    });
+    walkField(ownValue(rowObj, k), fShape, k, documentId, (v) => defineOwn(out, k, v));
   }
 
   // Pass through any row fields the shape does not describe. The shape is a
@@ -223,7 +232,7 @@ export async function decodeMongoRow(
   // (`select` / `$project`), not to the structural decode path.
   for (const k of Object.keys(rowObj)) {
     if (!Object.hasOwn(shape.fields, k)) {
-      out[k] = rowObj[k];
+      defineOwn(out, k, rowObj[k]);
     }
   }
 

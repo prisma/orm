@@ -21,6 +21,13 @@ describe('postgresSchemaTables', () => {
     expect(tables.hasTable(UNBOUND_NAMESPACE_ID, 'ghost')).toBe(false);
   });
 
+  it('finds no table named like a property every object has', () => {
+    expect({
+      hasTable: tables.hasTable(UNBOUND_NAMESPACE_ID, 'constructor'),
+      namespacesWithTable: tables.namespacesWithTable('toString'),
+    }).toEqual({ hasTable: false, namespacesWithTable: [] });
+  });
+
   it('names the namespaces that have a table', () => {
     expect(tables.namespacesWithTable('userProfile')).toEqual([UNBOUND_NAMESPACE_ID]);
     expect(tables.namespacesWithTable('ghost')).toEqual([]);

@@ -722,7 +722,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           declaredHere.tables,
           (table, column) => contractColumnsOf.columnOf(declaredHere.namespaceIds, table, column),
         );
-        namespaces[resolved] = namespace;
+        defineOwn(namespaces, resolved, namespace);
         pgVersion = version;
       }
 
@@ -1231,7 +1231,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
                 contractColumnOf(tableName, colRow.column_name),
               )
             : {};
-        columns[colRow.column_name] = {
+        defineOwn(columns, colRow.column_name, {
           name: colRow.column_name,
           typeText,
           nullable: colRow.is_nullable === 'YES',
@@ -1242,7 +1242,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           ...(reportedType === undefined
             ? {}
             : resolveIntrospectedColumnType(reportedType, this.declaredDataTypes)),
-        };
+        });
       }
 
       // Process primary key
@@ -1408,7 +1408,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         }),
       );
 
-      tableInputs[tableName] = {
+      defineOwn(tableInputs, tableName, {
         name: tableName,
         columns,
         ...ifDefined('primaryKey', primaryKey),
@@ -1416,7 +1416,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         uniques,
         indexes,
         ...ifDefined('checks', checksForTable.length > 0 ? checksForTable : undefined),
-      };
+      });
     }
 
     const nativeEnumResult = await driver.query<{ typname: string; enumvalues: unknown }>(
@@ -1514,11 +1514,15 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     const tables: Record<string, PostgresTableSchemaNode> = {};
     for (const [tableName, input] of Object.entries(tableInputs)) {
       if (OTHER_TOOL_MIGRATION_TABLES.has(tableName) && !declaredTables.has(tableName)) continue;
-      tables[tableName] = new PostgresTableSchemaNode({
-        ...input,
-        policies: policiesByTable.get(tableName) ?? [],
-        rlsEnabled: rlsEnabledByTable.get(tableName) ?? false,
-      });
+      defineOwn(
+        tables,
+        tableName,
+        new PostgresTableSchemaNode({
+          ...input,
+          policies: policiesByTable.get(tableName) ?? [],
+          rlsEnabled: rlsEnabledByTable.get(tableName) ?? false,
+        }),
+      );
     }
 
     const namespace = new PostgresNamespaceSchemaNode({
@@ -1746,6 +1750,16 @@ export function parsePgReloptions(
     result[key] = value;
   }
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/** Stores `value` as an own key of `target`, so a name the database returns, such as `__proto__`, is a key rather than the prototype. */
+function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
 }
 
 function groupBy<T, K extends keyof T>(items: readonly T[], key: K): Map<T[K], T[]> {

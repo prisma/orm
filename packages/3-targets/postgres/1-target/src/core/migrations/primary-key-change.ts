@@ -8,6 +8,7 @@ import {
 } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { defaultForeignKeyName, defaultPrimaryKeyName } from '../default-constraint-names';
+import { ownEntry } from '../own-entry';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import { PostgresSchemaNodeKind } from '../schema-ir/schema-node-kinds';
 import {
@@ -110,7 +111,7 @@ function endForeignKey(
   const namespace = Object.values(endTree.namespaces).find(
     (candidate) => candidate.schemaName === at.ddlSchemaName,
   );
-  return namespace?.tables[at.tableName]?.foreignKeys.find(
+  return ownEntry(namespace?.tables, at.tableName)?.foreignKeys.find(
     (foreignKey) => foreignKey.id === at.foreignKey.id,
   );
 }
@@ -202,7 +203,8 @@ function allowsOnlyAdditive(ctx: StrategyContext): boolean {
 function tableInEndTree(endTree: PostgresDatabaseSchemaNode, at: ForeignKeyAt): boolean {
   return Object.values(endTree.namespaces).some(
     (namespace) =>
-      namespace.schemaName === at.ddlSchemaName && namespace.tables[at.tableName] !== undefined,
+      namespace.schemaName === at.ddlSchemaName &&
+      ownEntry(namespace.tables, at.tableName) !== undefined,
   );
 }
 

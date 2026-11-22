@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { exactName, type SchemaTables } from '@internal/family-sql/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { ownEntry } from '../own-entry';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
 
@@ -13,9 +14,9 @@ export function postgresSchemaTables(
   contract: Contract<SqlStorage>,
 ): SchemaTables {
   const tablesIn = (namespaceId: string) =>
-    schema.namespaces[resolveDdlSchemaForNamespaceStorage(contract.storage, namespaceId)]?.tables ??
-    {};
-  const tableIn = (namespaceId: string, table: string) => tablesIn(namespaceId)[table];
+    ownEntry(schema.namespaces, resolveDdlSchemaForNamespaceStorage(contract.storage, namespaceId))
+      ?.tables ?? {};
+  const tableIn = (namespaceId: string, table: string) => ownEntry(tablesIn(namespaceId), table);
   const hasTable = (namespaceId: string, table: string) =>
     tableIn(namespaceId, table) !== undefined;
   return {

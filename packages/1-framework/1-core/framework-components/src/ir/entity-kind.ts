@@ -35,12 +35,17 @@ export function hydrateNamespaceEntities(
     if (descriptor !== undefined) {
       const built: Record<string, unknown> = {};
       for (const [name, value] of Object.entries(rawMap)) {
-        built[name] = descriptor.construct(
-          blindCast<
-            never,
-            "value is this kind's descriptor Input: when authoring, the typed entries-input contract produces it; when hydrating, it was validated against descriptor.schema before this loop. The never target is AnyEntityKindDescriptor's erased Input parameter."
-          >(value),
-        );
+        Object.defineProperty(built, name, {
+          value: descriptor.construct(
+            blindCast<
+              never,
+              "value is this kind's descriptor Input: when authoring, the typed entries-input contract produces it; when hydrating, it was validated against descriptor.schema before this loop. The never target is AnyEntityKindDescriptor's erased Input parameter."
+            >(value),
+          ),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
       }
       result[kind] = Object.freeze(built);
     } else if (onUnknown === 'carry') {

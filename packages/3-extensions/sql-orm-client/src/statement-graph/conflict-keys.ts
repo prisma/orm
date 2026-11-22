@@ -43,7 +43,8 @@ export function rowThatCannotConflict(
       !keys.some((key) =>
         key.every(
           (column) =>
-            parentLinkColumns.has(column) || (row[column] !== undefined && row[column] !== null),
+            parentLinkColumns.has(column) ||
+            (Object.hasOwn(row, column) && row[column] !== undefined && row[column] !== null),
         ),
       ),
   );
