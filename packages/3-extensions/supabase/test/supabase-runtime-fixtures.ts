@@ -9,9 +9,11 @@ import {
 import { SqlStorage } from '@internal/sql-contract/types';
 import type {
   Codec,
+  MarkerReadResult,
   PreparedStatementHandle,
   SqlDriver,
   SqlExecuteRequest,
+  SqlQueryable,
   SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { SelectAst as SelectAstCtor, TableSource } from '@internal/sql-relational-core/ast';
@@ -199,7 +201,9 @@ export function createRecordingDriver(
   return driver;
 }
 
-function createStubAdapter() {
+type ReadMarker = (queryable: SqlQueryable) => Promise<MarkerReadResult>;
+
+function createStubAdapter(readMarker: ReadMarker = async () => ({ kind: 'absent' })) {
   const codec: Codec<string> = {
     id: 'pg/int4@1',
     toWire: (v: number) => v,
@@ -215,7 +219,7 @@ function createStubAdapter() {
       id: 'test-profile',
       target: 'postgres',
       capabilities: {},
-      readMarker: async () => ({ kind: 'absent' as const }),
+      readMarker,
     },
     lower(ast: Parameters<SqlRuntimeAdapterInstance<'postgres'>['lower']>[0]) {
       const params = [...new Set(ast.collectParamRefs())].map((ref) =>
@@ -263,12 +267,16 @@ function createTestTargetDescriptor(): SqlRuntimeTargetDescriptor<'postgres'> {
   };
 }
 
-export function createTestSetup(options?: {
+export function createTestSetup<
+  Driver extends SqlDriver | RecordingDriver = RecordingDriver,
+>(options?: {
   middleware?: readonly SqlMiddleware[];
   affectedRows?: number;
+  driver?: Driver;
+  readMarker?: ReadMarker;
 }) {
-  const adapter = createStubAdapter();
-  const driver = createRecordingDriver(undefined, options?.affectedRows);
+  const adapter = createStubAdapter(options?.readMarker);
+  const driver = options?.driver ?? createRecordingDriver(undefined, options?.affectedRows);
   const targetDescriptor = createTestTargetDescriptor();
   const adapterDescriptor = createTestAdapterDescriptor(adapter);
 
@@ -296,7 +304,7 @@ export function createTestSetup(options?: {
     context,
     adapter: stackInstance.adapter,
     driver: driver as unknown as SqlDriver,
-    verifyMarker: false,
+    verifyMarker: options?.readMarker === undefined ? false : 'onFirstUse',
     middleware: options?.middleware ?? [],
     closeRefusal: undefined,
   };

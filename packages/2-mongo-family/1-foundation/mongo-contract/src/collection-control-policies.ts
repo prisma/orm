@@ -41,7 +41,11 @@ export function collectionControlPolicyOf(
   policies: CollectionControlPolicies,
 ): ControlPolicy {
   return governingControlPolicy(
-    { explicitNodeControlPolicy: policies.collections[collection] },
+    {
+      explicitNodeControlPolicy: Object.hasOwn(policies.collections, collection)
+        ? policies.collections[collection]
+        : undefined,
+    },
     policies.defaultControlPolicy,
   );
 }

@@ -55,4 +55,10 @@ describe('resolveDomainModel', () => {
 
     expect(resolveDomainModel(domain, 'Missing')).toBeUndefined();
   });
+
+  it('finds no model for a name every object has as a property', () => {
+    const domain = multiNamespaceDomain({ public: { User: minimalModel('User') } });
+
+    expect(resolveDomainModel(domain, 'constructor')).toBeUndefined();
+  });
 });

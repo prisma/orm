@@ -250,6 +250,17 @@ describe('mutation statements', () => {
       );
     });
 
+    it('refuses a column named like a property every object has', () => {
+      const contract = getTestContract();
+      const users = tablesForTable(contract, 'users', 'public');
+      expect(() => updateAst(contract, users, { constructor: 'X' }, undefined)).toThrowError(
+        /Unknown column "constructor" in table "users"/,
+      );
+      expect(() => insertUsers(contract, [{ id: 1, toString: 'X' }])).toThrowError(
+        /Unknown column "toString" in table "users"/,
+      );
+    });
+
     it('refuses an unknown column on an insert row', () => {
       const contract = getTestContract();
       expect(() => insertUsers(contract, [{ id: 1, not_a_real_column: 'X' }])).toThrowError(

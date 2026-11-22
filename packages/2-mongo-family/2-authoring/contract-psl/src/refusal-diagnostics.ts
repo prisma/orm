@@ -42,6 +42,8 @@ export interface IndexSite extends Site {
 
 /** Where a model's polymorphism and indexes are written. */
 export interface ModelSites {
+  /** The model's declaration. */
+  readonly declaration: Site;
   /** Each of the model's indexes, in the order the definition lists them. */
   readonly indexes: readonly IndexSite[];
   readonly discriminator?: Site & { readonly fieldName: string };
@@ -58,6 +60,8 @@ export interface SchemaSites {
   readonly models: ReadonlyMap<string, ModelSites>;
   readonly fields: ReadonlyMap<string, FieldSite>;
   readonly enums: ReadonlyMap<string, EnumSite>;
+  /** Each composite type's declaration, by name. */
+  readonly valueObjects: ReadonlyMap<string, Site>;
 }
 
 export function fieldSiteKey(owner: string, fieldName: string): string {
@@ -207,6 +211,46 @@ function validatorDiagnostic(
   }
 }
 
+const UNSUPPORTED_NAME_REASON =
+  'which JavaScript reads as the prototype of an object rather than as a key. Choose another name.';
+
+function unsupportedNameDiagnostic(
+  refusal: Extract<BuildRefusal, { kind: 'nameUnsupported' }>,
+  sites: SchemaSites,
+): PslDiagnostic | ContractSourceDiagnostic {
+  const code = 'PSL_STORED_NAME_UNSUPPORTED';
+  const { key, name } = refusal;
+  switch (key.kind) {
+    case 'model':
+      return at(
+        modelSitesOf(sites, key.model).declaration,
+        code,
+        `A model is named "${name}", ${UNSUPPORTED_NAME_REASON}`,
+      );
+    case 'collectionSettings':
+      return at(
+        modelSitesOf(sites, key.model).declaration,
+        code,
+        `Model "${key.model}" is stored in collection "${name}", ${UNSUPPORTED_NAME_REASON}`,
+      );
+    case 'valueObject': {
+      const site = sites.valueObjects.get(key.valueObject);
+      if (site === undefined) throw new InternalError(`A refused type "${name}" has a site.`);
+      return at(site, code, `A composite type is named "${name}", ${UNSUPPORTED_NAME_REASON}`);
+    }
+    case 'enum': {
+      const site = sites.enums.get(key.enumName);
+      if (site === undefined) throw new InternalError(`A refused enum "${name}" has a site.`);
+      return {
+        code,
+        message: `An enum is named "${name}", ${UNSUPPORTED_NAME_REASON}`,
+        sourceId: site.block.sourceId,
+        span: site.block.span,
+      };
+    }
+  }
+}
+
 /**
  * The diagnostic for one refusal of the builder, at the place in the schema it is about, worded as PSL words it. A source position comes from the refusal's key.
  */
@@ -215,6 +259,8 @@ export function refusalDiagnostic(
   sites: SchemaSites,
 ): PslDiagnostic | ContractSourceDiagnostic {
   switch (refusal.kind) {
+    case 'nameUnsupported':
+      return unsupportedNameDiagnostic(refusal, sites);
     case 'storedNameUnsupported': {
       const field = fieldSiteOf(sites, refusal.key);
       return atField(

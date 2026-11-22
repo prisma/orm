@@ -76,4 +76,17 @@ describe('hydrateNamespaceEntities', () => {
     expect(result['widget']?.['w']).toBeInstanceOf(Widget);
     expect(result['gadget']?.['g']).toBeInstanceOf(Gadget);
   });
+
+  it('keeps an entity named __proto__ as an own key', () => {
+    const result = hydrateNamespaceEntities(
+      { widget: Object.fromEntries([['__proto__', { name: 'proto' }]]) },
+      kinds,
+      'carry',
+    );
+    const widgets = result['widget'];
+    expect({
+      prototypeIsPlain: Object.getPrototypeOf(widgets) === Object.prototype,
+      keys: Object.keys(widgets ?? {}),
+    }).toEqual({ prototypeIsPlain: true, keys: ['__proto__'] });
+  });
 });

@@ -48,10 +48,13 @@ function documentIdErrors(contract: MongoContract): string[] {
           `Collection "${name}": its validator must require _id, for every model the collection stores, since every document has an _id`,
         ];
       }
-      const names = rootModels[name] ?? [];
+      const names = Object.hasOwn(rootModels, name) ? (rootModels[name] ?? []) : [];
       return idSchemas.flatMap((idSchema, index): string[] => {
         const modelName = names.length === shapes.length ? names[index] : undefined;
-        const model = modelName === undefined ? undefined : models[modelName];
+        const model =
+          modelName === undefined || !Object.hasOwn(models, modelName)
+            ? undefined
+            : models[modelName];
         const id = model === undefined ? undefined : ownDocumentIdFieldOf(model);
         const codecId = id?.field.type.kind === 'scalar' ? id.field.type.codecId : 'unknown';
         const refusal =
@@ -184,7 +187,9 @@ export function validateMongoStorage(contract: MongoContract): void {
       }
 
       if (model.base) {
-        const baseModel = models[model.base.model];
+        const baseModel = Object.hasOwn(models, model.base.model)
+          ? models[model.base.model]
+          : undefined;
         if (baseModel) {
           const variantCollection = model.storage.collection;
           const baseCollection = baseModel.storage.collection;
@@ -197,7 +202,9 @@ export function validateMongoStorage(contract: MongoContract): void {
       }
 
       for (const [relName, relation] of Object.entries(model.relations ?? {})) {
-        const targetModel = models[relation.to.model];
+        const targetModel = Object.hasOwn(models, relation.to.model)
+          ? models[relation.to.model]
+          : undefined;
         const targetLabel = formatCrossRef(relation.to);
 
         if (targetModel?.owner) {
@@ -213,7 +220,7 @@ export function validateMongoStorage(contract: MongoContract): void {
           }
         } else if ('on' in relation && relation.on) {
           for (const localField of relation.on.localFields) {
-            if (!(localField in model.fields)) {
+            if (!Object.hasOwn(model.fields, localField)) {
               errors.push(
                 `Reference relation "${relName}": localField "${localField}" is not a field on model "${qualifiedName}"`,
               );
@@ -222,7 +229,7 @@ export function validateMongoStorage(contract: MongoContract): void {
 
           if (targetModel) {
             for (const targetField of relation.on.targetFields) {
-              if (!(targetField in targetModel.fields)) {
+              if (!Object.hasOwn(targetModel.fields, targetField)) {
                 errors.push(
                   `Reference relation "${relName}": targetField "${targetField}" is not a field on model "${targetLabel}"`,
                 );

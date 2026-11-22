@@ -166,6 +166,25 @@ function discriminatorFieldError(
   }
 }
 
+function unsupportedNameSubject(
+  refusal: Extract<BuildRefusal, { kind: 'nameUnsupported' }>,
+): string {
+  switch (refusal.subject) {
+    case 'model':
+      return 'A model';
+    case 'valueObject':
+      return 'A value object';
+    case 'enum':
+      return 'An enum';
+    case 'root':
+      return refusal.key.kind === 'model' ? `A root of model "${refusal.key.model}"` : 'A root';
+    case 'collection':
+      return refusal.key.kind === 'collectionSettings'
+        ? `The collection of model "${refusal.key.model}"`
+        : 'A collection';
+  }
+}
+
 /** The error `defineContract` throws for a refusal of the builder. */
 export function refusalError(refusal: BuildRefusal): StructuredError {
   switch (refusal.kind) {
@@ -190,6 +209,21 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
             modelName: refusal.key.owner.name,
             fieldName: refusal.key.field,
             reason: 'stored-name-unsupported',
+          },
+        },
+      );
+    case 'nameUnsupported':
+      return contractError(
+        'CONTRACT.NAME_UNUSABLE_AS_KEY',
+        `${unsupportedNameSubject(refusal)} is named "${refusal.name}", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.`,
+        {
+          meta: {
+            name: refusal.name,
+            kind: refusal.subject,
+            ...(refusal.subject !== 'model' && 'model' in refusal.key
+              ? { modelName: refusal.key.model }
+              : {}),
+            reason: 'name-not-a-key',
           },
         },
       );

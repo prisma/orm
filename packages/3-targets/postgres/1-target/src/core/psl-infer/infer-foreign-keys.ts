@@ -185,7 +185,7 @@ export function resolveForeignKeys(
       // table survived introspection (local), otherwise drop it while keeping
       // the scalar column (dangling) — recording it so the model can explain
       // the drop instead of the relation vanishing without a trace.
-      if (tables[fk.referencedTable] !== undefined) {
+      if (Object.hasOwn(tables, fk.referencedTable)) {
         keptForeignKeys.push(fk);
       } else {
         const dangling: DanglingForeignKeyInfo = {
