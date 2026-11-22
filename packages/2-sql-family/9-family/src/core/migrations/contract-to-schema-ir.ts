@@ -512,7 +512,7 @@ export function contractToSchemaIR(
     for (const [tableName, tableDefRaw] of Object.entries(ns.entries.table ?? {})) {
       StorageTable.assert(tableDefRaw, `namespaces.${ns.id}.entries.table.${tableName}`);
       const tableDef = tableDefRaw;
-      if (tables[tableName] !== undefined) {
+      if (Object.hasOwn(tables, tableName)) {
         throw sqlFamilyError(
           'CONTRACT.TABLE_AMBIGUOUS',
           `contractToSchemaIR: duplicate SQL table name "${tableName}" across namespaces (ambiguous for flat SqlSchemaIR.tables).`,
