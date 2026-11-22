@@ -1,0 +1,73 @@
+{
+  "name": "@prisma/better-auth-adapter",
+  "version": "8.0.0-rc.24",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Better Auth database adapter for Prisma 8",
+  "keywords": [
+    "better-auth",
+    "prisma"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist coverage"
+  },
+  "devDependencies": {
+    "@better-auth/api-key": "1.7.27",
+    "@better-auth/core": "1.7.27",
+    "@better-auth/oauth-provider": "1.7.27",
+    "@better-auth/passkey": "1.7.27",
+    "@better-auth/scim": "1.7.27",
+    "@better-auth/sso": "1.7.27",
+    "@better-auth/test-utils": "1.7.27",
+    "@prisma/dev": "catalog:",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
+    "@prisma/orm-sqlite": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "better-auth": "1.7.27",
+    "pathe": "^2.0.3",
+    "pg": "catalog:",
+    "temporal-polyfill": "^1.0.8",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": ">=1.7.0 <1.8.0",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/9-public/@prisma/better-auth-adapter"
+  }
+}

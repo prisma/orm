@@ -301,6 +301,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/9-public/@prisma/better-auth-adapter/**",
+      "domain": "extensions",
+      "layer": "integrations",
+      "plane": "runtime"
+    },
+    {
       "glob": "packages/3-extensions/sql-orm-client/**",
       "domain": "extensions",
       "layer": "integrations",

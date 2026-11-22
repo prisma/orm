@@ -65,12 +65,13 @@ afterEach(() => {
 });
 
 describe('CONSUMER_SCOPES', () => {
-  it('covers the consumer-shaped trees and no substrate suite', () => {
+  it('covers the consumer-shaped trees, the Better Auth adapter and no substrate suite', () => {
     assert.deepEqual(CONSUMER_SCOPES, [
       'examples',
       'apps',
       'test/e2e/framework',
       'test/integration/test/cli-journeys',
+      'packages/9-public/@prisma/better-auth-adapter',
     ]);
   });
 });
