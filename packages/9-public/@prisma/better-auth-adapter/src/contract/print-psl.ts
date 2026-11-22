@@ -140,10 +140,7 @@ function blockText(block: PrintedBlock, indent: string): string {
 }
 
 /** PSL text for printed blocks; blocks of missing models go inside a `namespace` block when the adapter's `namespace` option is set. */
-export function renderBlocks(
-  blocks: readonly PrintedBlock[],
-  namespace: string | undefined,
-): string {
+function renderBlocks(blocks: readonly PrintedBlock[], namespace: string | undefined): string {
   const chunks: string[] = [];
   let run: PrintedBlock[] = [];
   const flush = () => {

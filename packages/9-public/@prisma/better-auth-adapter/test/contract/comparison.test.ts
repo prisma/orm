@@ -1,34 +1,13 @@
 import type { BetterAuthOptions } from '@better-auth/core';
 import { getAuthTables } from '@better-auth/core/db';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { compareContract } from '../../src/contract/compare';
-import {
-  createWorkDir,
-  emitContract,
-  type SqlContract,
-  type TargetName,
-  targets,
-  type WorkDir,
-} from '../helpers/databases';
-import { compare, pslForConfiguration, pslHeader } from '../helpers/printed-psl';
+import { useContractFixture } from '../helpers/contract-fixture';
+import { type TargetName, targets } from '../helpers/databases';
+import { compare, pslForConfiguration } from '../helpers/printed-psl';
 
-let workDir: WorkDir;
-const emptyContracts = new Map<TargetName, SqlContract>();
-
-beforeAll(async () => {
-  workDir = await createWorkDir();
-  for (const target of targets) {
-    emptyContracts.set(target, (await emitContract(target, pslHeader, workDir)).contract);
-  }
-});
-
-afterAll(() => workDir.remove());
-
-function emptyContract(target: TargetName): SqlContract {
-  const contract = emptyContracts.get(target);
-  if (contract === undefined) throw new Error(`No empty ${target} contract`);
-  return contract;
-}
+const fixture = useContractFixture();
+const emptyContract = (target: TargetName) => fixture().emptyContract(target);
 
 /** The printed PSL for a configuration, with each `[from, to]` replacement applied. */
 function editedPsl(
@@ -46,9 +25,7 @@ function editedPsl(
   );
 }
 
-async function contractOf(target: TargetName, psl: string): Promise<SqlContract> {
-  return (await emitContract(target, psl, workDir)).contract;
-}
+const contractOf = (target: TargetName, psl: string) => fixture().contractOf(target, psl);
 
 describe.each(targets)('the comparison on %s', (target) => {
   describe('which models it expects', () => {

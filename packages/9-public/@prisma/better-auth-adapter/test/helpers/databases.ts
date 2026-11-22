@@ -1,7 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import type { SqlStorage } from '@prisma/orm-family-sql/contract/types';
-import type { Contract } from '@prisma/orm-framework/contract/types';
 import { defineConfig as postgresConfig } from '@prisma/orm-postgres/config';
 import { createPostgresControlClient } from '@prisma/orm-postgres/control';
 import postgres from '@prisma/orm-postgres/runtime';
@@ -12,8 +10,7 @@ import sqlite from '@prisma/orm-sqlite/runtime';
 import { contractFromJson as sqliteContractFromJson } from '@prisma/orm-sqlite/static';
 import { join } from 'pathe';
 import pg from 'pg';
-
-export type SqlContract = Contract<SqlStorage>;
+import type { SqlContract } from '../../src/contract/model-lookup';
 
 export type TargetName = 'sqlite' | 'postgres';
 

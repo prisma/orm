@@ -1,8 +1,8 @@
 import type { BetterAuthOptions } from '@better-auth/core';
 import { getAuthTables } from '@better-auth/core/db';
 import { type ContractComparison, compareContract } from '../../src/contract/compare';
-import { type PrintedPsl, printPsl, renderBlocks } from '../../src/contract/print-psl';
-import type { SqlContract } from './databases';
+import type { SqlContract } from '../../src/contract/model-lookup';
+import { type PrintedPsl, printPsl } from '../../src/contract/print-psl';
 
 export interface AdapterOptionsForComparison {
   readonly namespace?: string;
@@ -41,8 +41,9 @@ function escapeRegExp(text: string): string {
 /**
  * Applies printed PSL to the PSL it was printed against, as a user following the message would: the fields printed for an existing model go into that model, and missing models are added.
  */
-export function addPrintedPsl(basePsl: string, printed: PrintedPsl, namespace?: string): string {
+export function addPrintedPsl(basePsl: string, printed: PrintedPsl): string {
   let result = basePsl;
+  let added = printed.text;
   for (const block of printed.blocks.filter((candidate) => candidate.existing)) {
     const model = new RegExp(`(model ${escapeRegExp(block.modelName)} \\{[^}]*?)(\\n\\s*\\})`);
     if (!model.test(result)) throw new Error(`No model ${block.modelName} in the base PSL`);
@@ -51,7 +52,10 @@ export function addPrintedPsl(basePsl: string, printed: PrintedPsl, namespace?: 
       (_, body: string, close: string) =>
         `${body}\n${block.fieldLines.map((line) => `  ${line}`).join('\n')}${close}`,
     );
+    added = added.replace(
+      new RegExp(`^model ${escapeRegExp(block.modelName)} \\{[^}]*\\}\\n*`, 'm'),
+      '',
+    );
   }
-  const missing = printed.blocks.filter((candidate) => !candidate.existing);
-  return missing.length === 0 ? result : `${result}\n${renderBlocks(missing, namespace)}\n`;
+  return added.trim() === '' ? result : `${result}\n${added}\n`;
 }

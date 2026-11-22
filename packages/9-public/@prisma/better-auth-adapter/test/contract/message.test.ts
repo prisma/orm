@@ -1,26 +1,21 @@
 import type { BetterAuthOptions } from '@better-auth/core';
 import { twoFactor } from 'better-auth/plugins';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { contractMessage } from '../../src/contract/message';
-import { createWorkDir, emitContract, type SqlContract, type WorkDir } from '../helpers/databases';
-import { compare, pslForConfiguration, pslHeader } from '../helpers/printed-psl';
+import type { SqlContract } from '../../src/contract/model-lookup';
+import { useContractFixture } from '../helpers/contract-fixture';
+import { compare, pslForConfiguration } from '../helpers/printed-psl';
 
-let workDir: WorkDir;
+const fixture = useContractFixture();
 let emptyContract: SqlContract;
 let coreContract: SqlContract;
 
 beforeAll(async () => {
-  workDir = await createWorkDir();
-  emptyContract = (await emitContract('sqlite', pslHeader, workDir)).contract;
-  coreContract = (await emitContract('sqlite', pslForConfiguration(emptyContract, {}), workDir))
-    .contract;
+  emptyContract = fixture().emptyContract('sqlite');
+  coreContract = await fixture().contractOf('sqlite', pslForConfiguration(emptyContract, {}));
 });
 
-afterAll(() => workDir.remove());
-
-async function contractOf(psl: string): Promise<SqlContract> {
-  return (await emitContract('sqlite', psl, workDir)).contract;
-}
+const contractOf = (psl: string) => fixture().contractOf('sqlite', psl);
 
 describe('contractMessage', () => {
   it('is undefined when the contract holds everything', () => {
@@ -115,11 +110,12 @@ Then run`);
 
 describe('contractMessage on postgres', () => {
   it('lists a model in more than one namespace as a change', async () => {
-    const empty = (await emitContract('postgres', pslHeader, workDir)).contract;
+    const empty = fixture().emptyContract('postgres');
     const authModels = pslForConfiguration(empty, {}, { namespace: 'auth' });
-    const contract = (
-      await emitContract('postgres', `${authModels}\nmodel User {\n  id String @id\n}\n`, workDir)
-    ).contract;
+    const contract = await fixture().contractOf(
+      'postgres',
+      `${authModels}\nmodel User {\n  id String @id\n}\n`,
+    );
     expect(
       contractMessage(compare(contract, {})),
     ).toBe(`Your Prisma contract does not match what Better Auth needs.

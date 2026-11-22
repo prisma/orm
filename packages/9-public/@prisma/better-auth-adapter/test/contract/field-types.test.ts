@@ -1,33 +1,13 @@
 import type { BetterAuthOptions } from '@better-auth/core';
 import type { DBFieldAttribute } from '@better-auth/core/db';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-  createWorkDir,
-  emitContract,
-  type SqlContract,
-  type TargetName,
-  targets,
-  type WorkDir,
-} from '../helpers/databases';
-import { compare, pslForConfiguration, pslHeader } from '../helpers/printed-psl';
+import { describe, expect, it } from 'vitest';
+import { useContractFixture } from '../helpers/contract-fixture';
+import { type TargetName, targets } from '../helpers/databases';
+import { compare, pslForConfiguration } from '../helpers/printed-psl';
 
-let workDir: WorkDir;
-const emptyContracts = new Map<TargetName, SqlContract>();
-
-beforeAll(async () => {
-  workDir = await createWorkDir();
-  for (const target of targets) {
-    emptyContracts.set(target, (await emitContract(target, pslHeader, workDir)).contract);
-  }
-});
-
-afterAll(() => workDir.remove());
-
-function emptyContract(target: TargetName): SqlContract {
-  const contract = emptyContracts.get(target);
-  if (contract === undefined) throw new Error(`No empty ${target} contract`);
-  return contract;
-}
+const fixture = useContractFixture();
+const emptyContract = (target: TargetName) => fixture().emptyContract(target);
+const contractOf = (target: TargetName, psl: string) => fixture().contractOf(target, psl);
 
 const declarations = `
 type Address {
@@ -65,7 +45,7 @@ model Probe {
   @@map("probe")
 }
 `;
-  const contract = (await emitContract(target, psl, workDir)).contract;
+  const contract = await contractOf(target, psl);
   return [...compare(contract, options).problems];
 }
 
@@ -200,7 +180,7 @@ describe.each(targets)('id types on %s', (target) => {
       /(model User \{\n\s+id\s+)\S+/,
       `$1${idType}`,
     );
-    const contract = (await emitContract(target, psl, workDir)).contract;
+    const contract = await contractOf(target, psl);
     return compare(contract, betterAuthOptions).problems;
   }
 
@@ -224,7 +204,7 @@ describe.each(targets)('id types on %s', (target) => {
       /(model Session \{[^}]*userId\s+)Int/,
       '$1String',
     );
-    const contract = (await emitContract(target, psl, workDir)).contract;
+    const contract = await contractOf(target, psl);
     expect(compare(contract, serial).problems).toEqual([
       {
         kind: 'wrong-type',
@@ -242,7 +222,7 @@ describe('id types on postgres only', () => {
     const psl = pslForConfiguration(emptyContract('postgres'), betterAuthOptions)
       .replace(/(model User \{\n\s+id\s+)\S+/, `$1${idType}`)
       .replace(/(model Session \{[^}]*userId\s+)String/, `$1${idType}`);
-    const contract = (await emitContract('postgres', psl, workDir)).contract;
+    const contract = await contractOf('postgres', psl);
     return compare(contract, betterAuthOptions).problems;
   }
 

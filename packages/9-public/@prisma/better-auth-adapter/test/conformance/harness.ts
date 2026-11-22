@@ -11,18 +11,17 @@ import {
 } from '@better-auth/test-utils/adapter';
 import { afterAll } from 'vitest';
 import { prismaAdapter } from '../../src/adapter';
+import { createContractFixture } from '../helpers/contract-fixture';
 import {
   applyContract,
-  createWorkDir,
   emitContract,
   openPostgresClient,
   openSqliteClient,
   resetPostgres,
-  type SqlContract,
   type TargetName,
 } from '../helpers/databases';
 import { type PostgresServer, startPostgresServer } from '../helpers/postgres-server';
-import { pslForConfiguration, pslHeader } from '../helpers/printed-psl';
+import { pslForConfiguration } from '../helpers/printed-psl';
 import { timeouts } from '../timeouts';
 
 type Client = ReturnType<typeof openSqliteClient> | ReturnType<typeof openPostgresClient>;
@@ -36,10 +35,11 @@ export interface ConformanceRun {
  * Runs Better Auth's seven published adapter suites against the adapter on one database. Each change of Better Auth's configuration gets a database built from the PSL the adapter prints for it.
  */
 export async function runConformanceSuites(target: TargetName): Promise<ConformanceRun> {
-  const workDir = await createWorkDir();
+  const contracts = await createContractFixture();
+  const workDir = contracts.workDir;
   const server: PostgresServer | undefined =
     target === 'postgres' ? await startPostgresServer() : undefined;
-  const emptyContract: SqlContract = (await emitContract(target, pslHeader, workDir)).contract;
+  const emptyContract = contracts.emptyContract(target);
   let client: Client | undefined;
   let migrations = 0;
 

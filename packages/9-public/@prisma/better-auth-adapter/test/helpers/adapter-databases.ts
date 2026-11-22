@@ -1,17 +1,16 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from '@better-auth/core';
+import type { SqlContract } from '../../src/contract/model-lookup';
+import { createContractFixture } from './contract-fixture';
 import {
   applyContract,
-  createWorkDir,
   emitContract,
   openPostgresClient,
   openSqliteClient,
   resetPostgres,
-  type SqlContract,
   type TargetName,
-  type WorkDir,
 } from './databases';
 import { type PostgresServer, startPostgresServer } from './postgres-server';
-import { pslForConfiguration, pslHeader } from './printed-psl';
+import { pslForConfiguration } from './printed-psl';
 
 export type TestClient =
   | ReturnType<typeof openSqliteClient>
@@ -27,23 +26,16 @@ export interface AdapterDatabases {
 }
 
 export async function createAdapterDatabases(): Promise<AdapterDatabases> {
-  const workDir: WorkDir = await createWorkDir();
+  const contracts = await createContractFixture();
+  const workDir = contracts.workDir;
   const server: PostgresServer = await startPostgresServer();
-  const empty = new Map<TargetName, SqlContract>();
-  for (const target of ['sqlite', 'postgres'] as const) {
-    empty.set(target, (await emitContract(target, pslHeader, workDir)).contract);
-  }
   let current: TestClient | undefined;
   const closeCurrent = async () => {
     await current?.close();
     current = undefined;
   };
   return {
-    emptyContract(target) {
-      const contract = empty.get(target);
-      if (contract === undefined) throw new Error(`No empty ${target} contract`);
-      return contract;
-    },
+    emptyContract: (target) => contracts.emptyContract(target),
     async open(target, psl) {
       await closeCurrent();
       const emitted = await emitContract(target, psl, workDir);

@@ -1,17 +1,15 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { findModel } from '../../src/contract/model-lookup';
-import { createWorkDir, emitContract, type SqlContract, type WorkDir } from '../helpers/databases';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { findModel, type SqlContract } from '../../src/contract/model-lookup';
+import { useContractFixture } from '../helpers/contract-fixture';
 
-let workDir: WorkDir;
+const fixture = useContractFixture();
 let sqliteContract: SqlContract;
 let postgresContract: SqlContract;
 
 beforeAll(async () => {
-  workDir = await createWorkDir();
-  sqliteContract = (
-    await emitContract(
-      'sqlite',
-      `// use prisma-8
+  sqliteContract = await fixture().contractOf(
+    'sqlite',
+    `// use prisma-8
 model user {
   id String @id
   @@map("lower_user")
@@ -27,13 +25,10 @@ model Session {
   @@map("session")
 }
 `,
-      workDir,
-    )
-  ).contract;
-  postgresContract = (
-    await emitContract(
-      'postgres',
-      `// use prisma-8
+  );
+  postgresContract = await fixture().contractOf(
+    'postgres',
+    `// use prisma-8
 model Session {
   id String @id
   @@map("session")
@@ -51,12 +46,8 @@ namespace auth {
   }
 }
 `,
-      workDir,
-    )
-  ).contract;
+  );
 });
-
-afterAll(() => workDir.remove());
 
 describe('findModel', () => {
   it('finds a model by its exact name before the upper-cased name', () => {

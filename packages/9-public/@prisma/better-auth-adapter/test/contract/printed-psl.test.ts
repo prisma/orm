@@ -2,16 +2,14 @@ import type { BetterAuthOptions, BetterAuthPlugin } from '@better-auth/core';
 import { twoFactor } from 'better-auth/plugins';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { printPsl } from '../../src/contract/print-psl';
+import { useContractFixture } from '../helpers/contract-fixture';
 import {
   applyContract,
-  createWorkDir,
   type EmittedContract,
   emitContract,
   resetPostgres,
-  type SqlContract,
   type TargetName,
   targets,
-  type WorkDir,
 } from '../helpers/databases';
 import { everyFirstPartyPlugin } from '../helpers/plugins';
 import { type PostgresServer, startPostgresServer } from '../helpers/postgres-server';
@@ -20,32 +18,18 @@ import {
   addPrintedPsl,
   compare,
   pslForConfiguration,
-  pslHeader,
 } from '../helpers/printed-psl';
 import { timeouts } from '../timeouts';
 
-let workDir: WorkDir;
+const fixture = useContractFixture();
+const emptyContract = (target: TargetName) => fixture().emptyContract(target);
 let server: PostgresServer;
-const emptyContracts = new Map<TargetName, SqlContract>();
 
 beforeAll(async () => {
-  workDir = await createWorkDir();
   server = await startPostgresServer();
-  for (const target of targets) {
-    emptyContracts.set(target, (await emitContract(target, pslHeader, workDir)).contract);
-  }
 }, timeouts.devServerStart);
 
-afterAll(async () => {
-  await server?.close();
-  await workDir?.remove();
-}, timeouts.devServerClose + timeouts.hook);
-
-function emptyContract(target: TargetName): SqlContract {
-  const contract = emptyContracts.get(target);
-  if (contract === undefined) throw new Error(`No empty ${target} contract`);
-  return contract;
-}
+afterAll(() => server?.close(), timeouts.devServerClose + timeouts.hook);
 
 /**
  * Emits the PSL, creates its tables in an empty database, and checks that the comparison over the emitted contract finds nothing missing.
@@ -56,12 +40,17 @@ async function emitAndApply(
   betterAuthOptions: BetterAuthOptions,
   adapterOptions: AdapterOptionsForComparison = {},
 ): Promise<EmittedContract> {
-  const emitted = await emitContract(target, psl, workDir);
+  const emitted = await emitContract(target, psl, fixture().workDir);
   if (target === 'sqlite') {
-    await applyContract(target, emitted.json, `${workDir.nextPath('database')}.sqlite`, workDir);
+    await applyContract(
+      target,
+      emitted.json,
+      `${fixture().workDir.nextPath('database')}.sqlite`,
+      fixture().workDir,
+    );
   } else {
     await resetPostgres(server.url);
-    await applyContract(target, emitted.json, server.url, workDir);
+    await applyContract(target, emitted.json, server.url, fixture().workDir);
   }
   expect(compare(emitted.contract, betterAuthOptions, adapterOptions).problems).toEqual([]);
   return emitted;
@@ -187,7 +176,7 @@ describe.each(targets)('printed PSL on %s', (target) => {
 
   it('adds missing fields and a back-relation to an existing model', async () => {
     const base = pslForConfiguration(emptyContract(target), {});
-    const baseContract = (await emitContract(target, base, workDir)).contract;
+    const baseContract = await fixture().contractOf(target, base);
     const options: BetterAuthOptions = { plugins: [twoFactor()] };
     const printed = printPsl(compare(baseContract, options));
 
@@ -210,7 +199,7 @@ model Project {
   @@map("project")
 }
 `;
-    const baseContract = (await emitContract(target, base, workDir)).contract;
+    const baseContract = await fixture().contractOf(target, base);
     const options: BetterAuthOptions = {
       plugins: [
         plugin({
@@ -248,7 +237,7 @@ describe('printed PSL on postgres namespaces', () => {
 
   it('names models across namespaces when existing auth models are outside public', async () => {
     const base = pslForConfiguration(emptyContract('postgres'), {}, { namespace: 'auth' });
-    const baseContract = (await emitContract('postgres', base, workDir)).contract;
+    const baseContract = await fixture().contractOf('postgres', base);
     const options: BetterAuthOptions = { plugins: [twoFactor()] };
     const printed = printPsl(compare(baseContract, options));
 
