@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
-import { fixtureAppDir, withTempDir } from '../utils/cli-test-helpers';
+import { fixtureAppDir, withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   type CommandResult,
   type JourneyContext,
@@ -49,15 +49,7 @@ Then run \`prisma contract emit\` and update your database.`;
 function setupProject(createTempDir: () => string): JourneyContext {
   const testDir = createTempDir();
   cpSync(join(fixtureAppDir, 'fixtures/better-auth'), testDir, { recursive: true });
-  writeFileSync(
-    join(testDir, 'package.json'),
-    JSON.stringify({
-      name: 'better-auth-journey',
-      private: true,
-      type: 'module',
-      dependencies: { '@prisma/orm-sqlite': 'workspace:8.0.0-rc.24' },
-    }),
-  );
+  writeProjectManifest(testDir);
   return {
     testDir,
     configPath: join(testDir, 'prisma.config.ts'),
