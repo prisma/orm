@@ -340,22 +340,18 @@ function rewriteInsertRow(
   row: Readonly<Record<string, InsertValue>>,
   rewriter: AstRewriter,
 ): Record<string, InsertValue> {
-  const result: Record<string, InsertValue> = {};
-  for (const [key, value] of Object.entries(row)) {
-    result[key] = rewriteInsertValue(value, rewriter);
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [key, rewriteInsertValue(value, rewriter)]),
+  );
 }
 
 function rewriteUpdateSet(
   set: Readonly<Record<string, AnyExpression>>,
   rewriter: AstRewriter,
 ): Record<string, AnyExpression> {
-  const result: Record<string, AnyExpression> = {};
-  for (const [key, value] of Object.entries(set)) {
-    result[key] = value.rewrite(rewriter);
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(set).map(([key, value]) => [key, value.rewrite(rewriter)]),
+  );
 }
 
 function rewriteLimitOffset<T extends number | AnyExpression | undefined>(
