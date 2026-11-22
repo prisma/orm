@@ -23,7 +23,7 @@ You need Node.js 24 or later and a Postgres database. These steps run the exampl
 4. Create the tables: `pnpm db:init`, which runs `prisma db init`.
 5. Start the application: `pnpm dev`, then open <http://localhost:3000> and sign up.
 
-Without `DATABASE_URL`, `src/lib/db.ts` stops with `DATABASE_URL is not set` when the application or `pnpm auth` loads it. `next build` is the exception: the check is skipped while it runs, so a build on a machine with no database, such as CI, still succeeds.
+Without `DATABASE_URL`, the application builds and starts, and the first request that reads the database fails with `Postgres driver not connected`.
 
 ## Using this outside the repository
 
@@ -31,9 +31,10 @@ The application code names only published packages. `package.json` and `tsconfig
 
 - Replace each `workspace:` version (`@prisma/orm-postgres`, `@prisma/better-auth-adapter`) with one published version, the same for both.
 - Replace each `catalog:` version with a version from the registry.
-- Replace `@repo/prisma-bin`, which provides the `prisma` command here, with the `prisma` package and `@prisma/cli-engine` at the version `prisma` declares as its dependency, both as development dependencies. This is what `prisma orm init` installs.
-- Replace `"extends": ["@repo/tsconfig/base"]` in `tsconfig.json` with your own compiler options, for example the ones `create-next-app` writes.
+- Replace `@repo/prisma-bin`, which provides the `prisma` command here, with the `prisma` package. Keep `@prisma/cli-engine`, at the version `prisma` asks for as its peer. These two are what `prisma orm init` installs.
+- Replace `"extends": ["@repo/tsconfig/base"]` in `tsconfig.json` with your own compiler options, for example the ones `create-next-app` writes, and remove the `@repo/tsconfig` dependency.
 - Remove `@repo/test-utils`, `@prisma/dev`, `vitest`, `pathe`, `test/` and `vitest.config.ts`, which only the smoke test uses.
+- Remove `biome.jsonc`, the `lint` script and `turbo.json`, which belong to this repository's tooling.
 
 ## Add a Better Auth plugin
 

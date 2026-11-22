@@ -80,7 +80,7 @@ export const auth = betterAuth({
 
 const sqliteClient = `import sqlite from '${facade}/runtime';
 import { contractFromJson } from '${facade}/static';
-import contractJson from '../prisma/contract.json' with { type: 'json' };
+import contractJson from '../../prisma/contract.json' with { type: 'json' };
 
 export const db = sqlite({ contract: contractFromJson(contractJson), path: './auth.db' });
 `;
@@ -114,7 +114,8 @@ function printedMessage(run: AuthRun): string {
 }
 
 // The install the adapter's README gives: the adapter at the database
-// package's version, and Better Auth 1.7 from the registry. The adapter's
+// package's version, and Better Auth 1.7 with its `auth` program from the
+// registry, both at the same range so they share one copy. The adapter's
 // two Prisma peers are declared too, because pnpm resolves a peer through
 // the registry rather than through the tarball overrides, and these exact
 // versions are not on the registry until they are released. From the
@@ -130,7 +131,7 @@ describe('the Better Auth adapter installed next to the SQLite database package'
       [packShell(adapterDir, scratch), ...pack(scratch, [facade, ...platform])],
       {
         direct: [adapter, facade, familySql, '@prisma/orm-framework'],
-        registryDependencies: { 'better-auth': '1.7', auth: '1.7.27' },
+        registryDependencies: { 'better-auth': '1.7', auth: '1.7' },
       },
     );
     writeFileSync(join(scratch, 'contract.prisma'), corePsl);
@@ -203,7 +204,6 @@ describe('the Better Auth adapter installed next to the SQLite database package'
     const contractPath = join(projectDir, 'prisma/contract.prisma');
     mkdirSync(join(projectDir, 'prisma'), { recursive: true });
     mkdirSync(join(projectDir, 'src/lib'), { recursive: true });
-    mkdirSync(join(projectDir, 'src/prisma'), { recursive: true });
     writeFileSync(contractPath, corePsl);
     writeFileSync(join(projectDir, 'src/lib/auth.ts'), twoFactorAuth);
     writeFileSync(join(projectDir, 'src/lib/db.ts'), sqliteClient);
@@ -215,7 +215,7 @@ describe('the Better Auth adapter installed next to the SQLite database package'
       const { contract: contractConfig } = defineConfig({ contract: './auth-cli/prisma/contract.prisma' });
       const emitted = await createSqliteControlClient().emit({ contractConfig });
       if (!emitted.ok) throw new Error(JSON.stringify(emitted.failure));
-      writeFileSync('./auth-cli/src/prisma/contract.json', emitted.value.contractJson);
+      writeFileSync('./auth-cli/prisma/contract.json', emitted.value.contractJson);
       console.log('emitted');
     `;
     expect(runInScratch(scratch, emit)).toContain('emitted');
