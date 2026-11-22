@@ -127,7 +127,7 @@ export async function buildRefAdvancementFields(options: {
 }
 
 /**
- * The --advance-ref tail of migrate and db sign: executeRefAdvancement with
+ * The ref-advancement tail of db sign: executeRefAdvancement with
  * MigrationToolsError failures passed through as notOk, others rethrown.
  */
 export async function advanceRefSafely(args: {
@@ -159,22 +159,28 @@ export type RefSnapshot =
   | { readonly kind: 'stored' }
   | { readonly kind: 'render'; readonly contractIR: ContractIR };
 
+/**
+ * Which write failed: checking the store for the snapshot, writing the snapshot (or finding none),
+ * or writing the pointer once the snapshot is in the store, which is when `migration ref set`
+ * can finish the job.
+ */
+export type RefWriteStage = 'store-check' | 'snapshot' | 'pointer';
+
 export interface RefWriteFailure {
   readonly reason: string;
   readonly causeCode: string | undefined;
-  /** Whether the store holds the snapshot for the ref's hash, which `migration ref set` needs. */
-  readonly snapshotStored: boolean;
+  readonly failedAt: RefWriteStage;
 }
 
 /** Writes a ref's pointer file; `advanceRef` in production. */
 export type RefPointerWriter = (refsDir: string, name: string, hash: string) => Promise<unknown>;
 
-function refWriteFailure(error: unknown, snapshotStored: boolean): RefWriteFailure {
+function refWriteFailure(error: unknown, failedAt: RefWriteStage): RefWriteFailure {
   const code = Reflect.get(Object(error), 'code');
   return {
     reason: error instanceof Error ? error.message : String(error),
     causeCode: typeof code === 'string' ? code : undefined,
-    snapshotStored,
+    failedAt,
   };
 }
 
@@ -194,30 +200,27 @@ export async function writeAdvancedRef(
   },
   writePointer: RefPointerWriter,
 ): Promise<Result<void, RefWriteFailure>> {
-  let snapshotStored = false;
+  let stage: RefWriteStage = args.snapshot.kind === 'render' ? 'snapshot' : 'store-check';
   try {
     if (args.snapshot.kind === 'render') {
       await writeContractSnapshot(args.migrationsDir, args.hash, {
         contractJson: args.snapshot.contractIR.contract,
         contractDts: args.snapshot.contractIR.contractDts,
       });
-      snapshotStored = true;
-    } else {
-      snapshotStored = await hasContractSnapshot(args.migrationsDir, args.hash);
-      if (!snapshotStored) {
-        return notOk({
-          reason: `the snapshot store holds no contract for ${args.hash}`,
-          causeCode: undefined,
-          snapshotStored,
-        });
-      }
+    } else if (!(await hasContractSnapshot(args.migrationsDir, args.hash))) {
+      return notOk({
+        reason: `the snapshot store holds no contract for ${args.hash}`,
+        causeCode: undefined,
+        failedAt: 'snapshot',
+      });
     }
+    stage = 'pointer';
     await writePointer(args.refsDir, args.name, args.hash);
     return ok(undefined);
   } catch (error) {
     if (isInternalError(error)) {
       throw error;
     }
-    return notOk(refWriteFailure(error, snapshotStored));
+    return notOk(refWriteFailure(error, stage));
   }
 }

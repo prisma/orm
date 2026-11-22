@@ -402,7 +402,7 @@ describe('advanceRefSafely', () => {
 });
 
 describe('writeAdvancedRef', () => {
-  it('does not report the snapshot as stored when checking the store fails', async () => {
+  it('reports a failed store check as such, without writing the pointer', async () => {
     const migrationsDir = createTestProjectDir('write-advanced-ref');
     const looping = contractSnapshotDir(migrationsDir, HASH_A);
     await mkdir(dirname(looping), { recursive: true });
@@ -422,7 +422,7 @@ describe('writeAdvancedRef', () => {
 
     expect(written).toMatchObject({
       ok: false,
-      failure: { causeCode: 'ELOOP', snapshotStored: false },
+      failure: { causeCode: 'ELOOP', failedAt: 'store-check' },
     });
     expect(writePointer).not.toHaveBeenCalled();
   });

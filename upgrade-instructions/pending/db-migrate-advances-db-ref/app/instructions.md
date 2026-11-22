@@ -2,11 +2,11 @@
 changes:
   - id: db-migrate-advances-db-ref
     summary: |
-      `prisma db migrate` now advances the `db` ref after a successful apply when the connection comes from `prisma.config.ts` and the CLI does not detect CI. It still advances nothing with `--db` or in CI. A development `db migrate --advance-ref db` can drop the flag. A deploy or script that runs `db migrate` from the config outside a CI runner, and must not change `migrations/app/refs/db.json`, passes the new `--no-advance-ref` or `--db`. The detection finds every `db migrate` invocation that passes neither `--db` nor `--no-advance-ref`; check each against the two cases below.
+      `prisma db migrate` now advances the `db` ref after a successful apply when the connection comes from `prisma.config.ts` and the CLI does not detect CI. It still advances nothing with `--db` or in CI. A development `db migrate --advance-ref db` can drop the flag. A deploy or script that runs `db migrate` from the config outside a CI runner, and must not change `migrations/app/refs/db.json`, passes the new `--no-advance-ref` or `--db`. The detection finds `db migrate` commands that do not pass `--db` or `--no-advance-ref` on the same line, including a Dockerfile's exec form and a YAML list; check each against the two cases below, and look for others in files it does not search.
     detection:
-      glob: "**/{*.json,*.sh,*.bash,*.zsh,*.yml,*.yaml,*.toml,*.md,*.mdx,*.ts,*.mts,*.js,*.mjs,*.cjs,Dockerfile*,Procfile}"
+      glob: "**/{*.json,*.sh,*.bash,*.zsh,*.yml,*.yaml,*.toml,*.md,*.mdx,*.ts,*.mts,*.js,*.mjs,*.cjs,Dockerfile*,*.dockerfile,Procfile*,Makefile,justfile}"
       matches:
-        - '(?<![\w-])db\s+migrate\b(?![^\n]*--(?:db|no-advance-ref)\b)'
+        - '(?<![\w-])db(?:\s+|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)migrate\b(?![^\n]*--(?:db|no-advance-ref)\b)'
 ---
 
 # `db migrate` advances the `db` ref

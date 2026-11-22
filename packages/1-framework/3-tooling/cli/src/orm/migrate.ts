@@ -177,15 +177,20 @@ function refNotWrittenDiagnostic(
   invocation: CliInvocation,
   rerunWithRef: readonly string[],
 ): Diagnostic {
-  const nextAction = failure.snapshotStored
-    ? runCommandAction(
-        `Point ref "${ref.name}" at the contract the database is at`,
-        cliCommand(invocation, 'migration ref set', [shellQuoted(ref.name), ref.hash]),
-      )
-    : runCommandAction(
-        `Write ref "${ref.name}" and its snapshot once the directory is writable`,
-        cliCommand(invocation, 'db migrate', rerunWithRef),
-      );
+  const rerun = cliCommand(invocation, 'db migrate', rerunWithRef);
+  const nextAction = {
+    pointer: runCommandAction(
+      `Point ref "${ref.name}" at the contract the database is at`,
+      cliCommand(invocation, 'migration ref set', [shellQuoted(ref.name), ref.hash]),
+    ),
+    snapshot: runCommandAction(
+      `Write ref "${ref.name}" and its snapshot once the directory is writable`,
+      rerun,
+    ),
+    'store-check': chooseAction(
+      `Repair the snapshot store entry for ${ref.hash}, which could not be read, then run \`${rerun}\``,
+    ),
+  }[failure.failedAt];
   return {
     code: 'MIGRATION.REF_NOT_WRITTEN',
     severity: 'warn',

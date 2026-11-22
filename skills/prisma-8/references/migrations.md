@@ -144,7 +144,7 @@ pnpm prisma migration plan --name my_change
 
 If the `db` ref's pointer is itself missing and the hash isn't a graph node either (`MIGRATION.SNAPSHOT_MISSING`), create it with `migration ref set db <hash>` or advance it with `db update --advance-ref db`.
 
-**After `db migrate` with `--db` or in CI.** The live marker advances and the `db` ref does not. The `db` ref records where development plans start, so move it only for your development database, never for a deployment database. On the development database, run the same `db migrate` again with `--advance-ref db`: it applies nothing and moves the ref to the contract the database is at. `db update` (no-op on the DB when already current) also moves it, but only when the database is at the emitted contract: after `db migrate --to` an older contract, `db update` would move the database forward to the emitted contract.
+**After `db migrate` with `--db` or in CI.** The live marker advances and the `db` ref does not. The `db` ref records where development plans start, so move it only for your development database, never for a deployment database. On the development database, run the same `db migrate` again with `--advance-ref db`: it applies nothing and moves the ref to the contract the database is at.
 
 **When to switch paths.** Use `db update` while the schema is in flux, on a database whose migration history does not need to be kept (a local, development, staging or preview database). Switch to `migration plan` + `db migrate` when the change needs a reviewable, replayable migration — typically before opening a PR, and always for a database that changes only through migrations, such as production. The `db` ref bridges the two: it captures dev iteration state on disk so the first formal plan knows where you left off.
 
@@ -627,7 +627,7 @@ node <package dir>/migration.ts
 pnpm prisma db migrate
 ```
 
-Every command here addresses the database `prisma.config.ts` names, so the diagnosis and the re-run look at the same database; outside CI, the re-run also moves the `db` ref. For another database, add the same `--db <url>` to the diagnose commands and to `db migrate`, which then leaves the `db` ref alone.
+Every `prisma` command here addresses the database `prisma.config.ts` names, so the diagnosis and the re-run look at the same database; outside CI, the re-run also moves the `db` ref. For another database, add the same `--db <url>` to the diagnose commands and to `db migrate`, which then leaves the `db` ref alone.
 
 If the failure was an out-of-band side-effect that left external systems half-changed, repair those by hand before re-applying.
 
