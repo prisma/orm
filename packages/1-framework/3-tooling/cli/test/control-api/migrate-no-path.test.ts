@@ -20,11 +20,14 @@ import {
   buildPathNotFoundFailure,
   executeMigrate,
   neverPlannedSpaceFailure,
-  toArgumentFor,
+  planEndOf,
   unreachableSpaceFailure,
 } from '../../src/control-api/operations/migrate';
+import { reference } from '../../src/control-api/operations/plan-arguments';
 import type { CliInvocation } from '../../src/utils/printed-command';
 import { createTestProjectDir } from '../utils/test-project-dir';
+
+const DEFAULT = { kind: 'default' } as const;
 
 const APP_CONTRACT: Contract = createSqlContract();
 const APP_HEAD = APP_CONTRACT.storage.storageHash;
@@ -243,7 +246,7 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         APP_HEAD,
         ELSEWHERE,
-        { from: APP_HEAD, to: undefined },
+        { from: reference(APP_HEAD), to: DEFAULT },
         invocationIn(projectDir),
       ).toEnvelope(),
     );
@@ -259,7 +262,7 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         ELSEWHERE,
         APP_HEAD,
-        { from: ELSEWHERE, to: undefined },
+        { from: reference(ELSEWHERE), to: DEFAULT },
         invocationIn(projectDir),
       ).toEnvelope(),
     );
@@ -279,7 +282,7 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         APP_HEAD,
         ELSEWHERE,
-        { from: APP_HEAD, to: 'production' },
+        { from: reference(APP_HEAD), to: reference('production') },
         invocationIn(projectDir),
       ).toEnvelope(),
     );
@@ -295,7 +298,7 @@ describe('executeMigrate with no path to the target', () => {
         'app',
         EMPTY_CONTRACT_HASH,
         ELSEWHERE,
-        { from: APP_HEAD, to: undefined },
+        { from: reference(APP_HEAD), to: DEFAULT },
         invocationIn(projectDir),
       ).toEnvelope(),
     );
@@ -306,7 +309,7 @@ describe('executeMigrate with no path to the target', () => {
       { spaceId: 'pgvector', fromHash: DELETED, targetHash: ELSEWHERE },
       {
         appSpaceId: 'app',
-        appGraph: reconstructGraph([]),
+        appSpace: { graph: reconstructGraph([]), refs: {} },
         target: undefined,
         invocation: {
           ...invocationIn('/project'),
@@ -345,8 +348,13 @@ describe('executeMigrate with no path to the target', () => {
 
   it('advises installing a version that ships migrations when an extension space has none', () => {
     const failure = neverPlannedSpaceFailure(
-      { spaceId: 'pgvector', targetHash: ELSEWHERE },
-      { appSpaceId: 'app', migrationsDir: 'migrations', invocation: invocationIn('/project') },
+      { spaceId: 'pgvector', liveMarker: null, targetHash: ELSEWHERE },
+      {
+        appSpaceId: 'app',
+        appSpace: { graph: reconstructGraph([]), refs: {} },
+        migrationsDir: 'migrations',
+        invocation: invocationIn('/project'),
+      },
     );
 
     expect(failure.toEnvelope()).toMatchObject({
@@ -374,37 +382,33 @@ describe('executeMigrate with no path to the target', () => {
 
   it('advises planning the first migration when the application space has none', () => {
     const failure = neverPlannedSpaceFailure(
-      { spaceId: 'app', targetHash: ELSEWHERE },
-      { appSpaceId: 'app', migrationsDir: 'migrations', invocation: invocationIn('/project') },
+      { spaceId: 'app', liveMarker: null, targetHash: ELSEWHERE },
+      {
+        appSpaceId: 'app',
+        appSpace: { graph: reconstructGraph([]), refs: {} },
+        migrationsDir: 'migrations',
+        invocation: invocationIn('/project'),
+      },
     );
 
     expect(failure.toEnvelope()).toMatchObject({
       nextActions: expect.arrayContaining([
-        expect.objectContaining({ command: '{bin} migration plan --name <slug>' }),
+        expect.objectContaining({ command: '{bin} migration plan --from @empty --name <slug>' }),
       ]),
       meta: { kind: 'neverPlanned', spaceId: 'app', targetHash: ELSEWHERE },
     });
   });
 
-  it('names a hash target by its hash only when a migration names that contract', () => {
-    const graph = reconstructGraph([
-      {
-        dirName: '20260101T0000_initial',
-        dirPath: '/project/migrations/app/20260101T0000_initial',
-        metadata: {
-          migrationHash: 'sha256:initial',
-          from: EMPTY_CONTRACT_HASH,
-          to: APP_HEAD,
-          providedInvariants: [],
-          createdAt: '2026-01-01T00:00:00.000Z',
-        },
-        ops: [CREATE_TABLE],
-      },
+  it('maps the target db migrate was given to where migration plan ends', () => {
+    expect([
+      planEndOf({ kind: 'hash', hash: APP_HEAD }),
+      planEndOf({ kind: 'ref', ref: { name: 'production', hash: APP_HEAD, invariants: [] } }),
+      planEndOf(undefined),
+    ]).toEqual([
+      { kind: 'contract', hash: APP_HEAD },
+      { kind: 'ref', name: 'production' },
+      { kind: 'emitted' },
     ]);
-
-    expect(toArgumentFor({ kind: 'hash', hash: APP_HEAD }, graph)).toBe(APP_HEAD);
-    expect(toArgumentFor({ kind: 'hash', hash: ELSEWHERE }, graph)).toBeUndefined();
-    expect(toArgumentFor(undefined, graph)).toBeUndefined();
   });
 
   describe('when no migration plan can author the path', () => {
@@ -425,7 +429,12 @@ describe('executeMigrate with no path to the target', () => {
     const commandsOf = (from: string, target: string) =>
       unreachableSpaceFailure(
         { spaceId: 'app', fromHash: from, targetHash: target },
-        { appSpaceId: 'app', appGraph: graph, target: undefined, invocation: invocationIn('/p') },
+        {
+          appSpaceId: 'app',
+          appSpace: { graph, refs: {} },
+          target: target === APP_HEAD ? undefined : { kind: 'hash', hash: target },
+          invocation: invocationIn('/p'),
+        },
       )
         .toEnvelope()
         .nextActions?.flatMap((action) => ('command' in action ? [action.command] : []));

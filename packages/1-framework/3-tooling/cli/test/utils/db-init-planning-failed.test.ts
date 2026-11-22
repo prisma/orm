@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { reference } from '../../src/control-api/operations/plan-arguments';
 import { dbInitPlanningFailedError } from '../../src/utils/db-init-failure';
 
 const typeMismatch = { kind: 'typeMismatch', summary: 'Column "user"."age" changes type' };
@@ -8,9 +9,11 @@ const refusedWidening = {
   refusedOperationClass: 'widening',
 } as const;
 
+const CONTEXT = { migrationPlanOrigin: reference('@empty'), invocation: undefined };
+
 describe('dbInitPlanningFailedError', () => {
   it('points at db update when any conflict is a refused operation class, beside conflicts that are not', () => {
-    const error = dbInitPlanningFailedError([typeMismatch, refusedWidening]);
+    const error = dbInitPlanningFailedError([typeMismatch, refusedWidening], CONTEXT);
     expect({ code: error.code, nextActions: error.nextActions }).toEqual({
       code: 'MIGRATION.PLANNING_FAILED',
       nextActions: [
@@ -24,7 +27,7 @@ describe('dbInitPlanningFailedError', () => {
   });
 
   it('keeps the planning failure as it is when no operation class was refused', () => {
-    const error = dbInitPlanningFailedError([typeMismatch]);
+    const error = dbInitPlanningFailedError([typeMismatch], CONTEXT);
     expect({ code: error.code, why: error.why }).toEqual({
       code: 'MIGRATION.PLANNING_FAILED',
       why: 'Column "user"."age" changes type',

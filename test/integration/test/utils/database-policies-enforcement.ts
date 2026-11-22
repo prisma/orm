@@ -20,6 +20,7 @@ import {
 } from './database-policies-journey';
 import {
   parseJsonOutput,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runDbSign,
   runDbUpdate,
@@ -35,9 +36,8 @@ export type WithPolicyProject = (
 
 const DOCS = 'https://docs.prisma.io/docs/orm/v8/reference/error-reference';
 
-function forbidsMigrationsOnly(command: 'db update' | 'db sign') {
-  const recovery =
-    'Author a migration with prisma-test migration plan, then apply it with prisma-test db migrate.';
+function forbidsMigrationsOnly(command: 'db update' | 'db sign', base: string) {
+  const recovery = `Author a migration with \`prisma-test migration plan --from ${base}\`, then apply it with \`prisma-test db migrate\`.`;
   return {
     code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
     severity: 'error',
@@ -82,10 +82,20 @@ export function definePolicyEnforcementJourneys(
         const update = await runDbUpdate(project.ctx, ['--json']);
         const sign = await runDbSign(project.ctx, ['--json']);
 
-        expect(errorOf(dryRun)).toEqual(forbidsMigrationsOnly('db update'));
-        expect(errorOf(update)).toEqual(forbidsMigrationsOnly('db update'));
-        expect(errorOf(sign)).toEqual(forbidsMigrationsOnly('db sign'));
+        expect(errorOf(dryRun)).toEqual(forbidsMigrationsOnly('db update', base));
+        expect(errorOf(update)).toEqual(forbidsMigrationsOnly('db update', base));
+        expect(errorOf(sign)).toEqual(forbidsMigrationsOnly('db sign', base));
         expect((await appMarker(project))?.storageHash).toBe(base);
+
+        const plan = await planMigrationAndSelfEmit(project.ctx, [
+          '--from',
+          base,
+          '--name',
+          'as-advised',
+        ]);
+        expect(plan.exitCode, `the advised migration plan: ${plan.stdout}\n${plan.stderr}`).toBe(0);
+        const migrated = await runMigrate(project.ctx);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
       });
     },
     timeout,

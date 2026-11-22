@@ -7,6 +7,7 @@ import {
   detectOrphans,
   findPath,
   findPathWithDecision,
+  historyEndsFrom,
   reconstructGraph,
 } from '../src/migration-graph';
 import type { OnDiskMigrationPackage } from '../src/package';
@@ -656,5 +657,34 @@ describe('findPathWithDecision', () => {
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
     expect(result.decision.selectedPath).toEqual([]);
+  });
+});
+
+describe('historyEndsFrom', () => {
+  it('names the one end of a linear history', () => {
+    const graph = reconstructGraph(chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2']));
+    expect(historyEndsFrom(graph, E)).toEqual(['H2']);
+  });
+
+  it('names each end of a branched history, and only those the start reaches', () => {
+    const graph = reconstructGraph(
+      chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H1', 'H3', 'm3'], ['X1', 'X2', 'm4']),
+    );
+    expect(historyEndsFrom(graph, E)).toEqual(['H2', 'H3']);
+  });
+
+  it('counts a contract whose only migration is a self-edge as an end', () => {
+    const graph = reconstructGraph([pkg(E, 'H1', 'm0'), pkgSelfEdge('H1', 'm_self')]);
+    expect(historyEndsFrom(graph, E)).toEqual(['H1']);
+  });
+
+  it('finds no end in a cycle', () => {
+    const graph = reconstructGraph(chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H2', 'H1', 'm3']));
+    expect(historyEndsFrom(graph, E)).toEqual([]);
+  });
+
+  it('is the start itself when no migration leaves it', () => {
+    const graph = reconstructGraph(chain(['H1', 'H2', 'm1']));
+    expect(historyEndsFrom(graph, E)).toEqual([E]);
   });
 });

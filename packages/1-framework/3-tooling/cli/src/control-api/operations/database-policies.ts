@@ -28,6 +28,7 @@ import {
   type PolicySource,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
+import type { MigrationPlanArgument } from './plan-arguments';
 
 /**
  * The database's policies in force: what the application space's marker records, filled from
@@ -79,6 +80,8 @@ export function checkRunPolicies(args: {
   readonly ref: NamedRef | undefined;
   readonly permitPolicyChange: boolean;
   readonly targetHash: string;
+  /** The `--from` a `migration plan` for the database takes, which a refusal of `db update` or `db sign` prints. */
+  readonly migrationPlanOrigin: MigrationPlanArgument;
   readonly invocation: CliInvocation | undefined;
 }): Result<CheckedDatabasePolicies, CliStructuredError> {
   const { appSpaceId, inForce, ref } = args;
@@ -105,6 +108,7 @@ export function checkRunPolicies(args: {
             ? { kind: 'ref', refName: ref.name }
             : { kind: 'marker' },
         targetHash: args.targetHash,
+        migrationPlanOrigin: args.migrationPlanOrigin,
         ref:
           ref === undefined
             ? undefined

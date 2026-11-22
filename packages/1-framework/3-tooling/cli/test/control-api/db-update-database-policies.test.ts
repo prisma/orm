@@ -155,7 +155,7 @@ function update(args: {
 }
 
 const RECOVERY =
-  'Author a migration with {bin} migration plan, then apply it with {bin} db migrate.';
+  'No migration can be planned to move it. No migration records contract origin, and `migration plan` starts only from a contract a migration records.';
 
 describe('executeDbUpdate, database policies', () => {
   it.each(['plan', 'apply'] as const)(

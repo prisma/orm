@@ -29,15 +29,21 @@ import type { RefResolutionError } from '@internal/migration-tools/ref-resolutio
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
-import { statementFlag } from '../control-api/statements/statement-flag';
+import type {
+  MigrationPlanArgument,
+  MigrationPlanTargetArgument,
+} from '../control-api/operations/plan-arguments';
+import { shellQuoted, statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
 import { chooseAction, editFileAction, runCommandAction } from './next-actions';
 import {
   type CliInvocation,
   cliCommand,
   dbMigrateRerun,
+  planAction,
   printedPath,
-  printedPlanCommand,
+  printedPlan,
+  quotedPlan,
   selfEmitCommand,
 } from './printed-command';
 
@@ -728,37 +734,37 @@ export function errorStatementNeedsMigrationFile(
   statements: readonly StatementText[],
   refused: readonly StatementText[],
   invocation: CliInvocation | undefined,
-  planFrom: string | undefined,
+  origin: MigrationPlanArgument,
 ): ActionableCliError {
   const written = refused.map(({ verb, text }) => `"--${verb} ${text}"`);
   const listed =
     written.length === 1 ? written[0] : `${written.slice(0, -1).join(', ')} and ${written.at(-1)}`;
   const why = `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`;
-  if (planFrom === undefined) {
+  const plan = printedPlan(
+    invocation,
+    { from: origin },
+    statements.filter(({ verb }) => MIGRATION_PLAN_VERBS.includes(verb)).map(statementFlag),
+  );
+  if (plan.kind === 'none') {
     return new ActionableCliError(
       'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
       `db update cannot carry out ${listed}`,
       {
-        why: `${why} No migration records the contract the database is at, so \`migration plan\` cannot plan from it either.`,
+        why: `${why} No migration can be planned for them either. ${plan.reason}.`,
         fix: 'Leave out these statements: db update then asks before it loses any data.',
         nextActions: [chooseAction('Run db update without these statements')],
         meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
       },
     );
   }
-  const plan = printedPlanCommand(
-    invocation,
-    planFrom,
-    statements.filter(({ verb }) => MIGRATION_PLAN_VERBS.includes(verb)).map(statementFlag),
-  );
   return new ActionableCliError(
     'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
     `db update cannot carry out ${listed}`,
     {
       why,
-      fix: `Plan the change with ${plan}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with ${cliCommand(invocation, 'db migrate')}. Or leave out these statements: db update then asks before it loses any data.`,
+      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`${cliCommand(invocation, 'db migrate')}\`. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
-        runCommandAction('Plan the change into a migration file to fill in', plan),
+        planAction('Plan the change into a migration file to fill in', plan),
         chooseAction('Or run db update without these statements'),
       ],
       meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
@@ -997,27 +1003,30 @@ export interface PathUnreachableAdvice {
   readonly nextActions: readonly NextAction[];
 }
 
-/** What the advised `migration plan` passes to `--from` and `--to`; `undefined` leaves a flag out. */
+/** What the advised `migration plan` passes to `--from` and `--to`. */
 export interface PlanArguments {
-  readonly from: string | undefined;
-  readonly to: string | undefined;
+  readonly from: MigrationPlanArgument;
+  readonly to: MigrationPlanTargetArgument;
 }
 
 /**
- * The advice to plan the missing migration in the app space and apply it. `plan.to` is what
- * `--to` takes to name the target, or `undefined` for the emitted contract: `migration plan` and
- * `db migrate` target it without `--to`, and `migration plan --to` resolves only a contract that a
- * migration or a ref names. A space with no migrations has no such contract, so neither of its
- * commands carries `--to`. Otherwise the apply step is the `db migrate` the user ran, when its flags
- * are known.
+ * The advice to plan the missing migration in the app space and apply it, or, when no `migration
+ * plan` can author it, why not. A space with no migrations has no contract `--to` resolves, so
+ * neither of its commands carries `--to`. Otherwise the apply step is the `db migrate` the user
+ * ran, when its flags are known.
  */
 export function planThenApply(
   meta: PathUnreachableMeta,
   plan: PlanArguments,
   invocation: CliInvocation,
 ): PathUnreachableAdvice {
-  const to = meta.kind === 'neverPlanned' || plan.to === undefined ? [] : ['--to', plan.to];
-  const planCommand = printedPlanCommand(invocation, plan.from, [...to, '--name', '<slug>']);
+  const target: MigrationPlanTargetArgument =
+    meta.kind === 'neverPlanned' ? { kind: 'default' } : plan.to;
+  const printed = printedPlan(invocation, { from: plan.from, to: target }, ['--name', '<slug>']);
+  if (printed.kind === 'none') return noPlanReaches(printed.reason, invocation);
+  const to = target.kind === 'reference' ? ['--to', shellQuoted(target.reference)] : [];
+  const planStep =
+    printed.kind === 'runs' ? printed.command : `${printed.command}\n     ${printed.fill}.`;
   const applyCommand =
     meta.kind === 'neverPlanned'
       ? cliCommand(invocation, 'db migrate')
@@ -1027,14 +1036,14 @@ export function planThenApply(
   return {
     fix: [
       'Plan the missing edge, then apply it:',
-      `  1. ${planCommand}`,
+      `  1. ${planStep}`,
       `  2. ${applyCommand}`,
       `${ROLLBACK_IS_DESTRUCTIVE}.`,
       `${RENAMES_AND_DATA_NEED_MORE}.`,
       `Inspect the on-disk graph with \`${listCommand}\`, or \`${showCommand}\` for any bundle in the path you expected.`,
     ].join('\n'),
     nextActions: [
-      runCommandAction('Plan the missing edge', planCommand),
+      planAction('Plan the missing edge', printed),
       runCommandAction('Apply it', applyCommand),
       chooseAction(ROLLBACK_IS_DESTRUCTIVE),
       chooseAction(RENAMES_AND_DATA_NEED_MORE),
@@ -1048,7 +1057,7 @@ export function planThenApply(
  * The advice when no `migration plan` can author the missing path: `reason` says why, and the
  * advice points at the graph.
  */
-export function noPlanReaches(reason: string, invocation: CliInvocation): PathUnreachableAdvice {
+function noPlanReaches(reason: string, invocation: CliInvocation): PathUnreachableAdvice {
   const listCommand = cliCommand(invocation, 'migration list');
   return {
     fix: [`${reason}.`, `Inspect the on-disk graph with \`${listCommand}\`.`].join('\n'),

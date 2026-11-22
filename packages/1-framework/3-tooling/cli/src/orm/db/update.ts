@@ -23,7 +23,12 @@ import {
   type ResolveContractRefToSnapshotSuccess,
   resolveContractRefToSnapshot,
 } from '../../control-api/operations/contract-snapshot-resolution';
-import { databasePlanFrom, UNKNOWN_PLAN_ORIGIN } from '../../control-api/operations/graph-queries';
+import {
+  databasePlanStart,
+  type MigrationPlanArgument,
+  migrationPlanFrom,
+  type PlanSpace,
+} from '../../control-api/operations/plan-arguments';
 import {
   buildRefAdvancementFields,
   type ContractIR,
@@ -76,8 +81,8 @@ function updatePresentations(inputs: {
   readonly document: MigrationCommandResult;
   /** Where the CLI ran and the `--config`, `--db` and other flags it was given, which printed commands repeat. */
   readonly invocation: CliInvocation;
-  /** What a `migration plan` for the database passes to `--from`; `undefined` when no plan can start where it was before the run. */
-  readonly planFrom: string | undefined;
+  /** The `--from` a `migration plan` for the database takes, as it was before the run. */
+  readonly migrationPlanOrigin: MigrationPlanArgument | undefined;
   readonly contractPath: string;
   readonly database: string | undefined;
   readonly to: string | undefined;
@@ -100,7 +105,7 @@ function updatePresentations(inputs: {
           ...(dryRun ? [{ label: 'mode', value: 'dry run' }] : []),
         ],
       },
-      ...migrationResultBlocks(document, inputs.invocation, inputs.planFrom),
+      ...migrationResultBlocks(document, inputs.invocation, inputs.migrationPlanOrigin),
     ],
     json: () => document,
     next: () =>
@@ -327,7 +332,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         ({ verb, text }) => verb === 'backfill' || text.split('.').length === 3,
       );
       if (cannotBeVariantConverts.length > 0) {
-        const planFrom = await planFromIfReachable({
+        const migrationPlanOrigin = await migrationPlanOriginIfReachable({
           config: ctx.config,
           cwd: ctx.cwd,
           db: args.flags.db,
@@ -340,7 +345,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
               given,
               cannotBeVariantConverts,
               cliInvocation(ctx, args.flags.db),
-              planFrom,
+              migrationPlanOrigin,
             ),
           ),
         );
@@ -425,7 +430,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
 
       const mode = args.flags.dryRun ? 'plan' : 'apply';
       let document: MigrationCommandResult;
-      let planFrom: string | undefined;
+      let migrationPlanOrigin: MigrationPlanArgument | undefined;
       try {
         await client.connect(dbConnection);
 
@@ -475,7 +480,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           return notOk(normalizeError(advanced.failure));
         }
 
-        planFrom = result.value.planFrom;
+        migrationPlanOrigin = result.value.migrationPlanOrigin;
         document = updateDocument({
           value: result.value,
           targetId: ctx.config.target.targetId,
@@ -529,7 +534,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           updatePresentations({
             document,
             invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs: rerunFlags(args.flags) },
-            planFrom,
+            migrationPlanOrigin,
             contractPath: prepared.value.contractDisplayPath,
             database: prepared.value.database,
             to: args.flags.to,
@@ -545,40 +550,49 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
 export const dbUpdateCommand = createDbUpdateCommand(createControlClient);
 
 /**
- * What a `migration plan` for the database passes to `--from` ({@link databasePlanFrom}), or a
- * placeholder for the user to fill in when the database or the migrations cannot be read in time.
+ * The `--from` a `migration plan` for the database takes. The migrations and refs are read
+ * offline; when the database cannot be read in time, the user chooses the contract, or, with no
+ * migrations, no plan can name it.
  */
-async function planFromIfReachable(
+async function migrationPlanOriginIfReachable(
   inputs: Parameters<typeof prepareMigrationRun>[0],
-): Promise<string | undefined> {
+): Promise<MigrationPlanArgument> {
   const prepared = await prepareMigrationRun(inputs);
-  if (!prepared.ok) return UNKNOWN_PLAN_ORIGIN;
+  if (!prepared.ok) return unreadDatabaseOrigin(undefined);
   const { client, dbConnection, migrationsDir } = prepared.value;
-  const read = async (): Promise<{ readonly planFrom: string | undefined }> => {
+  const space = await readPlanSpace(migrationsDir).catch(() => undefined);
+  const readMarker = async () => {
     await client.connect(dbConnection, {
       existingDatabaseOnly: true,
       connectTimeoutMs: MARKER_READ_TIMEOUT_MS,
     });
-    const marker = await client.readMarker();
-    const appDir = join(migrationsDir, APP_SPACE_ID);
-    const { packages } = await readMigrationsDir(appDir, { migrationsDir });
-    return {
-      planFrom: databasePlanFrom({
-        graph: reconstructGraph(packages),
-        refs: await readRefs(join(appDir, 'refs')),
-        markerHash: marker?.storageHash,
-      }),
-    };
+    return { marker: await client.readMarker() };
   };
-  const settled = read()
-    .catch(() => ({ planFrom: UNKNOWN_PLAN_ORIGIN }))
+  const settled = readMarker()
+    .catch(() => undefined)
     .finally(() => closeQuietly(client));
-  return (
-    (await settledWithin(settled, MARKER_READ_TIMEOUT_MS)) ?? { planFrom: UNKNOWN_PLAN_ORIGIN }
-  ).planFrom;
+  const read = await settledWithin(settled, MARKER_READ_TIMEOUT_MS);
+  if (space === undefined || read === undefined) return unreadDatabaseOrigin(space);
+  return migrationPlanFrom(space, databasePlanStart(read.marker?.storageHash));
 }
 
-/** How long the refusal waits for the marker before it prints `--from <contract>`. */
+async function readPlanSpace(migrationsDir: string): Promise<PlanSpace> {
+  const appDir = join(migrationsDir, APP_SPACE_ID);
+  const { packages } = await readMigrationsDir(appDir, { migrationsDir });
+  return { graph: reconstructGraph(packages), refs: await readRefs(join(appDir, 'refs')) };
+}
+
+function unreadDatabaseOrigin(space: PlanSpace | undefined): MigrationPlanArgument {
+  const reason = `The CLI could not read the database within ${MARKER_READ_TIMEOUT_MS / 1000} seconds to find the contract it is at`;
+  return space !== undefined && space.graph.nodes.size === 0
+    ? {
+        kind: 'none',
+        reason: `${reason}, and with no migrations no contract reference can name it`,
+      }
+    : { kind: 'ambiguous', reason, candidates: [] };
+}
+
+/** How long the refusal waits for the database before it leaves the plan's origin to the user. */
 const MARKER_READ_TIMEOUT_MS = 3000;
 
 function settledWithin<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {

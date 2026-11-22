@@ -12,6 +12,7 @@ import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { reference } from '../../src/control-api/operations/plan-arguments';
 import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
@@ -22,6 +23,8 @@ import {
 import { stdoutErrorMeta, stdoutFrames } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
+
+const PLAN_CONTEXT = { migrationPlanOrigin: reference('@empty'), invocation: undefined };
 
 const REFUSAL =
   'Column "at": The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z". Re-emit the contract, then try again.';
@@ -416,7 +419,7 @@ describe('db init', () => {
   });
 
   it('maps a planning failure to its migration code', async () => {
-    mocks.dbInit.mockResolvedValue(notOk(dbInitPlanningFailedError([])));
+    mocks.dbInit.mockResolvedValue(notOk(dbInitPlanningFailedError([], PLAN_CONTEXT)));
 
     const run = await harness(ormConfig()).run(['db', 'init', '--json'], {
       cwd: projectDir,
@@ -432,14 +435,17 @@ describe('db init', () => {
   it('points a planning failure the additive policy caused at db update', async () => {
     mocks.dbInit.mockResolvedValue(
       notOk(
-        dbInitPlanningFailedError([
-          {
-            kind: 'policy-violation',
-            summary: 'destructive operation disallowed: Add validator on events',
-            why: "Policy does not allow 'destructive' operations",
-            refusedOperationClass: 'destructive',
-          },
-        ]),
+        dbInitPlanningFailedError(
+          [
+            {
+              kind: 'policy-violation',
+              summary: 'destructive operation disallowed: Add validator on events',
+              why: "Policy does not allow 'destructive' operations",
+              refusedOperationClass: 'destructive',
+            },
+          ],
+          PLAN_CONTEXT,
+        ),
       ),
     );
 
@@ -475,7 +481,7 @@ describe('db init', () => {
   }
 
   function refusePlanning(...conflicts: ReturnType<typeof refusedClass>[]) {
-    mocks.dbInit.mockResolvedValue(notOk(dbInitPlanningFailedError(conflicts)));
+    mocks.dbInit.mockResolvedValue(notOk(dbInitPlanningFailedError(conflicts, PLAN_CONTEXT)));
   }
 
   it('points a widening refusal at db update without mentioning confirmation', async () => {
@@ -502,7 +508,7 @@ describe('db init', () => {
         nextActions: [
           {
             label: 'Plan a migration, since db update does not apply data operations',
-            command: 'prisma-test migration plan',
+            command: 'prisma-test migration plan --from @empty',
           },
         ],
       },

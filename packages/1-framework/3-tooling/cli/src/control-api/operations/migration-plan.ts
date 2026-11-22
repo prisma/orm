@@ -92,6 +92,7 @@ import {
   runContractSpaceSeedPhase,
 } from './contract-space-seed-phase';
 import { forbiddingSettingsOfRef, refuseForbiddenChanges } from './database-policies';
+import { migrationPlanFromRun } from './plan-arguments';
 import { resolveFromForPlan, resolveToForPlan } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
@@ -643,6 +644,7 @@ async function executeMigrationPlanCommandInner(
   if (!resolutionResult.ok) {
     return notOk(resolutionResult.failure);
   }
+  const fromResolution = resolutionResult.value;
 
   const warnings: string[] = [];
   const plannerWarnings: MigrationPlannerConflict[] = [];
@@ -727,7 +729,7 @@ async function executeMigrationPlanCommandInner(
     (conflicts: readonly MigrationPlannerConflict[]) =>
       planningRefusedError(conflicts, {
         invocation: invocationOf(options),
-        from: options.from ?? (isAutoBaseline ? 'db' : (fromHash ?? '@empty')),
+        from: migrationPlanFromRun(options.from, fromResolution),
         to: options.to,
         statements: texts,
         resolved,

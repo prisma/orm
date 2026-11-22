@@ -13,8 +13,7 @@ import {
   type ContractMarkerRecordLike,
   contractHashAtMarker,
 } from '@internal/migration-tools/aggregate';
-import type { MigrationGraph } from '@internal/migration-tools/graph';
-import { isGraphNode, isInSpaceHistory } from '@internal/migration-tools/migration-graph';
+import { isInSpaceHistory } from '@internal/migration-tools/migration-graph';
 import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry, Refs } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
@@ -34,7 +33,7 @@ import {
   loadContractRawSafely,
   refusePackageCorruptionOnAggregate,
 } from '../../control-api/operations/contract-space-aggregate-loader';
-import { hasMigrationPath, planOriginArgument } from '../../control-api/operations/graph-queries';
+import { hasMigrationPath } from '../../control-api/operations/graph-queries';
 import {
   refuseMissingInvariantPath,
   refuseUnknownInvariants,
@@ -49,6 +48,11 @@ import {
   deriveStatusEdgeAnnotations,
   statusForMigrationHash,
 } from '../../control-api/operations/migration-status-overlay';
+import {
+  migrationPlanFrom,
+  migrationPlanTo,
+  type PlanEnd,
+} from '../../control-api/operations/plan-arguments';
 import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
@@ -69,7 +73,12 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
-import { cliInvocation, printedPlanCommand } from '../../utils/printed-command';
+import {
+  cliCommand,
+  cliInvocation,
+  type PrintedPlan,
+  printedPlan,
+} from '../../utils/printed-command';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
@@ -162,24 +171,34 @@ export type StatusTarget =
       readonly kind: 'app';
       readonly explicitTarget: boolean;
       readonly refName: string | undefined;
-      readonly planCommand: string;
+      readonly plan: PrintedPlan;
+      readonly listCommand: string;
     }
   | { readonly kind: 'extension'; readonly spaceId: string };
 
-/**
- * The `--to` of a `migration plan` that reaches the target `--to` named: the ref by its name, or a
- * contract a migration names by its hash. The emitted contract, which `migration plan --to` cannot
- * resolve until a migration names it, is where `migration plan` goes without `--to`.
- */
-function planTargetFlags(
+/** Where `migration status` aims, as `migration plan` would end there. */
+function statusPlanEnd(
   to: string | undefined,
   refName: string | undefined,
   targetHash: string,
-  graph: MigrationGraph,
-): readonly string[] {
-  if (to === undefined) return [];
-  if (refName !== undefined) return ['--to', shellQuoted(refName)];
-  return isGraphNode(targetHash, graph) ? ['--to', targetHash] : [];
+): PlanEnd {
+  if (to === undefined) return { kind: 'emitted' };
+  return refName === undefined
+    ? { kind: 'contract', hash: targetHash }
+    : { kind: 'ref', name: refName };
+}
+
+/** How the summary says to author the missing path, or why no `migration plan` can. */
+function authorText(target: { readonly plan: PrintedPlan; readonly listCommand: string }): string {
+  const { plan } = target;
+  switch (plan.kind) {
+    case 'runs':
+      return `Run \`${plan.command}\` to author one`;
+    case 'fill':
+      return `Run \`${plan.command}\` to author one. ${plan.fill}`;
+    case 'none':
+      return `No migration plan can author one. ${plan.reason}. Inspect the graph with \`${target.listCommand}\``;
+  }
 }
 
 export function buildNoPathSummary(args: {
@@ -194,13 +213,13 @@ export function buildNoPathSummary(args: {
     return `No migration path from ${markerPart} to the head of extension space \`${target.spaceId}\` (${targetShort}).`;
   }
   if (!target.explicitTarget) {
-    return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`${target.planCommand}\` to author one.`;
+    return `No migration path from ${markerPart} to the application's contract (${targetShort}). ${authorText(target)}.`;
   }
   const targetLabel =
     target.refName !== undefined
       ? `the target (${targetShort} via \`${target.refName}\`)`
       : `the target (${targetShort})`;
-  return `No migration path from ${markerPart} to ${targetLabel}. Run \`${target.planCommand}\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
+  return `No migration path from ${markerPart} to ${targetLabel}. ${authorText(target)}, or pass \`--to <contract>\` to pick a reachable target.`;
 }
 
 export function buildStatusHeadline(args: {
@@ -513,6 +532,7 @@ export const migrationStatusCommand = defineOrmCommand({
         continue;
       }
       const graph = space.graph();
+      const planSpace = { graph, refs: space.refs };
       const spaceContractHash = space.contract().storage.storageHash;
       const isAppSpace = entry.space === aggregate.app.spaceId;
       const targetHash = isAppSpace ? (activeRefHash ?? spaceContractHash) : spaceContractHash;
@@ -552,11 +572,15 @@ export const migrationStatusCommand = defineOrmCommand({
                 kind: 'app',
                 explicitTarget: to !== undefined,
                 refName: activeRefName,
-                planCommand: printedPlanCommand(invocation, planOriginArgument(graph, originHash), [
-                  ...planTargetFlags(to, activeRefName, targetHash, graph),
-                  '--name',
-                  '<name>',
-                ]),
+                plan: printedPlan(
+                  invocation,
+                  {
+                    from: migrationPlanFrom(planSpace, { kind: 'contract', hash: originHash }),
+                    to: migrationPlanTo(planSpace, statusPlanEnd(to, activeRefName, targetHash)),
+                  },
+                  ['--name', '<name>'],
+                ),
+                listCommand: cliCommand(invocation, 'migration list'),
               }
             : { kind: 'extension', spaceId: entry.space },
         };

@@ -12,6 +12,7 @@ import { dbInitRunnerFailureError } from '../../src/utils/db-init-failure';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import type { FailedMigrationOnDisk } from '../../src/utils/runner-failure-advice';
+import { originOf } from './plan-origins';
 
 const node: DiffableNode = {
   id: 'default',
@@ -78,7 +79,7 @@ function migrateError(
 
 function dbUpdateError(failure: MigrationRunnerFailure) {
   return dbUpdateRunnerFailureError(failure, runnerFailureFacts(failure, []), {
-    planFrom: undefined,
+    migrationPlanOrigin: originOf(undefined),
     invocation,
   });
 }

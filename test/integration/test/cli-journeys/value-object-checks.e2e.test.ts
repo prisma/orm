@@ -429,7 +429,7 @@ withTempDir(({ createTempDir }) => {
                     )
                   : expect.stringMatching(
                       new RegExp(
-                        `cannot keep this data, and no migration ends at the contract the database is at, so .+ cannot plan from it\\. Drop check "${oldCheck}" in the database yourself`,
+                        `cannot keep this data\\. Plan the change with \`[^\`]+ migration plan --from db\`, add an operation that updates those rows to fit check "user_address_shape_[0-9a-f]{8}" to the migration\\.ts it writes, after the operation that drops check "${oldCheck}"`,
                       ),
                     ),
             },
@@ -438,6 +438,10 @@ withTempDir(({ createTempDir }) => {
         expect(JSON.stringify(error), 'V3.04: no advice that does not fit').not.toMatch(
           /drift|<contract>/,
         );
+        if (via !== 'migrate') {
+          const advised = await runMigrationPlan(ctx, ['--from', 'db', '--name', 'as-advised']);
+          expect(advised.exitCode, `V3.04: the advised plan runs: ${advised.stderr}`).toBe(0);
+        }
 
         expect(await checkNames(db.connectionString, 'user'), 'V3.05: the old check stays').toEqual(
           before,

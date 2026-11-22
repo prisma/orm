@@ -2,6 +2,7 @@ import { migrationRunnerFailure } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
+import { NOT_RECORDED_REASON, originOf } from './plan-origins';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 const FROM = 'sha256:0123';
@@ -57,7 +58,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
           planStartsFromMarker: false,
         },
       },
-      { planFrom: FROM, invocation: WITH_STATEMENTS },
+      { migrationPlanOrigin: originOf(FROM), invocation: WITH_STATEMENTS },
     );
 
     expect(labels(error)).toEqual([
@@ -70,11 +71,12 @@ describe('the advice when a removed enum value is still held by rows of a requir
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsHoldingValue: [rowsHoldingValue] },
-      { planFrom: undefined, invocation: WITH_STATEMENTS },
+      { migrationPlanOrigin: originOf(undefined), invocation: WITH_STATEMENTS },
     );
 
     expect(labels(error)[1]).toBe(
-      'To keep that data under another stored value, change the stored value "archived" to one the enum keeps in the database yourself, then re-run `{bin} db update --rename Prio.High:Prio.Higher --delete Status.ARCHIVED`',
+      `No migration can be planned to keep that data. ${NOT_RECORDED_REASON}. ` +
+        'To keep that data under another stored value, change the stored value "archived" to one the enum keeps in the database yourself, then re-run `{bin} db update --rename Prio.High:Prio.Higher --delete Status.ARCHIVED`',
     );
   });
 
@@ -141,7 +143,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
         failure,
         { rowsHoldingValue: several },
         {
-          planFrom: FROM,
+          migrationPlanOrigin: originOf(FROM),
           invocation: {
             ...PROJECT,
             statementArgs: ['--delete Status.ARCHIVED', '--delete Prio.Low'],
@@ -159,11 +161,12 @@ describe('the advice when a removed enum value is still held by rows of a requir
       const error = dbUpdateRunnerFailureError(
         failure,
         { rowsHoldingValue: several },
-        { planFrom: undefined, invocation: PROJECT },
+        { migrationPlanOrigin: originOf(undefined), invocation: PROJECT },
       );
 
       expect(labels(error)[1]).toBe(
-        'To keep that data under another stored value, change each of the stored values "archived", 1 to one its enum keeps in the database yourself, then re-run `{bin} db update --delete Status.ARCHIVED --delete Prio.Low`',
+        `No migration can be planned to keep that data. ${NOT_RECORDED_REASON}. ` +
+          'To keep that data under another stored value, change each of the stored values "archived", 1 to one its enum keeps in the database yourself, then re-run `{bin} db update --delete Status.ARCHIVED --delete Prio.Low`',
       );
     });
 

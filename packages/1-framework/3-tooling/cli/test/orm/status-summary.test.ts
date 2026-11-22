@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildNoPathSummary, buildStatusHeadline } from '../../src/orm/migration/status';
 
-const PLAN = '{bin} migration plan --from aaaa --name <name>';
-const PLAN_TO_PROD = '{bin} migration plan --from aaaa --to prod --name <name>';
+const PLAN = { kind: 'runs', command: '{bin} migration plan --from aaaa --name <name>' } as const;
+const PLAN_TO_PROD = {
+  kind: 'runs',
+  command: '{bin} migration plan --from aaaa --to prod --name <name>',
+} as const;
+const LIST = '{bin} migration list';
 
 describe('buildNoPathSummary', () => {
   it('names the live contract and the plan that reaches it when no --to was passed', () => {
@@ -10,7 +14,13 @@ describe('buildNoPathSummary', () => {
       buildNoPathSummary({
         origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: false, refName: undefined, planCommand: PLAN },
+        target: {
+          kind: 'app',
+          explicitTarget: false,
+          refName: undefined,
+          plan: PLAN,
+          listCommand: LIST,
+        },
       }),
     ).toBe(
       "No migration path from the database state (aaaaaaaaaaaa) to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --from aaaa --name <name>` to author one.",
@@ -22,7 +32,13 @@ describe('buildNoPathSummary', () => {
       buildNoPathSummary({
         origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: true, refName: 'prod', planCommand: PLAN_TO_PROD },
+        target: {
+          kind: 'app',
+          explicitTarget: true,
+          refName: 'prod',
+          plan: PLAN_TO_PROD,
+          listCommand: LIST,
+        },
       }),
     ).toBe(
       'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb via `prod`). Run `{bin} migration plan --from aaaa --to prod --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
@@ -34,7 +50,13 @@ describe('buildNoPathSummary', () => {
       buildNoPathSummary({
         origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: true, refName: undefined, planCommand: PLAN },
+        target: {
+          kind: 'app',
+          explicitTarget: true,
+          refName: undefined,
+          plan: PLAN,
+          listCommand: LIST,
+        },
       }),
     ).toBe(
       'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb). Run `{bin} migration plan --from aaaa --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
@@ -46,7 +68,13 @@ describe('buildNoPathSummary', () => {
       buildNoPathSummary({
         origin: { kind: 'database', marker: undefined },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: false, refName: undefined, planCommand: PLAN },
+        target: {
+          kind: 'app',
+          explicitTarget: false,
+          refName: undefined,
+          plan: PLAN,
+          listCommand: LIST,
+        },
       }),
     ).toBe(
       "No migration path from the database state to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --from aaaa --name <name>` to author one.",
@@ -58,7 +86,13 @@ describe('buildNoPathSummary', () => {
       buildNoPathSummary({
         origin: { kind: 'offline', hash: 'a'.repeat(64) },
         targetHash: 'b'.repeat(64),
-        target: { kind: 'app', explicitTarget: true, refName: undefined, planCommand: PLAN },
+        target: {
+          kind: 'app',
+          explicitTarget: true,
+          refName: undefined,
+          plan: PLAN,
+          listCommand: LIST,
+        },
       }),
     ).toBe(
       'No migration path from the --from contract (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb). Run `{bin} migration plan --from aaaa --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
@@ -74,6 +108,48 @@ describe('buildNoPathSummary', () => {
       }),
     ).toBe(
       'No migration path from the database state to the head of extension space `pgvector` (bbbbbbbbbbbb).',
+    );
+  });
+});
+
+describe('buildNoPathSummary when no migration plan can author the path', () => {
+  it('says why and points at the graph', () => {
+    expect(
+      buildNoPathSummary({
+        origin: { kind: 'database', marker: { storageHash: 'a'.repeat(64), invariants: [] } },
+        targetHash: 'empty',
+        target: {
+          kind: 'app',
+          explicitTarget: true,
+          refName: undefined,
+          plan: { kind: 'none', reason: 'No reason' },
+          listCommand: LIST,
+        },
+      }),
+    ).toBe(
+      'No migration path from the database state (aaaaaaaaaaaa) to the target (empty). No migration plan can author one. No reason. Inspect the graph with `{bin} migration list`, or pass `--to <contract>` to pick a reachable target.',
+    );
+  });
+
+  it('says what the placeholder takes', () => {
+    expect(
+      buildNoPathSummary({
+        origin: { kind: 'database', marker: undefined },
+        targetHash: 'b'.repeat(64),
+        target: {
+          kind: 'app',
+          explicitTarget: false,
+          refName: undefined,
+          plan: {
+            kind: 'fill',
+            command: '{bin} migration plan --from <contract> --name <name>',
+            fill: 'Two ends, so replace <contract> with one of `x`, `y`',
+          },
+          listCommand: LIST,
+        },
+      }),
+    ).toBe(
+      "No migration path from the database state to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --from <contract> --name <name>` to author one. Two ends, so replace <contract> with one of `x`, `y`.",
     );
   });
 });

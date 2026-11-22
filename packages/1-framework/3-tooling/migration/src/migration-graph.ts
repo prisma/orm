@@ -531,3 +531,18 @@ export function detectOrphans(graph: MigrationGraph): readonly MigrationEdge[] {
 
   return orphans;
 }
+
+/**
+ * Where the history that starts at `hash` ends: the contracts reachable from it that no migration
+ * leads on from to another contract, sorted. Empty when every contract it reaches leads on, as in a
+ * cycle.
+ */
+export function historyEndsFrom(graph: MigrationGraph, hash: string): readonly string[] {
+  const leadsOn = (node: string) =>
+    (graph.forwardChain.get(node) ?? []).some((edge) => edge.to !== node);
+  const ends: string[] = [];
+  for (const step of bfs([hash], (n) => forwardNeighbours(graph, n))) {
+    if (!leadsOn(step.state)) ends.push(step.state);
+  }
+  return ends.sort();
+}

@@ -10,6 +10,7 @@ import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import type { CliInvocation } from '../../src/utils/printed-command';
 import type { FailedMigrationOnDisk } from '../../src/utils/runner-failure-advice';
+import { originOf } from './plan-origins';
 
 /** A runner failure and the facts its advice names, as the advice tests state them. */
 interface AdviceInput extends Omit<RunnerFailureFacts, 'failedMigration'> {
@@ -65,7 +66,7 @@ export function migrateError(input: AdviceInput, invocation: CliInvocation) {
 
 export function dbUpdateError(input: AdviceInput, invocation: CliInvocation) {
   return dbUpdateRunnerFailureError(runnerFailureOf(input), factsOf(input), {
-    planFrom: input.planFrom,
+    migrationPlanOrigin: originOf(input.planFrom),
     invocation,
   });
 }

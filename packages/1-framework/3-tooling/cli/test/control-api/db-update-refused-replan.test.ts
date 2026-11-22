@@ -170,9 +170,14 @@ describe('executeDbUpdate when the plan with an answered rename is refused', () 
     ]);
   });
 
-  it('advises no plan when no ref or migration records the contract the database is at', async () => {
+  it('says why no plan can write the rewrites when no ref or migration records the contract the database is at', async () => {
     const result = await refusedRun({ dbRef: false });
 
-    expect(result.ok ? undefined : result.failure.nextActions).toBeUndefined();
+    expect(result.ok ? undefined : result.failure.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label: `The rewrites cannot be written by hand in a migration. No migration records contract ${ORIGIN_HASH}, and \`migration plan\` starts only from a contract a migration records`,
+      },
+    ]);
   });
 });

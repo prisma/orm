@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { reference } from '../../src/control-api/operations/plan-arguments';
 import { BIN_COMMANDS } from '../../src/orm/cli';
 import { dbFlag } from '../../src/orm/flags';
-import { cliCommand, rerunFlags, selfEmitCommand } from '../../src/utils/printed-command';
+import {
+  cliCommand,
+  planAction,
+  printedPlan,
+  rerunFlags,
+  selfEmitCommand,
+} from '../../src/utils/printed-command';
 
 describe('selfEmitCommand', () => {
   it('names the migration.ts relative to where the CLI ran, with the --config it was given', () => {
@@ -42,5 +49,54 @@ describe('rerunFlags', () => {
     { flags: { to: undefined, advanceRef: undefined, permitPolicyChange: undefined }, args: [] },
   ])('repeats exactly the flags given: $args', ({ flags, args }) => {
     expect(rerunFlags(flags)).toEqual(args);
+  });
+});
+
+describe('printedPlan', () => {
+  const PROJECT = { cwd: '/p', configPath: undefined, dbGiven: false };
+
+  it('prints a command that runs for a reference, quoted for a shell', () => {
+    expect(
+      printedPlan(PROJECT, { from: reference('db'), to: reference("it's") }, ['--name', '<name>']),
+    ).toEqual({
+      kind: 'runs',
+      command: "{bin} migration plan --from db --to 'it'\\''s' --name <name>",
+    });
+  });
+
+  it('names the candidates for a choice, and gives it as a choice, not a command', () => {
+    const plan = printedPlan(
+      PROJECT,
+      { from: { kind: 'ambiguous', reason: 'Two ends', candidates: ['x', 'y'] } },
+      [],
+    );
+    expect(plan).toEqual({
+      kind: 'fill',
+      command: '{bin} migration plan --from <contract>',
+      fill: 'Two ends, so replace <contract> with one of `x`, `y`',
+    });
+    expect(planAction('Plan it', plan)).toEqual({
+      kind: 'user-choice',
+      label:
+        'Plan it with `{bin} migration plan --from <contract>`. Two ends, so replace <contract> with one of `x`, `y`',
+    });
+  });
+
+  it('says what a choice takes when the candidates are unknown', () => {
+    expect(
+      printedPlan(PROJECT, { from: { kind: 'ambiguous', reason: 'Unread', candidates: [] } }, []),
+    ).toMatchObject({
+      fill: 'Unread, so replace <contract> with a contract `{bin} migration list` shows, a ref that names one, or `@empty`',
+    });
+  });
+
+  it('prints no command, with every reason, when either end cannot be named', () => {
+    expect(
+      printedPlan(
+        PROJECT,
+        { from: { kind: 'none', reason: 'No start' }, to: { kind: 'none', reason: 'No end' } },
+        [],
+      ),
+    ).toEqual({ kind: 'none', reason: 'No start. No end' });
   });
 });

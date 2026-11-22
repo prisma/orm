@@ -112,6 +112,7 @@ export {
   deriveStatusEdgeAnnotations,
   statusForMigrationHash,
 } from '../control-api/operations/migration-status-overlay';
+export type { MigrationPlanArgument } from '../control-api/operations/plan-arguments';
 export {
   type FromResolution,
   type ResolvedContractRef,

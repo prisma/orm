@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NOT_RECORDED_REASON } from './plan-origins';
 import { dbInitError, dbUpdateError, migrateError } from './runner-failure-errors';
 
 const runnerFailed = {
@@ -220,7 +221,7 @@ describe('the advice for rows a required field has no value for', () => {
         },
         { cwd: '/work', configPath: undefined, dbGiven: false },
       ).fix,
-    ).not.toContain('migration plan');
+    ).toContain(`No migration can be planned to backfill those rows. ${NOT_RECORDED_REASON}`);
   });
 
   it('on db update and db init with --config, repeats it in every command', () => {

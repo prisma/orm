@@ -2,6 +2,7 @@ import { migrationRunnerFailure } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
+import { NOT_RECORDED_REASON, originOf } from './plan-origins';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 const FROM = 'sha256:0123';
@@ -56,7 +57,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { planFrom: FROM, invocation: PROJECT },
+      { migrationPlanOrigin: originOf(FROM), invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([
@@ -69,11 +70,12 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { planFrom: undefined, invocation: PROJECT },
+      { migrationPlanOrigin: originOf(undefined), invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([
-      '`{bin} db update` cannot keep this data, and no migration ends at the contract the database is at, so `{bin} migration plan` cannot plan from it. Drop check "user_address_shape_9a7e984c" in the database yourself, update those rows to fit check "user_address_shape_5c02601b", then re-run `{bin} db update`',
+      `\`{bin} db update\` cannot keep this data, and no migration can be planned for it. ${NOT_RECORDED_REASON}.` +
+        ' Drop check "user_address_shape_9a7e984c" in the database yourself, update those rows to fit check "user_address_shape_5c02601b", then re-run `{bin} db update`',
     ]);
   });
 
@@ -81,7 +83,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: adding },
-      { planFrom: FROM, invocation: PROJECT },
+      { migrationPlanOrigin: originOf(FROM), invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([

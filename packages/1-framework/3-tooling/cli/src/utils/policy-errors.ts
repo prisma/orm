@@ -6,11 +6,12 @@ import {
   type MigrationDataLossKind,
   movedDatabasePoliciesWhy,
 } from '@internal/framework-components/control';
+import type { MigrationPlanArgument } from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
 import { type DataProtectionSetting, FORBIDDEN_LEVEL } from './data-protection-settings';
 import { chooseAction, runCommandAction } from './next-actions';
-import { type CliInvocation, cliCommand } from './printed-command';
+import { type CliInvocation, cliCommand, printedPlan, quotedPlan } from './printed-command';
 
 /** `change: migrate; dataProtection.dataLoss: data-loss-forbidden`: the declared side of each difference. */
 export function declaredSettingsText(differences: readonly DatabasePolicyDifference[]): string {
@@ -63,6 +64,8 @@ export function errorChangePolicyForbids(args: {
   readonly targetHash: string;
   /** The ref the user named, and whether they gave `--permit-policy-change`, which the advised command repeats. */
   readonly ref?: { readonly name: string; readonly permitPolicyChange: boolean } | undefined;
+  /** The `--from` a `migration plan` for the database takes, which the advice to author a migration prints. */
+  readonly migrationPlanOrigin: MigrationPlanArgument;
   readonly invocation: CliInvocation | undefined;
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;
@@ -101,7 +104,11 @@ export function errorChangePolicyForbids(args: {
     );
   }
   const migrate = cliCommand(invocation, 'db migrate', toRef);
-  const recovery = `Author a migration with ${cliCommand(invocation, 'migration plan')}, then apply it with ${migrate}.`;
+  const plan = printedPlan(invocation, { from: args.migrationPlanOrigin }, []);
+  const recovery =
+    plan.kind === 'none'
+      ? `No migration can be planned to move it. ${plan.reason}.`
+      : `Author a migration with ${quotedPlan(plan)}, then apply it with \`${migrate}\`.`;
   return new ActionableCliError(
     'MIGRATION.CHANGE_POLICY_FORBIDS',
     `${policyHolder} permits only migrations`,

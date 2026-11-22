@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NOT_RECORDED_REASON } from './plan-origins';
 import { dbUpdateError, migrateError } from './runner-failure-errors';
 
 const runnerFailed = {
@@ -87,7 +88,7 @@ describe('the advice for a type change whose cast failed', () => {
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      'The database has no cast from the old type of field "T.d" to its new type. No migration records the contract the database is at, so `migration plan` cannot plan the change from it.',
+      `The database has no cast from the old type of field "T.d" to its new type. No migration can be planned for the change. ${NOT_RECORDED_REASON}.`,
     );
   });
 

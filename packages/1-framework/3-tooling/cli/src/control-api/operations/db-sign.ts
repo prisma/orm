@@ -30,6 +30,7 @@ import type { OnControlProgress } from '../types';
 import { buildContractSpaceAggregate } from './contract-space-aggregate-loader';
 import { checkRunPolicies, databasePoliciesInForce } from './database-policies';
 import { runIntrospection } from './db-verify';
+import { appMigrationPlanOrigin, appSpaceOf } from './plan-arguments';
 
 export interface ExecuteDbSignOptions<TFamilyId extends string, TTargetId extends string> {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
@@ -157,6 +158,7 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
       ref: undefined,
       permitPolicyChange: false,
       targetHash: aggregate.app.contract().storage.storageHash,
+      migrationPlanOrigin: appMigrationPlanOrigin(appSpaceOf(aggregate), markers),
       invocation: options.invocation,
     });
     if (!permitted.ok) return notOk(permitted.failure);

@@ -12,6 +12,7 @@ import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { reference } from '../../src/control-api/operations/plan-arguments';
 import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
@@ -19,6 +20,7 @@ import { errorMigrationPlanningFailed } from '../../src/utils/cli-errors';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { stdoutErrorMeta, stdoutFrames } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
+import { NOT_RECORDED } from '../utils/plan-origins';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const REFUSAL =
@@ -228,11 +230,15 @@ describe('db update --rename', () => {
     expect(run.presented?.data).toMatchObject({ appliedStatements: [PROFILE_TO_USER] });
   });
 
-  it('says which field gets a temporary value in existing rows, and that migration plan --backfill chooses it', async () => {
+  it('says which field gets a temporary value in existing rows: before the run, that migration plan --backfill chooses it; after it, to update the rows', async () => {
     const temporaryValues = [{ field: 'User.email', value: "''" }];
     mocks.dbUpdate
-      .mockResolvedValueOnce(ok({ ...planSuccess(), temporaryValues, planFrom: '@empty' }))
-      .mockResolvedValueOnce(ok({ ...applySuccess(), temporaryValues, planFrom: '@empty' }));
+      .mockResolvedValueOnce(
+        ok({ ...planSuccess(), temporaryValues, migrationPlanOrigin: reference('@empty') }),
+      )
+      .mockResolvedValueOnce(
+        ok({ ...applySuccess(), temporaryValues, migrationPlanOrigin: reference('@empty') }),
+      );
     const dryRun = await harness().run(['db', 'update', '--dry-run'], {
       cwd: projectDir,
       isTty: { stdout: true },
@@ -245,12 +251,12 @@ describe('db update --rename', () => {
     expect(dryRun.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --from @empty --backfill User.email instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from @empty --backfill User.email\` instead.`,
     });
     expect(applied.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Field "User.email" got the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --from @empty --backfill User.email instead.`,
+      text: `Field "User.email" got the temporary value '' where existing data has none. To choose another value, update those rows.`,
     });
     expect(applied.presented?.data).toMatchObject({ temporaryValues });
   });
@@ -277,7 +283,7 @@ describe('db update --rename', () => {
         ...planSuccess(),
         temporaryValues: [{ field: 'User.email', value: "''" }],
         databaseStorageHash: MARKER_HASH,
-        planFrom: MARKER_HASH,
+        migrationPlanOrigin: reference(MARKER_HASH),
       }),
     );
     const run = await harness().run(['db', 'update', '--dry-run'], {
@@ -288,10 +294,10 @@ describe('db update --rename', () => {
     expect(run.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --from ${MARKER_HASH} --backfill User.email instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from ${MARKER_HASH} --backfill User.email\` instead.`,
     });
     expect(run.presented?.data).not.toHaveProperty('databaseStorageHash');
-    expect(run.presented?.data).not.toHaveProperty('planFrom');
+    expect(run.presented?.data).not.toHaveProperty('migrationPlanOrigin');
   });
 
   it('lists what an apply would ask about on a dry run, in its output and its JSON', async () => {
@@ -578,7 +584,7 @@ describe('db update --rename', () => {
       ok({
         ...planSuccess(),
         temporaryValues: [{ field: 'User.email', value: "''" }],
-        planFrom: '@empty',
+        migrationPlanOrigin: reference('@empty'),
       }),
     );
     const run = await harness().run(
@@ -616,7 +622,7 @@ describe('db update --rename', () => {
       temporaryValue: {
         kind: 'summary',
         status: 'warn',
-        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --from @empty --backfill User.email --config 'my app/prisma.config.ts' instead.`,
+        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from @empty --backfill User.email --config 'my app/prisma.config.ts'\` instead.`,
       },
     });
   });
@@ -1016,7 +1022,7 @@ describe('db update', () => {
           migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
           {},
           {
-            planFrom: undefined,
+            migrationPlanOrigin: NOT_RECORDED,
             invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
           },
         ),
@@ -1046,7 +1052,7 @@ describe('db update', () => {
             { meta: { blockingObjects: [{ kind: 'view', name: 'billing.v_paid' }] } },
           ),
           {},
-          { planFrom: undefined, invocation: options.invocation },
+          { migrationPlanOrigin: NOT_RECORDED, invocation: options.invocation },
         ),
       ),
     );
@@ -1101,7 +1107,7 @@ describe('db update', () => {
           migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
           {},
           {
-            planFrom: undefined,
+            migrationPlanOrigin: NOT_RECORDED,
             invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
           },
         ),
@@ -1147,7 +1153,7 @@ describe('db update', () => {
           migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
           {},
           {
-            planFrom: undefined,
+            migrationPlanOrigin: NOT_RECORDED,
             invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
           },
         ),
@@ -1174,7 +1180,7 @@ describe('db update', () => {
     mocks.dbUpdate.mockResolvedValue(
       notOk(
         dbUpdateRunnerFailureError(runnerFailure, runnerFailureFacts(runnerFailure, []), {
-          planFrom: undefined,
+          migrationPlanOrigin: NOT_RECORDED,
           invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
         }),
       ),

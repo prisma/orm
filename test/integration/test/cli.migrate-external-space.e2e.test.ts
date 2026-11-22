@@ -201,7 +201,7 @@ withTempDir(({ createTempDir }) => {
             expect(command).not.toMatch(/--to [0-9a-f]{64}/);
           }
           expect(remediationCommands).toEqual([
-            'prisma-test migration plan --name <slug>',
+            'prisma-test migration plan --from @empty --name <slug>',
             'prisma-test db migrate',
           ]);
 

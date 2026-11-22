@@ -1,7 +1,9 @@
 import { asNamespaceId } from '@internal/contract/types';
 import type { ResolvedEnumValueRenameStatement } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
+import { reference } from '../../src/control-api/operations/plan-arguments';
 import { planningRefusedError } from '../../src/utils/planning-refused-error';
+import { NOT_RECORDED } from './plan-origins';
 
 function rename(from: string, to: string): ResolvedEnumValueRenameStatement {
   return {
@@ -30,7 +32,7 @@ describe('a planning refusal that can be written by hand', () => {
   it('prints the plan without the statements to leave out, keeping the run statements and --from', () => {
     const error = planningRefusedError([conflict], {
       invocation: PROJECT,
-      from: 'sha256:0123',
+      from: reference('sha256:0123'),
       to: undefined,
       statements: [
         { verb: 'rename', text: 'Status.ACTIVE:Status.X' },
@@ -56,7 +58,7 @@ describe('a planning refusal that can be written by hand', () => {
   it('keeps the --to the plan was given', () => {
     const error = planningRefusedError([conflict], {
       invocation: PROJECT,
-      from: 'sha256:0123',
+      from: reference('sha256:0123'),
       to: 'staging',
       statements: [{ verb: 'rename', text: 'Status.ACTIVE:Status.X' }],
       resolved: [active],
@@ -73,7 +75,7 @@ describe('a planning refusal that can be written by hand', () => {
     expect(
       planningRefusedError([plain], {
         invocation: PROJECT,
-        from: undefined,
+        from: NOT_RECORDED,
         to: undefined,
         statements: [],
         resolved: [],

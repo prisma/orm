@@ -1,5 +1,12 @@
+import type { NextAction } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
+import type {
+  MigrationPlanArgument,
+  MigrationPlanTargetArgument,
+  RunnablePlanArgument,
+} from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
+import { chooseAction, runCommandAction } from './next-actions';
 
 /**
  * Where the user ran the CLI from, the `--config` they gave it, as they typed it, and whether they
@@ -86,20 +93,76 @@ export function cliCommand(
   ].join(' ');
 }
 
-/**
- * The `migration plan` command advice prints: it starts from `from`, the contract the database is
- * at, whenever that is known, because `migration plan` cannot find its origin without it once
- * migrations exist and no `db` ref names one.
- */
+/** A `migration plan` that starts at `from`, as advice prints it; `from` resolves as printed. */
 export function printedPlanCommand(
   invocation: CliInvocation | undefined,
-  from: string | undefined,
+  from: RunnablePlanArgument,
   flags: readonly string[],
 ): string {
-  return cliCommand(invocation, 'migration plan', [
-    ...(from === undefined ? [] : ['--from', from]),
-    ...flags,
-  ]);
+  return cliCommand(invocation, 'migration plan', [...argumentWords('--from', from), ...flags]);
+}
+
+/** What advice prints where `--from` is for the user to choose. */
+export const CONTRACT_PLACEHOLDER = '<contract>';
+
+/**
+ * A `migration plan` as advice prints it:
+ * - `runs`: the command runs as printed;
+ * - `fill`: its `--from` is {@link CONTRACT_PLACEHOLDER}, and `fill` says why and what it takes;
+ * - `none`: no `migration plan` can do it, and `reason` says why.
+ */
+export type PrintedPlan =
+  | { readonly kind: 'runs'; readonly command: string }
+  | { readonly kind: 'fill'; readonly command: string; readonly fill: string }
+  | { readonly kind: 'none'; readonly reason: string };
+
+/** The `migration plan` that goes from `plan.from` to `plan.to` (the emitted contract when absent) with `flags`. */
+export function printedPlan(
+  invocation: CliInvocation | undefined,
+  plan: { readonly from: MigrationPlanArgument; readonly to?: MigrationPlanTargetArgument },
+  flags: readonly string[],
+): PrintedPlan {
+  const { from, to = { kind: 'default' } as const } = plan;
+  if (from.kind === 'none' || to.kind === 'none') {
+    const reasons = [from, to].flatMap((argument) =>
+      argument.kind === 'none' ? [argument.reason] : [],
+    );
+    return { kind: 'none', reason: reasons.join('. ') };
+  }
+  const words = [...argumentWords('--to', to), ...flags];
+  if (from.kind !== 'ambiguous') {
+    return { kind: 'runs', command: printedPlanCommand(invocation, from, words) };
+  }
+  const choices =
+    from.candidates.length > 0
+      ? `one of ${from.candidates.map((candidate) => `\`${candidate}\``).join(', ')}`
+      : `a contract \`${cliCommand(invocation, 'migration list')}\` shows, a ref that names one, or \`@empty\``;
+  return {
+    kind: 'fill',
+    command: cliCommand(invocation, 'migration plan', ['--from', CONTRACT_PLACEHOLDER, ...words]),
+    fill: `${from.reason}, so replace ${CONTRACT_PLACEHOLDER} with ${choices}`,
+  };
+}
+
+/** `plan` quoted for a sentence: its command, followed for `fill` by what to put in its placeholder. */
+export function quotedPlan(plan: Exclude<PrintedPlan, { readonly kind: 'none' }>): string {
+  return plan.kind === 'runs' ? `\`${plan.command}\`` : `\`${plan.command}\` (${plan.fill})`;
+}
+
+/** The next action for `plan`: a command when it runs, otherwise the choice or the reason it has none. */
+export function planAction(label: string, plan: PrintedPlan): NextAction {
+  switch (plan.kind) {
+    case 'runs':
+      return runCommandAction(label, plan.command);
+    case 'fill':
+      return chooseAction(`${label} with \`${plan.command}\`. ${plan.fill}`);
+    case 'none':
+      return chooseAction(plan.reason);
+  }
+}
+
+function argumentWords(flag: string, argument: RunnablePlanArgument): readonly string[] {
+  return argument.kind === 'reference' ? [flag, shellQuoted(argument.reference)] : [];
 }
 
 /**

@@ -1,11 +1,12 @@
 import type { EnumValueCoordinate, KeepDataEdit } from '@internal/framework-components/control';
+import type { MigrationPlanArgument } from '../control-api/operations/plan-arguments';
 import type {
   KeepDataAdvice,
   KeepDataEditAdvice,
   KeptSubject,
 } from '../control-api/statements/plan-questions';
 import { statementFlag } from '../control-api/statements/statement-flag';
-import { type CliInvocation, cliCommand, printedPlanCommand } from './printed-command';
+import { type CliInvocation, cliCommand, printedPlan, quotedPlan } from './printed-command';
 import { runWrittenFile } from './runner-failure-advice';
 
 function editsText(edits: readonly KeepDataEdit[]): string {
@@ -97,11 +98,11 @@ function twoRuns(
 }
 
 /**
- * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with `migration plan`, when a plan can start where the database is and the target gives edits, answering with `--delete` each kept subject whose edits it gives, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no migration ends there.
+ * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with `migration plan` from `origin` when the target gives edits, answering with `--delete` each kept subject whose edits it gives, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no plan can start where the database is.
  */
 export function dbUpdateKeepDataEditAdvice(
   invocation: CliInvocation,
-  planFrom: string | undefined,
+  origin: MigrationPlanArgument,
 ): KeepDataEditAdvice {
   return (subject, kept): KeepDataAdvice => {
     const deleteFlag = statementFlag({ verb: 'delete', text: subject.text });
@@ -111,19 +112,31 @@ export function dbUpdateKeepDataEditAdvice(
       : `db update cannot keep that data in one run, and ${deleteFlag} removes it.`;
     const runs = twoRuns(invocation, subject, kept);
     const runWays = runs === undefined ? [] : [runs];
-    if (planFrom === undefined || subject.edits.length === 0) {
+    const edited = kept.filter(({ edits }) => edits.length > 0);
+    if (origin.kind === 'none' && edited.length > 0) {
+      return {
+        lead,
+        ways: [`No migration can be planned to keep it. ${origin.reason}.`, ...runWays],
+      };
+    }
+    if (subject.edits.length === 0) {
       return { lead, ways: runWays };
     }
-    const edited = kept.filter(({ edits }) => edits.length > 0);
     const deletes = edited.map(({ text }) => statementFlag({ verb: 'delete', text }));
-    const plan = printedPlanCommand(invocation, planFrom, [
+    const plan = printedPlan(invocation, { from: origin }, [
       ...otherStatements(invocation, [subject.text]).filter((flag) => !deletes.includes(flag)),
       ...deletes,
     ]);
+    if (plan.kind === 'none') {
+      return {
+        lead,
+        ways: [`No migration can be planned to keep it. ${plan.reason}.`, ...runWays],
+      };
+    }
     return {
       lead,
       ways: [
-        `To keep it, plan the change with ${quoted(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation)}.`,
+        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation)}.`,
         ...(swaps ? [] : runWays),
       ],
     };

@@ -2,6 +2,7 @@ import { migrationRunnerFailure } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
+import { originOf } from './plan-origins';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 
@@ -18,7 +19,7 @@ describe('the advice for an operation that objects in the database block', () =>
         blocked,
         {},
         {
-          planFrom: undefined,
+          migrationPlanOrigin: originOf(undefined),
           invocation: { ...PROJECT, rerunArgs: ['--delete', 'billing'] },
         },
       ).fix,

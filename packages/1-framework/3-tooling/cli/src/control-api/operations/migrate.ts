@@ -31,7 +31,6 @@ import {
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
-import type { MigrationGraph } from '@internal/migration-tools/graph';
 import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
@@ -44,7 +43,6 @@ import {
   type CliStructuredError,
   errorMigrationHasUnfilledPlaceholders,
   errorPathUnreachable,
-  noPlanReaches,
   type PathUnreachable,
   type PathUnreachableMeta,
   type PlanArguments,
@@ -80,8 +78,17 @@ import {
   forbiddingSettingsOfRun,
   refuseForbiddenChanges,
 } from './database-policies';
-import { planOriginArgument } from './graph-queries';
 import { noInvariantPathError } from './no-invariant-path';
+import {
+  appMigrationPlanOrigin,
+  appSpaceOf,
+  databasePlanStart,
+  type MigrationPlanArgument,
+  migrationPlanFrom,
+  migrationPlanTo,
+  type PlanEnd,
+  type PlanSpace,
+} from './plan-arguments';
 import {
   buildPerSpaceBreakdown,
   collectOrdered,
@@ -232,6 +239,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     ref,
     permitPolicyChange: options.permitPolicyChange ?? false,
     targetHash: appTargetHash,
+    migrationPlanOrigin: appMigrationPlanOrigin(appSpaceOf(aggregate), markerRows),
     invocation: options.invocation,
   });
   if (!checkedPolicies.ok) {
@@ -268,6 +276,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       return notOk(
         neverPlannedSpaceFailure(outcome, {
           appSpaceId: aggregate.app.spaceId,
+          appSpace: appSpaceOf(aggregate),
           migrationsDir,
           invocation: options.invocation,
         }),
@@ -283,7 +292,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
           },
           {
             appSpaceId: aggregate.app.spaceId,
-            appGraph: aggregate.app.graph(),
+            appSpace: appSpaceOf(aggregate),
             target,
             invocation: options.invocation,
           },
@@ -593,7 +602,12 @@ async function runPolicyOnly<TFamilyId extends string, TTargetId extends string>
 export type SpacePathOutcome =
   | { readonly kind: 'ok'; readonly plan: PerSpacePlan }
   | { readonly kind: 'at-head'; readonly plan: PerSpacePlan }
-  | { readonly kind: 'never-planned'; readonly spaceId: string; readonly targetHash: string }
+  | {
+      readonly kind: 'never-planned';
+      readonly spaceId: string;
+      readonly liveMarker: ContractMarkerRecordLike | null;
+      readonly targetHash: string;
+    }
   | MarkerOutsideGraphOutcome
   | {
       readonly kind: 'unreachable';
@@ -714,7 +728,7 @@ export function planSpacePath({
         }),
       };
     }
-    return { kind: 'never-planned', spaceId: space.spaceId, targetHash };
+    return { kind: 'never-planned', spaceId: space.spaceId, liveMarker, targetHash };
   }
 
   const targetInvariants =
@@ -984,9 +998,14 @@ function buildSuccess(args: BuildSuccessArgs): MigrateSuccess {
  * of the extension that ships them.
  */
 export function neverPlannedSpaceFailure(
-  space: { readonly spaceId: string; readonly targetHash: string },
+  space: {
+    readonly spaceId: string;
+    readonly liveMarker: ContractMarkerRecordLike | null;
+    readonly targetHash: string;
+  },
   run: {
     readonly appSpaceId: string;
+    readonly appSpace: PlanSpace;
     readonly migrationsDir: string;
     readonly invocation: CliInvocation;
   },
@@ -996,6 +1015,7 @@ export function neverPlannedSpaceFailure(
       space.spaceId,
       space.targetHash,
       run.migrationsDir,
+      migrationPlanFrom(run.appSpace, databasePlanStart(space.liveMarker?.storageHash)),
       run.invocation,
     );
   }
@@ -1017,26 +1037,19 @@ export function unreachableSpaceFailure(
   space: { readonly spaceId: string; readonly fromHash: string; readonly targetHash: string },
   run: {
     readonly appSpaceId: string;
-    readonly appGraph: MigrationGraph;
+    readonly appSpace: PlanSpace;
     readonly target: MigrateTarget | undefined;
     readonly invocation: CliInvocation;
   },
 ): CliStructuredError {
   if (space.spaceId === run.appSpaceId) {
-    const unplannable = unplannablePathReason(space, run.appGraph);
-    if (unplannable !== undefined) {
-      return errorPathUnreachable(
-        pathNotFound(space.spaceId, space.fromHash, space.targetHash),
-        noPlanReaches(unplannable, run.invocation),
-      );
-    }
     return buildPathNotFoundFailure(
       space.spaceId,
       space.fromHash,
       space.targetHash,
       {
-        from: planOriginArgument(run.appGraph, space.fromHash),
-        to: toArgumentFor(run.target, run.appGraph),
+        from: migrationPlanFrom(run.appSpace, { kind: 'contract', hash: space.fromHash }),
+        to: migrationPlanTo(run.appSpace, planEndOf(run.target)),
       },
       run.invocation,
     );
@@ -1050,35 +1063,12 @@ export function unreachableSpaceFailure(
   });
 }
 
-/**
- * Why no `migration plan` can author the path, or `undefined` when one can: `migration plan` starts
- * only from a contract a migration records, and does not plan to the empty contract.
- */
-function unplannablePathReason(
-  space: { readonly fromHash: string; readonly targetHash: string },
-  appGraph: MigrationGraph,
-): string | undefined {
-  if (!isGraphNode(space.fromHash, appGraph)) {
-    return `No migration records the contract the path starts from (${space.fromHash}), and \`migration plan\` plans only from a contract a migration records. Pass \`--from\` a contract the migration history holds`;
-  }
-  if (space.targetHash === EMPTY_CONTRACT_HASH) {
-    return '`migration plan` does not plan a migration to the empty contract, so no command can author a path to it. Pass `--to` a contract the migration history reaches';
-  }
-  return undefined;
-}
-
-/**
- * What `--to` takes to name the application space's target: a ref's name, or the hash of a contract
- * a migration names. `undefined` for the emitted contract, and for a hash no migration names, which
- * `--to` cannot resolve and which only the emitted contract can be.
- */
-export function toArgumentFor(
-  target: MigrateTarget | undefined,
-  appGraph: MigrationGraph,
-): string | undefined {
-  if (target === undefined) return undefined;
-  if (target.kind === 'ref') return target.ref.name;
-  return isGraphNode(target.hash, appGraph) ? target.hash : undefined;
+/** Where `db migrate` goes, as `migration plan` would end there: the emitted contract when no `--to` was given. */
+export function planEndOf(target: MigrateTarget | undefined): PlanEnd {
+  if (target === undefined) return { kind: 'emitted' };
+  return target.kind === 'ref'
+    ? { kind: 'ref', name: target.ref.name }
+    : { kind: 'contract', hash: target.hash };
 }
 
 /**
@@ -1095,6 +1085,7 @@ export function buildNeverPlannedFailure(
   spaceId: string,
   targetHash: string,
   migrationsDir: string,
+  from: MigrationPlanArgument,
   invocation: CliInvocation,
 ): CliStructuredError {
   const meta: PathUnreachableMeta = { spaceId, targetHash, kind: 'neverPlanned' };
@@ -1104,7 +1095,7 @@ export function buildNeverPlannedFailure(
       why: `migrate is replay-only: a contract space that declares managed storage elements must have an authored migration graph on disk. Space "${spaceId}" has no migrations under \`${migrationsDir}/${spaceId}/\` but its head ref targets "${targetHash}".`,
       meta,
     },
-    planThenApply(meta, { from: undefined, to: undefined }, invocation),
+    planThenApply(meta, { from, to: { kind: 'default' } }, invocation),
   );
 }
 

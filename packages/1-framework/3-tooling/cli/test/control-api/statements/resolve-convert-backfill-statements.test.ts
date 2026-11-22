@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { reference } from '../../../src/control-api/operations/plan-arguments';
 import {
   resolveStatements,
   type StatementOrigin,
@@ -274,7 +275,7 @@ describe('the migration plan command the db update refusal prints', () => {
         [rename('User.age:User.years'), convert('User.years')],
         [convert('User.years')],
         undefined,
-        '@empty',
+        reference('@empty'),
       ).toEnvelope().nextActions ?? []
     ).flatMap((action) =>
       'command' in action && typeof action.command === 'string' ? [action.command] : [],

@@ -380,7 +380,7 @@ withTempDir(({ createTempDir }) => {
         await emit(project, '  age  String\n  name String');
         const dryRun = await cli(project, ['db', 'update', '--dry-run']);
         expect(dryRun.exitCode, `db update --dry-run: ${dryRun.output}`).toBe(0);
-        const suggested = new RegExp(`${BIN} (migration plan .*?) instead\\.`).exec(
+        const suggested = new RegExp(`${BIN} (migration plan [^\`]*)\` instead\\.`).exec(
           stripVTControlCharacters(dryRun.output),
         );
         expect(suggested, `no migration plan in:\n${dryRun.output}`).not.toBeNull();

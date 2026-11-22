@@ -5,6 +5,11 @@ import type {
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { basename, join } from 'pathe';
+import {
+  type MigrationPlanArgument,
+  type RunnablePlanArgument,
+  reference,
+} from '../control-api/operations/plan-arguments';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type {
   FailedTypeChangeReport,
@@ -21,7 +26,9 @@ import {
   dbMigrateRerun,
   dbUpdateRerun,
   printedPath,
+  printedPlan,
   printedPlanCommand,
+  quotedPlan,
   selfEmitCommand,
   writtenMigrationRunCommand,
 } from './printed-command';
@@ -101,24 +108,24 @@ function changeValueAdvice(change: FailedTypeChangeReport, rerun: string): Runne
 /** The way out of a failed cast for `db update`, which plans and applies in one step. */
 export function dbUpdateFailedTypeChangeAdvice(
   change: FailedTypeChangeReport,
-  planFrom: string | undefined,
+  origin: MigrationPlanArgument,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const changeValue = changeValueAdvice(change, quoted(dbUpdateRerun(invocation)));
-  if (planFrom === undefined) {
+  const plan = printedPlan(invocation, { from: origin }, [
+    statementFlag({ verb: 'convert', text: change.field }),
+  ]);
+  if (plan.kind === 'none') {
     return [
       chooseAction(
-        `${failedTypeChangeText(change)} No migration records the contract the database is at, so \`migration plan\` cannot plan the change from it`,
+        `${failedTypeChangeText(change)} No migration can be planned for the change. ${plan.reason}`,
       ),
       ...changeValue,
     ];
   }
-  const plan = printedPlanCommand(invocation, planFrom, [
-    statementFlag({ verb: 'convert', text: change.field }),
-  ]);
   return [
     chooseAction(
-      `${failedTypeChangeText(change)} Plan the change with ${quoted(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+      `${failedTypeChangeText(change)} Plan the change with ${quotedPlan(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
     ),
     ...changeValue,
   ];
@@ -127,18 +134,21 @@ export function dbUpdateFailedTypeChangeAdvice(
 /** The way out of rows without a value for `db update`, which plans and applies in one step. */
 export function dbUpdateRowsWithoutValueAdvice(
   reports: readonly RowsWithoutValueReport[],
-  planFrom: string | undefined,
+  origin: MigrationPlanArgument,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const flags = backfillFlags(reports);
+  const plan = printedPlan(invocation, { from: origin }, flags);
   const planned =
-    flags.length === 0 || planFrom === undefined
+    flags.length === 0
       ? []
-      : [
-          chooseAction(
-            `Plan it with ${quoted(printedPlanCommand(invocation, planFrom, flags))}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
-          ),
-        ];
+      : plan.kind === 'none'
+        ? [chooseAction(`No migration can be planned to backfill those rows. ${plan.reason}`)]
+        : [
+            chooseAction(
+              `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+            ),
+          ];
   const [first] = reports;
   if (first?.reason === 'nullValues') {
     const keep = optionalFields([first], 'the field');
@@ -250,7 +260,7 @@ function storedValuesText(reports: readonly RowsHoldingValueReport[]): string {
 /** The way out when the data of required columns holds stored values `db update` removes. */
 export function dbUpdateRowsHoldingValueAdvice(
   reports: readonly RowsHoldingValueReport[],
-  planFrom: string | undefined,
+  origin: MigrationPlanArgument,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const others = otherStatements(invocation, reports);
@@ -258,21 +268,21 @@ export function dbUpdateRowsHoldingValueAdvice(
   const rename = chooseAction(
     `${newMember(reports, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, ...renameFlags(reports)]))}`,
   );
-  if (planFrom === undefined) {
+  const plan = printedPlan(invocation, { from: origin }, [...others, ...deletes]);
+  if (plan.kind === 'none') {
     return [
       rename,
       chooseAction(
-        `To keep that data under another stored value, change ${storedValuesText(reports)} in the database yourself, then re-run ${quoted(dbUpdateRerun(invocation, [...others, ...deletes]))}`,
+        `No migration can be planned to keep that data. ${plan.reason}. To keep that data under another stored value, change ${storedValuesText(reports)} in the database yourself, then re-run ${quoted(dbUpdateRerun(invocation, [...others, ...deletes]))}`,
       ),
     ];
   }
   const swaps = swapCalls(reports);
   if (swaps === undefined) return [rename];
-  const plan = printedPlanCommand(invocation, planFrom, [...others, ...deletes]);
   return [
     rename,
     chooseAction(
-      `To keep that data by hand, plan the change with ${quoted(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}.\n${swaps}`,
+      `To keep that data by hand, plan the change with ${quotedPlan(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}.\n${swaps}`,
     ),
   ];
 }
@@ -325,24 +335,24 @@ function fixRowsFirst(report: RowsFailingCheckReport, rerun: string): NextAction
 /** The way out when existing rows fail a check `db update` adds: it cannot keep the data while the check it replaces holds. */
 export function dbUpdateRowsFailingCheckAdvice(
   report: RowsFailingCheckReport,
-  planFrom: string | undefined,
+  origin: MigrationPlanArgument,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const update = dbUpdateRerun(invocation);
   const { replacedCheck } = report;
   if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
   const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
-  if (planFrom === undefined) {
+  const plan = printedPlan(invocation, { from: origin }, invocation.statementArgs ?? []);
+  if (plan.kind === 'none') {
     return [
       chooseAction(
-        `${cannotKeep}, and no migration ends at the contract the database is at, so ${quoted(cliCommand(invocation, 'migration plan'))} cannot plan from it. Drop check "${replacedCheck}" in the database yourself, update those rows to fit check "${report.check}", then re-run ${quoted(update)}`,
+        `${cannotKeep}, and no migration can be planned for it. ${plan.reason}. Drop check "${replacedCheck}" in the database yourself, update those rows to fit check "${report.check}", then re-run ${quoted(update)}`,
       ),
     ];
   }
-  const plan = printedPlanCommand(invocation, planFrom, invocation.statementArgs ?? []);
   return [
     chooseAction(
-      `${cannotKeep}. Plan the change with ${quoted(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation)}`,
+      `${cannotKeep}. Plan the change with ${quotedPlan(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation)}`,
     ),
   ];
 }
@@ -390,7 +400,7 @@ interface FailedMigrationText {
   readonly directory: string;
   readonly name: string;
   /** What `migration plan --from` takes to name the contract the migration starts from. */
-  readonly from: string;
+  readonly from: RunnablePlanArgument;
   readonly nodeCommand: string;
   readonly invocation: CliInvocation;
 }
@@ -404,7 +414,7 @@ function failedMigrationText(
   return {
     directory,
     name: dirName.slice(dirName.indexOf('_') + 1),
-    from: failed.from === EMPTY_CONTRACT_HASH ? '@empty' : failed.from,
+    from: reference(failed.from === EMPTY_CONTRACT_HASH ? '@empty' : failed.from),
     nodeCommand: selfEmitCommand(invocation, join(failed.directory, 'migration.ts')),
     invocation,
   };

@@ -8,6 +8,7 @@ import { errorMigrationHasUnfilledPlaceholders } from '../../src/utils/cli-error
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import type { CliInvocation } from '../../src/utils/printed-command';
+import { originOf } from './plan-origins';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 const GIVEN = { ...PROJECT, rerunArgs: ['--to', 'production', '--permit-policy-change'] };
@@ -191,7 +192,7 @@ function updateCommands(
   invocation: CliInvocation,
 ): readonly string[] {
   const error = dbUpdateRunnerFailureError(failure(entry.meta), entry.facts, {
-    planFrom: entry.planFrom,
+    migrationPlanOrigin: originOf(entry.planFrom),
     invocation,
   });
   return commandsIn(error.fix, 'db update').map((command) =>

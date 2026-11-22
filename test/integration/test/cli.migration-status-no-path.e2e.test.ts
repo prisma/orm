@@ -6,8 +6,10 @@ import {
   parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
+  runDbUpdate,
   runMigrate,
   runMigrationStatus,
+  runOnEngine,
   runRef,
   setupJourney,
   swapContract,
@@ -49,6 +51,19 @@ async function planned(ctx: JourneyContext, args: readonly string[]): Promise<st
 async function emit(ctx: JourneyContext, variant: Parameters<typeof swapContract>[1]) {
   swapContract(ctx, variant);
   expect((await runContractEmit(ctx)).exitCode).toBe(0);
+}
+
+/** The summary prints no `migration plan`, says why, and each command it prints runs. */
+async function expectNoPlanAndRunnableCommands(ctx: JourneyContext, summary: string) {
+  expect(summary).toContain('No migration plan can author one.');
+  const commands = [...summary.matchAll(/`\{bin\} ([^`]*)`/g)].map((match) =>
+    (match[1] ?? '').split(/\s+/),
+  );
+  expect(commands.map((words) => words.slice(0, 2).join(' '))).toEqual(['migration list']);
+  for (const words of commands) {
+    const run = await runOnEngine(ctx, words);
+    expect(run.exitCode, run.stderr).toBe(0);
+  }
 }
 
 withTempDir(({ createTempDir }) => {
@@ -124,6 +139,33 @@ withTempDir(({ createTempDir }) => {
 
         expect((await runMigrate(ctx, ['--to', 'production'])).exitCode).toBe(0);
         expect(await statusSummary(ctx, ['--to', 'production'])).toBe('Up to date');
+      }),
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'prints none, and says why, when --from names a ref no migration records',
+      inJourney(async (ctx) => {
+        expect((await runContractEmit(ctx)).exitCode).toBe(0);
+        const initial = await planned(ctx, ['--name', 'initial']);
+        expect((await runMigrate(ctx)).exitCode).toBe(0);
+        await emit(ctx, 'contract-additive');
+        expect((await runDbUpdate(ctx)).exitCode).toBe(0);
+
+        const summary = await statusSummary(ctx, ['--from', 'db', '--to', initial]);
+        await expectNoPlanAndRunnableCommands(ctx, summary);
+      }),
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'prints none, and says why, for --to @empty',
+      inJourney(async (ctx) => {
+        expect((await runContractEmit(ctx)).exitCode).toBe(0);
+        await planned(ctx, ['--name', 'initial']);
+        expect((await runMigrate(ctx)).exitCode).toBe(0);
+
+        await expectNoPlanAndRunnableCommands(ctx, await statusSummary(ctx, ['--to', '@empty']));
       }),
       timeouts.spinUpPpgDev,
     );

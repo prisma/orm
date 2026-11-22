@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { reference } from '../../src/control-api/operations/plan-arguments';
 import { errorChangePolicyForbids, errorPolicyMismatch } from '../../src/utils/policy-errors';
 import type { CliInvocation } from '../../src/utils/printed-command';
+import { NOT_RECORDED, NOT_RECORDED_REASON } from './plan-origins';
 
 const TARGET = 'b'.repeat(64);
 const invocation: CliInvocation = { cwd: '/work/app', configPath: undefined, dbGiven: true };
@@ -38,9 +40,22 @@ describe('errorPolicyMismatch', () => {
 });
 
 describe('errorChangePolicyForbids', () => {
+  it('says why no migration can be authored when no plan can start where the database is', () => {
+    expect(
+      errorChangePolicyForbids({
+        spaceId: 'app',
+        command: 'db update',
+        change: ['migrate'],
+        source: { kind: 'marker' },
+        targetHash: TARGET,
+        migrationPlanOrigin: NOT_RECORDED,
+        invocation: undefined,
+      }).fix,
+    ).toBe(`No migration can be planned to move it. ${NOT_RECORDED_REASON}.`);
+  });
+
   it('refuses db update on a database that changes only through migrations', () => {
-    const recovery =
-      'Author a migration with {bin} migration plan, then apply it with {bin} db migrate --db <url>.';
+    const recovery = `Author a migration with \`{bin} migration plan --from ${TARGET}\`, then apply it with \`{bin} db migrate --db <url>\`.`;
 
     expect(
       errorChangePolicyForbids({
@@ -49,6 +64,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'marker' },
         targetHash: TARGET,
+        migrationPlanOrigin: reference(TARGET),
         invocation,
       }).toEnvelope(),
     ).toEqual({
@@ -71,6 +87,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'marker' },
         targetHash: TARGET,
+        migrationPlanOrigin: reference(TARGET),
         invocation,
       }).toEnvelope(),
     ).toMatchObject({
@@ -90,6 +107,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['reconcile'],
         source: { kind: 'marker' },
         targetHash: TARGET,
+        migrationPlanOrigin: reference(TARGET),
         invocation,
       }).toEnvelope(),
     ).toEqual({
@@ -105,8 +123,7 @@ describe('errorChangePolicyForbids', () => {
   });
 
   it("names the ref when db update is refused by the ref's declaration, and applies the migration to the ref with the flag the user gave", () => {
-    const recovery =
-      'Author a migration with {bin} migration plan --config app.config.ts, then apply it with {bin} db migrate --to production --permit-policy-change --config app.config.ts --db <url>.';
+    const recovery = `Author a migration with \`{bin} migration plan --from ${TARGET} --config app.config.ts\`, then apply it with \`{bin} db migrate --to production --permit-policy-change --config app.config.ts --db <url>\`.`;
 
     expect(
       errorChangePolicyForbids({
@@ -115,6 +132,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'ref', refName: 'production' },
         targetHash: TARGET,
+        migrationPlanOrigin: reference(TARGET),
         invocation: { ...invocation, configPath: 'app.config.ts' },
       }).toEnvelope(),
     ).toEqual({
@@ -140,6 +158,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['reconcile'],
         source: { kind: 'ref', refName: 'production' },
         targetHash: TARGET,
+        migrationPlanOrigin: reference(TARGET),
         invocation: { ...invocation, configPath: 'app.config.ts' },
       }).toEnvelope(),
     ).toEqual({
@@ -170,6 +189,7 @@ describe('errorChangePolicyForbids', () => {
           change: ['reconcile'],
           source: { kind: 'marker' },
           targetHash: TARGET,
+          migrationPlanOrigin: reference(TARGET),
           ref: { name: 'production', permitPolicyChange },
           invocation,
         }).toEnvelope(),
@@ -183,8 +203,7 @@ describe('errorChangePolicyForbids', () => {
   );
 
   it("names the ref the user gave when the marker's policy refuses db update", () => {
-    const recovery =
-      'Author a migration with {bin} migration plan, then apply it with {bin} db migrate --to production --db <url>.';
+    const recovery = `Author a migration with \`{bin} migration plan --from ${TARGET}\`, then apply it with \`{bin} db migrate --to production --db <url>\`.`;
 
     expect(
       errorChangePolicyForbids({
@@ -193,6 +212,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'marker' },
         targetHash: TARGET,
+        migrationPlanOrigin: reference(TARGET),
         ref: { name: 'production', permitPolicyChange: false },
         invocation,
       }).toEnvelope(),

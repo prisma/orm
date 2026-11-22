@@ -3,6 +3,7 @@ import type {
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
+import type { MigrationPlanArgument } from '../control-api/operations/plan-arguments';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
 import {
@@ -11,20 +12,20 @@ import {
   errorMigrationPlanningFailed,
 } from './cli-errors';
 import { chooseAction } from './next-actions';
-import { type CliInvocation, printedPlanCommand } from './printed-command';
+import { type CliInvocation, printedPlan, quotedPlan } from './printed-command';
 import { runWrittenFile } from './runner-failure-advice';
 
 /**
  * The planner's refusal as the CLI reports it. When a conflict can be written by hand, its next
  * actions are the conflicts' own advice, which says what to write, then the plan to write it in:
- * the run's statements without the ones the conflict leaves out, from `context.from`. With no
- * `from`, no plan can start where the database is, and the refusal prints none.
+ * the run's statements without the ones the conflict leaves out, from `context.from`, or why no
+ * such plan exists.
  */
 export function planningRefusedError(
   conflicts: readonly MigrationPlannerConflict[],
   context: {
     readonly invocation: CliInvocation;
-    readonly from: string | undefined;
+    readonly from: MigrationPlanArgument;
     /** The `--to` the run was given, if any. */
     readonly to: string | undefined;
     /** The statements the run was given, in order. */
@@ -39,19 +40,21 @@ export function planningRefusedError(
       (statements ?? []).map((statement) => JSON.stringify(statement)),
     ),
   );
-  if (leaveOut.size === 0 || context.from === undefined) return refused;
+  if (leaveOut.size === 0) return refused;
   const planned = context.statements.filter(({ verb }) => verb !== 'delete' && verb !== 'allow');
   const left = planned.filter((_, index) => {
     const resolved = context.resolved[index];
     return resolved !== undefined && leaveOut.has(JSON.stringify(resolved));
   });
   const kept = context.statements.filter((statement) => !left.includes(statement));
-  const plan = printedPlanCommand(context.invocation, context.from, [
+  const plan = printedPlan(context.invocation, { from: context.from }, [
     ...(context.to === undefined ? [] : ['--to', context.to]),
     ...kept.map(statementFlag),
   ]);
   const action = chooseAction(
-    `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with \`${plan}\`, add the rewrites the message describes to the migration.ts it writes, ${runWrittenFile(context.invocation)}`,
+    plan.kind === 'none'
+      ? `The rewrites cannot be written by hand in a migration. ${plan.reason}`
+      : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${runWrittenFile(context.invocation)}`,
   );
   const reasons = conflicts.flatMap(({ why }) => (why === undefined ? [] : [why]));
   return new ActionableCliError(refused.code, refused.message, {

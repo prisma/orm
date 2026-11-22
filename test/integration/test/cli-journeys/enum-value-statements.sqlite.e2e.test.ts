@@ -261,9 +261,20 @@ withTempDir(({ createTempDir }) => {
             '1 row of "task" holds "archived" in column "status", which takes no NULL, so the value cannot be removed.',
           actions: [
             'To keep that data under a new enum value, add a member to enum "Status" in the contract source, run `prisma-test contract emit`, then run `prisma-test db update --rename \'Status.ARCHIVED:Status.<new member>\'`',
-            'To keep that data under another stored value, change the stored value "archived" to one the enum keeps in the database yourself, then re-run `prisma-test db update --delete Status.ARCHIVED`',
+            expect.stringMatching(
+              /^To keep that data by hand, plan the change with `prisma-test migration plan --from db --delete Status\.ARCHIVED`, make the edits below/,
+            ),
           ],
         });
+        const advised = await runMigrationPlan(held, [
+          '--from',
+          'db',
+          '--delete',
+          'Status.ARCHIVED',
+          '--name',
+          'as-advised',
+        ]);
+        expect(advised.exitCode, `S3.09: the advised plan runs: ${advised.stderr}`).toBe(0);
         expect(tasks(held.dbPath), 'S3.09: nothing changed').toEqual([
           { id: 1, status: 'archived' },
           { id: 2, status: 'active' },

@@ -1,6 +1,7 @@
 import type { OperationPreview } from '@internal/framework-components/control';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
+import type { MigrationPlanArgument } from '../../control-api/operations/plan-arguments';
 import { labelsText } from '../../control-api/statements/plan-questions';
 import { statementFlag } from '../../control-api/statements/statement-flag';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
@@ -14,7 +15,12 @@ import {
 import { runCommandAction } from '../../utils/next-actions';
 import { plannerWarningText } from '../../utils/planner-warning-text';
 import { declaredSettingsText } from '../../utils/policy-errors';
-import { type CliInvocation, cliCommand, printedPlanCommand } from '../../utils/printed-command';
+import {
+  type CliInvocation,
+  cliCommand,
+  printedPlan,
+  quotedPlan,
+} from '../../utils/printed-command';
 import { appliedStatementBlocks } from '../statement-blocks';
 
 interface PlannedOperation {
@@ -134,17 +140,27 @@ function previewBlocks(preview: OperationPreview | undefined): readonly Block[] 
     : [header, { kind: 'drawing', lines: statements }];
 }
 
-/** The new required fields whose existing rows get a temporary value, and how to choose the value. */
+/**
+ * The new required fields whose existing rows get a temporary value, and how to choose the value:
+ * before the run, with a `migration plan` from `migrationPlanOrigin` instead; after it, by updating
+ * the rows, since the database already has the new contract.
+ */
 function temporaryValueBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
-  planFrom: string | undefined,
+  migrationPlanOrigin: MigrationPlanArgument | undefined,
 ): readonly Block[] {
+  const choose = (field: string): string => {
+    if (result.mode === 'apply') return ' To choose another value, update those rows.';
+    if (migrationPlanOrigin === undefined) return '';
+    const plan = printedPlan(invocation, { from: migrationPlanOrigin }, [
+      statementFlag({ verb: 'backfill', text: field }),
+    ]);
+    return plan.kind === 'none'
+      ? ` No migration can be planned to choose it. ${plan.reason}.`
+      : ` To choose the value, plan a migration with ${quotedPlan(plan)} instead.`;
+  };
   const get = result.mode === 'plan' ? 'would get' : 'got';
-  const choose = (field: string) =>
-    planFrom === undefined
-      ? ''
-      : ` To choose the value, plan a migration with ${printedPlanCommand(invocation, planFrom, [statementFlag({ verb: 'backfill', text: field })])} instead.`;
   return (result.temporaryValues ?? []).map(
     ({ field, value }): Block => ({
       kind: 'summary',
@@ -256,14 +272,14 @@ function questionBlocks(result: MigrationCommandResult): readonly Block[] {
 function planBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
-  planFrom: string | undefined,
+  migrationPlanOrigin: MigrationPlanArgument | undefined,
 ): readonly Block[] {
   const planned = result.plannedAdvanceRef;
   return [
     { kind: 'summary', status: 'ok', text: planSummaryText(result) },
     ...plannerWarningBlocks(result),
     ...operationBlocks(result),
-    ...temporaryValueBlocks(result, invocation, planFrom),
+    ...temporaryValueBlocks(result, invocation, migrationPlanOrigin),
     ...appliedStatementBlocks(result.appliedStatements ?? []),
     ...questionBlocks(result),
     {
@@ -352,14 +368,14 @@ function permittedStatementBlocks(result: MigrationCommandResult): readonly Bloc
 function applyBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
-  planFrom: string | undefined,
+  migrationPlanOrigin: MigrationPlanArgument | undefined,
 ): readonly Block[] {
   const advanced = result.advancedRef;
   return [
     { kind: 'summary', status: 'ok', text: applySummaryText(result) },
     ...plannerWarningBlocks(result),
     ...operationBlocks(result),
-    ...temporaryValueBlocks(result, invocation, planFrom),
+    ...temporaryValueBlocks(result, invocation, migrationPlanOrigin),
     ...appliedStatementBlocks(result.appliedStatements ?? []),
     ...permittedStatementBlocks(result),
     ...fallbackMarkerBlocks(result),
@@ -380,17 +396,17 @@ function applyBlocks(
 
 /**
  * What a `db init` / `db update` result looks like in human mode. Printed commands repeat
- * `invocation`, and a printed `migration plan` passes `planFrom` to `--from`; with no `planFrom`, no
- * plan can start where the database was before the run, and none is printed.
+ * `invocation`, and a printed `migration plan` starts from `migrationPlanOrigin`, which `db init`
+ * does not give.
  */
 export function migrationResultBlocks(
   result: MigrationCommandResult,
   invocation: CliInvocation,
-  planFrom: string | undefined,
+  migrationPlanOrigin: MigrationPlanArgument | undefined,
 ): readonly Block[] {
   return result.mode === 'plan'
-    ? planBlocks(result, invocation, planFrom)
-    : applyBlocks(result, invocation, planFrom);
+    ? planBlocks(result, invocation, migrationPlanOrigin)
+    : applyBlocks(result, invocation, migrationPlanOrigin);
 }
 
 /** Where the user goes next, as typed actions rather than trailing prose. */

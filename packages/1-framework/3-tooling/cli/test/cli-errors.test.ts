@@ -5,6 +5,7 @@ import {
   buildNeverPlannedFailure,
   buildPathNotFoundFailure,
 } from '../src/control-api/operations/migrate';
+import { reference } from '../src/control-api/operations/plan-arguments';
 import {
   errorDriverRequired,
   errorFamilyReadMarkerSqlRequired,
@@ -18,6 +19,8 @@ import {
   planThenApply,
 } from '../src/utils/cli-errors';
 import type { CliInvocation } from '../src/utils/printed-command';
+
+const DEFAULT = { kind: 'default' } as const;
 
 describe('CliStructuredError.toEnvelope()', () => {
   it('converts driver required error to envelope with CONFIG.DRIVER_REQUIRED', () => {
@@ -59,7 +62,11 @@ describe('errorPathUnreachable', () => {
     };
     const envelope = errorPathUnreachable(
       failure,
-      planThenApply(failure.meta, { from: fromHash, to: targetHash }, INVOCATION),
+      planThenApply(
+        failure.meta,
+        { from: reference(fromHash), to: reference(targetHash) },
+        INVOCATION,
+      ),
     ).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.PATH_UNREACHABLE');
     expect(envelope.fix).toContain(
@@ -80,13 +87,16 @@ describe('errorPathUnreachable', () => {
     };
     const envelope = errorPathUnreachable(
       failure,
-      planThenApply(failure.meta, { from: undefined, to: targetHash }, INVOCATION),
+      planThenApply(
+        failure.meta,
+        { from: reference('@empty'), to: reference(targetHash) },
+        INVOCATION,
+      ),
     ).toEnvelope();
     // A never-planned space has an EMPTY graph, and `--to <hash>` only
     // resolves against graph nodes — the remediation must run verbatim.
-    expect(envelope.fix).toContain('{bin} migration plan --name <slug>');
+    expect(envelope.fix).toContain('{bin} migration plan --from @empty --name <slug>');
     expect(envelope.fix).not.toContain('--to');
-    expect(envelope.fix).not.toContain('--from');
     expect(envelope.fix).not.toContain('<unknown>');
   });
 
@@ -98,10 +108,7 @@ describe('errorPathUnreachable', () => {
       'app',
       fromHash,
       targetHash,
-      {
-        from: fromHash,
-        to: targetHash,
-      },
+      { from: reference(fromHash), to: reference(targetHash) },
       INVOCATION,
     );
     const envelope = failure.toEnvelope();
@@ -127,7 +134,7 @@ describe('errorPathUnreachable', () => {
       'app',
       EMPTY_CONTRACT_HASH,
       targetHash,
-      { from: fromHash, to: targetHash },
+      { from: reference(fromHash), to: reference(targetHash) },
       INVOCATION,
     ).toEnvelope();
 
@@ -143,7 +150,7 @@ describe('errorPathUnreachable', () => {
       'app',
       fromHash,
       targetHash,
-      { from: fromHash, to: undefined },
+      { from: reference(fromHash), to: DEFAULT },
       INVOCATION,
     );
 
@@ -175,7 +182,7 @@ describe('errorPathUnreachable', () => {
       'app',
       fromHash,
       targetHash,
-      { from: fromHash, to: 'production' },
+      { from: reference(fromHash), to: reference('production') },
       INVOCATION,
     );
 
@@ -194,7 +201,7 @@ describe('errorPathUnreachable', () => {
       'app',
       EMPTY_CONTRACT_HASH,
       targetHash,
-      { from: undefined, to: undefined },
+      { from: DEFAULT, to: DEFAULT },
       INVOCATION,
     );
 
@@ -213,7 +220,7 @@ describe('errorPathUnreachable', () => {
       'app',
       fromHash,
       targetHash,
-      { from: fromHash, to: undefined },
+      { from: reference(fromHash), to: DEFAULT },
       {
         cwd: '/project',
         configPath: 'apps/api/prisma.config.ts',
@@ -238,7 +245,7 @@ describe('errorPathUnreachable', () => {
       'app',
       fromHash,
       targetHash,
-      { from: fromHash, to: 'production' },
+      { from: reference(fromHash), to: reference('production') },
       {
         ...INVOCATION,
         rerunArgs: ['--to', 'production', '--permit-policy-change'],
@@ -260,7 +267,7 @@ describe('errorPathUnreachable', () => {
   });
 
   it('applies with a bare db migrate when the space has no migrations, whatever --to the run had', () => {
-    const error = buildNeverPlannedFailure('app', targetHash, 'migrations', {
+    const error = buildNeverPlannedFailure('app', targetHash, 'migrations', reference('@empty'), {
       ...INVOCATION,
       rerunArgs: ['--to', 'production'],
     });
@@ -269,7 +276,7 @@ describe('errorPathUnreachable', () => {
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: '{bin} migration plan --name <slug>',
+        command: '{bin} migration plan --from @empty --name <slug>',
       },
       { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
     ]);
@@ -280,6 +287,7 @@ describe('errorPathUnreachable', () => {
       'app',
       targetHash,
       'migrations-postgres',
+      reference('@empty'),
       INVOCATION,
     ).toEnvelope();
 
@@ -290,7 +298,7 @@ describe('errorPathUnreachable', () => {
 
     // A never-planned space has an empty graph; the fix must not
     // prescribe a `--to <hash>` the empty graph cannot resolve.
-    expect(envelope.fix).toContain('{bin} migration plan --name <slug>');
+    expect(envelope.fix).toContain('{bin} migration plan --from @empty --name <slug>');
     expect(envelope.fix).toContain('{bin} db migrate');
     expect(envelope.fix).not.toContain('--to');
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
@@ -371,7 +379,11 @@ describe('typed next actions on the CLI factories', () => {
 
     const actions = errorPathUnreachable(
       failure,
-      planThenApply(failure.meta, { from: fromHash, to: targetHash }, INVOCATION),
+      planThenApply(
+        failure.meta,
+        { from: reference(fromHash), to: reference(targetHash) },
+        INVOCATION,
+      ),
     ).nextActions;
 
     expect(actions.slice(0, 2)).toEqual([

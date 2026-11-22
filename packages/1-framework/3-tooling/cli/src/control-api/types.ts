@@ -41,6 +41,7 @@ import type { CliInvocation } from '../utils/printed-command';
 import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
+import type { MigrationPlanArgument } from './operations/plan-arguments';
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
 import type { AnswerPlanQuestions } from './statements/plan-questions';
 import type { AppliedStatementReport } from './statements/report-applied-statements';
@@ -509,16 +510,18 @@ export interface DbUpdateSuccess
   /** The statements the application space's plan applied, in order; empty when none were given. */
   readonly appliedStatements: readonly AppliedStatementReport[];
   /**
-   * The storage hash of the contract the database was at before the run, when a migration of the
-   * graph ends at it: the origin a `migration plan` for this database starts from.
+   * The storage hash of the contract the database was at before the run, when a migration records
+   * it.
+   *
+   * @deprecated Use `migrationPlanOrigin`, which says what `migration plan --from` takes in every
+   * case this field leaves out.
    */
   readonly databaseStorageHash?: string;
   /**
-   * What a `migration plan` for this database passes to `--from`: the contract the database is at,
-   * the end of the history for a database with no marker, or the ref a project with no migrations
-   * baselines from. Absent when no plan can start where the database is.
+   * The `--from` a `migration plan` for this database takes, as it was before the run: a contract
+   * reference, a choice for the user, or why no `migration plan` can start there.
    */
-  readonly planFrom?: string;
+  readonly migrationPlanOrigin?: MigrationPlanArgument;
   /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;
