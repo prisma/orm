@@ -520,7 +520,7 @@ export function requireOnlyCollidingKey(
       !(columns.length === named.size && columns.every((column) => named.has(column))) &&
       !columns.some(
         (column) =>
-          create[column] === undefined &&
+          (!Object.hasOwn(create, column) || create[column] === undefined) &&
           isAutoIncrementColumn(context.contract, namespaceId, tableName, column),
       ),
   );

@@ -23,7 +23,9 @@ export interface InsertedRows {
 
 export function generatedKeyColumn(options: InsertedRows): string | undefined {
   const { context, namespaceId, tableName, modelName, rows, method, columns } = options;
-  const [column, ...others] = columns.filter((key) => !rows.every((row) => row[key] !== undefined));
+  const [column, ...others] = columns.filter(
+    (key) => !rows.every((row) => Object.hasOwn(row, key) && row[key] !== undefined),
+  );
   if (column === undefined) {
     return undefined;
   }
