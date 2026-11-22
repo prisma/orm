@@ -31,11 +31,11 @@ The application code names only published packages. `package.json` and `tsconfig
 
 - Replace each `workspace:` version (`@prisma/orm-postgres`, `@prisma/better-auth-adapter`) with one published version, the same for both.
 - Replace each `catalog:` version with a version from the registry.
-- Replace `@repo/prisma-bin`, which provides the `prisma` command here, with the `prisma` package. Keep `@prisma/cli-engine`, at the version `prisma` asks for as its peer. These two are what `prisma orm init` installs.
+- Replace `@repo/prisma-bin`, which provides the `prisma` command here, with the `prisma` package. Keep `@prisma/cli-engine`, at the version `prisma` names. These two are what `prisma orm init` installs.
 - Replace `"extends": ["@repo/tsconfig/base"]` in `tsconfig.json` with your own compiler options, for example the ones `create-next-app` writes, and remove the `@repo/tsconfig` dependency.
 - Remove `@repo/test-utils`, `@prisma/dev`, `vitest`, `pathe`, `test/` and `vitest.config.ts`, which only the smoke test uses.
 - Remove `biome.jsonc`, the `lint` script and `turbo.json`, which belong to this repository's tooling.
-- Remove `migrations/` from `.gitignore`. `prisma db init` writes that folder, and your project should commit it; this repository leaves it out so that running the example changes no tracked file.
+- Remove `migrations/` and `AGENTS.md` from `.gitignore`. `prisma db init` writes the folder and `next dev` writes the file, and your project should commit both; this repository leaves them out so that running the example changes no tracked file.
 
 ## Add a Better Auth plugin
 
