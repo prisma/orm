@@ -121,7 +121,7 @@ describe('checkRunPolicies', () => {
 
     expect(recovery).not.toContain('migration plan');
     expect(recovery).toBe(
-      `No migration can be planned to move it. The database is at \`production\`, but no migration on disk provides the invariants "indexed", "seeded" it requires and the database does not record, and a plan from a contract to itself is empty. Write a migration from that contract to itself with \`{bin} migration new --from ${TARGET}\`, add to its migration.ts a \`dataTransform\` for each of the invariants "indexed", "seeded", with that invariant as its \`invariantId\`, run \`node <migration directory>/migration.ts\` for its directory, and apply it with \`{bin} db migrate --to production --permit-policy-change\`.`,
+      `The database is at \`production\`, but no migration on disk provides the invariants "indexed", "seeded" it requires and the database does not record, and a plan from a contract to itself is empty. Write a migration from that contract to itself with \`{bin} migration new --from ${TARGET}\`, add to its migration.ts a \`dataTransform\` for each of the invariants "indexed", "seeded", with that invariant as its \`invariantId\`, run \`node <migration directory>/migration.ts\` for its directory, and apply it with \`{bin} db migrate --to production --permit-policy-change\`.`,
     );
   });
 
@@ -137,8 +137,8 @@ describe('checkRunPolicies', () => {
       }),
     );
 
-    expect(recovery).toContain(
-      `Emit that contract with \`{bin} contract emit\` from a contract source that describes it, then write a migration from it to itself with \`{bin} migration new --from ${ORIGIN}\`, add to its migration.ts a \`dataTransform\` with \`invariantId\` "seeded",`,
+    expect(recovery).toBe(
+      `The database is at \`staging\`, but no migration on disk provides the invariant "seeded" it requires and the database does not record, and a plan from a contract to itself is empty. Change your contract source so it describes \`staging\` and run \`{bin} contract emit\`, then write a migration from that contract to itself with \`{bin} migration new --from ${ORIGIN}\`. Then change your contract source back and run \`{bin} contract emit\` again, because \`db update\` and \`migration plan\` target the emitted contract. Then add to the new migration's migration.ts a \`dataTransform\` with \`invariantId\` "seeded", run \`node <migration directory>/migration.ts\` for its directory, and apply it with \`{bin} db migrate --to staging\`.`,
     );
   });
 

@@ -454,7 +454,7 @@ describe('db update --to <ref> refused on a database at the ref contract that la
     'says to emit the ref contract before migration new when the emitted contract is %s',
     async (_, emittedContractHash) => {
       expect(await refused(emittedContractHash)).toContain(
-        `Emit that contract with \`{bin} contract emit\` from a contract source that describes it, then write a migration from it to itself with \`{bin} migration new --from ${DESTINATION_HASH}\`, add to its migration.ts`,
+        `Change your contract source so it describes \`production\` and run \`{bin} contract emit\`, then write a migration from that contract to itself with \`{bin} migration new --from ${DESTINATION_HASH}\`. Then change your contract source back and run \`{bin} contract emit\` again, because \`db update\` and \`migration plan\` target the emitted contract. Then add to the new migration's migration.ts`,
       );
     },
   );

@@ -114,14 +114,15 @@ export function errorChangePolicyForbids(args: {
         : [],
   );
   const way = printedWayToTarget(invocation, args.migrationPlan, [], migrate);
+  const atTarget =
+    way.kind === 'at-target' ||
+    args.migrationPlan.migrationsToTarget?.kind === 'at-target-missing-invariants';
   const recovery =
     way.kind === 'on-disk'
       ? `${way.text}.`
-      : way.kind === 'at-target'
-        ? `${way.reason}.`
-        : way.kind === 'none'
-          ? `No migration can be planned to move it. ${way.reason}.`
-          : `Author a migration with ${quotedPlan(way)}, ${way.afterPlan}.`;
+      : way.kind === 'none' || way.kind === 'at-target'
+        ? `${atTarget ? '' : 'No migration can be planned to move it. '}${way.reason}.`
+        : `Author a migration with ${quotedPlan(way)}, ${way.afterPlan}.`;
   return new ActionableCliError(
     'MIGRATION.CHANGE_POLICY_FORBIDS',
     `${policyHolder} permits only migrations`,

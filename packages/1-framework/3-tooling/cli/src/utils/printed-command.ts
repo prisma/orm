@@ -206,9 +206,11 @@ export function printedWayToTarget(
     }
     case 'at-target-missing-invariants': {
       const { missingInvariants, newMigration } = migrations;
+      const finish = (migrationTs: string) =>
+        `add to ${migrationTs} ${transformsText(missingInvariants)}, run \`${writtenMigrationRunCommand(invocation)}\` for its directory, and apply it with \`${apply}\``;
       return {
         kind: 'none',
-        reason: `The database is at ${target}, but no migration on disk provides ${invariantsText(missingInvariants)} it requires and the database does not record, and a plan from a contract to itself is empty. ${selfMigrationText(invocation, newMigration)}, add to its migration.ts ${transformsText(missingInvariants)}, run \`${writtenMigrationRunCommand(invocation)}\` for its directory, and apply it with \`${apply}\``,
+        reason: `The database is at ${target}, but no migration on disk provides ${invariantsText(missingInvariants)} it requires and the database does not record, and a plan from a contract to itself is empty. ${selfMigrationText(invocation, target, newMigration, finish)}`,
       };
     }
     case 'plan-needed': {
@@ -225,16 +227,25 @@ export function printedWayToTarget(
   }
 }
 
-/** How to write a migration from the contract the database is at to itself. */
+/**
+ * How to write a migration from `target`, the contract the database is at, to itself, then
+ * `finish` it, given the words that name its migration.ts.
+ */
 function selfMigrationText(
   invocation: CliInvocation | undefined,
+  target: string,
   newMigration: { readonly from: string; readonly emitFirst: boolean } | undefined,
+  finish: (migrationTs: string) => string,
 ): string {
-  if (newMigration === undefined) return 'Write a migration from that contract to itself';
+  if (newMigration === undefined) {
+    return `Write a migration from that contract to itself, ${finish('its migration.ts')}`;
+  }
   const command = `\`${cliCommand(invocation, 'migration new', ['--from', newMigration.from])}\``;
-  return newMigration.emitFirst
-    ? `Emit that contract with \`${cliCommand(invocation, 'contract emit')}\` from a contract source that describes it, then write a migration from it to itself with ${command}`
-    : `Write a migration from that contract to itself with ${command}`;
+  if (!newMigration.emitFirst) {
+    return `Write a migration from that contract to itself with ${command}, ${finish('its migration.ts')}`;
+  }
+  const emit = `\`${cliCommand(invocation, 'contract emit')}\``;
+  return `Change your contract source so it describes ${target} and run ${emit}, then write a migration from that contract to itself with ${command}. Then change your contract source back and run ${emit} again, because \`db update\` and \`migration plan\` target the emitted contract. Then ${finish("the new migration's migration.ts")}`;
 }
 
 function targetText(to: MigrationPlanTargetArgument): string {
