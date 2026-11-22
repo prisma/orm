@@ -149,7 +149,7 @@ export function computeRefAdvancementName(options: {
 }
 ```
 
-**Rationale:** `db init` and `db update` exist to reconcile the **project dev database** with the emitted contract. Advancing a local ref (default `db`) is part of what those commands *mean*. `migrate` is generic — deploy, CI apply, rollback rehearsal — and must not infer dev-state intent. A plain `migrate` leaves the `db` ref unchanged; the live marker advances while the ref may lag until the developer runs `db update` (no-op on DB when already current) or `migrate --advance-ref db`.
+**Rationale:** (The part about `migrate` is superseded by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md).) `db init` and `db update` exist to reconcile the **project dev database** with the emitted contract. Advancing a local ref (default `db`) is part of what those commands *mean*. `migrate` is generic — deploy, CI apply, rollback rehearsal — and must not infer dev-state intent. A plain `migrate` leaves the `db` ref unchanged; the live marker advances while the ref may lag until the developer runs `db update` (no-op on DB when already current) or `migrate --advance-ref db`.
 
 `db` is a **default name**, not a reserved or magic ref. The framework overwrites `db` on the next dev cycle; users may `ref set db <hash>` and accept that a subsequent `db update` replaces it. No ref names are protected.
 
@@ -166,7 +166,7 @@ export function computeRefAdvancementName(options: {
 ### Negative
 
 - **Extra on-disk files** per ref (two snapshot siblings). Acceptable for the safety of atomic paired writes and offline planning.
-- **`db` ref staleness after plain `migrate`.** Accepted; apply-time drift checks and an explicit `db update` or `migrate --advance-ref db` are the remediation.
+- **`db` ref staleness after plain `migrate`.** (Superseded by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md).) Accepted; apply-time drift checks and an explicit `db update` or `migrate --advance-ref db` are the remediation.
 - **Two-bundle visibility.** Auto-baseline shows two directories in `git status` before commit — intentional transparency, not silent graph extension.
 
 ### Neutral

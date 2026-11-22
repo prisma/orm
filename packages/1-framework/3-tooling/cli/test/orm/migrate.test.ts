@@ -14,6 +14,7 @@ import {
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import { writeRef } from '@internal/migration-tools/refs';
 import { notOk, ok } from '@internal/utils/result';
 import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
@@ -204,6 +205,26 @@ function refsDirOf(cwd: string): string {
   return join(cwd, 'migrations', 'app', 'refs');
 }
 
+async function storeSnapshot(cwd: string, hash: string): Promise<void> {
+  await writeContractSnapshot(join(cwd, 'migrations'), hash, {
+    contractJson: { storage: { storageHash: hash, namespaces: {} } },
+    contractDts: SNAPSHOT_CONTRACT_DTS,
+  });
+}
+
+/** Runs the first next action of the settled result's first diagnostic, as printed. */
+function runSuggestedCommand(cwd: string, json: readonly StreamEvent[]) {
+  const envelope = envelopeOf(json) as {
+    diagnostics: { nextActions: { kind: string; command?: string }[] }[];
+  };
+  const command = envelope.diagnostics[0]?.nextActions.find(
+    (action) => action.kind === 'run-command',
+  )?.command;
+  if (command === undefined) throw new Error('no command to run');
+  const [, ...argv] = command.replaceAll("'", '').split(' ');
+  return harness(ormConfig(cwd)).run([...argv, '--json'], { cwd });
+}
+
 function harness(config: Record<string, unknown>) {
   return createOrmTestCli({ commands, groups: BIN_GROUPS, orm: config });
 }
@@ -282,14 +303,24 @@ describe('migrate', () => {
         ok: true,
         diagnostics: [
           {
-            code: 'MIGRATION.MIGRATE_REF_NOT_ADVANCED_IN_CI',
+            code: 'MIGRATION.REF_NOT_ADVANCED_IN_CI',
             severity: 'info',
-            summary: 'Ref "db" was not advanced, because the CLI detected that it runs in CI',
+            summary: 'Ref "db" was not advanced: the CLI detected CI',
+            why: expect.stringContaining('--no-advance-ref silences this notice'),
             nextActions: [
               {
+                kind: 'user-choice',
+                label:
+                  'If this is your development machine and not CI: unset the variable that made the CLI detect CI, or set CI=false, so later runs advance the db ref',
+              },
+              {
                 kind: 'run-command',
-                label: 'Advance ref "db" in CI too',
+                label: 'If this is your development machine and not CI: advance ref "db" now',
                 command: 'prisma-test db migrate --advance-ref db',
+              },
+              {
+                kind: 'user-choice',
+                label: 'In a pipeline: pass --no-advance-ref to silence this notice',
               },
             ],
           },
@@ -307,7 +338,7 @@ describe('migrate', () => {
 
       expect(run.presented?.data).toMatchObject({ advancedRef: null });
       expect(envelopeOf(run.json)).toMatchObject({
-        diagnostics: [{ code: 'MIGRATION.MIGRATE_REF_NOT_ADVANCED_IN_CI' }],
+        diagnostics: [{ code: 'MIGRATION.REF_NOT_ADVANCED_IN_CI' }],
       });
     });
 
@@ -320,9 +351,7 @@ describe('migrate', () => {
       });
 
       const stderr = stripAnsi(run.stderr);
-      expect(stderr).toContain(
-        'Ref "db" was not advanced, because the CLI detected that it runs in CI',
-      );
+      expect(stderr).toContain('Ref "db" was not advanced: the CLI detected CI');
       expect(stderr).toContain('prisma-test db migrate --advance-ref db');
     });
 
@@ -365,7 +394,7 @@ describe('migrate', () => {
       expect(envelopeOf(run.json)).toMatchObject({
         diagnostics: [
           {
-            code: 'MIGRATION.MIGRATE_REF_NOT_WRITTEN',
+            code: 'MIGRATION.REF_NOT_WRITTEN',
             meta: { name: 'db', hash: C1, causeCode: 'MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH' },
           },
         ],
@@ -429,15 +458,15 @@ describe('migrate', () => {
         ok: true,
         diagnostics: [
           {
-            code: 'MIGRATION.MIGRATE_REF_NOT_WRITTEN',
+            code: 'MIGRATION.REF_NOT_WRITTEN',
             severity: 'warn',
             summary: 'Migrations applied, but ref "db" was not written',
             why: expect.stringContaining('EACCES'),
             nextActions: [
               {
                 kind: 'run-command',
-                label: 'Point ref "db" at the contract the database is at',
-                command: `prisma-test migration ref set db ${C2} --config prisma.config.ts`,
+                label: 'Write ref "db" and its snapshot once the directory is writable',
+                command: 'prisma-test db migrate --advance-ref db --config prisma.config.ts',
               },
             ],
             meta: { name: 'db', hash: C2, causeCode: 'EACCES' },
@@ -445,6 +474,139 @@ describe('migrate', () => {
         ],
       });
       expect(await dbRefHash(cwd)).toBeUndefined();
+
+      const suggested = await runSuggestedCommand(cwd, run.json);
+      expect(suggested.exitCode).toBe(0);
+      expect(await dbRefHash(cwd)).toBe(C2);
+    });
+
+    it('suggests migration ref set when the snapshot was already stored, and that command works', async () => {
+      const cwd = await buildProject();
+      await storeSnapshot(cwd, C2);
+      await mkdir(refsDirOf(cwd), { recursive: true });
+      await chmod(refsDirOf(cwd), 0o555);
+
+      const run = await harness(ormConfig(cwd))
+        .run(['db', 'migrate', '--json'], { cwd })
+        .finally(() => chmod(refsDirOf(cwd), 0o755));
+
+      expect(envelopeOf(run.json)).toMatchObject({
+        diagnostics: [
+          {
+            code: 'MIGRATION.REF_NOT_WRITTEN',
+            nextActions: [{ command: `prisma-test migration ref set db ${C2}` }],
+          },
+        ],
+      });
+      const suggested = await runSuggestedCommand(cwd, run.json);
+      expect(suggested.exitCode).toBe(0);
+      expect(await dbRefHash(cwd)).toBe(C2);
+    });
+
+    it('warns when the store has no snapshot for the hash the database ended at', async () => {
+      const cwd = await buildProject();
+      await storeSnapshot(cwd, C2);
+      mocks.migrate.mockResolvedValue(ok({ ...appliedSuccess(), markerHash: C1 }));
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
+
+      expect(run.exitCode).toBe(0);
+      expect(envelopeOf(run.json)).toMatchObject({
+        diagnostics: [
+          {
+            code: 'MIGRATION.REF_NOT_WRITTEN',
+            why: expect.stringContaining(`the snapshot store holds no contract for ${C1}`),
+          },
+        ],
+      });
+      expect(await dbRefHash(cwd)).toBeUndefined();
+    });
+
+    it('refuses an invalid ref name before applying when the snapshot is already stored', async () => {
+      const cwd = await buildProject();
+      await storeSnapshot(cwd, C2);
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--advance-ref', 'bad ref name', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run.json)).toMatchObject({
+        ok: false,
+        error: { code: 'MIGRATION.INVALID_REF_NAME' },
+      });
+      expect(mocks.migrate).not.toHaveBeenCalled();
+    });
+
+    describe('when the run brings the database to the empty contract', () => {
+      async function projectWithDbRef(): Promise<string> {
+        const cwd = await buildProject();
+        await writeRef(refsDirOf(cwd), 'db', { hash: C2, invariants: [] });
+        mocks.migrate.mockResolvedValue(ok({ ...appliedSuccess(), markerHash: EMPTY }));
+        return cwd;
+      }
+
+      it('leaves db unchanged and says how to remove it', async () => {
+        const cwd = await projectWithDbRef();
+
+        const run = await harness(ormConfig(cwd)).run(
+          ['db', 'migrate', '--to', '@empty', '--json'],
+          { cwd },
+        );
+
+        expect(run.exitCode).toBe(0);
+        expect(run.presented?.data).toMatchObject({ advancedRef: null });
+        expect(await dbRefHash(cwd)).toBe(C2);
+        expect(envelopeOf(run.json)).toMatchObject({
+          diagnostics: [
+            {
+              code: 'MIGRATION.REF_NOT_ADVANCED_TO_EMPTY',
+              severity: 'info',
+              nextActions: [
+                { kind: 'run-command', command: 'prisma-test migration ref delete db' },
+              ],
+            },
+          ],
+        });
+        const suggested = await runSuggestedCommand(cwd, run.json);
+        expect(suggested.exitCode).toBe(0);
+        expect(await dbRefHash(cwd)).toBeUndefined();
+      });
+
+      it('says why in CI too, and not that CI was the reason', async () => {
+        const cwd = await projectWithDbRef();
+
+        const run = await harness(ormConfig(cwd)).run(
+          ['db', 'migrate', '--to', '@empty', '--json'],
+          { cwd, env: { CI: 'true' } },
+        );
+
+        expect(envelopeOf(run.json)).toMatchObject({
+          diagnostics: [{ code: 'MIGRATION.REF_NOT_ADVANCED_TO_EMPTY' }],
+        });
+        expect(JSON.stringify(run.json)).not.toContain('MIGRATION.REF_NOT_ADVANCED_IN_CI');
+      });
+
+      it('refuses --advance-ref before applying', async () => {
+        const cwd = await projectWithDbRef();
+
+        const run = await harness(ormConfig(cwd)).run(
+          ['db', 'migrate', '--to', '@empty', '--advance-ref', 'staging', '--json'],
+          { cwd },
+        );
+
+        expect(run.exitCode).toBe(2);
+        expect(envelopeOf(run.json)).toMatchObject({
+          ok: false,
+          error: {
+            code: 'MIGRATION.REF_TARGET_EMPTY',
+            nextActions: [{ command: 'prisma-test db migrate --to @empty --no-advance-ref' }],
+          },
+        });
+        expect(mocks.migrate).not.toHaveBeenCalled();
+        expect(await dbRefHash(cwd)).toBe(C2);
+      });
     });
   });
 

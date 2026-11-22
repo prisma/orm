@@ -1829,14 +1829,6 @@ A warning diagnostic (not a hard failure) in `migration status`: the database's 
 
 Runner-level failure during apply: the plan asserts an origin contract, but the database marker is missing, or its storage hash (or profile hash) differs from the plan's origin: the database is not at the state the plan was computed from. Re-plan from the database's actual state. `db init`, `db update` and `db migrate` report it with this code. Payload: `expectedOriginStorageHash` plus `markerStorageHash`/`markerProfileHash` depending on the branch.
 
-### MIGRATION.MIGRATE_REF_NOT_ADVANCED_IN_CI
-
-An `info` diagnostic on a successful `db migrate` that took its connection from `prisma.config.ts` and was given neither `--advance-ref` nor `--no-advance-ref`: the `db` ref was not advanced only because the CLI detected that it runs in CI. The CLI detects CI when the `CI` environment variable is set to anything but `false`, or when a variable that CI services set is present, such as `BUILD_NUMBER`, `BUILD_ID` or `GITHUB_ACTIONS`. On a developer's machine, a shell or `.env` that sets one of these turns advancement off, and this diagnostic is how that shows. The next action is the same `db migrate` with `--advance-ref db`; outside CI, unsetting the variable or setting `CI=false` restores the default. Payload: none.
-
-### MIGRATION.MIGRATE_REF_NOT_WRITTEN
-
-A warning diagnostic on a successful `db migrate`: the migrations applied, but the ref the command advances afterwards (`db`, or the name given with `--advance-ref`) or its contract snapshot could not be written, for example because the refs directory is on a read-only filesystem. The command exits 0, because the database has already moved and failing would tell a pipeline to retry an apply that happened. The JSON document's `advancedRef` is `null`. The next action is `migration ref set <name> <hash>`, which writes the ref at the contract the database is at once the directory is writable. Payload: `name`, `hash`, `reason`, and `causeCode`, the code of the error that stopped the write when it had one: a Prisma code such as `MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH`, or a system error code such as `EACCES`.
-
 ### MIGRATION.MISSING_INVARIANTS
 
 A diagnostic in `migration status`: the active ref requires data invariants that the database marker does not record as provided. If no path through the graph can supply them, status escalates to `MIGRATION.NO_INVARIANT_PATH`. Payload: `ref` (when a ref is active), `invariants` (the missing ids).
@@ -1945,6 +1937,14 @@ A contract or migration reference prefix matches more than one candidate (raised
 
 A contract or migration reference is syntactically invalid: it is not a hash, ref name, or migration directory name in any accepted form (raised by the shared ref-resolution mapper). Payload: `input`.
 
+### MIGRATION.REF_NOT_ADVANCED_IN_CI
+
+An `info` diagnostic on a successful `db migrate` that took its connection from `prisma.config.ts`, was given neither `--advance-ref` nor `--no-advance-ref`, and did not bring the database to the empty contract: the `db` ref was not advanced only because the CLI detected that it runs in CI. The CLI detects CI when the `CI` environment variable is set to anything but `false`, or when a variable that CI services set is present, such as `BUILD_NUMBER`, `BUILD_ID` or `GITHUB_ACTIONS`; the diagnostic cannot name which one, because the CLI engine does not report it. In a pipeline the notice is expected, and `--no-advance-ref` silences it. On a developer's machine, a variable in their shell, or in a `.env` file that `prisma.config.ts` loads (for example with `import 'dotenv/config'`, which `prisma orm init` writes), can set one of these, and this notice is how that shows. Its next actions are for that developer: unset the variable or set `CI=false`, or advance the ref now with the same `db migrate` and `--advance-ref db`; the last says to pass `--no-advance-ref` in a pipeline. Payload: none.
+
+### MIGRATION.REF_NOT_ADVANCED_TO_EMPTY
+
+An `info` diagnostic on a successful `db migrate` that took its connection from `prisma.config.ts` and was given neither `--advance-ref` nor `--no-advance-ref`, when the run brought the database to the empty contract, for example `db migrate --to @empty`. A ref cannot name the empty contract, so `db migrate` neither moved the `db` ref nor deleted it; if it exists, it still names the contract the database was at before. The next action is `migration ref delete db`, for a development database: with no `db` ref, the next `migration plan` asks where to start instead of starting from a contract the database is not at. The diagnostic is reported in CI too, instead of `MIGRATION.REF_NOT_ADVANCED_IN_CI`. Payload: none.
+
 ### MIGRATION.REF_NOT_FOUND
 
 A contract or migration reference does not resolve: no matching hash, ref name, or migration directory name exists in the migration graph or refs index (raised by the shared ref-resolution mapper used across CLI commands). Payload: `input`, `grammar`.
@@ -1953,6 +1953,10 @@ A contract or migration reference does not resolve: no matching hash, ref name, 
 
 A ref name resolves to nothing: no pointer file with that name exists, and the fallback hash is not a node in the migration graph either, so there is no contract to materialize. Create the ref with `migration ref set`, advance it via `db update --advance-ref`, or pass a graph-node hash. Payload: `refName`, `identifier`.
 
+### MIGRATION.REF_NOT_WRITTEN
+
+A warning diagnostic on a successful `db migrate`: the migrations applied, but the ref the command advances afterwards (`db`, or the name given with `--advance-ref`) or its contract snapshot could not be written, for example because the refs directory is on a read-only filesystem, or because the snapshot store holds no contract for the hash the database ended at. The command exits 0, because the database has already moved and failing would tell a pipeline to retry an apply that happened. The JSON document's `advancedRef` is `null`. The next action depends on whether the store already held the snapshot. If it did, it is `migration ref set <name> <hash>`. If this run was to write the snapshot too, `migration ref set` would refuse for lack of it, so the next action is the same `db migrate` with `--advance-ref <name>`: the database is already at the target, so it applies nothing and writes both. Either runs once the directory is writable. Payload: `name`, `hash`, `reason`, and `causeCode`, the code of the error that stopped the write when it had one: a Prisma code such as `MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH`, or a system error code such as `EACCES`.
+
 ### MIGRATION.REF_SET_BUNDLE_NOT_FOUND
 
 `migration ref set` resolved the given hash to a graph node, but no on-disk migration bundle has that hash as its destination, so the ref would point at a node with no backing package. Re-emit the migration that produces this hash. Payload: `hash`.
@@ -1960,6 +1964,10 @@ A ref name resolves to nothing: no pointer file with that name exists, and the f
 ### MIGRATION.REF_SET_EMPTY_SENTINEL
 
 `migration ref set` was asked to point a ref at the empty-database sentinel hash, which is a planner internal and not a valid ref target. Use a real contract hash from the migration graph. Payload: `hash`.
+
+### MIGRATION.REF_TARGET_EMPTY
+
+`db migrate --advance-ref <name>` would bring the database to the empty contract, for example with `--to @empty`, and a ref cannot name the empty contract. The command refuses before it applies anything, since the ref could never be written. The next action is the same `db migrate` with `--no-advance-ref` in place of `--advance-ref`. Payload: `name`.
 
 ### MIGRATION.REF_WRONG_GRAMMAR
 
