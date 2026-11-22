@@ -12,7 +12,7 @@ import { blue, bold, cyan, dim, magenta, red, underline } from 'kleur/colors'
 import pRetry from 'p-retry'
 import semver from 'semver'
 
-import { getNextMinorStable, getPackageDistTag, getPublishChannel } from './publish-channel'
+import { getNextMinorStable, getPackageDistTag, getPublishChannel, parseCustomDistTag } from './publish-channel'
 
 const onlyPackages = process.env.ONLY_PACKAGES ? process.env.ONLY_PACKAGES.split(',') : null
 const skipPackages = process.env.SKIP_PACKAGES ? process.env.SKIP_PACKAGES.split(',') : null
@@ -582,8 +582,8 @@ async function publish() {
   }
 
   if (args['--custom-dist-tag']) {
-    console.log(`Using custom dist tag: ${args['--custom-dist-tag']}`)
-    tag = args['--custom-dist-tag']
+    tag = parseCustomDistTag(args['--custom-dist-tag'])
+    console.log(`Using custom dist tag: ${tag}`)
   }
   const publishesPrisma = (args['--publish'] || dryRun) && !isSkipped('prisma')
   const prismaTag = publishesPrisma ? getPackageDistTag('prisma', tag) : undefined

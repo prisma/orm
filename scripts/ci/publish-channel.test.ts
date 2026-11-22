@@ -7,6 +7,7 @@ import {
   getNextMinorStable,
   getPackageDistTag,
   getPublishChannel,
+  parseCustomDistTag,
   type PublishChannel,
   type PublishChannelInput,
 } from './publish-channel'
@@ -72,6 +73,23 @@ describe('getPackageDistTag', () => {
   for (const tag of ['dev', 'next']) {
     test(`refuses to publish prisma under ${tag}`, () => {
       assert.throws(() => getPackageDistTag('prisma', tag), /prisma\/prisma-cli owns it.*"prev-dev"/)
+    })
+  }
+})
+
+describe('parseCustomDistTag', () => {
+  test('removes the whitespace a shell would drop', () => {
+    assert.equal(parseCustomDistTag(' next'), 'next')
+    assert.equal(parseCustomDistTag('dev '), 'dev')
+  })
+
+  test('a padded prisma-cli tag is still refused for prisma', () => {
+    assert.throws(() => getPackageDistTag('prisma', parseCustomDistTag(' dev ')), /prisma\/prisma-cli owns it/)
+  })
+
+  for (const input of ['', 'my tag', 'Dev', 'dev;next', '--tag']) {
+    test(`refuses ${JSON.stringify(input)}`, () => {
+      assert.throws(() => parseCustomDistTag(input), /not a usable npm dist-tag/)
     })
   }
 })

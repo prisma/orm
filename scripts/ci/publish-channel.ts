@@ -62,6 +62,18 @@ export function getPackageDistTag(pkgName: string, tag: string): string {
 }
 
 /**
+ * Returns a custom dist-tag as npm will receive it. The tag reaches `pnpm publish --tag` through a shell, which drops
+ * surrounding whitespace, so ` dev` would pass a comparison with `dev` and still publish under it.
+ */
+export function parseCustomDistTag(input: string): string {
+  const tag = input.trim()
+  if (!/^[a-z][a-z0-9._-]*$/.test(tag)) {
+    throw new Error(`"${input}" is not a usable npm dist-tag: use lowercase letters, digits, ".", "_" and "-".`)
+  }
+  return tag
+}
+
+/**
  * Returns the next minor after the highest stable Prisma 7 version in `publishedVersions`, e.g. `7.10.1` -> `7.11.0`.
  * Reads the version list rather than a dist-tag, because a release from an older patch branch moves `prev` back.
  */
