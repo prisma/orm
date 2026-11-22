@@ -116,7 +116,7 @@ function layoutFix(
   const spaceDir = `\`${migrationsDir}/<space>/\``;
   return [
     layout.some((v) => v.kind === 'declaredButUnmigrated')
-      ? `Run \`prisma contract emit\` to write the pinned files of each declared extension pack under ${spaceDir}.`
+      ? `Run \`{bin} contract emit\` to write the pinned files of each declared extension pack under ${spaceDir}.`
       : [],
     layout.some((v) => v.kind === 'orphanSpaceDir')
       ? `For a directory no extension declares, declare its extension in \`extensions\` or remove ${spaceDir}.`
