@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs';
-import { readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
 import { readRef, writeRef } from '@internal/migration-tools/refs';
 import { notOk, ok } from '@internal/utils/result';
-import { join } from 'pathe';
+import { dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   advanceRefSafely,
@@ -13,6 +13,7 @@ import {
   computeRefAdvancementName,
   executeRefAdvancement,
   preflightRefAdvancement,
+  writeAdvancedRef,
 } from '../../src/control-api/operations/ref-advancement';
 import type { RenderContractDtsResult } from '../../src/control-api/render-contract-dts';
 import { createTestProjectDir } from '../utils/test-project-dir';
@@ -397,5 +398,32 @@ describe('advanceRefSafely', () => {
       expect(result.failure.toEnvelope()).toEqual(errorInvalidRefName('').toEnvelope());
     }
     expect(existsSync(contractSnapshotDir(migrationsDir, HASH_A))).toBe(false);
+  });
+});
+
+describe('writeAdvancedRef', () => {
+  it('does not report the snapshot as stored when checking the store fails', async () => {
+    const migrationsDir = createTestProjectDir('write-advanced-ref');
+    const looping = contractSnapshotDir(migrationsDir, HASH_A);
+    await mkdir(dirname(looping), { recursive: true });
+    await symlink(looping, looping);
+    const writePointer = vi.fn();
+
+    const written = await writeAdvancedRef(
+      {
+        refsDir: join(migrationsDir, 'app', 'refs'),
+        migrationsDir,
+        name: 'db',
+        hash: HASH_A,
+        snapshot: { kind: 'stored' },
+      },
+      writePointer,
+    );
+
+    expect(written).toMatchObject({
+      ok: false,
+      failure: { causeCode: 'ELOOP', snapshotStored: false },
+    });
+    expect(writePointer).not.toHaveBeenCalled();
   });
 });

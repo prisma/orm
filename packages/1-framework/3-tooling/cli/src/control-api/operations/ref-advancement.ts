@@ -1,6 +1,10 @@
-import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
+import {
+  hasContractSnapshot,
+  writeContractSnapshot,
+} from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
 import { advanceRef, validateRefName } from '@internal/migration-tools/refs';
+import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../../utils/cli-errors';
 import { contractTypesModuleOf } from '../../utils/command-helpers';
@@ -147,5 +151,68 @@ export async function advanceRefSafely(args: {
       return notOk(error);
     }
     throw error;
+  }
+}
+
+/** How a ref's snapshot reaches the store: it is there already, or this run renders it. */
+export type RefSnapshot =
+  | { readonly kind: 'stored' }
+  | { readonly kind: 'render'; readonly contractIR: ContractIR };
+
+export interface RefWriteFailure {
+  readonly reason: string;
+  readonly causeCode: string | undefined;
+  /** Whether the store holds the snapshot for the ref's hash, which `migration ref set` needs. */
+  readonly snapshotStored: boolean;
+}
+
+/** Writes a ref's pointer file; `advanceRef` in production. */
+export type RefPointerWriter = (refsDir: string, name: string, hash: string) => Promise<unknown>;
+
+function refWriteFailure(error: unknown, snapshotStored: boolean): RefWriteFailure {
+  const code = Reflect.get(Object(error), 'code');
+  return {
+    reason: error instanceof Error ? error.message : String(error),
+    causeCode: typeof code === 'string' ? code : undefined,
+    snapshotStored,
+  };
+}
+
+/**
+ * Writes a ref after `db migrate` applied its migrations. Every failure is returned, not thrown:
+ * the database has already moved, so a ref that cannot be written must not fail the run. An
+ * internal error is a bug and goes to the outermost boundary.
+ */
+export async function writeAdvancedRef(
+  args: {
+    readonly refsDir: string;
+    readonly migrationsDir: string;
+    readonly name: string;
+    readonly hash: string;
+    readonly snapshot: RefSnapshot;
+  },
+  writePointer: RefPointerWriter,
+): Promise<Result<void, RefWriteFailure>> {
+  let snapshotStored = false;
+  try {
+    if (args.snapshot.kind === 'render') {
+      const advanced = await advanceRefSafely({ ...args, contractIR: args.snapshot.contractIR });
+      return advanced.ok ? ok(undefined) : notOk(refWriteFailure(advanced.failure, false));
+    }
+    snapshotStored = await hasContractSnapshot(args.migrationsDir, args.hash);
+    if (!snapshotStored) {
+      return notOk({
+        reason: `the snapshot store holds no contract for ${args.hash}`,
+        causeCode: undefined,
+        snapshotStored,
+      });
+    }
+    await writePointer(args.refsDir, args.name, args.hash);
+    return ok(undefined);
+  } catch (error) {
+    if (isInternalError(error)) {
+      throw error;
+    }
+    return notOk(refWriteFailure(error, snapshotStored));
   }
 }

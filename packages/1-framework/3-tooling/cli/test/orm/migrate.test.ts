@@ -26,6 +26,7 @@ import { buildPathNotFoundFailure } from '../../src/control-api/operations/migra
 import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import { createMigrateCommand } from '../../src/orm/migrate';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import { stdoutErrorMeta } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
@@ -529,27 +530,23 @@ describe('migrate', () => {
     it('lets an internal error during the ref write reach the top level', async () => {
       const cwd = await buildProject();
       await storeSnapshot(cwd, C2);
-      vi.resetModules();
-      vi.doMock('@internal/migration-tools/refs', async (importOriginal) => ({
-        ...(await importOriginal<typeof import('@internal/migration-tools/refs')>()),
-        advanceRef: () => Promise.reject(new InternalError('broken invariant')),
-      }));
-      try {
-        const { createBinCommands: freshCommands, BIN_GROUPS: freshGroups } = await import(
-          '../../src/orm/cli'
-        );
-        const run = await createOrmTestCli({
-          commands: freshCommands(() => clientDouble),
-          groups: freshGroups,
-          orm: ormConfig(cwd),
-        }).run(['db', 'migrate', '--json'], { cwd });
+      const failingWriter = () => Promise.reject(new InternalError('broken invariant'));
 
-        expect(run.exitCode).toBe(1);
-        expect(JSON.stringify(run.json)).not.toContain('MIGRATION.REF_NOT_WRITTEN');
-      } finally {
-        vi.doUnmock('@internal/migration-tools/refs');
-        vi.resetModules();
-      }
+      const run = await createOrmTestCli({
+        commands: {
+          ...commands,
+          'db migrate': createMigrateCommand(() => clientDouble, failingWriter),
+        },
+        groups: BIN_GROUPS,
+        orm: ormConfig(cwd),
+      }).run(['db', 'migrate', '--json'], { cwd });
+
+      expect(run.exitCode).toBe(1);
+      expect(envelopeOf(run.json)).toMatchObject({
+        ok: false,
+        error: { code: 'CLI.INTERNAL_ERROR' },
+      });
+      expect(JSON.stringify(run.json)).not.toContain('MIGRATION.REF_NOT_WRITTEN');
     });
 
     it('refuses an invalid ref name before applying when the snapshot is already stored', async () => {

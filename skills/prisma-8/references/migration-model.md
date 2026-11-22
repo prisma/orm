@@ -178,5 +178,5 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 - [ ] In a deploy-first project: baseline authored and committed before the first deploy; every later plan chained via the `db` ref or `--from`.
 - [ ] After each plan in a loop where nothing advances refs: advanced the `db` ref (`migration ref set db <to-hash>`) or resolved to pass `--from` next time.
 - [ ] For a marked database with no on-disk migrations: made the graph reach the marker's hash (auto-baseline via `db update` or `db sign`, or an offline baseline plan) before planning deltas.
-- [ ] Expected `db migrate` to advance `db` only when its connection comes from `prisma.config.ts`, the CLI does not detect CI and neither `--advance-ref` nor `--no-advance-ref` is passed; did NOT expect `migration plan`, `db migrate --db`, or a deploy in CI to advance any ref.
+- [ ] Expected plain `db migrate` to advance `db` only when its connection comes from `prisma.config.ts`, the CLI does not detect CI and neither `--advance-ref` nor `--no-advance-ref` is passed; did NOT expect `migration plan`, `db migrate --db`, or a deploy in CI to advance any ref.
 - [ ] Did NOT apply or commit a `from: (baseline)` plan without confirming the empty origin was the intent.

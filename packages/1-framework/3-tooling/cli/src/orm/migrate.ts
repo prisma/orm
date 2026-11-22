@@ -15,7 +15,6 @@ import { isLiveMarkerRef } from '@internal/migration-tools/ref-resolution';
 import { advanceRef, type RefEntry, validateRefName } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { isInternalError } from '@internal/utils/internal-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type {
@@ -41,9 +40,11 @@ import {
   type MigrateShowMigration,
 } from '../control-api/operations/migrate-show';
 import {
-  advanceRefSafely,
-  type ContractIR,
   preflightRefAdvancement,
+  type RefPointerWriter,
+  type RefSnapshot,
+  type RefWriteFailure,
+  writeAdvancedRef,
 } from '../control-api/operations/ref-advancement';
 import {
   type RefResolutionContext,
@@ -164,62 +165,6 @@ function refAdvancementDecision(
     return { kind: 'none', reason: 'empty-target' };
   }
   return inCI ? { kind: 'none', reason: 'ci' } : { kind: 'advance', name: DEFAULT_ADVANCE_REF };
-}
-
-/** How the ref's snapshot reaches the store: it is there already, or this run renders it. */
-type RefSnapshot =
-  | { readonly kind: 'stored' }
-  | { readonly kind: 'render'; readonly contractIR: ContractIR };
-
-interface RefWriteFailure {
-  readonly reason: string;
-  readonly causeCode: string | undefined;
-  /** Whether the store holds the snapshot for the ref's hash, which `migration ref set` needs. */
-  readonly snapshotStored: boolean;
-}
-
-function refWriteFailure(error: unknown, snapshotStored: boolean): RefWriteFailure {
-  const code = Reflect.get(Object(error), 'code');
-  return {
-    reason: error instanceof Error ? error.message : String(error),
-    causeCode: typeof code === 'string' ? code : undefined,
-    snapshotStored,
-  };
-}
-
-/**
- * Writes the ref after the migrations have applied. Every failure is returned, not thrown: the
- * database has already moved, so a ref that cannot be written must not fail the run. An internal
- * error is a bug and goes to the outermost boundary.
- */
-async function writeAdvancedRef(args: {
-  readonly refsDir: string;
-  readonly migrationsDir: string;
-  readonly name: string;
-  readonly hash: string;
-  readonly snapshot: RefSnapshot;
-}): Promise<Result<void, RefWriteFailure>> {
-  const snapshotStored = args.snapshot.kind === 'stored';
-  try {
-    if (args.snapshot.kind === 'render') {
-      const advanced = await advanceRefSafely({ ...args, contractIR: args.snapshot.contractIR });
-      return advanced.ok ? ok(undefined) : notOk(refWriteFailure(advanced.failure, false));
-    }
-    if (!(await hasContractSnapshot(args.migrationsDir, args.hash))) {
-      return notOk({
-        reason: `the snapshot store holds no contract for ${args.hash}`,
-        causeCode: undefined,
-        snapshotStored: false,
-      });
-    }
-    await advanceRef(args.refsDir, args.name, args.hash);
-    return ok(undefined);
-  } catch (error) {
-    if (isInternalError(error)) {
-      throw error;
-    }
-    return notOk(refWriteFailure(error, snapshotStored));
-  }
 }
 
 /**
@@ -442,7 +387,10 @@ function liveMarkerTarget(appMarker: { readonly storageHash: string } | null): R
   return { entry: { hash: contractHashAtMarker(appMarker), invariants: [] }, refName: undefined };
 }
 
-export function createMigrateCommand(createClient: CreateControlClient) {
+export function createMigrateCommand(
+  createClient: CreateControlClient,
+  writeRefPointer: RefPointerWriter = advanceRef,
+) {
   return defineOrmCommand({
     help: {
       summary: 'Apply planned migrations to advance the database',
@@ -782,12 +730,15 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         const invocation = cliInvocation(ctx, args.flags.db);
         if (advancement !== null) {
           const ref = { name: advancement.name, hash: value.markerHash };
-          const written = await writeAdvancedRef({
-            refsDir,
-            migrationsDir,
-            ...ref,
-            snapshot: advancement.snapshot,
-          });
+          const written = await writeAdvancedRef(
+            {
+              refsDir,
+              migrationsDir,
+              ...ref,
+              snapshot: advancement.snapshot,
+            },
+            writeRefPointer,
+          );
           if (written.ok) {
             advancedRef = ref;
           } else {
