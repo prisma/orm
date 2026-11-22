@@ -192,6 +192,17 @@ describe('withTransaction when the callback returns', () => {
 });
 
 describe('a transaction from connection.transaction()', () => {
+  it('refuses commit() after rollback() on an untimed transaction', async () => {
+    const setup = createSetup();
+    const connection = await setup.runtime.connection();
+    const transaction = await connection.transaction();
+
+    await transaction.rollback();
+    await expect(transaction.commit()).rejects.toMatchObject(transactionClosed);
+    expect(setup.driver.execute).not.toHaveBeenCalled();
+    await connection.release();
+  });
+
   it.each(['commit', 'rollback'] as const)(
     'refuses a statement sent after %s() is called',
     async (end) => {
