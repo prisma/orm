@@ -85,7 +85,7 @@ describe('checkRunPolicies', () => {
     },
   );
 
-  it('advises authoring a migration for db update --to a ref whose invariant no migration on the path provides', () => {
+  it('advises authoring a migration that provides the invariant for db update --to a ref whose invariant no migration on the path provides', () => {
     expect(
       recoveryOf(
         check({
@@ -97,7 +97,25 @@ describe('checkRunPolicies', () => {
         }),
       ),
     ).toBe(
-      `Author a migration with \`{bin} migration plan --from ${ORIGIN} --to production\`, then apply it with \`{bin} db migrate --to production\`.`,
+      `Author a migration with \`{bin} migration plan --from ${ORIGIN} --to production\`, add a \`dataTransform\` with \`invariantId\` "seeded" to the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, then apply it with \`{bin} db migrate --to production\`.`,
+    );
+  });
+
+  it('prints no migration plan when the database is at the ref contract and lacks an invariant no migration on disk provides', () => {
+    const recovery = recoveryOf(
+      check({
+        command: 'db update',
+        inForce: MIGRATE_ONLY,
+        permitPolicyChange: true,
+        graph: LEADS_TO_TARGET,
+        markerHash: TARGET,
+        ref: { name: 'production', hash: TARGET, invariants: ['seeded', 'indexed'] },
+      }),
+    );
+
+    expect(recovery).not.toContain('migration plan');
+    expect(recovery).toBe(
+      'The database is at this contract, but no migration on disk provides the invariants "indexed", "seeded" it requires and the database does not record. Add a migration from this contract to itself that runs a `dataTransform` with `invariantId` set to each of them, run its migration.ts with `node`, then apply it with `{bin} db migrate --to production --permit-policy-change`.',
     );
   });
 

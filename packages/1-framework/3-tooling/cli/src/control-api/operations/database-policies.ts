@@ -10,10 +10,7 @@ import {
   databasePolicyDifferences,
   withDeclaredDatabasePolicies,
 } from '@internal/framework-components/control';
-import {
-  type ContractMarkerRecordLike,
-  contractHashAtMarker,
-} from '@internal/migration-tools/aggregate';
+import type { ContractMarkerRecordLike } from '@internal/migration-tools/aggregate';
 import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -30,11 +27,10 @@ import {
   errorChangePolicyForbids,
   errorDataProtectionForbids,
   errorPolicyMismatch,
-  type MigrationsToTarget,
   type PolicySource,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
-import { migrationsLeadToTarget, missingInvariants } from './graph-queries';
+import { type MigrationsToTarget, migrationsToTarget, missingInvariants } from './graph-queries';
 import {
   appMigrationPlan,
   type MigrationPlanArguments,
@@ -123,7 +119,7 @@ export function checkRunPolicies(args: {
             ? { kind: 'ref', refName: ref.name }
             : { kind: 'marker' },
         targetHash: args.targetHash,
-        ...migrationsToTarget(args),
+        ...migrationsToRunTarget(args),
         ref:
           ref === undefined
             ? undefined
@@ -137,26 +133,29 @@ export function checkRunPolicies(args: {
 
 /**
  * What a refusal of `db update` or `db sign` advises to move the database to the target through
- * migrations: the `migration plan` that ends there, and whether migrations are needed at all.
+ * migrations: the `migration plan` that ends there, whether migrations are needed at all, and the
+ * invariants the target requires that the database does not record.
  */
-function migrationsToTarget(args: {
+function migrationsToRunTarget(args: {
   readonly app: PlanSpace & { readonly spaceId: string };
   readonly markers: ReadonlyMap<string, ContractMarkerRecordLike | null>;
   readonly ref: NamedRef | undefined;
   readonly targetHash: string;
-}): { readonly migrationPlan: MigrationPlanArguments; readonly migrations: MigrationsToTarget } {
+}): {
+  readonly migrationPlan: MigrationPlanArguments;
+  readonly migrations: MigrationsToTarget;
+  readonly missingInvariants: readonly string[];
+} {
   const { app, markers, ref, targetHash } = args;
   const end: PlanEnd =
     ref === undefined ? { kind: 'contract', hash: targetHash } : { kind: 'ref', name: ref.name };
   const marker = markers.get(app.spaceId);
   const target = { hash: targetHash, invariants: ref?.invariants ?? [] };
-  const migrations: MigrationsToTarget =
-    contractHashAtMarker(marker) === targetHash && missingInvariants(marker, target).size === 0
-      ? 'none-needed'
-      : migrationsLeadToTarget(app.graph, marker, target)
-        ? 'on-disk'
-        : 'missing';
-  return { migrationPlan: appMigrationPlan(app, markers, end), migrations };
+  return {
+    migrationPlan: appMigrationPlan(app, markers, end),
+    migrations: migrationsToTarget(app.graph, marker, target),
+    missingInvariants: [...missingInvariants(marker, target)].sort(),
+  };
 }
 
 /** The data protection levels a checked run obeys: those it records when it consents to a change, otherwise those in force. */

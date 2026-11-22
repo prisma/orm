@@ -6,6 +6,7 @@ import {
   type MigrationDataLossKind,
   movedDatabasePoliciesWhy,
 } from '@internal/framework-components/control';
+import type { MigrationsToTarget } from '../control-api/operations/graph-queries';
 import type { MigrationPlanArguments } from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
@@ -68,6 +69,8 @@ export function errorChangePolicyForbids(args: {
   readonly migrationPlan: MigrationPlanArguments;
   /** Whether the database needs migrations to reach the target, and whether they are on disk. */
   readonly migrations: MigrationsToTarget;
+  /** The invariants the target requires that the database does not record. */
+  readonly missingInvariants?: readonly string[];
   readonly invocation: CliInvocation | undefined;
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;
@@ -116,26 +119,34 @@ export function errorChangePolicyForbids(args: {
         : [],
   );
   const plan = printedPlan(invocation, args.migrationPlan, []);
-  const recovery =
-    args.migrations === 'none-needed'
-      ? 'The database is already at this contract, so there is no migration for `db migrate` to apply.'
-      : args.migrations === 'on-disk'
-        ? `The planned migrations already lead there: apply them with \`${migrate}\`.`
-        : plan.kind === 'none'
+  const missingInvariants = args.missingInvariants ?? [];
+  const invariants = missingInvariants.map((id) => JSON.stringify(id)).join(', ');
+  const provideInvariants =
+    missingInvariants.length === 0
+      ? ''
+      : `, add ${missingInvariants.length === 1 ? `a \`dataTransform\` with \`invariantId\` ${invariants}` : `a \`dataTransform\` for each of the invariants ${invariants}, with that \`invariantId\`,`} to the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints,`;
+  const recovery = ((): string => {
+    switch (args.migrations) {
+      case 'none-needed':
+        return 'The database is already at this contract, so there is no migration for `db migrate` to apply.';
+      case 'on-disk':
+        return `The planned migrations already lead there: apply them with \`${migrate}\`.`;
+      case 'invariants-missing':
+        return missingInvariants.length === 1
+          ? `The database is at this contract, but no migration on disk provides the invariant ${invariants} it requires and the database does not record. Add a migration from this contract to itself that runs a \`dataTransform\` with \`invariantId\` ${invariants}, run its migration.ts with \`node\`, then apply it with \`${migrate}\`.`
+          : `The database is at this contract, but no migration on disk provides the invariants ${invariants} it requires and the database does not record. Add a migration from this contract to itself that runs a \`dataTransform\` with \`invariantId\` set to each of them, run its migration.ts with \`node\`, then apply it with \`${migrate}\`.`;
+      case 'missing':
+        return plan.kind === 'none'
           ? `No migration can be planned to move it. ${plan.reason}.`
-          : `Author a migration with ${quotedPlan(plan)}, then apply it with \`${migrate}\`.`;
+          : `Author a migration with ${quotedPlan(plan)}${provideInvariants === '' ? ',' : provideInvariants} then apply it with \`${migrate}\`.`;
+    }
+  })();
   return new ActionableCliError(
     'MIGRATION.CHANGE_POLICY_FORBIDS',
     `${policyHolder} permits only migrations`,
     { why, fix: recovery, nextActions: [chooseAction(recovery)], meta },
   );
 }
-
-/**
- * Whether a database needs migrations to reach a target: none, because it is already there; ones
- * already on disk; or ones still to author.
- */
-export type MigrationsToTarget = 'none-needed' | 'on-disk' | 'missing';
 
 export type DataProtectionCheckedCommand = 'db migrate' | 'db update' | 'migration plan';
 

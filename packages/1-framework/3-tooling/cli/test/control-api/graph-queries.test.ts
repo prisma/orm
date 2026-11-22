@@ -2,7 +2,7 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { describe, expect, it } from 'vitest';
 import {
   hasMigrationPath,
-  migrationsLeadToTarget,
+  migrationsToTarget,
 } from '../../src/control-api/operations/graph-queries';
 import { buildGraph, entry } from '../utils/graph-helpers';
 
@@ -21,7 +21,7 @@ describe('hasMigrationPath', () => {
   });
 });
 
-describe('migrationsLeadToTarget', () => {
+describe('migrationsToTarget', () => {
   const marker = (storageHash: string, invariants: readonly string[] = []) => ({
     storageHash,
     invariants,
@@ -31,44 +31,50 @@ describe('migrationsLeadToTarget', () => {
     { ...entry(HASH_A, HASH_B, 'm2'), invariants: ['backfill-email'] },
   ]);
 
-  it('is true when a migration path leads from the marker to the target', () => {
-    expect(migrationsLeadToTarget(graph, marker(HASH_A), { hash: HASH_B, invariants: [] })).toBe(
-      true,
+  it('is on-disk when a migration path leads from the marker to the target', () => {
+    expect(migrationsToTarget(graph, marker(HASH_A), { hash: HASH_B, invariants: [] })).toBe(
+      'on-disk',
     );
   });
 
   it('starts a database with no marker at the empty contract', () => {
-    expect(migrationsLeadToTarget(graph, undefined, { hash: HASH_B, invariants: [] })).toBe(true);
+    expect(migrationsToTarget(graph, undefined, { hash: HASH_B, invariants: [] })).toBe('on-disk');
   });
 
-  it('is false when the database is already at the target, where db migrate does nothing', () => {
-    expect(migrationsLeadToTarget(graph, marker(HASH_B), { hash: HASH_B, invariants: [] })).toBe(
-      false,
+  it('needs none when the database is already at the target, where db migrate does nothing', () => {
+    expect(migrationsToTarget(graph, marker(HASH_B), { hash: HASH_B, invariants: [] })).toBe(
+      'none-needed',
     );
   });
 
-  it('is true when the database is at the target and a migration that keeps the contract provides an invariant it lacks', () => {
+  it('is on-disk when the database is at the target and a migration that keeps the contract provides an invariant it lacks', () => {
     const seeds = buildGraph([
       entry(EMPTY_CONTRACT_HASH, HASH_B, 'm1'),
       { ...entry(HASH_B, HASH_B, 'm2'), invariants: ['seeded'] },
     ]);
     expect(
-      migrationsLeadToTarget(seeds, marker(HASH_B), { hash: HASH_B, invariants: ['seeded'] }),
-    ).toBe(true);
+      migrationsToTarget(seeds, marker(HASH_B), { hash: HASH_B, invariants: ['seeded'] }),
+    ).toBe('on-disk');
   });
 
-  it('is false when no path provides an invariant the target requires', () => {
+  it('reports the invariants missing when the database is at the target and no migration provides one it lacks', () => {
     expect(
-      migrationsLeadToTarget(graph, marker(HASH_A), {
+      migrationsToTarget(graph, marker(HASH_B), { hash: HASH_B, invariants: ['seeded'] }),
+    ).toBe('invariants-missing');
+  });
+
+  it('is missing when no path from elsewhere provides an invariant the target requires', () => {
+    expect(
+      migrationsToTarget(graph, marker(HASH_A), {
         hash: HASH_B,
         invariants: ['backfill-email'],
       }),
-    ).toBe(false);
+    ).toBe('missing');
   });
 
   it('counts an invariant a migration on the path provides, or the marker already records', () => {
     const target = { hash: HASH_B, invariants: ['backfill-email', 'seeded'] };
-    expect(migrationsLeadToTarget(withInvariant, marker(HASH_A, ['seeded']), target)).toBe(true);
-    expect(migrationsLeadToTarget(withInvariant, marker(HASH_A), target)).toBe(false);
+    expect(migrationsToTarget(withInvariant, marker(HASH_A, ['seeded']), target)).toBe('on-disk');
+    expect(migrationsToTarget(withInvariant, marker(HASH_A), target)).toBe('missing');
   });
 });

@@ -24,18 +24,24 @@ export function missingInvariants(
 }
 
 /**
- * Whether `db migrate` alone would move a database at `marker` to `target` with the migrations on
- * disk: a path leads there and covers every invariant the target requires that the marker does not
- * record. False when the database is already at the target and records every such invariant, where
- * `db migrate` has nothing to do.
+ * How a database at `marker` reaches `target` through migrations:
+ * - `none-needed`: it is at the target and records every invariant the target requires;
+ * - `on-disk`: a path on disk leads there and provides every such invariant it does not record, so
+ *   `db migrate` alone moves it;
+ * - `invariants-missing`: it is at the target, but no migration on disk provides an invariant it
+ *   lacks, and `migration plan` cannot author one, because a plan from a contract to itself is empty;
+ * - `missing`: a migration still has to be authored.
  */
-export function migrationsLeadToTarget(
+export type MigrationsToTarget = 'none-needed' | 'on-disk' | 'invariants-missing' | 'missing';
+
+export function migrationsToTarget(
   graph: MigrationGraph,
   marker: ContractMarkerRecordLike | null | undefined,
   target: { readonly hash: string; readonly invariants: readonly string[] },
-): boolean {
+): MigrationsToTarget {
   const from = contractHashAtMarker(marker);
   const missing = missingInvariants(marker, target);
-  if (from === target.hash && missing.size === 0) return false;
-  return findPathWithInvariants(graph, from, target.hash, missing) !== null;
+  if (from === target.hash && missing.size === 0) return 'none-needed';
+  if (findPathWithInvariants(graph, from, target.hash, missing) !== null) return 'on-disk';
+  return from === target.hash ? 'invariants-missing' : 'missing';
 }
