@@ -1,22 +1,5 @@
-import type { BetterAuthOptions } from '@better-auth/core';
 import type { DBFieldAttribute } from '@better-auth/core/db';
-
-/**
- * Who gives `id` its value. Better Auth sends a string (`string`) or a UUID string (`uuid`); or it sends none and the contract fills it, with an autoincrement number (`serial`) or with a database default or an `onCreate` generator (`contract`).
- */
-export type IdStrategy = 'string' | 'uuid' | 'serial' | 'contract';
-
-export function idStrategyOf(options: BetterAuthOptions): IdStrategy {
-  const generateId = options.advanced?.database?.generateId;
-  if (generateId === 'serial') return 'serial';
-  if (generateId === 'uuid') return 'uuid';
-  if (generateId === false) return 'contract';
-  return 'string';
-}
-
-export function isIdReference(attribute: DBFieldAttribute): boolean {
-  return attribute.references?.field === 'id';
-}
+import { type IdStrategy, isIdReference } from '../models/better-auth-models';
 
 /** How a Better Auth field is written in PSL, without `?`. */
 export function pslTypeOf(attribute: DBFieldAttribute, idStrategy: IdStrategy): string {
