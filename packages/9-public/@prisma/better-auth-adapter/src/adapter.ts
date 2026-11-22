@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from '@better-auth/core';
-import type { BetterAuthDBSchema } from '@better-auth/core/db';
+import { type BetterAuthDBSchema, getAuthTables } from '@better-auth/core/db';
 import {
   type AdapterFactoryConfig,
   type AdapterFactoryCustomizeAdapterCreator,
@@ -7,6 +7,7 @@ import {
   type CustomAdapter,
   createAdapterFactory,
   type DBAdapter,
+  type DBAdapterSchemaCreation,
   type JoinConfig,
 } from '@better-auth/core/db/adapter';
 import { BetterAuthError } from '@better-auth/core/error';
@@ -14,6 +15,7 @@ import { blindCast } from '@prisma/orm-framework/utils/casts';
 import { betterAuthModels } from './contract/expected-models';
 import { assertFieldName } from './contract/identifiers';
 import type { FoundModel, SqlContract } from './contract/model-lookup';
+import { contractMismatch, createContractCheck, registerContractCheck } from './contract-check';
 import { fieldOf, unsupportedError, whereFilter } from './filters';
 import { moveJoinedRows, planJoins } from './joins';
 import { createModelLookups, type ModelLookups } from './lookups';
@@ -97,6 +99,17 @@ interface RowAdapter {
   updateMany(call: Filtered & { readonly update: Row }): Promise<number>;
   delete(call: Filtered): Promise<void>;
   deleteMany(call: Filtered): Promise<number>;
+  createSchema(call: {
+    readonly file?: string | undefined;
+    readonly tables: BetterAuthDBSchema;
+  }): Promise<DBAdapterSchemaCreation>;
+}
+
+interface AdapterContext {
+  readonly orm: object;
+  readonly contract: SqlContract;
+  readonly lookups: ModelLookups;
+  readonly options: PrismaAdapterOptions;
 }
 
 function asCustomAdapter(adapter: RowAdapter): CustomAdapter {
@@ -107,11 +120,13 @@ function asCustomAdapter(adapter: RowAdapter): CustomAdapter {
 }
 
 /** The calls Better Auth's factory makes, over one ORM client root: the client's or a transaction's. */
-function customAdapter(
-  orm: object,
-  lookups: ModelLookups,
-  usePlural: boolean,
-): AdapterFactoryCustomizeAdapterCreator {
+function customAdapter({
+  orm,
+  contract,
+  lookups,
+  options: adapterOptions,
+}: AdapterContext): AdapterFactoryCustomizeAdapterCreator {
+  const usePlural = adapterOptions.usePlural ?? false;
   return ({ schema, options, getFieldName, debugLog }) => {
     const selections = defaultSelections(schema, options, usePlural);
     const target = (model: string): { found: FoundModel; collection: OrmCollection } => {
@@ -185,6 +200,17 @@ function customAdapter(
         const { found, collection } = target(model);
         return collection.where(whereFilter(found, where)).deleteAndCount();
       },
+      async createSchema({ file, tables }) {
+        const error = contractMismatch({
+          contract,
+          tables,
+          betterAuthOptions: options,
+          namespace: adapterOptions.namespace,
+          usePlural,
+        });
+        if (error !== undefined) throw error;
+        return { code: '', path: file ?? 'prisma/contract.prisma' };
+      },
     };
     return asCustomAdapter(adapter);
   };
@@ -223,7 +249,12 @@ export function prismaAdapter(
 ): (betterAuthOptions: BetterAuthOptions) => DBAdapter<BetterAuthOptions> {
   assertClient(db, options);
   return (betterAuthOptions) => {
-    const lookups = createModelLookups(db.contract, options.namespace);
+    const context: AdapterContext = {
+      orm: db.orm,
+      contract: db.contract,
+      lookups: createModelLookups(db.contract, options.namespace),
+      options,
+    };
     const transaction: AdapterFactoryConfig['transaction'] =
       options.transaction === true
         ? (callback) =>
@@ -231,14 +262,26 @@ export function prismaAdapter(
               callback(
                 createAdapterFactory({
                   config: factoryConfig(options, false),
-                  adapter: customAdapter(tx.orm, lookups, options.usePlural ?? false),
+                  adapter: customAdapter({ ...context, orm: tx.orm }),
                 })(betterAuthOptions),
               ),
             )
         : false;
-    return createAdapterFactory({
+    const adapter = createAdapterFactory({
       config: factoryConfig(options, transaction),
-      adapter: customAdapter(db.orm, lookups, options.usePlural ?? false),
+      adapter: customAdapter(context),
     })(betterAuthOptions);
+    registerContractCheck(
+      adapter,
+      createContractCheck(() => ({
+        contract: db.contract,
+        tables: getAuthTables(betterAuthOptions),
+        betterAuthOptions,
+        namespace: options.namespace,
+        usePlural: options.usePlural ?? false,
+      })),
+      betterAuthOptions,
+    );
+    return adapter;
   };
 }
