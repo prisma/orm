@@ -442,23 +442,32 @@ export function emissionSchemaName(ctx: StrategyContext, ddlSchemaName: string):
  * The generic differ is total: a missing/extra table (or column) emits an
  * issue for itself AND for every node in its subtree. `CreateTable`/`DropTable`
  * and `AddColumn`/`DropColumn` already account for the whole subtree, so the
- * nested issues are redundant — coalescing drops any issue whose path is a
- * strict descendant of a `not-found`/`not-expected` issue's path. Run over the
+ * nested issues are redundant — coalescing drops strict descendants of
+ * missing or extra nodes with children. Run over the
  * relational subset ONLY (policy issues and synthesized namespace issues are
  * handled on their own paths, never coalesced against tables).
  */
 export function coalesceSubtreeIssues<TNode extends DiffableNode = DiffableNode>(
   issues: readonly SchemaDiffIssue<TNode>[],
 ): readonly SchemaDiffIssue<TNode>[] {
-  const collapsingPaths = issues
-    .filter((issue) => issueOutcome(issue) !== 'not-equal')
-    .map((issue) => issue.path);
+  const collapsingIssues = new Set(
+    issues.filter(
+      (issue) =>
+        issueOutcome(issue) !== 'not-equal' &&
+        ((issue.expected ?? issue.actual)?.children().length ?? 0) > 0,
+    ),
+  );
+  const collapsingPaths = [...collapsingIssues].map((issue) => issue.path);
   if (collapsingPaths.length === 0) return issues;
   const isCollapsed = (issue: SchemaDiffIssue<TNode>) =>
     collapsingPaths.some((ancestor) => isStrictDescendantPath(issue.path, ancestor));
   const collapsed = issues.filter(isCollapsed);
   const kept = issues.filter((issue) => !isCollapsed(issue));
-  const inherited = new Map(kept.map((issue) => [issue, subtreeDependencies(issue, collapsed)]));
+  const inherited = new Map(
+    kept
+      .filter((issue) => collapsingIssues.has(issue))
+      .map((issue) => [issue, subtreeDependencies(issue, collapsed)]),
+  );
   const dependsOnTarget = (from: SchemaDiffIssue<TNode>, to: SchemaDiffIssue<TNode>) =>
     (inherited.get(from) ?? []).some((path) => samePath(path, to.path));
   return kept.map((issue) => {
