@@ -3,6 +3,7 @@ import {
   type SchemaDiffIssue,
 } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
+import type { MigrationPlanArguments } from '../../src/control-api/operations/plan-arguments';
 import type { RunnerFailureFacts } from '../../src/control-api/types';
 import {
   errorMigrationHasUnfilledPlaceholders,
@@ -221,8 +222,45 @@ describe('advice that repeats a failed db update', () => {
 });
 
 describe('the db migrate that applies what a failed db update --to advises to plan', () => {
-  const TO_PRODUCTION = { from: reference(FROM), to: reference('production') };
-  const REFUSED: readonly (readonly [string, (invocation: CliInvocation) => string])[] = [
+  const REFUSED = adviceAfterDbUpdate({ from: reference(FROM), to: reference('production') });
+
+  it.each(REFUSED)('keeps the flags the user gave db update: %s', (_, adviceOf) => {
+    const commands = commandsIn(adviceOf(GIVEN), 'db migrate');
+    expect(commands.length).toBeGreaterThan(0);
+    expect(new Set(commands)).toEqual(
+      new Set(['{bin} db migrate --to production --permit-policy-change']),
+    );
+  });
+
+  it.each(REFUSED)('applies to the plan target when the run gave no flags: %s', (_, adviceOf) => {
+    expect(new Set(commandsIn(adviceOf(PROJECT), 'db migrate'))).toEqual(
+      new Set(['{bin} db migrate --to production']),
+    );
+  });
+});
+
+describe('advice after a failed db update --to when migrations on disk already lead there', () => {
+  it.each(
+    adviceAfterDbUpdate({
+      from: reference(FROM),
+      to: reference('production'),
+      migrationsOnDisk: true,
+    }),
+  )('plans no migration beside them, and applies them with the flags given: %s', (_, adviceOf) => {
+    const advice = adviceOf(GIVEN);
+    expect(advice).not.toContain('{bin} migration plan');
+    expect(advice).toContain('Migrations on disk already lead from the database to that contract');
+    expect(new Set(commandsIn(advice, 'db migrate'))).toEqual(
+      new Set(['{bin} db migrate --to production --permit-policy-change']),
+    );
+  });
+});
+
+/** Every piece of advice after a failed db update that prints a `migration plan` to `TO_PRODUCTION`. */
+function adviceAfterDbUpdate(
+  plan: MigrationPlanArguments,
+): readonly (readonly [string, (invocation: CliInvocation) => string])[] {
+  return [
     ...(
       [
         [
@@ -262,7 +300,7 @@ describe('the db migrate that applies what a failed db update --to advises to pl
           kind,
           (invocation: CliInvocation) =>
             dbUpdateRunnerFailureError(failure(), facts, {
-              migrationPlan: TO_PRODUCTION,
+              migrationPlan: plan,
               invocation,
             }).fix ?? '',
         ] as const,
@@ -275,20 +313,20 @@ describe('the db migrate that applies what a failed db update --to advises to pl
           text: 'Status.OLD',
           edits: [{ remove: 'a', replaceWith: 'b' }],
         } as never;
-        return dbUpdateKeepDataEditAdvice(invocation, TO_PRODUCTION)(edited, [edited]).ways.join(
-          ' ',
-        );
+        return dbUpdateKeepDataEditAdvice(invocation, plan)(edited, [edited]).ways.join(' ');
       },
     ],
     [
       'a statement that needs a migration file',
-      (invocation) =>
-        errorStatementNeedsMigrationFile(
+      (invocation) => {
+        const { why, fix } = errorStatementNeedsMigrationFile(
           [{ verb: 'backfill', text: 'User.age' }],
           [{ verb: 'backfill', text: 'User.age' }],
           invocation,
-          TO_PRODUCTION,
-        ).fix ?? '',
+          plan,
+        ).toEnvelope();
+        return `${why ?? ''} ${fix ?? ''}`;
+      },
     ],
     [
       'rewrites the planner asks to write by hand',
@@ -304,7 +342,7 @@ describe('the db migrate that applies what a failed db update --to advises to pl
             [{ kind: 'statementRefused', summary: 's', why: 'w', leaveOut: [rewrite] } as never],
             {
               invocation,
-              migrationPlan: TO_PRODUCTION,
+              migrationPlan: plan,
               statements: [
                 { verb: 'rename', text: 'Status.OLD:Status.NEW' },
                 { verb: 'backfill', text: 'User.age' },
@@ -318,18 +356,4 @@ describe('the db migrate that applies what a failed db update --to advises to pl
       },
     ],
   ];
-
-  it.each(REFUSED)('keeps the flags the user gave db update: %s', (_, adviceOf) => {
-    const commands = commandsIn(adviceOf(GIVEN), 'db migrate');
-    expect(commands.length).toBeGreaterThan(0);
-    expect(new Set(commands)).toEqual(
-      new Set(['{bin} db migrate --to production --permit-policy-change']),
-    );
-  });
-
-  it.each(REFUSED)('applies to the plan target when the run gave no flags: %s', (_, adviceOf) => {
-    expect(new Set(commandsIn(adviceOf(PROJECT), 'db migrate'))).toEqual(
-      new Set(['{bin} db migrate --to production']),
-    );
-  });
-});
+}

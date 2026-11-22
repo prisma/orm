@@ -12,7 +12,14 @@ import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
 import { type DataProtectionSetting, FORBIDDEN_LEVEL } from './data-protection-settings';
 import { chooseAction, runCommandAction } from './next-actions';
-import { type CliInvocation, cliCommand, printedPlan, quotedPlan } from './printed-command';
+import {
+  type CliInvocation,
+  cliCommand,
+  MIGRATIONS_ON_DISK,
+  printedPlan,
+  printedUpdatePlan,
+  quotedPlan,
+} from './printed-command';
 
 /** `change: migrate; dataProtection.dataLoss: data-loss-forbidden`: the declared side of each difference. */
 export function declaredSettingsText(differences: readonly DatabasePolicyDifference[]): string {
@@ -246,10 +253,15 @@ function typeChangeSentence(
 ): string {
   if (migrationPlan === undefined)
     return 'For a type change, state the conversion with --convert <field>.';
-  const plan = printedPlan(invocation, migrationPlan, ['--convert', '<field>']);
-  return plan.kind === 'none'
-    ? `A type change cannot be written as a migration here. ${plan.reason}.`
-    : `For a type change, write the conversion with ${quotedPlan(plan)}.`;
+  const plan = printedUpdatePlan(invocation, migrationPlan, ['--convert', '<field>']);
+  switch (plan.kind) {
+    case 'onDisk':
+      return `${MIGRATIONS_ON_DISK}. For a type change, write the conversion in the migration.ts of the one that changes the field, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\`.`;
+    case 'none':
+      return `A type change cannot be written as a migration here. ${plan.reason}.`;
+    default:
+      return `For a type change, write the conversion with ${quotedPlan(plan)}.`;
+  }
 }
 
 /** What a user can do instead of a refused change, for the command that refused it and the contract spaces that hold it. */

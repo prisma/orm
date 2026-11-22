@@ -29,6 +29,7 @@ import {
   type PrintedPlan,
   printedPath,
   printedPlan,
+  printedUpdatePlan,
   quotedPlan,
   selfEmitCommand,
   writtenMigrationRunCommand,
@@ -129,9 +130,12 @@ export function dbUpdateFailedTypeChangeAdvice(
   invocation: CliInvocation,
 ): RunnerAdvice {
   const changeValue = changeValueAdvice(change, quoted(dbUpdateRerun(invocation)));
-  const plan = printedPlan(invocation, migrationPlan, [
+  const plan = printedUpdatePlan(invocation, migrationPlan, [
     statementFlag({ verb: 'convert', text: change.field }),
   ]);
+  if (plan.kind === 'onDisk') {
+    return [chooseAction(`${failedTypeChangeText(change)} ${plan.text}`), ...changeValue];
+  }
   if (plan.kind === 'none') {
     return [
       chooseAction(
@@ -155,17 +159,19 @@ export function dbUpdateRowsWithoutValueAdvice(
   invocation: CliInvocation,
 ): RunnerAdvice {
   const flags = backfillFlags(reports);
-  const plan = printedPlan(invocation, migrationPlan, flags);
+  const plan = printedUpdatePlan(invocation, migrationPlan, flags);
   const planned =
     flags.length === 0
       ? []
-      : plan.kind === 'none'
-        ? [chooseAction(`No migration can be planned to backfill those rows. ${plan.reason}`)]
-        : [
-            chooseAction(
-              `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbUpdateApply(invocation, migrationPlan.to)}`,
-            ),
-          ];
+      : plan.kind === 'onDisk'
+        ? [chooseAction(plan.text)]
+        : plan.kind === 'none'
+          ? [chooseAction(`No migration can be planned to backfill those rows. ${plan.reason}`)]
+          : [
+              chooseAction(
+                `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbUpdateApply(invocation, migrationPlan.to)}`,
+              ),
+            ];
   const [first] = reports;
   if (first?.reason === 'nullValues') {
     const keep = optionalFields([first], 'the field');
@@ -285,7 +291,8 @@ export function dbUpdateRowsHoldingValueAdvice(
   const rename = chooseAction(
     `${newMember(reports, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, ...renameFlags(reports)]))}`,
   );
-  const plan = printedPlan(invocation, migrationPlan, [...others, ...deletes]);
+  const plan = printedUpdatePlan(invocation, migrationPlan, [...others, ...deletes]);
+  if (plan.kind === 'onDisk') return [rename, chooseAction(plan.text)];
   if (plan.kind === 'none') {
     return [
       rename,
@@ -359,7 +366,8 @@ export function dbUpdateRowsFailingCheckAdvice(
   const { replacedCheck } = report;
   if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
   const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
-  const plan = printedPlan(invocation, migrationPlan, invocation.statementArgs ?? []);
+  const plan = printedUpdatePlan(invocation, migrationPlan, invocation.statementArgs ?? []);
+  if (plan.kind === 'onDisk') return [chooseAction(`${cannotKeep}. ${plan.text}`)];
   if (plan.kind === 'none') {
     return [
       chooseAction(

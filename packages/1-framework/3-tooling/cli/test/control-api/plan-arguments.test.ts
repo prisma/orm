@@ -9,6 +9,7 @@ import type { Refs } from '@internal/migration-tools/refs';
 import { describe, expect, it, vi } from 'vitest';
 import {
   type DatabasePosition,
+  dbUpdateMigrationPlan,
   type MigrationPlanArgument,
   migrationPlanArguments,
   migrationPlanChoice,
@@ -23,6 +24,7 @@ import {
   resolveFromForPlan,
   resolveToForPlan,
 } from '../../src/control-api/operations/plan-resolution';
+import { buildGraph, entry } from '../utils/graph-helpers';
 
 const E = EMPTY_CONTRACT_HASH;
 const A = 'a'.repeat(64);
@@ -390,5 +392,39 @@ describe('a plan that carries a statement never starts at @empty', () => {
     expect(
       migrationPlanFromForStatements({ kind: 'reference', reference: '@empty' }),
     ).toMatchObject({ kind: 'none' });
+  });
+});
+
+describe('dbUpdateMigrationPlan', () => {
+  const graph = buildGraph([entry(E, A, 'm1'), entry(A, B, 'm2')]);
+  const refs: Refs = {
+    production: { hash: B, invariants: [] },
+    seeded: { hash: B, invariants: ['seeded'] },
+  };
+  const planSpace = { graph, refs, emittedHash: B };
+  const at = (storageHash: string) => ({ storageHash, invariants: [] });
+
+  it('marks the plan when migrations on disk lead from the database to the ref', () => {
+    expect(dbUpdateMigrationPlan(planSpace, at(A), { kind: 'ref', name: 'production' })).toEqual({
+      from: { kind: 'reference', reference: A },
+      to: { kind: 'reference', reference: 'production' },
+      migrationsOnDisk: true,
+    });
+  });
+
+  it('marks the plan to the emitted contract when migrations on disk lead there', () => {
+    expect(dbUpdateMigrationPlan(planSpace, at(A), { kind: 'emitted' }).migrationsOnDisk).toBe(
+      true,
+    );
+  });
+
+  it('leaves the plan unmarked when no migration leads there, or none provides an invariant the ref requires', () => {
+    expect(
+      [
+        dbUpdateMigrationPlan(planSpace, at(C), { kind: 'ref', name: 'production' }),
+        dbUpdateMigrationPlan(planSpace, at(A), { kind: 'ref', name: 'seeded' }),
+        dbUpdateMigrationPlan(planSpace, at(B), { kind: 'ref', name: 'production' }),
+      ].map(({ migrationsOnDisk }) => migrationsOnDisk),
+    ).toEqual([undefined, undefined, undefined]);
   });
 });

@@ -15,7 +15,8 @@ import { chooseAction } from './next-actions';
 import {
   type CliInvocation,
   dbUpdateApplyCommand,
-  printedPlan,
+  MIGRATIONS_ON_DISK,
+  printedUpdatePlan,
   quotedPlan,
 } from './printed-command';
 import { runWrittenFile } from './runner-failure-advice';
@@ -50,11 +51,17 @@ export function planningRefusedError(
     return resolved !== undefined && leaveOut.has(JSON.stringify(resolved));
   });
   const kept = context.statements.filter((statement) => !left.includes(statement));
-  const plan = printedPlan(context.invocation, context.migrationPlan, kept.map(statementFlag));
+  const plan = printedUpdatePlan(
+    context.invocation,
+    context.migrationPlan,
+    kept.map(statementFlag),
+  );
   const action = chooseAction(
-    plan.kind === 'none'
-      ? `The rewrites cannot be written by hand in a migration. ${plan.reason}`
-      : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${runWrittenFile(context.invocation, dbUpdateApplyCommand(context.invocation, context.migrationPlan.to))}`,
+    plan.kind === 'onDisk'
+      ? `${MIGRATIONS_ON_DISK}. To write the rewrites by hand, add the rewrites the message describes to the migration.ts of the one that makes the change, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\``
+      : plan.kind === 'none'
+        ? `The rewrites cannot be written by hand in a migration. ${plan.reason}`
+        : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${runWrittenFile(context.invocation, dbUpdateApplyCommand(context.invocation, context.migrationPlan.to))}`,
   );
   const reasons = conflicts.flatMap(({ why }) => (why === undefined ? [] : [why]));
   return new ActionableCliError(refused.code, refused.message, {

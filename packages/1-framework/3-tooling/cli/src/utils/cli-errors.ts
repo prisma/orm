@@ -42,10 +42,12 @@ import {
   cliCommand,
   dbMigrateRerun,
   dbUpdateApplyCommand,
+  MIGRATIONS_ON_DISK,
   planAction,
   printedChoicePlan,
   printedPath,
   printedPlan,
+  printedUpdatePlan,
   quotedPlan,
   selfEmitCommand,
 } from './printed-command';
@@ -756,11 +758,26 @@ export function errorStatementNeedsMigrationFile(
   const listed =
     written.length === 1 ? written[0] : `${written.slice(0, -1).join(', ')} and ${written.at(-1)}`;
   const why = `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`;
-  const plan = printedPlan(
+  const plan = printedUpdatePlan(
     invocation,
     migrationPlan,
     statements.filter(({ verb }) => MIGRATION_PLAN_VERBS.includes(verb)).map(statementFlag),
   );
+  if (plan.kind === 'onDisk') {
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+      `db update cannot carry out ${listed}`,
+      {
+        why: `${why} ${MIGRATIONS_ON_DISK}.`,
+        fix: `Write what these statements ask for in the migration.ts of the migration on disk that changes the field, run that migration.ts with \`node\`, and apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`,
+        nextActions: [
+          runCommandAction('Apply the migrations on disk', plan.apply),
+          chooseAction('Or run db update without these statements'),
+        ],
+        meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
+      },
+    );
+  }
   if (plan.kind === 'none') {
     return new ActionableCliError(
       'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',

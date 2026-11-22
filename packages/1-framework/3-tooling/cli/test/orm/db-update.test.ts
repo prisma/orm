@@ -282,6 +282,30 @@ describe('db update --rename', () => {
     );
   });
 
+  it('points a temporary value at the migrations on disk that already lead to the ref, and plans none beside them', async () => {
+    mocks.dbUpdate.mockResolvedValueOnce(
+      ok({
+        ...planSuccess(),
+        temporaryValues: [{ field: 'User.email', value: "''" }],
+        migrationPlan: {
+          from: reference('db'),
+          to: reference('production'),
+          migrationsOnDisk: true,
+        },
+      }),
+    );
+    const run = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.presented?.presentation.human).toContainEqual({
+      kind: 'summary',
+      status: 'warn',
+      text: 'Field "User.email" would get the temporary value \'\' where existing data has none. Migrations on disk already lead from the database to that contract, so a migration planned now would run beside them. To fill the rows as they do, apply them with `prisma-test db migrate --to production` instead.',
+    });
+  });
+
   it('suggests no migration plan for a temporary value when no plan can start where the database is', async () => {
     mocks.dbUpdate.mockResolvedValue(
       ok({ ...planSuccess(), temporaryValues: [{ field: 'User.email', value: "''" }] }),

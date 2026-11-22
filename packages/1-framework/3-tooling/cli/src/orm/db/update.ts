@@ -26,6 +26,7 @@ import {
 import {
   type DatabasePosition,
   databasePositionOf,
+  dbUpdateMigrationPlan,
   type MigrationPlanArguments,
   migrationPlanArguments,
   migrationPlanChoice,
@@ -604,7 +605,11 @@ async function migrationPlanIfReachable(
       : read.kind === 'failed'
         ? { kind: 'unknown', reason: `The CLI could not read the database: ${read.cause}` }
         : databasePositionOf(read.marker?.storageHash);
-  if (space !== undefined) return migrationPlanArguments(space, position, end);
+  if (space !== undefined) {
+    return read?.kind === 'read'
+      ? dbUpdateMigrationPlan(space, read.marker, end)
+      : migrationPlanArguments(space, position, end);
+  }
   return {
     from: migrationPlanChoice(
       undefined,

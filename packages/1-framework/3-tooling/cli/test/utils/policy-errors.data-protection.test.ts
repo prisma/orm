@@ -363,6 +363,35 @@ describe('errorDataProtectionForbids advice', () => {
     );
   });
 
+  it('points a type change at the migrations on disk that already lead to the ref, and plans nothing beside them', () => {
+    const { fix } = errorDataProtectionForbids({
+      spaceId: 'app',
+      command: 'db update',
+      refusals: [
+        {
+          setting: 'dataLoss',
+          source: { kind: 'ref', refName: 'production' },
+          operations: [
+            {
+              spaceId: 'app',
+              operationId: 'column.user.age.type',
+              subject: 'User.age',
+              label: 'Change the type of column "age"',
+              loss: 'typeChange',
+            },
+          ],
+        },
+      ],
+      invocation: { ...invocation, rerunArgs: ['--to', 'production', '--permit-policy-change'] },
+      migrationPlan: { from: reference('db'), to: reference('production'), migrationsOnDisk: true },
+    });
+
+    expect(fix).not.toContain('{bin} migration plan');
+    expect(fix).toContain(
+      'Migrations on disk already lead from the database to that contract, so a migration planned now would run beside them. For a type change, write the conversion in the migration.ts of the one that changes the field, run that migration.ts with `node`, and apply them with `{bin} db migrate --to production --permit-policy-change --db <url>`.',
+    );
+  });
+
   it('says why a type change cannot be written as a migration when no plan can start where the database is', () => {
     const { fix } = errorDataProtectionForbids({
       spaceId: 'app',

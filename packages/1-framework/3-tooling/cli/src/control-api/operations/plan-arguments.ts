@@ -6,6 +6,7 @@
  * ref whose contract a migration records, or no `--from` when there are no migrations.
  */
 
+import type { ContractMarkerRecordLike } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { MigrationGraph } from '@internal/migration-tools/graph';
 import {
@@ -15,6 +16,7 @@ import {
 } from '@internal/migration-tools/migration-graph';
 import type { OnDiskMigrationPackage } from '@internal/migration-tools/package';
 import type { Refs } from '@internal/migration-tools/refs';
+import { migrationsToTarget } from './graph-queries';
 import type { FromResolution } from './plan-resolution';
 
 /**
@@ -46,10 +48,15 @@ export type RunnablePlanArgument = Extract<
   { readonly kind: 'reference' | 'default' }
 >;
 
-/** What a `migration plan` takes for `--from` and `--to`. */
+/**
+ * What a `migration plan` takes for `--from` and `--to`. `migrationsOnDisk` is set when migrations
+ * on disk already lead from where the database is to `to`: `db migrate` applies them, and a
+ * migration planned from `from` would run beside them, so advice prints no plan.
+ */
 export interface MigrationPlanArguments {
   readonly from: MigrationPlanArgument;
   readonly to: MigrationPlanTargetArgument;
+  readonly migrationsOnDisk?: true;
 }
 
 /**
@@ -262,6 +269,40 @@ export function appMigrationPlan(
     databasePositionOf(markers.get(app.spaceId)?.storageHash),
     end,
   );
+}
+
+/**
+ * The `migration plan` that advice after a `db update` prints to take the database at `marker` to
+ * `end`, marked `migrationsOnDisk` when migrations on disk already lead there and provide every
+ * invariant the end requires that the database does not record.
+ */
+export function dbUpdateMigrationPlan(
+  space: PlanSpace,
+  marker: ContractMarkerRecordLike | null | undefined,
+  end: PlanEnd,
+): MigrationPlanArguments {
+  const plan = migrationPlanArguments(space, databasePositionOf(marker?.storageHash), end);
+  const target = planEndContract(space, end);
+  return target !== undefined && migrationsToTarget(space.graph, marker, target) === 'on-disk'
+    ? { ...plan, migrationsOnDisk: true }
+    : plan;
+}
+
+/** The contract `end` names, with the invariants a ref requires; undefined when it is not known. */
+function planEndContract(
+  space: PlanSpace,
+  end: PlanEnd,
+): { readonly hash: string; readonly invariants: readonly string[] } | undefined {
+  switch (end.kind) {
+    case 'emitted':
+      return space.emittedHash === undefined
+        ? undefined
+        : { hash: space.emittedHash, invariants: [] };
+    case 'ref':
+      return space.refs[end.name];
+    case 'contract':
+      return { hash: end.hash, invariants: [] };
+  }
 }
 
 /** Where a database whose marker names `markerHash`, or that has none, is. */

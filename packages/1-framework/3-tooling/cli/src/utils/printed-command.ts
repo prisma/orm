@@ -2,6 +2,7 @@ import type { NextAction } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
 import {
   type MigrationPlanArgument,
+  type MigrationPlanArguments,
   type MigrationPlanTargetArgument,
   migrationPlanFromForStatements,
   type RunnablePlanArgument,
@@ -59,17 +60,17 @@ export function dbMigrateToCommand(
 
 /**
  * The `db migrate` that applies what a failed `db update` advises to plan to `to`. It repeats the
- * flags the user gave `db update`, which `db migrate` takes with the same meaning: `--to`, which
- * names the contract the plan ends at, and `--advance-ref` and `--permit-policy-change`, without
- * which it would not do what `db update` was asked to. A caller that gives no flags gets `--to`.
+ * flags the user gave `db update`, which `db migrate` takes with the same meaning: `--to`, and
+ * `--advance-ref` and `--permit-policy-change`, without which it would not do what `db update` was
+ * asked to. Without a `--to` among them, it takes the plan's.
  */
 export function dbUpdateApplyCommand(
   invocation: CliInvocation | undefined,
   to: MigrationPlanTargetArgument,
 ): string {
-  return invocation?.rerunArgs === undefined
-    ? dbMigrateToCommand(invocation, to)
-    : cliCommand(invocation, 'db migrate', invocation.rerunArgs);
+  const given = invocation?.rerunArgs ?? [];
+  const target = given.includes('--to') || to.kind === 'none' ? [] : argumentWords('--to', to);
+  return cliCommand(invocation, 'db migrate', [...target, ...given]);
 }
 
 /** The `db update` the user ran, with the flags they gave and `statements`, by default the run's own. */
@@ -160,6 +161,34 @@ export function printedPlan(
     ? printedChoicePlan(invocation, from, words)
     : { kind: 'runs', command: printedPlanCommand(invocation, from, words) };
 }
+
+/**
+ * What advice after a `db update` prints to move the database where the run was going: a
+ * {@link PrintedPlan}, or, under `onDisk`, the `db migrate` that applies the migrations on disk that
+ * already lead there, where a planned migration would run beside them.
+ */
+export type PrintedUpdatePlan =
+  | PrintedPlan
+  | { readonly kind: 'onDisk'; readonly apply: string; readonly text: string };
+
+/** The `migration plan` from `plan.from` to `plan.to` with `flags`, or the `db migrate` that applies the migrations on disk that lead there. */
+export function printedUpdatePlan(
+  invocation: CliInvocation | undefined,
+  plan: MigrationPlanArguments,
+  flags: readonly string[],
+): PrintedUpdatePlan {
+  if (plan.migrationsOnDisk !== true) return printedPlan(invocation, plan, flags);
+  const apply = dbUpdateApplyCommand(invocation, plan.to);
+  return {
+    kind: 'onDisk',
+    apply,
+    text: `${MIGRATIONS_ON_DISK}: apply them with \`${apply}\`, which names the migration.ts to change if one of them fails`,
+  };
+}
+
+/** Why advice prints no `migration plan` when migrations on disk already lead where the run was going. */
+export const MIGRATIONS_ON_DISK =
+  'Migrations on disk already lead from the database to that contract, so a migration planned now would run beside them';
 
 const STATEMENT_FLAGS: ReadonlySet<string> = new Set([
   '--rename',

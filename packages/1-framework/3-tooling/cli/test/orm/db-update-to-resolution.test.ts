@@ -11,7 +11,6 @@ import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
-import { errorStatementNeedsMigrationFile } from '../../src/utils/cli-errors';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
@@ -21,14 +20,6 @@ import { createTestProjectDir, writeProjectManifest } from '../utils/test-projec
  * contract handed to the control client comes from the snapshot store entry
  * for that hash — not the emitted contract.json.
  */
-
-vi.mock('../../src/utils/cli-errors', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/utils/cli-errors')>();
-  return {
-    ...actual,
-    errorStatementNeedsMigrationFile: vi.fn(actual.errorStatementNeedsMigrationFile),
-  };
-});
 
 const mocks = {
   connect: vi.fn(),
@@ -482,7 +473,7 @@ describe('db update --to <ref> --backfill', () => {
     );
   }
 
-  it('plans to the ref and applies with the flags the user gave', async () => {
+  it('plans to the ref from where the database is', async () => {
     const { cwd } = await setupFixture();
     await besideTheHistory(cwd);
     await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
@@ -499,10 +490,26 @@ describe('db update --to <ref> --backfill', () => {
     expect(stripAnsi(run.stderr)).toContain(
       `prisma-test migration plan --from ${HASH_C} --to production --backfill User.email`,
     );
-    const [refused] = vi.mocked(errorStatementNeedsMigrationFile).mock.results;
-    expect(refused?.type === 'return' ? refused.value.toEnvelope().fix : undefined).toContain(
-      'apply it with `{bin} db migrate --to production --permit-policy-change`',
-    );
     expect(mocks.dbUpdate).not.toHaveBeenCalled();
+  });
+
+  it('applies the migration on disk that leads to the ref, and plans none beside it', async () => {
+    const { cwd } = await setupFixture();
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
+      hash: HASH_B,
+      invariants: [],
+    });
+    mocks.readMarker.mockResolvedValue({ storageHash: HASH_A, invariants: [] });
+
+    const run = await harness(cwd).run(
+      ['db', 'update', '--to', 'production', '--permit-policy-change', '--backfill', 'User.email'],
+      { cwd },
+    );
+
+    const output = stripAnsi(run.stderr);
+    expect(output).not.toContain('prisma-test migration plan');
+    expect(output).toContain(
+      'Apply the migrations on disk: prisma-test db migrate --to production --permit-policy-change',
+    );
   });
 });

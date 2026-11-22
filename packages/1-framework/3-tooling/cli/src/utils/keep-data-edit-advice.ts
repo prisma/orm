@@ -10,7 +10,8 @@ import {
   type CliInvocation,
   cliCommand,
   dbUpdateApplyCommand,
-  printedPlan,
+  MIGRATIONS_ON_DISK,
+  printedUpdatePlan,
   quotedPlan,
 } from './printed-command';
 import { runWrittenFile } from './runner-failure-advice';
@@ -130,10 +131,19 @@ export function dbUpdateKeepDataEditAdvice(
       return { lead, ways: runWays };
     }
     const deletes = edited.map(({ text }) => statementFlag({ verb: 'delete', text }));
-    const plan = printedPlan(invocation, migrationPlan, [
+    const plan = printedUpdatePlan(invocation, migrationPlan, [
       ...otherStatements(invocation, [subject.text]).filter((flag) => !deletes.includes(flag)),
       ...deletes,
     ]);
+    if (plan.kind === 'onDisk') {
+      return {
+        lead,
+        ways: [
+          `${MIGRATIONS_ON_DISK}. To keep it, in the migration.ts of the one that removes it ${editsText(edited.flatMap(({ edits }) => edits))}, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\`.`,
+          ...(swaps ? [] : runWays),
+        ],
+      };
+    }
     if (plan.kind === 'none') {
       return {
         lead,

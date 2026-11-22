@@ -118,8 +118,8 @@ import {
 import { stripOperations } from './migration-helpers';
 import { structuralPathOf } from './no-invariant-path';
 import {
-  appMigrationPlan,
   appSpaceOf,
+  dbUpdateMigrationPlan,
   type MigrationPlanArguments,
   type PlanEnd,
 } from './plan-arguments';
@@ -253,9 +253,9 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
 
   // 2. Read live DB state (markers + schema).
   const markerRows = await familyInstance.readAllMarkers({ driver });
-  const migrationPlan: MigrationPlanArguments = appMigrationPlan(
+  const migrationPlan: MigrationPlanArguments = dbUpdateMigrationPlan(
     appSpaceOf(aggregate),
-    markerRows,
+    markerRows.get(aggregate.app.spaceId),
     dbUpdatePlanEnd(
       options.action === 'dbUpdate' ? options.ref : undefined,
       contract.storage.storageHash,
