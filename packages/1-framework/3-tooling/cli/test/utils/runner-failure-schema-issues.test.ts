@@ -123,10 +123,13 @@ describe('a failed schema check after apply', () => {
       ).toContain('plan it again with `{bin} migration plan --from @empty --name initial`,');
     });
 
-    it('prints no migration plan when the runner names no migration', () => {
-      expect(migrateError(schemaCheckFailure([explained])).fix).toBe(
-        `${MIGRATION_CAUSE('the migration.ts of the failed migration', 'run that file with node')}.`,
-      );
+    it('names no migration directory when the runner names no migration, and points to the commands that find one', () => {
+      expect(
+        (migrateError(schemaCheckFailure([explained])).nextActions ?? []).map(({ label }) => label),
+      ).toEqual([
+        'If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run `{bin} contract emit`, run the `migration plan` that `{bin} migration status` prints, run that migration.ts with the `node` command `migration plan` prints, and run `{bin} db migrate`',
+        'If a migration you edited by hand does not reach its destination contract, find it with `{bin} migration list`, change its operations to resolve the issues listed, run its migration.ts with `node`, and run `{bin} db migrate`',
+      ]);
     });
 
     it('gives each cause its own next action, an edit of a file that names the commands to run after it', () => {

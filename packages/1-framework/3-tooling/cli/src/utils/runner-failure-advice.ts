@@ -657,11 +657,20 @@ function migrateSchemaCheckAdvice(
   invocation: CliInvocation,
 ): RunnerAdvice {
   const emit = quoted(cliCommand(invocation, 'contract emit'));
+  if (failedMigration === undefined) {
+    return [
+      editFileAction(
+        `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, run the \`migration plan\` that ${quoted(cliCommand(invocation, 'migration status'))} prints, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(invocation)}`,
+      ),
+      editFileAction(
+        `If a migration you edited by hand does not reach its destination contract, find it with ${quoted(cliCommand(invocation, 'migration list'))}, change its operations to resolve the issues listed, run its migration.ts with \`node\`, and run ${dbMigrateAgain(invocation)}`,
+      ),
+    ];
+  }
   const { file, run } = failedMigrationFile(failedMigration);
   const fixMigration = editFileAction(
     `If ${file} does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, ${run}, and run ${dbMigrateAgain(invocation)}`,
   );
-  if (failedMigration === undefined) return [fixMigration];
   const plan = replacingPlan(failedMigration, []);
   if (plan.kind === 'none')
     return [keepFailedMigration(failedMigration, plan.reason), fixMigration];
