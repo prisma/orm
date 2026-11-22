@@ -549,12 +549,12 @@ export class ClientEngine implements Engine {
       throw this.#transformRequestError(err, request)
     })
 
-    const hasRawQueries = firstModelName === undefined
+    const onlyRawQueries = queries.every(isRawQuery)
     let batchResponse: BatchResponse
     let placeholderValues: Record<string, unknown> = {}
     let queryInfoQueries = queries.map((query) => query.query)
 
-    if (!hasRawQueries) {
+    if (!onlyRawQueries) {
       const { parameterizedBatch, placeholderValues: extractedValues } = parameterizeBatch(
         batchPayload as JsonBatchQuery,
         this.#paramGraph,
@@ -563,7 +563,9 @@ export class ClientEngine implements Engine {
       placeholderValues = extractedValues
       queryInfoQueries = parameterizedBatch.batch.map((query) => query.query)
 
-      const cached = this.#queryPlanCache?.getBatch(cacheKeyStr)
+      // Raw queries are not parameterized, so their values would end up in the cache key.
+      const isCacheable = !queries.some(isRawQuery)
+      const cached = isCacheable ? this.#queryPlanCache?.getBatch(cacheKeyStr) : undefined
       if (cached) {
         debug('batch query plan cache hit')
         batchResponse = cached
@@ -571,7 +573,9 @@ export class ClientEngine implements Engine {
         debug('batch query plan cache miss')
         try {
           batchResponse = this.#compileBatch(parameterizedBatch.batch, cacheKeyStr, queryCompiler)
-          this.#queryPlanCache?.setBatch(cacheKeyStr, batchResponse)
+          if (isCacheable) {
+            this.#queryPlanCache?.setBatch(cacheKeyStr, batchResponse)
+          }
         } catch (error) {
           throw this.#transformCompileError(error)
         }
@@ -628,6 +632,7 @@ export class ClientEngine implements Engine {
               results.push(err as Error)
               rollback = true
               if (!canContinueOnError) {
+                results.push(...queries.slice(batchIndex + 1).map(() => err as Error))
                 break
               }
             }

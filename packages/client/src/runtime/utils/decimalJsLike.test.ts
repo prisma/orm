@@ -1,4 +1,5 @@
 import { Decimal } from '@prisma/client-runtime-utils'
+import { describe, expect, test, vi } from 'vitest'
 
 import { isDecimalJsLike } from './decimalJsLike'
 
@@ -24,7 +25,7 @@ describe('isDecimalJsLike', () => {
       d: [12, 3000000],
       e: 1,
       s: 1,
-      toFixed: jest.fn(),
+      toFixed: vi.fn(),
     }
     expect(isDecimalJsLike(object)).toBe(true)
   })
@@ -34,7 +35,7 @@ describe('isDecimalJsLike', () => {
       d: 'yes',
       e: 1,
       s: 1,
-      toFixed: jest.fn(),
+      toFixed: vi.fn(),
     }
     expect(isDecimalJsLike(object)).toBe(false)
   })
@@ -44,7 +45,7 @@ describe('isDecimalJsLike', () => {
       d: [12, 3000000],
       e: 'one',
       s: 1,
-      toFixed: jest.fn(),
+      toFixed: vi.fn(),
     }
     expect(isDecimalJsLike(object)).toBe(false)
   })
@@ -54,7 +55,7 @@ describe('isDecimalJsLike', () => {
       d: [12, 3000000],
       e: 1,
       s: '+',
-      toFixed: jest.fn(),
+      toFixed: vi.fn(),
     }
     expect(isDecimalJsLike(object)).toBe(false)
   })
@@ -64,7 +65,7 @@ describe('isDecimalJsLike', () => {
       d: [12, 3000000],
       e: 1,
       s: 1,
-      toFixed: jest.fn(),
+      toFixed: vi.fn(),
       something: 'other',
       isFinite() {
         return true

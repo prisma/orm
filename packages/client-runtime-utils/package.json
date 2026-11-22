@@ -30,8 +30,7 @@
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
     "build": "tsx helpers/build.ts",
-    "prepublishOnly": "pnpm run build",
-    "test": "vitest run --passWithNoTests"
+    "prepublishOnly": "pnpm run build"
   },
   "files": [
     "dist"

@@ -1,13 +1,9 @@
-import { ChokidarOptions, watch as createWatcher } from 'chokidar'
 import * as esbuild from 'esbuild'
-import { BuildContext } from 'esbuild'
 import { writeFileSync } from 'fs'
 import glob from 'globby'
 import path from 'path'
 
-import { debounce } from '../blaze/debounce'
 import { flatten } from '../blaze/flatten'
-import { handle } from '../blaze/handle'
 import { map } from '../blaze/map'
 import { omit } from '../blaze/omit'
 import { pipe } from '../blaze/pipe'
@@ -112,12 +108,6 @@ function addDefaultOutDir(options: BuildOptions) {
  * Execute esbuild with all the configurations we pass
  */
 async function executeEsBuild(options: BuildOptions) {
-  if (process.env.WATCH === 'true') {
-    const context = await esbuild.context(omit(options, ['name', 'emitTypes', 'emitMetafile']) as any)
-
-    watch(context, options)
-  }
-
   const build = await esbuild.build(omit(options, ['name', 'emitTypes', 'emitMetafile']) as any)
   const outdir = options.outdir ?? (options.outfile ? path.dirname(options.outfile) : undefined)
 
@@ -172,48 +162,6 @@ function logEndBuild(progress: Progress) {
     console.log(`Built ${options.name} as ${options.format ?? 'cjs'} (${++progress.done}/${progress.total})`)
     return [options, result]
   }
-}
-
-/**
- * Executes the build and rebuilds what is necessary
- * @param builds
- */
-const watch = (context: BuildContext, options: BuildOptions) => {
-  if (process.env.WATCH !== 'true') return context
-
-  // common chokidar options for the watchers
-  const config = {
-    ignoreInitial: true,
-    ignored: [/$src\/__tests__\//, 'package.json'],
-  } satisfies ChokidarOptions
-
-  // prepare the incremental builds watcher
-  const changeWatcher = createWatcher(['./src'], config)
-
-  // triggers quick rebuild on file change
-  const fastRebuild = debounce(async () => {
-    const timeBefore = Date.now()
-
-    // we handle possible rebuild exceptions
-    const rebuildResult = await handle.async(() => {
-      return context.rebuild()
-    })
-
-    // Handle unexpected internal errors
-    if (rebuildResult instanceof Error) {
-      console.error(rebuildResult)
-      // Handle build errors (e.g., syntax errors)
-    } else if (rebuildResult.errors.length > 0) {
-      // Log the detailed error object from esbuild for better debugging.
-      console.error(rebuildResult.errors)
-    }
-
-    console.log(`${Date.now() - timeBefore}ms [${options.name ?? ''}]`)
-  }, 10)
-
-  changeWatcher.on('change', fastRebuild)
-
-  return undefined
 }
 
 // Utils ::::::::::::::::::::::::::::::::::::::::::::::::::

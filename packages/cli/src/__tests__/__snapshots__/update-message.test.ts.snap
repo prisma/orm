@@ -6,10 +6,6 @@ exports[`update available message update available dev tag - major 1`] = `
 │                                                         │
 │  This is a major update - please follow the guide at    │
 │  https://pris.ly/d/major-version-upgrade                │
-│                                                         │
-│  Run the following to update                            │
-│    npm i --save-dev prisma@dev                          │
-│    npm i @prisma/client@dev                             │
 └─────────────────────────────────────────────────────────┘"
 `;
 
@@ -28,10 +24,15 @@ exports[`update available message update available latest tag - major 1`] = `
 │                                                         │
 │  This is a major update - please follow the guide at    │
 │  https://pris.ly/d/major-version-upgrade                │
+└─────────────────────────────────────────────────────────┘"
+`;
+
+exports[`update available message update available latest tag - major pre-release 1`] = `
+"┌─────────────────────────────────────────────────────────┐
+│  Update available 7.10.1 -> 8.0.0-rc.34                 │
 │                                                         │
-│  Run the following to update                            │
-│    npm i --save-dev prisma@latest                       │
-│    npm i @prisma/client@latest                          │
+│  This is a major update - please follow the guide at    │
+│  https://pris.ly/d/major-version-upgrade                │
 └─────────────────────────────────────────────────────────┘"
 `;
 

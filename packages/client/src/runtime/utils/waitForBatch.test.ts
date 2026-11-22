@@ -1,4 +1,5 @@
 import { PrismaClientKnownRequestError } from '@prisma/client-runtime-utils'
+import { expect, test } from 'vitest'
 
 import { waitForBatch } from './waitForBatch'
 

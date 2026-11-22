@@ -11,7 +11,7 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
-    "watch": "pnpm -r run dev && WATCH=true pnpm -r --parallel --stream run dev",
+    "watch": "turbo watch dev",
     "publish-all-dryrun": "tsx scripts/ci/publish.ts --publish --dry-run",
     "publish-all": "tsx scripts/ci/publish.ts --publish",
     "bump-engines": "tsx scripts/bump-engines.ts",
@@ -56,7 +56,6 @@
     "arg": "5.0.2",
     "batching-toposort": "1.2.0",
     "buffer": "6.0.3",
-    "chokidar": "4.0.3",
     "decimal.js-light": "2.5.1",
     "dotenv-cli": "8.0.0",
     "esbuild": "0.25.5",

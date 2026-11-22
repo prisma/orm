@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { maskQuery } from './maskQuery'
 
 test('big query', () => {

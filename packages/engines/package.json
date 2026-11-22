@@ -12,9 +12,6 @@
   "license": "Apache-2.0",
   "author": "Tim Suchanek <suchanek@prisma.io>",
   "devDependencies": {
-    "@swc/core": "1.11.5",
-    "@swc/jest": "0.2.37",
-    "@types/jest": "29.5.14",
     "@types/node": "~20.19.24",
     "execa": "5.1.1",
     "typescript": "5.4.5"
@@ -28,7 +25,6 @@
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
     "build": "tsx helpers/build.ts",
-    "test": "vitest run",
     "prepublishOnly": "pnpm run build",
     "postinstall": "node scripts/postinstall.js"
   },

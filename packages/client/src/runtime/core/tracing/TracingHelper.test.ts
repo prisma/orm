@@ -1,14 +1,15 @@
 import { clearGlobalTracingHelper, setGlobalTracingHelper, type TracingHelper } from '@prisma/instrumentation-contract'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getTracingHelper } from './TracingHelper'
 
 function createMockTracingHelper(): TracingHelper {
   return {
-    dispatchEngineSpans: jest.fn(),
-    getActiveContext: jest.fn(),
-    getTraceParent: jest.fn(),
-    isEnabled: jest.fn(() => true),
-    runInChildSpan: jest.fn(),
+    dispatchEngineSpans: vi.fn(),
+    getActiveContext: vi.fn(),
+    getTraceParent: vi.fn(),
+    isEnabled: vi.fn(() => true),
+    runInChildSpan: vi.fn(),
   }
 }
 

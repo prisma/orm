@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { makeStrictEnum } from './strictEnum'
 
 const StrictEnum = makeStrictEnum({
@@ -13,7 +15,9 @@ test('individual values', () => {
 })
 
 test('throws on undefined value', () => {
-  expect(() => (StrictEnum as any).NOT_THERE).toThrowErrorMatchingInlineSnapshot(`"Invalid enum value: NOT_THERE"`)
+  expect(() => (StrictEnum as any).NOT_THERE).toThrowErrorMatchingInlineSnapshot(
+    `[TypeError: Invalid enum value: NOT_THERE]`,
+  )
 })
 
 test('keys', () => {

@@ -1,4 +1,5 @@
 import type { RuntimeDataModel } from '@prisma/client-common'
+import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 
 import { PrismaClientOptions } from '../runtime'
 import { ClientConfig, validatePrismaClientOptions } from '../runtime/utils/validatePrismaClientOptions'
@@ -64,7 +65,7 @@ describe('valid options', () => {
 describe('invalid options', () => {
   test('empty', () => {
     expect(() => validatePrismaClientOptions({}, config)).toThrowErrorMatchingInlineSnapshot(`
-      "PrismaClient requires a driver adapter to connect to your database, but none was provided.
+      [PrismaClientConstructorValidationError: PrismaClient requires a driver adapter to connect to your database, but none was provided.
 
       Pass a driver adapter to the PrismaClient constructor, for example:
 
@@ -77,7 +78,7 @@ describe('invalid options', () => {
       Learn more about driver adapters: https://pris.ly/d/driver-adapters
 
       If you use Prisma Accelerate instead of connecting to your database directly, pass \`accelerateUrl\` to the PrismaClient constructor instead of \`adapter\`.
-      Read more at https://pris.ly/d/client-constructor"
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 
@@ -91,8 +92,8 @@ describe('invalid options', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Unknown property errorsFormat provided to PrismaClient constructor. Did you mean "errorFormat"?
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Unknown property errorsFormat provided to PrismaClient constructor. Did you mean "errorFormat"?
+      Read more at https://pris.ly/d/client-constructor]
     `)
     expect(() =>
       validatePrismaClientOptions(
@@ -104,8 +105,8 @@ describe('invalid options', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid property helo for "log" provided to PrismaClient constructor
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid property helo for "log" provided to PrismaClient constructor
+      Read more at https://pris.ly/d/client-constructor]
     `)
     expect(() =>
       validatePrismaClientOptions(
@@ -117,8 +118,8 @@ describe('invalid options', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid log level "muery" provided to PrismaClient constructor. Did you mean "query"?
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid log level "muery" provided to PrismaClient constructor. Did you mean "query"?
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 
@@ -132,8 +133,8 @@ describe('invalid options', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "The "adapter" and "accelerateUrl" options are mutually exclusive. Please provide only one of them.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: The "adapter" and "accelerateUrl" options are mutually exclusive. Please provide only one of them.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 })
@@ -182,8 +183,8 @@ describe('comments option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value "not-an-array" for "comments" provided to PrismaClient constructor. Expected an array of SQL commenter plugins.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value "not-an-array" for "comments" provided to PrismaClient constructor. Expected an array of SQL commenter plugins.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 
@@ -197,8 +198,8 @@ describe('comments option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value {} for "comments" provided to PrismaClient constructor. Expected an array of SQL commenter plugins.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value {} for "comments" provided to PrismaClient constructor. Expected an array of SQL commenter plugins.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 
@@ -212,8 +213,8 @@ describe('comments option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value at index 1 for "comments" provided to PrismaClient constructor. Each plugin must be a function.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value at index 1 for "comments" provided to PrismaClient constructor. Each plugin must be a function.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 
@@ -227,8 +228,8 @@ describe('comments option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value at index 0 for "comments" provided to PrismaClient constructor. Each plugin must be a function.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value at index 0 for "comments" provided to PrismaClient constructor. Each plugin must be a function.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 })
@@ -277,8 +278,8 @@ describe('queryPlanCacheMaxSize option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value -1 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Cache size needs to be greater or equal to 0.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value -1 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Cache size needs to be greater or equal to 0.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 
@@ -292,8 +293,8 @@ describe('queryPlanCacheMaxSize option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value 1.5 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected an integer.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value 1.5 for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected an integer.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 
@@ -307,8 +308,8 @@ describe('queryPlanCacheMaxSize option', () => {
         config,
       ),
     ).toThrowErrorMatchingInlineSnapshot(`
-      "Invalid value "100" for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected a number.
-      Read more at https://pris.ly/d/client-constructor"
+      [PrismaClientConstructorValidationError: Invalid value "100" for "queryPlanCacheMaxSize" provided to PrismaClient constructor. Expected a number.
+      Read more at https://pris.ly/d/client-constructor]
     `)
   })
 })
