@@ -12,7 +12,12 @@ import {
   errorMigrationPlanningFailed,
 } from './cli-errors';
 import { chooseAction } from './next-actions';
-import { type CliInvocation, printedPlan, quotedPlan } from './printed-command';
+import {
+  type CliInvocation,
+  dbUpdateApplyCommand,
+  printedPlan,
+  quotedPlan,
+} from './printed-command';
 import { runWrittenFile } from './runner-failure-advice';
 
 /**
@@ -49,7 +54,7 @@ export function planningRefusedError(
   const action = chooseAction(
     plan.kind === 'none'
       ? `The rewrites cannot be written by hand in a migration. ${plan.reason}`
-      : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${runWrittenFile(context.invocation, context.migrationPlan.to)}`,
+      : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${runWrittenFile(context.invocation, dbUpdateApplyCommand(context.invocation, context.migrationPlan.to))}`,
   );
   const reasons = conflicts.flatMap(({ why }) => (why === undefined ? [] : [why]));
   return new ActionableCliError(refused.code, refused.message, {

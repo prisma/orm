@@ -41,7 +41,7 @@ import {
   type CliInvocation,
   cliCommand,
   dbMigrateRerun,
-  dbMigrateToCommand,
+  dbUpdateApplyCommand,
   planAction,
   printedChoicePlan,
   printedPath,
@@ -778,7 +778,7 @@ export function errorStatementNeedsMigrationFile(
     `db update cannot carry out ${listed}`,
     {
       why,
-      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`${dbMigrateToCommand(invocation, migrationPlan.to)}\`. Or leave out these statements: db update then asks before it loses any data.`,
+      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`${dbUpdateApplyCommand(invocation, migrationPlan.to)}\`. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
         planAction('Plan the change into a migration file to fill in', plan),
         chooseAction('Or run db update without these statements'),

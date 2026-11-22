@@ -24,6 +24,7 @@ import {
   cliCommand,
   dbMigrateRerun,
   dbMigrateToCommand,
+  dbUpdateApplyCommand,
   dbUpdateRerun,
   type PrintedPlan,
   printedPath,
@@ -68,8 +69,13 @@ function quoted(command: string): string {
 }
 
 /** A `db migrate` command as advice prints it, for a migration that is not the one the user ran. */
-function dbMigrateCommand(invocation: CliInvocation, to?: MigrationPlanTargetArgument): string {
-  return quoted(dbMigrateToCommand(invocation, to));
+function dbMigrateCommand(invocation: CliInvocation): string {
+  return quoted(dbMigrateToCommand(invocation));
+}
+
+/** The `db migrate` that applies what a failed `db update` advises to plan to `to`, as advice prints it. */
+function dbUpdateApply(invocation: CliInvocation, to: MigrationPlanTargetArgument): string {
+  return quoted(dbUpdateApplyCommand(invocation, to));
 }
 
 /** The `db migrate` the user ran, as advice that repeats it prints it. */
@@ -77,12 +83,15 @@ function dbMigrateAgain(invocation: CliInvocation): string {
   return quoted(dbMigrateRerun(invocation));
 }
 
-/** The steps after filling the migration.ts a `migration plan` wrote with no placeholders: run it, which writes its operations, and apply it. */
+/**
+ * The steps after filling the migration.ts a `migration plan` wrote with no placeholders: run it,
+ * which writes its operations, and apply it with `apply`, by default a plain `db migrate`.
+ */
 export function runWrittenFile(
   invocation: CliInvocation,
-  to?: MigrationPlanTargetArgument,
+  apply: string = dbMigrateToCommand(invocation),
 ): string {
-  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${dbMigrateCommand(invocation, to)}`;
+  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${quoted(apply)}`;
 }
 
 /** The step between filling a planned migration.ts and applying it, which writes its operations. */
@@ -133,7 +142,7 @@ export function dbUpdateFailedTypeChangeAdvice(
   }
   return [
     chooseAction(
-      `${failedTypeChangeText(change)} Plan the change with ${quotedPlan(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation, migrationPlan.to)}`,
+      `${failedTypeChangeText(change)} Plan the change with ${quotedPlan(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbUpdateApply(invocation, migrationPlan.to)}`,
     ),
     ...changeValue,
   ];
@@ -154,7 +163,7 @@ export function dbUpdateRowsWithoutValueAdvice(
         ? [chooseAction(`No migration can be planned to backfill those rows. ${plan.reason}`)]
         : [
             chooseAction(
-              `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation, migrationPlan.to)}`,
+              `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbUpdateApply(invocation, migrationPlan.to)}`,
             ),
           ];
   const [first] = reports;
@@ -290,7 +299,7 @@ export function dbUpdateRowsHoldingValueAdvice(
   return [
     rename,
     chooseAction(
-      `To keep that data by hand, plan the change with ${quotedPlan(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation, migrationPlan.to)}.\n${swaps}`,
+      `To keep that data by hand, plan the change with ${quotedPlan(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation, dbUpdateApplyCommand(invocation, migrationPlan.to))}.\n${swaps}`,
     ),
   ];
 }
@@ -360,7 +369,7 @@ export function dbUpdateRowsFailingCheckAdvice(
   }
   return [
     chooseAction(
-      `${cannotKeep}. Plan the change with ${quotedPlan(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation, migrationPlan.to)}`,
+      `${cannotKeep}. Plan the change with ${quotedPlan(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation, dbUpdateApplyCommand(invocation, migrationPlan.to))}`,
     ),
   ];
 }

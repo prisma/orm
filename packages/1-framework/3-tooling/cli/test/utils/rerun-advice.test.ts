@@ -4,11 +4,16 @@ import {
 } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import type { RunnerFailureFacts } from '../../src/control-api/types';
-import { errorMigrationHasUnfilledPlaceholders } from '../../src/utils/cli-errors';
+import {
+  errorMigrationHasUnfilledPlaceholders,
+  errorStatementNeedsMigrationFile,
+} from '../../src/utils/cli-errors';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
+import { dbUpdateKeepDataEditAdvice } from '../../src/utils/keep-data-edit-advice';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
+import { planningRefusedError } from '../../src/utils/planning-refused-error';
 import type { CliInvocation } from '../../src/utils/printed-command';
-import { originOf, toEmitted } from './plan-origins';
+import { originOf, reference, toEmitted } from './plan-origins';
 import { onDisk } from './runner-failure-errors';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
@@ -212,5 +217,119 @@ describe('advice that repeats a failed db update', () => {
 
   it.each(UPDATE_CASES)('prints neither flag when the user gave none: $kind', (entry) => {
     expect(updateCommands(entry, PROJECT)).toEqual(entry.reruns.map(() => '{bin} db update'));
+  });
+});
+
+describe('the db migrate that applies what a failed db update --to advises to plan', () => {
+  const TO_PRODUCTION = { from: reference(FROM), to: reference('production') };
+  const REFUSED: readonly (readonly [string, (invocation: CliInvocation) => string])[] = [
+    ...(
+      [
+        [
+          'a cast that failed',
+          { failedTypeChange: { field: 'User.age', by: 'cast', reason: 'value' } },
+        ],
+        [
+          'rows without a value for a new field',
+          {
+            rowsWithoutValue: [
+              { field: 'User.age', reason: 'newField', rows: 2, discriminator: false },
+            ],
+          },
+        ],
+        [
+          'rows that hold a removed enum value',
+          {
+            rowsHoldingValue: [
+              {
+                enumValue: 'Status.OLD',
+                enumName: 'Status',
+                value: 'old',
+                rows: 1,
+                keepDataEdit: { remove: 'a', replaceWith: 'b' },
+              },
+            ],
+          },
+        ],
+        [
+          'rows failing a check that replaces another',
+          { rowsFailingCheck: { check: 'c', replacedCheck: 'b' } },
+        ],
+      ] as const satisfies readonly (readonly [string, RunnerFailureFacts])[]
+    ).map(
+      ([kind, facts]) =>
+        [
+          kind,
+          (invocation: CliInvocation) =>
+            dbUpdateRunnerFailureError(failure(), facts, {
+              migrationPlan: TO_PRODUCTION,
+              invocation,
+            }).fix ?? '',
+        ] as const,
+    ),
+    [
+      'keeping the data of an enum member',
+      (invocation) => {
+        const edited = {
+          subject: { kind: 'enumValue', namespaceId: 'app', enum: 'Status', member: 'OLD' },
+          text: 'Status.OLD',
+          edits: [{ remove: 'a', replaceWith: 'b' }],
+        } as never;
+        return dbUpdateKeepDataEditAdvice(invocation, TO_PRODUCTION)(edited, [edited]).ways.join(
+          ' ',
+        );
+      },
+    ],
+    [
+      'a statement that needs a migration file',
+      (invocation) =>
+        errorStatementNeedsMigrationFile(
+          [{ verb: 'backfill', text: 'User.age' }],
+          [{ verb: 'backfill', text: 'User.age' }],
+          invocation,
+          TO_PRODUCTION,
+        ).fix ?? '',
+    ],
+    [
+      'rewrites the planner asks to write by hand',
+      (invocation) => {
+        const rewrite = {
+          kind: 'rename',
+          entity: 'enumValue',
+          from: { namespaceId: 'app', enum: 'Status', member: 'OLD' },
+          to: { namespaceId: 'app', enum: 'Status', member: 'NEW' },
+        } as never;
+        return (
+          planningRefusedError(
+            [{ kind: 'statementRefused', summary: 's', why: 'w', leaveOut: [rewrite] } as never],
+            {
+              invocation,
+              migrationPlan: TO_PRODUCTION,
+              statements: [
+                { verb: 'rename', text: 'Status.OLD:Status.NEW' },
+                { verb: 'backfill', text: 'User.age' },
+              ],
+              resolved: [rewrite, { kind: 'backfill' } as never],
+            },
+          ).toEnvelope().nextActions ?? []
+        )
+          .map(({ label }) => label)
+          .join(' ');
+      },
+    ],
+  ];
+
+  it.each(REFUSED)('keeps the flags the user gave db update: %s', (_, adviceOf) => {
+    const commands = commandsIn(adviceOf(GIVEN), 'db migrate');
+    expect(commands.length).toBeGreaterThan(0);
+    expect(new Set(commands)).toEqual(
+      new Set(['{bin} db migrate --to production --permit-policy-change']),
+    );
+  });
+
+  it.each(REFUSED)('applies to the plan target when the run gave no flags: %s', (_, adviceOf) => {
+    expect(new Set(commandsIn(adviceOf(PROJECT), 'db migrate'))).toEqual(
+      new Set(['{bin} db migrate --to production']),
+    );
   });
 });

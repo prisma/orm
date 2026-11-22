@@ -57,6 +57,21 @@ export function dbMigrateToCommand(
   return cliCommand(invocation, 'db migrate', to.kind === 'none' ? [] : argumentWords('--to', to));
 }
 
+/**
+ * The `db migrate` that applies what a failed `db update` advises to plan to `to`. It repeats the
+ * flags the user gave `db update`, which `db migrate` takes with the same meaning: `--to`, which
+ * names the contract the plan ends at, and `--advance-ref` and `--permit-policy-change`, without
+ * which it would not do what `db update` was asked to. A caller that gives no flags gets `--to`.
+ */
+export function dbUpdateApplyCommand(
+  invocation: CliInvocation | undefined,
+  to: MigrationPlanTargetArgument,
+): string {
+  return invocation?.rerunArgs === undefined
+    ? dbMigrateToCommand(invocation, to)
+    : cliCommand(invocation, 'db migrate', invocation.rerunArgs);
+}
+
 /** The `db update` the user ran, with the flags they gave and `statements`, by default the run's own. */
 export function dbUpdateRerun(
   invocation: CliInvocation,

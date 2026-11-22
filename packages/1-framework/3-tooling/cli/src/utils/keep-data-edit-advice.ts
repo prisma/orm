@@ -6,7 +6,13 @@ import type {
   KeptSubject,
 } from '../control-api/statements/plan-questions';
 import { statementFlag } from '../control-api/statements/statement-flag';
-import { type CliInvocation, cliCommand, printedPlan, quotedPlan } from './printed-command';
+import {
+  type CliInvocation,
+  cliCommand,
+  dbUpdateApplyCommand,
+  printedPlan,
+  quotedPlan,
+} from './printed-command';
 import { runWrittenFile } from './runner-failure-advice';
 
 function editsText(edits: readonly KeepDataEdit[]): string {
@@ -137,7 +143,7 @@ export function dbUpdateKeepDataEditAdvice(
     return {
       lead,
       ways: [
-        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation, migrationPlan.to)}.`,
+        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation, dbUpdateApplyCommand(invocation, migrationPlan.to))}.`,
         ...(swaps ? [] : runWays),
       ],
     };

@@ -365,7 +365,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             errorStatementNeedsMigrationFile(
               given,
               cannotBeVariantConverts,
-              cliInvocation(ctx, args.flags.db),
+              { ...cliInvocation(ctx, args.flags.db), rerunArgs: rerunFlags(args.flags) },
               migrationPlan,
             ),
           ),
