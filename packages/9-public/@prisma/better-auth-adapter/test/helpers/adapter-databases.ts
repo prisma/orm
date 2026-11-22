@@ -1,0 +1,100 @@
+import type { BetterAuthOptions, BetterAuthPlugin } from '@better-auth/core';
+import {
+  applyContract,
+  createWorkDir,
+  emitContract,
+  openPostgresClient,
+  openSqliteClient,
+  resetPostgres,
+  type SqlContract,
+  type TargetName,
+  type WorkDir,
+} from './databases';
+import { type PostgresServer, startPostgresServer } from './postgres-server';
+import { pslForConfiguration, pslHeader } from './printed-psl';
+
+export type TestClient =
+  | ReturnType<typeof openSqliteClient>
+  | ReturnType<typeof openPostgresClient>;
+
+/**
+ * Builds databases for the adapter's own tests: SQLite in a new file each time, Postgres in the one `@prisma/dev` server, reset each time. Opening a database closes the client of the one before.
+ */
+export interface AdapterDatabases {
+  emptyContract(target: TargetName): SqlContract;
+  open(target: TargetName, psl: string): Promise<TestClient>;
+  dispose(): Promise<void>;
+}
+
+export async function createAdapterDatabases(): Promise<AdapterDatabases> {
+  const workDir: WorkDir = await createWorkDir();
+  const server: PostgresServer = await startPostgresServer();
+  const empty = new Map<TargetName, SqlContract>();
+  for (const target of ['sqlite', 'postgres'] as const) {
+    empty.set(target, (await emitContract(target, pslHeader, workDir)).contract);
+  }
+  let current: TestClient | undefined;
+  const closeCurrent = async () => {
+    await current?.close();
+    current = undefined;
+  };
+  return {
+    emptyContract(target) {
+      const contract = empty.get(target);
+      if (contract === undefined) throw new Error(`No empty ${target} contract`);
+      return contract;
+    },
+    async open(target, psl) {
+      await closeCurrent();
+      const emitted = await emitContract(target, psl, workDir);
+      if (target === 'sqlite') {
+        const path = `${workDir.nextPath('database')}.sqlite`;
+        await applyContract(target, emitted.json, path, workDir);
+        current = openSqliteClient(emitted.json, path);
+      } else {
+        await resetPostgres(server.url);
+        await applyContract(target, emitted.json, server.url, workDir);
+        current = openPostgresClient(emitted.json, server.url);
+      }
+      return current;
+    },
+    async dispose() {
+      await closeCurrent();
+      await server.close();
+      await workDir.remove();
+    },
+  };
+}
+
+/** A Better Auth model with one field of each type the filters and sorts are tested on. */
+export const probePlugin: BetterAuthPlugin = {
+  id: 'probe',
+  schema: {
+    probe: {
+      fields: {
+        text: { type: 'string', required: false },
+        flag: { type: 'boolean', required: false },
+        meta: { type: 'json', required: false },
+        at: { type: 'date', required: false },
+        n: { type: 'number', required: false },
+      },
+    },
+  },
+};
+
+export const probeOptions: BetterAuthOptions = {
+  plugins: [probePlugin],
+  rateLimit: { storage: 'database' },
+};
+
+/**
+ * The PSL the adapter prints for `probeOptions`, with `Probe.meta` declared `Json` and a column `extra` the application added.
+ */
+export function probePsl(databases: AdapterDatabases, target: TargetName): string {
+  const psl = pslForConfiguration(databases.emptyContract(target), probeOptions);
+  const edited = psl
+    .replace(/(model Probe \{[^}]*\n\s+meta\s+)String\?/, '$1Json?')
+    .replace(/(model Probe \{\n)/, '$1  extra String? @default("added by the application")\n');
+  if (!edited.includes('Json?') || !edited.includes('extra')) throw new Error('No Probe model');
+  return edited;
+}
