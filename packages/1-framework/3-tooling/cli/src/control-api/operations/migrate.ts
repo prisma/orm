@@ -45,7 +45,6 @@ import {
   errorPathUnreachable,
   type PathUnreachable,
   type PathUnreachableMeta,
-  type PlanArguments,
   planThenApply,
 } from '../../utils/cli-errors';
 import {
@@ -83,9 +82,11 @@ import { noInvariantPathError } from './no-invariant-path';
 import {
   appMigrationPlanOrigin,
   appSpaceOf,
-  databasePlanStart,
+  databasePositionOf,
   type MigrationPlanArgument,
+  type MigrationPlanArguments,
   migrationPlanFrom,
+  migrationPlanReplacing,
   migrationPlanTo,
   type PlanEnd,
   type PlanSpace,
@@ -240,7 +241,10 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     ref,
     permitPolicyChange: options.permitPolicyChange ?? false,
     targetHash: appTargetHash,
-    migrationPlanOrigin: appMigrationPlanOrigin(appSpaceOf(aggregate), markerRows),
+    migrationPlan: {
+      from: appMigrationPlanOrigin(appSpaceOf(aggregate), markerRows),
+      to: { kind: 'default' },
+    },
     invocation: options.invocation,
   });
   if (!checkedPolicies.ok) {
@@ -413,7 +417,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
         facts,
         facts.failedMigration === undefined
           ? undefined
-          : failedMigrationOnDisk(facts.failedMigration, migrationsDir, aggregate.app.spaceId),
+          : failedMigrationOnDisk(facts.failedMigration, migrationsDir, aggregate.app),
         options.invocation,
       ),
     );
@@ -1016,7 +1020,7 @@ export function neverPlannedSpaceFailure(
       space.spaceId,
       space.targetHash,
       run.migrationsDir,
-      migrationPlanFrom(run.appSpace, databasePlanStart(space.liveMarker?.storageHash)),
+      migrationPlanFrom(run.appSpace, databasePositionOf(space.liveMarker?.storageHash)),
       run.invocation,
     );
   }
@@ -1064,7 +1068,7 @@ export function unreachableSpaceFailure(
   });
 }
 
-/** Where `db migrate` goes, as `migration plan` would end there: the emitted contract when no `--to` was given. */
+/** Where `db migrate` goes, as `migration plan` would end there: the emitted contract when it was given no other target. */
 export function planEndOf(target: MigrateTarget | undefined): PlanEnd {
   if (target === undefined) return { kind: 'emitted' };
   return target.kind === 'ref'
@@ -1114,7 +1118,7 @@ export function buildPathNotFoundFailure(
   spaceId: string,
   fromHash: string,
   targetHash: string,
-  plan: PlanArguments,
+  plan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): CliStructuredError {
   const failure = pathNotFound(spaceId, fromHash, targetHash);
@@ -1133,11 +1137,14 @@ function pathNotFound(spaceId: string, fromHash: string, targetHash: string): Pa
 function failedMigrationOnDisk(
   failed: { readonly spaceId: string; readonly edge: AggregateMigrationEdgeRef },
   migrationsDir: string,
-  appSpaceId: string,
+  app: AggregateContractSpace,
 ): FailedMigrationOnDisk {
   return {
     directory: join(migrationsDir, failed.spaceId, failed.edge.dirName),
-    from: failed.edge.from,
-    ...(failed.spaceId === appSpaceId ? {} : { extensionSpaceId: failed.spaceId }),
+    replanFrom: migrationPlanReplacing(
+      { graph: app.graph(), refs: app.refs, packages: app.packages },
+      failed.edge,
+    ),
+    ...(failed.spaceId === app.spaceId ? {} : { extensionSpaceId: failed.spaceId }),
   };
 }

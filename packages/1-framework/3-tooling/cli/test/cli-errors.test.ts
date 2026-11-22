@@ -5,7 +5,6 @@ import {
   buildNeverPlannedFailure,
   buildPathNotFoundFailure,
 } from '../src/control-api/operations/migrate';
-import { reference } from '../src/control-api/operations/plan-arguments';
 import {
   errorDriverRequired,
   errorFamilyReadMarkerSqlRequired,
@@ -20,6 +19,8 @@ import {
   planThenApply,
 } from '../src/utils/cli-errors';
 import type { CliInvocation } from '../src/utils/printed-command';
+import { buildGraph, entry } from './utils/graph-helpers';
+import { reference } from './utils/plan-origins';
 
 const DEFAULT = { kind: 'default' } as const;
 
@@ -326,10 +327,15 @@ describe('errorRefSetHashNotInGraph', () => {
   });
 });
 
+const ONE_END_SPACE = {
+  graph: buildGraph([entry(EMPTY_CONTRACT_HASH, 'b'.repeat(64), 'initial')]),
+  refs: {},
+};
+
 describe('errorPlanOriginUnknown', () => {
   it('offers db update only for a database whose migration history does not need to be kept', () => {
-    expect(errorPlanOriginUnknown([], []).fix?.split('\n')[0]).toBe(
-      'Set the `db` ref to the contract your database is at (`{bin} migration ref set db <contract>`), or, on a database whose migration history does not need to be kept, advance it via `{bin} db update`.',
+    expect(errorPlanOriginUnknown([], ONE_END_SPACE).fix?.split('\n')[0]).toBe(
+      `Point the db ref at the contract your database is at with \`{bin} migration ref set db <contract>\`, replacing <contract> with one of \`${'b'.repeat(64)}\`, or, on a database whose migration history does not need to be kept, advance it via \`{bin} db update\`.`,
     );
   });
 });
@@ -338,8 +344,8 @@ describe('errorPlanOriginUnknown and errorPlanForgotTheFlag with no ref to plan 
   const END = 'b'.repeat(64);
 
   it.each([
-    ['errorPlanOriginUnknown', () => errorPlanOriginUnknown([], [END])],
-    ['errorPlanForgotTheFlag', () => errorPlanForgotTheFlag('c'.repeat(64), [], [END])],
+    ['errorPlanOriginUnknown', () => errorPlanOriginUnknown([], ONE_END_SPACE)],
+    ['errorPlanForgotTheFlag', () => errorPlanForgotTheFlag('c'.repeat(64), [], ONE_END_SPACE)],
   ] as const)(
     '%s gives the explicit plan as a choice that names where the history ends',
     (_, make) => {

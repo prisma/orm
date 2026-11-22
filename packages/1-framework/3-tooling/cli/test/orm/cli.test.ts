@@ -105,7 +105,7 @@ describe('the orm command family', () => {
         flag: undefined,
         replacement: [
           '{bin} contract emit',
-          '{bin} migration plan --name <name>',
+          '{bin} migration status',
           '{bin} db migrate --advance-ref db',
         ],
       },
@@ -209,10 +209,10 @@ describe('a retired invocation', () => {
   it.each([
     {
       path: 'migrate dev',
-      why: "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration plan --name <name>` (for `--create-only`, stop here), then `db migrate --advance-ref db`. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate dev` instead.",
+      why: "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration status`, which prints the `migration plan` that plans it from where the database is, and run that plan (for `--create-only`, stop here), then `db migrate --advance-ref db`. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate dev` instead.",
       nextActions: [
         step(1, 'prisma-test contract emit'),
-        step(2, 'prisma-test migration plan --name <name>'),
+        step(2, 'prisma-test migration status'),
         step(3, 'prisma-test db migrate --advance-ref db'),
         help('contract emit'),
       ],

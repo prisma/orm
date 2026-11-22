@@ -2,14 +2,9 @@ import type {
   BlockingObject,
   MigrationRunnerFailure,
 } from '@internal/framework-components/control';
-import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { basename, join } from 'pathe';
-import {
-  type MigrationPlanArgument,
-  type RunnablePlanArgument,
-  reference,
-} from '../control-api/operations/plan-arguments';
+import type { MigrationPlanArgument } from '../control-api/operations/plan-arguments';
 import { statementFlag } from '../control-api/statements/statement-flag';
 import type {
   FailedTypeChangeReport,
@@ -27,7 +22,6 @@ import {
   dbUpdateRerun,
   printedPath,
   printedPlan,
-  printedPlanCommand,
   quotedPlan,
   selfEmitCommand,
   writtenMigrationRunCommand,
@@ -41,7 +35,8 @@ import { schemaCheckIssues } from './schema-check-issues';
  */
 export interface FailedMigrationOnDisk {
   readonly directory: string;
-  readonly from: string;
+  /** The `--from` that plans it again once its directory is deleted. */
+  readonly replanFrom: MigrationPlanArgument;
   readonly extensionSpaceId?: string;
 }
 
@@ -403,8 +398,8 @@ export function dbInitRowsWithoutValueAdvice(
 interface FailedMigrationText {
   readonly directory: string;
   readonly name: string;
-  /** What `migration plan --from` takes to name the contract the migration starts from. */
-  readonly from: RunnablePlanArgument;
+  /** The `--from` that plans the migration again once its directory is deleted. */
+  readonly replanFrom: MigrationPlanArgument;
   readonly nodeCommand: string;
   readonly invocation: CliInvocation;
 }
@@ -418,10 +413,22 @@ function failedMigrationText(
   return {
     directory,
     name: dirName.slice(dirName.indexOf('_') + 1),
-    from: reference(failed.from === EMPTY_CONTRACT_HASH ? '@empty' : failed.from),
+    replanFrom: failed.replanFrom,
     nodeCommand: selfEmitCommand(invocation, join(failed.directory, 'migration.ts')),
     invocation,
   };
+}
+
+/** "plan it again with" the `migration plan` that replaces the deleted migration, or why none can. */
+function planAgain(failed: FailedMigrationText, flags: readonly string[]): string {
+  const plan = printedPlan(failed.invocation, { from: failed.replanFrom }, [
+    '--name',
+    failed.name,
+    ...flags,
+  ]);
+  return plan.kind === 'none'
+    ? `plan it again, though no plan can start where it did once it is deleted (${plan.reason})`
+    : `plan it again with ${quotedPlan(plan)}`;
 }
 
 /**
@@ -437,13 +444,8 @@ function replan(
 ): NextAction {
   const others =
     except === undefined ? OTHER_STATEMENTS : `${OTHER_STATEMENTS} except any ${except}`;
-  const plan = printedPlanCommand(failed.invocation, failed.from, [
-    '--name',
-    failed.name,
-    ...flags,
-  ]);
   return chooseAction(
-    `${opening} \`${failed.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quoted(plan)}, ${others}, ${afterPlan}`,
+    `${opening} \`${failed.directory}\` (copy any code you wrote in its migration.ts first), ${planAgain(failed, flags)}, ${others}, ${afterPlan}`,
   );
 }
 
@@ -613,12 +615,8 @@ function keepOptional(
   failedMigration: FailedMigrationText,
   invocation: CliInvocation,
 ): NextAction {
-  const plan = printedPlanCommand(invocation, failedMigration.from, [
-    '--name',
-    failedMigration.name,
-  ]);
   return editFileAction(
-    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and plan it again with ${quoted(plan)}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and ${planAgain(failedMigration, [])}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
   );
 }
 
@@ -643,13 +641,9 @@ function migrateSchemaCheckAdvice(
     `If ${file} does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, ${run}, and run ${dbMigrateAgain(invocation)}`,
   );
   if (failedMigration === undefined) return [fixMigration];
-  const plan = printedPlanCommand(invocation, failedMigration.from, [
-    '--name',
-    failedMigration.name,
-  ]);
   return [
     editFileAction(
-      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quoted(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}`,
+      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), ${planAgain(failedMigration, [])}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}`,
     ),
     fixMigration,
   ];

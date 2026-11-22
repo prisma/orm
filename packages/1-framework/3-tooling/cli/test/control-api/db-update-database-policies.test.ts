@@ -155,7 +155,7 @@ function update(args: {
 }
 
 const RECOVERY =
-  'No migration can be planned to move it. No migration records contract origin, and `migration plan` starts only from a contract a migration records.';
+  'No migration can be planned to move it. No ref names contract origin, and with no migrations `migration plan` starts only from `@empty` or a ref.';
 
 describe('executeDbUpdate, database policies', () => {
   it.each(['plan', 'apply'] as const)(

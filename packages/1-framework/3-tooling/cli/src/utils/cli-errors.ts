@@ -29,9 +29,12 @@ import type { RefResolutionError } from '@internal/migration-tools/ref-resolutio
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
-import type {
-  MigrationPlanArgument,
-  MigrationPlanTargetArgument,
+import {
+  type MigrationPlanArgument,
+  type MigrationPlanArguments,
+  type MigrationPlanTargetArgument,
+  migrationPlanChoice,
+  type PlanSpace,
 } from '../control-api/operations/plan-arguments';
 import { shellQuoted, statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
@@ -482,38 +485,47 @@ export function errorRefSetBundleNotFound(hash: string): ActionableCliError {
   );
 }
 
-/** A `migration plan` whose `--from` the user chooses, for `reason`, from where the history ends. */
-function explicitOriginPlan(reason: string, historyEnds: readonly string[]) {
-  return printedChoicePlan(undefined, { kind: 'ambiguous', reason, candidates: historyEnds }, []);
+/**
+ * The choices a refusal of `migration plan`'s origin gives, for `reason`: a plan from a contract
+ * the rule names, and the `db` ref pointed at one, which `migration ref set` takes only for a
+ * contract a migration records.
+ */
+function originChoices(space: PlanSpace, reason: string) {
+  const choice = migrationPlanChoice(space, reason);
+  const refTargets = choice.candidates.filter((candidate) => candidate !== '@empty');
+  const refSet = '{bin} migration ref set db <contract>';
+  const refChoice = `Point the db ref at the contract your database is at with \`${refSet}\`, replacing <contract> with ${
+    refTargets.length > 0
+      ? `one of ${refTargets.map((target) => `\`${target}\``).join(', ')}`
+      : 'a contract `{bin} migration list` shows'
+  }`;
+  return { plan: printedChoicePlan(undefined, choice, []), refChoice };
 }
 
 export function errorPlanForgotTheFlag(
   resolvedHash: string,
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
-  historyEnds: readonly string[],
+  space: PlanSpace,
   options?: { readonly cause?: unknown },
 ): ActionableCliError {
   const reachableList =
     reachableRefs.length > 0
       ? reachableRefs.map((r) => `${r.name} (${r.hash})`).join(', ')
       : '(none)';
-  const explicit = explicitOriginPlan(`No migration records contract ${resolvedHash}`, historyEnds);
+  const { plan: explicit, refChoice } = originChoices(
+    space,
+    `No migration records contract ${resolvedHash}`,
+  );
   const refFix =
     reachableRefs.length > 0
       ? `Run migration plan with ${reachableRefs.map((r) => `--from ${r.name}`).join(' or ')}.`
-      : `Plan from a contract a migration records with \`${explicit.command}\`: ${explicit.fill}. Or point the db ref at one with \`{bin} migration ref set db <contract>\`.`;
+      : `Plan from a contract a migration records with \`${explicit.command}\`: ${explicit.fill}. Or ${refChoice.charAt(0).toLowerCase()}${refChoice.slice(1)}.`;
   const nextActions =
     reachableRefs.length > 0
       ? reachableRefs.map((ref) =>
           runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
         )
-      : [
-          planAction('Plan from an explicit origin', explicit),
-          runCommandAction(
-            'Point the db ref at a graph node',
-            '{bin} migration ref set db <contract>',
-          ),
-        ];
+      : [planAction('Plan from an explicit origin', explicit), chooseAction(refChoice)];
   return new ActionableCliError(
     'MIGRATION.HASH_NOT_IN_GRAPH',
     `Resolved from-hash is not in the migration graph: ${resolvedHash}`,
@@ -590,31 +602,30 @@ export function errorSnapshotMissing(
  */
 export function errorPlanOriginUnknown(
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
-  historyEnds: readonly string[],
+  space: PlanSpace,
 ): ActionableCliError {
-  const explicit = explicitOriginPlan(
+  const { plan: explicit, refChoice } = originChoices(
+    space,
     'No `db` ref and no --from say where the plan starts',
-    historyEnds,
   );
   const fromSuggestion =
     reachableRefs.length > 0
       ? reachableRefs.map((r) => `--from ${r.name}`).join(' or ')
       : '--from <contract>';
-  const refSetCommand = '{bin} migration ref set db <contract>';
   return new ActionableCliError(
     'MIGRATION.PLAN_ORIGIN_UNKNOWN',
     'Cannot determine the plan origin: migrations exist but no origin is named',
     {
       why: 'Migrations exist on disk, but there is no `db` ref and no --from was given, so the plan origin would silently fall back to an empty database and the resulting migration would recreate everything the existing migrations already create.',
       fix: [
-        `Set the \`db\` ref to the contract your database is at (\`${refSetCommand}\`), or, on a database whose migration history does not need to be kept, advance it via \`{bin} db update\`.`,
+        `${refChoice}, or, on a database whose migration history does not need to be kept, advance it via \`{bin} db update\`.`,
         reachableRefs.length > 0
           ? `Or pass the origin explicitly: \`{bin} migration plan ${fromSuggestion}\`.`
           : `Or pass the origin explicitly: \`${explicit.command}\`. ${explicit.fill}.`,
         'Or pass --from @empty to deliberately plan from an empty database.',
       ].join('\n'),
       nextActions: [
-        runCommandAction('Point the db ref at the origin contract', refSetCommand),
+        chooseAction(refChoice),
         ...(reachableRefs.length > 0
           ? reachableRefs.map((ref) =>
               runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
@@ -722,9 +733,8 @@ const MIGRATION_PLAN_VERBS: readonly string[] = ['rename', 'delete', 'convert', 
  * `refused`, `--convert` or `--backfill` statements that ask for code the user writes, were given
  * to `db update`, which applies its plan directly and so has no migration file whose slot the user
  * could fill. `statements` are every statement the user gave, in the order given: the `migration
- * plan` command the error suggests carries each one that command accepts, and passes `planFrom` to
- * `--from`; with no `planFrom`, no plan can start where the database is, and the error suggests
- * none. Its commands repeat the `--config` of `invocation`.
+ * plan` command the error suggests carries each one that command accepts, from `origin`; when no plan
+ * can start there, the error says why and suggests none. Its commands repeat the `--config` of `invocation`.
  */
 function needsMigrationFileReason(refused: readonly StatementText[]): string {
   const converts = refused.some(({ verb }) => verb === 'convert');
@@ -1010,12 +1020,6 @@ export interface PathUnreachableAdvice {
   readonly nextActions: readonly NextAction[];
 }
 
-/** What the advised `migration plan` passes to `--from` and `--to`. */
-export interface PlanArguments {
-  readonly from: MigrationPlanArgument;
-  readonly to: MigrationPlanTargetArgument;
-}
-
 /**
  * The advice to plan the missing migration in the app space and apply it, or, when no `migration
  * plan` can author it, why not. A space with no migrations has no contract `--to` resolves, so
@@ -1024,7 +1028,7 @@ export interface PlanArguments {
  */
 export function planThenApply(
   meta: PathUnreachableMeta,
-  plan: PlanArguments,
+  plan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): PathUnreachableAdvice {
   const target: MigrationPlanTargetArgument =

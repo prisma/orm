@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import { NOT_RECORDED_REASON, originOf } from './plan-origins';
+import { onDisk } from './runner-failure-errors';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 const FROM = 'sha256:0123';
@@ -92,7 +93,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
           planStartsFromMarker: true,
         },
       },
-      { directory: '/work/app/migrations/app/20260101T0000_retire', from: FROM },
+      onDisk({ directory: '/work/app/migrations/app/20260101T0000_retire', from: FROM }),
       PROJECT,
     );
 
@@ -108,7 +109,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
     const error = migrateRunnerFailureError(
       failure,
       { rowsHoldingValue: [withoutEdit] },
-      { directory: '/work/app/migrations/app/20260101T0000_retire', from: FROM },
+      onDisk({ directory: '/work/app/migrations/app/20260101T0000_retire', from: FROM }),
       PROJECT,
     );
 
@@ -174,7 +175,7 @@ describe('the advice when a removed enum value is still held by rows of a requir
       const error = migrateRunnerFailureError(
         failure,
         { rowsHoldingValue: several },
-        { directory: '/work/app/migrations/app/20260101T0000_retire', from: FROM },
+        onDisk({ directory: '/work/app/migrations/app/20260101T0000_retire', from: FROM }),
         PROJECT,
       );
 

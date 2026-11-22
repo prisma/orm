@@ -185,7 +185,7 @@ export async function executeMigrationNewCommand(
       return notOk(
         errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', 'The db ref is not a graph node yet', {
           why: `The db ref points at ${origin.value.fromHash}, but ${appMigrationsRelative} contains no migrations, so that contract is not a graph node and nothing can chain from it.`,
-          fix: 'Run `{bin} migration plan` first: on an empty graph it writes the baseline migration for the db ref alongside the delta, after which `migration new` can chain from it.',
+          fix: 'Run `{bin} migration plan` first: on an empty graph it writes the baseline migration for the db ref, and a delta to the emitted contract when the contract changed. Then run `migration new` with `--from` the contract the new migration starts at, which `{bin} migration list` shows: without it, `migration new` starts from the db ref, where a contract that did not change leaves nothing to scaffold.',
           meta: { refName: origin.value.refName, resolvedHash: origin.value.fromHash },
         }),
       );

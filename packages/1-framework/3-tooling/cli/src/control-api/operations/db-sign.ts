@@ -158,7 +158,10 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
       ref: undefined,
       permitPolicyChange: false,
       targetHash: aggregate.app.contract().storage.storageHash,
-      migrationPlanOrigin: appMigrationPlanOrigin(appSpaceOf(aggregate), markers),
+      migrationPlan: {
+        from: appMigrationPlanOrigin(appSpaceOf(aggregate), markers),
+        to: { kind: 'default' },
+      },
       invocation: options.invocation,
     });
     if (!permitted.ok) return notOk(permitted.failure);

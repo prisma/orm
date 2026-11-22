@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { reference } from '../../src/control-api/operations/plan-arguments';
 import { dbInitPlanningFailedError } from '../../src/utils/db-init-failure';
+import { reference } from './plan-origins';
 
 const typeMismatch = { kind: 'typeMismatch', summary: 'Column "user"."age" changes type' };
 const refusedWidening = {

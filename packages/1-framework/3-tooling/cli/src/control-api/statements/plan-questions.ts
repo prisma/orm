@@ -26,6 +26,8 @@ import {
   STORE_ORIGIN_SNAPSHOT_STEPS,
   type UnusedConsent,
 } from '../../utils/cli-errors';
+import { type CliInvocation, printedPlan, quotedPlan } from '../../utils/printed-command';
+import type { MigrationPlanArgument } from '../operations/plan-arguments';
 import type { ConsentVerb } from './parse-consent';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
@@ -315,6 +317,22 @@ const DELETE_CASTS =
   '--delete keeps the field and lets the database cast its values, which can change or lose some.';
 
 /** What each answer to a type change does: `--convert`, where the command writes a migration to fill in, and `--delete`. */
+/** The sentence that says which `migration plan` writes the values of `fields`, or why none can. */
+function backfillPlanText(
+  migrationPlan: QuestionMigrationPlan | undefined,
+  fields: readonly string[],
+  values: string,
+): string {
+  const flags = fields.map((each) => statementFlag({ verb: 'backfill', text: each }));
+  if (migrationPlan === undefined) {
+    return `plan the change with migration plan and ${flags.join(' ')} to write ${values} in migration.ts`;
+  }
+  const plan = printedPlan(migrationPlan.invocation, { from: migrationPlan.from }, flags);
+  return plan.kind === 'none'
+    ? `no migration can be planned to write ${values} either. ${plan.reason}`
+    : `plan the change with ${quotedPlan(plan)} to write ${values} in migration.ts`;
+}
+
 function typeChangeNote(loss: PlannedDataLoss, canConvert: boolean): readonly string[] {
   if (loss.loss !== 'typeChange') return [];
   return loss.subject.kind === 'field' && canConvert
@@ -584,6 +602,8 @@ type DataLossContracts = StatementContracts & {
   readonly originKnown: boolean;
   /** Whether the command writes a migration whose conversion the user fills in. */
   readonly canConvert: boolean;
+  /** For a command that writes no migration, the `migration plan` that would write a value it cannot. */
+  readonly migrationPlan?: QuestionMigrationPlan;
   /** The command's words for the edits that keep a subject's data; none when it gives none. */
   readonly keepDataEditAdvice?: KeepDataEditAdvice;
   /** The subjects of the round's questions whose data the command may say how to keep, in question order. */
@@ -591,6 +611,12 @@ type DataLossContracts = StatementContracts & {
   /** The fields the plan gives a temporary value, in the destination contract. */
   readonly temporaryValues: readonly { readonly subject: MigrationSubject }[];
 };
+
+/** Where a `migration plan` a question names starts, and how the CLI was run. */
+export interface QuestionMigrationPlan {
+  readonly from: MigrationPlanArgument;
+  readonly invocation: CliInvocation | undefined;
+}
 
 /** What a command says of keeping a subject's data: why its answer loses it, if anything, and each way to keep it. */
 export interface KeepDataAdvice {
@@ -832,7 +858,7 @@ function newRequiredFieldNote(
       ? []
       : !contracts.canConvert
         ? [
-            `If you answer delete, the new required ${named(needed)} ${needed.length === 1 ? 'gets' : 'get'} no temporary value: plan the change with migration plan ${backfills} to write ${needed.length === 1 ? 'its value' : 'their values'} in migration.ts.`,
+            `If you answer delete, the new required ${named(needed)} ${needed.length === 1 ? 'gets' : 'get'} no temporary value: ${backfillPlanText(contracts.migrationPlan, needed, needed.length === 1 ? 'its value' : 'their values')}.`,
           ]
         : needed.length === 1
           ? [
@@ -1180,6 +1206,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
   readonly replan: (statements: readonly StatementText[]) => Promise<Result<TPlan, TFailure>>;
   /** The command's words for the edits that keep a subject's data. */
   readonly keepDataEditAdvice?: KeepDataEditAdvice;
+  readonly migrationPlan?: QuestionMigrationPlan;
 }): Promise<
   Result<
     {
@@ -1203,6 +1230,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
       canConvert: input.canConvert,
       statements,
       ...ifDefined('keepDataEditAdvice', input.keepDataEditAdvice),
+      ...ifDefined('migrationPlan', input.migrationPlan),
       temporaryValues: plan.temporaryValues,
     };
     const pending = <TEntry extends PlannedSubject>(

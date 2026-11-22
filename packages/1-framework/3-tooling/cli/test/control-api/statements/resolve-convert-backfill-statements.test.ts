@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { reference } from '../../../src/control-api/operations/plan-arguments';
 import {
   resolveStatements,
   type StatementOrigin,
@@ -9,6 +8,7 @@ import {
   type StatementText,
 } from '../../../src/control-api/statements/statement-text';
 import { errorStatementNeedsMigrationFile } from '../../../src/utils/cli-errors';
+import { reference } from '../../utils/plan-origins';
 import { contractOf, expectFailure, expectValue } from './statement-fixtures';
 
 const UNRESOLVED = 'MIGRATION.STATEMENT_UNRESOLVED';

@@ -17,13 +17,14 @@ import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildPathNotFoundFailure } from '../../src/control-api/operations/migrate';
-import { reference } from '../../src/control-api/operations/plan-arguments';
 import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import { stdoutErrorMeta } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
+import { reference } from '../utils/plan-origins';
+import { onDisk } from '../utils/runner-failure-errors';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const DEFAULT = { kind: 'default' } as const;
@@ -474,7 +475,7 @@ describe('migrate', () => {
         migrateRunnerFailureError(
           runnerFailure,
           runnerFailureFacts(runnerFailure, []),
-          { directory: join(cwd, 'migrations', 'app', '20261015T1200_initial'), from: C1 },
+          onDisk({ directory: join(cwd, 'migrations', 'app', '20261015T1200_initial'), from: C1 }),
           invocation,
         ),
       ),

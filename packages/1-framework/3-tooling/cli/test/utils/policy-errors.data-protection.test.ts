@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { reference } from '../../src/control-api/operations/plan-arguments';
 import { errorDataProtectionForbids } from '../../src/utils/policy-errors';
 import type { CliInvocation } from '../../src/utils/printed-command';
-import { NOT_RECORDED, NOT_RECORDED_REASON } from './plan-origins';
+import { NOT_RECORDED, NOT_RECORDED_REASON, reference } from './plan-origins';
 
 const invocation: CliInvocation = { cwd: '/work/app', configPath: undefined, dbGiven: true };
 

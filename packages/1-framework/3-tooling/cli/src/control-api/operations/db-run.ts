@@ -42,6 +42,8 @@ import {
   type SnapshotContentVerifier,
 } from '@internal/migration-tools/contract-snapshot-store';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
+import type { MigrationGraph } from '@internal/migration-tools/graph';
+import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -117,7 +119,14 @@ import {
 } from './database-policies';
 import { stripOperations } from './migration-helpers';
 import { structuralPathOf } from './no-invariant-path';
-import { appMigrationPlanOrigin, appSpaceOf, type MigrationPlanArgument } from './plan-arguments';
+import {
+  appMigrationPlanOrigin,
+  appSpaceOf,
+  type MigrationPlanArgument,
+  type MigrationPlanArguments,
+  migrationPlanTo,
+  type PlanEnd,
+} from './plan-arguments';
 import {
   buildPerSpaceBreakdown,
   collectOrdered,
@@ -249,6 +258,17 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   // 2. Read live DB state (markers + schema).
   const markerRows = await familyInstance.readAllMarkers({ driver });
   const migrationPlanOrigin = appMigrationPlanOrigin(appSpaceOf(aggregate), markerRows);
+  const migrationPlan: MigrationPlanArguments = {
+    from: migrationPlanOrigin,
+    to: migrationPlanTo(
+      appSpaceOf(aggregate),
+      dbUpdatePlanEnd(
+        options.action === 'dbUpdate' ? options.ref : undefined,
+        contract.storage.storageHash,
+        aggregate.app.graph(),
+      ),
+    ),
+  };
 
   // 2c. The database's policies decide whether `db update` may move it, before anything is planned.
   let checkedPolicies: CheckedDatabasePolicies | undefined;
@@ -264,7 +284,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       ref: options.ref,
       permitPolicyChange: options.permitPolicyChange,
       targetHash: contract.storage.storageHash,
-      migrationPlanOrigin,
+      migrationPlan,
       invocation: options.invocation,
     });
     if (!checked.ok) {
@@ -371,7 +391,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       appSpaceId: aggregate.app.spaceId,
       command: 'db update',
       invocation: options.invocation,
-      migrationPlan: { from: migrationPlanOrigin, to: { kind: 'default' } },
+      migrationPlan,
       forbidden: forbiddingSettingsOfRun(checkedPolicies, options.ref),
       dataLoss: operations(planned.subjects.dataLoss),
       accessChanges: operations(planned.subjects.accessChanges),
@@ -476,6 +496,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       destination: contract,
       answer: options.answerQuestions,
       keepDataEditAdvice: dbUpdateKeepDataEditAdvice(options.invocation, migrationPlanOrigin),
+      migrationPlan: { from: migrationPlanOrigin, invocation: options.invocation },
       replan: (planned) => plan([...consentTexts, ...planned], resolveRenames(planned)),
     });
     if (!answered.ok) {
@@ -1001,6 +1022,21 @@ function wrapApplyResult(args: {
     summary: args.summary,
   };
   return ok(success);
+}
+
+/**
+ * Where `db update` goes, as `migration plan` would end there: the ref `--to` named, a contract a
+ * migration records, or else the emitted contract, the only other contract `db update` moves to.
+ */
+function dbUpdatePlanEnd(
+  ref: NamedRef | undefined,
+  targetHash: string,
+  graph: MigrationGraph,
+): PlanEnd {
+  if (ref !== undefined) return { kind: 'ref', name: ref.name };
+  return isGraphNode(targetHash, graph)
+    ? { kind: 'contract', hash: targetHash }
+    : { kind: 'emitted' };
 }
 
 /** The contract the application space's database is at, when a migration records it. */

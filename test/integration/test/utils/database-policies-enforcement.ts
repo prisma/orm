@@ -10,6 +10,7 @@ import { expect, it } from 'vitest';
 import {
   appMarker,
   errorOf,
+  latestMigrationTo,
   MIGRATE_ONLY_DECLARED,
   MIGRATE_ONLY_RECORDED,
   type PolicyProject,
@@ -66,6 +67,11 @@ async function migrationsOnlyDatabase(project: PolicyProject): Promise<string> {
   return base;
 }
 
+/** The commands `text` prints in backticks, as a shell passes their words after the bin. */
+function printedCommands(text: string): readonly (readonly string[])[] {
+  return [...text.matchAll(/`prisma-test ([^`]+)`/g)].map((match) => (match[1] ?? '').split(/\s+/));
+}
+
 export function definePolicyEnforcementJourneys(
   withProject: WithPolicyProject,
   timeout: number,
@@ -96,6 +102,60 @@ export function definePolicyEnforcementJourneys(
         expect(plan.exitCode, `the advised migration plan: ${plan.stdout}\n${plan.stderr}`).toBe(0);
         const migrated = await runMigrate(project.ctx);
         expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'advises, for db update --to a ref that permits only migrations, a plan to that ref and a db migrate that both run',
+    async (test) => {
+      await withProject(test, async (project) => {
+        const base = await planTo(project, 'base', 'initial');
+        const migrated = await runMigrate(project.ctx);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+        writeContract(project, 'unique');
+        expect((await runContractEmit(project.ctx)).exitCode).toBe(0);
+        const root = await planMigrationAndSelfEmit(project.ctx, [
+          '--name',
+          'another-root',
+          '--from',
+          '@empty',
+        ]);
+        expect(root.exitCode, `plan another root: ${root.stdout}\n${root.stderr}`).toBe(0);
+        await writePolicyRef(
+          project,
+          'production',
+          latestMigrationTo(project),
+          MIGRATE_ONLY_DECLARED,
+        );
+        writeContract(project, 'next');
+        expect((await runContractEmit(project.ctx)).exitCode).toBe(0);
+
+        const refused = errorOf(
+          await runDbUpdate(project.ctx, [
+            '--to',
+            'production',
+            '--permit-policy-change',
+            '--json',
+          ]),
+        );
+        expect(refused['code'], JSON.stringify(refused)).toBe('MIGRATION.CHANGE_POLICY_FORBIDS');
+        const [plan, apply] = printedCommands(JSON.stringify(refused['nextActions']));
+        expect(plan).toEqual(['migration', 'plan', '--from', base, '--to', 'production']);
+        expect(apply).toEqual(['db', 'migrate', '--to', 'production', '--permit-policy-change']);
+
+        const planned = await planMigrationAndSelfEmit(project.ctx, [
+          ...(plan ?? []).slice(2),
+          '--name',
+          'as-advised',
+        ]);
+        expect(planned.exitCode, `the advised plan: ${planned.stdout}\n${planned.stderr}`).toBe(0);
+        const applied = await runMigrate(project.ctx, (apply ?? []).slice(2));
+        expect(
+          applied.exitCode,
+          `the advised db migrate: ${applied.stdout}\n${applied.stderr}`,
+        ).toBe(0);
       });
     },
     timeout,

@@ -4,7 +4,7 @@ import {
 } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { checkRunPolicies } from '../../src/control-api/operations/database-policies';
-import { reference } from '../../src/control-api/operations/plan-arguments';
+import { reference } from '../utils/plan-origins';
 
 const TARGET = 'b'.repeat(64);
 
@@ -24,7 +24,7 @@ function check(args: {
         : { name: 'production', hash: TARGET, invariants: [], policies: args.declared },
     permitPolicyChange: args.permitPolicyChange,
     targetHash: TARGET,
-    migrationPlanOrigin: reference(TARGET),
+    migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
     invocation: undefined,
   });
 }
@@ -85,7 +85,7 @@ describe('checkRunPolicies', () => {
       },
       permitPolicyChange: true,
       targetHash: TARGET,
-      migrationPlanOrigin: reference(TARGET),
+      migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
       invocation: undefined,
     });
     const reconcile = '{bin} db update --to production --permit-policy-change';

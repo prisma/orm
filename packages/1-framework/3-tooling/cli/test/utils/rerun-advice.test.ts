@@ -9,6 +9,7 @@ import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import type { CliInvocation } from '../../src/utils/printed-command';
 import { originOf } from './plan-origins';
+import { onDisk } from './runner-failure-errors';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 const GIVEN = { ...PROJECT, rerunArgs: ['--to', 'production', '--permit-policy-change'] };
@@ -125,7 +126,7 @@ function migrateCommands(entry: AdviceCase, invocation: CliInvocation): readonly
   const error = migrateRunnerFailureError(
     failure(entry.meta),
     entry.facts,
-    entry.failed,
+    entry.failed === undefined ? undefined : onDisk(entry.failed),
     invocation,
   );
   return commandsIn(error.fix, 'db migrate');

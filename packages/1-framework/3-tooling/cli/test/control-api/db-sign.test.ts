@@ -279,7 +279,7 @@ describe('signContractSpaces', () => {
         {
           kind: 'user-choice',
           label:
-            'No migration can be planned to move it. No migration records contract old-app, and `migration plan` starts only from a contract a migration records.',
+            'No migration can be planned to move it. No ref names contract old-app, and with no migrations `migration plan` starts only from `@empty` or a ref.',
         },
       ],
       meta: { spaceId: 'app', command: 'db sign', change: ['migrate'] },

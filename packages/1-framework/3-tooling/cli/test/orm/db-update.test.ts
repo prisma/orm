@@ -12,7 +12,6 @@ import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { reference } from '../../src/control-api/operations/plan-arguments';
 import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
@@ -20,7 +19,7 @@ import { errorMigrationPlanningFailed } from '../../src/utils/cli-errors';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { stdoutErrorMeta, stdoutFrames } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
-import { NOT_RECORDED } from '../utils/plan-origins';
+import { NOT_RECORDED, reference } from '../utils/plan-origins';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const REFUSAL =

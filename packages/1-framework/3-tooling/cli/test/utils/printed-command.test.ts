@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { reference } from '../../src/control-api/operations/plan-arguments';
 import { BIN_COMMANDS } from '../../src/orm/cli';
 import { dbFlag } from '../../src/orm/flags';
 import {
@@ -9,6 +8,7 @@ import {
   rerunFlags,
   selfEmitCommand,
 } from '../../src/utils/printed-command';
+import { reference } from './plan-origins';
 
 describe('selfEmitCommand', () => {
   it('names the migration.ts relative to where the CLI ran, with the --config it was given', () => {

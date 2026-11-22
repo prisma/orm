@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { reference } from '../../src/control-api/operations/plan-arguments';
 import { errorChangePolicyForbids, errorPolicyMismatch } from '../../src/utils/policy-errors';
 import type { CliInvocation } from '../../src/utils/printed-command';
-import { NOT_RECORDED, NOT_RECORDED_REASON } from './plan-origins';
+import { NOT_RECORDED, NOT_RECORDED_REASON, reference } from './plan-origins';
 
 const TARGET = 'b'.repeat(64);
 const invocation: CliInvocation = { cwd: '/work/app', configPath: undefined, dbGiven: true };
@@ -48,7 +47,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'marker' },
         targetHash: TARGET,
-        migrationPlanOrigin: NOT_RECORDED,
+        migrationPlan: { from: NOT_RECORDED, to: { kind: 'default' } },
         invocation: undefined,
       }).fix,
     ).toBe(`No migration can be planned to move it. ${NOT_RECORDED_REASON}.`);
@@ -64,7 +63,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'marker' },
         targetHash: TARGET,
-        migrationPlanOrigin: reference(TARGET),
+        migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation,
       }).toEnvelope(),
     ).toEqual({
@@ -87,7 +86,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'marker' },
         targetHash: TARGET,
-        migrationPlanOrigin: reference(TARGET),
+        migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation,
       }).toEnvelope(),
     ).toMatchObject({
@@ -107,7 +106,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['reconcile'],
         source: { kind: 'marker' },
         targetHash: TARGET,
-        migrationPlanOrigin: reference(TARGET),
+        migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation,
       }).toEnvelope(),
     ).toEqual({
@@ -132,7 +131,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'ref', refName: 'production' },
         targetHash: TARGET,
-        migrationPlanOrigin: reference(TARGET),
+        migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation: { ...invocation, configPath: 'app.config.ts' },
       }).toEnvelope(),
     ).toEqual({
@@ -158,7 +157,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['reconcile'],
         source: { kind: 'ref', refName: 'production' },
         targetHash: TARGET,
-        migrationPlanOrigin: reference(TARGET),
+        migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         invocation: { ...invocation, configPath: 'app.config.ts' },
       }).toEnvelope(),
     ).toEqual({
@@ -189,7 +188,7 @@ describe('errorChangePolicyForbids', () => {
           change: ['reconcile'],
           source: { kind: 'marker' },
           targetHash: TARGET,
-          migrationPlanOrigin: reference(TARGET),
+          migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
           ref: { name: 'production', permitPolicyChange },
           invocation,
         }).toEnvelope(),
@@ -212,7 +211,7 @@ describe('errorChangePolicyForbids', () => {
         change: ['migrate'],
         source: { kind: 'marker' },
         targetHash: TARGET,
-        migrationPlanOrigin: reference(TARGET),
+        migrationPlan: { from: reference(TARGET), to: { kind: 'default' } },
         ref: { name: 'production', permitPolicyChange: false },
         invocation,
       }).toEnvelope(),

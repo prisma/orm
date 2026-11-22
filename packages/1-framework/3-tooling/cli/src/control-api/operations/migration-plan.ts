@@ -92,7 +92,7 @@ import {
   runContractSpaceSeedPhase,
 } from './contract-space-seed-phase';
 import { forbiddingSettingsOfRef, refuseForbiddenChanges } from './database-policies';
-import { migrationPlanFromRun, reference } from './plan-arguments';
+import { migrationPlanFromRun, migrationPlanTo } from './plan-arguments';
 import { resolveFromForPlan, resolveToForPlan } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
@@ -863,7 +863,10 @@ async function executeMigrationPlanCommandInner(
             invocation: invocationOf(options),
             migrationPlan: {
               from: migrationPlanFromRun(options.from, fromResolution),
-              to: reference(toRef.name),
+              to: migrationPlanTo(
+                { graph: resolutionSpace.graph(), refs: resolutionSpace.refs },
+                { kind: 'ref', name: toRef.name },
+              ),
             },
             forbidden: forbiddingSettingsOfRef(toRef),
             dataLoss: plannedOperations(leg, leg.dataLoss, planned),

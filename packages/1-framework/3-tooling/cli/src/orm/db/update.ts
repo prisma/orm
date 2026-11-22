@@ -7,6 +7,7 @@ import {
 import { readMigrationsDir } from '@internal/migration-tools/io';
 import { reconstructGraph } from '@internal/migration-tools/migration-graph';
 import { readRefs } from '@internal/migration-tools/refs';
+import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -16,7 +17,6 @@ import {
   notOk,
   ok,
 } from '@prisma/cli-engine/protocol';
-import { join } from 'pathe';
 import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
@@ -24,8 +24,10 @@ import {
   resolveContractRefToSnapshot,
 } from '../../control-api/operations/contract-snapshot-resolution';
 import {
-  databasePlanStart,
+  type DatabasePosition,
+  databasePositionOf,
   type MigrationPlanArgument,
+  migrationPlanChoice,
   migrationPlanFrom,
   type PlanSpace,
 } from '../../control-api/operations/plan-arguments';
@@ -550,15 +552,19 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
 export const dbUpdateCommand = createDbUpdateCommand(createControlClient);
 
 /**
- * The `--from` a `migration plan` for the database takes. The migrations and refs are read
- * offline; when the database cannot be read in time, the user chooses the contract, or, with no
- * migrations, no plan can name it.
+ * The `--from` a `migration plan` for the database takes. The migrations and refs are read offline;
+ * when the database cannot be read, the user chooses where the plan starts, told why.
  */
 async function migrationPlanOriginIfReachable(
   inputs: Parameters<typeof prepareMigrationRun>[0],
 ): Promise<MigrationPlanArgument> {
   const prepared = await prepareMigrationRun(inputs);
-  if (!prepared.ok) return unreadDatabaseOrigin(undefined);
+  if (!prepared.ok) {
+    return migrationPlanChoice(
+      undefined,
+      'The CLI could not prepare a connection to the database from the config',
+    );
+  }
   const { client, dbConnection, migrationsDir } = prepared.value;
   const space = await readPlanSpace(migrationsDir).catch(() => undefined);
   const readMarker = async () => {
@@ -566,30 +572,37 @@ async function migrationPlanOriginIfReachable(
       existingDatabaseOnly: true,
       connectTimeoutMs: MARKER_READ_TIMEOUT_MS,
     });
-    return { marker: await client.readMarker() };
+    return { kind: 'read', marker: await client.readMarker() } as const;
   };
   const settled = readMarker()
-    .catch(() => undefined)
+    .catch((error: unknown) => ({ kind: 'failed', cause: causeText(error) }) as const)
     .finally(() => closeQuietly(client));
   const read = await settledWithin(settled, MARKER_READ_TIMEOUT_MS);
-  if (space === undefined || read === undefined) return unreadDatabaseOrigin(space);
-  return migrationPlanFrom(space, databasePlanStart(read.marker?.storageHash));
+  const position: DatabasePosition =
+    read === undefined
+      ? {
+          kind: 'unknown',
+          reason: `The CLI could not read the database within ${MARKER_READ_TIMEOUT_MS / 1000} seconds to find the contract it is at`,
+        }
+      : read.kind === 'failed'
+        ? { kind: 'unknown', reason: `The CLI could not read the database: ${read.cause}` }
+        : databasePositionOf(read.marker?.storageHash);
+  return space === undefined
+    ? migrationPlanChoice(
+        undefined,
+        position.kind === 'unknown' ? position.reason : 'The CLI could not read the migrations',
+      )
+    : migrationPlanFrom(space, position);
+}
+
+function causeText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function readPlanSpace(migrationsDir: string): Promise<PlanSpace> {
-  const appDir = join(migrationsDir, APP_SPACE_ID);
+  const appDir = spaceMigrationDirectory(migrationsDir, APP_SPACE_ID);
   const { packages } = await readMigrationsDir(appDir, { migrationsDir });
-  return { graph: reconstructGraph(packages), refs: await readRefs(join(appDir, 'refs')) };
-}
-
-function unreadDatabaseOrigin(space: PlanSpace | undefined): MigrationPlanArgument {
-  const reason = `The CLI could not read the database within ${MARKER_READ_TIMEOUT_MS / 1000} seconds to find the contract it is at`;
-  return space !== undefined && space.graph.nodes.size === 0
-    ? {
-        kind: 'none',
-        reason: `${reason}, and with no migrations no contract reference can name it`,
-      }
-    : { kind: 'ambiguous', reason, candidates: [] };
+  return { graph: reconstructGraph(packages), refs: await readRefs(spaceRefsDirectory(appDir)) };
 }
 
 /** How long the refusal waits for the database before it leaves the plan's origin to the user. */

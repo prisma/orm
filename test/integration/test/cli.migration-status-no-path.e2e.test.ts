@@ -169,5 +169,31 @@ withTempDir(({ createTempDir }) => {
       }),
       timeouts.spinUpPpgDev,
     );
+
+    it(
+      'with no migrations, prints the plan that authors the first, which runs',
+      inJourney(async (ctx) => {
+        expect((await runContractEmit(ctx)).exitCode).toBe(0);
+        const summary = await statusSummary(ctx);
+        expect(summary).toContain('No migrations found. Run `{bin} migration plan --from @empty');
+        await planAsAdvised(ctx, summary);
+        expect((await runMigrate(ctx)).exitCode).toBe(0);
+        expect(await statusSummary(ctx)).toBe('Up to date');
+      }),
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'with no migrations and a db ref, prints the plan from the db ref, which runs',
+      inJourney(async (ctx) => {
+        expect((await runContractEmit(ctx)).exitCode).toBe(0);
+        expect((await runDbUpdate(ctx)).exitCode).toBe(0);
+        await emit(ctx, 'contract-additive');
+        const summary = await statusSummary(ctx);
+        expect(summary).toContain('No migrations found. Run `{bin} migration plan --from db');
+        await planAsAdvised(ctx, summary);
+      }),
+      timeouts.spinUpPpgDev,
+    );
   });
 });

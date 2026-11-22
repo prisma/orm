@@ -176,7 +176,7 @@ describe('executeDbUpdate when the plan with an answered rename is refused', () 
     expect(result.ok ? undefined : result.failure.nextActions).toEqual([
       {
         kind: 'user-choice',
-        label: `The rewrites cannot be written by hand in a migration. No migration records contract ${ORIGIN_HASH}, and \`migration plan\` starts only from a contract a migration records`,
+        label: `The rewrites cannot be written by hand in a migration. No ref names contract ${ORIGIN_HASH}, and with no migrations \`migration plan\` starts only from \`@empty\` or a ref`,
       },
     ]);
   });

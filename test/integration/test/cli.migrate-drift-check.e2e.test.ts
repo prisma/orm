@@ -36,8 +36,18 @@ function printedArgs(error: MigrateErrorJson, label: string, command: string): s
     .map((arg) => (arg === '<slug>' ? 'planned-as-advised' : arg.replace(/^'(.*)'$/, '$1')));
 }
 
-/** The error advises no `migration plan`, and each command it prints runs. */
-async function expectOnlyRunnableCommands(ctx: JourneyContext, error: MigrateErrorJson) {
+/** The error advises no `migration plan`, says why, and each command it prints runs. */
+async function expectOnlyRunnableCommands(
+  ctx: JourneyContext,
+  error: MigrateErrorJson,
+  reason: string,
+) {
+  expect(
+    (error.nextActions ?? []).some(
+      (action) => action.command === undefined && action.label.includes(reason),
+    ),
+    JSON.stringify(error.nextActions),
+  ).toBe(true);
   const commands = (error.nextActions ?? []).flatMap((action) =>
     action.command === undefined ? [] : [action.command.split(/\s+/).slice(1)],
   );
@@ -402,7 +412,11 @@ withTempDir(({ createTempDir }) => {
             const show = ['--show', '--from', '@contract', '--to', initialHash, '--json'];
             const err = parseJsonOutput<MigrateErrorJson>(await runMigrate(ctx, show));
             expect(err.code).toBe('MIGRATION.PATH_UNREACHABLE');
-            await expectOnlyRunnableCommands(ctx, err);
+            await expectOnlyRunnableCommands(
+              ctx,
+              err,
+              '`migration plan` starts only from a contract a migration records',
+            );
           });
         });
       },
@@ -422,7 +436,11 @@ withTempDir(({ createTempDir }) => {
               await runMigrate(ctx, ['--to', '@empty', '--json']),
             );
             expect(err.code).toBe('MIGRATION.PATH_UNREACHABLE');
-            await expectOnlyRunnableCommands(ctx, err);
+            await expectOnlyRunnableCommands(
+              ctx,
+              err,
+              '`migration plan` does not plan a migration to the empty contract',
+            );
           });
         });
       },

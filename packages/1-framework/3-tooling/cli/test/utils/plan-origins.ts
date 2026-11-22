@@ -2,7 +2,7 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import {
   type MigrationPlanArgument,
   migrationPlanFrom,
-  reference,
+  type RunnablePlanArgument,
 } from '../../src/control-api/operations/plan-arguments';
 import { buildGraph, entry } from './graph-helpers';
 
@@ -22,3 +22,8 @@ export function originOf(hash: string | undefined): MigrationPlanArgument {
 
 /** Why no plan starts at {@link UNRECORDED}. */
 export const NOT_RECORDED_REASON = NOT_RECORDED.kind === 'none' ? NOT_RECORDED.reason : '';
+
+/** A contract reference a test names, as a `--from` or `--to`. */
+export function reference(value: string): RunnablePlanArgument {
+  return { kind: 'reference', reference: value };
+}

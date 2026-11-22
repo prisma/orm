@@ -176,16 +176,27 @@ export type StatusTarget =
     }
   | { readonly kind: 'extension'; readonly spaceId: string };
 
-/** Where `migration status` aims, as `migration plan` would end there. */
+/** Where `migration status` aims, as `migration plan` would end there: the emitted contract, a ref, or another contract. */
 function statusPlanEnd(
-  to: string | undefined,
   refName: string | undefined,
   targetHash: string,
+  emittedHash: string,
 ): PlanEnd {
-  if (to === undefined) return { kind: 'emitted' };
-  return refName === undefined
-    ? { kind: 'contract', hash: targetHash }
-    : { kind: 'ref', name: refName };
+  if (refName !== undefined) return { kind: 'ref', name: refName };
+  return targetHash === emittedHash ? { kind: 'emitted' } : { kind: 'contract', hash: targetHash };
+}
+
+/** The summary with no migrations: the `migration plan` that writes the first, or why none can. */
+function firstPlanText(plan: PrintedPlan | undefined): string {
+  if (plan === undefined) return 'No migrations found';
+  switch (plan.kind) {
+    case 'runs':
+      return `No migrations found. Run \`${plan.command}\` to author the first.`;
+    case 'fill':
+      return `No migrations found. Run \`${plan.command}\` to author the first. ${plan.fill}.`;
+    case 'none':
+      return `No migrations found, and no migration plan can author the first. ${plan.reason}.`;
+  }
 }
 
 /** How the summary says to author the missing path, or why no `migration plan` can. */
@@ -504,6 +515,7 @@ export const migrationStatusCommand = defineOrmCommand({
           readonly target: StatusTarget;
         }
       | undefined;
+    let firstPlan: PrintedPlan | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
 
@@ -546,6 +558,23 @@ export const migrationStatusCommand = defineOrmCommand({
           ? { kind: 'offline', hash: fromOverrideHash }
           : undefined;
       const originHash = originHashOf(origin);
+      if (isAppSpace && originHash !== targetHash) {
+        firstPlan = printedPlan(
+          invocation,
+          {
+            from: migrationPlanFrom(
+              planSpace,
+              origin === undefined
+                ? {
+                    kind: 'unknown',
+                    reason: 'migration status read no database to find where it is',
+                  }
+                : { kind: 'contract', hash: originHash },
+            ),
+          },
+          ['--name', '<name>'],
+        );
+      }
       const markerRead = origin?.kind === 'database' || (isAppSpace && liveTarget);
       const readMarker =
         origin?.kind === 'database' ? origin.marker : markerRead ? appMarker : undefined;
@@ -576,7 +605,10 @@ export const migrationStatusCommand = defineOrmCommand({
                   invocation,
                   {
                     from: migrationPlanFrom(planSpace, { kind: 'contract', hash: originHash }),
-                    to: migrationPlanTo(planSpace, statusPlanEnd(to, activeRefName, targetHash)),
+                    to: migrationPlanTo(
+                      planSpace,
+                      statusPlanEnd(activeRefName, targetHash, contractHash),
+                    ),
                   },
                   ['--name', '<name>'],
                 ),
@@ -671,7 +703,7 @@ export const migrationStatusCommand = defineOrmCommand({
 
     const everySpaceEmpty = scopedSpaces.every((entry) => entry.migrations.length === 0);
     const pathSummary = everySpaceEmpty
-      ? 'No migrations found'
+      ? firstPlanText(firstPlan)
       : noPath !== undefined
         ? buildNoPathSummary(noPath)
         : buildStatusHeadline({

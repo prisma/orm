@@ -1,9 +1,8 @@
 import { asNamespaceId } from '@internal/contract/types';
 import type { ResolvedEnumValueRenameStatement } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
-import { reference } from '../../src/control-api/operations/plan-arguments';
 import { planningRefusedError } from '../../src/utils/planning-refused-error';
-import { NOT_RECORDED } from './plan-origins';
+import { NOT_RECORDED, reference } from './plan-origins';
 
 function rename(from: string, to: string): ResolvedEnumValueRenameStatement {
   return {

@@ -23,8 +23,8 @@ import {
   planEndOf,
   unreachableSpaceFailure,
 } from '../../src/control-api/operations/migrate';
-import { reference } from '../../src/control-api/operations/plan-arguments';
 import type { CliInvocation } from '../../src/utils/printed-command';
+import { reference } from '../utils/plan-origins';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const DEFAULT = { kind: 'default' } as const;
@@ -232,7 +232,7 @@ describe('executeMigrate with no path to the target', () => {
     });
   });
 
-  it('advises planning without --to when the target is a hash no migration names', async () => {
+  it('advises no plan when the target is a hash no migration names and not the emitted contract', async () => {
     const projectDir = await projectWithOneAppEdge();
 
     const result = await migrate({
@@ -241,15 +241,19 @@ describe('executeMigrate with no path to the target', () => {
       refHash: ELSEWHERE,
     });
 
-    expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
-      buildPathNotFoundFailure(
-        'app',
-        APP_HEAD,
-        ELSEWHERE,
-        { from: reference(APP_HEAD), to: DEFAULT },
-        invocationIn(projectDir),
-      ).toEnvelope(),
-    );
+    const envelope = result.ok ? undefined : result.failure.toEnvelope();
+    expect(envelope?.code).toBe('MIGRATION.PATH_UNREACHABLE');
+    expect(envelope?.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label: `No migration records contract ${ELSEWHERE}, and \`migration plan --to\` ends only at a contract a migration records, a ref, or the emitted contract`,
+      },
+      {
+        kind: 'run-command',
+        label: 'Inspect the on-disk graph',
+        command: '{bin} migration list',
+      },
+    ]);
   });
 
   it('advises planning without --to when the unreachable target is the emitted contract', async () => {
@@ -289,16 +293,16 @@ describe('executeMigrate with no path to the target', () => {
   });
 
   it('advises planning from where the history ends when the database has no marker', async () => {
-    const projectDir = await projectWithOneAppEdge();
+    const projectDir = await projectWithOneAppEdge(ELSEWHERE);
 
-    const result = await migrate({ projectDir, markers: new Map(), refHash: ELSEWHERE });
+    const result = await migrate({ projectDir, markers: new Map() });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
       buildPathNotFoundFailure(
         'app',
         EMPTY_CONTRACT_HASH,
-        ELSEWHERE,
-        { from: reference(APP_HEAD), to: DEFAULT },
+        APP_HEAD,
+        { from: reference(ELSEWHERE), to: DEFAULT },
         invocationIn(projectDir),
       ).toEnvelope(),
     );

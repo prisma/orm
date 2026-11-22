@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import { NOT_RECORDED_REASON, originOf } from './plan-origins';
+import { onDisk } from './runner-failure-errors';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 const FROM = 'sha256:0123';
@@ -30,7 +31,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = migrateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { directory: '/work/app/migrations/app/20260101T0000_country', from: FROM },
+      onDisk({ directory: '/work/app/migrations/app/20260101T0000_country', from: FROM }),
       PROJECT,
     );
 
@@ -44,7 +45,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = migrateRunnerFailureError(
       failure,
       { rowsFailingCheck: adding },
-      { directory: '/work/app/migrations/app/20260101T0000_country', from: FROM },
+      onDisk({ directory: '/work/app/migrations/app/20260101T0000_country', from: FROM }),
       { ...PROJECT, rerunArgs: ['--advance-ref', 'db'] },
     );
 

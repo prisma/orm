@@ -374,10 +374,14 @@ describe('db update questions', () => {
     expect(envelopeOf(run.json)).toMatchObject({
       error: {
         code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
-        why: expect.stringContaining(
-          'The CLI could not read the database within 3 seconds to find the contract it is at, and with no migrations no contract reference can name it.',
-        ),
-        nextActions: [{ kind: 'user-choice', label: 'Run db update without these statements' }],
+        nextActions: [
+          {
+            kind: 'user-choice',
+            label:
+              'Plan the change into a migration file to fill in with `prisma-test migration plan --from <contract> --backfill User.email`. The CLI could not read the database within 3 seconds to find the contract it is at, so replace <contract> with one of `@empty`',
+          },
+          { kind: 'user-choice', label: 'Or run db update without these statements' },
+        ],
       },
     });
   }, 10_000);
@@ -391,10 +395,14 @@ describe('db update questions', () => {
     expect(envelopeOf(run.json)).toMatchObject({
       error: {
         code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
-        why: expect.stringContaining(
-          'The CLI could not read the database within 3 seconds to find the contract it is at, and with no migrations no contract reference can name it.',
-        ),
-        nextActions: [{ kind: 'user-choice', label: 'Run db update without these statements' }],
+        nextActions: [
+          {
+            kind: 'user-choice',
+            label:
+              'Plan the change into a migration file to fill in with `prisma-test migration plan --from <contract> --backfill User.email`. The CLI could not read the database: connect ECONNREFUSED 127.0.0.1:1, so replace <contract> with one of `@empty`',
+          },
+          { kind: 'user-choice', label: 'Or run db update without these statements' },
+        ],
       },
     });
     expect(mocks.connect).toHaveBeenCalledWith(expect.anything(), {

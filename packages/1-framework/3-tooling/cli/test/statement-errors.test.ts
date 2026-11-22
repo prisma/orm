@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { reference } from '../src/control-api/operations/plan-arguments';
 import {
   errorStatementNeedsMigrationFile,
   errorStatementOriginUnknown,
 } from '../src/utils/cli-errors';
-import { NOT_RECORDED } from './utils/plan-origins';
+import { NOT_RECORDED, reference } from './utils/plan-origins';
 
 const HASH = 'sha256:abc';
 const DIR = 'migrations/snapshots/sha256:abc';

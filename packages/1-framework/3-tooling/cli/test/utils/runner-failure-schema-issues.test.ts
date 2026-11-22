@@ -11,8 +11,8 @@ import { runnerFailureFacts } from '../../src/control-api/operations/run-migrati
 import { dbInitRunnerFailureError } from '../../src/utils/db-init-failure';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
-import type { FailedMigrationOnDisk } from '../../src/utils/runner-failure-advice';
 import { originOf } from './plan-origins';
+import { onDisk, type WrittenMigration } from './runner-failure-errors';
 
 const node: DiffableNode = {
   id: 'default',
@@ -67,12 +67,12 @@ const withoutIssues = schemaCheckFailure(undefined);
 
 function migrateError(
   failure: MigrationRunnerFailure,
-  failedMigration: FailedMigrationOnDisk | undefined = undefined,
+  failedMigration: WrittenMigration | undefined = undefined,
 ) {
   return migrateRunnerFailureError(
     failure,
     runnerFailureFacts(failure, []),
-    failedMigration,
+    failedMigration === undefined ? undefined : onDisk(failedMigration),
     invocation,
   );
 }

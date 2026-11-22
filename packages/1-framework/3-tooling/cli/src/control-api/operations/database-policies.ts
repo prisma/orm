@@ -27,10 +27,9 @@ import {
   errorDataProtectionForbids,
   errorPolicyMismatch,
   type PolicySource,
-  type TypeChangePlan,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
-import type { MigrationPlanArgument } from './plan-arguments';
+import type { MigrationPlanArguments } from './plan-arguments';
 
 /**
  * The database's policies in force: what the application space's marker records, filled from
@@ -82,8 +81,8 @@ export function checkRunPolicies(args: {
   readonly ref: NamedRef | undefined;
   readonly permitPolicyChange: boolean;
   readonly targetHash: string;
-  /** The `--from` a `migration plan` for the database takes, which a refusal of `db update` or `db sign` prints. */
-  readonly migrationPlanOrigin: MigrationPlanArgument;
+  /** The `migration plan` a refusal of `db update` or `db sign` prints: from the database, to where the run goes. */
+  readonly migrationPlan: MigrationPlanArguments;
   readonly invocation: CliInvocation | undefined;
 }): Result<CheckedDatabasePolicies, CliStructuredError> {
   const { appSpaceId, inForce, ref } = args;
@@ -110,7 +109,7 @@ export function checkRunPolicies(args: {
             ? { kind: 'ref', refName: ref.name }
             : { kind: 'marker' },
         targetHash: args.targetHash,
-        migrationPlanOrigin: args.migrationPlanOrigin,
+        migrationPlan: args.migrationPlan,
         ref:
           ref === undefined
             ? undefined
@@ -183,7 +182,7 @@ export function refuseForbiddenChanges(args: {
   readonly dataLoss: readonly DataProtectionRefusedOperation[];
   readonly accessChanges: readonly DataProtectionRefusedOperation[];
   readonly invocation: CliInvocation | undefined;
-  readonly migrationPlan?: TypeChangePlan;
+  readonly migrationPlan?: MigrationPlanArguments;
 }): CliStructuredError | undefined {
   const operationsOf = { dataLoss: args.dataLoss, accessWidening: args.accessChanges };
   const refusals = DATA_PROTECTION_KEYS.flatMap((setting) => {

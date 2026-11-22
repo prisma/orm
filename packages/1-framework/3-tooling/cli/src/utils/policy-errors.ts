@@ -6,10 +6,7 @@ import {
   type MigrationDataLossKind,
   movedDatabasePoliciesWhy,
 } from '@internal/framework-components/control';
-import type {
-  MigrationPlanArgument,
-  MigrationPlanTargetArgument,
-} from '../control-api/operations/plan-arguments';
+import type { MigrationPlanArguments } from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
 import { type DataProtectionSetting, FORBIDDEN_LEVEL } from './data-protection-settings';
@@ -67,8 +64,8 @@ export function errorChangePolicyForbids(args: {
   readonly targetHash: string;
   /** The ref the user named, and whether they gave `--permit-policy-change`, which the advised command repeats. */
   readonly ref?: { readonly name: string; readonly permitPolicyChange: boolean } | undefined;
-  /** The `--from` a `migration plan` for the database takes, which the advice to author a migration prints. */
-  readonly migrationPlanOrigin: MigrationPlanArgument;
+  /** The `migration plan` the advice to author a migration prints: from the database, to where the run goes. */
+  readonly migrationPlan: MigrationPlanArguments;
   readonly invocation: CliInvocation | undefined;
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;
@@ -106,8 +103,17 @@ export function errorChangePolicyForbids(args: {
       },
     );
   }
-  const migrate = cliCommand(invocation, 'db migrate', toRef);
-  const plan = printedPlan(invocation, { from: args.migrationPlanOrigin }, []);
+  const target = args.migrationPlan.to;
+  const migrate = cliCommand(
+    invocation,
+    'db migrate',
+    ref !== undefined
+      ? toRef
+      : target.kind === 'reference'
+        ? ['--to', shellQuoted(target.reference)]
+        : [],
+  );
+  const plan = printedPlan(invocation, args.migrationPlan, []);
   const recovery =
     plan.kind === 'none'
       ? `No migration can be planned to move it. ${plan.reason}.`
@@ -181,7 +187,7 @@ function keepAppProtected(
   operations: readonly DataProtectionRefusedOperation[],
   alongsideExtensions: boolean,
   invocation: CliInvocation | undefined,
-  migrationPlan: TypeChangePlan | undefined,
+  migrationPlan: MigrationPlanArguments | undefined,
 ): readonly string[] {
   if (command === 'db migrate') {
     const unapplied = alongsideExtensions
@@ -211,15 +217,9 @@ function keepAppProtected(
   ];
 }
 
-/** Where a `migration plan` that writes a type change starts and ends: the run's own, or the database's. */
-export interface TypeChangePlan {
-  readonly from: MigrationPlanArgument;
-  readonly to: MigrationPlanTargetArgument;
-}
-
 function typeChangeSentence(
   invocation: CliInvocation | undefined,
-  migrationPlan: TypeChangePlan | undefined,
+  migrationPlan: MigrationPlanArguments | undefined,
 ): string {
   if (migrationPlan === undefined)
     return 'For a type change, state the conversion with --convert <field>.';
@@ -235,7 +235,7 @@ function keepProtected(
   command: DataProtectionCheckedCommand,
   appSpaceId: string,
   invocation: CliInvocation | undefined,
-  migrationPlan: TypeChangePlan | undefined,
+  migrationPlan: MigrationPlanArguments | undefined,
 ): string {
   const inApp = refusal.operations.filter(({ spaceId }) => spaceId === appSpaceId);
   const extensionSpaces = [
@@ -279,7 +279,7 @@ export function errorDataProtectionForbids(args: {
   readonly refusals: readonly DataProtectionRefusal[];
   readonly invocation: CliInvocation | undefined;
   /** The `migration plan` a type change is written in; `db migrate` advises planning again instead. */
-  readonly migrationPlan?: TypeChangePlan;
+  readonly migrationPlan?: MigrationPlanArguments;
 }): ActionableCliError {
   const { spaceId, command, refusals } = args;
   const refNames = new Set(
