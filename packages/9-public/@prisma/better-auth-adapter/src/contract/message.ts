@@ -1,3 +1,4 @@
+import { invalidFieldNameMessage, invalidModelNameMessage } from '../models/identifiers';
 import { ambiguousModelMessage } from '../models/model-lookup';
 import type { ContractComparison } from './compare';
 import { printPsl } from './print-psl';
@@ -45,9 +46,14 @@ function unwrittenLines(comparison: ContractComparison): string[] {
  */
 export function contractMessage(comparison: ContractComparison): string | undefined {
   if (comparison.problems.length === 0) return undefined;
-  const invalidNames = comparison.problems.flatMap((problem) =>
-    problem.kind === 'invalid-name' ? [problem.message] : [],
-  );
+  const invalidNames = comparison.problems.flatMap((problem) => {
+    if (problem.kind !== 'invalid-name') return [];
+    const message =
+      problem.field === undefined
+        ? invalidModelNameMessage(problem.model)
+        : invalidFieldNameMessage(problem.model, problem.field);
+    return message === undefined ? [] : [message];
+  });
   if (invalidNames.length > 0) return invalidNames.join('\n');
   const psl = printPsl(comparison);
   const additions = psl.text === '' ? [] : ['Add to your contract:', '', psl.text, ''];

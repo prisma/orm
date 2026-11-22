@@ -7,13 +7,15 @@ import type { ContractField, ContractModelBase } from '@prisma/orm-framework/con
 import {
   type BetterAuthField,
   type BetterAuthModel,
+  type IdStrategy,
+  idStrategyOf,
+  isIdReference,
   managedModels,
 } from '../models/better-auth-models';
 import { type CodecKind, codecKind } from '../models/codec-kinds';
 import { describeFieldType } from '../models/field-type';
-import { invalidFieldNameMessage, invalidModelNameMessage } from '../models/identifiers';
+import { isPslIdentifier } from '../models/identifiers';
 import { type FoundModel, findModel, type SqlContract } from '../models/model-lookup';
-import { type IdStrategy, idStrategyOf, isIdReference } from './psl-types';
 
 export type ComparedModel =
   | { readonly status: 'missing'; readonly expected: BetterAuthModel }
@@ -26,7 +28,12 @@ export type ComparedModel =
     };
 
 export type ContractProblem =
-  | { readonly kind: 'invalid-name'; readonly message: string }
+  | {
+      readonly kind: 'invalid-name';
+      readonly model: string;
+      /** The field whose name is not an identifier; absent when it is the model's name. */
+      readonly field?: string;
+    }
   | { readonly kind: 'missing-model'; readonly model: string }
   | {
       readonly kind: 'ambiguous-model';
@@ -190,14 +197,18 @@ function compareFoundModel(
 
 /** A model or field name that is not a Prisma identifier can be neither matched nor printed, so it is the only problem reported. */
 function invalidNameProblems(models: readonly BetterAuthModel[]): ContractProblem[] {
-  return models.flatMap((model) =>
-    [
-      invalidModelNameMessage(model.physicalName),
-      ...model.fields.map((field) => invalidFieldNameMessage(model.physicalName, field.name)),
-    ].flatMap((message): ContractProblem[] =>
-      message === undefined ? [] : [{ kind: 'invalid-name', message }],
-    ),
-  );
+  return models.flatMap((model): ContractProblem[] => [
+    ...(isPslIdentifier(model.physicalName)
+      ? []
+      : [{ kind: 'invalid-name' as const, model: model.physicalName }]),
+    ...model.fields
+      .filter((field) => !isPslIdentifier(field.name))
+      .map((field) => ({
+        kind: 'invalid-name' as const,
+        model: model.physicalName,
+        field: field.name,
+      })),
+  ]);
 }
 
 /**

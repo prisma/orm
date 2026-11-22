@@ -115,11 +115,7 @@ describe.each(targets)('the comparison on %s', (target) => {
     it('a name that is not an identifier, as the only problem', async () => {
       const contract = await contractOf(target, editedPsl(target, {}));
       expect(problemsOf(compare(contract, { user: { fields: { email: 'e-mail' } } }))).toEqual([
-        {
-          kind: 'invalid-name',
-          message:
-            'Better Auth\'s field name "e-mail" of model "user" is not a valid Prisma field name: use letters, digits and "_", not starting with a digit. Rename the field with Better Auth\'s "fields" option.',
-        },
+        { kind: 'invalid-name', model: 'user', field: 'e-mail' },
       ]);
     });
 
