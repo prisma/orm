@@ -1,0 +1,31 @@
+{
+  "name": "better-auth-example",
+  "private": true,
+  "type": "module",
+  "version": "8.0.0-rc.24",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "emit": "prisma contract emit",
+    "emit:check": "pnpm emit && git diff --exit-code src/prisma/contract.json src/prisma/contract.d.ts",
+    "db:init": "prisma db init",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "lint": "biome check . --error-on-warnings"
+  },
+  "dependencies": {
+    "@prisma/better-auth-adapter": "workspace:8.0.0-rc.24",
+    "@prisma/orm-sqlite": "workspace:8.0.0-rc.24",
+    "better-auth": "1.7.27"
+  },
+  "devDependencies": {
+    "@prisma/cli-engine": "0.10.0",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@types/node": "catalog:",
+    "auth": "1.7.27",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
