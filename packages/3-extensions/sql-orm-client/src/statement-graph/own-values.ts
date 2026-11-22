@@ -83,7 +83,7 @@ function refuseUpsertOfColumnsReadBack(
   const read = returns.map((column) => column.alias);
   const unchanged = new Set(['excluded', ast.table.alias ?? ast.table.name]);
   const updated = read.filter((column) => {
-    const value = action.set[column];
+    const value = Object.hasOwn(action.set, column) ? action.set[column] : undefined;
     return (
       value !== undefined &&
       !(value.kind === 'column-ref' && unchanged.has(value.table) && value.column === column)
