@@ -19,7 +19,7 @@ import {
   checkValueObjectExecutionDefaults,
 } from './build-execution-defaults';
 import { checkFields } from './build-fields';
-import { buildModels, buildRoots, buildValueObjects } from './build-models';
+import { buildModels, buildRoots, buildValueObjects, refuseUnsupportedNames } from './build-models';
 import { decidePolymorphism, inheritVariantCollections } from './build-polymorphism';
 import { type BuildRefusal, type BuildWarning, validatorRefusalKey } from './build-refusals';
 import type { ContractDefinition } from './contract-definition';
@@ -64,6 +64,7 @@ export function buildMongoContractFromDefinition(
   const components = [definition.target, ...Object.values(definition.extensions ?? {})];
   const generatorFunctions = assembleGeneratorFunctions(components);
 
+  refuseUnsupportedNames(definition, refusals);
   const models = inheritVariantCollections(definition.models, refusals);
   const builtEnums = buildEnums(definition, codecLookup, refusals);
   const variantValues = decidePolymorphism({

@@ -193,6 +193,17 @@ describe('the Prisma 6 reader on the contract builder', () => {
     ]);
   });
 
+  it('refuses a collection named __proto__', async () => {
+    expect(await diagnosticsOf('collection-named-proto')).toEqual([
+      {
+        code: 'PSL_STORED_NAME_UNSUPPORTED',
+        message:
+          'Model "User" is stored in collection "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Prisma 8 cannot read or write a collection of that name.',
+        line: undefined,
+      },
+    ]);
+  });
+
   it('reports a relation on a refused field once, at the field', async () => {
     const result = await loadPrisma6Schema(
       join(casesDir, 'relation-on-rejected-field', 'schema.prisma'),

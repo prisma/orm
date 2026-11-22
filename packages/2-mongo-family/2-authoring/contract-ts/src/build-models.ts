@@ -341,3 +341,61 @@ export function buildRoots(
   }
   return roots;
 }
+
+/** Refuses each name of the definition that cannot be an object's own key: the name of a model, value object, enum, collection or root. */
+export function refuseUnsupportedNames(
+  definition: ContractDefinition,
+  refusals: BuildRefusal[],
+): void {
+  const unsupported = (name: string) => unsupportedStoredNameReason(name) !== undefined;
+  for (const model of definition.models) {
+    if (unsupported(model.modelName)) {
+      refusals.push({
+        kind: 'nameUnsupported',
+        key: { kind: 'model', model: model.modelName },
+        subject: 'model',
+        name: model.modelName,
+      });
+    }
+    if (model.collection !== undefined && unsupported(model.collection)) {
+      refusals.push({
+        kind: 'nameUnsupported',
+        key: { kind: 'collectionSettings', model: model.modelName },
+        subject: 'collection',
+        name: model.collection,
+      });
+    }
+  }
+  for (const valueObject of definition.valueObjects ?? []) {
+    if (unsupported(valueObject.name)) {
+      refusals.push({
+        kind: 'nameUnsupported',
+        key: { kind: 'valueObject', valueObject: valueObject.name },
+        subject: 'valueObject',
+        name: valueObject.name,
+      });
+    }
+  }
+  for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {
+    for (const name of new Set([enumName, handle.enumName])) {
+      if (unsupported(name)) {
+        refusals.push({
+          kind: 'nameUnsupported',
+          key: { kind: 'enum', enumName },
+          subject: 'enum',
+          name,
+        });
+      }
+    }
+  }
+  for (const [rootName, modelName] of Object.entries(definition.roots ?? {})) {
+    if (unsupported(rootName)) {
+      refusals.push({
+        kind: 'nameUnsupported',
+        key: { kind: 'model', model: modelName },
+        subject: 'root',
+        name: rootName,
+      });
+    }
+  }
+}
