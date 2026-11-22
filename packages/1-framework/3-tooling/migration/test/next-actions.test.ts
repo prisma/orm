@@ -72,9 +72,8 @@ describe('errors.ts — converted factories carry typed nextActions', () => {
         reason: 'Graph nodes: (none).',
       },
       {
-        kind: 'run-command',
-        label: 'Introduce "abc123" by planning a migration for it',
-        command: '{bin} migration plan',
+        kind: 'user-choice',
+        label: 'Or introduce "abc123" by planning a migration that ends at it',
       },
     ]);
   });
@@ -84,9 +83,9 @@ describe('errors.ts — converted factories carry typed nextActions', () => {
 
     expect(error.nextActions).toEqual([
       {
-        kind: 'run-command',
-        label: 'Re-emit the snapshot for an app-space migration',
-        command: '{bin} migration plan',
+        kind: 'user-choice',
+        label:
+          'For an app-space migration, re-run the migration plan that authored it, with the same --from and --to, to re-emit the snapshot',
       },
       {
         kind: 'user-choice',

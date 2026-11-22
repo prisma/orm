@@ -175,3 +175,26 @@ describe('the advice for a type change whose cast failed', () => {
     );
   });
 });
+
+describe('the advice for a failed migration an extension ships', () => {
+  it('names no migration plan, which plans only the application space, and points at the extension', () => {
+    const error = migrateError(
+      {
+        ...runnerFailed,
+        failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' },
+        failedMigration: {
+          directory: `${PROJECT}/migrations/pgvector/20261012T1041_install`,
+          from: FROM,
+          extensionSpaceId: 'pgvector',
+        },
+      },
+      FROM_PROJECT,
+    );
+
+    expect(error.fix).not.toContain('migration plan --');
+    expect(error.nextActions?.map(({ label }) => label)).toEqual([
+      'Resolve the cause the failure names, then re-run `{bin} db migrate`',
+      'The failed migration belongs to extension space "pgvector", whose migrations come with the extension and `migration plan` does not plan, so do not edit or plan it again; ask the extension\'s author for a version whose migrations apply to this database',
+    ]);
+  });
+});

@@ -11,6 +11,7 @@ import {
   withDeclaredDatabasePolicies,
 } from '@internal/framework-components/control';
 import type { NamedRef } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../../utils/cli-errors';
 import {
@@ -26,6 +27,7 @@ import {
   errorDataProtectionForbids,
   errorPolicyMismatch,
   type PolicySource,
+  type TypeChangePlan,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import type { MigrationPlanArgument } from './plan-arguments';
@@ -181,6 +183,7 @@ export function refuseForbiddenChanges(args: {
   readonly dataLoss: readonly DataProtectionRefusedOperation[];
   readonly accessChanges: readonly DataProtectionRefusedOperation[];
   readonly invocation: CliInvocation | undefined;
+  readonly migrationPlan?: TypeChangePlan;
 }): CliStructuredError | undefined {
   const operationsOf = { dataLoss: args.dataLoss, accessWidening: args.accessChanges };
   const refusals = DATA_PROTECTION_KEYS.flatMap((setting) => {
@@ -195,5 +198,6 @@ export function refuseForbiddenChanges(args: {
         command: args.command,
         refusals,
         invocation: args.invocation,
+        ...ifDefined('migrationPlan', args.migrationPlan),
       });
 }

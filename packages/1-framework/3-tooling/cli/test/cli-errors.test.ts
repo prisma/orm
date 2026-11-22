@@ -10,6 +10,7 @@ import {
   errorDriverRequired,
   errorFamilyReadMarkerSqlRequired,
   errorPathUnreachable,
+  errorPlanForgotTheFlag,
   errorPlanOriginUnknown,
   errorRefSetEmptySentinel,
   errorRefSetHashNotInGraph,
@@ -327,10 +328,31 @@ describe('errorRefSetHashNotInGraph', () => {
 
 describe('errorPlanOriginUnknown', () => {
   it('offers db update only for a database whose migration history does not need to be kept', () => {
-    expect(errorPlanOriginUnknown([]).fix?.split('\n')[0]).toBe(
+    expect(errorPlanOriginUnknown([], []).fix?.split('\n')[0]).toBe(
       'Set the `db` ref to the contract your database is at (`{bin} migration ref set db <contract>`), or, on a database whose migration history does not need to be kept, advance it via `{bin} db update`.',
     );
   });
+});
+
+describe('errorPlanOriginUnknown and errorPlanForgotTheFlag with no ref to plan from', () => {
+  const END = 'b'.repeat(64);
+
+  it.each([
+    ['errorPlanOriginUnknown', () => errorPlanOriginUnknown([], [END])],
+    ['errorPlanForgotTheFlag', () => errorPlanForgotTheFlag('c'.repeat(64), [], [END])],
+  ] as const)(
+    '%s gives the explicit plan as a choice that names where the history ends',
+    (_, make) => {
+      const action = make().nextActions?.find(({ label }) =>
+        label.startsWith('Plan from an explicit origin'),
+      );
+      expect(action).toMatchObject({
+        kind: 'user-choice',
+        label: expect.stringContaining('with `{bin} migration plan --from <contract>`. '),
+      });
+      expect(action?.label).toContain(`replace <contract> with one of \`${END}\``);
+    },
+  );
 });
 
 describe('errorRefSetEmptySentinel', () => {

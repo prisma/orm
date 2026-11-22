@@ -92,7 +92,7 @@ import {
   runContractSpaceSeedPhase,
 } from './contract-space-seed-phase';
 import { forbiddingSettingsOfRef, refuseForbiddenChanges } from './database-policies';
-import { migrationPlanFromRun } from './plan-arguments';
+import { migrationPlanFromRun, reference } from './plan-arguments';
 import { resolveFromForPlan, resolveToForPlan } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
@@ -861,6 +861,10 @@ async function executeMigrationPlanCommandInner(
             appSpaceId: aggregate.app.spaceId,
             command: 'migration plan',
             invocation: invocationOf(options),
+            migrationPlan: {
+              from: migrationPlanFromRun(options.from, fromResolution),
+              to: reference(toRef.name),
+            },
             forbidden: forbiddingSettingsOfRef(toRef),
             dataLoss: plannedOperations(leg, leg.dataLoss, planned),
             accessChanges: plannedOperations(leg, leg.accessChanges, planned),

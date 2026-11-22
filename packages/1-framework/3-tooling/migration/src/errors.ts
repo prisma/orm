@@ -580,7 +580,7 @@ export function errorHashNotInGraph(hash: string, graph: MigrationGraph): Migrat
     `Hash "${hash}" is not a node in the migration graph`,
     {
       why: `The migration graph contains nodes ${reachableList}; "${hash}" isn't one of them.`,
-      fix: `Pass a hash that's the from-or-to of an on-disk migration bundle, use --from with a graph-node hash, or run "{bin} migration plan" to introduce it.`,
+      fix: `Pass a hash that's the from-or-to of an on-disk migration bundle, use --from with a graph-node hash, or plan a migration that ends at it to introduce it.`,
       nextActions: [
         {
           kind: 'user-choice',
@@ -589,9 +589,8 @@ export function errorHashNotInGraph(hash: string, graph: MigrationGraph): Migrat
           reason: `Graph nodes: ${reachableList}.`,
         },
         {
-          kind: 'run-command',
-          label: `Introduce "${hash}" by planning a migration for it`,
-          command: '{bin} migration plan',
+          kind: 'user-choice',
+          label: `Or introduce "${hash}" by planning a migration that ends at it`,
         },
       ],
       meta: { hash, reachableHashes },
@@ -608,12 +607,12 @@ export function errorContractSnapshotMissing(
     'Contract snapshot is missing',
     {
       why: `Expected a contract snapshot for ${storageHash} at "${expectedPath}" but the file does not exist.`,
-      fix: "Re-emit the contract snapshot by re-running the command that authored the migration referencing this hash (`{bin} migration plan` for app-space migrations; the extension's contract-space build for extension spaces), or restore migrations/snapshots/ from version control.",
+      fix: "Re-emit the contract snapshot by re-running the command that authored the migration referencing this hash (the `migration plan` that wrote it, with the same `--from` and `--to`, for app-space migrations; the extension's contract-space build for extension spaces), or restore migrations/snapshots/ from version control.",
       nextActions: [
         {
-          kind: 'run-command',
-          label: 'Re-emit the snapshot for an app-space migration',
-          command: '{bin} migration plan',
+          kind: 'user-choice',
+          label:
+            'For an app-space migration, re-run the migration plan that authored it, with the same --from and --to, to re-emit the snapshot',
         },
         {
           kind: 'user-choice',

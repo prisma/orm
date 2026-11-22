@@ -639,6 +639,19 @@ describe('resolveToForPlan', () => {
     expect(contractAt).not.toHaveBeenCalled();
   });
 
+  it('refuses the empty contract by its hash as a target, as it refuses @empty', async () => {
+    const contractAt = vi.fn();
+    const space = makeSpace([makePkg(E, HASH_A, 'm1')], {}, contractAt);
+    const result = await resolveToForPlan(E, baseToInput({ space }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expectRefuse(result.failure, 'MIGRATION.REF_WRONG_GRAMMAR', '--from @empty');
+      expect(result.failure.meta?.['input']).toBe(E);
+    }
+    expect(contractAt).not.toHaveBeenCalled();
+  });
+
   it('refuses @empty as a target on an empty graph too', async () => {
     const space = makeSpace([]);
     const result = await resolveToForPlan('@empty', baseToInput({ space }));

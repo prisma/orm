@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { reference } from '../../src/control-api/operations/plan-arguments';
 import { errorDataProtectionForbids } from '../../src/utils/policy-errors';
 import type { CliInvocation } from '../../src/utils/printed-command';
+import { NOT_RECORDED, NOT_RECORDED_REASON } from './plan-origins';
 
 const invocation: CliInvocation = { cwd: '/work/app', configPath: undefined, dbGiven: true };
 
@@ -322,15 +324,45 @@ describe('errorDataProtectionForbids advice', () => {
         },
       ],
       invocation: { ...invocation, configPath: 'app.config.ts' },
+      migrationPlan: { from: reference('db'), to: { kind: 'default' } },
     }).toEnvelope();
 
     expect(envelope.nextActions).toEqual([
       {
         kind: 'user-choice',
         label:
-          "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with {bin} migration plan --convert <field> --config app.config.ts. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.",
+          "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with `{bin} migration plan --from db --convert <field> --config app.config.ts`. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.",
       },
     ]);
+  });
+
+  it('says why a type change cannot be written as a migration when no plan can start where the database is', () => {
+    const { fix } = errorDataProtectionForbids({
+      spaceId: 'app',
+      command: 'db update',
+      refusals: [
+        {
+          setting: 'dataLoss',
+          source: { kind: 'marker' },
+          operations: [
+            {
+              spaceId: 'app',
+              operationId: 'column.user.age.type',
+              subject: 'User.age',
+              label: 'Change the type of column "age"',
+              loss: 'typeChange',
+            },
+          ],
+        },
+      ],
+      invocation,
+      migrationPlan: { from: NOT_RECORDED, to: { kind: 'default' } },
+    });
+
+    expect(fix).toContain(
+      `A type change cannot be written as a migration here. ${NOT_RECORDED_REASON}.`,
+    );
+    expect(fix).not.toContain('migration plan --');
   });
 
   it.each(['db migrate', 'db update', 'migration plan'] as const)(

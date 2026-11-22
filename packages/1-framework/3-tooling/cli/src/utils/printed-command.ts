@@ -130,17 +130,25 @@ export function printedPlan(
     return { kind: 'none', reason: reasons.join('. ') };
   }
   const words = [...argumentWords('--to', to), ...flags];
-  if (from.kind !== 'ambiguous') {
-    return { kind: 'runs', command: printedPlanCommand(invocation, from, words) };
-  }
+  return from.kind === 'ambiguous'
+    ? printedChoicePlan(invocation, from, words)
+    : { kind: 'runs', command: printedPlanCommand(invocation, from, words) };
+}
+
+/** A `migration plan` whose `--from` the user chooses, for `choice.reason`, from `choice.candidates`. */
+export function printedChoicePlan(
+  invocation: CliInvocation | undefined,
+  choice: Extract<MigrationPlanArgument, { readonly kind: 'ambiguous' }>,
+  flags: readonly string[],
+): Extract<PrintedPlan, { readonly kind: 'fill' }> {
   const choices =
-    from.candidates.length > 0
-      ? `one of ${from.candidates.map((candidate) => `\`${candidate}\``).join(', ')}`
+    choice.candidates.length > 0
+      ? `one of ${choice.candidates.map((candidate) => `\`${candidate}\``).join(', ')}`
       : `a contract \`${cliCommand(invocation, 'migration list')}\` shows, a ref that names one, or \`@empty\``;
   return {
     kind: 'fill',
-    command: cliCommand(invocation, 'migration plan', ['--from', CONTRACT_PLACEHOLDER, ...words]),
-    fill: `${from.reason}, so replace ${CONTRACT_PLACEHOLDER} with ${choices}`,
+    command: cliCommand(invocation, 'migration plan', ['--from', CONTRACT_PLACEHOLDER, ...flags]),
+    fill: `${choice.reason}, so replace ${CONTRACT_PLACEHOLDER} with ${choices}`,
   };
 }
 

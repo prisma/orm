@@ -371,6 +371,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       appSpaceId: aggregate.app.spaceId,
       command: 'db update',
       invocation: options.invocation,
+      migrationPlan: { from: migrationPlanOrigin, to: { kind: 'default' } },
       forbidden: forbiddingSettingsOfRun(checkedPolicies, options.ref),
       dataLoss: operations(planned.subjects.dataLoss),
       accessChanges: operations(planned.subjects.accessChanges),

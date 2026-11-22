@@ -6,7 +6,10 @@ import {
   type MigrationDataLossKind,
   movedDatabasePoliciesWhy,
 } from '@internal/framework-components/control';
-import type { MigrationPlanArgument } from '../control-api/operations/plan-arguments';
+import type {
+  MigrationPlanArgument,
+  MigrationPlanTargetArgument,
+} from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
 import { ActionableCliError } from './cli-errors';
 import { type DataProtectionSetting, FORBIDDEN_LEVEL } from './data-protection-settings';
@@ -178,6 +181,7 @@ function keepAppProtected(
   operations: readonly DataProtectionRefusedOperation[],
   alongsideExtensions: boolean,
   invocation: CliInvocation | undefined,
+  migrationPlan: TypeChangePlan | undefined,
 ): readonly string[] {
   if (command === 'db migrate') {
     const unapplied = alongsideExtensions
@@ -202,17 +206,27 @@ function keepAppProtected(
     alongsideExtensions
       ? "For the application's operations: if a model or field was only renamed, state the rename with --rename <old>:<new>."
       : 'If a model or field was only renamed, state the rename with --rename <old>:<new>.',
-    ...(changesType
-      ? [
-          `For a type change, write the conversion with ${cliCommand(
-            invocation === undefined ? undefined : { ...invocation, dbGiven: false },
-            'migration plan',
-            ['--convert', '<field>'],
-          )}.`,
-        ]
-      : []),
+    ...(changesType ? [typeChangeSentence(invocation, migrationPlan)] : []),
     'Otherwise keep it in the contract.',
   ];
+}
+
+/** Where a `migration plan` that writes a type change starts and ends: the run's own, or the database's. */
+export interface TypeChangePlan {
+  readonly from: MigrationPlanArgument;
+  readonly to: MigrationPlanTargetArgument;
+}
+
+function typeChangeSentence(
+  invocation: CliInvocation | undefined,
+  migrationPlan: TypeChangePlan | undefined,
+): string {
+  if (migrationPlan === undefined)
+    return 'For a type change, state the conversion with --convert <field>.';
+  const plan = printedPlan(invocation, migrationPlan, ['--convert', '<field>']);
+  return plan.kind === 'none'
+    ? `A type change cannot be written as a migration here. ${plan.reason}.`
+    : `For a type change, write the conversion with ${quotedPlan(plan)}.`;
 }
 
 /** What a user can do instead of a refused change, for the command that refused it and the contract spaces that hold it. */
@@ -221,6 +235,7 @@ function keepProtected(
   command: DataProtectionCheckedCommand,
   appSpaceId: string,
   invocation: CliInvocation | undefined,
+  migrationPlan: TypeChangePlan | undefined,
 ): string {
   const inApp = refusal.operations.filter(({ spaceId }) => spaceId === appSpaceId);
   const extensionSpaces = [
@@ -235,7 +250,14 @@ function keepProtected(
     ),
     ...(inApp.length === 0
       ? []
-      : keepAppProtected(refusal.setting, command, inApp, extensionSpaces.length > 0, invocation)),
+      : keepAppProtected(
+          refusal.setting,
+          command,
+          inApp,
+          extensionSpaces.length > 0,
+          invocation,
+          migrationPlan,
+        )),
     ...(extensionSpaces.length === 0 ? [] : [extensionsOwnMigrations(extensionSpaces)]),
     doItAnyway(refusal.source),
   ].join(' ');
@@ -256,6 +278,8 @@ export function errorDataProtectionForbids(args: {
   readonly command: DataProtectionCheckedCommand;
   readonly refusals: readonly DataProtectionRefusal[];
   readonly invocation: CliInvocation | undefined;
+  /** The `migration plan` a type change is written in; `db migrate` advises planning again instead. */
+  readonly migrationPlan?: TypeChangePlan;
 }): ActionableCliError {
   const { spaceId, command, refusals } = args;
   const refNames = new Set(
@@ -275,7 +299,7 @@ export function errorDataProtectionForbids(args: {
     ])
     .join(' ');
   const recoveries = refusals.map((refusal) =>
-    keepProtected(refusal, command, spaceId, args.invocation),
+    keepProtected(refusal, command, spaceId, args.invocation, args.migrationPlan),
   );
   return new ActionableCliError(
     'MIGRATION.DATA_PROTECTION_FORBIDS',

@@ -57,6 +57,7 @@ import { migrateRunnerFailureError } from '../../utils/migrate-failure';
 import type { DataProtectionRefusedOperation } from '../../utils/policy-errors';
 import { declaredSettingsText, errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
+import type { FailedMigrationOnDisk } from '../../utils/runner-failure-advice';
 import { subjectText } from '../statements/plan-questions';
 import type {
   MigratePathDecision,
@@ -412,7 +413,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
         facts,
         facts.failedMigration === undefined
           ? undefined
-          : failedMigrationOnDisk(facts.failedMigration, migrationsDir),
+          : failedMigrationOnDisk(facts.failedMigration, migrationsDir, aggregate.app.spaceId),
         options.invocation,
       ),
     );
@@ -1132,9 +1133,11 @@ function pathNotFound(spaceId: string, fromHash: string, targetHash: string): Pa
 function failedMigrationOnDisk(
   failed: { readonly spaceId: string; readonly edge: AggregateMigrationEdgeRef },
   migrationsDir: string,
-): { readonly directory: string; readonly from: string } {
+  appSpaceId: string,
+): FailedMigrationOnDisk {
   return {
     directory: join(migrationsDir, failed.spaceId, failed.edge.dirName),
     from: failed.edge.from,
+    ...(failed.spaceId === appSpaceId ? {} : { extensionSpaceId: failed.spaceId }),
   };
 }

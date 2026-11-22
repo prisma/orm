@@ -35,10 +35,14 @@ import {
 import type { RunnerAdvice } from './runner-advice';
 import { schemaCheckIssues } from './schema-check-issues';
 
-/** The written migration of the failed operation: its directory, and the contract it starts from. */
+/**
+ * The written migration of the failed operation: its directory, the contract it starts from, and,
+ * when an extension ships it, the extension's contract space.
+ */
 export interface FailedMigrationOnDisk {
   readonly directory: string;
   readonly from: string;
+  readonly extensionSpaceId?: string;
 }
 
 /** What a runner failure says of a type change that failed: who converted the values, and how it failed. */
@@ -584,6 +588,19 @@ function migrateRowsWithoutValueAdvice(
   ];
 }
 
+/**
+ * The way out of a failed migration an extension ships: its migrations come with the extension, and
+ * `migration plan` plans only the application's contract space.
+ */
+function extensionMigrationAdvice(spaceId: string, invocation: CliInvocation): RunnerAdvice {
+  return [
+    resolveTheCause(invocation),
+    chooseAction(
+      `The failed migration belongs to extension space "${spaceId}", whose migrations come with the extension and \`migration plan\` does not plan, so do not edit or plan it again; ask the extension's author for a version whose migrations apply to this database`,
+    ),
+  ];
+}
+
 function resolveTheCause(invocation: CliInvocation): NextAction {
   return chooseAction(
     `Resolve the cause the failure names, then re-run ${dbMigrateAgain(invocation)}`,
@@ -666,6 +683,9 @@ export function migrateAdvice(
   const { blockingObjects } = failure.meta;
   if (blockingObjects !== undefined) {
     return blockingObjectsAdvice(blockingObjects, dbMigrateRerun(invocation));
+  }
+  if (failedOnDisk?.extensionSpaceId !== undefined) {
+    return extensionMigrationAdvice(failedOnDisk.extensionSpaceId, invocation);
   }
   if (facts.failedTypeChange !== undefined) {
     return migrateFailedTypeChangeAdvice(facts.failedTypeChange, failedMigration, invocation);

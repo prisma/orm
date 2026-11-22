@@ -41,6 +41,7 @@ import {
   cliCommand,
   dbMigrateRerun,
   planAction,
+  printedChoicePlan,
   printedPath,
   printedPlan,
   quotedPlan,
@@ -481,29 +482,33 @@ export function errorRefSetBundleNotFound(hash: string): ActionableCliError {
   );
 }
 
+/** A `migration plan` whose `--from` the user chooses, for `reason`, from where the history ends. */
+function explicitOriginPlan(reason: string, historyEnds: readonly string[]) {
+  return printedChoicePlan(undefined, { kind: 'ambiguous', reason, candidates: historyEnds }, []);
+}
+
 export function errorPlanForgotTheFlag(
   resolvedHash: string,
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
+  historyEnds: readonly string[],
   options?: { readonly cause?: unknown },
 ): ActionableCliError {
   const reachableList =
     reachableRefs.length > 0
       ? reachableRefs.map((r) => `${r.name} (${r.hash})`).join(', ')
       : '(none)';
+  const explicit = explicitOriginPlan(`No migration records contract ${resolvedHash}`, historyEnds);
   const refFix =
     reachableRefs.length > 0
       ? `Run migration plan with ${reachableRefs.map((r) => `--from ${r.name}`).join(' or ')}.`
-      : 'Pass --from <contract> naming the `to` hash of an on-disk migration (`{bin} migration list` shows them), or point the db ref at one with `{bin} migration ref set db <contract>`.';
+      : `Plan from a contract a migration records with \`${explicit.command}\`: ${explicit.fill}. Or point the db ref at one with \`{bin} migration ref set db <contract>\`.`;
   const nextActions =
     reachableRefs.length > 0
       ? reachableRefs.map((ref) =>
           runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
         )
       : [
-          runCommandAction(
-            'Plan from an explicit origin',
-            '{bin} migration plan --from <contract>',
-          ),
+          planAction('Plan from an explicit origin', explicit),
           runCommandAction(
             'Point the db ref at a graph node',
             '{bin} migration ref set db <contract>',
@@ -585,7 +590,12 @@ export function errorSnapshotMissing(
  */
 export function errorPlanOriginUnknown(
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
+  historyEnds: readonly string[],
 ): ActionableCliError {
+  const explicit = explicitOriginPlan(
+    'No `db` ref and no --from say where the plan starts',
+    historyEnds,
+  );
   const fromSuggestion =
     reachableRefs.length > 0
       ? reachableRefs.map((r) => `--from ${r.name}`).join(' or ')
@@ -598,7 +608,9 @@ export function errorPlanOriginUnknown(
       why: 'Migrations exist on disk, but there is no `db` ref and no --from was given, so the plan origin would silently fall back to an empty database and the resulting migration would recreate everything the existing migrations already create.',
       fix: [
         `Set the \`db\` ref to the contract your database is at (\`${refSetCommand}\`), or, on a database whose migration history does not need to be kept, advance it via \`{bin} db update\`.`,
-        `Or pass the origin explicitly: \`{bin} migration plan ${fromSuggestion}\`.`,
+        reachableRefs.length > 0
+          ? `Or pass the origin explicitly: \`{bin} migration plan ${fromSuggestion}\`.`
+          : `Or pass the origin explicitly: \`${explicit.command}\`. ${explicit.fill}.`,
         'Or pass --from @empty to deliberately plan from an empty database.',
       ].join('\n'),
       nextActions: [
@@ -607,12 +619,7 @@ export function errorPlanOriginUnknown(
           ? reachableRefs.map((ref) =>
               runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
             )
-          : [
-              runCommandAction(
-                'Plan from an explicit origin',
-                `{bin} migration plan ${fromSuggestion}`,
-              ),
-            ]),
+          : [planAction('Plan from an explicit origin', explicit)]),
         runCommandAction(
           'Plan from an empty database deliberately',
           '{bin} migration plan --from @empty',
