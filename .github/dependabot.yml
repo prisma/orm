@@ -136,10 +136,12 @@ updates:
           - minor
           - major
     ignore:
-      # These releases make the publish, preview release and telemetry deploy
-      # workflows fail before any job starts. CI passed because it uses the
-      # shared setup action, which pins older versions.
+      # mise-action 5.2.6 and pnpm/action-setup 6.1.1 made the publish, preview
+      # release and telemetry deploy workflows fail before any job started, and
+      # the next releases were offered straight after. Normal CI never runs
+      # those workflows, so an update PR looks green either way. Upgrade these
+      # two by hand, together with .github/actions/setup, and run a publish.
       - dependency-name: "jdx/mise-action"
-        versions: ["5.2.6"]
+        versions: [">=5"]
       - dependency-name: "pnpm/action-setup"
-        versions: ["6.1.1"]
+        versions: [">=6.1"]
