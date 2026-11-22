@@ -23,7 +23,7 @@ You need Node.js 24 or later and a Postgres database. These steps run the exampl
 4. Create the tables: `pnpm db:init`, which runs `prisma db init`.
 5. Start the application: `pnpm dev`, then open <http://localhost:3000> and sign up.
 
-Without `DATABASE_URL`, `src/lib/db.ts` stops with `DATABASE_URL is not set` when the application or `pnpm auth` loads it. `next build` is the exception: it loads the file without your environment, so the check is skipped while it runs.
+Without `DATABASE_URL`, `src/lib/db.ts` stops with `DATABASE_URL is not set` when the application or `pnpm auth` loads it. `next build` is the exception: the check is skipped while it runs, so a build on a machine with no database, such as CI, still succeeds.
 
 ## Using this outside the repository
 

@@ -124,18 +124,11 @@ import { contractFromJson } from '@prisma/orm-postgres/static';
 import type { Contract } from '../../prisma/contract';
 import contractJson from '../../prisma/contract.json' with { type: 'json' };
 
-const url = process.env['DATABASE_URL'];
-if (url === undefined && process.env['NEXT_PHASE'] !== 'phase-production-build') {
-  throw new Error('DATABASE_URL is not set. Set it to your Postgres connection string.');
-}
-
 export const db = postgres({
   contract: contractFromJson<Contract>(contractJson),
-  ...(url !== undefined && { url }),
+  url: process.env['DATABASE_URL']!,
 });
 ```
-
-The `NEXT_PHASE` condition is for Next.js: `next build` loads this file without your environment. Outside Next.js, drop the condition.
 
 On SQLite, give the client a file path:
 
