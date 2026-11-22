@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
-import { createBoundDriverFromBinding, type SqliteBinding } from '../src/sqlite-driver';
+import {
+  createBoundDriverFromBinding,
+  type SqliteBinding,
+  SqliteDriver,
+} from '../src/sqlite-driver';
 import { executeSql, queryRows } from './sql-queryable-test-utils';
 
 let testDir: string;
@@ -158,7 +162,7 @@ describe('SQLite connection reuse', () => {
     await driver.close();
   });
 
-  it('does not reuse a connection whose COMMIT failed', async () => {
+  it('does not reuse a connection whose COMMIT failed, even when a later rollback ends the transaction', async () => {
     const driver = createDriver();
     await executeSql(driver, 'CREATE TABLE p(id INTEGER PRIMARY KEY)');
     await executeSql(
@@ -171,6 +175,9 @@ describe('SQLite connection reuse', () => {
     const tx = await conn.beginTransaction();
     await executeSql(tx, 'INSERT INTO c VALUES (?, ?)', [1, 99]);
     await expect(tx.commit()).rejects.toThrow();
+    // The failed COMMIT leaves the transaction open; a successful rollback ends it, so only the
+    // terminal-operation failure history can keep this connection out of the idle slot.
+    await tx.rollback();
 
     await conn.release();
     const retry = await driver.acquireConnection();
@@ -178,6 +185,76 @@ describe('SQLite connection reuse', () => {
     const fresh = await retry.beginTransaction();
     await fresh.rollback();
     await retry.release();
+    await driver.close();
+  });
+
+  it('does not reuse a connection whose ROLLBACK failed', async () => {
+    const driver = createDriver();
+    const originalExec = DatabaseSync.prototype.exec;
+    const conn = await driver.acquireConnection();
+    const tx = await conn.beginTransaction();
+    const execMock = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (
+      this: DatabaseSync,
+      sql: string,
+    ) {
+      originalExec.call(this, sql);
+      if (sql === 'ROLLBACK') {
+        // The rollback applies, then the operation still reports failure.
+        throw new Error('rollback confirmation lost');
+      }
+      return;
+    });
+    await expect(tx.rollback()).rejects.toThrow('rollback confirmation lost');
+    execMock.mockRestore();
+
+    await conn.release();
+    const execSpy = spyExec();
+    const next = await driver.acquireConnection();
+    // The failed-rollback connection was closed, so this acquisition opens a fresh database.
+    expect(openedDatabases(execSpy)).toHaveLength(1);
+    const fresh = await next.beginTransaction();
+    await fresh.rollback();
+    await next.release();
+    await driver.close();
+  });
+
+  it('closes rather than pools a connection released after the driver closed', async () => {
+    const driver = createDriver();
+    const conn = await driver.acquireConnection();
+    const closeSpy = vi.spyOn(DatabaseSync.prototype, 'close');
+
+    await driver.close();
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    await conn.release();
+    expect(closeSpy).toHaveBeenCalledTimes(2);
+
+    // The idle slot holds nothing, so a reconnect opens a fresh database instead of the released one.
+    const execSpy = spyExec();
+    await driver.connect({ kind: 'path', path: testPath });
+    const next = await driver.acquireConnection();
+    expect(openedDatabases(execSpy)).toHaveLength(2);
+    await next.release();
+    await driver.close();
+  });
+
+  it('does not hand a released connection from a replaced binding to the new binding', async () => {
+    const driver = new SqliteDriver();
+    const closeSpy = vi.spyOn(DatabaseSync.prototype, 'close');
+    await driver.connect({ kind: 'path', path: join(testDir, 'gen-a.db') });
+    const stale = await driver.acquireConnection();
+    await executeSql(stale, 'CREATE TABLE in_a(id INTEGER)');
+
+    await driver.close();
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    await driver.connect({ kind: 'path', path: join(testDir, 'gen-b.db') });
+    await stale.release();
+    // The late release belongs to the replaced binding, so it closes instead of pooling.
+    expect(closeSpy).toHaveBeenCalledTimes(2);
+
+    const conn = await driver.acquireConnection();
+    await executeSql(conn, 'CREATE TABLE in_b(id INTEGER)');
+    await expect(queryRows(conn, 'SELECT * FROM in_a')).rejects.toThrow();
+    await conn.release();
     await driver.close();
   });
 

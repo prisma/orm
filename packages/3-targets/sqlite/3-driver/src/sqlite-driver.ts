@@ -68,8 +68,11 @@ function openConnection(path: string): DatabaseSync {
 
 /** Takes a released connection's database for reuse instead of closing it. */
 interface SqliteConnectionHome {
-  /** Takes the database into the idle slot; false means the caller must close it. */
-  reclaim(db: DatabaseSync, statements: SqliteStatementCache): boolean;
+  /**
+   * Takes the database into the idle slot when it belongs to the binding generation the
+   * connection was created for; false means the caller must close it.
+   */
+  reclaim(db: DatabaseSync, statements: SqliteStatementCache, generation: number): boolean;
   /** Drops the database from the idle slot when its connection closes it some other way. */
   discard(db: DatabaseSync): void;
 }
@@ -139,10 +142,20 @@ abstract class SqliteQueryable implements SqlQueryable {
 
 export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnection {
   readonly #home: SqliteConnectionHome | undefined;
+  /** The binding generation this connection was created under, so a stale release cannot pool it. */
+  readonly #generation: number;
+  /** Set when a terminal operation (COMMIT or ROLLBACK) failed; the connection never pools after that. */
+  #terminalOperationFailed = false;
 
-  constructor(db: DatabaseSync, home?: SqliteConnectionHome, statements?: SqliteStatementCache) {
+  constructor(
+    db: DatabaseSync,
+    home?: SqliteConnectionHome,
+    statements?: SqliteStatementCache,
+    generation = 0,
+  ) {
     super(db, statements ?? new SqliteStatementCache());
     this.#home = home;
+    this.#generation = generation;
   }
 
   async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
@@ -151,14 +164,19 @@ export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnecti
     }
     try {
       this.db.exec('BEGIN');
-      return new SqliteTransactionImpl(this.db, this.statements);
+      return new SqliteTransactionImpl(this.db, this.statements, () => {
+        this.#terminalOperationFailed = true;
+      });
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
 
   async release(): Promise<void> {
-    if (this.#home?.reclaim(this.db, this.statements) === true) {
+    if (
+      this.#terminalOperationFailed === false &&
+      this.#home?.reclaim(this.db, this.statements, this.#generation) === true
+    ) {
       return;
     }
     return this.destroy();
@@ -175,10 +193,18 @@ export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnecti
 }
 
 class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
+  readonly #onTerminalFailure: () => void;
+
+  constructor(db: DatabaseSync, statements: SqliteStatementCache, onTerminalFailure: () => void) {
+    super(db, statements);
+    this.#onTerminalFailure = onTerminalFailure;
+  }
+
   async commit(): Promise<void> {
     try {
       this.db.exec('COMMIT');
     } catch (error) {
+      this.#onTerminalFailure();
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
@@ -187,6 +213,7 @@ class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
     try {
       this.db.exec('ROLLBACK');
     } catch (error) {
+      this.#onTerminalFailure();
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
@@ -262,11 +289,13 @@ export class SqliteDriver implements SqliteRuntimeDriver {
   #state: DriverState;
   readonly #home: SqliteConnectionHome;
   #idle: IdleSqliteConnection | undefined;
+  /** Counts connect() calls, so a connection's reclamation is judged against its own binding. */
+  #generation = 0;
 
   constructor(initialState?: ConnectedState) {
     this.#state = initialState ?? { kind: 'unbound' };
     this.#home = {
-      reclaim: (db, statements) => this.#reclaim(db, statements),
+      reclaim: (db, statements, generation) => this.#reclaim(db, statements, generation),
       discard: (db) => this.#discard(db),
     };
   }
@@ -288,6 +317,7 @@ export class SqliteDriver implements SqliteRuntimeDriver {
         bindingKind: binding.kind,
       });
     }
+    this.#generation += 1;
     this.#state = {
       kind: 'connected',
       path: binding.path,
@@ -299,13 +329,28 @@ export class SqliteDriver implements SqliteRuntimeDriver {
     const { path } = this.#requireConnected();
     const idle = this.#idle;
     if (idle === undefined) {
-      return new SqliteConnectionImpl(openConnection(path), this.#home);
+      return new SqliteConnectionImpl(
+        openConnection(path),
+        this.#home,
+        undefined,
+        this.#generation,
+      );
     }
     this.#idle = undefined;
-    return new SqliteConnectionImpl(idle.db, this.#home, idle.statements);
+    return new SqliteConnectionImpl(idle.db, this.#home, idle.statements, this.#generation);
   }
 
-  #reclaim(db: DatabaseSync, statements: SqliteStatementCache): boolean {
+  #reclaim(db: DatabaseSync, statements: SqliteStatementCache, generation: number): boolean {
+    // A connection created for an earlier binding never joins this binding's idle slot: after a
+    // reconnect it would serve the new binding while still reading and writing the old database.
+    if (generation !== this.#generation) {
+      return false;
+    }
+    // A driver that closed pools nothing: no later acquisition can hand the database out again,
+    // and a further close() returns without draining the idle slot.
+    if (this.#state.kind !== 'connected') {
+      return false;
+    }
     if (this.#idle !== undefined) {
       return false;
     }
