@@ -21,6 +21,7 @@ import {
   ProjectionItem,
   SelectAst,
   SubqueryExpr,
+  type TableSource,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
@@ -656,10 +657,37 @@ function buildIncludeChildRowsSelect(
 
   const partitionByParent = tied.parentKey.map((key) => key.expr);
   if (childState.distinctOn && childState.distinctOn.length > 0) {
-    childRows = childRows.withDistinctOn([
-      ...partitionByParent,
-      ...childState.distinctOn.map((column) => child.column(column)),
-    ]);
+    if (nestedProjections.length > 0) {
+      // Postgres computes the select list before the sort and the DISTINCT ON
+      // step when the statement has no LIMIT, so the nested include subqueries
+      // would run for every candidate row. Dedupe in a derived table aliased
+      // back to the child alias and run the nested includes outside it, once
+      // per kept row.
+      let deduped = SelectAst.from(child.tableSource(contract))
+        .withProjection([...childProjection, ...hiddenOrderProjection])
+        .withDistinctOn([
+          ...partitionByParent,
+          ...childState.distinctOn.map((column) => child.column(column)),
+        ]);
+      if (whereExpr !== undefined) {
+        deduped = deduped.withWhere(whereExpr);
+      }
+      if (joins.length > 0) {
+        deduped = deduped.withJoins(joins);
+      }
+      if (childOrderBy) {
+        deduped = deduped.withOrderBy(childOrderBy);
+      }
+      childRows = SelectAst.from(DerivedTableSource.as(child.alias, deduped)).withProjection([
+        ...childProjection,
+        ...hiddenOrderProjection,
+      ]);
+    } else {
+      childRows = childRows.withDistinctOn([
+        ...partitionByParent,
+        ...childState.distinctOn.map((column) => child.column(column)),
+      ]);
+    }
     if (childOrderBy) {
       childRows = childRows.withOrderBy(childOrderBy);
     }
@@ -1626,6 +1654,8 @@ function buildSelectAst(
     readonly joins?: ReadonlyArray<JoinAst>;
     readonly includeProjection?: ReadonlyArray<ProjectionItem>;
     readonly where?: AnyExpression;
+    /** Whether the read carries `include` subqueries in its select list. */
+    readonly hasIncludes?: boolean;
   },
 ): SelectAst {
   const { root } = state.tables;
@@ -1644,15 +1674,28 @@ function buildSelectAst(
   const modelColumnsProjection = modelColumns.map((column) =>
     ProjectionItem.of(column, root.column(column)),
   );
-  const { source: fromSource, where: effectiveWhere } = buildDedupedTableSource(
+  const { source: dedupedSource, where: effectiveWhere } = buildDedupedTableSource(
     contract,
     state,
     where,
     modelColumnsProjection,
   );
+  // With includes, `distinctOn` dedupes in a derived table instead, so the
+  // include subqueries in the select list run once per kept row.
+  const distinctOnSource =
+    options.hasIncludes === true
+      ? buildDistinctOnTableSource(
+          state,
+          dedupedSource,
+          effectiveWhere,
+          modelColumnsProjection,
+          options.joins,
+        )
+      : undefined;
+  const fromSource = distinctOnSource ?? dedupedSource;
 
   let ast = SelectAst.from(fromSource).withProjection(projection);
-  if (effectiveWhere) {
+  if (distinctOnSource === undefined && effectiveWhere) {
     ast = ast.withWhere(effectiveWhere);
   }
   if (state.orderBy) {
@@ -1661,7 +1704,7 @@ function buildSelectAst(
   if (state.selectedFields === undefined) {
     ast = ast.withSelectAllIntent({ table: tableName });
   }
-  if (state.distinctOn && state.distinctOn.length > 0) {
+  if (distinctOnSource === undefined && state.distinctOn && state.distinctOn.length > 0) {
     ast = ast.withDistinctOn(state.distinctOn.map((column) => root.column(column)));
   }
   // `state.distinct` is handled via the `usesRowNumberDistinct` wrap
@@ -1672,7 +1715,7 @@ function buildSelectAst(
   if (state.offset !== undefined) {
     ast = ast.withOffset(state.offset);
   }
-  if (options.joins && options.joins.length > 0) {
+  if (distinctOnSource === undefined && options.joins && options.joins.length > 0) {
     ast = ast.withJoins(options.joins);
   }
   if (state.locking !== undefined) {
@@ -1680,6 +1723,41 @@ function buildSelectAst(
   }
 
   return ast;
+}
+
+/**
+ * The FROM source for a `distinctOn` read that carries include subqueries:
+ * Postgres computes the select list before the sort and the DISTINCT ON step
+ * when the statement has no LIMIT, so each include subquery would run for
+ * every candidate row and all but one row per group would then be thrown
+ * away. `SELECT DISTINCT ON` in a derived table aliased back to the root
+ * alias keeps the includes outside the dedup, so they run once per kept row —
+ * the same shape `distinct()` gets from `buildDedupedTableSource`.
+ */
+function buildDistinctOnTableSource(
+  state: CollectionState,
+  fromSource: TableSource | DerivedTableSource,
+  where: AnyExpression | undefined,
+  projection: ReadonlyArray<ProjectionItem>,
+  joins: ReadonlyArray<JoinAst> | undefined,
+): DerivedTableSource | undefined {
+  if (state.distinctOn === undefined || state.distinctOn.length === 0) {
+    return undefined;
+  }
+  const { root } = state.tables;
+  let inner = SelectAst.from(fromSource)
+    .withProjection(projection)
+    .withDistinctOn(state.distinctOn.map((column) => root.column(column)));
+  if (where !== undefined) {
+    inner = inner.withWhere(where);
+  }
+  if (joins !== undefined && joins.length > 0) {
+    inner = inner.withJoins(joins);
+  }
+  if (state.orderBy !== undefined && state.orderBy.length > 0) {
+    inner = inner.withOrderBy(state.orderBy);
+  }
+  return DerivedTableSource.as(root.alias, inner);
 }
 
 function buildRootPolymorphism(
@@ -1783,6 +1861,7 @@ export function collectionSelectWithIncludesAst(
     {
       joins: polymorphism.joins,
       includeProjection,
+      hasIncludes: state.includes.length > 0,
       ...ifDefined('where', topLevelWhere),
     },
   );

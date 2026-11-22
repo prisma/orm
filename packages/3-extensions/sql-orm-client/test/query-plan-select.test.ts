@@ -360,6 +360,60 @@ describe('compileSelectWithIncludes', () => {
     expect(childRows.limit).toBe(2);
   });
 
+  it('moves includes outside DISTINCT ON so they run once per kept row', () => {
+    const { collection } = createCollection();
+    const orderBy = collection.orderBy((user) => user.email.asc()).state.orderBy;
+    const state = collection
+      .orderBy((user) => user.email.asc())
+      .distinctOn('email')
+      .include('posts', (posts) => posts.select('id', 'title')).state;
+
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
+    expectSelectAst(plan.ast);
+
+    const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
+    expectSubqueryExpr(postsProjection?.expr);
+
+    // Postgres computes a select list before the sort and the DISTINCT ON step
+    // when the statement has no LIMIT, so the include subqueries would run for
+    // every candidate row. The dedup sits in a derived table aliased back to
+    // the root alias, and the includes run outside it, once per kept row.
+    expectDerivedTableSource(plan.ast.from);
+    expect(plan.ast.from.query.distinctOn).toEqual([ColumnRef.of('users', 'email')]);
+    expect(plan.ast.from.query.orderBy).toEqual(orderBy);
+    expect(plan.ast.distinctOn).toBeUndefined();
+    expect(plan.ast.orderBy).toEqual(orderBy);
+  });
+
+  it('moves nested includes outside the child DISTINCT ON', () => {
+    const { collection } = createCollection();
+    const state = collection.include('posts', (posts) =>
+      posts
+        .orderBy((post) => post.title.asc())
+        .distinctOn('title')
+        .include('author', (author) => author.select('name')),
+    ).state;
+
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
+    expectSelectAst(plan.ast);
+
+    const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
+    expectSubqueryExpr(postsProjection?.expr);
+
+    const aggregateQuery = postsProjection.expr.query;
+    expectDerivedTableSource(aggregateQuery.from);
+    const childRows = aggregateQuery.from.query;
+
+    // Same shape one level down: the nested author subquery is in the select
+    // list of the row read, so the DISTINCT ON dedup moves into a derived
+    // table and the nested include runs outside it.
+    expect(childRows.distinctOn).toBeUndefined();
+    expectDerivedTableSource(childRows.from);
+    expect(childRows.from.query.distinctOn).toEqual([ColumnRef.of('posts', 'title')]);
+    const authorProjection = childRows.projection.find((item) => item.alias === 'author');
+    expectSubqueryExpr(authorProjection?.expr);
+  });
+
   it('preserves complete codec metadata through row-number dedup', () => {
     const codec: CodecRef = {
       codecId: 'pg/vector@1',
