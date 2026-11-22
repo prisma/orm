@@ -145,7 +145,7 @@ function customAdapter({
       return { found, collection: collections.collection(orm, found) };
     };
 
-    const checkedNames = (model: string, fields: Iterable<string>): void => {
+    const assertFieldNames = (model: string, fields: Iterable<string>): void => {
       for (const field of fields) assertFieldName(model, field);
     };
 
@@ -154,7 +154,7 @@ function customAdapter({
       found: FoundModel,
       where: readonly CleanedWhere[] | undefined,
     ) => {
-      checkedNames(
+      assertFieldNames(
         model,
         (where ?? []).map((clause) => clause.field),
       );
@@ -175,13 +175,13 @@ function customAdapter({
         select !== undefined && select.length > 0
           ? select.map((field) => getFieldName({ model, field }))
           : selectionOf(model);
-      checkedNames(model, fields);
+      assertFieldNames(model, fields);
       return fields;
     };
 
     const adapter: RowAdapter = {
       async create({ model, data }) {
-        checkedNames(model, Object.keys(data));
+        assertFieldNames(model, Object.keys(data));
         const { collection } = resolve(model);
         return collection.create(data);
       },
@@ -201,7 +201,7 @@ function customAdapter({
           .select(...selected(model, select));
         if (sortBy !== undefined) {
           const field = getFieldName({ model, field: sortBy.field });
-          checkedNames(model, [field]);
+          assertFieldNames(model, [field]);
           const direction: unknown = sortBy.direction;
           if (direction !== 'asc' && direction !== 'desc') {
             throw new BetterAuthError(`Sort direction "${String(direction)}" is not supported.`);
@@ -227,12 +227,12 @@ function customAdapter({
         );
       },
       async update({ model, where, update }) {
-        checkedNames(model, Object.keys(update));
+        assertFieldNames(model, Object.keys(update));
         const { found, collection } = resolve(model);
         return collection.where(filterFor(model, found, where)).update(update);
       },
       async updateMany({ model, where, update }) {
-        checkedNames(model, Object.keys(update));
+        assertFieldNames(model, Object.keys(update));
         const { found, collection } = resolve(model);
         return collection.where(filterFor(model, found, where)).updateAndCount(update);
       },
