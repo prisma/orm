@@ -164,7 +164,7 @@ export function errorRefTargetEmpty(options: {
     'MIGRATION.REF_TARGET_EMPTY',
     `Cannot advance ref "${options.name}" to the empty contract`,
     {
-      why: 'This run would bring the database to the empty contract, and a ref cannot name the empty contract: it is not a contract any migration produces, and the snapshot store holds nothing for it. Nothing was applied.',
+      why: 'This run would bring the database to the empty contract. The empty contract is where the planner starts, not a contract a ref can name, so the ref could never be written. Nothing was applied.',
       fix: 'Run the command again without --advance-ref.',
       nextActions: [runCommandAction('Apply without advancing a ref', options.rerunWithoutRef)],
       meta: { name: options.name },

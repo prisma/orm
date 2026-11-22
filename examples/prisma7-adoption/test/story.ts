@@ -25,7 +25,7 @@ export function runAllowingFailure(
   return new Promise((resolve, reject) => {
     const child = spawn(join(BIN, bin), args, {
       cwd,
-      env: { ...process.env, CI: 'false', DATABASE_URL: databaseUrl },
+      env: { ...process.env, DATABASE_URL: databaseUrl },
     });
     let output = '';
     child.stdout.on('data', (chunk: Buffer) => {

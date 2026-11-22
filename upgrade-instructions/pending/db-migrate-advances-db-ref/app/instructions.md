@@ -11,7 +11,7 @@ changes:
 
 # `db migrate` advances the `db` ref
 
-`prisma db migrate` now moves the `db` ref to the contract the database is at after it applies, the way `db init` and `db update` do. It does so only when the connection comes from `db.connection` in `prisma.config.ts` and the CLI does not detect CI. The CLI detects CI when the `CI` environment variable is set to anything but `false`, or when a variable that CI services set is present, such as `BUILD_NUMBER`, `BUILD_ID` or `GITHUB_ACTIONS`. When CI detection is what stops the advance, the command says so with `MIGRATION.REF_NOT_ADVANCED_IN_CI`. A pipeline that runs `db migrate` from the config silences that notice with `--no-advance-ref`.
+`prisma db migrate` now moves the `db` ref to the contract the database is at after it applies, the way `db init` and `db update` do. It does so only when the connection comes from `db.connection` in `prisma.config.ts` and the CLI does not detect CI. Unless the `CI` environment variable is `false`, which turns detection off whatever else is set, the CLI detects CI when `CI` is set or when a variable that CI services set is present, such as `BUILD_NUMBER`, `BUILD_ID` or `GITHUB_ACTIONS`. When CI detection is what stops the advance, the command says so with `MIGRATION.REF_NOT_ADVANCED_IN_CI`. A pipeline that runs `db migrate` from the config silences that notice with `--no-advance-ref`.
 
 | Situation | Ref advancement |
 | --- | --- |
@@ -20,6 +20,8 @@ changes:
 | `--db <url>` | None |
 | `--advance-ref <name>` | `<name>` instead, in every case above |
 | `--no-advance-ref` | None |
+| The run ends at the empty contract, for example `--to @empty`; connection from `prisma.config.ts`, neither flag | None; `db` is left unchanged, with a warning when it exists |
+| The run ends at the empty contract, `--advance-ref <name>` | Refused before anything is applied; before, the write failed after the apply |
 
 Change the commands the project runs:
 

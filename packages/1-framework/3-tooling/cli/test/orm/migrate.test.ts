@@ -15,11 +15,13 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeRef } from '@internal/migration-tools/refs';
+import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { buildPathNotFoundFailure } from '../../src/control-api/operations/migrate';
 import { runnerFailureFacts } from '../../src/control-api/operations/run-migration';
 import type { ControlClient } from '../../src/control-api/types';
@@ -45,16 +47,15 @@ const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: t
 const SNAPSHOT_CONTRACT_DTS = '/* rendered */ export type Contract = { rendered: true };\n';
 
 /** The command tree mounted over a control-client double instead of the real client. */
-const commands = createBinCommands(
-  () =>
-    ({
-      connect: mocks.connect,
-      readAllMarkers: mocks.readAllMarkers,
-      migrate: mocks.migrate,
-      renderContractDts: mocks.renderContractDts,
-      close: mocks.close,
-    }) as unknown as ControlClient,
-);
+const clientDouble = {
+  connect: mocks.connect,
+  readAllMarkers: mocks.readAllMarkers,
+  migrate: mocks.migrate,
+  renderContractDts: mocks.renderContractDts,
+  close: mocks.close,
+} as unknown as ControlClient;
+
+const commands = createBinCommands(() => clientDouble);
 
 const EMPTY = 'empty';
 const C1 = '1'.repeat(64);
@@ -516,10 +517,39 @@ describe('migrate', () => {
           {
             code: 'MIGRATION.REF_NOT_WRITTEN',
             why: expect.stringContaining(`the snapshot store holds no contract for ${C1}`),
+            nextActions: [
+              { kind: 'run-command', command: 'prisma-test db migrate --advance-ref db' },
+            ],
           },
         ],
       });
       expect(await dbRefHash(cwd)).toBeUndefined();
+    });
+
+    it('lets an internal error during the ref write reach the top level', async () => {
+      const cwd = await buildProject();
+      await storeSnapshot(cwd, C2);
+      vi.resetModules();
+      vi.doMock('@internal/migration-tools/refs', async (importOriginal) => ({
+        ...(await importOriginal<typeof import('@internal/migration-tools/refs')>()),
+        advanceRef: () => Promise.reject(new InternalError('broken invariant')),
+      }));
+      try {
+        const { createBinCommands: freshCommands, BIN_GROUPS: freshGroups } = await import(
+          '../../src/orm/cli'
+        );
+        const run = await createOrmTestCli({
+          commands: freshCommands(() => clientDouble),
+          groups: freshGroups,
+          orm: ormConfig(cwd),
+        }).run(['db', 'migrate', '--json'], { cwd });
+
+        expect(run.exitCode).toBe(1);
+        expect(JSON.stringify(run.json)).not.toContain('MIGRATION.REF_NOT_WRITTEN');
+      } finally {
+        vi.doUnmock('@internal/migration-tools/refs');
+        vi.resetModules();
+      }
     });
 
     it('refuses an invalid ref name before applying when the snapshot is already stored', async () => {
@@ -562,7 +592,8 @@ describe('migrate', () => {
           diagnostics: [
             {
               code: 'MIGRATION.REF_NOT_ADVANCED_TO_EMPTY',
-              severity: 'info',
+              severity: 'warn',
+              summary: `Ref "db" still names ${C2}, but the database is now at the empty contract`,
               nextActions: [
                 { kind: 'run-command', command: 'prisma-test migration ref delete db' },
               ],
@@ -572,6 +603,21 @@ describe('migrate', () => {
         const suggested = await runSuggestedCommand(cwd, run.json);
         expect(suggested.exitCode).toBe(0);
         expect(await dbRefHash(cwd)).toBeUndefined();
+      });
+
+      it('says nothing when there is no db ref', async () => {
+        const cwd = await buildProject();
+        mocks.migrate.mockResolvedValue(ok({ ...appliedSuccess(), markerHash: EMPTY }));
+
+        const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', '@empty'], {
+          cwd,
+          isTty: { stdout: true, stderr: true },
+        });
+
+        expect(run.exitCode).toBe(0);
+        expect(run.presented?.diagnostics).toEqual([]);
+        expect(stripAnsi(run.stderr)).not.toContain('Ref "db"');
+        expect(existsSync(refsDirOf(cwd))).toBe(false);
       });
 
       it('says why in CI too, and not that CI was the reason', async () => {
