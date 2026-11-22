@@ -167,18 +167,19 @@ function startAtEndOf(graph: MigrationGraph, hash: string, history: string): Mig
 /**
  * The `--to` that makes `migration plan` end at `end`: none for the emitted contract, which it
  * targets by default, nor for a contract hash that is the one the run was given; a ref by its name;
- * a contract a migration records by its hash. It does not plan to the empty contract, or to any
- * other contract no migration records.
+ * a contract a migration records by its hash. It does not plan to the empty contract, by its hash or
+ * a ref, or to any other contract no migration records.
  */
 export function migrationPlanTo(space: PlanSpace, end: PlanEnd): MigrationPlanTargetArgument {
   if (end.kind === 'emitted') return { kind: 'default' };
-  if (end.kind === 'ref') return reference(end.name);
-  if (end.hash === EMPTY_CONTRACT_HASH) {
+  const hash = end.kind === 'ref' ? space.refs[end.name]?.hash : end.hash;
+  if (hash === EMPTY_CONTRACT_HASH) {
     return {
       kind: 'none',
       reason: '`migration plan` does not plan a migration to the empty contract',
     };
   }
+  if (end.kind === 'ref') return reference(end.name);
   if (isGraphNode(end.hash, space.graph)) return reference(end.hash);
   if (end.hash === space.emittedHash) return { kind: 'default' };
   return {

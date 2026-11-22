@@ -325,6 +325,14 @@ describe('migrationPlanTo names a --to migration plan resolves to the intended e
     });
   });
 
+  it('names none for a ref that names the empty contract, which migration plan refuses', async () => {
+    const aggregateSpace = space([pkg(E, A)], { blank: ref(E) });
+    expect(
+      migrationPlanTo(planSpaceOf(aggregateSpace), { kind: 'ref', name: 'blank' }),
+    ).toMatchObject({ kind: 'none' });
+    expect((await resolveToForPlan('blank', { space: aggregateSpace })).ok).toBe(false);
+  });
+
   it('names none for the empty contract, which migration plan refuses', async () => {
     const aggregateSpace = space([pkg(E, A)]);
     expect(
