@@ -55,7 +55,8 @@ export interface MigrationPlanArguments {
   readonly to: MigrationPlanTargetArgument;
   /**
    * How the database reaches `to` through migrations, when its marker was read, which decides what
-   * the CLI's advice prints. Not part of the public API.
+   * the CLI's advice prints. It is in the published types, but it exists for that advice only, and
+   * its shape may change in any release without notice.
    *
    * @internal
    */
@@ -64,12 +65,19 @@ export interface MigrationPlanArguments {
 
 /**
  * What deriving a plan's arguments needs from the application space: its migration graph, its
- * refs, and, when known, the hash of the emitted contract, the one contract `migration plan`
- * targets that no migration records and the one `migration new` writes to.
+ * refs, and the hash of the contract the caller takes as emitted.
  */
 export interface PlanSpace {
   readonly graph: MigrationGraph;
   readonly refs: Refs;
+  /**
+   * The hash of the contract the caller takes as emitted, absent when it does not know it. `db
+   * update` and `migration status` pass the emitted contract: the one at the config's contract
+   * path, which `migration plan` targets by default and `migration new` writes to. `db init`, `db
+   * migrate` and `db sign` pass the contract the run was given (see {@link appSpaceOf}), which is
+   * another one under `db migrate --to` and `db sign <contract>`. Their advice does not depend on
+   * it there, since the plan's end is then a migration's end or a ref.
+   */
   readonly emittedHash?: string;
 }
 
@@ -301,9 +309,8 @@ export function databasePositionOf(markerHash: string | undefined): DatabasePosi
 }
 
 /**
- * The application space of `aggregate`, as a {@link PlanSpace}. The emitted contract is the
- * aggregate's unless `emitted` says otherwise: a run given a ref's contract passes the emitted
- * contract's hash, or `undefined` when it is not known.
+ * The application space of `aggregate`, as a {@link PlanSpace}, with `emitted.hash` as its
+ * `emittedHash`: by default the hash of the contract the run was given, the aggregate's.
  */
 export function appSpaceOf(
   aggregate: {

@@ -50,7 +50,7 @@ export type MigrationsToTarget =
     }
   | { readonly kind: 'plan-needed'; readonly missingInvariants: readonly string[] };
 
-/** `emittedHash` is the hash of the emitted contract, the one `migration new` writes to; absent when not known. */
+/** `space.emittedHash` is the contract the caller takes as emitted, as `PlanSpace.emittedHash` describes. */
 export function migrationsToTarget(
   space: { readonly graph: MigrationGraph; readonly emittedHash?: string },
   marker: ContractMarkerRecordLike | null | undefined,
