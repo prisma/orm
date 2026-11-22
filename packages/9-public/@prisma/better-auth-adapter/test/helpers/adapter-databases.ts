@@ -17,7 +17,7 @@ export type TestClient =
   | ReturnType<typeof openPostgresClient>;
 
 /**
- * Builds databases for the adapter's own tests: SQLite in a new file each time, Postgres in the one `@prisma/dev` server, reset each time. Opening a database closes the client of the one before.
+ * Builds test databases from PSL: SQLite in a new file each time, Postgres in one `@prisma/dev` server, started on first use and reset each time. Opening a database closes the client of the one before.
  */
 export interface AdapterDatabases {
   emptyContract(target: TargetName): SqlContract;
@@ -28,7 +28,7 @@ export interface AdapterDatabases {
 export async function createAdapterDatabases(): Promise<AdapterDatabases> {
   const contracts = await createContractFixture();
   const workDir = contracts.workDir;
-  const server: PostgresServer = await startPostgresServer();
+  let server: PostgresServer | undefined;
   let current: TestClient | undefined;
   const closeCurrent = async () => {
     await current?.close();
@@ -44,6 +44,7 @@ export async function createAdapterDatabases(): Promise<AdapterDatabases> {
         await applyContract(target, emitted.json, path, workDir);
         current = openSqliteClient(emitted.json, path);
       } else {
+        server ??= await startPostgresServer();
         await resetPostgres(server.url);
         await applyContract(target, emitted.json, server.url, workDir);
         current = openPostgresClient(emitted.json, server.url);
@@ -52,7 +53,7 @@ export async function createAdapterDatabases(): Promise<AdapterDatabases> {
     },
     async dispose() {
       await closeCurrent();
-      await server.close();
+      await server?.close();
       await workDir.remove();
     },
   };
