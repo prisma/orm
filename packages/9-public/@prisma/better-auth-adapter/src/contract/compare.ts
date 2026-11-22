@@ -43,6 +43,8 @@ export interface ContractComparison {
   readonly namespace: string | undefined;
   /** The namespace a model printed outside a `namespace` block belongs to. */
   readonly defaultNamespace: string;
+  /** Contract models that Better Auth's foreign keys reference but that are not among the models it expects, by physical model name. */
+  readonly referencedModels: ReadonlyMap<string, FoundModel>;
 }
 
 export interface CompareContractInput {
@@ -230,7 +232,8 @@ export function compareContract(input: CompareContractInput): ContractComparison
   const idStrategy = idStrategyOf(betterAuthOptions);
   const problems: ContractProblem[] = [];
   const models: ComparedModel[] = [];
-  for (const expected of expectedModels(input.tables, input)) {
+  const expectedModelList = expectedModels(input.tables, input);
+  for (const expected of expectedModelList) {
     const lookup = findModel(contract, expected.physicalName, namespace);
     switch (lookup.kind) {
       case 'missing':
@@ -248,9 +251,19 @@ export function compareContract(input: CompareContractInput): ContractComparison
       }
     }
   }
+  const expectedNames = new Set(expectedModelList.map((model) => model.physicalName));
+  const referencedModels = new Map<string, FoundModel>();
+  for (const model of expectedModelList) {
+    for (const { reference } of model.fields) {
+      if (reference === undefined || expectedNames.has(reference.model)) continue;
+      const lookup = findModel(contract, reference.model, namespace);
+      if (lookup.kind === 'found') referencedModels.set(reference.model, lookup);
+    }
+  }
   return {
     models,
     problems,
+    referencedModels,
     idStrategy,
     namespace,
     defaultNamespace: defaultNamespaceByTarget[contract.target] ?? UNBOUND_DOMAIN_NAMESPACE_ID,

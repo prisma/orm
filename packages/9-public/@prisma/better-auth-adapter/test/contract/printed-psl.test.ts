@@ -181,6 +181,38 @@ describe.each(targets)('printed PSL on %s', (target) => {
   });
 });
 
+describe.each(targets)('printed PSL referencing an application model on %s', (target) => {
+  it("relates to a model the contract has outside Better Auth's tables", async () => {
+    const base = `${pslForConfiguration(emptyContract(target), {})}
+model Project {
+  id String @id
+
+  @@map("project")
+}
+`;
+    const baseContract = (await emitContract(target, base, workDir)).contract;
+    const options: BetterAuthOptions = {
+      plugins: [
+        plugin({
+          note: {
+            fields: {
+              projectId: { type: 'string', references: { model: 'project', field: 'id' } },
+            },
+          },
+        }),
+      ],
+    };
+    const printed = printPsl(compare(baseContract, options));
+    expect(printed.blocks.find((block) => block.modelName === 'Project')).toEqual({
+      modelName: 'Project',
+      existing: true,
+      fieldLines: ['notes Note[]'],
+      attributeLines: [],
+    });
+    await emitAndApply(target, addPrintedPsl(base, printed), options);
+  });
+});
+
 describe('printed PSL on postgres namespaces', () => {
   it('puts missing models in the namespace the option names', async () => {
     const adapterOptions = { namespace: 'auth' };

@@ -2,6 +2,7 @@ import type { ComparedModel, ContractComparison } from './compare';
 import { idLineOf, pslTypeOf } from './compare';
 import type { ExpectedField, ExpectedModel, ReferentialAction } from './expected-models';
 import { lowerFirst, upperFirst } from './identifiers';
+import type { FoundModel } from './model-lookup';
 
 /** One field line, as its columns: name, type, then attributes when there are any. */
 type FieldLine = readonly [name: string, type: string, attributes?: string | undefined];
@@ -38,6 +39,22 @@ const actionNames: Readonly<Record<ReferentialAction, string>> = {
   'set default': 'SetDefault',
 };
 
+function existingTarget(found: FoundModel, betterAuthFields: readonly string[]): Target {
+  return {
+    name: found.name,
+    namespaceId: found.namespaceId,
+    existing: true,
+    taken: new Set([
+      ...betterAuthFields,
+      ...Object.keys(found.model.fields),
+      ...Object.keys(found.model.relations),
+    ]),
+    fields: [],
+    backRelations: [],
+    attributes: [],
+  };
+}
+
 function targetFor(model: ComparedModel, comparison: ContractComparison): Target | undefined {
   const betterAuthFields = ['id', ...model.expected.fields.map((field) => field.name)];
   switch (model.status) {
@@ -52,19 +69,7 @@ function targetFor(model: ComparedModel, comparison: ContractComparison): Target
         attributes: [],
       };
     case 'found':
-      return {
-        name: model.found.name,
-        namespaceId: model.found.namespaceId,
-        existing: true,
-        taken: new Set([
-          ...betterAuthFields,
-          ...Object.keys(model.found.model.fields),
-          ...Object.keys(model.found.model.relations),
-        ]),
-        fields: [],
-        backRelations: [],
-        attributes: [],
-      };
+      return existingTarget(model.found, betterAuthFields);
     case 'ambiguous':
       return undefined;
   }
@@ -161,6 +166,9 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
   for (const model of comparison.models) {
     const target = targetFor(model, comparison);
     if (target !== undefined) targets.set(model.expected.physicalName, target);
+  }
+  for (const [physicalName, found] of comparison.referencedModels) {
+    targets.set(physicalName, existingTarget(found, []));
   }
   const notes: string[] = [];
 
