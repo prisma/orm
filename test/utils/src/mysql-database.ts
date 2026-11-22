@@ -112,6 +112,3 @@ export async function queryMysqlDatabase(url: string, sql: string): Promise<void
     await connection.end();
   }
 }
-
-/** Whether the tests run in CI, where every live-test server the job configures must be present. */
-export const inCi = process.env['CI'] !== undefined;

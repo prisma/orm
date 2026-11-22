@@ -1,4 +1,5 @@
-import { inCi, mysqlServerUrl } from '@repo/test-utils/mysql-database';
+import { inCi } from '@repo/test-utils/ci';
+import { mysqlServerUrl } from '@repo/test-utils/mysql-database';
 import { expect, it } from 'vitest';
 
 it.runIf(inCi)('has the MySQL server its live tests run against when it runs in CI', () => {

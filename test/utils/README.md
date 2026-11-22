@@ -308,6 +308,7 @@ import { loadContractFromDisk, emitAndVerifyContract } from './utils';
 ## Exports
 
 - `.`: All test utilities (database helpers, async iterable helpers, column descriptors, operation descriptors, timeouts). **Note**: Does not include utilities that import `vitest` directly - see separate export paths below.
+- `./ci`: `inCi`, whether the tests run in CI, where a test that needs a live server fails instead of skipping when the server is missing
 - `./column-descriptors`: Adapter-agnostic column type descriptors for test fixtures
 - `./operation-descriptors`: Adapter-agnostic operation type descriptors for type-level test fixtures
 - `./temporal-fallback-entries`: The published-entry check for `temporal-polyfill` each target package runs
