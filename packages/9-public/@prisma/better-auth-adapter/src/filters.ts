@@ -1,7 +1,7 @@
 import type { CleanedWhere } from '@better-auth/core/db/adapter';
 import { BetterAuthError } from '@better-auth/core/error';
 import { all, and, or } from '@prisma/orm-family-sql/orm-client';
-import { assertFieldName } from './models/identifiers';
+import { describeFieldType } from './models/field-type';
 import type { FoundModel } from './models/model-lookup';
 import {
   asCondition,
@@ -14,21 +14,26 @@ import {
   type WhereTools,
 } from './orm';
 
-export function codecIdOf(model: FoundModel, field: string): string {
-  const type = model.model.fields[field]?.type;
-  if (type === undefined) return 'unknown type';
-  return type.kind === 'scalar' ? type.codecId : type.kind;
+/** The codec id a raw expression over the field returns; a field that is not a single scalar supports no pattern or case-insensitive comparison. */
+function scalarCodecIdOf(model: FoundModel, field: string, operator: string): string {
+  const type = model.model.fields[field];
+  if (type?.type.kind !== 'scalar' || type.many) throw unsupportedError(model, field, operator);
+  return type.type.codecId;
+}
+
+function fieldTypeOf(model: FoundModel, field: string): string {
+  const contractField = model.model.fields[field];
+  return contractField === undefined ? 'unknown type' : describeFieldType(contractField);
 }
 
 export function unsupportedError(model: FoundModel, field: string, operator: string) {
   return new BetterAuthError(
-    `Field "${model.name}.${field}" (${codecIdOf(model, field)}) does not support ${operator}.`,
+    `Field "${model.name}.${field}" (${fieldTypeOf(model, field)}) does not support ${operator}.`,
   );
 }
 
 /** A field of the callback's model accessor; an unknown field raises the ORM client's own error. */
-export function fieldOf(accessor: ModelAccessor, model: FoundModel, field: string): unknown {
-  assertFieldName(model.name, field);
+export function fieldOf(accessor: ModelAccessor, field: string): unknown {
   return property(accessor, field);
 }
 
@@ -132,11 +137,15 @@ function clauseCondition(
   clause: CleanedWhere,
 ): Condition {
   const name = clause.field;
-  const field = fieldOf(accessor, model, name);
+  const field = fieldOf(accessor, name);
   const operator = clause.operator ?? 'eq';
   const value = clause.value;
   const insensitive = clause.mode === 'insensitive';
-  const pattern: PatternContext = { fns, field, codecId: codecIdOf(model, name) };
+  const pattern = (): PatternContext => ({
+    fns,
+    field,
+    codecId: scalarCodecIdOf(model, name, operator),
+  });
   const method = (methodName: string, ...args: unknown[]) =>
     call(field, methodName, model, name, operator, ...args);
 
@@ -145,7 +154,7 @@ function clauseCondition(
     case 'ne':
       if (value === null) return method(operator === 'eq' ? 'isNull' : 'isNotNull');
       if (insensitive && typeof value === 'string') {
-        return insensitivePattern(pattern, operator, value);
+        return insensitivePattern(pattern(), operator, value);
       }
       return method(operator === 'eq' ? 'eq' : 'neq', value);
     case 'lt':
@@ -159,7 +168,7 @@ function clauseCondition(
       const isIn = operator === 'in';
       if (values.length === 0) return isIn ? or() : and();
       if (insensitive && allStrings(values)) {
-        const each = values.map((item) => insensitivePattern(pattern, isIn ? 'eq' : 'ne', item));
+        const each = values.map((item) => insensitivePattern(pattern(), isIn ? 'eq' : 'ne', item));
         return isIn ? or(...each) : and(...each);
       }
       return method(isIn ? 'in' : 'notIn', values);
@@ -170,8 +179,8 @@ function clauseCondition(
       const text = String(value);
       if (text === '') return method('isNotNull');
       return insensitive
-        ? insensitivePattern(pattern, operator, text)
-        : sensitivePattern(pattern, operator, text);
+        ? insensitivePattern(pattern(), operator, text)
+        : sensitivePattern(pattern(), operator, text);
     }
     default:
       throw new BetterAuthError(

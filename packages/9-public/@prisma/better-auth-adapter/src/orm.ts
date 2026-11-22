@@ -45,7 +45,21 @@ export interface OrmCollection {
   deleteAndCount(): Promise<number>;
 }
 
-const collectionMethods = ['where', 'create'] as const;
+const collectionMethods = [
+  'where',
+  'select',
+  'orderBy',
+  'limit',
+  'offset',
+  'include',
+  'first',
+  'all',
+  'aggregate',
+  'create',
+  'update',
+  'updateAndCount',
+  'deleteAndCount',
+] as const satisfies readonly (keyof OrmCollection)[];
 
 export function isOrmCollection(value: unknown): value is OrmCollection {
   return (

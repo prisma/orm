@@ -28,6 +28,22 @@ const signUp = {
   body: { email: 'ada@example.com', password: 'a-long-password', name: 'Ada' },
 };
 
+async function authOverPsl(
+  target: (typeof targets)[number],
+  psl: string,
+  options: Omit<BetterAuthOptions, 'database'>,
+) {
+  const client = await databases.open(target, psl);
+  const auth = betterAuth({
+    ...options,
+    database: prismaAdapter(client),
+    emailAndPassword: { enabled: true },
+    secret: 'a-test-secret-that-is-long-enough-for-better-auth',
+    baseURL: 'http://localhost:3000',
+  });
+  return { auth, client };
+}
+
 const mismatch = (message: string | undefined) =>
   expect.objectContaining({ name: 'BetterAuthError', code: 'SCHEMA_MISMATCH', message });
 
@@ -149,19 +165,60 @@ describe.each(targets)('createSchema on %s', (target) => {
 });
 
 describe.each(targets)('a Better Auth name that is not an identifier on %s', (target) => {
-  const invalidName =
-    'Better Auth\'s model name "verification-token" is not a valid Prisma model name: use letters, digits and "_", not starting with a digit. Rename the model with Better Auth\'s "modelName" option.';
-  const options: BetterAuthOptions = { verification: { modelName: 'verification-token' } };
+  const cases = [
+    {
+      name: 'a model name',
+      options: { verification: { modelName: 'verification-token' } },
+      message:
+        'Better Auth\'s model name "verification-token" is not a valid Prisma model name: use letters, digits and "_", not starting with a digit. Rename the model with Better Auth\'s "modelName" option.',
+      call: { model: 'verification', where: [] },
+    },
+    {
+      name: 'a field name',
+      options: { user: { fields: { email: 'e-mail' } } },
+      message:
+        'Better Auth\'s field name "e-mail" of model "user" is not a valid Prisma field name: use letters, digits and "_", not starting with a digit. Rename the field with Better Auth\'s "fields" option.',
+      call: { model: 'user', where: [{ field: 'email', value: 'ada@example.com' }] },
+    },
+  ] satisfies readonly {
+    name: string;
+    options: BetterAuthOptions;
+    message: string;
+    call: Parameters<ReturnType<ReturnType<typeof prismaAdapter>>['findOne']>[0];
+  }[];
 
-  it('makes the check and createSchema fail with the mismatch code', async () => {
-    const client = await databases.open(
+  it.each(cases)(
+    '$name makes the check and createSchema fail with the mismatch code, and the call that uses it fail',
+    async ({ options, message, call }) => {
+      const client = await databases.open(
+        target,
+        pslForConfiguration(databases.emptyContract(target), {}),
+      );
+      const adapter = prismaAdapter(client)(options);
+      const check = schemaCheckFor(adapter);
+      if (check === undefined) throw new Error('No check registered');
+      await expect(Promise.resolve(check())).rejects.toThrow(mismatch(message));
+      await expect(adapter.createSchema?.(options)).rejects.toThrow(mismatch(message));
+      await expect(adapter.findOne(call)).rejects.toThrow(
+        expect.objectContaining({ name: 'BetterAuthError', message }),
+      );
+    },
+  );
+
+  it('reaches auth check through a real betterAuth() instance', async () => {
+    const options = { user: { fields: { email: 'e-mail' } } };
+    const { auth } = await authOverPsl(
       target,
       pslForConfiguration(databases.emptyContract(target), {}),
+      options,
     );
-    const adapter = prismaAdapter(client)(options);
-    const check = schemaCheckFor(adapter);
+    const context = await auth.$context;
+    const check = context.explicitSchemaCheck;
     if (check === undefined) throw new Error('No check registered');
-    await expect(Promise.resolve(check())).rejects.toThrow(mismatch(invalidName));
-    await expect(adapter.createSchema?.(options)).rejects.toThrow(mismatch(invalidName));
+    await expect(Promise.resolve(check())).rejects.toThrow(
+      mismatch(
+        'Better Auth\'s field name "e-mail" of model "user" is not a valid Prisma field name: use letters, digits and "_", not starting with a digit. Rename the field with Better Auth\'s "fields" option.',
+      ),
+    );
   });
 });

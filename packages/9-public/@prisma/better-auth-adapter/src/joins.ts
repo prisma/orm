@@ -1,6 +1,6 @@
 import type { JoinConfig } from '@better-auth/core/db/adapter';
 import type { ContractRelation } from '@prisma/orm-framework/contract/types';
-import type { ModelLookups } from './collections';
+import type { ModelCollections } from './collections';
 import type { FoundModel } from './models/model-lookup';
 import type { OrmCollection, Row } from './orm';
 
@@ -41,13 +41,13 @@ export function planJoins(
   collection: OrmCollection,
   base: FoundModel,
   join: JoinConfig | undefined,
-  lookups: ModelLookups,
+  collections: ModelCollections,
   debugLog: (...args: unknown[]) => void,
 ): PlannedJoins {
   const included: IncludedJoin[] = [];
   let planned = collection;
   for (const [key, config] of Object.entries(join ?? {})) {
-    const match = matchingRelation(base, lookups.model(key), config.on);
+    const match = matchingRelation(base, collections.model(key), config.on);
     if (match === undefined) {
       debugLog(
         `Join of "${key}" on "${base.name}" runs as separate queries: the contract declares no relation from ${base.name}.${config.on.from} to ${key}.${config.on.to}. Declare the relation to join in one query.`,

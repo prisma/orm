@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from '@better-auth/core';
+import { blindCast } from '@prisma/orm-framework/utils/casts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type PrismaAdapterOptions, prismaAdapter } from '../../src/exports/index';
 import {
@@ -107,6 +108,21 @@ model Legacy {
         }),
       ).rejects.toThrow(
         `Field "Probe.flag" (${target === 'sqlite' ? 'sqlite/boolean@1' : 'pg/bool@1'}) does not support sorting.`,
+      );
+    });
+
+    it('a sort direction other than asc or desc', async () => {
+      const direction = blindCast<
+        'asc',
+        'a Better Auth plugin can pass a request value through sortBy at run time'
+      >('constructor');
+      await expect(
+        adapterOver(client).findMany({ model: 'probe', sortBy: { field: 'n', direction } }),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          name: 'BetterAuthError',
+          message: 'Sort direction "constructor" is not supported.',
+        }),
       );
     });
 

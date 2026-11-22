@@ -12,7 +12,7 @@ import {
 } from '@better-auth/core/db/adapter';
 import { BetterAuthError } from '@better-auth/core/error';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
-import { createModelLookups, type ModelLookups } from './collections';
+import { createModelCollections, type ModelCollections } from './collections';
 import {
   contractMismatch,
   createContractCheck,
@@ -37,7 +37,7 @@ export interface PrismaClientLike {
 
 const supportedTargets = ['postgres', 'sqlite'];
 
-function assertClient(db: PrismaClientLike, options: PrismaAdapterOptions): void {
+function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions): void {
   const contract: SqlContract | undefined = db.contract;
   if (contract === undefined) {
     throw new BetterAuthError('prismaAdapter needs the Prisma client, not a transaction.');
@@ -47,7 +47,7 @@ function assertClient(db: PrismaClientLike, options: PrismaAdapterOptions): void
       `@prisma/better-auth-adapter supports Postgres and SQLite. This client's database is "${contract.target}".`,
     );
   }
-  const namespace = options.namespace;
+  const namespace = adapterOptions.namespace;
   if (namespace !== undefined && !Object.hasOwn(contract.domain.namespaces, namespace)) {
     throw new BetterAuthError(`Namespace "${namespace}" is not in your Prisma contract.`);
   }
@@ -73,47 +73,54 @@ function rowCount(result: Record<string, unknown>): number {
   return count;
 }
 
-interface Target {
+interface ModelCall {
   readonly model: string;
 }
 
-interface Filtered extends Target {
+interface FilteredCall extends ModelCall {
   readonly where: CleanedWhere[];
 }
 
-interface Read extends Filtered {
+interface ReadCall extends FilteredCall {
   readonly select?: string[] | undefined;
   readonly join?: JoinConfig | undefined;
 }
 
 /** The calls of Better Auth's `CustomAdapter`, with the rows they return typed as rows. */
 interface RowAdapter {
-  create(call: Target & { readonly data: Row }): Promise<Row>;
-  findOne(call: Read): Promise<Row | null>;
+  create(call: ModelCall & { readonly data: Row }): Promise<Row>;
+  findOne(call: ReadCall): Promise<Row | null>;
   findMany(
-    call: Omit<Read, 'where'> & {
+    call: Omit<ReadCall, 'where'> & {
       readonly where?: CleanedWhere[] | undefined;
       readonly limit: number;
       readonly sortBy?: { readonly field: string; readonly direction: 'asc' | 'desc' } | undefined;
       readonly offset?: number | undefined;
     },
   ): Promise<Row[]>;
-  count(call: Target & { readonly where?: CleanedWhere[] | undefined }): Promise<number>;
-  update(call: Filtered & { readonly update: Row }): Promise<Row | null>;
-  updateMany(call: Filtered & { readonly update: Row }): Promise<number>;
-  delete(call: Filtered): Promise<void>;
-  deleteMany(call: Filtered): Promise<number>;
+  count(call: ModelCall & { readonly where?: CleanedWhere[] | undefined }): Promise<number>;
+  update(call: FilteredCall & { readonly update: Row }): Promise<Row | null>;
+  updateMany(call: FilteredCall & { readonly update: Row }): Promise<number>;
+  delete(call: FilteredCall): Promise<void>;
+  deleteMany(call: FilteredCall): Promise<number>;
   createSchema(call: {
     readonly file?: string | undefined;
     readonly tables: BetterAuthDBSchema;
   }): Promise<DBAdapterSchemaCreation>;
 }
 
+/** What one adapter instance computes once and shares with the adapters it builds for transactions. */
+interface InstanceState {
+  readonly collections: ModelCollections;
+  /** For each physical model name, the fields a read without `select` returns; computed on the first such read. */
+  defaultSelections: ReadonlyMap<string, readonly string[]> | undefined;
+}
+
 interface AdapterContext {
   readonly orm: object;
   readonly contract: SqlContract;
-  readonly lookups: ModelLookups;
-  readonly options: PrismaAdapterOptions;
+  readonly instance: InstanceState;
+  readonly adapterOptions: PrismaAdapterOptions;
 }
 
 function asCustomAdapter(adapter: RowAdapter): CustomAdapter {
@@ -127,19 +134,36 @@ function asCustomAdapter(adapter: RowAdapter): CustomAdapter {
 function customAdapter({
   orm,
   contract,
-  lookups,
-  options: adapterOptions,
+  instance,
+  adapterOptions,
 }: AdapterContext): AdapterFactoryCustomizeAdapterCreator {
   const usePlural = adapterOptions.usePlural ?? false;
-  return ({ schema, options, getFieldName, debugLog }) => {
-    const selections = defaultSelections(schema, options, usePlural);
-    const target = (model: string): { found: FoundModel; collection: OrmCollection } => {
-      const found = lookups.model(model);
-      return { found, collection: lookups.collection(orm, found) };
+  const { collections } = instance;
+  return ({ schema, options: betterAuthOptions, getFieldName, debugLog }) => {
+    const resolve = (model: string): { found: FoundModel; collection: OrmCollection } => {
+      const found = collections.model(model);
+      return { found, collection: collections.collection(orm, found) };
+    };
+
+    const checkedNames = (model: string, fields: Iterable<string>): void => {
+      for (const field of fields) assertFieldName(model, field);
+    };
+
+    const filterFor = (
+      model: string,
+      found: FoundModel,
+      where: readonly CleanedWhere[] | undefined,
+    ) => {
+      checkedNames(
+        model,
+        (where ?? []).map((clause) => clause.field),
+      );
+      return whereFilter(found, where);
     };
 
     const selectionOf = (model: string): readonly string[] => {
-      const fields = selections.get(model);
+      instance.defaultSelections ??= defaultSelections(schema, betterAuthOptions, usePlural);
+      const fields = instance.defaultSelections.get(model);
       if (fields === undefined) {
         throw new BetterAuthError(`Better Auth's table description has no model "${model}".`);
       }
@@ -151,72 +175,80 @@ function customAdapter({
         select !== undefined && select.length > 0
           ? select.map((field) => getFieldName({ model, field }))
           : selectionOf(model);
-      for (const field of fields) assertFieldName(model, field);
+      checkedNames(model, fields);
       return fields;
     };
 
     const adapter: RowAdapter = {
       async create({ model, data }) {
-        const { collection } = target(model);
+        checkedNames(model, Object.keys(data));
+        const { collection } = resolve(model);
         return collection.create(data);
       },
       async findOne({ model, where, select, join }) {
-        const { found, collection } = target(model);
+        const { found, collection } = resolve(model);
         const filtered = collection
-          .where(whereFilter(found, where))
+          .where(filterFor(model, found, where))
           .select(...selected(model, select));
-        const joins = planJoins(filtered, found, join, lookups, debugLog);
+        const joins = planJoins(filtered, found, join, collections, debugLog);
         const row = await joins.collection.first();
         return row === null ? null : moveJoinedRows(row, joins.included);
       },
       async findMany({ model, where, limit, select, sortBy, offset, join }) {
-        const { found, collection } = target(model);
-        let query = collection.where(whereFilter(found, where)).select(...selected(model, select));
+        const { found, collection } = resolve(model);
+        let query = collection
+          .where(filterFor(model, found, where))
+          .select(...selected(model, select));
         if (sortBy !== undefined) {
           const field = getFieldName({ model, field: sortBy.field });
+          checkedNames(model, [field]);
+          const direction: unknown = sortBy.direction;
+          if (direction !== 'asc' && direction !== 'desc') {
+            throw new BetterAuthError(`Sort direction "${String(direction)}" is not supported.`);
+          }
           query = query.orderBy((accessor) => {
-            const sorted = fieldOf(accessor, found, field);
-            if (!hasMethod(sorted, sortBy.direction)) {
-              throw unsupportedError(found, field, 'sorting');
-            }
-            return callMethod(sorted, sortBy.direction);
+            const sorted = fieldOf(accessor, field);
+            if (!hasMethod(sorted, direction)) throw unsupportedError(found, field, 'sorting');
+            return callMethod(sorted, direction);
           });
         }
         query = query.limit(limit);
         if (offset !== undefined) query = query.offset(offset);
-        const joins = planJoins(query, found, join, lookups, debugLog);
+        const joins = planJoins(query, found, join, collections, debugLog);
         const rows: Row[] = await joins.collection.all();
         return rows.map((row) => moveJoinedRows(row, joins.included));
       },
       async count({ model, where }) {
-        const { found, collection } = target(model);
+        const { found, collection } = resolve(model);
         return rowCount(
           await collection
-            .where(whereFilter(found, where))
+            .where(filterFor(model, found, where))
             .aggregate((aggregates) => ({ n: aggregates.count() })),
         );
       },
       async update({ model, where, update }) {
-        const { found, collection } = target(model);
-        return collection.where(whereFilter(found, where)).update(update);
+        checkedNames(model, Object.keys(update));
+        const { found, collection } = resolve(model);
+        return collection.where(filterFor(model, found, where)).update(update);
       },
       async updateMany({ model, where, update }) {
-        const { found, collection } = target(model);
-        return collection.where(whereFilter(found, where)).updateAndCount(update);
+        checkedNames(model, Object.keys(update));
+        const { found, collection } = resolve(model);
+        return collection.where(filterFor(model, found, where)).updateAndCount(update);
       },
       async delete({ model, where }) {
-        const { found, collection } = target(model);
-        await collection.where(whereFilter(found, where)).deleteAndCount();
+        const { found, collection } = resolve(model);
+        await collection.where(filterFor(model, found, where)).deleteAndCount();
       },
       async deleteMany({ model, where }) {
-        const { found, collection } = target(model);
-        return collection.where(whereFilter(found, where)).deleteAndCount();
+        const { found, collection } = resolve(model);
+        return collection.where(filterFor(model, found, where)).deleteAndCount();
       },
       async createSchema({ file, tables }) {
         const error = contractMismatch({
           contract,
           tables,
-          betterAuthOptions: options,
+          betterAuthOptions,
           namespace: adapterOptions.namespace,
           usePlural,
         });
@@ -229,14 +261,14 @@ function customAdapter({
 }
 
 function factoryConfig(
-  options: PrismaAdapterOptions,
+  adapterOptions: PrismaAdapterOptions,
   transaction: AdapterFactoryConfig['transaction'],
 ): AdapterFactoryConfig {
   return {
     adapterId: 'prisma-8',
     adapterName: 'Prisma 8',
-    usePlural: options.usePlural ?? false,
-    debugLogs: options.debugLogs ?? false,
+    usePlural: adapterOptions.usePlural ?? false,
+    debugLogs: adapterOptions.debugLogs ?? false,
     supportsDates: true,
     supportsBooleans: true,
     supportsNumericIds: true,
@@ -257,30 +289,33 @@ function factoryConfig(
  */
 export function prismaAdapter(
   db: PrismaClientLike,
-  options: PrismaAdapterOptions = {},
+  adapterOptions: PrismaAdapterOptions = {},
 ): (betterAuthOptions: BetterAuthOptions) => DBAdapter<BetterAuthOptions> {
-  assertClient(db, options);
+  assertClient(db, adapterOptions);
   return (betterAuthOptions) => {
     const context: AdapterContext = {
       orm: db.orm,
       contract: db.contract,
-      lookups: createModelLookups(db.contract, options.namespace),
-      options,
+      instance: {
+        collections: createModelCollections(db.contract, adapterOptions.namespace),
+        defaultSelections: undefined,
+      },
+      adapterOptions,
     };
     const transaction: AdapterFactoryConfig['transaction'] =
-      options.transaction === true
+      adapterOptions.transaction === true
         ? (callback) =>
             db.transaction((tx) =>
               callback(
                 createAdapterFactory({
-                  config: factoryConfig(options, false),
+                  config: factoryConfig(adapterOptions, false),
                   adapter: customAdapter({ ...context, orm: tx.orm }),
                 })(betterAuthOptions),
               ),
             )
         : false;
     const adapter = createAdapterFactory({
-      config: factoryConfig(options, transaction),
+      config: factoryConfig(adapterOptions, transaction),
       adapter: customAdapter(context),
     })(betterAuthOptions);
     registerContractCheck(
@@ -289,8 +324,8 @@ export function prismaAdapter(
         contract: db.contract,
         tables: getAuthTables(betterAuthOptions),
         betterAuthOptions,
-        namespace: options.namespace,
-        usePlural: options.usePlural ?? false,
+        namespace: adapterOptions.namespace,
+        usePlural: adapterOptions.usePlural ?? false,
       })),
       betterAuthOptions,
     );
