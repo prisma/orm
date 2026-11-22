@@ -2,11 +2,11 @@
 changes:
   - id: db-migrate-advances-db-ref
     summary: |
-      `prisma db migrate` now advances the `db` ref after a successful apply when the connection comes from `prisma.config.ts` and the CLI does not detect CI. It still advances nothing with `--db` or in CI. A development `db migrate --advance-ref db` can drop the flag. A deploy or script that runs `db migrate` from the config outside a CI runner, and must not change `migrations/app/refs/db.json`, passes the new `--no-advance-ref` or `--db`. The detection finds `db migrate` commands that do not pass `--db` or `--no-advance-ref` on the same line, including a Dockerfile's exec form and a YAML list; check each against the two cases below, and look for others in files it does not search.
+      `prisma db migrate` now advances the `db` ref after a successful apply when the connection comes from `prisma.config.ts` and the CLI does not detect CI. Without `--advance-ref`, it still advances nothing with `--db` or in CI. A `db migrate --advance-ref db` that reads its connection from the config outside CI can drop the flag; one that passes `--db` or runs in CI keeps it. A deploy or script that runs `db migrate` from the config outside a CI runner, and must not change `migrations/app/refs/db.json`, passes the new `--no-advance-ref` or `--db`. A failed ref write is now a warning and the command exits 0, which matters to a script that checks the exit code of `db migrate --advance-ref`. The detection finds `db migrate` commands that pass `--advance-ref`, and those that pass neither `--db` nor `--no-advance-ref`, on the same line, including a Dockerfile's exec form and a YAML list; check each against the cases below, and look for others in files it does not search.
     detection:
       glob: "**/{*.json,*.sh,*.bash,*.zsh,*.yml,*.yaml,*.toml,*.md,*.mdx,*.ts,*.mts,*.js,*.mjs,*.cjs,Dockerfile*,*.dockerfile,Procfile*,Makefile,justfile}"
       matches:
-        - '(?<![\w-])db(?:\s+|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)migrate\b(?![^\n]*--(?:db|no-advance-ref)\b)'
+        - '(?<![\w-])db(?:\s+|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)migrate\b(?:(?=[^\n]*--advance-ref\b)|(?![^\n]*--(?:db|no-advance-ref)\b))'
 ---
 
 # `db migrate` advances the `db` ref
