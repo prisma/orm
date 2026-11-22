@@ -277,7 +277,7 @@ export function contractToPostgresDatabaseSchemaNode(
     }
 
     for (const [tableName, tablePolicies] of policiesByTable) {
-      if (!(tableName in tables)) {
+      if (!Object.hasOwn(tables, tableName)) {
         const policyName = tablePolicies[0]?.name ?? '(unknown)';
         throw postgresError(
           'CONTRACT.POLICY_INVALID',

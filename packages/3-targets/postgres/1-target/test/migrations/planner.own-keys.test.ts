@@ -2,10 +2,11 @@ import { type Contract, type ControlPolicy, coreHash, profileHash } from '@inter
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import { type SqlNamespaceBase, SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresMigrationPlanner } from '../../src/core/migrations/planner';
+import { PostgresNativeEnum } from '../../src/core/postgres-native-enum';
 import { postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
@@ -181,4 +182,60 @@ describe('Postgres planner with names every object has as a property', () => {
       await planIds([], 'users', { namespaceId: 'constructor', schemaName: 'public' }),
     ).toEqual(expect.arrayContaining(['table.users']));
   });
+
+  it.each(['other', 'constructor'])(
+    'leaves alone a table in schema %s, which the contract declares with no tables',
+    async (schemaName) => {
+      const contract = contractWithTable('users');
+      const withEnumOnlySchema: Contract<SqlStorage> = {
+        ...contract,
+        storage: new SqlStorage({
+          storageHash: coreHash(`enum-only-${schemaName}`),
+          namespaces: Object.fromEntries([
+            ...Object.entries(contract.storage.namespaces),
+            [
+              schemaName,
+              postgresCreateNamespace({
+                id: schemaName,
+                entries: {
+                  table: {},
+                  native_enum: {
+                    Mood: new PostgresNativeEnum({ typeName: 'mood', members: ['ok'] }),
+                  },
+                },
+              }),
+            ],
+          ]) as Record<string, SqlNamespaceBase>,
+        }),
+      };
+      const live = liveSchema(['users']);
+      const withLegacy = new PostgresDatabaseSchemaNode({
+        extensions: undefined,
+        namespaces: {
+          ...live.namespaces,
+          [schemaName]: new PostgresNamespaceSchemaNode({
+            schemaName,
+            tables: { legacy: liveTable('legacy') },
+          }),
+        },
+        roles: [],
+        existingSchemas: ['public', schemaName],
+        pgVersion: 'unknown',
+      });
+      const result = createPostgresMigrationPlanner(stubLowerer).plan({
+        contract: withEnumOnlySchema,
+        schema: withLegacy,
+        policy: DESTRUCTIVE_POLICY,
+        fromContract: null,
+        origin: null,
+        statements: [],
+        frameworkComponents: postgresTypeComponents,
+        spaceId: APP_SPACE_ID,
+        snapshotsImportPath: '../../snapshots',
+      });
+      if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts));
+      const ids = (await Promise.all(result.plan.operations)).map((op) => op.id);
+      expect(ids.filter((id) => id.includes('legacy'))).toEqual([]);
+    },
+  );
 });

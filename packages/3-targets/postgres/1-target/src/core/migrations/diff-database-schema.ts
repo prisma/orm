@@ -87,7 +87,7 @@ function pruneTableLessNamespaces(
     namespaces,
     roles: [...expected.roles],
     extensions: [...expected.extensions],
-    existingSchemas: expected.existingSchemas.filter((s) => namespaces[s] !== undefined),
+    existingSchemas: expected.existingSchemas.filter((s) => ownEntry(namespaces, s) !== undefined),
     pgVersion: expected.pgVersion,
   });
 }

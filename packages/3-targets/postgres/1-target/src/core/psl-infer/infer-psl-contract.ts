@@ -140,7 +140,7 @@ export async function inferPostgresPslContract(
       ) {
         continue;
       }
-      if (tables[tableName] !== undefined) {
+      if (Object.hasOwn(tables, tableName)) {
         throw postgresError(
           'CONTRACT.INFER_UNSUPPORTED',
           `contract infer: duplicate table name "${tableName}" across schemas is not yet supported ` +
