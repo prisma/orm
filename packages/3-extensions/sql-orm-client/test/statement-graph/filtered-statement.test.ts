@@ -8,6 +8,7 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { anyOf } from '../../src/statement-graph/filtered-statement';
 import type { StatementAst } from '../../src/statement-graph/node';
 import { printExpression } from './print-expression';
 import {
@@ -67,6 +68,40 @@ describe.each([
     );
 
     expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and id in (7, 8))"]);
+  });
+
+  it('deduplicates parameter values when generating the IN list', async () => {
+    const run = recordingRun();
+
+    await make().execute(
+      {
+        filter: [[idIs(7), idIs(7), idIs(8), idIs(7)]],
+        payload: null,
+        link: null,
+        state: null,
+        requires: null,
+      },
+      run,
+    );
+
+    expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and id in (7, 8))"]);
+  });
+
+  it('keeps an IN list with a single distinct value when all conditions share that value', async () => {
+    const run = recordingRun();
+
+    await make().execute(
+      {
+        filter: [[idIs(7), idIs(7)]],
+        payload: null,
+        link: null,
+        state: null,
+        requires: null,
+      },
+      run,
+    );
+
+    expect(run.queried.map(whereOf)).toEqual(["(name = 'Ada' and id in (7))"]);
   });
 
   it('keeps an OR between conditions on different columns or with no value parameter', async () => {
@@ -221,5 +256,37 @@ describe.each([
 
     expect(result).toEqual([]);
     expect(run).toMatchObject({ queried: [], executed: [] });
+  });
+});
+
+describe('anyOf', () => {
+  const col = ColumnRef.of('users', 'id');
+
+  it('returns single condition unchanged', () => {
+    const cond = BinaryExpr.eq(col, ParamRef.of(1));
+    expect(anyOf([cond])).toBe(cond);
+  });
+
+  it('deduplicates repeated identical parameters into distinct IN list', () => {
+    const conds = [
+      BinaryExpr.eq(col, ParamRef.of(1)),
+      BinaryExpr.eq(col, ParamRef.of(1)),
+      BinaryExpr.eq(col, ParamRef.of(2)),
+      BinaryExpr.eq(col, ParamRef.of(1)),
+    ];
+    const expr = anyOf(conds);
+    expect(expr).toBeInstanceOf(BinaryExpr);
+    expect((expr as BinaryExpr).op).toBe('in');
+    expect(printExpression(expr, 'users')).toBe('id in (1, 2)');
+  });
+
+  it('preserves IN list with one distinct parameter when multiple duplicate conditions are passed', () => {
+    const conds = [
+      BinaryExpr.eq(col, ParamRef.of(42)),
+      BinaryExpr.eq(col, ParamRef.of(42)),
+      BinaryExpr.eq(col, ParamRef.of(42)),
+    ];
+    const expr = anyOf(conds);
+    expect(printExpression(expr, 'users')).toBe('id in (42)');
   });
 });
