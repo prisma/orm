@@ -12,7 +12,7 @@ import {
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
 import { getModelFields, modelOf } from './collection-contract';
-import type { Filtered, HasTypeState, Ordered } from './collection-types';
+import type { Filtered, HasTypeState, Ordered, Paged } from './collection-types';
 import { hasTrait, resolveColumn } from './column-codec';
 import { ormError } from './orm-errors';
 import type {
@@ -108,6 +108,7 @@ export declare const FragmentFactsType: unique symbol;
 export interface FragmentFacts {
   readonly hasWhere: boolean;
   readonly hasOrderBy: boolean;
+  readonly hasPaging?: boolean | undefined;
 }
 
 /** The second argument of a `where` or `orderBy` callback in the body of a fragment for any model: every function, and no index, as the body does not know its model. */
@@ -121,6 +122,17 @@ type OrderSelector<Row, TContract extends Contract<SqlStorage>> = (
   tools: DeclaredFieldsFragmentCallbackTools<TContract>,
 ) => OrderByItem;
 
+type PagedFacts<Facts extends FragmentFacts> = {
+  readonly hasWhere: Facts['hasWhere'];
+  readonly hasOrderBy: Facts['hasOrderBy'];
+  readonly hasPaging: true;
+};
+
+type KeepPaging<
+  Facts extends FragmentFacts,
+  Next extends FragmentFacts,
+> = Facts['hasPaging'] extends true ? Next & { readonly hasPaging: true } : Next;
+
 /** The collection the body of a fragment for any model receives: the methods that keep the row, on the declared fields, and what has been established so far. */
 export interface DeclaredFieldsFragmentCollection<
   Row,
@@ -132,18 +144,18 @@ export interface DeclaredFieldsFragmentCollection<
     fn: (row: Row, tools: DeclaredFieldsFragmentCallbackTools<TContract>) => WhereCallbackResult,
   ): DeclaredFieldsFragmentCollection<
     Row,
-    { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] },
+    KeepPaging<Facts, { readonly hasWhere: true; readonly hasOrderBy: Facts['hasOrderBy'] }>,
     TContract
   >;
   orderBy(
     selection: OrderSelector<Row, TContract> | ReadonlyArray<OrderSelector<Row, TContract>>,
   ): DeclaredFieldsFragmentCollection<
     Row,
-    { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true },
+    KeepPaging<Facts, { readonly hasWhere: Facts['hasWhere']; readonly hasOrderBy: true }>,
     TContract
   >;
-  limit(n: number): DeclaredFieldsFragmentCollection<Row, Facts, TContract>;
-  offset(n: number): DeclaredFieldsFragmentCollection<Row, Facts, TContract>;
+  limit(n: number): DeclaredFieldsFragmentCollection<Row, PagedFacts<Facts>, TContract>;
+  offset(n: number): DeclaredFieldsFragmentCollection<Row, PagedFacts<Facts>, TContract>;
 }
 
 type ContractFieldMultiplicity<Field> = Field extends { readonly many: infer Many }
@@ -195,12 +207,14 @@ export type DeclaredFieldsFragmentFieldsCheck<
         >;
       };
 
-/** A collection plus the filter and order a fragment's body established. */
+type WithPaging<C, Facts extends FragmentFacts> = Facts['hasPaging'] extends true ? Paged<C> : C;
+
+/** A collection plus the filter, order and paging a fragment's body established. */
 export type WithFacts<C, Facts extends FragmentFacts> = Facts['hasOrderBy'] extends true
-  ? Ordered<Facts['hasWhere'] extends true ? Filtered<C> : C>
+  ? Ordered<Facts['hasWhere'] extends true ? Filtered<WithPaging<C, Facts>> : WithPaging<C, Facts>>
   : Facts['hasWhere'] extends true
-    ? Filtered<C>
-    : C;
+    ? Filtered<WithPaging<C, Facts>>
+    : WithPaging<C, Facts>;
 
 /**
  * A fragment made by the client's `fragment` method: it accepts a collection of any model that has the declared fields, checked against the collection's own contract, model and namespace, and returns that collection with what the body established. `with` reads the result from the receiver's type and the fragment's facts.

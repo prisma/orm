@@ -203,7 +203,7 @@ export function queryFragments(now: Temporal.Instant) {
   expectTypeOf(posts.with(unexpired(now))).toEqualTypeOf<Ordered<Filtered<PostLibrary>>>();
   // @ts-expect-error User has no expiresAt field
   users.with(unexpired(now));
-  expectTypeOf(posts.with(firstPage)).toEqualTypeOf<PostLibrary>();
+  expectTypeOf(posts.with(firstPage)).toEqualTypeOf<Paged<PostLibrary>>();
   // @ts-expect-error firstPage applied no filter, so delete is refused
   posts.with(firstPage).deleteAll();
   expectTypeOf(unexpiredPosts(now)).not.toBeAny();
