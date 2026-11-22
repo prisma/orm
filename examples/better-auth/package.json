@@ -7,6 +7,9 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "emit": "prisma contract emit",
     "emit:check": "pnpm emit && git diff --exit-code src/prisma/contract.json src/prisma/contract.d.ts",
     "db:init": "prisma db init",
@@ -16,15 +19,26 @@
   },
   "dependencies": {
     "@prisma/better-auth-adapter": "workspace:8.0.0-rc.24",
-    "@prisma/orm-sqlite": "workspace:8.0.0-rc.24",
-    "better-auth": "1.7.27"
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
+    "better-auth": "1.7.27",
+    "dotenv": "^17.4.2",
+    "next": "^16.4.5",
+    "pg": "catalog:",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.10.0",
+    "@prisma/dev": "catalog:",
     "@repo/prisma-bin": "workspace:8.0.0-rc.24",
+    "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "auth": "1.7.27",
+    "pathe": "^2.0.3",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

@@ -1,120 +1,132 @@
 {
   "schemaVersion": "1",
   "targetFamily": "sql",
-  "target": "sqlite",
-  "profileHash": "260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "roots": {
     "account": {
       "model": "Account",
-      "namespace": "__unbound__"
+      "namespace": "public"
     },
     "session": {
       "model": "Session",
-      "namespace": "__unbound__"
+      "namespace": "public"
     },
     "user": {
       "model": "User",
-      "namespace": "__unbound__"
+      "namespace": "public"
     },
     "verification": {
       "model": "Verification",
-      "namespace": "__unbound__"
+      "namespace": "public"
     }
   },
   "domain": {
     "namespaces": {
-      "__unbound__": {
+      "public": {
         "models": {
           "Account": {
             "fields": {
               "accessToken": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "accessTokenExpiresAt": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "accountId": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "id": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "idToken": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "password": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "providerId": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "refreshToken": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "refreshTokenExpiresAt": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "scope": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "userId": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               }
@@ -133,7 +145,7 @@
                 },
                 "to": {
                   "model": "User",
-                  "namespace": "__unbound__"
+                  "namespace": "public"
                 }
               }
             },
@@ -179,7 +191,7 @@
                   "column": "userId"
                 }
               },
-              "namespaceId": "__unbound__",
+              "namespaceId": "public",
               "table": "account"
             }
           },
@@ -188,56 +200,65 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "expiresAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "id": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "ipAddress": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "token": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "userAgent": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "userId": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               }
@@ -256,7 +277,7 @@
                 },
                 "to": {
                   "model": "User",
-                  "namespace": "__unbound__"
+                  "namespace": "public"
                 }
               }
             },
@@ -287,7 +308,7 @@
                   "column": "userId"
                 }
               },
-              "namespaceId": "__unbound__",
+              "namespaceId": "public",
               "table": "session"
             }
           },
@@ -296,50 +317,56 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "email": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "emailVerified": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/boolean@1",
+                  "codecId": "pg/bool@1",
                   "kind": "scalar"
                 }
               },
               "id": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "image": {
                 "nullable": true,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "name": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               }
             },
@@ -356,7 +383,7 @@
                 },
                 "to": {
                   "model": "Account",
-                  "namespace": "__unbound__"
+                  "namespace": "public"
                 }
               },
               "sessions": {
@@ -371,7 +398,7 @@
                 },
                 "to": {
                   "model": "Session",
-                  "namespace": "__unbound__"
+                  "namespace": "public"
                 }
               }
             },
@@ -399,7 +426,7 @@
                   "column": "updatedAt"
                 }
               },
-              "namespaceId": "__unbound__",
+              "namespaceId": "public",
               "table": "user"
             }
           },
@@ -408,42 +435,51 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "expiresAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "id": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "identifier": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               },
               "updatedAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
+                  "codecId": "pg/timestamptz-date@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "value": {
                 "nullable": false,
                 "type": {
-                  "codecId": "sqlite/text@1",
+                  "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
               }
@@ -470,7 +506,7 @@
                   "column": "value"
                 }
               },
-              "namespaceId": "__unbound__",
+              "namespaceId": "public",
               "table": "verification"
             }
           }
@@ -480,74 +516,86 @@
   },
   "storage": {
     "namespaces": {
-      "__unbound__": {
+      "public": {
         "entries": {
           "table": {
             "account": {
               "columns": {
                 "accessToken": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "accessTokenExpiresAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": true
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "accountId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "createdAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "id": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "idToken": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "password": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "providerId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "refreshToken": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "refreshTokenExpiresAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": true
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "scope": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "updatedAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "userId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -561,14 +609,14 @@
                     "columns": [
                       "userId"
                     ],
-                    "namespaceId": "__unbound__",
+                    "namespaceId": "public",
                     "tableName": "account"
                   },
                   "target": {
                     "columns": [
                       "id"
                     ],
-                    "namespaceId": "__unbound__",
+                    "namespaceId": "public",
                     "tableName": "user"
                   }
                 }
@@ -593,43 +641,52 @@
             "session": {
               "columns": {
                 "createdAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "expiresAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "id": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "ipAddress": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "token": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "updatedAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "userAgent": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "userId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -643,14 +700,14 @@
                     "columns": [
                       "userId"
                     ],
-                    "namespaceId": "__unbound__",
+                    "namespaceId": "public",
                     "tableName": "session"
                   },
                   "target": {
                     "columns": [
                       "id"
                     ],
-                    "namespaceId": "__unbound__",
+                    "namespaceId": "public",
                     "tableName": "user"
                   }
                 }
@@ -681,39 +738,45 @@
             "user": {
               "columns": {
                 "createdAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "email": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "emailVerified": {
-                  "codecId": "sqlite/boolean@1",
-                  "dataType": "sqlite/boolean",
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "nullable": false
                 },
                 "id": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "image": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "name": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "updatedAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 }
               },
               "foreignKeys": [],
@@ -734,33 +797,42 @@
             "verification": {
               "columns": {
                 "createdAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "expiresAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "id": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "identifier": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "updatedAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
+                  "codecId": "pg/timestamptz-date@1",
+                  "dataType": "pg/timestamptz",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
                 },
                 "value": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -784,23 +856,41 @@
             }
           }
         },
-        "id": "__unbound__"
+        "id": "public",
+        "kind": "postgres-schema"
       }
     },
-    "storageHash": "75e1919f24ada4fcd0c80d830c813ab28792c80ef70f498997ad49c014f29c41"
+    "storageHash": "762b1e1832399a80b4215ecb752a13b3f61d2b99f8ff2a01f7470f04b8bfd057"
   },
   "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "forKeyShare": true,
+      "forNoKeyUpdate": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
     "sql": {
-      "foreignKeys": true,
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "forShare": true,
+      "forUpdate": true,
       "insertOnConflictSkip": true,
       "insertOnConflictTarget": true,
       "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
       "jsonAggWithoutTruncation": true,
-      "limit": true,
-      "orderBy": true,
+      "lateral": true,
+      "lockNowait": true,
+      "lockOf": true,
+      "lockSkipLocked": true,
       "outerReferencesInDerivedTables": true,
-      "returning": true
+      "returning": true,
+      "scalarList": true
     }
   },
   "extensions": {},

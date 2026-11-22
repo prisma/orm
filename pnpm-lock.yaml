@@ -285,28 +285,61 @@ importers:
       '@prisma/better-auth-adapter':
         specifier: workspace:8.0.0-rc.24
         version: link:../../packages/9-public/@prisma/better-auth-adapter
-      '@prisma/orm-sqlite':
+      '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.24
-        version: link:../../packages/9-public/@prisma/orm-sqlite
+        version: link:../../packages/9-public/@prisma/orm-postgres
       better-auth:
         specifier: 1.7.27
         version: 1.7.27(@prisma/client@7.10.1(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3))(typescript@5.9.3))(mongodb@7.5.0(socks@2.8.9))(mysql2@3.15.3)(next@16.4.6(@types/node@26.1.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(pg@8.22.0)(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@5.0.0-rc.2)
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      next:
+        specifier: ^16.4.5
+        version: 16.4.6(@babel/core@7.29.7)(@types/node@26.1.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      pg:
+        specifier: 'catalog:'
+        version: 8.22.0
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.3.1
+        version: 19.3.1(react@19.3.1)
     devDependencies:
       '@prisma/cli-engine':
         specifier: 0.10.0
         version: 0.10.0(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
+      '@prisma/dev':
+        specifier: 'catalog:'
+        version: 0.25.2(typescript@5.9.3)(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       '@repo/prisma-bin':
         specifier: workspace:8.0.0-rc.24
         version: link:../../test/prisma-bin
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.24
+        version: link:../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.24
         version: link:../../packages/0-config/tsconfig
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.2
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.20.4
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
       auth:
         specifier: 1.7.27
         version: 1.7.27(@better-fetch/fetch@1.3.3)(@prisma/client@7.10.1(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3))(typescript@5.9.3))(better-call@1.4.6(zod@4.6.7))(jose@6.2.8)(kysely@0.29.9)(magicast@0.5.4)(mongodb@7.5.0(socks@2.8.9))(mysql2@3.15.3)(nanostores@1.5.5)(next@16.4.6(@babel/core@7.29.7)(@types/node@26.1.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(pg@8.22.0)(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(magicast@0.5.4)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@5.0.0-rc.2)
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

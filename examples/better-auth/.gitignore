@@ -1,5 +1,4 @@
-*.db
-*.db-wal
-*.db-shm
 node_modules/
-dist/
+.next/
+next-env.d.ts
+.env

@@ -1,10 +1,12 @@
+import { timeouts } from '@repo/test-utils';
 import { defineConfig } from 'vitest/config';
-import { cliTimeoutMs } from './test/timeouts';
 
 export default defineConfig({
   test: {
     environment: 'node',
-    testTimeout: cliTimeoutMs,
-    hookTimeout: cliTimeoutMs,
+    pool: 'forks',
+    include: ['test/**/*.test.ts'],
+    testTimeout: timeouts.spinUpPpgDev,
+    hookTimeout: timeouts.spinUpPpgDev,
   },
 });

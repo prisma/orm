@@ -2,15 +2,26 @@
   "extends": ["@repo/tsconfig/base"],
   "compilerOptions": {
     "outDir": "dist",
-    "lib": ["ES2022"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "isolatedModules": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
     "src/**/*.ts",
     "test/**/*.ts",
-    "scripts/**/*.ts",
-    "prisma/**/*.ts",
     "prisma.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    ".next/types/**/*.ts"
   ],
   "exclude": ["dist"]
 }
