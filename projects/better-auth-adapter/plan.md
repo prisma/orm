@@ -27,7 +27,7 @@ Each step is one piece of work for the implementer, reviewed before the next sta
 4. **The example, the packaging test and the docs.** `examples/better-auth/` with its two tests, the packaging test, the naming conventions page, the application declaration under `upgrade-instructions/pending/`, and every lint in the definition of done.
    - *Builds on:* step 3.
 
-5. **A Next.js example and a journey test in place of the first example.** The first example was a bare SQLite project whose tests copied the project and ran installed programs through a helper of their own. It is replaced by the Next.js application and the command-line journey test the spec describes; the example's `test/project.ts`, `test/sign-up.test.ts` and `test/auth-cli.test.ts` are deleted.
+5. **A Next.js example, and the command-line check moved into the packaging test, in place of the first example.** The first example was a bare SQLite project whose tests copied the project and ran installed programs through a helper of their own. It is replaced by the Next.js application and the command-line check in the packaging test that the spec describes; the example's `test/project.ts`, `test/sign-up.test.ts` and `test/auth-cli.test.ts` are deleted.
    - *Builds on:* step 4.
 
 After step 5: a full review of the branch tip by two reviewers (system design and code), fixes, manual QA of the example and of `auth generate` by hand, then the pull request opens as a draft until the npm package name is confirmed.
