@@ -3,7 +3,7 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "inputs": ["app/**", "src/**", "package.json", "tsconfig.json"],
+      "inputs": ["app/**", "src/**", "prisma/**", "package.json", "tsconfig.json"],
       "outputs": [".next/**", "!.next/cache/**"]
     },
     "test": {
@@ -12,10 +12,26 @@
     },
     "typecheck": {
       "dependsOn": ["^build", "build"],
-      "inputs": ["app/**", "prisma/**", "src/**", "test/**", "prisma.config.ts", "tsconfig.json"]
+      "inputs": [
+        "app/**",
+        "prisma/**",
+        "src/**",
+        "test/**",
+        "prisma.config.ts",
+        "vitest.config.ts",
+        "tsconfig.json"
+      ]
     },
     "lint": {
-      "inputs": ["app/**", "prisma/**", "src/**", "test/**", "biome.jsonc"]
+      "inputs": [
+        "app/**",
+        "prisma/**",
+        "src/**",
+        "test/**",
+        "prisma.config.ts",
+        "vitest.config.ts",
+        "biome.jsonc"
+      ]
     }
   }
 }

@@ -6,7 +6,7 @@ import { createDevDatabase, type DevDatabase, timeouts } from '@repo/test-utils'
 import next from 'next';
 import { join } from 'pathe';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
-import contractJson from '../src/prisma/contract.json' with { type: 'json' };
+import contractJson from '../prisma/contract.json' with { type: 'json' };
 
 const exampleDir = fileURLToPath(new URL('..', import.meta.url));
 
@@ -52,7 +52,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app?.close();
-  await new Promise((resolve) => server?.close(resolve));
+  const started = server;
+  if (started) await new Promise((resolve) => started.close(resolve));
   await database?.close();
   vi.unstubAllEnvs();
 }, timeouts.spinUpPpgDev);
