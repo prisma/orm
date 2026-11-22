@@ -339,7 +339,7 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
       /dropCollection\(['"]events|createCollection\(['"]occasions/,
     );
     writeFileSync(migrationTs, edited, 'utf-8');
-    const emitted = runPrintedSelfEmit(String(engineError(asked)?.why), dirname(migrationTs));
+    const emitted = runPrintedSelfEmit(String(engineError(asked)?.summary), dirname(migrationTs));
     expect(emitted.exitCode, `S5.09: node on migration.ts, as printed: ${emitted.stderr}`).toBe(0);
     const applyRemap = await runMigrate(ctx);
     expect(applyRemap.exitCode, `S5.10: migrate: ${applyRemap.stderr}`).toBe(0);

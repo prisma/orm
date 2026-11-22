@@ -147,15 +147,11 @@ function ledByKeepDataWays(error: unknown, questions: readonly PlanQuestion[]): 
     ),
   ];
   if (ways.length === 0) return error;
-  return new CliStructuredError(error.code, error.message, {
+  const withoutWays = (text: string) =>
+    ways.reduce((rest, way) => rest.replaceAll(` ${way}`, '').replaceAll(`\n${way}`, ''), text);
+  return new CliStructuredError(error.code, withoutWays(error.message), {
     severity: error.severity,
-    ...ifDefined(
-      'why',
-      ways.reduce(
-        (why, way) => why?.replaceAll(` ${way}`, '').replaceAll(`\n${way}`, ''),
-        error.why,
-      ),
-    ),
+    ...ifDefined('why', error.why === undefined ? undefined : withoutWays(error.why)),
     nextActions: [...ways.map(chooseAction), ...error.nextActions],
     diagnostics: error.diagnostics,
     ...ifDefined('where', error.where),

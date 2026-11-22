@@ -96,8 +96,8 @@ withTempDir(({ createTempDir }) => {
           expect(asked, 'M2.03: the question names User.score').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"User.score" needs a statement, and the session is not interactive.',
-            why: `Recreate table people would change the type of field "User.score" and can change or lose its values.${convert} --delete keeps the field and lets the database cast its values, which can change or lose some.`,
+            summary: `Recreate table people would change the type of field "User.score" and can change or lose its values.${convert} --delete keeps the field and lets the database cast its values, which can change or lose some.`,
+            why: 'You have to choose what happens, and this run cannot ask you.',
             nextActions: verbs.map((verb) => ({
               kind: 'user-choice',
               label: `Run the command again with --${verb} User.score`,
@@ -167,8 +167,8 @@ withTempDir(({ createTempDir }) => {
           expect(asked, 'M4.03: the question names User.nick').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '"User.nick" needs a statement, and the session is not interactive.',
-            why: 'Drop column "nick" from "people" would lose the values of field "User.nick".',
+            summary: 'Drop column "nick" from "people" would lose the values of field "User.nick".',
+            why: 'You have to choose what happens, and this run cannot ask you.',
             nextActions: [
               {
                 kind: 'user-choice',

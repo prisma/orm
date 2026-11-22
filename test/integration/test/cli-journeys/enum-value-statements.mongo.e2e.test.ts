@@ -548,7 +548,7 @@ describe('Journeys (MongoDB): enum value statements', {
     await emit(ctx, chained, 'E7.03');
 
     const asked = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-    expect(engineError(asked)?.why).toContain(
+    expect(engineError(asked)?.summary).toContain(
       'If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next question says how to keep the data of both.',
     );
     const renamed = await runDbUpdate(ctx, [
@@ -558,12 +558,12 @@ describe('Journeys (MongoDB): enum value statements', {
       '--json',
     ]);
     expect({
-      why: engineError(renamed)?.why,
+      summary: engineError(renamed)?.summary,
       twoRuns: (engineError(renamed)?.nextActions ?? [])
         .map(({ label }) => label)
         .filter((label) => label.startsWith('To keep it with db update')),
     }).toEqual({
-      why: [
+      summary: [
         'These operations would lose enum value "Status.ACTIVE" from the data that holds it:',
         '- Remove value "active" from field status of collection users',
         '- Remove value "active" from field tags of collection users',

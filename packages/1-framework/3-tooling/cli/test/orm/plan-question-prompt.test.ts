@@ -178,7 +178,7 @@ describe('a namespace answer typed at the prompt', () => {
     const prompt = {
       statements: vi.fn(async (questions: readonly { readonly subject: string }[]) => {
         asked.push(questions.map(({ subject }) => subject));
-        throw Object.assign(new Error('needs a statement'), {
+        throw Object.assign(new Error('3 choices are needed, and this run cannot ask you.'), {
           code: 'CLI.CONSENT_REQUIRED',
           unanswered: questions.map(({ subject }) => subject),
         });
@@ -380,8 +380,8 @@ describe('a refusal to answer a question that names ways to keep the data', () =
     };
     const prompt = {
       statements: vi.fn(async () => {
-        throw new CliStructuredError('CLI.CONSENT_REQUIRED', '"Status.DONE" needs a statement.', {
-          why: kept.question,
+        throw new CliStructuredError('CLI.CONSENT_REQUIRED', kept.question, {
+          why: 'You have to choose what happens, and this run cannot ask you.',
           nextActions: [
             { kind: 'user-choice', label: 'Run the command again with --delete Status.DONE' },
           ],
@@ -396,13 +396,51 @@ describe('a refusal to answer a question that names ways to keep the data', () =
 
     await expect(promptPlanQuestions(prompt, statements)([kept])).rejects.toMatchObject({
       code: 'CLI.CONSENT_REQUIRED',
-      message: '"Status.DONE" needs a statement.',
-      why: 'Remove value "done" would lose enum value "Status.DONE".',
+      message: 'Remove value "done" would lose enum value "Status.DONE".',
+      why: 'You have to choose what happens, and this run cannot ask you.',
       nextActions: [
         { kind: 'user-choice', label: way },
         { kind: 'user-choice', label: 'Run the command again with --delete Status.DONE' },
       ],
       meta: { unanswered: [{ subject: 'Status.DONE', verbs: ['delete'] }] },
+    });
+  });
+
+  it('removes those ways from each question it lists when several are unanswered', async () => {
+    const way = 'To keep it, plan the change with `prisma migration plan`.';
+    const keptQuestion = (value: string): PlanQuestion => ({
+      ...question(`Status.${value}`),
+      question: `Remove value "${value}" would lose enum value "Status.${value}". ${way}`,
+      keepDataWays: [way],
+    });
+    const done = keptQuestion('DONE');
+    const open = keptQuestion('OPEN');
+    const prompt = {
+      statements: vi.fn(async () => {
+        throw new CliStructuredError(
+          'CLI.CONSENT_REQUIRED',
+          '2 choices are needed, and this run cannot ask you.',
+          {
+            why: `${done.question}\n${open.question}`,
+            meta: {
+              unanswered: [
+                { subject: 'Status.DONE', verbs: ['delete'] },
+                { subject: 'Status.OPEN', verbs: ['delete'] },
+              ],
+            },
+          },
+        );
+      }),
+    } as unknown as PromptSurface;
+    const statements: StatementSurface = {
+      take: vi.fn(() => []) as StatementSurface['take'],
+      values: () => [],
+    };
+
+    await expect(promptPlanQuestions(prompt, statements)([done, open])).rejects.toMatchObject({
+      message: '2 choices are needed, and this run cannot ask you.',
+      why: 'Remove value "DONE" would lose enum value "Status.DONE".\nRemove value "OPEN" would lose enum value "Status.OPEN".',
+      nextActions: [{ kind: 'user-choice', label: way }],
     });
   });
 });
