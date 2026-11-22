@@ -27,8 +27,8 @@ import {
   type DatabasePosition,
   databasePositionOf,
   type MigrationPlanArgument,
+  migrationPlanArguments,
   migrationPlanChoice,
-  migrationPlanFrom,
   type PlanSpace,
 } from '../../control-api/operations/plan-arguments';
 import {
@@ -592,7 +592,7 @@ async function migrationPlanOriginIfReachable(
         undefined,
         position.kind === 'unknown' ? position.reason : 'The CLI could not read the migrations',
       )
-    : migrationPlanFrom(space, position);
+    : migrationPlanArguments(space, position, { kind: 'emitted' }).from;
 }
 
 function causeText(error: unknown): string {

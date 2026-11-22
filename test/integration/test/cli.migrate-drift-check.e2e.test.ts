@@ -347,7 +347,7 @@ withTempDir(({ createTempDir }) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
             expect((await planMigrationAndSelfEmit(ctx, ['--name', 'add-name'])).exitCode).toBe(0);
 
-            swapContract(ctx, 'contract-phone');
+            swapContract(ctx, 'contract-v3');
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
 
             const unreachable = await runMigrate(ctx, ['--json']);

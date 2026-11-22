@@ -10,8 +10,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   type DatabasePosition,
   type MigrationPlanArgument,
+  migrationPlanArguments,
   migrationPlanChoice,
-  migrationPlanFrom,
   migrationPlanFromRun,
   migrationPlanReplacing,
   migrationPlanTo,
@@ -93,36 +93,47 @@ async function resolvedStart(
 
 const ref = (hash: string) => ({ hash, invariants: [] });
 
-describe('migrationPlanFrom names a --from migration plan resolves to the intended start', () => {
+/** The `--from` the rule names for a database at `position`, for a plan to the emitted contract unless `end` says otherwise. */
+function fromOf(
+  aggregateSpace: AggregateContractSpace,
+  position: DatabasePosition,
+  end: PlanEnd = { kind: 'emitted' },
+): MigrationPlanArgument {
+  return migrationPlanArguments(rulesSpace(aggregateSpace), position, end).from;
+}
+
+describe('migrationPlanArguments names a --from migration plan resolves to the intended start', () => {
   it.each<{
     readonly name: string;
     readonly packages: () => readonly OnDiskMigrationPackage[];
     readonly refs?: Refs;
     readonly start: DatabasePosition;
+    readonly end?: PlanEnd;
     readonly startsAt: string | null;
   }>([
     {
-      name: 'a contract a migration records',
+      name: 'a contract a migration records, for a plan to a recorded contract',
       packages: () => [pkg(E, A), pkg(A, B)],
       start: { kind: 'contract', hash: A },
+      end: { kind: 'contract', hash: B },
       startsAt: A,
+    },
+    {
+      name: 'a database behind its history, for a plan to the emitted contract: where the history continues to',
+      packages: () => [pkg(E, A), pkg(A, B)],
+      start: { kind: 'contract', hash: A },
+      startsAt: B,
     },
     {
       name: 'an empty database, from where its history ends',
       packages: () => [pkg(E, A), pkg(A, B)],
-      start: { kind: 'empty' },
+      start: { kind: 'unmarked' },
       startsAt: B,
-    },
-    {
-      name: 'an empty database in a space with no migrations',
-      packages: () => [],
-      start: { kind: 'empty' },
-      startsAt: null,
     },
     {
       name: 'an empty database whose history starts at a baseline',
       packages: () => [pkg(A, B)],
-      start: { kind: 'empty' },
+      start: { kind: 'unmarked' },
       startsAt: null,
     },
     {
@@ -132,15 +143,37 @@ describe('migrationPlanFrom names a --from migration plan resolves to the intend
       start: { kind: 'contract', hash: OFF_GRAPH },
       startsAt: OFF_GRAPH,
     },
-  ])('$name', async ({ packages, refs, start, startsAt }) => {
+  ])('$name', async ({ packages, refs, start, end, startsAt }) => {
     const aggregateSpace = space(packages(), refs);
-    const argument = migrationPlanFrom(rulesSpace(aggregateSpace), start);
-    expect(await resolvedStart(aggregateSpace, argument)).toBe(startsAt);
+    expect(await resolvedStart(aggregateSpace, fromOf(aggregateSpace, start, end))).toBe(startsAt);
+  });
+
+  it('offers @empty only as a choice for a database with no marker and no migrations, which may need adopting', async () => {
+    const aggregateSpace = space([]);
+    const argument = fromOf(aggregateSpace, { kind: 'unmarked' });
+    expect(argument).toMatchObject({
+      kind: 'ambiguous',
+      candidates: ['@empty'],
+      reason: expect.stringContaining('`{bin} db sign`'),
+    });
+    expect(await resolvedStart(aggregateSpace, { kind: 'reference', reference: '@empty' })).toBe(
+      null,
+    );
+  });
+
+  it('gives a database behind a history with two ends the choice of both', () => {
+    const aggregateSpace = space([pkg(E, A), pkg(A, B), pkg(A, C)]);
+    expect(fromOf(aggregateSpace, { kind: 'contract', hash: A })).toEqual({
+      kind: 'ambiguous',
+      reason:
+        'The migration history that continues from where the database is has more than one end',
+      candidates: [B, C],
+    });
   });
 
   it('names each end of a history that has several, each of which resolves', async () => {
     const aggregateSpace = space([pkg(E, A), pkg(A, B), pkg(A, C)]);
-    const argument = migrationPlanFrom(rulesSpace(aggregateSpace), { kind: 'empty' });
+    const argument = fromOf(aggregateSpace, { kind: 'unmarked' });
     if (argument.kind !== 'ambiguous') throw new Error(`expected a choice, got ${argument.kind}`);
     expect(argument.candidates).toEqual([B, C]);
     for (const candidate of argument.candidates) {
@@ -152,9 +185,9 @@ describe('migrationPlanFrom names a --from migration plan resolves to the intend
 
   it('names none for a contract nothing records, which migration plan refuses', async () => {
     const aggregateSpace = space([pkg(E, A)], { db: ref(OFF_GRAPH) });
-    expect(
-      migrationPlanFrom(rulesSpace(aggregateSpace), { kind: 'contract', hash: OFF_GRAPH }),
-    ).toMatchObject({ kind: 'none' });
+    expect(fromOf(aggregateSpace, { kind: 'contract', hash: OFF_GRAPH })).toMatchObject({
+      kind: 'none',
+    });
     const resolved = await resolveFromForPlan({ optionsFrom: OFF_GRAPH, space: aggregateSpace });
     expect(resolved.ok).toBe(false);
   });
@@ -185,10 +218,7 @@ describe('the choice where the database is cannot be read names --from values mi
     },
   ])('$name', async ({ packages, refs, candidates }) => {
     const aggregateSpace = space(packages(), refs);
-    const argument = migrationPlanFrom(rulesSpace(aggregateSpace), {
-      kind: 'unknown',
-      reason: 'Unread',
-    });
+    const argument = fromOf(aggregateSpace, { kind: 'unknown', reason: 'Unread' });
     expect(argument).toEqual({ kind: 'ambiguous', reason: 'Unread', candidates });
     for (const candidate of candidates) {
       const resolved = await resolveFromForPlan({ optionsFrom: candidate, space: aggregateSpace });
@@ -205,9 +235,10 @@ describe('the choice where the database is cannot be read names --from values mi
   });
 
   it('names none, with the empty-graph rule, for a contract no ref names while there are no migrations', () => {
-    expect(
-      migrationPlanFrom(rulesSpace(space([])), { kind: 'contract', hash: OFF_GRAPH }),
-    ).toMatchObject({ kind: 'none', reason: expect.stringContaining('`@empty` or a ref') });
+    expect(fromOf(space([]), { kind: 'contract', hash: OFF_GRAPH })).toMatchObject({
+      kind: 'none',
+      reason: expect.stringContaining('`@empty` or a ref'),
+    });
   });
 });
 
@@ -247,6 +278,15 @@ describe('migrationPlanReplacing names the --from that plans a failed migration 
 });
 
 describe('migrationPlanTo names a --to migration plan resolves to the intended end', () => {
+  it('leaves --to out for a contract hash that is the one the run was given', () => {
+    expect(
+      migrationPlanTo(
+        { ...rulesSpace(space([pkg(E, A)])), emittedHash: OFF_GRAPH },
+        { kind: 'contract', hash: OFF_GRAPH },
+      ),
+    ).toEqual({ kind: 'default' });
+  });
+
   it('names none for a contract no migration records, which migration plan refuses', async () => {
     const aggregateSpace = space([pkg(E, A)]);
     expect(

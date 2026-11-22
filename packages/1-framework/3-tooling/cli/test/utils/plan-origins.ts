@@ -1,7 +1,7 @@
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import {
   type MigrationPlanArgument,
-  migrationPlanFrom,
+  migrationPlanArguments,
   type RunnablePlanArgument,
 } from '../../src/control-api/operations/plan-arguments';
 import { buildGraph, entry } from './graph-helpers';
@@ -10,10 +10,11 @@ import { buildGraph, entry } from './graph-helpers';
 export const UNRECORDED = 'c'.repeat(64);
 
 /** The origin of a database at a contract no migration records, as the rule says it. */
-export const NOT_RECORDED: MigrationPlanArgument = migrationPlanFrom(
+export const NOT_RECORDED: MigrationPlanArgument = migrationPlanArguments(
   { graph: buildGraph([entry(EMPTY_CONTRACT_HASH, 'a'.repeat(64), 'initial')]), refs: {} },
   { kind: 'contract', hash: UNRECORDED },
-);
+  { kind: 'emitted' },
+).from;
 
 /** A database at `hash`, which a migration records, or at a contract none records. */
 export function originOf(hash: string | undefined): MigrationPlanArgument {

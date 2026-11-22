@@ -49,8 +49,8 @@ import {
   statusForMigrationHash,
 } from '../../control-api/operations/migration-status-overlay';
 import {
-  migrationPlanFrom,
-  migrationPlanTo,
+  databasePositionOf,
+  migrationPlanArguments,
   type PlanEnd,
 } from '../../control-api/operations/plan-arguments';
 import {
@@ -176,14 +176,11 @@ export type StatusTarget =
     }
   | { readonly kind: 'extension'; readonly spaceId: string };
 
-/** Where `migration status` aims, as `migration plan` would end there: the emitted contract, a ref, or another contract. */
-function statusPlanEnd(
-  refName: string | undefined,
-  targetHash: string,
-  emittedHash: string,
-): PlanEnd {
-  if (refName !== undefined) return { kind: 'ref', name: refName };
-  return targetHash === emittedHash ? { kind: 'emitted' } : { kind: 'contract', hash: targetHash };
+/** Where `migration status` aims, as `migration plan` would end there: a ref, or a contract, which the rule tells from the emitted one. */
+function statusPlanEnd(refName: string | undefined, targetHash: string): PlanEnd {
+  return refName === undefined
+    ? { kind: 'contract', hash: targetHash }
+    : { kind: 'ref', name: refName };
 }
 
 /** The summary with no migrations: the `migration plan` that writes the first, or why none can. */
@@ -544,7 +541,7 @@ export const migrationStatusCommand = defineOrmCommand({
         continue;
       }
       const graph = space.graph();
-      const planSpace = { graph, refs: space.refs };
+      const planSpace = { graph, refs: space.refs, emittedHash: contractHash };
       const spaceContractHash = space.contract().storage.storageHash;
       const isAppSpace = entry.space === aggregate.app.spaceId;
       const targetHash = isAppSpace ? (activeRefHash ?? spaceContractHash) : spaceContractHash;
@@ -558,22 +555,22 @@ export const migrationStatusCommand = defineOrmCommand({
           ? { kind: 'offline', hash: fromOverrideHash }
           : undefined;
       const originHash = originHashOf(origin);
-      if (isAppSpace && originHash !== targetHash) {
-        firstPlan = printedPlan(
+      const appPlan = () =>
+        printedPlan(
           invocation,
-          {
-            from: migrationPlanFrom(
-              planSpace,
-              origin === undefined
-                ? {
-                    kind: 'unknown',
-                    reason: 'migration status read no database to find where it is',
-                  }
-                : { kind: 'contract', hash: originHash },
-            ),
-          },
+          migrationPlanArguments(
+            planSpace,
+            origin === undefined
+              ? { kind: 'unknown', reason: 'migration status read no database to find where it is' }
+              : databasePositionOf(
+                  origin.kind === 'offline' ? origin.hash : origin.marker?.storageHash,
+                ),
+            statusPlanEnd(activeRefName, targetHash),
+          ),
           ['--name', '<name>'],
         );
+      if (isAppSpace && originHash !== targetHash && graph.nodes.size === 0) {
+        firstPlan = appPlan();
       }
       const markerRead = origin?.kind === 'database' || (isAppSpace && liveTarget);
       const readMarker =
@@ -601,17 +598,7 @@ export const migrationStatusCommand = defineOrmCommand({
                 kind: 'app',
                 explicitTarget: to !== undefined,
                 refName: activeRefName,
-                plan: printedPlan(
-                  invocation,
-                  {
-                    from: migrationPlanFrom(planSpace, { kind: 'contract', hash: originHash }),
-                    to: migrationPlanTo(
-                      planSpace,
-                      statusPlanEnd(activeRefName, targetHash, contractHash),
-                    ),
-                  },
-                  ['--name', '<name>'],
-                ),
+                plan: appPlan(),
                 listCommand: cliCommand(invocation, 'migration list'),
               }
             : { kind: 'extension', spaceId: entry.space },

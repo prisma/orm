@@ -233,10 +233,10 @@ describe('db update --rename', () => {
     const temporaryValues = [{ field: 'User.email', value: "''" }];
     mocks.dbUpdate
       .mockResolvedValueOnce(
-        ok({ ...planSuccess(), temporaryValues, migrationPlanOrigin: reference('@empty') }),
+        ok({ ...planSuccess(), temporaryValues, migrationPlanOrigin: reference('db') }),
       )
       .mockResolvedValueOnce(
-        ok({ ...applySuccess(), temporaryValues, migrationPlanOrigin: reference('@empty') }),
+        ok({ ...applySuccess(), temporaryValues, migrationPlanOrigin: reference('db') }),
       );
     const dryRun = await harness().run(['db', 'update', '--dry-run'], {
       cwd: projectDir,
@@ -250,7 +250,7 @@ describe('db update --rename', () => {
     expect(dryRun.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from @empty --backfill User.email\` instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from db --backfill User.email\` instead.`,
     });
     expect(applied.presented?.presentation.human).toContainEqual({
       kind: 'summary',
@@ -583,7 +583,7 @@ describe('db update --rename', () => {
       ok({
         ...planSuccess(),
         temporaryValues: [{ field: 'User.email', value: "''" }],
-        migrationPlanOrigin: reference('@empty'),
+        migrationPlanOrigin: reference('db'),
       }),
     );
     const run = await harness().run(
@@ -621,7 +621,7 @@ describe('db update --rename', () => {
       temporaryValue: {
         kind: 'summary',
         status: 'warn',
-        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from @empty --backfill User.email --config 'my app/prisma.config.ts'\` instead.`,
+        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with \`prisma-test migration plan --from db --backfill User.email --config 'my app/prisma.config.ts'\` instead.`,
       },
     });
   });

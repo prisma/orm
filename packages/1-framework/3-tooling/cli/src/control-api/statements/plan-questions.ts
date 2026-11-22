@@ -316,23 +316,24 @@ export function consentDescription(
 const DELETE_CASTS =
   '--delete keeps the field and lets the database cast its values, which can change or lose some.';
 
-/** What each answer to a type change does: `--convert`, where the command writes a migration to fill in, and `--delete`. */
-/** The sentence that says which `migration plan` writes the values of `fields`, or why none can. */
+/**
+ * The sentence that says which `migration plan` writes the values of `fields`, or why none can; a
+ * command that gives no plan origin is told it has none to offer.
+ */
 function backfillPlanText(
   migrationPlan: QuestionMigrationPlan | undefined,
   fields: readonly string[],
   values: string,
 ): string {
   const flags = fields.map((each) => statementFlag({ verb: 'backfill', text: each }));
-  if (migrationPlan === undefined) {
-    return `plan the change with migration plan and ${flags.join(' ')} to write ${values} in migration.ts`;
-  }
+  if (migrationPlan === undefined) return `this command plans no migration that writes ${values}`;
   const plan = printedPlan(migrationPlan.invocation, { from: migrationPlan.from }, flags);
   return plan.kind === 'none'
     ? `no migration can be planned to write ${values} either. ${plan.reason}`
     : `plan the change with ${quotedPlan(plan)} to write ${values} in migration.ts`;
 }
 
+/** What each answer to a type change does: `--convert`, where the command writes a migration to fill in, and `--delete`. */
 function typeChangeNote(loss: PlannedDataLoss, canConvert: boolean): readonly string[] {
   if (loss.loss !== 'typeChange') return [];
   return loss.subject.kind === 'field' && canConvert

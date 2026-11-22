@@ -155,14 +155,14 @@ describe('resolveFromForPlan', () => {
     }
   });
 
-  it('suggests a contract placeholder when no ref reaches the graph', async () => {
+  it('suggests the end of the history as the origin when no ref reaches the graph', async () => {
     const bundles = [makePkg(E, HASH_A, 'm1')];
     const space = makeSpace(bundles);
     const result = await resolveFromForPlan(baseInput({ space }));
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', '--from <contract>');
+      expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', `--from ${HASH_A}`);
       expect(result.failure.fix).toContain('ref set db <contract>');
     }
   });
@@ -351,7 +351,7 @@ describe('resolveFromForPlan', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expectRefuse(result.failure, 'MIGRATION.HASH_NOT_IN_GRAPH', '--from <contract>');
+      expectRefuse(result.failure, 'MIGRATION.HASH_NOT_IN_GRAPH', '--from ');
       expect(result.failure.fix).toContain('ref set db <contract>');
     }
   });

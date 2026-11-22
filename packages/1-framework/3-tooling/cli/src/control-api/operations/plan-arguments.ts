@@ -50,18 +50,22 @@ export interface MigrationPlanArguments {
   readonly to: MigrationPlanTargetArgument;
 }
 
-/** The application space as the rules read it: its migration graph and its refs. */
+/**
+ * The application space as the rules read it: its migration graph, its refs, and the hash of the
+ * contract the run was given, the one contract `migration plan` targets that no migration records.
+ */
 export interface PlanSpace {
   readonly graph: MigrationGraph;
   readonly refs: Refs;
+  readonly emittedHash?: string;
 }
 
 /**
- * Where a database is, which decides where a plan for it starts: at the empty contract (no
- * marker), at a contract by its hash, or unknown, for `reason`, when it cannot be read.
+ * Where a database is, which decides where a plan for it starts: unmarked (no marker, so empty or
+ * not yet adopted), at a contract by its hash, or unknown, for `reason`, when it cannot be read.
  */
 export type DatabasePosition =
-  | { readonly kind: 'empty' }
+  | { readonly kind: 'unmarked' }
   | { readonly kind: 'contract'; readonly hash: string }
   | { readonly kind: 'unknown'; readonly reason: string };
 
@@ -83,11 +87,9 @@ function refNames(refs: Refs): readonly string[] {
   return Object.keys(refs).sort((a, b) => (a === 'db' ? -1 : b === 'db' ? 1 : a.localeCompare(b)));
 }
 
-/** Where the history an empty database replays ends, as `--from` names each end. */
-function historyEnds(graph: MigrationGraph): readonly string[] {
-  return historyEndsFrom(graph, EMPTY_CONTRACT_HASH).map((end) =>
-    end === EMPTY_CONTRACT_HASH ? '@empty' : end,
-  );
+/** Where the history that continues from `hash` ends, as `--from` names each end. */
+function historyEnds(graph: MigrationGraph, hash: string = EMPTY_CONTRACT_HASH): readonly string[] {
+  return historyEndsFrom(graph, hash).map((end) => (end === EMPTY_CONTRACT_HASH ? '@empty' : end));
 }
 
 /**
@@ -105,33 +107,32 @@ export function migrationPlanChoice(space: PlanSpace | undefined, reason: string
   return { kind: 'ambiguous', reason, candidates };
 }
 
+/** Why a database with no marker in a space with no migrations gets a plan from `@empty` only as a choice. */
+const NO_MARKER_REASON =
+  'The database has no marker, so this plan is for an empty database. A database that is not empty needs adopting first: record the contract it matches with `{bin} db sign`, then plan from there';
+
 /**
  * The `--from` that makes `migration plan` start where a database at `position` is. A contract a
  * migration records is named by its hash. An empty database starts where its history ends, because
  * a plan from the empty contract would recreate what the existing migrations create; with no
- * migrations, or no migration from the empty contract, it starts at `@empty`. While the space has no
- * migrations, `migration plan` also starts from a ref, which it baselines. Nothing else can be a
- * `--from`.
+ * migration from the empty contract it starts at `@empty`. With no migrations, a database with no
+ * marker may be empty or may need adopting, so the plan from `@empty` is a choice; a database at a
+ * contract a ref names starts from the ref, which `migration plan` baselines.
  */
-export function migrationPlanFrom(
-  space: PlanSpace,
-  position: DatabasePosition,
-): MigrationPlanArgument {
+function startAtPosition(space: PlanSpace, position: DatabasePosition): MigrationPlanArgument {
   const { graph, refs } = space;
   if (position.kind === 'unknown') return migrationPlanChoice(space, position.reason);
-  if (position.kind === 'empty' || position.hash === EMPTY_CONTRACT_HASH) {
-    if (graph.nodes.size === 0) return reference('@empty');
-    const ends = historyEnds(graph);
-    const [onlyEnd] = ends;
-    if (ends.length === 1 && onlyEnd !== undefined) return reference(onlyEnd);
-    return {
-      kind: 'ambiguous',
-      reason:
-        ends.length === 0
-          ? 'The migration history an empty database replays has no end'
-          : 'The migration history an empty database replays has more than one end',
-      candidates: ends,
-    };
+  if (position.kind === 'unmarked' || position.hash === EMPTY_CONTRACT_HASH) {
+    if (graph.nodes.size === 0) {
+      return position.kind === 'unmarked'
+        ? { kind: 'ambiguous', reason: NO_MARKER_REASON, candidates: ['@empty'] }
+        : reference('@empty');
+    }
+    return startAtEndOf(
+      graph,
+      EMPTY_CONTRACT_HASH,
+      'The migration history an empty database replays',
+    );
   }
   if (isGraphNode(position.hash, graph)) return reference(position.hash);
   if (graph.nodes.size === 0) {
@@ -148,10 +149,23 @@ export function migrationPlanFrom(
   };
 }
 
+/** Where the history that continues from `hash` ends: the one end, or a choice of them. */
+function startAtEndOf(graph: MigrationGraph, hash: string, history: string): MigrationPlanArgument {
+  const ends = historyEnds(graph, hash);
+  const [onlyEnd] = ends;
+  if (ends.length === 1 && onlyEnd !== undefined) return reference(onlyEnd);
+  return {
+    kind: 'ambiguous',
+    reason: ends.length === 0 ? `${history} has no end` : `${history} has more than one end`,
+    candidates: ends,
+  };
+}
+
 /**
  * The `--to` that makes `migration plan` end at `end`: none for the emitted contract, which it
- * targets by default; a ref by its name; a contract a migration records by its hash. It does not
- * plan to the empty contract, or to any other contract no migration records.
+ * targets by default, nor for a contract hash that is the one the run was given; a ref by its name;
+ * a contract a migration records by its hash. It does not plan to the empty contract, or to any
+ * other contract no migration records.
  */
 export function migrationPlanTo(space: PlanSpace, end: PlanEnd): MigrationPlanTargetArgument {
   if (end.kind === 'emitted') return { kind: 'default' };
@@ -163,9 +177,40 @@ export function migrationPlanTo(space: PlanSpace, end: PlanEnd): MigrationPlanTa
     };
   }
   if (isGraphNode(end.hash, space.graph)) return reference(end.hash);
+  if (end.hash === space.emittedHash) return { kind: 'default' };
   return {
     kind: 'none',
     reason: `No migration records contract ${end.hash}, and \`migration plan --to\` ends only at a contract a migration records, a ref, or the emitted contract`,
+  };
+}
+
+/**
+ * The `--from` and `--to` of the `migration plan` that takes a database at `position` to `end`. To
+ * a contract the history records, the plan leaves from where the database is. To the emitted
+ * contract, a new one, it extends the history: it starts where the history that continues from the
+ * database's contract ends, so `db migrate` applies the migrations after it and then the new one,
+ * and the plan forks nothing.
+ */
+export function migrationPlanArguments(
+  space: PlanSpace,
+  position: DatabasePosition,
+  end: PlanEnd,
+): MigrationPlanArguments {
+  const to = migrationPlanTo(space, end);
+  const extendsHistory =
+    to.kind === 'default' &&
+    position.kind === 'contract' &&
+    position.hash !== EMPTY_CONTRACT_HASH &&
+    isGraphNode(position.hash, space.graph);
+  return {
+    from: extendsHistory
+      ? startAtEndOf(
+          space.graph,
+          position.hash,
+          'The migration history that continues from where the database is',
+        )
+      : startAtPosition(space, position),
+    to,
   };
 }
 
@@ -181,20 +226,25 @@ export function migrationPlanReplacing(
   const graph = reconstructGraph(
     space.packages.filter(({ dirName }) => dirName !== failed.dirName),
   );
-  return migrationPlanFrom({ graph, refs: space.refs }, { kind: 'contract', hash: failed.from });
+  return startAtPosition({ graph, refs: space.refs }, { kind: 'contract', hash: failed.from });
 }
 
-/** The `--from` a `migration plan` for the application space takes, for its marker in `markers`. */
-export function appMigrationPlanOrigin(
+/** The `migration plan` for the application space's database, at its marker in `markers`, to `end`. */
+export function appMigrationPlan(
   app: PlanSpace & { readonly spaceId: string },
   markers: ReadonlyMap<string, { readonly storageHash: string } | null>,
-): MigrationPlanArgument {
-  return migrationPlanFrom(app, databasePositionOf(markers.get(app.spaceId)?.storageHash));
+  end: PlanEnd,
+): MigrationPlanArguments {
+  return migrationPlanArguments(
+    app,
+    databasePositionOf(markers.get(app.spaceId)?.storageHash),
+    end,
+  );
 }
 
 /** Where a database whose marker names `markerHash`, or that has none, is. */
 export function databasePositionOf(markerHash: string | undefined): DatabasePosition {
-  if (markerHash === undefined || markerHash === EMPTY_CONTRACT_HASH) return { kind: 'empty' };
+  if (markerHash === undefined) return { kind: 'unmarked' };
   return { kind: 'contract', hash: markerHash };
 }
 
@@ -204,9 +254,15 @@ export function appSpaceOf(aggregate: {
     readonly spaceId: string;
     readonly refs: Refs;
     graph(): MigrationGraph;
+    contract(): { readonly storage: { readonly storageHash: string } };
   };
 }): PlanSpace & { readonly spaceId: string } {
-  return { spaceId: aggregate.app.spaceId, graph: aggregate.app.graph(), refs: aggregate.app.refs };
+  return {
+    spaceId: aggregate.app.spaceId,
+    graph: aggregate.app.graph(),
+    refs: aggregate.app.refs,
+    emittedHash: aggregate.app.contract().storage.storageHash,
+  };
 }
 
 /**

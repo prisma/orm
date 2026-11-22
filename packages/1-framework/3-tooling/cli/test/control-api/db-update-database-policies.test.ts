@@ -7,6 +7,7 @@ import type {
   MigrationRunnerResult,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { NamedRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it, vi } from 'vitest';
@@ -20,9 +21,9 @@ const FAKE_MIGRATIONS_DIR = '/tmp/__test-db-update-migrations';
 const noQuestions = async (questions: readonly PlanQuestion[]) =>
   questions.map((question) => ({ verb: 'delete' as const, text: question.subject }));
 
-function markerRecord(meta: Record<string, unknown>): ContractMarkerRecord {
+function markerRecord(meta: Record<string, unknown>, storageHash = 'origin'): ContractMarkerRecord {
   return {
-    storageHash: 'origin',
+    storageHash,
     profileHash: '',
     contractJson: null,
     canonicalVersion: null,
@@ -181,6 +182,18 @@ describe('executeDbUpdate, database policies', () => {
       expect(execute).not.toHaveBeenCalled();
     },
   );
+
+  it('ends the plan it advises at the ref db update was given', async () => {
+    const result = await update({
+      mode: 'plan',
+      markers: new Map([['app', markerRecord(MIGRATE_ONLY, EMPTY_CONTRACT_HASH)]]),
+      ref: { name: 'dev', hash: 'dummy', invariants: [] },
+    });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope().fix).toBe(
+      'Author a migration with `{bin} migration plan --from @empty --to dev`, then apply it with `{bin} db migrate --to dev`.',
+    );
+  });
 
   it('refuses a ref whose policies differ without consent', async () => {
     const result = await update({

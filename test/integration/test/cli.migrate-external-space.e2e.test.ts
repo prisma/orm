@@ -187,27 +187,19 @@ withTempDir(({ createTempDir }) => {
             ok: false,
             error: { meta: { kind: 'neverPlanned', spaceId: 'app' } },
           });
-          // The remediation must not prescribe a hash the planner cannot
-          // resolve (an empty graph has no nodes to resolve hashes against),
-          // and its first two run-command actions must be exactly the
-          // plan-then-apply commands asserted here — if the presented actions
-          // drift, this parse-and-execute round fails rather than silently
-          // running hard-coded commands.
-          const remediationCommands = (envelope?.nextActions ?? [])
-            .filter((action) => action.kind === 'run-command')
-            .map((action) => action.command)
-            .slice(0, 2);
-          for (const command of remediationCommands) {
-            expect(command).not.toMatch(/--to [0-9a-f]{64}/);
-          }
-          expect(remediationCommands).toEqual([
-            'prisma-test migration plan --from @empty --name <slug>',
-            'prisma-test db migrate',
-          ]);
-
-          // Execute the presented remediation: derive each command's argv from
-          // the action text itself, substituting the <slug> placeholder.
-          const [planCommand, migrateCommand] = remediationCommands;
+          // The database has no marker, so the plan from `@empty` is a choice: it runs on an empty
+          // database, and the reason names `db sign` for one that already has tables. This database
+          // is empty, so the commands in the two choices run as printed.
+          const [planChoice, applyChoice] = (envelope?.nextActions ?? []).map((action) =>
+            action.kind === 'user-choice' ? action.label : '',
+          );
+          expect(planChoice).toBe(
+            'Plan the missing edge with `prisma-test migration plan --from @empty --name <slug>`. The database has no marker, so this plan is for an empty database. A database that is not empty needs adopting first: record the contract it matches with `prisma-test db sign`, then plan from there.',
+          );
+          expect(applyChoice).toBe('Then apply it with `prisma-test db migrate`');
+          const [planCommand, migrateCommand] = [planChoice, applyChoice].map(
+            (label) => /`(prisma-test [^`]*)`/.exec(label ?? '')?.[1],
+          );
           const planArgs = (planCommand ?? '')
             .replace(/^prisma-test migration plan\s*/, '')
             .replaceAll('<slug>', 'initial')

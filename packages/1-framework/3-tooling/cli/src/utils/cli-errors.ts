@@ -1055,7 +1055,9 @@ export function planThenApply(
     ].join('\n'),
     nextActions: [
       planAction('Plan the missing edge', printed),
-      runCommandAction('Apply it', applyCommand),
+      printed.kind === 'runs'
+        ? runCommandAction('Apply it', applyCommand)
+        : chooseAction(`Then apply it with \`${applyCommand}\``),
       chooseAction(ROLLBACK_IS_DESTRUCTIVE),
       chooseAction(RENAMES_AND_DATA_NEED_MORE),
       runCommandAction('Inspect the on-disk graph', listCommand),

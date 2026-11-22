@@ -16,6 +16,7 @@ import {
 
 interface ErrorJson {
   readonly code?: string;
+  readonly why?: string;
   readonly nextActions?: readonly { readonly label: string; readonly command?: string }[];
 }
 
@@ -77,6 +78,33 @@ withTempDir(({ createTempDir }) => {
         const error = refused.error ?? refused;
         expect(error.code).toBe('MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE');
         await expectEachPlanRuns(ctx, adviceText(error));
+      }),
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'in none for the refusal of --backfill on a database with rows and no marker, which names db sign',
+      inJourney(async (ctx, connectionString) => {
+        await sql(
+          connectionString,
+          'CREATE TABLE "user" (id int4 PRIMARY KEY, email text NOT NULL)',
+        );
+        await sql(
+          connectionString,
+          `INSERT INTO "user" (id, email) VALUES (1, 'dev@example.test')`,
+        );
+        swapContract(ctx, 'contract-additive-required-name');
+        expect((await runContractEmit(ctx)).exitCode).toBe(0);
+
+        const refused = parseJsonOutput<{ readonly error?: ErrorJson } & ErrorJson>(
+          await runDbUpdate(ctx, ['--backfill', 'User.name', '--json']),
+        );
+        const error = refused.error ?? refused;
+        expect(error.code).toBe('MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE');
+        expect(printedPlans(adviceText(error))).toEqual([]);
+        expect(error.why).toContain(
+          'No migration can be planned for them either. The database has no marker, so this plan is for an empty database. A database that is not empty needs adopting first: record the contract it matches with `prisma-test db sign`, then plan from there. A plan from `@empty` creates every model, so its statements name nothing it can resolve.',
+        );
       }),
       timeouts.spinUpPpgDev,
     );

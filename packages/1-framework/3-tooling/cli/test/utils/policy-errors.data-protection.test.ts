@@ -335,6 +335,34 @@ describe('errorDataProtectionForbids advice', () => {
     ]);
   });
 
+  it('ends the --convert plan at the ref db update was given', () => {
+    const { fix } = errorDataProtectionForbids({
+      spaceId: 'app',
+      command: 'db update',
+      refusals: [
+        {
+          setting: 'dataLoss',
+          source: { kind: 'ref', refName: 'production' },
+          operations: [
+            {
+              spaceId: 'app',
+              operationId: 'column.user.age.type',
+              subject: 'User.age',
+              label: 'Change the type of column "age"',
+              loss: 'typeChange',
+            },
+          ],
+        },
+      ],
+      invocation,
+      migrationPlan: { from: reference('db'), to: reference('production') },
+    });
+
+    expect(fix).toContain(
+      'For a type change, write the conversion with `{bin} migration plan --from db --to production --convert <field>`.',
+    );
+  });
+
   it('says why a type change cannot be written as a migration when no plan can start where the database is', () => {
     const { fix } = errorDataProtectionForbids({
       spaceId: 'app',

@@ -108,7 +108,8 @@ export const CONTRACT_PLACEHOLDER = '<contract>';
 /**
  * A `migration plan` as advice prints it:
  * - `runs`: the command runs as printed;
- * - `fill`: its `--from` is {@link CONTRACT_PLACEHOLDER}, and `fill` says why and what it takes;
+ * - `fill`: a choice: its `--from` is {@link CONTRACT_PLACEHOLDER}, or the one candidate, and `fill`
+ *   says why and what it takes;
  * - `none`: no `migration plan` can do it, and `reason` says why.
  */
 export type PrintedPlan =
@@ -122,7 +123,8 @@ export function printedPlan(
   plan: { readonly from: MigrationPlanArgument; readonly to?: MigrationPlanTargetArgument },
   flags: readonly string[],
 ): PrintedPlan {
-  const { from, to = { kind: 'default' } as const } = plan;
+  const { to = { kind: 'default' } as const } = plan;
+  const from = withStatements(plan.from, flags);
   if (from.kind === 'none' || to.kind === 'none') {
     const reasons = [from, to].flatMap((argument) =>
       argument.kind === 'none' ? [argument.reason] : [],
@@ -135,16 +137,61 @@ export function printedPlan(
     : { kind: 'runs', command: printedPlanCommand(invocation, from, words) };
 }
 
-/** A `migration plan` whose `--from` the user chooses, for `choice.reason`, from `choice.candidates`. */
+const STATEMENT_FLAGS: ReadonlySet<string> = new Set([
+  '--rename',
+  '--delete',
+  '--convert',
+  '--backfill',
+]);
+
+function carriesStatement(flags: readonly string[]): boolean {
+  return flags.some((flag) => STATEMENT_FLAGS.has(flag.split(/\s+/)[0] ?? ''));
+}
+
+const EMPTY_ORIGIN_STATEMENTS =
+  'A plan from `@empty` creates every model, so its statements name nothing it can resolve';
+
+/**
+ * `from` for a plan with `flags`: a plan that carries a statement cannot start at `@empty`, so that
+ * start is dropped, and with no start left there is no plan.
+ */
+function withStatements(
+  from: MigrationPlanArgument,
+  flags: readonly string[],
+): MigrationPlanArgument {
+  if (!carriesStatement(flags)) return from;
+  if (from.kind === 'reference' && from.reference === '@empty') {
+    return { kind: 'none', reason: EMPTY_ORIGIN_STATEMENTS };
+  }
+  if (from.kind !== 'ambiguous' || !from.candidates.includes('@empty')) return from;
+  const candidates = from.candidates.filter((candidate) => candidate !== '@empty');
+  return candidates.length === 0
+    ? { kind: 'none', reason: `${from.reason}. ${EMPTY_ORIGIN_STATEMENTS}` }
+    : { ...from, candidates };
+}
+
+/**
+ * A `migration plan` whose `--from` the user chooses, for `choice.reason`, from `choice.candidates`:
+ * with one candidate, the command names it and the reason says when it fits.
+ */
 export function printedChoicePlan(
   invocation: CliInvocation | undefined,
   choice: Extract<MigrationPlanArgument, { readonly kind: 'ambiguous' }>,
   flags: readonly string[],
 ): Extract<PrintedPlan, { readonly kind: 'fill' }> {
+  const [only] = choice.candidates;
+  if (choice.candidates.length === 1 && only !== undefined) {
+    return {
+      kind: 'fill',
+      command: printedPlanCommand(invocation, { kind: 'reference', reference: only }, flags),
+      fill: choice.reason,
+    };
+  }
+  const statements = carriesStatement(flags);
   const choices =
     choice.candidates.length > 0
       ? `one of ${choice.candidates.map((candidate) => `\`${candidate}\``).join(', ')}`
-      : `a contract \`${cliCommand(invocation, 'migration list')}\` shows, a ref that names one, or \`@empty\``;
+      : `a contract \`${cliCommand(invocation, 'migration list')}\` shows${statements ? ' or a ref that names one' : ', a ref that names one, or `@empty`'}`;
   return {
     kind: 'fill',
     command: cliCommand(invocation, 'migration plan', ['--from', CONTRACT_PLACEHOLDER, ...flags]),
@@ -163,7 +210,7 @@ export function planAction(label: string, plan: PrintedPlan): NextAction {
     case 'runs':
       return runCommandAction(label, plan.command);
     case 'fill':
-      return chooseAction(`${label} with \`${plan.command}\`. ${plan.fill}`);
+      return chooseAction(`${label} with \`${plan.command}\`. ${plan.fill}.`);
     case 'none':
       return chooseAction(plan.reason);
   }

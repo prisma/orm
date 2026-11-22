@@ -33,7 +33,7 @@ import {
   type SpacePathOutcome,
   unreachableSpaceFailure,
 } from './migrate';
-import { appMigrationPlanOrigin, appSpaceOf } from './plan-arguments';
+import { appMigrationPlan, appSpaceOf, databasePositionOf } from './plan-arguments';
 import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
@@ -258,10 +258,7 @@ export async function executeMigrateShowPlan(
         ref: namedRef,
         permitPolicyChange: options.permitPolicyChange ?? false,
         targetHash,
-        migrationPlan: {
-          from: appMigrationPlanOrigin(appSpaceOf(aggregate), allMarkers),
-          to: { kind: 'default' },
-        },
+        migrationPlan: appMigrationPlan(appSpaceOf(aggregate), allMarkers, { kind: 'emitted' }),
         invocation: options.invocation,
       });
       if (!permitted.ok) {
@@ -334,6 +331,11 @@ export async function executeMigrateShowPlan(
                 ? outcome.markerHash
                 : contractHashAtMarker(outcome.liveMarker),
             targetHash: outcome.targetHash,
+            position: databasePositionOf(
+              outcome.kind === 'marker-outside-graph'
+                ? outcome.markerHash
+                : outcome.liveMarker?.storageHash,
+            ),
           },
           {
             appSpaceId: aggregate.app.spaceId,

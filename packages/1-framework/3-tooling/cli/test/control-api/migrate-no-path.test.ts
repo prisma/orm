@@ -384,7 +384,7 @@ describe('executeMigrate with no path to the target', () => {
     });
   });
 
-  it('advises planning the first migration when the application space has none', () => {
+  it('advises the first migration as a choice for an empty database when the application space has none and the database no marker', () => {
     const failure = neverPlannedSpaceFailure(
       { spaceId: 'app', liveMarker: null, targetHash: ELSEWHERE },
       {
@@ -397,7 +397,12 @@ describe('executeMigrate with no path to the target', () => {
 
     expect(failure.toEnvelope()).toMatchObject({
       nextActions: expect.arrayContaining([
-        expect.objectContaining({ command: '{bin} migration plan --from @empty --name <slug>' }),
+        expect.objectContaining({
+          kind: 'user-choice',
+          label: expect.stringContaining(
+            'Plan the missing edge with `{bin} migration plan --from @empty --name <slug>`. The database has no marker',
+          ),
+        }),
       ]),
       meta: { kind: 'neverPlanned', spaceId: 'app', targetHash: ELSEWHERE },
     });

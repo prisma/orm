@@ -83,6 +83,8 @@ export function checkRunPolicies(args: {
   readonly targetHash: string;
   /** The `migration plan` a refusal of `db update` or `db sign` prints: from the database, to where the run goes. */
   readonly migrationPlan: MigrationPlanArguments;
+  /** Whether the migrations on disk already lead from the database to the target, so `db migrate` alone moves it. */
+  readonly migrationsReachTarget?: boolean;
   readonly invocation: CliInvocation | undefined;
 }): Result<CheckedDatabasePolicies, CliStructuredError> {
   const { appSpaceId, inForce, ref } = args;
@@ -110,6 +112,7 @@ export function checkRunPolicies(args: {
             : { kind: 'marker' },
         targetHash: args.targetHash,
         migrationPlan: args.migrationPlan,
+        migrationsReachTarget: args.migrationsReachTarget ?? false,
         ref:
           ref === undefined
             ? undefined

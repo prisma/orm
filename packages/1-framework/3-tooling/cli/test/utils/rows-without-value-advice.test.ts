@@ -234,7 +234,7 @@ describe('the advice for rows a required field has no value for', () => {
           rowsWithoutValue: [
             { field: 'Item.note', reason: 'newField', rows: 3, discriminator: false },
           ],
-          planFrom: '@empty',
+          planFrom: 'db',
         },
         withConfig,
       ).fix,
@@ -249,7 +249,7 @@ describe('the advice for rows a required field has no value for', () => {
         withConfig,
       ).fix,
     ]).toEqual([
-      'Plan it with `{bin} migration plan --from @empty --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate --config app/prisma.config.ts`. Or: Make the field optional in the contract source.',
+      'Plan it with `{bin} migration plan --from db --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate --config app/prisma.config.ts`. Or: Make the field optional in the contract source.',
       'Make field "Item.note" optional in the contract source, run `{bin} db init --config app/prisma.config.ts`, then make it required with `{bin} db update --config app/prisma.config.ts`, which says how to give the rows a value.',
     ]);
   });
@@ -292,14 +292,14 @@ describe('the advice for rows a required field has no value for', () => {
           rowsWithoutValue: [
             { field: 'Item.note', reason: 'newField', rows: 3, discriminator: false },
           ],
-          planFrom: '@empty',
+          planFrom: 'db',
         },
         withDb,
       ).fix,
     ]).toEqual([
       'The backfill step of field "Item.note" left those rows without a value. Make its run fill every row in the migration.ts of the failed migration, run that file with node, and re-run `{bin} db migrate --config app/prisma.config.ts --db <url>`.',
       'Resolve the cause the failure names, then re-run `{bin} db migrate --config app/prisma.config.ts --db <url>`.',
-      'Plan it with `{bin} migration plan --from @empty --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate --config app/prisma.config.ts --db <url>`. Or: Make the field optional in the contract source.',
+      'Plan it with `{bin} migration plan --from db --backfill Item.note --config app/prisma.config.ts`, fill the backfill steps in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate --config app/prisma.config.ts --db <url>`. Or: Make the field optional in the contract source.',
     ]);
   });
 

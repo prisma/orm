@@ -346,19 +346,15 @@ describe('errorPlanOriginUnknown and errorPlanForgotTheFlag with no ref to plan 
   it.each([
     ['errorPlanOriginUnknown', () => errorPlanOriginUnknown([], ONE_END_SPACE)],
     ['errorPlanForgotTheFlag', () => errorPlanForgotTheFlag('c'.repeat(64), [], ONE_END_SPACE)],
-  ] as const)(
-    '%s gives the explicit plan as a choice that names where the history ends',
-    (_, make) => {
-      const action = make().nextActions?.find(({ label }) =>
-        label.startsWith('Plan from an explicit origin'),
-      );
-      expect(action).toMatchObject({
-        kind: 'user-choice',
-        label: expect.stringContaining('with `{bin} migration plan --from <contract>`. '),
-      });
-      expect(action?.label).toContain(`replace <contract> with one of \`${END}\``);
-    },
-  );
+  ] as const)('%s gives the explicit plan as a choice from where the history ends', (_, make) => {
+    const action = make().nextActions?.find(({ label }) =>
+      label.startsWith('Plan from an explicit origin'),
+    );
+    expect(action).toMatchObject({
+      kind: 'user-choice',
+      label: expect.stringContaining(`with \`{bin} migration plan --from ${END}\`. `),
+    });
+  });
 });
 
 describe('errorRefSetEmptySentinel', () => {

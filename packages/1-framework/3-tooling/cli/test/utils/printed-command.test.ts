@@ -78,7 +78,7 @@ describe('printedPlan', () => {
     expect(planAction('Plan it', plan)).toEqual({
       kind: 'user-choice',
       label:
-        'Plan it with `{bin} migration plan --from <contract>`. Two ends, so replace <contract> with one of `x`, `y`',
+        'Plan it with `{bin} migration plan --from <contract>`. Two ends, so replace <contract> with one of `x`, `y`.',
     });
   });
 

@@ -66,6 +66,8 @@ export function errorChangePolicyForbids(args: {
   readonly ref?: { readonly name: string; readonly permitPolicyChange: boolean } | undefined;
   /** The `migration plan` the advice to author a migration prints: from the database, to where the run goes. */
   readonly migrationPlan: MigrationPlanArguments;
+  /** Whether the migrations on disk already lead from the database to the target. */
+  readonly migrationsReachTarget?: boolean;
   readonly invocation: CliInvocation | undefined;
 }): ActionableCliError {
   const { spaceId, command, change, invocation, source } = args;
@@ -114,8 +116,9 @@ export function errorChangePolicyForbids(args: {
         : [],
   );
   const plan = printedPlan(invocation, args.migrationPlan, []);
-  const recovery =
-    plan.kind === 'none'
+  const recovery = args.migrationsReachTarget
+    ? `The planned migrations already lead there: apply them with \`${migrate}\`.`
+    : plan.kind === 'none'
       ? `No migration can be planned to move it. ${plan.reason}.`
       : `Author a migration with ${quotedPlan(plan)}, then apply it with \`${migrate}\`.`;
   return new ActionableCliError(

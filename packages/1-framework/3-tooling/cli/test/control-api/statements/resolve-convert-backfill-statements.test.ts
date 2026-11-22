@@ -275,7 +275,7 @@ describe('the migration plan command the db update refusal prints', () => {
         [rename('User.age:User.years'), convert('User.years')],
         [convert('User.years')],
         undefined,
-        reference('@empty'),
+        reference('db'),
       ).toEnvelope().nextActions ?? []
     ).flatMap((action) =>
       'command' in action && typeof action.command === 'string' ? [action.command] : [],

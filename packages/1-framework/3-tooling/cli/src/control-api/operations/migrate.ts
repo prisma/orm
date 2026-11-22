@@ -80,14 +80,14 @@ import {
 } from './database-policies';
 import { noInvariantPathError } from './no-invariant-path';
 import {
-  appMigrationPlanOrigin,
+  appMigrationPlan,
   appSpaceOf,
+  type DatabasePosition,
   databasePositionOf,
   type MigrationPlanArgument,
   type MigrationPlanArguments,
-  migrationPlanFrom,
+  migrationPlanArguments,
   migrationPlanReplacing,
-  migrationPlanTo,
   type PlanEnd,
   type PlanSpace,
 } from './plan-arguments';
@@ -241,10 +241,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     ref,
     permitPolicyChange: options.permitPolicyChange ?? false,
     targetHash: appTargetHash,
-    migrationPlan: {
-      from: appMigrationPlanOrigin(appSpaceOf(aggregate), markerRows),
-      to: { kind: 'default' },
-    },
+    migrationPlan: appMigrationPlan(appSpaceOf(aggregate), markerRows, { kind: 'emitted' }),
     invocation: options.invocation,
   });
   if (!checkedPolicies.ok) {
@@ -294,6 +291,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
             spaceId: outcome.spaceId,
             fromHash: contractHashAtMarker(outcome.liveMarker),
             targetHash: outcome.targetHash,
+            position: databasePositionOf(outcome.liveMarker?.storageHash),
           },
           {
             appSpaceId: aggregate.app.spaceId,
@@ -1020,7 +1018,9 @@ export function neverPlannedSpaceFailure(
       space.spaceId,
       space.targetHash,
       run.migrationsDir,
-      migrationPlanFrom(run.appSpace, databasePositionOf(space.liveMarker?.storageHash)),
+      migrationPlanArguments(run.appSpace, databasePositionOf(space.liveMarker?.storageHash), {
+        kind: 'emitted',
+      }).from,
       run.invocation,
     );
   }
@@ -1039,7 +1039,12 @@ export function neverPlannedSpaceFailure(
  * contract the path would start from: the one the marker names, or an offline `--from`.
  */
 export function unreachableSpaceFailure(
-  space: { readonly spaceId: string; readonly fromHash: string; readonly targetHash: string },
+  space: {
+    readonly spaceId: string;
+    readonly fromHash: string;
+    readonly targetHash: string;
+    readonly position?: DatabasePosition;
+  },
   run: {
     readonly appSpaceId: string;
     readonly appSpace: PlanSpace;
@@ -1052,10 +1057,11 @@ export function unreachableSpaceFailure(
       space.spaceId,
       space.fromHash,
       space.targetHash,
-      {
-        from: migrationPlanFrom(run.appSpace, { kind: 'contract', hash: space.fromHash }),
-        to: migrationPlanTo(run.appSpace, planEndOf(run.target)),
-      },
+      migrationPlanArguments(
+        run.appSpace,
+        space.position ?? databasePositionOf(space.fromHash),
+        planEndOf(run.target),
+      ),
       run.invocation,
     );
   }
