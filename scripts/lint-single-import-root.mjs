@@ -27,10 +27,6 @@
  * projects a script rewrites as text; nothing imports them. Each fragment's
  * `detection.test.ts` holds sample import lines as strings to match its
  * detection patterns against; those specifiers are sample text, not imports.
- * The application files of the Better Auth journey's fixture,
- * `fixtures/better-auth/src/` in the CLI test app, are loaded only by Better
- * Auth's `auth` command in a child process; the journey's own process loads
- * just the fixture's `prisma.config.ts`, which names the workspace root.
  *
  * Exits 1 listing every mixed package; exits 0 otherwise.
  */
@@ -44,7 +40,6 @@ const EXEMPT_SUBTREES = [
   /^test\/integration\/test\/packaging\//,
   /^test\/integration\/test\/upgrade-instructions\/[^/]+\/fixtures\//,
   /^test\/integration\/test\/upgrade-instructions\/[^/]+\/detection\.test\.ts$/,
-  /^test\/integration\/test\/fixtures\/cli\/cli-e2e-test-app\/fixtures\/better-auth\/src\//,
 ];
 const INTERNAL_SCOPE = '@internal/';
 const PUBLISHED_SCOPE = '@prisma/orm-';

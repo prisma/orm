@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +40,79 @@ function pack(scratch: string, names: readonly ShellName[]): PackedShell[] {
 
 const corePsl = readFileSync(join(repoRoot, 'examples/better-auth/prisma/contract.prisma'), 'utf8');
 
+const twoFactorMissing = `Your Prisma contract is missing models or fields that Better Auth needs.
+
+Add to your contract:
+
+model User {
+  twoFactorEnabled Boolean?
+  twoFactors       TwoFactor[]
+}
+
+model TwoFactor {
+  id                      String    @id
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean?
+  failedVerificationCount Int?
+  lockedUntil             DateTime?
+
+  @@index([secret])
+  @@index([userId])
+  @@map("twoFactor")
+}
+
+Then run \`prisma contract emit\` and update your database.`;
+
+const twoFactorAuth = `import { prismaAdapter } from '${adapter}';
+import { betterAuth } from 'better-auth';
+import { twoFactor } from 'better-auth/plugins';
+import { db } from './db';
+
+export const auth = betterAuth({
+  database: prismaAdapter(db),
+  emailAndPassword: { enabled: true },
+  plugins: [twoFactor()],
+});
+`;
+
+const sqliteClient = `import sqlite from '${facade}/runtime';
+import { contractFromJson } from '${facade}/static';
+import contractJson from '../prisma/contract.json' with { type: 'json' };
+
+export const db = sqlite({ contract: contractFromJson(contractJson), path: './auth.db' });
+`;
+
+interface AuthRun {
+  readonly status: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+function runAuth(projectDir: string, scratch: string, args: readonly string[]): AuthRun {
+  const run = spawnSync(join(scratch, 'node_modules/.bin/auth'), [...args], {
+    cwd: projectDir,
+    encoding: 'utf-8',
+    env: {
+      ...process.env,
+      BETTER_AUTH_SECRET: 'a-test-secret-that-is-long-enough-for-better-auth',
+      BETTER_AUTH_URL: 'http://localhost:3000',
+      BETTER_AUTH_TELEMETRY: '0',
+      NO_COLOR: '1',
+    },
+  });
+  if (run.error !== undefined) throw run.error;
+  return { status: run.status, stdout: run.stdout, stderr: run.stderr };
+}
+
+/** The message, without what the command logs while it loads the configuration. */
+function printedMessage(run: AuthRun): string {
+  expect(run.stderr).not.toContain('Error running Better Auth CLI');
+  return run.stderr.slice(run.stderr.indexOf('Your Prisma contract')).trim();
+}
+
 // The install the adapter's README gives: the adapter at the database
 // package's version, and Better Auth 1.7 from the registry. The adapter's
 // two Prisma peers are declared too, because pnpm resolves a peer through
@@ -56,7 +130,7 @@ describe('the Better Auth adapter installed next to the SQLite database package'
       [packShell(adapterDir, scratch), ...pack(scratch, [facade, ...platform])],
       {
         direct: [adapter, facade, familySql, '@prisma/orm-framework'],
-        registryDependencies: { 'better-auth': '1.7' },
+        registryDependencies: { 'better-auth': '1.7', auth: '1.7.27' },
       },
     );
     writeFileSync(join(scratch, 'contract.prisma'), corePsl);
@@ -122,6 +196,56 @@ describe('the Better Auth adapter installed next to the SQLite database package'
       console.log('signed up');
     `;
     expect(runInScratch(scratch, script)).toContain('signed up');
+  });
+
+  it('runs auth generate and auth check until the contract has what the two-factor plugin needs', () => {
+    const projectDir = join(scratch, 'auth-cli');
+    const contractPath = join(projectDir, 'prisma/contract.prisma');
+    mkdirSync(join(projectDir, 'prisma'), { recursive: true });
+    mkdirSync(join(projectDir, 'src/lib'), { recursive: true });
+    mkdirSync(join(projectDir, 'src/prisma'), { recursive: true });
+    writeFileSync(contractPath, corePsl);
+    writeFileSync(join(projectDir, 'src/lib/auth.ts'), twoFactorAuth);
+    writeFileSync(join(projectDir, 'src/lib/db.ts'), sqliteClient);
+    const emit = `
+      import { writeFileSync } from 'node:fs';
+      import { defineConfig } from '${facade}/config';
+      import { createSqliteControlClient } from '${facade}/control';
+
+      const { contract: contractConfig } = defineConfig({ contract: './auth-cli/prisma/contract.prisma' });
+      const emitted = await createSqliteControlClient().emit({ contractConfig });
+      if (!emitted.ok) throw new Error(JSON.stringify(emitted.failure));
+      writeFileSync('./auth-cli/src/prisma/contract.json', emitted.value.contractJson);
+      console.log('emitted');
+    `;
+    expect(runInScratch(scratch, emit)).toContain('emitted');
+
+    const generated = runAuth(projectDir, scratch, ['generate', '--yes']);
+    expect(generated.status).toBe(1);
+    expect(printedMessage(generated)).toBe(twoFactorMissing);
+    const checked = runAuth(projectDir, scratch, ['check']);
+    expect(checked.status).toBe(1);
+    expect(printedMessage(checked)).toBe(twoFactorMissing);
+    expect(readFileSync(contractPath, 'utf8')).toBe(corePsl);
+
+    const completed = corePsl.replace(
+      '  accounts      Account[]\n',
+      '  accounts      Account[]\n  twoFactorEnabled Boolean?\n  twoFactors       TwoFactor[]\n',
+    );
+    expect(completed).not.toBe(corePsl);
+    const twoFactorModel = twoFactorMissing.slice(
+      twoFactorMissing.indexOf('model TwoFactor'),
+      twoFactorMissing.indexOf('\n\nThen run'),
+    );
+    writeFileSync(contractPath, `${completed}\n${twoFactorModel}\n`);
+    expect(runInScratch(scratch, emit)).toContain('emitted');
+
+    const regenerated = runAuth(projectDir, scratch, ['generate', '--yes']);
+    expect(regenerated.status, regenerated.stderr).toBe(0);
+    expect(regenerated.stdout).toContain('Your schema is already up to date.');
+    const rechecked = runAuth(projectDir, scratch, ['check']);
+    expect(rechecked.status, rechecked.stderr).toBe(0);
+    expect(rechecked.stdout).toContain('Schema check passed against adapter "prisma-8".');
   });
 });
 
