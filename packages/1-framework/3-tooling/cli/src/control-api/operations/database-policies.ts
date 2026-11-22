@@ -91,6 +91,8 @@ export function checkRunPolicies(args: {
   /** The contract the run moves the database to: the ref's, when there is one. */
   readonly targetHash: string;
   readonly invocation: CliInvocation | undefined;
+  /** The `migration plan` to the target that the run already derived, which the refusal's advice names. */
+  readonly migrationPlan?: MigrationPlanArguments;
 }): Result<CheckedDatabasePolicies, CliStructuredError> {
   const { app, inForce, ref } = args;
   const appSpaceId = app.spaceId;
@@ -117,13 +119,15 @@ export function checkRunPolicies(args: {
             ? { kind: 'ref', refName: ref.name }
             : { kind: 'marker' },
         targetHash: args.targetHash,
-        migrationPlan: migrationPlanForDatabase(
-          app,
-          args.markers.get(app.spaceId),
-          ref === undefined
-            ? { kind: 'contract', hash: args.targetHash }
-            : { kind: 'ref', name: ref.name },
-        ),
+        migrationPlan:
+          args.migrationPlan ??
+          migrationPlanForDatabase(
+            app,
+            args.markers.get(app.spaceId),
+            ref === undefined
+              ? { kind: 'contract', hash: args.targetHash }
+              : { kind: 'ref', name: ref.name },
+          ),
         ref:
           ref === undefined
             ? undefined

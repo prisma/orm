@@ -253,13 +253,16 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
 
   // 2. Read live DB state (markers + schema).
   const markerRows = await familyInstance.readAllMarkers({ driver });
+  const ref = options.action === 'dbUpdate' ? options.ref : undefined;
+  const appSpace = appSpaceOf(aggregate, {
+    hash:
+      options.invocation.emittedHash ??
+      (ref === undefined ? contract.storage.storageHash : undefined),
+  });
   const migrationPlan: MigrationPlanArguments = migrationPlanForDatabase(
-    appSpaceOf(aggregate),
+    appSpace,
     markerRows.get(aggregate.app.spaceId),
-    dbUpdatePlanEnd(
-      options.action === 'dbUpdate' ? options.ref : undefined,
-      contract.storage.storageHash,
-    ),
+    dbUpdatePlanEnd(ref, contract.storage.storageHash),
   );
 
   // 2c. The database's policies decide whether `db update` may move it, before anything is planned.
@@ -267,7 +270,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   if (options.action === 'dbUpdate') {
     const checked = checkRunPolicies({
       command: 'db update',
-      app: appSpaceOf(aggregate),
+      app: appSpace,
       markers: markerRows,
       inForce: databasePoliciesInForce(
         markerRows,
@@ -278,6 +281,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       permitPolicyChange: options.permitPolicyChange,
       targetHash: contract.storage.storageHash,
       invocation: options.invocation,
+      migrationPlan,
     });
     if (!checked.ok) {
       return notOk(checked.failure);

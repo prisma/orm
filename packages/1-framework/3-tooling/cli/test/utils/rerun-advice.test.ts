@@ -263,7 +263,7 @@ describe('advice after a failed db update --to a ref whose invariant no migratio
     adviceAfterDbUpdate({
       from: reference(FROM),
       to: reference('production'),
-      migrationsToTarget: { kind: 'not-on-disk', missingInvariants: ['seeded'] },
+      migrationsToTarget: { kind: 'plan-needed', missingInvariants: ['seeded'] },
     }),
   )('plans a migration that provides it: %s', (_, adviceOf) => {
     const advice = adviceOf(GIVEN);
@@ -279,9 +279,9 @@ describe('advice after a failed db update --to a ref whose invariant no migratio
       from: reference(FROM),
       to: reference('production'),
       migrationsToTarget: {
-        kind: 'invariants-not-on-disk',
+        kind: 'at-target-missing-invariants',
         missingInvariants: ['seeded'],
-        newMigrationFrom: FROM,
+        newMigration: { from: FROM, emitFirst: false },
       },
     }),
   )(

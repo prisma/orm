@@ -161,8 +161,10 @@ function temporaryValueBlocks(
         return ` ${plan.reason}. To fill the rows as they do, apply them with \`${plan.apply}\` instead.`;
       case 'none':
         return ` No migration can be planned to choose it. ${plan.reason}.`;
+      case 'at-target':
+        return ` ${plan.text}.`;
       default:
-        return ` To choose the value instead, plan a migration with ${quotedPlan(plan)}, ${plan.finish}.`;
+        return ` To choose the value instead, plan a migration with ${quotedPlan(plan)}, ${plan.afterPlan}.`;
     }
   };
   const get = result.mode === 'plan' ? 'would get' : 'got';

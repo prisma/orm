@@ -460,6 +460,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             ...cliInvocation(ctx, args.flags.db),
             rerunArgs: rerunFlags(args.flags),
             statementArgs,
+            ...ifDefined('emittedHash', storageHashOf(prepared.value.contractJson)),
           },
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
           onProgress: controlProgressReporter(ctx.report),

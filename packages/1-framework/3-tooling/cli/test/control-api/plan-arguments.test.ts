@@ -429,9 +429,13 @@ describe('migrationPlanForDatabase', () => {
         migrationPlanForDatabase(planSpace, at(B), { kind: 'ref', name: 'production' }),
       ].map(({ migrationsToTarget }) => migrationsToTarget),
     ).toEqual([
-      { kind: 'not-on-disk', missingInvariants: [] },
-      { kind: 'not-on-disk', missingInvariants: ['seeded'] },
-      { kind: 'invariants-not-on-disk', missingInvariants: ['seeded'], newMigrationFrom: B },
+      { kind: 'plan-needed', missingInvariants: [] },
+      { kind: 'plan-needed', missingInvariants: ['seeded'] },
+      {
+        kind: 'at-target-missing-invariants',
+        missingInvariants: ['seeded'],
+        newMigration: { from: B, emitFirst: false },
+      },
       { kind: 'none-needed' },
     ]);
   });

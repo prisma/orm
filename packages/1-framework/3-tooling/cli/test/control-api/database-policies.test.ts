@@ -86,7 +86,7 @@ describe('checkRunPolicies', () => {
           }),
         ),
       ).toBe(
-        `No migration can be planned to move it. The database is already at \`${TARGET}\` and records every invariant it requires, so there is no migration to apply.`,
+        `The database is already at \`${TARGET}\` and records every invariant it requires, so there is no migration to apply.`,
       );
     },
   );
@@ -125,13 +125,30 @@ describe('checkRunPolicies', () => {
     );
   });
 
-  it('names no migration new command when the emitted contract is not the one the database is at', () => {
+  it('says to emit the contract the database is at before migration new when the emitted contract is another', () => {
     const recovery = recoveryOf(
       check({
         command: 'db update',
         inForce: MIGRATE_ONLY,
         permitPolicyChange: false,
         graph: LEADS_TO_TARGET,
+        markerHash: ORIGIN,
+        ref: { name: 'staging', hash: ORIGIN, invariants: ['seeded'] },
+      }),
+    );
+
+    expect(recovery).toContain(
+      `Emit that contract with \`{bin} contract emit\` from a contract source that describes it, then write a migration from it to itself with \`{bin} migration new --from ${ORIGIN}\`, add to its migration.ts a \`dataTransform\` with \`invariantId\` "seeded",`,
+    );
+  });
+
+  it('says in words what migration is needed when no migration ends at the contract the database is at', () => {
+    const recovery = recoveryOf(
+      check({
+        command: 'db update',
+        inForce: MIGRATE_ONLY,
+        permitPolicyChange: false,
+        graph: buildGraph([]),
         markerHash: ORIGIN,
         ref: { name: 'staging', hash: ORIGIN, invariants: ['seeded'] },
       }),

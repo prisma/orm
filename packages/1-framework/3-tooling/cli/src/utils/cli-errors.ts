@@ -788,12 +788,24 @@ export function errorStatementNeedsMigrationFile(
       },
     );
   }
+  if (plan.kind === 'at-target') {
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+      `db update cannot carry out ${listed}`,
+      {
+        why: `${why} ${plan.text}.`,
+        fix: 'Leave out these statements: db update then asks before it loses any data.',
+        nextActions: [chooseAction('Run db update without these statements')],
+        meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
+      },
+    );
+  }
   return new ActionableCliError(
     'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
     `db update cannot carry out ${listed}`,
     {
       why,
-      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, ${plan.finish}. Or leave out these statements: db update then asks before it loses any data.`,
+      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, ${plan.afterPlan}. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
         planAction('Plan the change into a migration file to fill in', plan),
         chooseAction('Or run db update without these statements'),

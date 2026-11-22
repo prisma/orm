@@ -54,7 +54,9 @@ export function planningRefusedError(
       ? `${plan.reason}. To write the rewrites by hand, add the rewrites the message describes to the migration.ts of the one that makes the change, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\``
       : plan.kind === 'none'
         ? `The rewrites cannot be written by hand in a migration. ${plan.reason}`
-        : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${plan.finish}`,
+        : plan.kind === 'at-target'
+          ? plan.text
+          : `To write the rewrites by hand, plan the change without ${left.map(statementFlag).join(' and ')} with ${quotedPlan(plan)}, add the rewrites the message describes to the migration.ts it writes, ${plan.afterPlan}`,
   );
   const reasons = conflicts.flatMap(({ why }) => (why === undefined ? [] : [why]));
   return new ActionableCliError(refused.code, refused.message, {

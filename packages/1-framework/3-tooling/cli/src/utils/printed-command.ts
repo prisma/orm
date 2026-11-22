@@ -22,6 +22,8 @@ export interface CliInvocation {
   readonly rerunArgs?: readonly string[];
   /** The run's statements, as flags, which another command that plans the same change repeats. */
   readonly statementArgs?: readonly string[];
+  /** The storage hash of the contract at the config's contract path, which `migration new` writes to, when the CLI read it. */
+  readonly emittedHash?: string;
 }
 
 /** The invocation of a command run with `ctx`, given `--db` when `db` is defined. */
@@ -157,16 +159,18 @@ export function printedPlan(
 /**
  * What advice prints to move the database where a run was going, by how it gets there through
  * migrations:
- * - a {@link PrintedPlan} that runs or is a choice: plan a migration with it, then `finish`, which
- *   adds any invariant the target requires, runs the migration.ts it writes and applies it with
- *   `apply`;
+ * - a {@link PrintedPlan} that runs or is a choice: plan a migration with it, then `afterPlan`,
+ *   which adds any invariant the target requires, runs the migration.ts it writes and applies it
+ *   with `apply`;
+ * - `at-target`: the database is already there, as `text` says, and there is nothing to move;
  * - `on-disk`: migrations on disk lead there; `reason` says why no plan is printed, `text` says to
  *   apply them with `apply`;
  * - `none`: no `migration plan` moves it, for `reason`, which says what does where something can.
  */
 export type PrintedWayToTarget =
-  | (Exclude<PrintedPlan, { readonly kind: 'none' }> & { readonly finish: string })
+  | (Exclude<PrintedPlan, { readonly kind: 'none' }> & { readonly afterPlan: string })
   | { readonly kind: 'none'; readonly reason: string }
+  | { readonly kind: 'at-target'; readonly text: string }
   | {
       readonly kind: 'on-disk';
       readonly reason: string;
@@ -186,12 +190,12 @@ export function printedWayToTarget(
   apply: string = dbUpdateApplyCommand(invocation, plan.to),
 ): PrintedWayToTarget {
   const target = targetText(plan.to);
-  const migrations = plan.migrationsToTarget ?? { kind: 'not-on-disk', missingInvariants: [] };
+  const migrations = plan.migrationsToTarget ?? { kind: 'plan-needed', missingInvariants: [] };
   switch (migrations.kind) {
     case 'none-needed':
       return {
-        kind: 'none',
-        reason: `The database is already at ${target} and records every invariant it requires, so there is no migration to apply`,
+        kind: 'at-target',
+        text: `The database is already at ${target} and records every invariant it requires, so there is no migration to apply`,
       };
     case 'on-disk': {
       const reason = `Migrations on disk already lead from the database to ${target}, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them`;
@@ -202,18 +206,14 @@ export function printedWayToTarget(
         text: `${reason}. Apply them with \`${apply}\`, which names the migration.ts to change if one of them fails`,
       };
     }
-    case 'invariants-not-on-disk': {
-      const { missingInvariants, newMigrationFrom } = migrations;
-      const write =
-        newMigrationFrom === undefined
-          ? 'Write a migration from that contract to itself'
-          : `Write a migration from that contract to itself with \`${cliCommand(invocation, 'migration new', ['--from', newMigrationFrom])}\``;
+    case 'at-target-missing-invariants': {
+      const { missingInvariants, newMigration } = migrations;
       return {
         kind: 'none',
-        reason: `The database is at ${target}, but no migration on disk provides ${invariantsText(missingInvariants)} it requires and the database does not record, and a plan from a contract to itself is empty. ${write}, add to its migration.ts ${transformsText(missingInvariants)}, run \`${writtenMigrationRunCommand(invocation)}\` for its directory, and apply it with \`${apply}\``,
+        reason: `The database is at ${target}, but no migration on disk provides ${invariantsText(missingInvariants)} it requires and the database does not record, and a plan from a contract to itself is empty. ${selfMigrationText(invocation, newMigration)}, add to its migration.ts ${transformsText(missingInvariants)}, run \`${writtenMigrationRunCommand(invocation)}\` for its directory, and apply it with \`${apply}\``,
       };
     }
-    case 'not-on-disk': {
+    case 'plan-needed': {
       const printed = printedPlan(invocation, plan, flags);
       if (printed.kind === 'none') return printed;
       const { missingInvariants } = migrations;
@@ -221,10 +221,22 @@ export function printedWayToTarget(
         missingInvariants.length === 0 ? '' : `add to it ${transformsText(missingInvariants)}, `;
       return {
         ...printed,
-        finish: `${provide}run \`${writtenMigrationRunCommand(invocation)}\` for the directory it writes, and apply it with \`${apply}\``,
+        afterPlan: `${provide}run \`${writtenMigrationRunCommand(invocation)}\` for the directory it writes, and apply it with \`${apply}\``,
       };
     }
   }
+}
+
+/** How to write a migration from the contract the database is at to itself. */
+function selfMigrationText(
+  invocation: CliInvocation | undefined,
+  newMigration: { readonly from: string; readonly emitFirst: boolean } | undefined,
+): string {
+  if (newMigration === undefined) return 'Write a migration from that contract to itself';
+  const command = `\`${cliCommand(invocation, 'migration new', ['--from', newMigration.from])}\``;
+  return newMigration.emitFirst
+    ? `Emit that contract with \`${cliCommand(invocation, 'contract emit')}\` from a contract source that describes it, then write a migration from it to itself with ${command}`
+    : `Write a migration from that contract to itself with ${command}`;
 }
 
 function targetText(to: MigrationPlanTargetArgument): string {

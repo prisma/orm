@@ -29,23 +29,28 @@ function missingInvariants(
  * - `none-needed`: it is at the target and records every invariant the target requires;
  * - `on-disk`: a path on disk leads there and provides every such invariant it does not record, so
  *   `db migrate` alone moves it;
- * - `invariants-not-on-disk`: it is at the target, but no migration on disk provides
- *   `missingInvariants`, and `migration plan` cannot write one, because a plan from a contract to
- *   itself is empty. `newMigrationFrom` is the `--from` that makes `migration new` write a migration
- *   from the target to itself, present when the emitted contract is the target and a migration ends
- *   there;
- * - `not-on-disk`: a migration has to be planned, and it has to provide `missingInvariants`.
+ * - `at-target-missing-invariants`: it is at the target's contract, but no migration on disk
+ *   provides `missingInvariants`, and `migration plan` cannot write one, because a plan from a
+ *   contract to itself is empty, so the migration is written by hand. `newMigration` is there when a
+ *   migration ends at the target, so `migration new --from` it resolves: that writes a migration
+ *   from the target to itself once the emitted contract is the target, which it already is unless
+ *   `emitFirst`;
+ * - `plan-needed`: the database is not at the target's contract, so a migration has to be planned,
+ *   and it has to provide `missingInvariants`.
+ *
+ * @internal
  */
 export type MigrationsToTarget =
   | { readonly kind: 'none-needed' }
   | { readonly kind: 'on-disk' }
   | {
-      readonly kind: 'invariants-not-on-disk';
+      readonly kind: 'at-target-missing-invariants';
       readonly missingInvariants: readonly string[];
-      readonly newMigrationFrom?: string;
+      readonly newMigration?: { readonly from: string; readonly emitFirst: boolean };
     }
-  | { readonly kind: 'not-on-disk'; readonly missingInvariants: readonly string[] };
+  | { readonly kind: 'plan-needed'; readonly missingInvariants: readonly string[] };
 
+/** `emittedHash` is the hash of the emitted contract, the one `migration new` writes to; absent when not known. */
 export function migrationsToTarget(
   space: { readonly graph: MigrationGraph; readonly emittedHash?: string },
   marker: ContractMarkerRecordLike | null | undefined,
@@ -58,15 +63,16 @@ export function migrationsToTarget(
     return { kind: 'on-disk' };
   }
   const missingInvariantIds = [...missing].sort();
-  if (from !== target.hash) return { kind: 'not-on-disk', missingInvariants: missingInvariantIds };
-  const newMigrationFrom =
-    space.emittedHash === target.hash &&
-    (space.graph.reverseChain.get(target.hash)?.length ?? 0) > 0
-      ? target.hash
-      : undefined;
+  if (from !== target.hash) return { kind: 'plan-needed', missingInvariants: missingInvariantIds };
+  const migrationEndsAtTarget = (space.graph.reverseChain.get(target.hash)?.length ?? 0) > 0;
   return {
-    kind: 'invariants-not-on-disk',
+    kind: 'at-target-missing-invariants',
     missingInvariants: missingInvariantIds,
-    ...ifDefined('newMigrationFrom', newMigrationFrom),
+    ...ifDefined(
+      'newMigration',
+      migrationEndsAtTarget
+        ? { from: target.hash, emitFirst: space.emittedHash !== target.hash }
+        : undefined,
+    ),
   };
 }

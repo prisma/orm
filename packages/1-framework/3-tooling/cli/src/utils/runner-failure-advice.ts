@@ -124,17 +124,17 @@ export function dbUpdateFailedTypeChangeAdvice(
   if (plan.kind === 'on-disk') {
     return [chooseAction(`${failedTypeChangeText(change)} ${plan.text}`), ...changeValue];
   }
-  if (plan.kind === 'none') {
+  if (plan.kind === 'none' || plan.kind === 'at-target') {
     return [
       chooseAction(
-        `${failedTypeChangeText(change)} No migration can be planned for the change. ${plan.reason}`,
+        `${failedTypeChangeText(change)} ${plan.kind === 'none' ? `No migration can be planned for the change. ${plan.reason}` : plan.text}`,
       ),
       ...changeValue,
     ];
   }
   return [
     chooseAction(
-      `${failedTypeChangeText(change)} Plan the change with ${quotedPlan(plan)}, write the conversion in the migration.ts it writes, ${plan.finish}`,
+      `${failedTypeChangeText(change)} Plan the change with ${quotedPlan(plan)}, write the conversion in the migration.ts it writes, ${plan.afterPlan}`,
     ),
     ...changeValue,
   ];
@@ -151,13 +151,13 @@ export function dbUpdateRowsWithoutValueAdvice(
   const planned =
     flags.length === 0
       ? []
-      : plan.kind === 'on-disk'
+      : plan.kind === 'on-disk' || plan.kind === 'at-target'
         ? [chooseAction(plan.text)]
         : plan.kind === 'none'
           ? [chooseAction(`No migration can be planned to backfill those rows. ${plan.reason}`)]
           : [
               chooseAction(
-                `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${plan.finish}`,
+                `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${plan.afterPlan}`,
               ),
             ];
   const [first] = reports;
@@ -280,7 +280,9 @@ export function dbUpdateRowsHoldingValueAdvice(
     `${newMember(reports, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, ...renameFlags(reports)]))}`,
   );
   const plan = printedWayToTarget(invocation, migrationPlan, [...others, ...deletes]);
-  if (plan.kind === 'on-disk') return [rename, chooseAction(plan.text)];
+  if (plan.kind === 'on-disk' || plan.kind === 'at-target') {
+    return [rename, chooseAction(plan.text)];
+  }
   if (plan.kind === 'none') {
     return [
       rename,
@@ -294,7 +296,7 @@ export function dbUpdateRowsHoldingValueAdvice(
   return [
     rename,
     chooseAction(
-      `To keep that data by hand, plan the change with ${quotedPlan(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${plan.finish}.\n${swaps}`,
+      `To keep that data by hand, plan the change with ${quotedPlan(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${plan.afterPlan}.\n${swaps}`,
     ),
   ];
 }
@@ -368,7 +370,9 @@ export function dbUpdateRowsFailingCheckAdvice(
   if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
   const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
   const plan = printedWayToTarget(invocation, migrationPlan, invocation.statementArgs ?? []);
-  if (plan.kind === 'on-disk') return [chooseAction(`${cannotKeep}. ${plan.text}`)];
+  if (plan.kind === 'on-disk' || plan.kind === 'at-target') {
+    return [chooseAction(`${cannotKeep}. ${plan.text}`)];
+  }
   if (plan.kind === 'none') {
     return [
       chooseAction(
@@ -378,7 +382,7 @@ export function dbUpdateRowsFailingCheckAdvice(
   }
   return [
     chooseAction(
-      `${cannotKeep}. Plan the change with ${quotedPlan(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${plan.finish}`,
+      `${cannotKeep}. Plan the change with ${quotedPlan(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${plan.afterPlan}`,
     ),
   ];
 }

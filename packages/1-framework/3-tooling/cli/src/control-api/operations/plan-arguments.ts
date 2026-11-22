@@ -16,6 +16,7 @@ import {
 } from '@internal/migration-tools/migration-graph';
 import type { OnDiskMigrationPackage } from '@internal/migration-tools/package';
 import type { Refs } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
 import { type MigrationsToTarget, migrationsToTarget } from './graph-queries';
 import type { FromResolution } from './plan-resolution';
 
@@ -48,20 +49,23 @@ export type RunnablePlanArgument = Extract<
   { readonly kind: 'reference' | 'default' }
 >;
 
-/**
- * What a `migration plan` takes for `--from` and `--to`, and, when the database's marker was read,
- * how the database reaches `to` through migrations, which decides whether advice prints the plan.
- */
+/** What a `migration plan` takes for `--from` and `--to`. */
 export interface MigrationPlanArguments {
   readonly from: MigrationPlanArgument;
   readonly to: MigrationPlanTargetArgument;
+  /**
+   * How the database reaches `to` through migrations, when its marker was read, which decides what
+   * the CLI's advice prints. Not part of the public API.
+   *
+   * @internal
+   */
   readonly migrationsToTarget?: MigrationsToTarget;
 }
 
 /**
  * What deriving a plan's arguments needs from the application space: its migration graph, its
- * refs, and the hash of the contract the run was given, the one contract `migration plan` targets
- * that no migration records.
+ * refs, and, when known, the hash of the emitted contract, the one contract `migration plan`
+ * targets that no migration records and the one `migration new` writes to.
  */
 export interface PlanSpace {
   readonly graph: MigrationGraph;
@@ -296,20 +300,29 @@ export function databasePositionOf(markerHash: string | undefined): DatabasePosi
   return { kind: 'contract', hash: markerHash };
 }
 
-/** The application space of `aggregate`, as a {@link PlanSpace}. */
-export function appSpaceOf(aggregate: {
-  readonly app: {
-    readonly spaceId: string;
-    readonly refs: Refs;
-    graph(): MigrationGraph;
-    contract(): { readonly storage: { readonly storageHash: string } };
-  };
-}): PlanSpace & { readonly spaceId: string } {
+/**
+ * The application space of `aggregate`, as a {@link PlanSpace}. The emitted contract is the
+ * aggregate's unless `emitted` says otherwise: a run given a ref's contract passes the emitted
+ * contract's hash, or `undefined` when it is not known.
+ */
+export function appSpaceOf(
+  aggregate: {
+    readonly app: {
+      readonly spaceId: string;
+      readonly refs: Refs;
+      graph(): MigrationGraph;
+      contract(): { readonly storage: { readonly storageHash: string } };
+    };
+  },
+  emitted: { readonly hash: string | undefined } = {
+    hash: aggregate.app.contract().storage.storageHash,
+  },
+): PlanSpace & { readonly spaceId: string } {
   return {
     spaceId: aggregate.app.spaceId,
     graph: aggregate.app.graph(),
     refs: aggregate.app.refs,
-    emittedHash: aggregate.app.contract().storage.storageHash,
+    ...ifDefined('emittedHash', emitted.hash),
   };
 }
 

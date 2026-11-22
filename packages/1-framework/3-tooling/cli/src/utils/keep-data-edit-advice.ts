@@ -143,10 +143,11 @@ export function dbUpdateKeepDataEditAdvice(
         ways: [`No migration can be planned to keep it. ${plan.reason}.`, ...runWays],
       };
     }
+    if (plan.kind === 'at-target') return { lead, ways: [`${plan.text}.`, ...runWays] };
     return {
       lead,
       ways: [
-        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${plan.finish}.`,
+        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${plan.afterPlan}.`,
         ...(swaps ? [] : runWays),
       ],
     };

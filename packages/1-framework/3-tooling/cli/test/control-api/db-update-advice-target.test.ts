@@ -78,13 +78,16 @@ const marker: ContractMarkerRecord = {
   invariants: [],
 };
 
-const family = {
-  familyId: 'sql',
-  readAllMarkers: async () => new Map([['app', marker]]),
-  introspect: async () => ({ tables: {} }),
-  deserializeContract: (json: unknown) => json as Contract,
-  toOperationPreview: () => ({ statements: [] }),
-} as unknown as ControlFamilyInstance<'sql', unknown>;
+function familyAt(markerRecord: ContractMarkerRecord) {
+  return {
+    familyId: 'sql',
+    markerLocation: 'prisma_contract.marker',
+    readAllMarkers: async () => new Map([['app', markerRecord]]),
+    introspect: async () => ({ tables: {} }),
+    deserializeContract: (json: unknown) => json as Contract,
+    toOperationPreview: () => ({ statements: [] }),
+  } as unknown as ControlFamilyInstance<'sql', unknown>;
+}
 
 const LOSSES: readonly MigrationDataLoss[] = [
   {
@@ -179,6 +182,9 @@ async function runToProduction(options: {
   readonly statements?: readonly { readonly verb: 'backfill'; readonly text: string }[];
   readonly forbidDataLoss?: boolean;
   readonly invariants?: readonly string[];
+  readonly marker?: ContractMarkerRecord;
+  readonly emittedHash?: string;
+  readonly migrateOnly?: boolean;
 }) {
   const dir = createTestProjectDir('db-update-advice-target');
   tempDirs.push(dir);
@@ -204,10 +210,13 @@ async function runToProduction(options: {
     ControlFamilyInstance<'sql', unknown>
   >;
   const result = await executeDbUpdate({
-    invocation: GIVEN,
+    invocation: {
+      ...GIVEN,
+      ...(options.emittedHash === undefined ? {} : { emittedHash: options.emittedHash }),
+    },
     driver: { close: vi.fn() } as unknown as ControlDriverInstance<'sql', 'postgres'>,
     adapter: {} as unknown as ControlAdapterInstance<'sql', 'postgres'>,
-    familyInstance: family,
+    familyInstance: familyAt(options.marker ?? marker),
     contract: destination,
     mode: options.mode,
     migrations,
@@ -226,6 +235,7 @@ async function runToProduction(options: {
       ...(options.forbidDataLoss === true
         ? { policies: { dataProtection: { dataLoss: 'data-loss-forbidden' as const } } }
         : {}),
+      ...(options.migrateOnly === true ? { policies: { change: ['migrate' as const] } } : {}),
     },
     permitPolicyChange: true,
   }).catch((error: unknown) => notOk(error as { readonly fix?: string }));
@@ -247,7 +257,7 @@ const PLAN_TO_PRODUCTION_END = {
 const PLAN_TO_PRODUCTION = {
   from: { kind: 'reference', reference: 'db' },
   to: { kind: 'reference', reference: 'production' },
-  migrationsToTarget: { kind: 'not-on-disk', missingInvariants: [] },
+  migrationsToTarget: { kind: 'plan-needed', missingInvariants: [] },
 };
 
 describe('db update --to <ref> with no migration on disk that leads there', () => {
@@ -417,4 +427,35 @@ describe('db update --to <ref> when the migrations on disk that lead there lack 
     expect(advice).toContain('add to it a `dataTransform` with `invariantId` "seeded"');
     expect(advice).toContain(APPLY);
   });
+});
+
+describe('db update --to <ref> refused on a database at the ref contract that lacks an invariant no migration provides', () => {
+  const atDestination: ContractMarkerRecord = { ...marker, storageHash: DESTINATION_HASH };
+  const refused = (emittedHash: string | undefined) =>
+    runToProduction({
+      mode: 'plan',
+      migrationToRef: true,
+      invariants: ['seeded'],
+      marker: atDestination,
+      migrateOnly: true,
+      ...(emittedHash === undefined ? {} : { emittedHash }),
+    }).then(({ result }) => adviceOf(result));
+
+  it('names migration new from the ref contract when that contract is the emitted one', async () => {
+    expect(await refused(DESTINATION_HASH)).toContain(
+      `Write a migration from that contract to itself with \`{bin} migration new --from ${DESTINATION_HASH}\`, add to its migration.ts a \`dataTransform\` with \`invariantId\` "seeded",`,
+    );
+  });
+
+  it.each([
+    ['another contract', ORIGIN_HASH],
+    ['not known', undefined],
+  ])(
+    'says to emit the ref contract before migration new when the emitted contract is %s',
+    async (_, emittedHash) => {
+      expect(await refused(emittedHash)).toContain(
+        `Emit that contract with \`{bin} contract emit\` from a contract source that describes it, then write a migration from it to itself with \`{bin} migration new --from ${DESTINATION_HASH}\`, add to its migration.ts`,
+      );
+    },
+  );
 });

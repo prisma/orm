@@ -115,11 +115,11 @@ export function errorChangePolicyForbids(args: {
   );
   const way = printedWayToTarget(invocation, args.migrationPlan, [], migrate);
   const recovery =
-    way.kind === 'on-disk'
+    way.kind === 'on-disk' || way.kind === 'at-target'
       ? `${way.text}.`
       : way.kind === 'none'
         ? `No migration can be planned to move it. ${way.reason}.`
-        : `Author a migration with ${quotedPlan(way)}, ${way.finish}.`;
+        : `Author a migration with ${quotedPlan(way)}, ${way.afterPlan}.`;
   return new ActionableCliError(
     'MIGRATION.CHANGE_POLICY_FORBIDS',
     `${policyHolder} permits only migrations`,
@@ -231,8 +231,10 @@ function typeChangeSentence(
       return `${plan.reason}. For a type change, write the conversion in the migration.ts of the one that changes the field, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\`.`;
     case 'none':
       return `A type change cannot be written as a migration here. ${plan.reason}.`;
+    case 'at-target':
+      return `${plan.text}.`;
     default:
-      return `For a type change, write the conversion with ${quotedPlan(plan)}, ${plan.finish}.`;
+      return `For a type change, write the conversion with ${quotedPlan(plan)}, ${plan.afterPlan}.`;
   }
 }
 

@@ -68,18 +68,38 @@ describe('migrationsToTarget', () => {
         hash: HASH_B,
         invariants: ['seeded', 'indexed'],
       }),
-    ).toEqual({ kind: 'invariants-not-on-disk', missingInvariants: ['indexed', 'seeded'] });
+    ).toMatchObject({
+      kind: 'at-target-missing-invariants',
+      missingInvariants: ['indexed', 'seeded'],
+    });
   });
 
-  it('names the --from of migration new when the target is the emitted contract and a migration ends there', () => {
+  it('names the --from of migration new when a migration ends at the target, and says to emit the target first unless it is the emitted contract', () => {
     const target = { hash: HASH_B, invariants: ['seeded'] };
     expect(
-      [HASH_B, HASH_A].map((emittedHash) =>
-        migrationsToTarget({ graph, emittedHash }, marker(HASH_B), target),
+      [HASH_B, HASH_A, undefined].map((emittedHash) =>
+        migrationsToTarget(
+          { graph, ...(emittedHash === undefined ? {} : { emittedHash }) },
+          marker(HASH_B),
+          target,
+        ),
       ),
     ).toEqual([
-      { kind: 'invariants-not-on-disk', missingInvariants: ['seeded'], newMigrationFrom: HASH_B },
-      { kind: 'invariants-not-on-disk', missingInvariants: ['seeded'] },
+      {
+        kind: 'at-target-missing-invariants',
+        missingInvariants: ['seeded'],
+        newMigration: { from: HASH_B, emitFirst: false },
+      },
+      {
+        kind: 'at-target-missing-invariants',
+        missingInvariants: ['seeded'],
+        newMigration: { from: HASH_B, emitFirst: true },
+      },
+      {
+        kind: 'at-target-missing-invariants',
+        missingInvariants: ['seeded'],
+        newMigration: { from: HASH_B, emitFirst: true },
+      },
     ]);
   });
 
@@ -89,7 +109,7 @@ describe('migrationsToTarget', () => {
         hash: HASH_B,
         invariants: ['backfill-email'],
       }),
-    ).toEqual({ kind: 'not-on-disk', missingInvariants: ['backfill-email'] });
+    ).toEqual({ kind: 'plan-needed', missingInvariants: ['backfill-email'] });
   });
 
   it('counts an invariant a migration on the path provides, or the marker already records', () => {
@@ -98,7 +118,7 @@ describe('migrationsToTarget', () => {
       migrationsToTarget({ graph: withInvariant }, marker(HASH_A, ['seeded']), target),
     ).toEqual({ kind: 'on-disk' });
     expect(migrationsToTarget({ graph: withInvariant }, marker(HASH_A), target)).toEqual({
-      kind: 'not-on-disk',
+      kind: 'plan-needed',
       missingInvariants: ['backfill-email', 'seeded'],
     });
   });

@@ -1259,6 +1259,7 @@ describe('db update', () => {
           dbGiven: false,
           rerunArgs: [],
           statementArgs: [],
+          emittedHash: 'a'.repeat(64),
         },
       }),
     );
