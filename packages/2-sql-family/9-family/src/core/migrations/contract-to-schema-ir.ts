@@ -331,12 +331,12 @@ function convertTable(
   hooks: DefaultHooks,
   storage: SqlStorage,
 ): SqlTableIR {
-  const columns: Record<string, SqlColumnIRInput> = {};
-  for (const [colName, colDef] of Object.entries(table.columns)) {
-    columns[colName] = withColumnInErrors(name, colName, () =>
-      convertColumn(colName, colDef, types, hooks),
-    );
-  }
+  const columns: Record<string, SqlColumnIRInput> = Object.fromEntries(
+    Object.entries(table.columns).map(([colName, colDef]) => [
+      colName,
+      withColumnInErrors(name, colName, () => convertColumn(colName, colDef, types, hooks)),
+    ]),
+  );
 
   const checks: SqlCheckConstraintIRInput[] | undefined =
     table.checks && table.checks.length > 0

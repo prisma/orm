@@ -93,6 +93,33 @@ describe('Mongo contract names every object has as a property', () => {
     });
   });
 
+  it('keeps the stored name of a field named __proto__ that maps to another stored name', () => {
+    const contract = contractOf({
+      models: [
+        stored('User', 'users', [
+          {
+            fieldName: '__proto__',
+            storedName: 'proto',
+            type: field.scalar(type.String()).__type,
+            nullable: false,
+            many: false,
+          },
+        ]),
+      ],
+    });
+    const user = contract.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['User'];
+    expect({
+      fields: Object.keys(user?.fields ?? {}),
+      storageFields: Object.entries(user?.storage['fields'] ?? {}),
+    }).toEqual({
+      fields: ['_id', '__proto__'],
+      storageFields: [
+        ['_id', { field: '_id' }],
+        ['__proto__', { field: 'proto' }],
+      ],
+    });
+  });
+
   it('gives a collection named constructor no validator when the definition writes none', () => {
     const contract = contractOf({
       models: [stored('constructor', 'constructor')],

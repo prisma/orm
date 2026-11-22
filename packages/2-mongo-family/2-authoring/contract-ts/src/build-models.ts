@@ -116,7 +116,7 @@ function buildStorageFields(
       continue;
     }
     fieldsByStoredName.set(storedName, fieldName);
-    storageFields[fieldName] = { field: storedName };
+    defineOwn(storageFields, fieldName, { field: storedName });
   }
   return storageFields;
 }

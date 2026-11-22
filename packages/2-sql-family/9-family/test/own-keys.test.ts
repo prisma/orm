@@ -33,6 +33,20 @@ describe('names every object has as a property', () => {
     }).toEqual({ tables: ['__proto__'], plainPrototype: true });
   });
 
+  it('keep a column named __proto__ as a column of its table', () => {
+    const schema = contractToSchemaIR(
+      contract({
+        users: table(Object.fromEntries([['__proto__', col({ codecId: 'pg/text@1' })]])),
+      }),
+      {
+        annotationNamespace: 'pg',
+        dataTypeLookup: testTypeLookups.dataTypeLookup,
+        codecLookup: testTypeLookups.codecLookup,
+      },
+    );
+    expect(Object.keys(schema.tables['users']?.columns ?? {})).toEqual(['__proto__']);
+  });
+
   it('are added and dropped tables and fields, never altered ones', () => {
     const cs = recordingHook((call) => [
       makeOp(`${call.event}-${call.tableName}.${call.fieldName}`),

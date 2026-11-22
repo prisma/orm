@@ -65,6 +65,8 @@ async function filterThroughEmbed(relationName: string): Promise<unknown> {
 
 describe('a path through an embed relation named like a property every object has', () => {
   it('is filtered on as through any other embed relation', async () => {
-    expect(await filterThroughEmbed('constructor')).toEqual(await filterThroughEmbed('address'));
+    const throughOrdinaryName = await filterThroughEmbed('address');
+    expect(throughOrdinaryName).toMatchObject({ outcome: 'ok', command: expect.anything() });
+    expect(await filterThroughEmbed('constructor')).toEqual(throughOrdinaryName);
   });
 });

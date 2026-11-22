@@ -44,6 +44,6 @@ JavaScript reads `__proto__` as the prototype of an object rather than as a key,
 A model is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-Rename the model, composite type, enum or root. For a collection, name another collection with `@@map`. The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
+Rename the model, composite type, enum or root. For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there, so rename that collection in the database to the new name (`renameCollection`) in the same deployment. The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
 A SQL query builder `select` that names a result column `__proto__` is refused with `RUNTIME.AST_INVALID`; choose another alias.
