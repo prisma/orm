@@ -3,7 +3,7 @@ import type { DBFieldAttribute } from '@better-auth/core/db';
 import { describe, expect, it } from 'vitest';
 import { useContractFixture } from '../helpers/contract-fixture';
 import { type TargetName, targets } from '../helpers/databases';
-import { compare, pslForConfiguration } from '../helpers/printed-psl';
+import { compare, problemsOf, pslForConfiguration } from '../helpers/printed-psl';
 
 const fixture = useContractFixture();
 const emptyContract = (target: TargetName) => fixture().emptyContract(target);
@@ -46,7 +46,7 @@ model Probe {
 }
 `;
   const contract = await contractOf(target, psl);
-  return [...compare(contract, options).problems];
+  return [...problemsOf(compare(contract, options))];
 }
 
 function wrongType(expectedType: string, found: string) {
@@ -181,7 +181,7 @@ describe.each(targets)('id types on %s', (target) => {
       `$1${idType}`,
     );
     const contract = await contractOf(target, psl);
-    return compare(contract, betterAuthOptions).problems;
+    return problemsOf(compare(contract, betterAuthOptions));
   }
 
   it('Better Auth string ids accept String and refuse Int', async () => {
@@ -205,7 +205,7 @@ describe.each(targets)('id types on %s', (target) => {
       '$1String',
     );
     const contract = await contractOf(target, psl);
-    expect(compare(contract, serial).problems).toEqual([
+    expect(problemsOf(compare(contract, serial))).toEqual([
       {
         kind: 'wrong-type',
         model: 'Session',
@@ -223,7 +223,7 @@ describe('id types on postgres only', () => {
       .replace(/(model User \{\n\s+id\s+)\S+/, `$1${idType}`)
       .replace(/(model Session \{[^}]*userId\s+)String/, `$1${idType}`);
     const contract = await contractOf('postgres', psl);
-    return compare(contract, betterAuthOptions).problems;
+    return problemsOf(compare(contract, betterAuthOptions));
   }
 
   it('uuid ids accept Uuid and String', async () => {

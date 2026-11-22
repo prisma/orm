@@ -1,8 +1,12 @@
-import type { ExpectedField, ExpectedModel, ReferentialAction } from '../models/better-auth-models';
+import type {
+  BetterAuthField,
+  BetterAuthModel,
+  ReferentialAction,
+} from '../models/better-auth-models';
 import { lowerFirst, upperFirst } from '../models/identifiers';
 import type { FoundModel } from '../models/model-lookup';
 import type { ComparedModel, ContractComparison } from './compare';
-import { idFieldOf, pslTypeOf } from './compare';
+import { idFieldOf, pslTypeOf } from './psl-types';
 
 /** One field line, as its columns: name, type, then attributes when there are any. */
 type FieldLine = readonly [name: string, type: string, attributes?: string | undefined];
@@ -21,7 +25,7 @@ export interface PrintedPsl {
   readonly text: string;
 }
 
-interface Target {
+interface PrintedModel {
   readonly name: string;
   readonly namespaceId: string;
   readonly existing: boolean;
@@ -39,7 +43,10 @@ const actionNames: Readonly<Record<ReferentialAction, string>> = {
   'set default': 'SetDefault',
 };
 
-function existingTarget(found: FoundModel, betterAuthFields: readonly string[]): Target {
+function existingPrintedModel(
+  found: FoundModel,
+  betterAuthFields: readonly string[],
+): PrintedModel {
   return {
     name: found.name,
     namespaceId: found.namespaceId,
@@ -55,7 +62,10 @@ function existingTarget(found: FoundModel, betterAuthFields: readonly string[]):
   };
 }
 
-function targetFor(model: ComparedModel, comparison: ContractComparison): Target | undefined {
+function printedModelFor(
+  model: ComparedModel,
+  comparison: ContractComparison,
+): PrintedModel | undefined {
   const betterAuthFields = ['id', ...model.expected.fields.map((field) => field.name)];
   switch (model.status) {
     case 'missing':
@@ -69,17 +79,17 @@ function targetFor(model: ComparedModel, comparison: ContractComparison): Target
         attributes: [],
       };
     case 'found':
-      return existingTarget(model.found, betterAuthFields);
+      return existingPrintedModel(model.found, betterAuthFields);
     case 'ambiguous':
       return undefined;
   }
 }
 
-function typeName(of: Target, from: Target): string {
+function typeName(of: PrintedModel, from: PrintedModel): string {
   return of.namespaceId === from.namespaceId ? of.name : `${of.namespaceId}.${of.name}`;
 }
 
-function scalarLine(field: ExpectedField, comparison: ContractComparison): FieldLine {
+function scalarLine(field: BetterAuthField, comparison: ContractComparison): FieldLine {
   const optional = field.attribute.required === false ? '?' : '';
   const type = `${pslTypeOf(field.attribute, comparison.idStrategy)}${optional}`;
   return field.attribute.unique === true ? [field.name, type, '@unique'] : [field.name, type];
@@ -90,24 +100,24 @@ function idLine(comparison: ContractComparison): FieldLine {
   return [name, type, attributes];
 }
 
-function freeName(name: string, target: Target): string {
+function freeName(name: string, printed: PrintedModel): string {
   let free = name;
-  while (target.taken.has(free)) free = `${free}_`;
+  while (printed.taken.has(free)) free = `${free}_`;
   return free;
 }
 
-function relationFieldName(foreignKey: string, holder: Target): string {
+function relationFieldName(foreignKey: string, holder: PrintedModel): string {
   const stripped = foreignKey.endsWith('Id') ? foreignKey.slice(0, -2) : foreignKey;
   return stripped === '' || stripped === foreignKey || holder.taken.has(stripped)
     ? freeName(`${foreignKey}Relation`, holder)
     : stripped;
 }
 
-function foreignKeyCount(expected: ExpectedModel, referenced: string): number {
+function foreignKeyCount(expected: BetterAuthModel, referenced: string): number {
   return expected.fields.filter((field) => field.reference?.model === referenced).length;
 }
 
-function indexLines(expected: ExpectedModel): string[] {
+function indexLines(expected: BetterAuthModel): string[] {
   const lines = [
     ...expected.fields
       .filter((field) => field.attribute.index === true && field.attribute.unique !== true)
@@ -165,18 +175,18 @@ function renderBlocks(blocks: readonly PrintedBlock[], namespace: string | undef
  * The PSL that adds what the comparison found missing: whole models for missing models, and the missing fields and new back-relation fields of existing models.
  */
 export function printPsl(comparison: ContractComparison): PrintedPsl {
-  const targets = new Map<string, Target>();
+  const printedModels = new Map<string, PrintedModel>();
   for (const model of comparison.models) {
-    const target = targetFor(model, comparison);
-    if (target !== undefined) targets.set(model.expected.physicalName, target);
+    const printed = printedModelFor(model, comparison);
+    if (printed !== undefined) printedModels.set(model.expected.physicalName, printed);
   }
   for (const [physicalName, found] of comparison.referencedModels) {
-    targets.set(physicalName, existingTarget(found, []));
+    printedModels.set(physicalName, existingPrintedModel(found, []));
   }
   const notes: string[] = [];
 
   for (const model of comparison.models) {
-    const holder = targets.get(model.expected.physicalName);
+    const holder = printedModels.get(model.expected.physicalName);
     if (holder === undefined) continue;
     if (model.status === 'found') {
       for (const name of model.missingFields) {
@@ -192,7 +202,7 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
       holder.fields.push(scalarLine(field, comparison));
       const reference = field.reference;
       if (reference === undefined) continue;
-      const referenced = targets.get(reference.model);
+      const referenced = printedModels.get(reference.model);
       const optional = field.attribute.required === false;
 
       let action = reference.onDelete;
@@ -243,14 +253,14 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
   }
 
   const blocks: PrintedBlock[] = [];
-  for (const target of targets.values()) {
-    const lines = [...target.fields, ...target.backRelations];
+  for (const printed of printedModels.values()) {
+    const lines = [...printed.fields, ...printed.backRelations];
     if (lines.length === 0) continue;
     blocks.push({
-      modelName: target.name,
-      existing: target.existing,
+      modelName: printed.name,
+      existing: printed.existing,
       fieldLines: alignedLines(lines),
-      attributeLines: target.attributes,
+      attributeLines: printed.attributes,
     });
   }
   return { blocks, notes, text: renderBlocks(blocks, comparison.namespace) };

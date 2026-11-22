@@ -1,7 +1,12 @@
 import type { BetterAuthOptions } from '@better-auth/core';
 import { getAuthTables } from '@better-auth/core/db';
-import { type ContractComparison, compareContract } from '../../src/contract/compare';
+import {
+  type ContractComparison,
+  type ContractProblem,
+  compareContract,
+} from '../../src/contract/compare';
 import { type PrintedPsl, printPsl } from '../../src/contract/print-psl';
+import { idLineOf, pslTypeOf } from '../../src/contract/psl-types';
 import type { SqlContract } from '../../src/models/model-lookup';
 
 export interface AdapterOptionsForComparison {
@@ -58,4 +63,21 @@ export function addPrintedPsl(basePsl: string, printed: PrintedPsl): string {
     );
   }
   return added.trim() === '' ? result : `${result}\n${added}\n`;
+}
+
+/**
+ * The comparison's problems, with a wrong type's Better Auth field shown as the PSL type the message asks for, so tests read as the message does.
+ */
+export function problemsOf(comparison: ContractComparison): unknown[] {
+  return comparison.problems.map((problem: ContractProblem) => {
+    if (problem.kind !== 'wrong-type') return problem;
+    const { attribute, ...rest } = problem;
+    return {
+      ...rest,
+      expectedType:
+        attribute === undefined
+          ? idLineOf(comparison.idStrategy)
+          : pslTypeOf(attribute, comparison.idStrategy),
+    };
+  });
 }

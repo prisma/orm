@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { compareContract } from '../../src/contract/compare';
 import { useContractFixture } from '../helpers/contract-fixture';
 import { type TargetName, targets } from '../helpers/databases';
-import { compare, pslForConfiguration } from '../helpers/printed-psl';
+import { compare, problemsOf, pslForConfiguration } from '../helpers/printed-psl';
 
 const fixture = useContractFixture();
 const emptyContract = (target: TargetName) => fixture().emptyContract(target);
@@ -34,8 +34,8 @@ describe.each(targets)('the comparison on %s', (target) => {
         target,
         pslForConfiguration(emptyContract(target), {}, { usePlural: true }),
       );
-      expect(compare(contract, {}, { usePlural: true }).problems).toEqual([]);
-      expect(compare(contract, {}).problems).toEqual([
+      expect(problemsOf(compare(contract, {}, { usePlural: true }))).toEqual([]);
+      expect(problemsOf(compare(contract, {}))).toEqual([
         { kind: 'missing-model', model: 'user' },
         { kind: 'missing-model', model: 'session' },
         { kind: 'missing-model', model: 'account' },
@@ -54,7 +54,7 @@ describe.each(targets)('the comparison on %s', (target) => {
         ],
       };
       expect(getAuthTables(options)['legacy']).toBeDefined();
-      expect(compare(contract, options).problems).toEqual([]);
+      expect(problemsOf(compare(contract, options))).toEqual([]);
     });
 
     it('leaves out the session table when sessions live in secondary storage', async () => {
@@ -71,13 +71,15 @@ describe.each(targets)('the comparison on %s', (target) => {
       };
       const tables = getAuthTables({});
       const compareWith = (betterAuthOptions: BetterAuthOptions) =>
-        compareContract({
-          contract,
-          tables,
-          betterAuthOptions,
-          namespace: undefined,
-          usePlural: false,
-        }).problems;
+        problemsOf(
+          compareContract({
+            contract,
+            tables,
+            betterAuthOptions,
+            namespace: undefined,
+            usePlural: false,
+          }),
+        );
 
       expect(tables['session']).toBeDefined();
       expect(compareWith({ secondaryStorage })).toEqual([]);
@@ -105,11 +107,22 @@ describe.each(targets)('the comparison on %s', (target) => {
           },
         ],
       };
-      expect(compare(contract, options).problems).toEqual([]);
+      expect(problemsOf(compare(contract, options))).toEqual([]);
     });
   });
 
   describe('the problems it reports', () => {
+    it('a name that is not an identifier, as the only problem', async () => {
+      const contract = await contractOf(target, editedPsl(target, {}));
+      expect(problemsOf(compare(contract, { user: { fields: { email: 'e-mail' } } }))).toEqual([
+        {
+          kind: 'invalid-name',
+          message:
+            'Better Auth\'s field name "e-mail" of model "user" is not a valid Prisma field name: use letters, digits and "_", not starting with a digit. Rename the field with Better Auth\'s "fields" option.',
+        },
+      ]);
+    });
+
     it('a missing field and a missing id', async () => {
       const contract = await contractOf(
         target,
@@ -118,7 +131,7 @@ describe.each(targets)('the comparison on %s', (target) => {
           [/(model Verification \{\n {2})id(\s+String\s+@id)/, '$1uid$2'],
         ]),
       );
-      expect(compare(contract, {}).problems).toEqual([
+      expect(problemsOf(compare(contract, {}))).toEqual([
         { kind: 'missing-field', model: 'User', field: 'image' },
         { kind: 'missing-field', model: 'Verification', field: 'id' },
         { kind: 'required-field-not-written', model: 'Verification', field: 'uid' },
@@ -130,7 +143,7 @@ describe.each(targets)('the comparison on %s', (target) => {
         target,
         editedPsl(target, {}, [[/emailVerified Boolean/, 'emailVerified String ']]),
       );
-      expect(compare(contract, {}).problems).toEqual([
+      expect(problemsOf(compare(contract, {}))).toEqual([
         {
           kind: 'wrong-type',
           model: 'User',
@@ -149,7 +162,7 @@ describe.each(targets)('the comparison on %s', (target) => {
           [/(model User \{\n\s+id\s+Int\s+@id) @default\(autoincrement\(\)\)/, '$1'],
         ]),
       );
-      expect(compare(withoutDefault, serial).problems).toEqual([
+      expect(problemsOf(compare(withoutDefault, serial))).toEqual([
         { kind: 'id-without-default', model: 'User' },
       ]);
 
@@ -160,10 +173,10 @@ describe.each(targets)('the comparison on %s', (target) => {
           [/(model User \{\n\s+id\s+String\s+@id) @onCreate\(uuid\(\)\)/, '$1'],
         ]),
       );
-      expect(compare(withoutGenerator, databaseIds).problems).toEqual([
+      expect(problemsOf(compare(withoutGenerator, databaseIds))).toEqual([
         { kind: 'id-without-default', model: 'User' },
       ]);
-      expect(compare(withoutGenerator, {}).problems).toEqual([]);
+      expect(problemsOf(compare(withoutGenerator, {}))).toEqual([]);
     });
 
     describe('a required field Better Auth never writes', () => {
@@ -172,7 +185,7 @@ describe.each(targets)('the comparison on %s', (target) => {
           target,
           editedPsl(target, {}, [[/(model User \{\n)/, `$1  ${extraField}\n`]]),
         );
-        return compare(contract, {}).problems;
+        return problemsOf(compare(contract, {}));
       }
 
       it('is reported', async () => {
@@ -211,8 +224,8 @@ describe('the comparison on postgres namespaces', () => {
       'postgres',
       `${authModels}\nmodel User {\n  id       String @id\n  nickname String\n}\n`,
     );
-    expect(compare(contract, {}, { namespace: 'auth' }).problems).toEqual([]);
-    expect(compare(contract, {}, { namespace: 'public' }).problems).toEqual([
+    expect(problemsOf(compare(contract, {}, { namespace: 'auth' }))).toEqual([]);
+    expect(problemsOf(compare(contract, {}, { namespace: 'public' }))).toEqual([
       { kind: 'missing-field', model: 'User', field: 'name' },
       { kind: 'missing-field', model: 'User', field: 'email' },
       { kind: 'missing-field', model: 'User', field: 'emailVerified' },
@@ -232,11 +245,11 @@ describe('the comparison on postgres namespaces', () => {
       'postgres',
       `${authModels}\nmodel User {\n  id String @id\n}\n`,
     );
-    expect(compare(contract, {}).problems).toEqual([
+    expect(problemsOf(compare(contract, {}))).toEqual([
       {
         kind: 'ambiguous-model',
-        message:
-          'Model "User" is in more than one namespace of your Prisma contract (auth, public). Set the adapter\'s "namespace" option.',
+        model: 'User',
+        namespaceIds: ['auth', 'public'],
       },
     ]);
   });

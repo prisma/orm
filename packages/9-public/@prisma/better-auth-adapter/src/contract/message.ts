@@ -1,5 +1,7 @@
-import { type ContractComparison, idLineOf } from './compare';
+import { ambiguousModelMessage } from '../models/model-lookup';
+import type { ContractComparison } from './compare';
 import { printPsl } from './print-psl';
+import { idLineOf, pslTypeOf } from './psl-types';
 
 function section(title: string, lines: readonly string[]): string[] {
   return lines.length === 0 ? [] : [`${title}:`, '', ...lines.map((line) => `  ${line}`), ''];
@@ -11,18 +13,18 @@ function changeLines(comparison: ContractComparison): string[] {
   for (const problem of comparison.problems) {
     switch (problem.kind) {
       case 'ambiguous-model':
-        lines.push(problem.message);
+        lines.push(ambiguousModelMessage(problem.model, problem.namespaceIds));
         break;
       case 'id-without-default':
       case 'wrong-type':
-        if (problem.kind === 'id-without-default' || problem.field === 'id') {
+        if (problem.kind === 'id-without-default' || problem.attribute === undefined) {
           if (idLinesPrinted.has(problem.model)) break;
           idLinesPrinted.add(problem.model);
           lines.push(`${problem.model}.id: must be \`${idLineOf(comparison.idStrategy)}\``);
           break;
         }
         lines.push(
-          `${problem.model}.${problem.field}: must be \`${problem.expectedType}\` (found ${problem.found})`,
+          `${problem.model}.${problem.field}: must be \`${pslTypeOf(problem.attribute, comparison.idStrategy)}\` (found ${problem.found})`,
         );
         break;
     }
@@ -43,6 +45,10 @@ function unwrittenLines(comparison: ContractComparison): string[] {
  */
 export function contractMessage(comparison: ContractComparison): string | undefined {
   if (comparison.problems.length === 0) return undefined;
+  const invalidNames = comparison.problems.flatMap((problem) =>
+    problem.kind === 'invalid-name' ? [problem.message] : [],
+  );
+  if (invalidNames.length > 0) return invalidNames.join('\n');
   const psl = printPsl(comparison);
   const additions = psl.text === '' ? [] : ['Add to your contract:', '', psl.text, ''];
   const heading =

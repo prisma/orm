@@ -80,8 +80,8 @@ describe('findModel', () => {
   it('reports a name found in more than one namespace', () => {
     expect(findModel(postgresContract, 'session', undefined)).toEqual({
       kind: 'ambiguous',
-      message:
-        'Model "Session" is in more than one namespace of your Prisma contract (auth, public). Set the adapter\'s "namespace" option.',
+      name: 'Session',
+      namespaceIds: ['auth', 'public'],
     });
   });
 
@@ -92,9 +92,5 @@ describe('findModel', () => {
     });
     expect(findModel(postgresContract, 'account', 'public')).toEqual({ kind: 'missing' });
     expect(findModel(postgresContract, 'account', 'elsewhere')).toEqual({ kind: 'missing' });
-  });
-
-  it('refuses a model name that is not an identifier', () => {
-    expect(() => findModel(sqliteContract, 'user-table', undefined)).toThrow(/"modelName"/);
   });
 });

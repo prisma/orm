@@ -5,35 +5,41 @@ import type { SqlModelStorage } from '@prisma/orm-family-sql/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@prisma/orm-framework/contract/default-namespace';
 import type { ContractField, ContractModelBase } from '@prisma/orm-framework/contract/types';
 import {
-  checkedModels,
-  type ExpectedField,
-  type ExpectedModel,
+  type BetterAuthField,
+  type BetterAuthModel,
+  managedModels,
 } from '../models/better-auth-models';
+import { describeFieldType } from '../models/field-type';
+import { invalidFieldNameMessage, invalidModelNameMessage } from '../models/identifiers';
 import { type FoundModel, findModel, type SqlContract } from '../models/model-lookup';
 import { type CodecKind, codecKind } from './codec-kinds';
-
-/** How `id` gets its value: Better Auth sends a string (`string`) or a UUID string (`uuid`), or sends none and the contract fills it (`serial`, an autoincrement number; `database`, a default or an `onCreate` generator). */
-export type IdStrategy = 'string' | 'uuid' | 'serial' | 'database';
+import { type IdStrategy, idStrategyOf, isIdReference } from './psl-types';
 
 export type ComparedModel =
-  | { readonly status: 'missing'; readonly expected: ExpectedModel }
-  | { readonly status: 'ambiguous'; readonly expected: ExpectedModel; readonly message: string }
+  | { readonly status: 'missing'; readonly expected: BetterAuthModel }
+  | { readonly status: 'ambiguous'; readonly expected: BetterAuthModel }
   | {
       readonly status: 'found';
-      readonly expected: ExpectedModel;
+      readonly expected: BetterAuthModel;
       readonly found: FoundModel;
       readonly missingFields: readonly string[];
     };
 
 export type ContractProblem =
+  | { readonly kind: 'invalid-name'; readonly message: string }
   | { readonly kind: 'missing-model'; readonly model: string }
-  | { readonly kind: 'ambiguous-model'; readonly message: string }
+  | {
+      readonly kind: 'ambiguous-model';
+      readonly model: string;
+      readonly namespaceIds: readonly string[];
+    }
   | { readonly kind: 'missing-field'; readonly model: string; readonly field: string }
   | {
       readonly kind: 'wrong-type';
       readonly model: string;
       readonly field: string;
-      readonly expectedType: string;
+      /** Better Auth's description of the field, or `undefined` for `id`. */
+      readonly attribute: DBFieldAttribute | undefined;
       readonly found: string;
     }
   | { readonly kind: 'id-without-default'; readonly model: string }
@@ -50,7 +56,7 @@ export interface ContractComparison {
   readonly referencedModels: ReadonlyMap<string, FoundModel>;
 }
 
-export interface CompareContractInput {
+export interface ComparisonInput {
   readonly contract: SqlContract;
   readonly tables: BetterAuthDBSchema;
   readonly betterAuthOptions: BetterAuthOptions;
@@ -62,24 +68,12 @@ const acceptedKindsByIdStrategy: Readonly<Record<IdStrategy, readonly CodecKind[
   serial: ['number'],
   uuid: ['string', 'uuid'],
   string: ['string'],
-  database: ['string'],
+  contract: ['string'],
 };
 
 const defaultNamespaceByTarget: Readonly<Record<string, string>> = {
   postgres: 'public',
 };
-
-function idStrategyOf(options: BetterAuthOptions): IdStrategy {
-  const generateId = options.advanced?.database?.generateId;
-  if (generateId === 'serial') return 'serial';
-  if (generateId === 'uuid') return 'uuid';
-  if (generateId === false) return 'database';
-  return 'string';
-}
-
-function isIdReference(attribute: DBFieldAttribute): boolean {
-  return attribute.references?.field === 'id';
-}
 
 function acceptedKinds(attribute: DBFieldAttribute, idStrategy: IdStrategy): readonly CodecKind[] {
   if (isIdReference(attribute)) return acceptedKindsByIdStrategy[idStrategy];
@@ -95,55 +89,11 @@ function acceptedKinds(attribute: DBFieldAttribute, idStrategy: IdStrategy): rea
   }
 }
 
-export function pslTypeOf(attribute: DBFieldAttribute, idStrategy: IdStrategy): string {
-  if (isIdReference(attribute)) return idStrategy === 'serial' ? 'Int' : 'String';
-  switch (attribute.type) {
-    case 'number':
-      return attribute.bigint === true ? 'BigInt(as: number)' : 'Int';
-    case 'boolean':
-      return 'Boolean';
-    case 'date':
-      return 'DateTime';
-    default:
-      return 'String';
-  }
-}
-
-export interface IdField {
-  readonly name: 'id';
-  readonly type: string;
-  readonly attributes: string;
-}
-
-export function idFieldOf(idStrategy: IdStrategy): IdField {
-  switch (idStrategy) {
-    case 'serial':
-      return { name: 'id', type: 'Int', attributes: '@id @default(autoincrement())' };
-    case 'database':
-      return { name: 'id', type: 'String', attributes: '@id @onCreate(uuid())' };
-    default:
-      return { name: 'id', type: 'String', attributes: '@id' };
-  }
-}
-
-export function idLineOf(idStrategy: IdStrategy): string {
-  const { name, type, attributes } = idFieldOf(idStrategy);
-  return `${name} ${type} ${attributes}`;
-}
-
-/** What a contract field holds, as the message names it, when its type is wrong for every Better Auth field. */
-function unusableShape(field: ContractField): string | undefined {
-  if (field.type.kind === 'valueObject') return 'a value object';
-  if (field.type.kind === 'union') return 'a union';
-  if (field.many) return `${field.type.codecId} list`;
-  return undefined;
-}
-
+/** The description of a contract field whose type Better Auth cannot use, or `undefined` when it can. */
 function wrongTypeFound(field: ContractField, accepted: readonly CodecKind[]): string | undefined {
-  const shape = unusableShape(field);
-  if (shape !== undefined || field.type.kind !== 'scalar') return shape;
+  if (field.type.kind !== 'scalar' || field.many) return describeFieldType(field);
   const kind = codecKind(field.type.codecId);
-  return kind === undefined || accepted.includes(kind) ? undefined : field.type.codecId;
+  return kind === undefined || accepted.includes(kind) ? undefined : describeFieldType(field);
 }
 
 function isSqlModelStorage(storage: ContractModelBase['storage']): storage is SqlModelStorage {
@@ -176,7 +126,7 @@ function columnFacts(contract: SqlContract, found: FoundModel, field: string): C
 
 function compareFoundModel(
   contract: SqlContract,
-  expected: ExpectedModel,
+  expected: BetterAuthModel,
   found: FoundModel,
   idStrategy: IdStrategy,
   problems: ContractProblem[],
@@ -195,12 +145,12 @@ function compareFoundModel(
         kind: 'wrong-type',
         model,
         field: 'id',
-        expectedType: idLineOf(idStrategy),
+        attribute: undefined,
         found: wrong,
       });
     }
     const facts = columnFacts(contract, found, 'id');
-    const betterAuthSendsNoId = idStrategy === 'serial' || idStrategy === 'database';
+    const betterAuthSendsNoId = idStrategy === 'serial' || idStrategy === 'contract';
     if (betterAuthSendsNoId && !facts.hasDatabaseDefault && !facts.hasCreateGenerator) {
       problems.push({ kind: 'id-without-default', model });
     }
@@ -218,7 +168,7 @@ function compareFoundModel(
         kind: 'wrong-type',
         model,
         field: field.name,
-        expectedType: pslTypeOf(field.attribute, idStrategy),
+        attribute: field.attribute,
         found: wrong,
       });
     }
@@ -227,7 +177,7 @@ function compareFoundModel(
     problems.push({ kind: 'missing-field', model, field });
   }
 
-  const written = new Set(['id', ...expected.fields.map((field: ExpectedField) => field.name)]);
+  const written = new Set(['id', ...expected.fields.map((field: BetterAuthField) => field.name)]);
   for (const [name, field] of Object.entries(fields)) {
     if (written.has(name) || field.nullable) continue;
     const facts = columnFacts(contract, found, name);
@@ -238,15 +188,39 @@ function compareFoundModel(
   return missingFields;
 }
 
+/** A model or field name that is not a Prisma identifier can be neither matched nor printed, so it is the only problem reported. */
+function invalidNameProblems(models: readonly BetterAuthModel[]): ContractProblem[] {
+  return models.flatMap((model) =>
+    [
+      invalidModelNameMessage(model.physicalName),
+      ...model.fields.map((field) => invalidFieldNameMessage(model.physicalName, field.name)),
+    ].flatMap((message): ContractProblem[] =>
+      message === undefined ? [] : [{ kind: 'invalid-name', message }],
+    ),
+  );
+}
+
 /**
  * Compares the contract with the models and fields Better Auth's table description asks for. The contract check and `auth generate` both use it.
  */
-export function compareContract(input: CompareContractInput): ContractComparison {
+export function compareContract(input: ComparisonInput): ContractComparison {
   const { contract, betterAuthOptions, namespace } = input;
   const idStrategy = idStrategyOf(betterAuthOptions);
+  const defaultNamespace = defaultNamespaceByTarget[contract.target] ?? UNBOUND_DOMAIN_NAMESPACE_ID;
+  const expectedModelList = managedModels(input.tables, input);
+  const invalidNames = invalidNameProblems(expectedModelList);
+  if (invalidNames.length > 0) {
+    return {
+      models: [],
+      problems: invalidNames,
+      referencedModels: new Map(),
+      idStrategy,
+      namespace,
+      defaultNamespace,
+    };
+  }
   const problems: ContractProblem[] = [];
   const models: ComparedModel[] = [];
-  const expectedModelList = checkedModels(input.tables, input);
   for (const expected of expectedModelList) {
     const lookup = findModel(contract, expected.physicalName, namespace);
     switch (lookup.kind) {
@@ -255,8 +229,12 @@ export function compareContract(input: CompareContractInput): ContractComparison
         models.push({ status: 'missing', expected });
         break;
       case 'ambiguous':
-        problems.push({ kind: 'ambiguous-model', message: lookup.message });
-        models.push({ status: 'ambiguous', expected, message: lookup.message });
+        problems.push({
+          kind: 'ambiguous-model',
+          model: lookup.name,
+          namespaceIds: lookup.namespaceIds,
+        });
+        models.push({ status: 'ambiguous', expected });
         break;
       case 'found': {
         const missingFields = compareFoundModel(contract, expected, lookup, idStrategy, problems);
@@ -280,6 +258,6 @@ export function compareContract(input: CompareContractInput): ContractComparison
     referencedModels,
     idStrategy,
     namespace,
-    defaultNamespace: defaultNamespaceByTarget[contract.target] ?? UNBOUND_DOMAIN_NAMESPACE_ID,
+    defaultNamespace,
   };
 }

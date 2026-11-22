@@ -17,6 +17,7 @@ import {
   type AdapterOptionsForComparison,
   addPrintedPsl,
   compare,
+  problemsOf,
   pslForConfiguration,
 } from '../helpers/printed-psl';
 import { timeouts } from '../timeouts';
@@ -52,7 +53,7 @@ async function emitAndApply(
     await resetPostgres(server.url);
     await applyContract(target, emitted.json, server.url, fixture().workDir);
   }
-  expect(compare(emitted.contract, betterAuthOptions, adapterOptions).problems).toEqual([]);
+  expect(problemsOf(compare(emitted.contract, betterAuthOptions, adapterOptions))).toEqual([]);
   return emitted;
 }
 
