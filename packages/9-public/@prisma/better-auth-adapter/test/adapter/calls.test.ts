@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from '@better-auth/core';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { type PrismaAdapterOptions, prismaAdapter } from '../../src/exports/index';
 import {
   type AdapterDatabases,
@@ -258,14 +258,11 @@ describe('refused comparisons on postgres', () => {
 });
 
 describe.each(targets)('joins on %s', (target) => {
-  it('returns the joined rows when the contract declares no relation', async () => {
-    const withoutRelations = pslForConfiguration(databases.emptyContract(target), {})
-      .split('\n')
-      .filter((line) => !line.includes('@relation(') && !/\[\]$/.test(line))
-      .join('\n');
-    const client = await databases.open(target, withoutRelations);
-    const options: BetterAuthOptions = { advanced: { database: { joins: true } } };
-    const adapter = prismaAdapter(client)(options);
+  const joinOptions: BetterAuthOptions = { advanced: { database: { joins: true } } };
+
+  async function userWithSessions(psl: string) {
+    const client = await databases.open(target, psl);
+    const adapter = prismaAdapter(client)(joinOptions);
     const user = await adapter.create<{ id: string }>({
       model: 'user',
       data: {
@@ -276,23 +273,79 @@ describe.each(targets)('joins on %s', (target) => {
         updatedAt: new Date(),
       },
     });
-    const session = await adapter.create<{ id: string }>({
+    const sessions: { id: string }[] = [];
+    for (const token of ['first-token', 'second-token']) {
+      sessions.push(
+        await adapter.create<{ id: string }>({
+          model: 'session',
+          data: {
+            token,
+            userId: user.id,
+            expiresAt: new Date(Date.now() + 60_000),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        }),
+      );
+    }
+    return { client, user, sessions };
+  }
+
+  const queries = (calls: readonly string[]) =>
+    calls.filter((call) => call === 'first' || call === 'all');
+
+  it('serves a join with include, in one query, when the contract declares the relation', async () => {
+    const { client, user, sessions } = await userWithSessions(
+      pslForConfiguration(databases.emptyContract(target), {}),
+    );
+
+    const toOne = recordingClient(client);
+    const session = await prismaAdapter(toOne.client)(joinOptions).findOne({
       model: 'session',
-      data: {
-        token: 'join-token',
-        userId: user.id,
-        expiresAt: new Date(Date.now() + 60_000),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-    const { client: recorded, recording } = recordingClient(client);
-    const joined = await prismaAdapter(recorded)(options).findOne({
-      model: 'session',
-      where: [{ field: 'id', value: session.id }],
+      where: [{ field: 'id', value: sessions[0]?.id ?? '' }],
       join: { user: true },
     });
-    expect(joined).toMatchObject({ id: session.id, user: { id: user.id, name: 'Ada' } });
-    expect(recording.calls).not.toContain('include');
+    expect(session).toMatchObject({ user: { id: user.id, name: 'Ada' } });
+    expect(toOne.recording.calls.filter((call) => call === 'include')).toHaveLength(1);
+    expect(queries(toOne.recording.calls)).toEqual(['first']);
+
+    const toMany = recordingClient(client);
+    const users = await prismaAdapter(toMany.client)(joinOptions).findMany<{
+      session: { id: string }[];
+    }>({ model: 'user', where: [{ field: 'id', value: user.id }], join: { session: true } });
+    expect(users[0]?.session.map((row) => row.id).sort()).toEqual(
+      sessions.map((row) => row.id).sort(),
+    );
+    expect(toMany.recording.calls.filter((call) => call === 'include')).toHaveLength(1);
+    expect(queries(toMany.recording.calls)).toEqual(['all']);
+  });
+
+  it('leaves a join to Better Auth, and logs it, when the contract declares no relation', async () => {
+    const withoutRelations = pslForConfiguration(databases.emptyContract(target), {})
+      .split('\n')
+      .filter((line) => !line.includes('@relation(') && !/\[\]$/.test(line))
+      .join('\n');
+    const { client, user, sessions } = await userWithSessions(withoutRelations);
+    const logged: string[] = [];
+    const spies = (['log', 'info'] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation((...args: unknown[]) => {
+        logged.push(args.map(String).join(' '));
+      }),
+    );
+    try {
+      const { client: recorded, recording } = recordingClient(client);
+      const joined = await prismaAdapter(recorded, { debugLogs: true })(joinOptions).findOne({
+        model: 'session',
+        where: [{ field: 'id', value: sessions[0]?.id ?? '' }],
+        join: { user: true },
+      });
+      expect(joined).toMatchObject({ user: { id: user.id, name: 'Ada' } });
+      expect(recording.calls).not.toContain('include');
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+    expect(logged.join('\n')).toContain(
+      'Join of "user" on "Session" runs as separate queries: the contract declares no relation from Session.userId to user.id. Declare the relation to join in one query.',
+    );
   });
 });
