@@ -626,7 +626,7 @@ const NO_MIGRATIONS: PlanSpace = { graph: reconstructGraph([]), refs: {} };
 function storageHashOf(contractJson: Record<string, unknown>): string | undefined {
   const storage = contractJson['storage'];
   if (typeof storage !== 'object' || storage === null) return undefined;
-  const hash = (storage as Record<string, unknown>)['storageHash'];
+  const hash = 'storageHash' in storage ? storage.storageHash : undefined;
   return typeof hash === 'string' ? hash : undefined;
 }
 
