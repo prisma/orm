@@ -11,6 +11,7 @@ import {
 } from '@better-auth/core/db/adapter';
 import { BetterAuthError } from '@better-auth/core/error';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
+import { betterAuthModels } from './contract/expected-models';
 import { assertFieldName } from './contract/identifiers';
 import type { FoundModel, SqlContract } from './contract/model-lookup';
 import { fieldOf, unsupportedError, whereFilter } from './filters';
@@ -46,15 +47,18 @@ function assertClient(db: PrismaClientLike, options: PrismaAdapterOptions): void
   }
 }
 
-function betterAuthFieldNames(schema: BetterAuthDBSchema, modelKey: string): string[] {
-  const table = schema[modelKey];
-  if (table === undefined) return [];
-  return [
-    'id',
-    ...Object.entries(table.fields)
-      .map(([key, field]) => field.fieldName || key)
-      .filter((name) => name !== 'id'),
-  ];
+/** For each physical model name, the fields a read without `select` returns: `id` and every field of Better Auth's table description. */
+function defaultSelections(
+  schema: BetterAuthDBSchema,
+  betterAuthOptions: BetterAuthOptions,
+  usePlural: boolean,
+): ReadonlyMap<string, readonly string[]> {
+  return new Map(
+    betterAuthModels(schema, { betterAuthOptions, usePlural }).map((model) => [
+      model.physicalName,
+      ['id', ...model.fields.map((field) => field.name)],
+    ]),
+  );
 }
 
 function rowCount(result: Record<string, unknown>): number {
@@ -103,18 +107,23 @@ function asCustomAdapter(adapter: RowAdapter): CustomAdapter {
 }
 
 /** The calls Better Auth's factory makes, over one ORM client root: the client's or a transaction's. */
-function customAdapter(orm: object, lookups: ModelLookups): AdapterFactoryCustomizeAdapterCreator {
-  return ({ schema, getFieldName, getDefaultModelName, debugLog }) => {
+function customAdapter(
+  orm: object,
+  lookups: ModelLookups,
+  usePlural: boolean,
+): AdapterFactoryCustomizeAdapterCreator {
+  return ({ schema, options, getFieldName, debugLog }) => {
+    const selections = defaultSelections(schema, options, usePlural);
     const target = (model: string): { found: FoundModel; collection: OrmCollection } => {
       const found = lookups.model(model);
       return { found, collection: lookups.collection(orm, found) };
     };
 
-    const selected = (model: string, select: readonly string[] | undefined): string[] => {
+    const selected = (model: string, select: readonly string[] | undefined): readonly string[] => {
       const fields =
         select !== undefined && select.length > 0
           ? select.map((field) => getFieldName({ model, field }))
-          : betterAuthFieldNames(schema, getDefaultModelName(model));
+          : (selections.get(model) ?? ['id']);
       for (const field of fields) assertFieldName(model, field);
       return fields;
     };
@@ -222,14 +231,14 @@ export function prismaAdapter(
               callback(
                 createAdapterFactory({
                   config: factoryConfig(options, false),
-                  adapter: customAdapter(tx.orm, lookups),
+                  adapter: customAdapter(tx.orm, lookups, options.usePlural ?? false),
                 })(betterAuthOptions),
               ),
             )
         : false;
     return createAdapterFactory({
       config: factoryConfig(options, transaction),
-      adapter: customAdapter(db.orm, lookups),
+      adapter: customAdapter(db.orm, lookups, options.usePlural ?? false),
     })(betterAuthOptions);
   };
 }

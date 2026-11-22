@@ -23,11 +23,13 @@ export interface ExpectedIndex {
   readonly unique: boolean;
 }
 
-/** A model Better Auth needs, after `usePlural`, omitted tables and merged tables. Its fields do not include `id`. */
+/** A model Better Auth calls, after `usePlural` and with tables that share a physical name merged. Its fields do not include `id`. */
 export interface ExpectedModel {
   readonly physicalName: string;
   readonly fields: readonly ExpectedField[];
   readonly indexes: readonly ExpectedIndex[];
+  /** False when every table merged into it is left out of schema work: `disableMigrations`, or sessions kept in secondary storage. */
+  readonly checked: boolean;
 }
 
 export interface ExpectedModelsOptions {
@@ -40,6 +42,7 @@ type Table = BetterAuthDBSchema[string];
 interface MergedModel {
   readonly fields: Map<string, ExpectedField>;
   readonly indexes: ExpectedIndex[];
+  checked: boolean;
 }
 
 function physicalName(modelName: string, usePlural: boolean): string {
@@ -74,17 +77,21 @@ function resolveReference(
 }
 
 /**
- * The models Better Auth's table description asks for, one per physical model name, in Better Auth's table order.
+ * The models Better Auth's table description names, one per physical model name, in Better Auth's table order. The adapter serves calls for all of them.
  */
-export function expectedModels(
+export function betterAuthModels(
   tables: BetterAuthDBSchema,
   { betterAuthOptions, usePlural }: ExpectedModelsOptions,
 ): ExpectedModel[] {
   const merged = new Map<string, MergedModel>();
   for (const [key, table] of Object.entries(tables)) {
-    if (isOmitted(key, table, betterAuthOptions)) continue;
     const name = physicalName(table.modelName, usePlural);
-    const model: MergedModel = merged.get(name) ?? { fields: new Map(), indexes: [] };
+    const model: MergedModel = merged.get(name) ?? {
+      fields: new Map(),
+      indexes: [],
+      checked: false,
+    };
+    model.checked ||= !isOmitted(key, table, betterAuthOptions);
     merged.set(name, model);
     for (const [fieldKey, attribute] of Object.entries(table.fields)) {
       const fieldName = attribute.fieldName || fieldKey;
@@ -106,9 +113,18 @@ export function expectedModels(
       });
     }
   }
-  return [...merged].map(([name, { fields, indexes }]) => ({
+  return [...merged].map(([name, { fields, indexes, checked }]) => ({
     physicalName: name,
     fields: [...fields.values()],
     indexes,
+    checked,
   }));
+}
+
+/** The models the comparison checks: those `betterAuthModels` marks as checked. */
+export function checkedModels(
+  tables: BetterAuthDBSchema,
+  options: ExpectedModelsOptions,
+): ExpectedModel[] {
+  return betterAuthModels(tables, options).filter((model) => model.checked);
 }

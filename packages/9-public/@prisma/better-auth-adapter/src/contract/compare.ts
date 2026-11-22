@@ -5,7 +5,7 @@ import type { SqlModelStorage } from '@prisma/orm-family-sql/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@prisma/orm-framework/contract/default-namespace';
 import type { ContractField, ContractModelBase } from '@prisma/orm-framework/contract/types';
 import { type CodecKind, codecKind } from './codec-kinds';
-import { type ExpectedField, type ExpectedModel, expectedModels } from './expected-models';
+import { checkedModels, type ExpectedField, type ExpectedModel } from './expected-models';
 import { type FoundModel, findModel, type SqlContract } from './model-lookup';
 
 /** How `id` gets its value: Better Auth sends a string (`string`) or a UUID string (`uuid`), or sends none and the contract fills it (`serial`, an autoincrement number; `database`, a default or an `onCreate` generator). */
@@ -242,7 +242,7 @@ export function compareContract(input: CompareContractInput): ContractComparison
   const idStrategy = idStrategyOf(betterAuthOptions);
   const problems: ContractProblem[] = [];
   const models: ComparedModel[] = [];
-  const expectedModelList = expectedModels(input.tables, input);
+  const expectedModelList = checkedModels(input.tables, input);
   for (const expected of expectedModelList) {
     const lookup = findModel(contract, expected.physicalName, namespace);
     switch (lookup.kind) {
