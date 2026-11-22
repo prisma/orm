@@ -34,7 +34,7 @@ import {
   type PolicySource,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
-import { migrationsLeadToTarget } from './graph-queries';
+import { migrationsLeadToTarget, missingInvariants } from './graph-queries';
 import {
   appMigrationPlan,
   type MigrationPlanArguments,
@@ -149,13 +149,11 @@ function migrationsToTarget(args: {
   const end: PlanEnd =
     ref === undefined ? { kind: 'contract', hash: targetHash } : { kind: 'ref', name: ref.name };
   const marker = markers.get(app.spaceId);
+  const target = { hash: targetHash, invariants: ref?.invariants ?? [] };
   const migrations: MigrationsToTarget =
-    contractHashAtMarker(marker) === targetHash
+    contractHashAtMarker(marker) === targetHash && missingInvariants(marker, target).size === 0
       ? 'none-needed'
-      : migrationsLeadToTarget(app.graph, marker, {
-            hash: targetHash,
-            invariants: ref?.invariants ?? [],
-          })
+      : migrationsLeadToTarget(app.graph, marker, target)
         ? 'on-disk'
         : 'missing';
   return { migrationPlan: appMigrationPlan(app, markers, end), migrations };

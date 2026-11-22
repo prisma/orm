@@ -101,6 +101,24 @@ describe('checkRunPolicies', () => {
     );
   });
 
+  it('advises db migrate when the database is at the ref contract but lacks an invariant a migration on disk provides', () => {
+    const seeds = { ...entry(TARGET, TARGET, 'm3'), invariants: ['seeded'] };
+    expect(
+      recoveryOf(
+        check({
+          command: 'db update',
+          inForce: MIGRATE_ONLY,
+          permitPolicyChange: false,
+          graph: buildGraph([...LEADS_TO_TARGET.migrationByHash.values(), seeds]),
+          markerHash: TARGET,
+          ref: { name: 'production', hash: TARGET, invariants: ['seeded'] },
+        }),
+      ),
+    ).toBe(
+      'The planned migrations already lead there: apply them with `{bin} db migrate --to production`.',
+    );
+  });
+
   it('refuses db update when the database changes only through migrations, naming the marker', () => {
     const result = check({
       command: 'db update',

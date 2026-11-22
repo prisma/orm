@@ -47,6 +47,16 @@ describe('migrationsLeadToTarget', () => {
     );
   });
 
+  it('is true when the database is at the target and a migration that keeps the contract provides an invariant it lacks', () => {
+    const seeds = buildGraph([
+      entry(EMPTY_CONTRACT_HASH, HASH_B, 'm1'),
+      { ...entry(HASH_B, HASH_B, 'm2'), invariants: ['seeded'] },
+    ]);
+    expect(
+      migrationsLeadToTarget(seeds, marker(HASH_B), { hash: HASH_B, invariants: ['seeded'] }),
+    ).toBe(true);
+  });
+
   it('is false when no path provides an invariant the target requires', () => {
     expect(
       migrationsLeadToTarget(graph, marker(HASH_A), {
