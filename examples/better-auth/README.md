@@ -5,7 +5,7 @@ A small Next.js application (App Router) that signs users up and in with [Better
 | File | What it holds |
 | --- | --- |
 | `prisma/contract.prisma` | Better Auth's four models: `User`, `Session`, `Account` and `Verification` |
-| `src/prisma/` | The emitted contract, `contract.json` and `contract.d.ts` |
+| `prisma/contract.json`, `prisma/contract.d.ts` | The emitted contract |
 | `src/lib/db.ts` | The Prisma client, connected with `DATABASE_URL` |
 | `src/lib/auth.ts` | The Better Auth instance, with `prismaAdapter(db)` and email and password sign-in |
 | `src/lib/auth-client.ts` | Better Auth's client for the browser |
@@ -15,13 +15,25 @@ A small Next.js application (App Router) that signs users up and in with [Better
 
 ## Run it
 
-You need Node.js 24 or later and a Postgres database.
+You need Node.js 24 or later and a Postgres database. These steps run the example inside this repository; to use it in your own project, see the next section first.
 
-1. Install the dependencies: `pnpm install`.
-2. Copy `.env.example` to `.env`. Set `DATABASE_URL` to your database's connection string and `BETTER_AUTH_SECRET` to at least 32 random characters, for example the output of `pnpm auth secret`.
-3. Emit the contract: `pnpm emit`. This writes `src/prisma/contract.json` and `src/prisma/contract.d.ts`. They are committed here, so you need this step only after you change `prisma/contract.prisma`.
+1. At the root of the repository, install the dependencies and build the packages: `pnpm install`, then `pnpm build`.
+2. In `examples/better-auth`, copy `.env.example` to `.env`. Set `DATABASE_URL` to your database's connection string and `BETTER_AUTH_SECRET` to at least 32 random characters, for example the output of `pnpm auth secret`.
+3. Emit the contract: `pnpm emit`. This writes `prisma/contract.json` and `prisma/contract.d.ts`. They are committed here, so you need this step only after you change `prisma/contract.prisma`.
 4. Create the tables: `pnpm db:init`, which runs `prisma db init`.
 5. Start the application: `pnpm dev`, then open <http://localhost:3000> and sign up.
+
+Without `DATABASE_URL`, `src/lib/db.ts` stops with `DATABASE_URL is not set` when the application or `pnpm auth` loads it. `next build` is the exception: it loads the file without your environment, so the check is skipped while it runs.
+
+## Using this outside the repository
+
+The application code names only published packages. `package.json` and `tsconfig.json` use this repository's workspace, so in a copy:
+
+- Replace each `workspace:` version (`@prisma/orm-postgres`, `@prisma/better-auth-adapter`) with one published version, the same for both.
+- Replace each `catalog:` version with a version from the registry.
+- Replace `@repo/prisma-bin`, which provides the `prisma` command here, with the `prisma` package and `@prisma/cli-engine` at the version `prisma` declares as its dependency, both as development dependencies. This is what `prisma orm init` installs.
+- Replace `"extends": ["@repo/tsconfig/base"]` in `tsconfig.json` with your own compiler options, for example the ones `create-next-app` writes.
+- Remove `@repo/test-utils`, `@prisma/dev`, `vitest`, `pathe`, `test/` and `vitest.config.ts`, which only the smoke test uses.
 
 ## Add a Better Auth plugin
 
