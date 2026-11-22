@@ -25,11 +25,12 @@ const DESTRUCTIVE_POLICY = {
 interface ContractOptions {
   readonly extraColumn?: string;
   readonly indexedColumn?: string;
+  readonly extraColumnRequired?: boolean;
 }
 
 function contractWithTable(
   tableName: string,
-  { extraColumn, indexedColumn }: ContractOptions = {},
+  { extraColumn, indexedColumn, extraColumnRequired = false }: ContractOptions = {},
 ): Contract<SqlStorage> {
   return {
     target: 'sqlite',
@@ -52,7 +53,7 @@ function contractWithTable(
                         [extraColumn]: {
                           dataType: 'sqlite/text',
                           codecId: 'sqlite/text@1',
-                          nullable: true,
+                          nullable: !extraColumnRequired,
                         },
                       }),
                 },
@@ -142,5 +143,17 @@ describe('SQLite planner with names every object has as a property', () => {
         indexedColumn: 'constructor',
       }),
     ).toEqual(['column.users.constructor', 'index.users.users_constructor_idx']);
+  });
+
+  it('plans a rebuild that adds an indexed required column named constructor as for any other name', async () => {
+    const idsFor = async (column: string) =>
+      (
+        await planIds(['users'], 'users', {
+          extraColumn: column,
+          indexedColumn: column,
+          extraColumnRequired: true,
+        })
+      ).map((id) => id.replaceAll(column, '<column>'));
+    expect(await idsFor('constructor')).toEqual(await idsFor('other'));
   });
 });
