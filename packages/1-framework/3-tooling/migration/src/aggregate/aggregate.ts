@@ -280,14 +280,14 @@ export function collectAggregateNamespaces(
     ...aggregate.spaces().map((space) => space.contract()),
     ...(originContract === null ? [] : [originContract]),
   ];
-  const merged: Record<string, StorageNamespace> = {};
+  const merged = new Map<string, StorageNamespace>();
   for (const contract of contracts) {
     for (const [key, ns] of Object.entries(contract.storage.namespaces)) {
-      const existing = merged[key];
-      merged[key] = existing === undefined ? ns : mergeNamespaceEntries(existing, ns);
+      const existing = merged.get(key);
+      merged.set(key, existing === undefined ? ns : mergeNamespaceEntries(existing, ns));
     }
   }
-  return { storage: { namespaces: merged }, contracts };
+  return { storage: { namespaces: Object.fromEntries(merged) }, contracts };
 }
 
 /**

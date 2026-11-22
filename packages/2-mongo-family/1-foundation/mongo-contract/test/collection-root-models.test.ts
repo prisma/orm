@@ -23,4 +23,21 @@ describe('collectionRootModelsOf', () => {
       collectionRootModelsOf({ Admin: stored('users'), User: stored('users') }),
     );
   });
+
+  it('lists collections named like properties every object has', () => {
+    const roots = collectionRootModelsOf({
+      User: stored('constructor'),
+      Task: stored('__proto__'),
+    });
+    expect({
+      prototypeIsPlain: Object.getPrototypeOf(roots) === Object.prototype,
+      roots: Object.entries(roots),
+    }).toEqual({
+      prototypeIsPlain: true,
+      roots: [
+        ['constructor', ['User']],
+        ['__proto__', ['Task']],
+      ],
+    });
+  });
 });

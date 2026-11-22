@@ -641,7 +641,7 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
           schema: undefined,
           name: undefined,
         };
-        columns[col.name] = {
+        defineOwn(columns, col.name, {
           name: col.name,
           typeText: col.type.toLowerCase(),
           nullable: col.notnull === 0 && col.pk === 0,
@@ -649,7 +649,7 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
           ...readDefault,
           reportedType,
           ...resolveIntrospectedColumnType(reportedType, this.declaredDataTypes),
-        };
+        });
         if (col.pk > 0) {
           pkColumns.push({ name: col.name, pk: col.pk });
         }
@@ -728,20 +728,34 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
         // Skip 'pk' origin — already captured in primaryKey
       }
 
-      tables[tableName] = new SqlTableIR({
-        name: tableName,
-        columns,
-        ...ifDefined('primaryKey', primaryKey),
-        foreignKeys,
-        uniques,
-        indexes,
-      });
+      defineOwn(
+        tables,
+        tableName,
+        new SqlTableIR({
+          name: tableName,
+          columns,
+          ...ifDefined('primaryKey', primaryKey),
+          foreignKeys,
+          uniques,
+          indexes,
+        }),
+      );
     }
 
     return new SqlSchemaIR({
       tables,
     });
   }
+}
+
+/** Stores `value` as an own key of `target`, so a name the database returns, such as `__proto__`, is a key rather than the prototype. */
+function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
 }
 
 const SQLITE_REFERENTIAL_ACTION_MAP: Record<string, SqlReferentialAction> = {

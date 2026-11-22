@@ -268,7 +268,7 @@ export function getModelAndEveryVariantFieldColumns(
     const columns: Record<string, string[]> = {};
     const add = (fieldColumns: Readonly<Record<string, string>>) => {
       for (const [field, column] of Object.entries(fieldColumns)) {
-        const existing = columns[field] ?? [];
+        const existing = Object.hasOwn(columns, field) ? (columns[field] ?? []) : [];
         if (!existing.includes(column)) existing.push(column);
         columns[field] = existing;
       }

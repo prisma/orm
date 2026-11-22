@@ -99,6 +99,17 @@ describe('a relation join field', () => {
   });
 });
 
+describe('a junction column named like a property every object has', () => {
+  it('is refused when the junction table has no such column', () => {
+    expect(() => validateSqlContractFully(contractWithTags(['constructor']))).toThrow(
+      new ContractValidationError(
+        'Relation "tags" on model "__unbound__:User" joins on "constructor", which is not a column of junction table "__unbound__.user_tag"',
+        'domain',
+      ),
+    );
+  });
+});
+
 describe('the link column lists of a relation', () => {
   it('refuse an empty on.localFields or on.targetFields', () => {
     expect(() => validateSqlContractFully(contractWith(postsOn([], ['userId'])))).toThrow(

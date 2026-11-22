@@ -539,6 +539,17 @@ describe('bindWhereExpr', () => {
         ),
       ).toThrow('Unknown column "nonexistent" in table "posts"');
     });
+
+    it('throws for a column named like a property every object has', () => {
+      expect(() =>
+        paramRefForStorageColumn(
+          contract,
+          { namespaceId: 'public', tableName: 'posts' },
+          'constructor',
+          7,
+        ),
+      ).toThrow('Unknown column "constructor" in table "posts"');
+    });
   });
 
   describe('error handling', () => {

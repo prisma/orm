@@ -8,14 +8,14 @@ export type StoredModel = Pick<ContractModelBase, 'storage' | 'base' | 'owner'>;
 export function collectionRootModelsOf(
   models: Record<string, StoredModel>,
 ): Record<string, readonly string[]> {
-  const roots: Record<string, string[]> = {};
+  const roots = new Map<string, string[]>();
   for (const [name, model] of Object.entries(models)) {
     const collection = model.storage['collection'];
     if (typeof collection !== 'string' || model.base !== undefined || model.owner !== undefined) {
       continue;
     }
-    roots[collection] = [...(roots[collection] ?? []), name];
+    roots.set(collection, [...(roots.get(collection) ?? []), name]);
   }
-  for (const names of Object.values(roots)) names.sort();
-  return roots;
+  for (const names of roots.values()) names.sort();
+  return Object.fromEntries(roots);
 }
