@@ -1673,7 +1673,7 @@ While writing a contract snapshot, the contract JSON's inner `storage.storageHas
 
 ### MIGRATION.CONTRACT_SNAPSHOT_MISSING
 
-A contract snapshot expected under `migrations/snapshots/` for a given storage hash does not exist on disk, so commands that need the contract at that hash (`migration plan`, `ref`-based resolution, `migration check`) cannot proceed. Re-run the command that authored the referencing migration to regenerate the snapshot, or restore `migrations/snapshots/` from version control. For an application migration, only a `migration plan` to the emitted contract writes the snapshot: emit that contract again and re-run the plan with the same `--from` and no `--to`. A plan with `--to` reads the snapshot, so it fails the same way. Payload: `storageHash`, `expectedPath`.
+A contract snapshot expected under `migrations/snapshots/` for a given storage hash does not exist on disk, so commands that need the contract at that hash (`migration plan`, `ref`-based resolution, `migration check`) cannot proceed. Re-run the command that authored the referencing migration to regenerate the snapshot, or restore `migrations/snapshots/` from version control. For an application migration, only a `migration plan` to the emitted contract writes the snapshot: emit that contract again and re-run the plan with the same `--from` and no `--to`, then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with `--to` reads the snapshot, so it fails the same way. Payload: `storageHash`, `expectedPath`.
 
 ### MIGRATION.CONTRACT_SPACE_LAYOUT_VIOLATION
 
