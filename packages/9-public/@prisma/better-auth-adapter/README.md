@@ -33,6 +33,8 @@ Better Auth must load one copy of `@better-auth/core`, the one `better-auth` its
 
 ## Set up
 
+These steps assume an application that already uses Prisma 8 on Postgres or SQLite. To start one, see the [Prisma docs](https://www.prisma.io/docs/orm).
+
 ### 1. Add Better Auth's models to your contract
 
 Better Auth's models live in your contract, next to your own models. For the default configuration, add these four models to your PSL contract, for example `prisma/contract.prisma`. The same PSL works on Postgres and SQLite:
@@ -153,7 +155,7 @@ The adapter compares your contract with what your Better Auth configuration need
 
 - `auth generate` prints it and exits with code 1. It never writes a file.
 - `auth check` prints it and exits with code 1.
-- The first request your application serves, or the first server-side Better Auth call it makes, fails with it.
+- Every request your application serves, and every server-side Better Auth call it makes, fails with it until the contract is fixed.
 
 For example, after adding Better Auth's two-factor plugin to the configuration above:
 
@@ -213,7 +215,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
 
 - **SQLite needs a file.** With `:memory:`, each transaction gets its own empty database.
 - **Transactions on SQLite.** With `transaction: true` on SQLite, a write from another request while a transaction is open blocks the whole process for up to five seconds and then fails with `database is locked`. Leave `transaction` off on SQLite if your application serves requests concurrently.
-- **Case-insensitive search on SQLite.** SQLite's `lower()` changes ASCII letters only. On SQLite, `École` and `école` do not match each other in a case-insensitive search; on Postgres they do.
+- **Case-insensitive search.** Case-insensitive filters compare both sides with `lower()`. On SQLite, `lower()` changes ASCII letters only, so `École` and `école` do not match each other. On Postgres, `lower()` follows the database's collation.
 - **Booleans cannot be sorted.** Sorting on a `Boolean` field fails with an error that names the field.
 - **Joins need relations.** With Better Auth's `advanced.database.joins`, a join runs as one query only when your contract declares the relation between the two models, as the printed PSL does. Without the relation, Better Auth runs one extra query per row.
 - **Dates.** Better Auth's date fields must be `DateTime` fields that read as JavaScript `Date` values, with a precision of three fraction digits or fewer. `DateTime` and `DateTime(storage: timestamp)` both work. `DateTime(as: temporal)` and `DateTime(as: string)` do not.
