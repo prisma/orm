@@ -71,6 +71,7 @@ export {
   type ExecuteDbVerifyResult,
   executeDbVerify,
 } from '../control-api/operations/db-verify';
+export type { MigrationsToTarget } from '../control-api/operations/graph-queries';
 export { hasMigrationPath } from '../control-api/operations/graph-queries';
 export {
   refuseMissingInvariantPath,
