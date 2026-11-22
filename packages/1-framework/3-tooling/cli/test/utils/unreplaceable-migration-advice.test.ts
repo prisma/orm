@@ -55,6 +55,43 @@ describe('the advice for a failed migration no plan can replace once it is delet
     );
   });
 
+  it.each<{ readonly name: string; readonly facts: RunnerFailureFacts }>([
+    {
+      name: 'rows holding an enum value the migration removes',
+      facts: {
+        rowsHoldingValue: [
+          { enumValue: 'Status.ARCHIVED', enumName: 'Status', value: 'archived', rows: 2 },
+        ],
+      },
+    },
+    {
+      name: 'rows without a value for a new required field',
+      facts: {
+        rowsWithoutValue: [
+          { field: 'User.email', reason: 'newField', rows: 3, discriminator: false },
+        ],
+      },
+    },
+    {
+      name: 'rows holding NULL beside a new required field',
+      facts: {
+        rowsWithoutValue: [
+          { field: 'User.age', reason: 'nullValues', rows: 2, discriminator: false },
+          { field: 'User.email', reason: 'newField', rows: 3, discriminator: false },
+        ],
+      },
+    },
+  ])('for $name, says to change the migration in place and plans nothing again', ({ facts }) => {
+    const labels = adviceOf(facts);
+
+    expect(labels.join('\n')).not.toMatch(/plan (it|the migration) again/);
+    expect(labels).toContainEqual(
+      expect.stringMatching(
+        /`migrations\/app\/20261012T1041_lossy\/migration\.ts`.*, run `node migrations\/app\/20261012T1041_lossy\/migration\.ts`, and re-run `\{bin\} db migrate`$/,
+      ),
+    );
+  });
+
   it('keeps the migration when the schema check fails, and names the edit to its operations', () => {
     const labels = adviceOf({}, [
       { kind: 'missing_table', table: 'user', message: 'Table "user" is missing' } as never,

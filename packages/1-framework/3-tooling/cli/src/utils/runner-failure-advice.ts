@@ -327,6 +327,14 @@ function migrateRowsHoldingValueAdvice(
           ),
         ];
   if (failedMigration === undefined) return byHand;
+  const inPlace =
+    swaps === undefined && replacingPlan(failedMigration, renameFlags(reports)).kind === 'none'
+      ? [
+          editFileAction(
+            `To keep that data, add an operation to ${file} that updates the rows holding ${storedValuesList(reports)} to a stored value the enum keeps, before the operation that removes it, ${run}, and re-run ${dbMigrateAgain(invocation)}`,
+          ),
+        ]
+      : [];
   return [
     replan(
       `${newMember(reports, invocation)}, delete`,
@@ -338,7 +346,12 @@ function migrateRowsHoldingValueAdvice(
       `put any code you copied into the migration.ts it writes, ${runWrittenFile(invocation)}`,
     ),
     ...byHand,
+    ...inPlace,
   ];
+}
+
+function storedValuesList(reports: readonly RowsHoldingValueReport[]): string {
+  return distinct(reports.map(({ value }) => JSON.stringify(value))).join(' or ');
 }
 
 /** Where the operation that updates the rows goes among the operations of a migration.ts that replaces a check. */
@@ -581,12 +594,22 @@ function migrateRowsWithoutValueAdvice(
           ].filter((action) => action !== undefined);
     return [rerun, ...(backfill === undefined ? [] : [backfill]), ...keep];
   }
+  const unreplaceable = failedMigration !== undefined && !replaceable;
   if (first?.reason === 'nullValues') {
     const notEnough =
       'The migration also adds a required field the existing rows have no value for, so setting values is not enough.';
     const backfill = again(`${notEnough} Delete`);
     if (backfill !== undefined && replaceable) {
       return [backfill];
+    }
+    if (unreplaceable) {
+      const newFields = reports.filter(({ reason }) => reason === 'newField');
+      return [
+        ...(backfill === undefined ? [] : [backfill]),
+        editFileAction(
+          `${notEnough} Set a value in the rows that hold NULL, and ${fillInPlace(newFields, failedMigration, invocation)}`,
+        ),
+      ];
     }
     const newFields = optionalFields(
       reports.filter(({ reason }) => reason === 'newField'),
@@ -603,6 +626,14 @@ function migrateRowsWithoutValueAdvice(
   }
   const fields = theFields(reports);
   const required = again(`To keep ${fields} required, delete`);
+  if (unreplaceable && required !== undefined) {
+    return [
+      required,
+      editFileAction(
+        `To keep ${fields} required, ${fillInPlace(reports, failedMigration, invocation)}`,
+      ),
+    ];
+  }
   const optional = optionalFields(reports, fields);
   if (required === undefined) {
     return [
@@ -623,6 +654,24 @@ function migrateRowsWithoutValueAdvice(
           ),
         ]),
   ];
+}
+
+/**
+ * Giving the rows of new required fields a value in the failed migration itself, for when no plan
+ * can replace it: the shape `migration plan --backfill` writes, made by hand.
+ */
+function fillInPlace(
+  reports: readonly RowsWithoutValueReport[],
+  failedMigration: FailedMigrationText,
+  invocation: CliInvocation,
+): string {
+  const { file, run } = failedMigrationFile(failedMigration);
+  const flags = backfillFlags(reports)
+    .map((flag) => `\`${flag}\``)
+    .join(' ');
+  const shape = flags === '' ? '`migration plan --backfill`' : `\`migration plan\` with ${flags}`;
+  const field = reports.length === 1 ? 'the field' : 'each field';
+  return `give the existing rows a value for ${fieldList(reports)} in the migration itself, in the shape ${shape} writes: add ${field} as optional, fill it with a data transform, and only then make it required. Make that change in ${file}, ${run}, and re-run ${dbMigrateAgain(invocation)}`;
 }
 
 /**
