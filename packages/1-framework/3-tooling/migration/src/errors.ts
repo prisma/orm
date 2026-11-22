@@ -607,12 +607,12 @@ export function errorContractSnapshotMissing(
     'Contract snapshot is missing',
     {
       why: `Expected a contract snapshot for ${storageHash} at "${expectedPath}" but the file does not exist.`,
-      fix: "Re-emit the contract snapshot by re-running the command that authored the migration referencing this hash (the `migration plan` that wrote it, with the same `--from` and `--to`, for app-space migrations; the extension's contract-space build for extension spaces), or restore migrations/snapshots/ from version control.",
+      fix: "Re-emit the contract snapshot by re-running the command that authored the migration referencing this hash (for an app-space migration planned to the emitted contract, emit that contract again and re-run its `migration plan` with the same `--from` and no `--to`, since a plan with `--to` reads the snapshot; the extension's contract-space build for extension spaces), or restore migrations/snapshots/ from version control.",
       nextActions: [
         {
           kind: 'user-choice',
           label:
-            'For an app-space migration, re-run the migration plan that authored it, with the same --from and --to, to re-emit the snapshot',
+            'For an app-space migration planned to the emitted contract, emit that contract again and re-run the migration plan that authored it, with the same --from and no --to, to re-emit the snapshot. A plan with --to reads the snapshot, so it cannot re-emit it',
         },
         {
           kind: 'user-choice',
