@@ -123,49 +123,6 @@ describe('a statement outside a transaction', () => {
       ]);
     });
 
-    it('ends failed and finalizes unknown when the signal aborts during the marker read', async () => {
-      const controller = new AbortController();
-      const setup = createSetup({
-        readMarker: async () => {
-          controller.abort();
-          return { kind: 'absent' };
-        },
-      });
-      const queryable = await queryableOf(setup);
-
-      await expect(
-        queryable.execute(rawPlan('update t set x = 1'), { signal: controller.signal }),
-      ).rejects.toMatchObject({ code: 'RUNTIME.ABORTED' });
-
-      expect(afterHookNames(setup.events)).toEqual([
-        'ended:statement:failed',
-        'finalized:statement:unknown',
-      ]);
-    });
-
-    it('ends failed and finalizes unknown when the marker read fails', async () => {
-      const setup = createSetup({
-        readMarker: async () => {
-          throw new Error('marker read failed');
-        },
-      });
-      const queryable = await queryableOf(setup);
-
-      await expect(queryable.execute(rawPlan('update t set x = 1'))).rejects.toThrow(
-        'marker read failed',
-      );
-      await expect(queryable.query(rawPlan('select 1')).toArray()).rejects.toThrow(
-        'marker read failed',
-      );
-
-      expect(afterHookNames(setup.events)).toEqual([
-        'ended:statement:failed',
-        'finalized:statement:unknown',
-        'ended:statement:failed',
-        'finalized:statement:unknown',
-      ]);
-    });
-
     it('ends failed and finalizes unknown a statement whose beforeEncode throws', async () => {
       const setup = createSetup({ beforeHookFailure: new Error('before-hook failed') });
       const queryable = await queryableOf(setup);
@@ -207,6 +164,63 @@ describe('a statement outside a transaction', () => {
         'finalized:statement:committed',
       ]);
     });
+  });
+
+  describe('when the marker is read at the first statement on the runtime', () => {
+    it('ends failed and finalizes unknown when the signal aborts during the marker read', async () => {
+      const controller = new AbortController();
+      const setup = createSetup({
+        readMarker: async () => {
+          controller.abort();
+          return { kind: 'absent' };
+        },
+      });
+      const queryable = setup.runtime;
+
+      await expect(
+        queryable.execute(rawPlan('update t set x = 1'), { signal: controller.signal }),
+      ).rejects.toMatchObject({ code: 'RUNTIME.ABORTED' });
+
+      expect(afterHookNames(setup.events)).toEqual([
+        'ended:statement:failed',
+        'finalized:statement:unknown',
+      ]);
+    });
+
+    it('ends failed and finalizes unknown when the marker read fails', async () => {
+      const setup = createSetup({
+        readMarker: async () => {
+          throw new Error('marker read failed');
+        },
+      });
+      const queryable = setup.runtime;
+
+      await expect(queryable.execute(rawPlan('update t set x = 1'))).rejects.toThrow(
+        'marker read failed',
+      );
+      await expect(queryable.query(rawPlan('select 1')).toArray()).rejects.toThrow(
+        'marker read failed',
+      );
+
+      expect(afterHookNames(setup.events)).toEqual([
+        'ended:statement:failed',
+        'finalized:statement:unknown',
+        'ended:statement:failed',
+        'finalized:statement:unknown',
+      ]);
+    });
+  });
+
+  it('rejects connection() with a failed marker read, before any statement starts', async () => {
+    const setup = createSetup({
+      readMarker: async () => {
+        throw new Error('marker read failed');
+      },
+    });
+
+    await expect(setup.runtime.connection()).rejects.toThrow('marker read failed');
+
+    expect(setup.events).toEqual([]);
   });
 
   it('passes the same activity and context to every hook of a statement', async () => {
