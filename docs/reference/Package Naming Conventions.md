@@ -20,6 +20,7 @@ The published packages all release in lockstep at the workspace version:
 
 - **Database facades** — `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`, `@prisma/orm-mongo`. An application depends on exactly one; everything else arrives as its exact-pinned dependencies.
 - **Extension packages** — `@prisma/orm-extension-{postgis,pgvector,paradedb,supabase,arktype-json,middleware-cache}` and `@prisma/orm-postgres-contrib`, peer-depending on their target package. A third-party Postgres extension gets a package of its own; the trusted PostgreSQL contrib modules share `@prisma/orm-postgres-contrib`, one entrypoint group per module (`/citext/control`, …), which is why that name has no `orm-extension-` prefix ([ADR 313](../architecture%20docs/adrs/ADR%20313%20-%20Postgres%20extension%20packs%20are%20published%20by%20tier.md)).
+- **Library integrations** — `@prisma/better-auth-adapter`, which connects an outside library to an application's Prisma 8 client. Named after the library it integrates, with no `orm-` prefix. Unlike the other published packages it is hand-written, not a shell: it builds only on published entrypoints, so it can move out of this repository, and holds `@prisma/orm-framework` and `@prisma/orm-family-sql` as exact peers.
 - **Platform packages** — `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-sql`, `@prisma/orm-family-mongo`, `@prisma/orm-target-{postgres,sqlite,mysql,mariadb,mongo}`. These are shells: each bundles a set of `@internal/*` packages and re-exposes them as subpath entrypoints (e.g. `packages/2-sql-family/5-runtime` → `@prisma/orm-family-sql/runtime`).
 
 **Publishability is a directory property.** Everything under `packages/9-public/` is publishable and nothing else is; `pnpm lint:publishability` enforces both directions. One module lives in exactly one published package — shells re-export, never copy — so `instanceof` and shared-registry identity hold across package boundaries.
@@ -50,7 +51,7 @@ packages/
       4-codec-testkit/   # Codec test harness (SQL databases)
       9-facade/          # Facade: the database's one-package client
   9-public/              # The published surface — every publishable package, nothing else
-    @prisma/*            # The 19 @prisma packages (19 dirs) …
+    @prisma/*            # The 22 @prisma packages (22 dirs) …
 ```
 
 The numbered prefixes serve two purposes:
