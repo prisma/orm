@@ -179,9 +179,10 @@ function refWriteFailure(error: unknown, snapshotStored: boolean): RefWriteFailu
 }
 
 /**
- * Writes a ref after `db migrate` applied its migrations. Every failure is returned, not thrown:
- * the database has already moved, so a ref that cannot be written must not fail the run. An
- * internal error is a bug and goes to the outermost boundary.
+ * Writes a ref after `db migrate` applied its migrations: the snapshot first, when this run
+ * rendered it, then the pointer. Every failure is returned, not thrown: the database has already
+ * moved, so a ref that cannot be written must not fail the run. An internal error is a bug and
+ * goes to the outermost boundary.
  */
 export async function writeAdvancedRef(
   args: {
@@ -196,16 +197,20 @@ export async function writeAdvancedRef(
   let snapshotStored = false;
   try {
     if (args.snapshot.kind === 'render') {
-      const advanced = await advanceRefSafely({ ...args, contractIR: args.snapshot.contractIR });
-      return advanced.ok ? ok(undefined) : notOk(refWriteFailure(advanced.failure, false));
-    }
-    snapshotStored = await hasContractSnapshot(args.migrationsDir, args.hash);
-    if (!snapshotStored) {
-      return notOk({
-        reason: `the snapshot store holds no contract for ${args.hash}`,
-        causeCode: undefined,
-        snapshotStored,
+      await writeContractSnapshot(args.migrationsDir, args.hash, {
+        contractJson: args.snapshot.contractIR.contract,
+        contractDts: args.snapshot.contractIR.contractDts,
       });
+      snapshotStored = true;
+    } else {
+      snapshotStored = await hasContractSnapshot(args.migrationsDir, args.hash);
+      if (!snapshotStored) {
+        return notOk({
+          reason: `the snapshot store holds no contract for ${args.hash}`,
+          causeCode: undefined,
+          snapshotStored,
+        });
+      }
     }
     await writePointer(args.refsDir, args.name, args.hash);
     return ok(undefined);

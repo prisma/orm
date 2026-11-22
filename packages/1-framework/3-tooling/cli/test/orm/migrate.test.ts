@@ -445,14 +445,15 @@ describe('migrate', () => {
       expect(mocks.connect).not.toHaveBeenCalled();
     });
 
-    it('warns and still succeeds when the ref cannot be written', async () => {
+    it('warns and still succeeds when the snapshot cannot be written', async () => {
       const cwd = await buildProject();
-      await mkdir(refsDirOf(cwd), { recursive: true });
-      await chmod(refsDirOf(cwd), 0o555);
+      const snapshotsDir = join(cwd, 'migrations', 'snapshots');
+      await mkdir(snapshotsDir, { recursive: true });
+      await chmod(snapshotsDir, 0o555);
 
       const run = await harness(ormConfig(cwd))
         .run(['db', 'migrate', '--config', 'prisma.config.ts', '--json'], { cwd })
-        .finally(() => chmod(refsDirOf(cwd), 0o755));
+        .finally(() => chmod(snapshotsDir, 0o755));
 
       expect(run.exitCode).toBe(0);
       expect(run.presented?.data).toMatchObject({ ok: true, advancedRef: null });
@@ -477,6 +478,36 @@ describe('migrate', () => {
       });
       expect(await dbRefHash(cwd)).toBeUndefined();
 
+      const suggested = await runSuggestedCommand(cwd, run.json);
+      expect(suggested.exitCode).toBe(0);
+      expect(await dbRefHash(cwd)).toBe(C2);
+    });
+
+    it('suggests migration ref set when this run wrote the snapshot but not the pointer', async () => {
+      const cwd = await buildProject();
+      const failingWriter = () => Promise.reject(new Error('disk full'));
+
+      const run = await createOrmTestCli({
+        commands: {
+          ...commands,
+          'db migrate': createMigrateCommand(() => clientDouble, failingWriter),
+        },
+        groups: BIN_GROUPS,
+        orm: ormConfig(cwd),
+      }).run(['db', 'migrate', '--json'], { cwd });
+
+      expect(run.exitCode).toBe(0);
+      expect(envelopeOf(run.json)).toMatchObject({
+        diagnostics: [
+          {
+            code: 'MIGRATION.REF_NOT_WRITTEN',
+            why: expect.stringContaining('disk full'),
+            nextActions: [{ command: `prisma-test migration ref set db ${C2}` }],
+          },
+        ],
+      });
+      expect(existsSync(contractSnapshotDir(join(cwd, 'migrations'), C2))).toBe(true);
+      expect(await dbRefHash(cwd)).toBeUndefined();
       const suggested = await runSuggestedCommand(cwd, run.json);
       expect(suggested.exitCode).toBe(0);
       expect(await dbRefHash(cwd)).toBe(C2);
