@@ -2316,19 +2316,31 @@ export type RawQueryResult =
  */
 const RESERVED_RESULT_COLUMN = '__proto__';
 
+/** Refuses a result column named {@link RESERVED_RESULT_COLUMN}, which a raw query declares or a select names as an alias, with `RUNTIME.AST_INVALID`. */
+export function refuseReservedResultColumn(column: string, lane: 'raw-query' | 'select'): void {
+  if (column !== RESERVED_RESULT_COLUMN) return;
+  throw structuredError(
+    'RUNTIME.AST_INVALID',
+    lane === 'raw-query'
+      ? `A raw query result cannot declare a "${RESERVED_RESULT_COLUMN}" column: alias the column in SQL and declare the alias instead`
+      : `A select cannot name a result column "${RESERVED_RESULT_COLUMN}": choose another alias`,
+    {
+      meta: {
+        kind: lane,
+        field: lane === 'raw-query' ? 'result.columns' : 'alias',
+        column,
+      },
+    },
+  );
+}
+
 function frozenRawQueryResult(result: RawQueryResult): RawQueryResult {
   if (result.kind === 'affected-count') {
     return Object.freeze({ kind: 'affected-count' as const });
   }
   const columns: Record<string, RawQueryColumn> = {};
   for (const [name, column] of Object.entries(result.columns)) {
-    if (name === RESERVED_RESULT_COLUMN) {
-      throw structuredError(
-        'RUNTIME.AST_INVALID',
-        `A raw query result cannot declare a "${RESERVED_RESULT_COLUMN}" column: alias the column in SQL and declare the alias instead`,
-        { meta: { kind: 'raw-query', field: 'result.columns', column: name } },
-      );
-    }
+    refuseReservedResultColumn(name, 'raw-query');
     if (column.codec !== undefined && column.codec.codecId !== column.codecId) {
       throw structuredError(
         'RUNTIME.AST_INVALID',

@@ -22,6 +22,7 @@ import {
   lockIncompatible,
   OrderByItem,
   ProjectionItem,
+  refuseReservedResultColumn,
   SelectAst,
   type TableSource,
 } from '@internal/sql-relational-core/ast';
@@ -288,16 +289,6 @@ export function tableToScope(
   return { topLevel: { ...fields }, namespaces: { [alias]: fields } };
 }
 
-/** Stores `value` as an own key of `target`, so a key named `__proto__` is a key rather than the prototype. */
-export function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
-  Object.defineProperty(target, key, {
-    value,
-    enumerable: true,
-    writable: true,
-    configurable: true,
-  });
-}
-
 /** The field `table` owns under `name`; an inherited property such as `constructor` is no field. */
 export function ownScopeField(table: ScopeTable, name: string): ScopeField | undefined {
   return Object.hasOwn(table, name) ? table[name] : undefined;
@@ -306,10 +297,10 @@ export function ownScopeField(table: ScopeTable, name: string): ScopeField | und
 export function mergeScopes<A extends Scope, B extends Scope>(a: A, b: B): MergeScopes<A, B> {
   const topLevel: ScopeTable = {};
   for (const [k, v] of Object.entries(a.topLevel)) {
-    if (!Object.hasOwn(b.topLevel, k)) defineOwn(topLevel, k, v);
+    if (!Object.hasOwn(b.topLevel, k)) topLevel[k] = v;
   }
   for (const [k, v] of Object.entries(b.topLevel)) {
-    if (!Object.hasOwn(a.topLevel, k)) defineOwn(topLevel, k, v);
+    if (!Object.hasOwn(a.topLevel, k)) topLevel[k] = v;
   }
   return {
     topLevel,
@@ -349,8 +340,8 @@ export function orderByScopeOf<S extends Scope, R extends Record<string, ScopeFi
   rowFields: R,
 ): OrderByScope<S, R> {
   const aliasFields = { ...rowFields };
-  for (const alias of Object.keys(aliasFields)) {
-    defineOwn(aliasFields, alias, { ...rowFields[alias] });
+  for (const alias in aliasFields) {
+    aliasFields[alias] = { ...rowFields[alias] };
   }
   return {
     topLevel: { ...scope.topLevel, ...aliasFields },
@@ -417,10 +408,11 @@ export function resolveSelectArgs(
       ctx.rawCodecInferer,
       ctx.aggregates,
     );
+    refuseReservedResultColumn(alias, 'select');
     const result = exprFn(createFieldProxy(scope), fns);
     const field = result.returnType;
     projections.push(ProjectionItem.of(alias, projectionAstOf(result), codecRefOf(field, ctx)));
-    defineOwn(newRowFields, alias, field);
+    newRowFields[alias] = field;
     return { projections, newRowFields };
   }
 
@@ -436,9 +428,10 @@ export function resolveSelectArgs(
     );
     const record = callbackFn(createFieldProxy(scope), fns);
     for (const [key, expr] of Object.entries(record)) {
+      refuseReservedResultColumn(key, 'select');
       const field = expr.returnType;
       projections.push(ProjectionItem.of(key, projectionAstOf(expr), codecRefOf(field, ctx)));
-      defineOwn(newRowFields, key, field);
+      newRowFields[key] = field;
     }
     return { projections, newRowFields };
   }

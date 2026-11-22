@@ -80,4 +80,23 @@ describe('a rewritten mutation', () => {
       update: { prototypeIsPlain: true, keys: ['__proto__'] },
     });
   });
+
+  it('keeps a contract-free insert value and update set of a column named __proto__ as own keys', () => {
+    const things = table(TableSource.named('things'), {
+      id: INT,
+      ...Object.fromEntries([['__proto__', TEXT]]),
+    });
+    const values = blindCast<{ id: number }, 'a row with a column named __proto__'>(
+      Object.fromEntries([
+        ['id', 1],
+        ['__proto__', 'x'],
+      ]),
+    );
+    const insert = things.insert(values).build();
+    const update = things.update().set(values).build();
+    expect({ insert: ownProto(insert.rows[0]), update: ownProto(update.set) }).toEqual({
+      insert: { prototypeIsPlain: true, keys: ['id', '__proto__'] },
+      update: { prototypeIsPlain: true, keys: ['id', '__proto__'] },
+    });
+  });
 });

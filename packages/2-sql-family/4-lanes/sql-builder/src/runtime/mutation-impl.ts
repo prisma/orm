@@ -36,7 +36,6 @@ import {
   codecRefFor,
   codecRefOf,
   combineWhereExprs,
-  defineOwn,
   ownScopeField,
 } from './builder-base';
 import { createFieldProxy } from './field-proxy';
@@ -69,6 +68,16 @@ export type UpdateSetCallback = (
   fields: ReturnType<typeof createFieldProxy>,
   fns: ReturnType<typeof createFunctions>,
 ) => Record<string, Expression<ScopeField> | undefined>;
+
+/** Stores `value` as an own key of `target`, so a key named `__proto__` is a key rather than the prototype. */
+function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
 
 export function buildParamValues(
   values: Record<string, unknown>,

@@ -75,13 +75,19 @@ describe('a column name every object has as a property', () => {
     expect(Object.keys(merged.topLevel)).toEqual(['constructor']);
   });
 
-  it('orders by a selected alias named __proto__', () => {
-    const query = untyped(db().public.users)
-      .select('__proto__', (f: { id: unknown }) => f.id)
-      .orderBy('__proto__');
-    expect(query.buildAst()).toMatchObject({
-      orderBy: [{ expr: { kind: 'identifier-ref', name: '__proto__' } }],
-    });
+  it('refuses a select alias named __proto__, as a raw query result refuses that column', () => {
+    const users = () => untyped(db().public.users);
+    const refused = {
+      code: 'RUNTIME.AST_INVALID',
+      message: 'A select cannot name a result column "__proto__": choose another alias',
+      meta: { kind: 'select', field: 'alias', column: '__proto__' },
+    };
+    expect(() => users().select('__proto__', (f: { id: unknown }) => f.id)).toThrow(
+      expect.objectContaining(refused),
+    );
+    expect(() =>
+      users().select((f: { id: unknown }) => Object.fromEntries([['__proto__', f.id]])),
+    ).toThrow(expect.objectContaining(refused));
   });
 
   it('keeps an insert value keyed __proto__ as an own key', () => {
