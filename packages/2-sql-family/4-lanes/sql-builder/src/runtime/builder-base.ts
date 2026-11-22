@@ -288,13 +288,28 @@ export function tableToScope(
   return { topLevel: { ...fields }, namespaces: { [alias]: fields } };
 }
 
+/** Stores `value` as an own key of `target`, so a key named `__proto__` is a key rather than the prototype. */
+export function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
+/** The field `table` owns under `name`; an inherited property such as `constructor` is no field. */
+export function ownScopeField(table: ScopeTable, name: string): ScopeField | undefined {
+  return Object.hasOwn(table, name) ? table[name] : undefined;
+}
+
 export function mergeScopes<A extends Scope, B extends Scope>(a: A, b: B): MergeScopes<A, B> {
   const topLevel: ScopeTable = {};
   for (const [k, v] of Object.entries(a.topLevel)) {
-    if (!(k in b.topLevel)) topLevel[k] = v;
+    if (!Object.hasOwn(b.topLevel, k)) defineOwn(topLevel, k, v);
   }
   for (const [k, v] of Object.entries(b.topLevel)) {
-    if (!(k in a.topLevel)) topLevel[k] = v;
+    if (!Object.hasOwn(a.topLevel, k)) defineOwn(topLevel, k, v);
   }
   return {
     topLevel,
@@ -334,8 +349,8 @@ export function orderByScopeOf<S extends Scope, R extends Record<string, ScopeFi
   rowFields: R,
 ): OrderByScope<S, R> {
   const aliasFields = { ...rowFields };
-  for (const alias in aliasFields) {
-    aliasFields[alias] = { ...rowFields[alias] };
+  for (const alias of Object.keys(aliasFields)) {
+    defineOwn(aliasFields, alias, { ...rowFields[alias] });
   }
   return {
     topLevel: { ...scope.topLevel, ...aliasFields },
@@ -378,7 +393,7 @@ export function resolveSelectArgs(
 
   if (typeof args[0] === 'string' && (args.length === 1 || typeof args[1] !== 'function')) {
     for (const colName of args as string[]) {
-      const field = scope.topLevel[colName];
+      const field = ownScopeField(scope.topLevel, colName);
       if (!field)
         throw structuredError('ORM.COLUMN_UNKNOWN', `Column "${colName}" not found in scope`, {
           meta: { column: colName },
@@ -405,7 +420,7 @@ export function resolveSelectArgs(
     const result = exprFn(createFieldProxy(scope), fns);
     const field = result.returnType;
     projections.push(ProjectionItem.of(alias, projectionAstOf(result), codecRefOf(field, ctx)));
-    newRowFields[alias] = field;
+    defineOwn(newRowFields, alias, field);
     return { projections, newRowFields };
   }
 
@@ -423,7 +438,7 @@ export function resolveSelectArgs(
     for (const [key, expr] of Object.entries(record)) {
       const field = expr.returnType;
       projections.push(ProjectionItem.of(key, projectionAstOf(expr), codecRefOf(field, ctx)));
-      newRowFields[key] = field;
+      defineOwn(newRowFields, key, field);
     }
     return { projections, newRowFields };
   }
@@ -456,7 +471,7 @@ export function resolveOrderBy(
 
   if (typeof arg === 'string') {
     const combined = orderByScopeOf(scope, rowFields);
-    if (!(arg in combined.topLevel))
+    if (!Object.hasOwn(combined.topLevel, arg))
       throw structuredError(
         'ORM.COLUMN_UNKNOWN',
         `Column "${arg}" not found in scope for orderBy`,
@@ -488,7 +503,7 @@ export function resolveGroupBy(
   if (typeof args[0] === 'string') {
     const combined = orderByScopeOf(scope, rowFields);
     return (args as string[]).map((colName) => {
-      if (!(colName in combined.topLevel))
+      if (!Object.hasOwn(combined.topLevel, colName))
         throw structuredError(
           'ORM.COLUMN_UNKNOWN',
           `Column "${colName}" not found in scope for groupBy`,
@@ -522,7 +537,7 @@ export function resolveDistinctOn(
   }
   const combined = orderByScopeOf(scope, rowFields);
   return (args as string[]).map((colName) => {
-    if (!(colName in combined.topLevel))
+    if (!Object.hasOwn(combined.topLevel, colName))
       throw structuredError(
         'ORM.COLUMN_UNKNOWN',
         `Column "${colName}" not found in scope for distinctOn`,
