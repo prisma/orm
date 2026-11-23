@@ -51,6 +51,13 @@ export type ContractProblem =
       readonly reference: BetterAuthReference | undefined;
       readonly found: string;
     }
+  | {
+      readonly kind: 'optional-field-not-nullable';
+      readonly model: string;
+      readonly field: string;
+      readonly attribute: DBFieldAttribute;
+      readonly reference: BetterAuthReference | undefined;
+    }
   | { readonly kind: 'id-without-default'; readonly model: string }
   | { readonly kind: 'required-field-not-written'; readonly model: string; readonly field: string };
 
@@ -137,9 +144,9 @@ function columnFacts(contract: SqlContract, found: FoundModel, field: string): C
   };
 }
 
-/** Better Auth leaves an optional field without a default value out of the row it creates. */
-function alwaysWritten(field: BetterAuthField): boolean {
-  return field.attribute.required !== false || field.attribute.defaultValue !== undefined;
+/** Better Auth writes `null` to an optional field it has no default value for, so a database default does not help. */
+function mayBeNull(field: BetterAuthField): boolean {
+  return field.attribute.required === false && field.attribute.defaultValue === undefined;
 }
 
 function compareFoundModel(
@@ -191,16 +198,21 @@ function compareFoundModel(
         reference: field.reference,
         found: wrong,
       });
+    } else if (mayBeNull(field) && !contractField.nullable) {
+      problems.push({
+        kind: 'optional-field-not-nullable',
+        model,
+        field: field.name,
+        attribute: field.attribute,
+        reference: field.reference,
+      });
     }
   }
   for (const field of missingFields) {
     problems.push({ kind: 'missing-field', model, field });
   }
 
-  const written = new Set([
-    'id',
-    ...expected.fields.filter(alwaysWritten).map((field) => field.name),
-  ]);
+  const written = new Set(['id', ...expected.fields.map((field) => field.name)]);
   for (const [name, field] of Object.entries(fields)) {
     if (written.has(name) || field.nullable) continue;
     const facts = columnFacts(contract, found, name);

@@ -190,7 +190,7 @@ Then run `prisma contract emit` and update your database.
 
 Add the printed fields to your existing `User` model, add the new model, then run `prisma contract emit` and `prisma db update`. After that, `auth generate` prints `Your schema is already up to date.` and `auth check` prints `Schema check passed against adapter "prisma-8".`, both with exit code 0.
 
-The message can also list fields whose type is wrong, and fields your contract requires that Better Auth does not always write, including fields Better Auth treats as optional: make those optional or give them a default.
+The message can also list fields whose type is wrong; optional Better Auth fields your contract makes required, which you make optional; and fields your contract requires that Better Auth never writes, which you make optional or give a default.
 
 Some things to know:
 
@@ -227,7 +227,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
   ```
 
 - **Numbers.** The printed PSL declares Better Auth's number fields as `Int`, which on Postgres holds whole numbers up to about two billion. A number field that holds fractions or larger values, such as an interval in milliseconds, should be declared `Float` or `BigInt(as: number)` instead; both are accepted.
-- **Optional fields must be optional.** A field Better Auth treats as optional must be optional (`?`) in your contract, because Better Auth writes `null` to it.
+- **Optional fields must be optional.** A field Better Auth treats as optional must be optional (`?`) in your contract, because Better Auth writes `null` to it. A database default does not help, and the contract check reports such a field.
 - **Ids.** With `generateId: false`, declare the id with a default, as the printed PSL does (`id String @id @onCreate(uuid())`). A `generateId` function that returns `false` for some models needs the same for those models' ids.
 
 ## Responsibilities

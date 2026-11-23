@@ -70,6 +70,10 @@ export function addPrintedPsl(basePsl: string, printed: PrintedPsl): string {
  */
 export function problemsOf(comparison: ContractComparison): unknown[] {
   return comparison.problems.map((problem: ContractProblem) => {
+    if (problem.kind === 'optional-field-not-nullable') {
+      const { attribute, reference, ...rest } = problem;
+      return { ...rest, expectedType: pslTypeOf(attribute, reference, comparison) };
+    }
     if (problem.kind !== 'wrong-type') return problem;
     const { attribute, reference, ...rest } = problem;
     return {

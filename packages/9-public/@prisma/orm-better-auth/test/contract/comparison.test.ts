@@ -175,6 +175,45 @@ describe.each(targets)('the comparison on %s', (target) => {
       expect(problemsOf(compare(withoutGenerator, {}))).toEqual([]);
     });
 
+    describe('an optional Better Auth field the contract makes required', () => {
+      async function imageProblems(image: string, options: BetterAuthOptions = {}) {
+        const contract = await contractOf(
+          target,
+          editedPsl(target, options, [[/image(\s+)String\?/, `image$1${image}`]]),
+        );
+        return problemsOf(compare(contract, options));
+      }
+      const notNullable = [
+        {
+          kind: 'optional-field-not-nullable',
+          model: 'User',
+          field: 'image',
+          expectedType: 'String',
+        },
+      ];
+
+      it('is reported', async () => {
+        expect(await imageProblems('String')).toEqual(notNullable);
+      });
+
+      it('is reported when it has a database default, since Better Auth writes null to it', async () => {
+        expect(await imageProblems('String @default("")')).toEqual(notNullable);
+      });
+
+      it('is not reported when it is optional, with or without a default', async () => {
+        expect(await imageProblems('String? @default("")')).toEqual([]);
+      });
+
+      it('is not reported when Better Auth gives it a default value', async () => {
+        const options: BetterAuthOptions = {
+          user: {
+            additionalFields: { image: { type: 'string', required: false, defaultValue: '' } },
+          },
+        };
+        expect(await imageProblems('String', options)).toEqual([]);
+      });
+    });
+
     describe('a required field Better Auth never writes', () => {
       async function problemsWith(extraField: string) {
         const contract = await contractOf(
@@ -200,35 +239,6 @@ describe.each(targets)('the comparison on %s', (target) => {
 
       it('is not reported when a generator fills it on create', async () => {
         expect(await problemsWith('seenAt DateTime @onCreate(now())')).toEqual([]);
-      });
-
-      describe('an optional Better Auth field the contract makes required', () => {
-        async function imageProblems(image: string, options: BetterAuthOptions = {}) {
-          const contract = await contractOf(
-            target,
-            editedPsl(target, options, [[/image(\s+)String\?/, `image$1${image}`]]),
-          );
-          return problemsOf(compare(contract, options));
-        }
-
-        it('is reported', async () => {
-          expect(await imageProblems('String')).toEqual([
-            { kind: 'required-field-not-written', model: 'User', field: 'image' },
-          ]);
-        });
-
-        it('is not reported when it has a database default', async () => {
-          expect(await imageProblems('String @default("")')).toEqual([]);
-        });
-
-        it('is not reported when Better Auth gives it a default value', async () => {
-          const options: BetterAuthOptions = {
-            user: {
-              additionalFields: { image: { type: 'string', required: false, defaultValue: '' } },
-            },
-          };
-          expect(await imageProblems('String', options)).toEqual([]);
-        });
       });
 
       it('is reported when a generator fills it only on update', async () => {

@@ -198,11 +198,12 @@ The inner adapter receives database field names and already-converted values fro
     | Missing field | the model exists and has no field with the Better Auth field name, or no `id` field |
     | Wrong type | the field exists and decision 32 rejects its type |
     | Id has no default | Better Auth will not send an id (`advanced.database.generateId` is `"serial"` or `false`) and the id column has neither a database default nor an `onCreate` generator |
-    | Required field Better Auth never writes | the model has a field that is not `id` and not in Better Auth's description, that is not nullable, with neither a database default nor an `onCreate` generator. The same for a Better Auth field with `required: false` and no `defaultValue`, which Better Auth leaves out of the row it creates |
+    | Optional field not nullable | a Better Auth field with `required: false` and no `defaultValue` exists and is not nullable. Better Auth writes `null` to such a field (an admin unban clears `banReason`, `updateUser` passes `image: null`), so a database default or an `onCreate` generator does not satisfy it. The message asks for the field's type with `?` |
+    | Required field Better Auth never writes | the model has a field that is not `id` and not in Better Auth's description, that is not nullable, with neither a database default nor an `onCreate` generator |
 
     - A database default is a `default` on the storage column. An `onCreate` generator is an entry in `execution.mutations.defaults` for that table and column with an `onCreate` part.
     - A `generateId` function is treated as always sending an id. The README says a function that returns `false` needs an id column with a default.
-    - The comparison does not look at uniqueness, indexes, foreign keys, relations or the primary key. Better Auth's own check has the same limits, and Better Auth generates unique ids. It does not require a field Better Auth treats as optional to be nullable when the column has a default; the README says that such fields must be optional in the contract, because Better Auth can also write `null` to them.
+    - The comparison does not look at uniqueness, indexes, foreign keys, relations or the primary key. Better Auth's own check has the same limits, and Better Auth generates unique ids.
 32. **Type check by known codecs.** The adapter holds this table from codec id to kind. Nothing published tells a codec's JavaScript type at run time.
 
     | Kind | Codec ids |
@@ -261,6 +262,7 @@ The inner adapter receives database field names and already-converted values fro
 
       <Model>.<field>: must be `<PSL type>` (found <what the contract has>)
       <Model>.id: must be `<id line of decision 42>`
+      <Model>.<field>: must be `<PSL type>?`, because Better Auth writes null to it
       <text of a several-namespaces problem>
 
     Fields Better Auth does not write:

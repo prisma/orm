@@ -16,6 +16,11 @@ function changeLines(comparison: ContractComparison): string[] {
       case 'ambiguous-model':
         lines.push(ambiguousModelMessage(problem.model, problem.namespaceIds));
         break;
+      case 'optional-field-not-nullable':
+        lines.push(
+          `${problem.model}.${problem.field}: must be \`${pslTypeOf(problem.attribute, problem.reference, comparison)}?\`, because Better Auth writes null to it`,
+        );
+        break;
       case 'id-without-default':
       case 'wrong-type':
         if (problem.kind === 'id-without-default' || problem.attribute === undefined) {

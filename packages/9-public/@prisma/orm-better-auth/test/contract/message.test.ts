@@ -72,6 +72,22 @@ Fields Better Auth does not write:
 Then run \`prisma contract emit\` and update your database.`);
   });
 
+  it('asks for an optional field Better Auth writes null to to be optional', async () => {
+    const psl = pslForConfiguration(emptyContract, {}).replace(
+      /image(\s+)String\?/,
+      'image$1String @default("")',
+    );
+    expect(
+      contractMessage(compare(await contractOf(psl), {})),
+    ).toBe(`Your Prisma contract does not match what Better Auth needs.
+
+Change in your contract:
+
+  User.image: must be \`String?\`, because Better Auth writes null to it
+
+Then run \`prisma contract emit\` and update your database.`);
+  });
+
   it('prints NoAction with a note for referential actions Prisma 8 refuses', () => {
     const options: BetterAuthOptions = {
       plugins: [
