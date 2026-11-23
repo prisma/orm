@@ -91,7 +91,14 @@ describe('variant() on the mutator of a polymorphic target', () => {
 
   test('the variant mutator has the operations of the base mutator except variant', () => {
     expectTypeOf<keyof VariantRelationMutator<Contract, 'Task', 'bug'>>().toEqualTypeOf<
-      'create' | 'connect' | 'disconnect' | 'where' | 'updateAll' | 'deleteAll'
+      | 'create'
+      | 'connect'
+      | 'disconnect'
+      | 'where'
+      | 'updateAll'
+      | 'deleteAll'
+      | 'update'
+      | 'delete'
     >();
 
     const update: ProjectUpdate = {

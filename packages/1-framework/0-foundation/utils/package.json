@@ -39,6 +39,7 @@
     "./canonical-stringify": "./dist/canonical-stringify.mjs",
     "./casts": "./dist/casts.mjs",
     "./defined": "./dist/defined.mjs",
+    "./guards": "./dist/guards.mjs",
     "./hash-content": "./dist/hash-content.mjs",
     "./internal-error": "./dist/internal-error.mjs",
     "./json": "./dist/json.mjs",

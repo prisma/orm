@@ -96,6 +96,16 @@ const REFERENTIAL_ACTIONS: Readonly<Record<string, SqlReferentialAction>> = {
   'SET DEFAULT': 'setDefault',
 };
 
+/** Stores `value` as an own key of `target`, so a name the database returns, such as `__proto__`, is a key rather than the prototype. */
+function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 /** A rule `REFERENTIAL_CONSTRAINTS` reports, with `NO ACTION`, MySQL's default, as no action at all. */
 function referentialAction(rule: string): SqlReferentialAction | undefined {
   const normalized = rule.toUpperCase();
@@ -268,7 +278,7 @@ async function tableOf(
 ): Promise<SqlTableIR> {
   const columns: Record<string, SqlColumnIRInput> = {};
   for (const row of [...rows.columns].sort(byPosition((column) => column.ordinal_position))) {
-    columns[row.column_name] = await columnOf(row, dataTypes, readLiteralDefault);
+    defineOwn(columns, row.column_name, await columnOf(row, dataTypes, readLiteralDefault));
   }
 
   const foreignKeys = foreignKeysOf(tableName, rows.foreignKeys);
@@ -349,17 +359,21 @@ export async function buildMysqlSchemaIR(
   const foreignKeysByTable = groupBy(rows.foreignKeys, (row) => row.table_name);
   const tables: Record<string, SqlTableIR> = {};
   for (const tableName of rows.tables) {
-    tables[tableName] = await tableOf(
+    defineOwn(
+      tables,
       tableName,
-      {
-        columns: columnsByTable.get(tableName) ?? [],
-        indexes: indexesByTable.get(tableName) ?? [],
-        constraints: constraintsByTable.get(tableName) ?? [],
-        foreignKeys: foreignKeysByTable.get(tableName) ?? [],
-      },
-      dataTypes,
-      readLiteralDefault,
-      declared,
+      await tableOf(
+        tableName,
+        {
+          columns: columnsByTable.get(tableName) ?? [],
+          indexes: indexesByTable.get(tableName) ?? [],
+          constraints: constraintsByTable.get(tableName) ?? [],
+          foreignKeys: foreignKeysByTable.get(tableName) ?? [],
+        },
+        dataTypes,
+        readLiteralDefault,
+        declared,
+      ),
     );
   }
   return new SqlSchemaIR({ tables });

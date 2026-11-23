@@ -202,6 +202,18 @@ describe('templates', () => {
         expect(md).not.toContain('defineContract');
       });
 
+      it.each([
+        ['psl', 'src/prisma/contract.prisma', 'number'],
+        ['typescript', 'src/prisma/contract.ts', 'string'],
+      ] as const)(
+        '%s: names the id type its starter contract gives',
+        (mode, schemaPath, idType) => {
+          expect(quickReferenceFor(mode, schemaPath)).toContain(
+            `// { id: ${idType}; email: string;`,
+          );
+        },
+      );
+
       it('typescript: shows a TS `defineContract` block (no PSL)', () => {
         const md = quickReferenceFor('typescript', 'src/prisma/contract.ts');
 
@@ -256,6 +268,7 @@ describe('templates', () => {
           'pkg',
           'configEntrypoint',
           'schemaSample',
+          'idType',
           'requirements',
         ]),
       );

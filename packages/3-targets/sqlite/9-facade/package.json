@@ -6,6 +6,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "One-liner lazy SQLite client composition for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
@@ -67,6 +70,7 @@
     "./contract-builder": "./dist/contract-builder.mjs",
     "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
+    "./init": "./dist/init.mjs",
     "./migration": "./dist/migration.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./static": "./dist/static.mjs",

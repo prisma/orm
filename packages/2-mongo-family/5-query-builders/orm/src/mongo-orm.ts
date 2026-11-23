@@ -32,18 +32,19 @@ export function mongoOrm<
 >(options: MongoOrmOptions<TContract>): MongoOrmClient<TContract> {
   const { context, runtime } = options;
   const enums = buildEnumAccessors(context);
-  const client: Record<string, unknown> = {};
-
-  for (const [rootName, rootRef] of Object.entries(context.contract.roots)) {
-    client[rootName] = new MongoCollectionImpl(
-      { context, runtime },
-      blindCast<
-        RootModelName<TContract, typeof rootName & keyof TContract['roots'] & string>,
-        'roots entries are CrossReferences; rootRef.model is a valid RootModelName for this contract'
-      >(rootRef.model),
-      enums,
-    );
-  }
+  const client = Object.fromEntries(
+    Object.entries(context.contract.roots).map(([rootName, rootRef]) => [
+      rootName,
+      new MongoCollectionImpl(
+        { context, runtime },
+        blindCast<
+          RootModelName<TContract, typeof rootName & keyof TContract['roots'] & string>,
+          'roots entries are CrossReferences; rootRef.model is a valid RootModelName for this contract'
+        >(rootRef.model),
+        enums,
+      ),
+    ]),
+  );
 
   return blindCast<
     MongoOrmClient<TContract>,

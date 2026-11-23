@@ -531,12 +531,14 @@ export function planIssues(
     ),
   );
   const indexesANewColumn = (call: CreateIndexCall) => {
-    const live = context.actual.tables[call.tableName];
+    const live = Object.hasOwn(context.actual.tables, call.tableName)
+      ? context.actual.tables[call.tableName]
+      : undefined;
     return (
       live !== undefined &&
       call.columns.some(
         (column) =>
-          live.columns[column] === undefined &&
+          !Object.hasOwn(live.columns, column) &&
           !addedBeforeIndexes.has(indexKey(call.tableName, column)),
       )
     );

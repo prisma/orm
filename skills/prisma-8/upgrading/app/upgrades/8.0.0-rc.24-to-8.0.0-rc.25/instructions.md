@@ -261,6 +261,37 @@ changes:
   - id: mongo-nested-required-field-gets-temporary-value
     summary: |
       A required field new inside a MongoDB value object or embedded model is now filled with a temporary value in the objects that lack it, as at the top level, unless `--backfill` names it.
+  - id: json-default-proto-key-kept
+    summary: |
+      A JSON column default that has a `__proto__` key now keeps that key in `contract.json` and in the storage hash; it used to be dropped. Re-emit the contract, then plan and apply a migration.
+    detection:
+      glob: "**/*.prisma"
+      matches:
+        - 'json`[^`]*__proto__'
+  - id: mongo-proto-names-refused
+    summary: |
+      A MongoDB contract now refuses a model, composite type or value object, enum, collection or root named `__proto__`. Choose another name.
+    detection:
+      glob: "**/*.{prisma,ts}"
+      matches:
+        - '__proto__'
+  - id: init-target-takes-a-package-name
+    summary: |
+      `prisma orm init --target` takes the name of a target package, such as `--target @prisma/orm-sqlite`, beside the short names `postgres` and `mongodb`. The `--json` result gains `package`, the name of the target package, and its `target` is the package name when the package has no short name. A script that reads the result needs a change only if it accepts no `target` but `postgres` and `mongodb`.
+    detection:
+      glob: "**/*.{sh,bash,zsh,ts,mts,cts,js,mjs,cjs,json,yml,yaml}"
+      matches:
+        - 'orm init\b[^\n]*--json'
+  - id: orm-write-inside-transaction-suspends-tx
+    summary: |
+      An ORM write of more than one statement on `tx.orm`, such as a create with a nested relation, runs in a savepoint. While it runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`. The detection matches TypeScript sources that call `transaction` and `Promise.all` or `Promise.allSettled`.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?<![\s\S])(?=[\s\S]*\.transaction\s*\()[\s\S]*Promise\.all'
+  - id: foreign-key-with-relation-callback-refused
+    summary: |
+      `update()` data that sets a field of the foreign key the record holds for a relation (many-to-one, such as `Post.authorId` for `Post.author`) and also has a callback on that relation is refused with `ORM.ARGUMENT_INVALID` (`meta.problem: 'foreign-key-with-relation-mutation'`, with `meta.relation` and `meta.fields`) before any statement runs. It used to run, and a `create`, `connect` or `disconnect` callback overwrote the foreign key the data set. Keep either the foreign key or the callback.
   - id: nullable-unique-key-is-no-row-identity
     summary: |
       A unique key with a nullable column no longer identifies a row: two rows may both hold NULL in it. A table whose only unique key has a nullable column now has no row identity, on every database, and the ORM refuses the calls that need one with `ORM.ROW_IDENTITY_MISSING`. Give such a table a primary key, or make the unique key's columns `NOT NULL`.
@@ -330,10 +361,10 @@ Do the steps in this order, and skip a step that does not apply to the project:
 1. Before you deploy the upgrade, on PostgreSQL with `money` columns, make the database print `money` in the `C` form (`postgres-lc-monetary-not-set`). The old release still forces it on its own connections, so do this first.
 2. Before you run the install for the upgrade, fix the dependencies in `package.json`: declare `pg` and `@types/pg` for the PostgreSQL packages (`pg-is-a-peer-dependency`), and move a declared `temporal-polyfill` to `^1.0.8` (`temporal-polyfill-peer-range-moves-to-1-0-8`). Then upgrade the Prisma packages.
 3. Change the config and the scripts that call the control client: the renamed config type (`config-type-renamed-to-prisma-config`), the modules a hand-assembled config names (`hand-assembled-config-names-generated-file-modules`), `typesModule` and the removed `projectDir` (`control-api-takes-types-module`), the removed `publish-surface` entries (`toolchain-publish-surface-entrypoints-removed`), the arguments of `typescriptContractFromPath` (`typescript-contract-from-path-requires-target`), and the `migrate`, `dbUpdate` and `dbSign` options (`migrate-options-ref`, `db-sign-invocation`, `permit-policy-change`).
-4. Change the contract sources. Make each TypeScript contract import `defineContract` from its config's target (`typescript-contract-for-another-target-refused`). Save every schema file as UTF-8 (`psl-schema-must-be-utf8`). Rewrite the renamed types and helpers: `sql.String` (`psl-renamed-sql-string`, `ts-renamed-sql-string`), the PostgreSQL and SQLite column helpers (`ts-renamed-postgres-json-column-helper`, `ts-renamed-sqlite-column-helpers`), SQLite's `BigIntNumber` (`sqlite-bigintnumber-deprecated`) and MongoDB's `Int64` (`psl-renamed-mongo-int64`, `ts-removed-mongo-int64-helper`, and optionally `psl-optional-mongo-convenience-names`). Fix each `hasOne` relation without a unique key (`has-one-key-must-be-unique`) and each attribute of a single-table variant that emit refuses (`sti-variant-unscoped-index-refused`).
-5. Run `prisma contract emit` once for every contract and commit what it writes. One emit covers `contract-types-import-from-the-target-package`, `re-emit-for-include-capabilities`, `re-emit-mysql-contract-for-aggregates`, `mysql-reemit-contract`, `sqlite-decimal-codec`, `ts-sqlite-decimal-codec`, `sti-variant-foreign-keys-stored` and `contract-artifacts-restamp`. Leave the contract copies under `migrations/` as they are.
-6. Bring each database up to date. Plan and apply a migration for a new unique key (`has-one-key-must-be-unique`) and for the indexes and foreign keys of single-table variants (`sti-variant-unscoped-index-refused`, `sti-variant-foreign-keys-stored`). On SQLite, fix stored values the stricter codecs refuse (`sqlite-decimal-codec`, `sqlite-integer-safe-range`), then sign the database with the new contract as the SQLite section describes.
-7. Change the application code: tables whose only unique key has a nullable column (`nullable-unique-key-is-no-row-identity`), the ORM error codes of nested relation mutations (`relation-mutation-error-codes-merged`), nested creates on a polymorphic model (`nested-create-on-polymorphic-target-needs-variant`, `variant-create-without-returning-names-create`), `disconnect` (`disconnect-on-required-relation-refused`, `to-one-disconnect-criteria-applied`, `disconnect-empty-criteria-disconnects-nothing`), `onConflict: 'skip'` (`create-all-skip-refuses-rows-without-conflict-key`, `create-all-skip-refuses-tables-without-keys`), SQL builder comparisons (`sql-builder-enum-comparison-values-are-checked`) and code that reads `meta.target` from a MySQL error (`mysql-errors-drop-meta-target`).
+4. Change the contract sources. Make each TypeScript contract import `defineContract` from its config's target (`typescript-contract-for-another-target-refused`). Save every schema file as UTF-8 (`psl-schema-must-be-utf8`). Rewrite the renamed types and helpers: `sql.String` (`psl-renamed-sql-string`, `ts-renamed-sql-string`), the PostgreSQL and SQLite column helpers (`ts-renamed-postgres-json-column-helper`, `ts-renamed-sqlite-column-helpers`), SQLite's `BigIntNumber` (`sqlite-bigintnumber-deprecated`) and MongoDB's `Int64` (`psl-renamed-mongo-int64`, `ts-removed-mongo-int64-helper`, and optionally `psl-optional-mongo-convenience-names`). Fix each `hasOne` relation without a unique key (`has-one-key-must-be-unique`) and each attribute of a single-table variant that emit refuses (`sti-variant-unscoped-index-refused`). On MongoDB, rename anything named `__proto__` (`mongo-proto-names-refused`).
+5. Run `prisma contract emit` once for every contract and commit what it writes. One emit covers `contract-types-import-from-the-target-package`, `re-emit-for-include-capabilities`, `re-emit-mysql-contract-for-aggregates`, `mysql-reemit-contract`, `sqlite-decimal-codec`, `ts-sqlite-decimal-codec`, `sti-variant-foreign-keys-stored`, `json-default-proto-key-kept` and `contract-artifacts-restamp`. Leave the contract copies under `migrations/` as they are.
+6. Bring each database up to date. Plan and apply a migration for a new unique key (`has-one-key-must-be-unique`), for a JSON default that has a `__proto__` key (`json-default-proto-key-kept`) and for the indexes and foreign keys of single-table variants (`sti-variant-unscoped-index-refused`, `sti-variant-foreign-keys-stored`). On SQLite, fix stored values the stricter codecs refuse (`sqlite-decimal-codec`, `sqlite-integer-safe-range`), then sign the database with the new contract as the SQLite section describes.
+7. Change the application code: work sent on a transaction while an ORM write runs on it (`orm-write-inside-transaction-suspends-tx`), `update()` data that sets a foreign key and also has a callback on its relation (`foreign-key-with-relation-callback-refused`), tables whose only unique key has a nullable column (`nullable-unique-key-is-no-row-identity`), the ORM error codes of nested relation mutations (`relation-mutation-error-codes-merged`), nested creates on a polymorphic model (`nested-create-on-polymorphic-target-needs-variant`, `variant-create-without-returning-names-create`), `disconnect` (`disconnect-on-required-relation-refused`, `to-one-disconnect-criteria-applied`, `disconnect-empty-criteria-disconnects-nothing`), `onConflict: 'skip'` (`create-all-skip-refuses-rows-without-conflict-key`, `create-all-skip-refuses-tables-without-keys`), SQL builder comparisons (`sql-builder-enum-comparison-values-are-checked`) code that reads `meta.target` from a MySQL error (`mysql-errors-drop-meta-target`) and scripts that read the `--json` result of `prisma orm init` (`init-target-takes-a-package-name`).
 8. Before planning the next schema change, read what the planner now does: on PostgreSQL and SQLite a changed stored name is a rename (`sql-stored-name-change-is-a-rename`, `sql-stored-name-delete-is-unused`, `sql-stored-name-empty-table`, `sql-stored-name-swaps-refused`, `sql-lowered-table-names-renamed`), and on MongoDB changes inside documents are asked about and planned (`mongo-nested-removals-are-asked`, `mongo-nested-statements-are-planned`, `mongo-nested-required-field-gets-temporary-value`).
 
 
@@ -1041,6 +1072,97 @@ If you rewrote such documents by hand in `mongosh` or in a `dataTransform` becau
 To write your own value instead, plan the change with `migration plan --backfill Address.zip` and write an aggregation expression in the `placeholder('Address.zip:value')` slot of each `fillStoredKey` it writes, such as `{ $literal: 'unknown' }`. A field whose type has no temporary value, such as a date, gets none, and the validator change's document check stops the apply while objects lack it; use `--backfill` for it.
 
 
+## Names and keys that JavaScript objects inherit
+
+Names such as `constructor` and `toString` now work everywhere as model, table, column and field names, and need no action. Two cases with `__proto__` do.
+
+### `json-default-proto-key-kept`
+
+```prisma
+model User {
+  id   Int   @id
+  meta Jsonb @default(json`{ "__proto__": { "x": 1 }, "a": 2 }`)
+}
+```
+
+`prisma contract emit` used to leave the `__proto__` key out of `contract.json` and out of the storage hash, so the database got the default `{"a": 2}`. It now keeps the key. For each file the detection matches:
+
+1. Run `prisma contract emit`. The storage hash changes.
+2. Run `prisma migration plan` and apply the migration, or run `prisma db update`. Either plans one operation per such column, `Set default on "<table>"."<column>"`.
+
+Until the operation is applied, the SQL runtime logs `CONTRACT.MARKER_MISMATCH` as a warning and still runs queries. If you do not want the key in the default, remove it from the contract source instead.
+
+### `mongo-proto-names-refused`
+
+JavaScript reads `__proto__` as the prototype of an object rather than as a key, so a contract could not hold such a name: the client lost the model or collection. A MongoDB contract now refuses it. The TypeScript builder raises `CONTRACT.NAME_UNUSABLE_AS_KEY`; a PSL contract reports `PSL_STORED_NAME_UNSUPPORTED` at the declaration:
+
+```text
+A model is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
+```
+
+Rename the model, composite type, enum or root. For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there, so rename that collection in the database to the new name (`renameCollection`) in the same deployment. The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
+
+A SQL query builder `select` that names a result column `__proto__` is refused with `RUNTIME.AST_INVALID`; choose another alias.
+
+
+## Concurrent work on `tx` during an ORM write
+
+### `orm-write-inside-transaction-suspends-tx`
+
+Inside `db.transaction(async (tx) => ...)`, where an ORM write of several statements runs at the same time as other work on `tx`, for example in `Promise.all`, await the write before sending the other work:
+
+```ts
+await tx.orm.public.Post.create({ title, author: (author) => author.create(user) });
+await tx.execute(plan);
+```
+
+
+## `update()` data refuses a foreign key together with a callback on its relation
+
+### `foreign-key-with-relation-callback-refused`
+
+`update()` data that sets the foreign key the record holds for a relation and also has a callback on that relation is now refused, whatever the callback returns (`create`, `connect`, `disconnect`, `update` or `delete`). The ORM refuses it while it plans the write, before any statement runs, with:
+
+```text
+ORM.ARGUMENT_INVALID: update() data sets "authorId", the foreign key of relation "author", and also has a callback on "author"; set the foreign key or use the callback
+```
+
+`meta.relation` names the relation and `meta.fields` the foreign-key fields the data sets. A foreign-key field whose value is `undefined` does not count. It is not a type error.
+
+Such data used to run, and a `create`, `connect` or `disconnect` callback silently overwrote the foreign key the data set.
+
+For each such call, keep one of the two. To point the record at another row, set the foreign key, or use `connect` on the relation:
+
+```ts
+// before
+await db.Post.where({ id: 10 }).update({
+  authorId: 2,
+  author: (author) => author.connect({ id: 2 }),
+});
+
+// after
+await db.Post.where({ id: 10 }).update({
+  author: (author) => author.connect({ id: 2 }),
+});
+```
+
+To change or delete the row the record points at and also point the record at another row, make two calls: first the callback, then the foreign key.
+
+```ts
+// before
+await db.Post.where({ id: 10 }).update({
+  authorId: 2,
+  author: (author) => author.update({ name: 'Ada' }),
+});
+
+// after
+await db.Post.where({ id: 10 }).update({
+  author: (author) => author.update({ name: 'Ada' }),
+});
+await db.Post.where({ id: 10 }).update({ authorId: 2 });
+```
+
+
 ## A unique key with a nullable column is no row identity
 
 ### `nullable-unique-key-is-no-row-identity`
@@ -1224,3 +1346,23 @@ To find rows that hold a value the column's type no longer lists, compare with a
 ### `mysql-errors-drop-meta-target`
 
 Find code that reads `meta.target` from an error a MySQL or MariaDB client raised, and read the target from the client instead: `db.stack.target.targetId` is `'mysql'` or `'mariadb'`.
+
+
+## `prisma orm init --target` takes any target package by name
+
+### `init-target-takes-a-package-name`
+
+```bash
+prisma orm init --target @prisma/orm-sqlite --authoring psl
+```
+
+`--target` is looked up among the short names (`postgres`, `mongodb` and their aliases). A value that is not one of them is taken as a package name: `init` installs that package and writes the project from the init contribution it exports. `--target postgres` and `--target mongodb` do what they did before. A value that is not a valid package name is refused with `CLI.INIT_INVALID_FLAG_VALUE` before anything changes, and the error's `meta.problems` says why. Before installing, `init` checks that the package lists the `prisma-orm-extension` keyword and refuses with `CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED` when it does not. That includes `--target sqlite`, which names an unrelated package: use `--target @prisma/orm-sqlite`. The first error's `meta.allowed` still lists the short names only, and `meta.acceptsPackageName` is `true`.
+
+Without `--target`, the picker has one more entry, "Another target package", which asks for the package name.
+
+Nothing changes for a script that runs `init --target postgres` or `--target mongodb` and ignores fields it does not know.
+
+In each matched file that reads the `--json` result of `prisma orm init`:
+
+- The result has a new string field, `package`: the name of the target package, such as `@prisma/orm-postgres`. A reader that refuses unknown fields must allow it.
+- `target` is still `postgres` or `mongodb` for those packages, also when the package was given by name (`--target @prisma/orm-postgres` reports `target: "postgres"`). For any other package it is the package name, so a reader that checks `target` against the two short names must accept any string. Use `package` when you need the package name.

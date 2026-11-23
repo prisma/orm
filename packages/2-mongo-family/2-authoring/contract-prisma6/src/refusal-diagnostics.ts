@@ -46,6 +46,22 @@ function unexplained(refusal: BuildRefusal, sourceId: string): ContractSourceDia
   );
 }
 
+function unsupportedNameSubject(
+  refusal: Extract<BuildRefusal, { kind: 'nameUnsupported' }>,
+): string {
+  const { key, name } = refusal;
+  switch (key.kind) {
+    case 'model':
+      return `A model is named "${name}"`;
+    case 'collectionSettings':
+      return `Model "${key.model}" is stored in collection "${name}"`;
+    case 'valueObject':
+      return `A composite type is named "${name}"`;
+    case 'enum':
+      return `An enum is named "${name}"`;
+  }
+}
+
 /**
  * The reader's diagnostic for one refusal of the builder, at the place in the schema it is about. A refusal the reader cannot place is reported as a bug in the reader, as a contract Prisma 8 rejects.
  */
@@ -55,6 +71,12 @@ export function refusalDiagnostic(
   fallbackSourceId: string,
 ): ContractSourceDiagnostic {
   switch (refusal.kind) {
+    case 'nameUnsupported':
+      return {
+        code: 'PSL_STORED_NAME_UNSUPPORTED',
+        message: `${unsupportedNameSubject(refusal)}, which JavaScript reads as the prototype of an object rather than as a key. Prisma 8 cannot read or write a ${refusal.subject === 'valueObject' ? 'composite type' : refusal.subject} of that name.`,
+        sourceId: fallbackSourceId,
+      };
     case 'storedNameUnsupported': {
       const site = fieldSiteOf(sites, refusal.key);
       if (site === undefined) break;

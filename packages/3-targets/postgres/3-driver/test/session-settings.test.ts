@@ -109,6 +109,20 @@ describe('a pg client built from the settings of a URL', () => {
   });
 });
 
+describe('a connection string that leaves the user or host blank', () => {
+  it('connects as a client given no user or host at all', () => {
+    const fromBlank = connectsWith(new pg.Client(fromUrl('postgres://:secret@localhost/db')));
+    const fromNone = connectsWith(
+      new pg.Client({ password: 'secret', host: 'localhost', database: 'db' }),
+    );
+    expect(fromBlank['user']).toBe(fromNone['user']);
+
+    const fromBlankHost = connectsWith(new pg.Client(fromUrl('postgres://u:p@/db')));
+    const fromLocalHost = connectsWith(new pg.Client({ user: 'u', password: 'p', database: 'db' }));
+    expect(fromBlankHost['host']).toBe(fromLocalHost['host']);
+  });
+});
+
 describe('the connection settings of a connection Prisma opens', () => {
   it('send each session setting as a startup option, escaping spaces and backslashes', () => {
     expect(

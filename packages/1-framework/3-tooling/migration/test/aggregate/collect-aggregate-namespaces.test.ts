@@ -105,4 +105,28 @@ describe('collectAggregateNamespaces', () => {
 
     expect(collected.contracts).toEqual([app.contract(), ext.contract()]);
   });
+
+  it('collects namespaces named like properties every object has', () => {
+    const app = makeSpace('app', {
+      constructor: { table: { user: {} } },
+      ['__proto__']: { table: { post: {} } },
+    });
+
+    const collected = collectAggregateNamespaces(makeAggregate(app, []));
+
+    expect({
+      prototypeIsPlain: Object.getPrototypeOf(collected.storage.namespaces) === Object.prototype,
+      namespaces: Object.entries(collected.storage.namespaces).map(([id, ns]) => [
+        id,
+        ns.id,
+        Object.keys(ns.entries['table'] ?? {}),
+      ]),
+    }).toEqual({
+      prototypeIsPlain: true,
+      namespaces: [
+        ['constructor', 'constructor', ['user']],
+        ['__proto__', '__proto__', ['post']],
+      ],
+    });
+  });
 });

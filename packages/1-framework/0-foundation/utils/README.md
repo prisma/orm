@@ -37,6 +37,18 @@ const obj = {
 3. **Type-safe**: Returns `{}` or `{ key: V }` (without undefined)
 4. **exactOptionalPropertyTypes compatible**: Properly handles TypeScript's strict optional property checking
 
+### `isRecord(value)`
+
+Type guard for a non-null object that is not an array. Use it before reading properties from an `unknown` value.
+
+```typescript
+import { isRecord } from '@internal/utils/guards';
+
+if (isRecord(value) && Array.isArray(value['filters'])) {
+  // value is Record<string, unknown>
+}
+```
+
 ### `Result<T, F>`, `ok()`, `notOk()`, `okVoid()`
 
 Generic Result type for representing success or failure outcomes. This is the standard way to return "expected failures" as values rather than throwing exceptions.

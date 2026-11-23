@@ -1225,6 +1225,18 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/sqlite/9-facade/src/exports/init.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/sqlite/9-facade/src/init/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
       "glob": "packages/3-targets/sqlite/9-facade/src/config/**",
       "domain": "extensions",
       "layer": "adapters",
@@ -1523,6 +1535,18 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/init.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/init/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
     },
     {
       "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/config/**",

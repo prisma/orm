@@ -5,6 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "Prisma 8 for MySQL: the one package a MySQL application installs",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist",
     "skills"
@@ -116,6 +119,7 @@
     "./family-contract/value-set-derivation-hook": "./dist/family-contract__value-set-derivation-hook.mjs",
     "./family-runtime": "./dist/family-runtime.mjs",
     "./family-runtime/internal/prepared-query": "./dist/family-runtime__internal__prepared-query.mjs",
+    "./init": "./dist/init.mjs",
     "./migration": "./dist/migration.mjs",
     "./migration-tools/aggregate": "./dist/migration-tools__aggregate.mjs",
     "./migration-tools/contract-snapshot-store": "./dist/migration-tools__contract-snapshot-store.mjs",
@@ -165,6 +169,7 @@
     "./utils/canonical-stringify": "./dist/utils__canonical-stringify.mjs",
     "./utils/casts": "./dist/utils__casts.mjs",
     "./utils/defined": "./dist/utils__defined.mjs",
+    "./utils/guards": "./dist/utils__guards.mjs",
     "./utils/hash-content": "./dist/utils__hash-content.mjs",
     "./utils/internal-error": "./dist/utils__internal-error.mjs",
     "./utils/json": "./dist/utils__json.mjs",

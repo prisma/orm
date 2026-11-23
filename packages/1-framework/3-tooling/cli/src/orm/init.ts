@@ -14,7 +14,12 @@ import {
 } from '../commands/init/output';
 import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import { KNOWN_TARGET_PACKAGES, TARGET_SHORT_NAMES } from '../commands/init/target-packages';
+import {
+  KNOWN_TARGET_PACKAGES,
+  reportedTargetName,
+  TARGET_FLAG_PLACEHOLDER,
+  TARGET_SHORT_NAMES,
+} from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
 import { buildInitNextActions, initPresentations } from './init-blocks';
@@ -31,6 +36,7 @@ import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold'
 import { createTargetPackagePreparation } from './init-target-package';
 import { normalizeError } from './normalize-error';
 import { type ImportFromProject, importFromProject } from './project-modules';
+import { type LookUpRegistryKeywords, lookUpRegistryKeywords } from './registry-keywords';
 
 /** Each of these is a finding on a completed run, not an error. */
 const INIT_EXIT_CODES = {
@@ -78,6 +84,7 @@ function causeMessage(error: unknown): string {
 export interface InitCommandDependencies {
   readonly emitScaffoldedContract: typeof emitScaffoldedContract;
   readonly importFromProject: ImportFromProject;
+  readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
 }
 
 export const createInitCommand = (injected: InitCommandDependencies) =>
@@ -114,8 +121,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         // accepted are matched in the handler, where a rejection can name
         // every allowed value.
         target: flag.string({
-          brief: `Database target: ${TARGET_SHORT_NAMES.join(' or ')}`,
-          placeholder: 'db',
+          brief: `Database target: ${TARGET_SHORT_NAMES.join(' or ')}, or the name of a target package`,
+          placeholder: TARGET_FLAG_PLACEHOLDER,
         }),
         authoring: flag.string({
           brief: 'Schema authoring style: psl or typescript',
@@ -163,10 +170,13 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           prompt: ctx.prompt,
           prepareTargetPackage: createTargetPackagePreparation({
             cwd: ctx.cwd,
+            env: ctx.env,
             packages: ctx.packages,
             packageManager,
             install: !args.flags.skipInstall,
             importFromProject: injected.importFromProject,
+            lookUpRegistryKeywords: injected.lookUpRegistryKeywords,
+            signal: ctx.signal,
           }),
           checkPrisma7Source: createPrisma7SourceCheck({
             cwd: ctx.cwd,
@@ -181,7 +191,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }
         const document: InitOutput = {
           ok: true,
-          target: error.target.shortName,
+          target: reportedTargetName(error.target),
+          package: error.target.packageName,
           authoring: error.authoring,
           schemaPath: error.schemaPath,
           filesWritten: [],
@@ -274,7 +285,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         const installed = packagesInstalled === 'installed';
         const document: InitOutput = {
           ok: true,
-          target: inputs.target.shortName,
+          target: reportedTargetName(inputs.target),
+          package: inputs.target.packageName,
           authoring: adoptsPrisma7 ? 'prisma7' : inputs.authoring,
           schemaPath: inputs.schemaPath,
           filesWritten: scaffold.filesWritten,
@@ -295,7 +307,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
               }
             : null,
           nextSteps: buildNextSteps({
-            target: inputs.target.shortName,
+            target: reportedTargetName(inputs.target),
             packagesInstalled,
             contractEmitted,
             emitCommand: EMIT_COMMAND,
@@ -414,4 +426,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
     },
   });
 
-export const initCommand = createInitCommand({ emitScaffoldedContract, importFromProject });
+export const initCommand = createInitCommand({
+  emitScaffoldedContract,
+  importFromProject,
+  lookUpRegistryKeywords,
+});

@@ -101,7 +101,10 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*@(?:prisma/orm-family-sql|internal/sql-contract-ts)/(?:contract-ts/)?config-types)[\s\S]*\btypescriptContractFromPath\b'
   - id: target-package-exports-an-init-contribution
     summary: |
-      `prisma orm init` takes everything about a target from the target package: a package that wants `init` to set up a project on it exports an init contribution, typed `InitContribution` from `@prisma/orm-toolchain/cli/init-contribution`, as the default export of its `init` entrypoint. `@prisma/orm-postgres` and `@prisma/orm-mongo` export one. A package without it is not affected; `init` cannot set up a project on it, and the application writes `prisma.config.ts` by hand.
+      `prisma orm init` takes everything about a target from the target package: a package that wants `init` to set up a project on it exports an init contribution, typed `InitContribution` from `@prisma/orm-toolchain/cli/init-contribution`, as the default export of its `init` entrypoint. `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite` and `@prisma/orm-mysql` export one. A package without it is not affected; `init` cannot set up a project on it, and the application writes `prisma.config.ts` by hand.
+  - id: init-reaches-a-target-package-by-name
+    summary: |
+      `prisma orm init --target <package name>` sets up a project on any target package that exports an init contribution from its `init` entrypoint. The package needs no entry in any list of Prisma's, and must list the `prisma-orm-extension` keyword. A package without an `init` entrypoint is not affected.
   - id: mysql-driver-factories-take-the-target
     summary: |
       `createMysqlRuntimeDriverDescriptor` and `createMysqlControlDriverDescriptor`, which build the MySQL driver for a target that extends MySQL, take an options object whose `target` is the target's runtime metadata, from which the drivers take their target id and the display name their errors show, and whose `checkViolationErrors` lists the error numbers the database reports a failed CHECK constraint with, as in `createMysqlRuntimeDriverDescriptor({ target: mariadbTargetDescriptorMetaRuntime, checkViolationErrors: [4025] })`.
@@ -237,6 +240,28 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\.transaction\?\.\('
+  - id: activity-handle-transaction-and-in-transaction-required
+    summary: |
+      An activity handle, the `ActivityHandle` from `startActivityOn` or `startActivity` in `@prisma/orm-family-sql/runtime`, always has `transaction(fn, options)` and a new `inTransaction()` member. On a handle opened inside a transaction, or on a connection whose transaction is open, `transaction(fn)` runs `fn` in a savepoint, and `transaction(fn, options)` rejects with `RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED`. An object built by hand and typed as `ActivityHandle` must have both members, and a wrapper that copies a handle member by member must forward them. The detection matches TypeScript sources that name the type or call an optional `transaction` member.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?<![\w$])ActivityHandle(?![\w$])'
+        - '\.transaction\?\.\('
+  - id: activity-route-transaction-always-defined
+    summary: |
+      `ActivityRoute.transaction`, from `@prisma/orm-family-sql/runtime`, is always a function; its type no longer includes `undefined`. The detection matches TypeScript sources that name the type.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?<![\w$])ActivityRoute(?![\w$])'
+  - id: orm-write-inside-transaction-suspends-tx
+    summary: |
+      An ORM write of more than one statement inside a transaction runs in a savepoint. While it runs, other work sent on the same transaction rejects with `RUNTIME.TRANSACTION_SUSPENDED`. The detection matches TypeScript sources that call `transaction` and `Promise.all` or `Promise.allSettled`.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?<![\s\S])(?=[\s\S]*\.transaction\s*\()[\s\S]*Promise\.all'
   - id: sql-runtime-base-own-transaction-removed
     summary: |
       `SqlRuntimeBase.ownTransaction` is removed, and `ActivityRoute.transaction` is now `(parent, fn, options) => Promise<R>`: it runs `fn` in a transaction beneath `parent`, usually with `withTransaction(provider, fn, options, parent)`, instead of returning a `RuntimeTransaction`. `withTransaction` takes that optional `parent` and passes it to `provider.connection({ activityParent })`. The detection matches TypeScript sources that call `ownTransaction` or build an `ActivityRoute`.
@@ -294,6 +319,17 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '(?<![\w$])(?:Mysql|Sqlite)TransactionContext(?![\w$])'
+  - id: relation-mutator-writes-parameter
+    summary: |
+      The boolean type parameter `FilteredWritesDisabled` of `RelationMutator` (its sixth) and `VariantRelationMutator` (its seventh), exported from `@prisma/orm-family-sql`, is replaced by `Writes extends 'many' | 'one' | 'none'`, which also decides whether the mutator offers the new `update(data)` and `delete()` members. Both types also take a new last type parameter, `DeleteDisabled extends boolean = false` (the tenth of `RelationMutator`, the eleventh of `VariantRelationMutator`), which makes `delete` unavailable. Code that passes the `Writes` argument replaces `false` with `'many'`, and `true` with `'one'` for a to-one relation in `update()` data or `'none'` in `create()` data. Code that leaves the argument out gets the default `'many'` and is unaffected. The types may be imported under another name; follow the local name.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '(?<![\w$])(?:Variant)?RelationMutator\s*<'
+        - 'import\s+(?:type\s+)?\{[^}]*(?<![\w$])(?:Variant)?RelationMutator(?![\w$])[^}]*\}'
+  - id: foreign-key-with-relation-callback-refused
+    summary: |
+      `update()` data that sets a field of the foreign key the record holds for a relation (many-to-one, such as `Post.authorId` for `Post.author`) and also has a callback on that relation is refused with `ORM.ARGUMENT_INVALID` (`meta.problem: 'foreign-key-with-relation-mutation'`, with `meta.relation` and `meta.fields`) before any statement runs. It used to run, and a `create`, `connect` or `disconnect` callback overwrote the foreign key the data set. Keep either the foreign key or the callback.
   - id: mongo-collection-has-prepared
     summary: |
       `MongoCollection`, from `@prisma/orm-mongo/orm`, has a `prepared` member (`all()`, `first()`, `firstOrThrow()`), and its `limit` and `offset` take a number or a prepared placeholder. An object you type as `MongoCollection` yourself, such as a test double, needs `prepared`, and its `limit` and `offset` must accept the wider argument.
@@ -608,7 +644,7 @@ typescriptContractFromPath('prisma/contract.ts', 'prisma/contract.json', {
 
 This applies to a package that adds a target and wants `prisma orm init` to set up projects on it. Nothing changes for a package that does not.
 
-In this release `--target` takes only the short names of the packages Prisma lists, so `init` cannot reach a package outside that list yet; accepting a package name comes in a later release. Exporting the entrypoint now prepares your package for it.
+A user reaches your package with `prisma orm init --target <your package name>`; `init-reaches-a-target-package-by-name` below says what your package needs for that.
 
 Export an `init` entrypoint whose default export satisfies `InitContribution`:
 
@@ -633,6 +669,23 @@ export default {
 - `peerPackages` names the drivers your package requires as peers. `init` reads it only after your package is installed, so it cannot help a package manager that refuses to install your package without its peers. For a package Prisma lists, the list names the drivers so they go into that first install.
 - `readme`, `serverRequirement`, `probe` and `prisma7QuickReference` are optional. A `probe` must settle within the 60 seconds `init` gives it. Give `prisma7QuickReference` when your `configModule` exports `prisma7Schema`.
 - The entrypoint may import types from the framework, and no framework code that runs. The CLI that loads it can be a different installed copy of the framework from the one your package depends on.
+
+### `init-reaches-a-target-package-by-name`
+
+```bash
+prisma orm init --target prisma-orm-acmedb --authoring psl
+```
+
+This applies to a package that adds a target and exports an init contribution, or wants to. Nothing changes for a package that does not. The guide for the whole package is `references/build-a-target-package.md` in the `prisma-8` skill.
+
+Check these against your package:
+
+- **The keyword.** Add `"keywords": ["prisma-orm-extension"]` to your `package.json`. Before `init` installs a package that is not in Prisma's list of short names, it reads the package's keywords and refuses a package without this one. It reads the registry's `latest` manifest when it is about to install your package, and the installed `package.json` when the project already declares your package and has it on disk. When it cannot read your package from the registry, for example one that needs credentials or a scope's own registry, it asks the user to install your package first.
+- **The package name.** `--target` takes your package's name as published, with no version or tag.
+- **The first install.** `init` does not know your drivers before your package is installed, and it does not work them out from the registry. It installs your package and `dotenv`, and the package manager handles your required peer dependencies its own way. A package manager set up to refuse a package whose peers are missing fails that install, and `init` reports the failure. After loading your contribution, `init` declares its `peerPackages` in a later install. Your `init` entrypoint is loaded between the two installs, so it must load without the drivers present.
+- **Other required peers.** `init` installs only `peerPackages`. Tell your users in your README about any other peer your package requires.
+- **`--json`.** The result reports your package name as both `target` and `package`.
+- **Prisma 7 schemas.** `init` maps the provider of a Prisma 7 schema to a target package through Prisma's list only. In a project with a Prisma 7 schema, `--target <your package>` sets up a fresh contract and leaves the schema alone, and `--from-prisma7-schema` with `--target <your package>` is refused.
 
 
 ## Targets that extend MySQL
@@ -1011,12 +1064,41 @@ if (tx) {
 After:
 
 ```ts
-if (handle.transaction) {
-  return handle.transaction((tx) => work(tx), options);
-}
+return handle.transaction((tx) => work(tx), options);
 ```
 
+The member is always there (`activity-handle-transaction-and-in-transaction-required`), so the test for it goes too.
+
 A handle opened on a connection the caller holds runs the transaction on that connection and leaves it held after a commit or a rollback. After a failed `BEGIN`, a failed `ROLLBACK` or a timeout the connection is destroyed, and a later `release()` by its holder rejects.
+
+### `activity-handle-transaction-and-in-transaction-required`
+
+Drop the optional call on a handle's `transaction`: write `handle.transaction(fn)` in place of `handle.transaction?.(fn)`. Code that tested for the member, such as `'transaction' in handle` or `handle.transaction === undefined`, to learn whether the handle was opened inside a transaction calls `handle.inTransaction()` instead. Inside a transaction, call `handle.transaction(fn)` without options.
+
+An object built by hand and typed as `ActivityHandle`, such as a stub in a test, gains both members:
+
+```ts
+const handle: ActivityHandle<'my-call'> = {
+  ...members,
+  transaction: (fn, options) => inner.transaction(fn, options),
+  inTransaction: () => inner.inTransaction(),
+};
+```
+
+A wrapper that copies a handle's members by name, for example to record the statements it sends, forwards `inTransaction` too. Without it the ORM treats the handle as outside a transaction and passes its implicit transaction options, and on a facade that sets them, such as MySQL's, a write of several statements inside a transaction rejects with `RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED`.
+
+### `activity-route-transaction-always-defined`
+
+A `SqlRuntimeBase` subclass that builds an `ActivityRoute` sets `transaction` to a function; `transaction: undefined` no longer typechecks. Remove checks of the member for `undefined`. `sql-runtime-base-own-transaction-removed` below gives the function's new shape.
+
+### `orm-write-inside-transaction-suspends-tx`
+
+Where code runs an ORM write of several statements, such as a create with a nested relation, at the same time as other work on the same transaction, for example in `Promise.all`, await the write before sending the other work:
+
+```ts
+await tx.orm.Post.create({ title, author: (author) => author.create(user) });
+await tx.execute(plan);
+```
 
 ### `sql-runtime-base-own-transaction-removed`
 
@@ -1130,6 +1212,73 @@ return withTransaction(runtime, (txCtx) => fn(buildTransactionContext(txCtx)), o
 ```
 
 Code that only receives `tx` from `db.transaction(...)` needs no change: the callback of `tx.transaction(...)` now receives the same type as `tx`, which has every member the runtime's `TransactionContext` has.
+
+
+## The relation mutator types take `Writes` and `DeleteDisabled`
+
+### `relation-mutator-writes-parameter`
+
+`RelationMutator<TContract, ModelName, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, ConflictActions, DeleteDisabled>` and `VariantRelationMutator<TContract, ModelName, VariantValue, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, ConflictActions, DeleteDisabled>` used to take a boolean, `FilteredWritesDisabled`, in the place of `Writes`, and had no `DeleteDisabled`. Nested `update(data)` and `delete()` of one related row are new, and `Writes` says which row writes the mutator offers:
+
+| `Writes` | Relation | `where()` returns | `updateAll`, `deleteAll` | `update`, `delete` |
+| --- | --- | --- | --- | --- |
+| `'many'` (default) | to-many, including many-to-many | a mutator with `update`, `delete`, `updateAll`, `deleteAll` | available | only after `where()` |
+| `'one'` | to-one, including a relation the record holds the key for | a mutator with `update`, `delete` | not available | available |
+| `'none'` | in `create()` | not available | not available | not available |
+
+An unavailable member takes a `never` parameter, so a call is a type error.
+
+`DeleteDisabled` is `false` by default. It applies with `Writes = 'one'`: when it is `true`, `delete`, bare and after `where()`, takes a `never` parameter. With `Writes = 'many'` it has no effect. The ORM sets it on a relation whose foreign key, held by the record, is required.
+
+In every file the detection matches, find each use of `RelationMutator<...>` or `VariantRelationMutator<...>`. A file may import them under another name, as in `import type { RelationMutator as RM } from '@prisma/orm-family-sql'`; follow the local name. Where a use passes the `Writes` argument (the sixth for `RelationMutator`, the seventh for `VariantRelationMutator`):
+
+- `false` becomes `'many'`.
+- `true` becomes `'none'` in `create()` data. In `update()` data it becomes `'one'` for a to-one relation, which offers `update` and `delete`; when the record holds the relation's foreign key and that key is required, also pass `DeleteDisabled = true`, because the ORM refuses `delete` there.
+
+A use that leaves the `Writes` argument out gets `'many'` and needs no change. Code that lists the members of a mutator, for example with `keyof`, also sees `update` and `delete`.
+
+### `foreign-key-with-relation-callback-refused`
+
+`update()` data that sets the foreign key the record holds for a relation and also has a callback on that relation is now refused, whatever the callback returns (`create`, `connect`, `disconnect`, `update` or `delete`). The ORM refuses it while it plans the write, before any statement runs, with:
+
+```text
+ORM.ARGUMENT_INVALID: update() data sets "authorId", the foreign key of relation "author", and also has a callback on "author"; set the foreign key or use the callback
+```
+
+`meta.relation` names the relation and `meta.fields` the foreign-key fields the data sets. A foreign-key field whose value is `undefined` does not count. It is not a type error.
+
+Such data used to run, and a `create`, `connect` or `disconnect` callback silently overwrote the foreign key the data set.
+
+For each such call, keep one of the two. To point the record at another row, set the foreign key, or use `connect` on the relation:
+
+```ts
+// before
+await db.Post.where({ id: 10 }).update({
+  authorId: 2,
+  author: (author) => author.connect({ id: 2 }),
+});
+
+// after
+await db.Post.where({ id: 10 }).update({
+  author: (author) => author.connect({ id: 2 }),
+});
+```
+
+To change or delete the row the record points at and also point the record at another row, make two calls: first the callback, then the foreign key.
+
+```ts
+// before
+await db.Post.where({ id: 10 }).update({
+  authorId: 2,
+  author: (author) => author.update({ name: 'Ada' }),
+});
+
+// after
+await db.Post.where({ id: 10 }).update({
+  author: (author) => author.update({ name: 'Ada' }),
+});
+await db.Post.where({ id: 10 }).update({ authorId: 2 });
+```
 
 
 ## MongoDB prepared ORM reads

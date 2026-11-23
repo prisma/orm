@@ -64,7 +64,7 @@ describe(
         });
 
         expect(inputs).toMatchObject({
-          target: { shortName: 'postgres' },
+          target: { listed: { shortName: 'postgres' } },
           schemaPath: 'prisma/schema.prisma',
           contractSource: {
             kind: 'prisma7-schema',
@@ -89,7 +89,7 @@ describe(
           prompt,
         });
 
-        expect(inputs.target.shortName).toBe('postgres');
+        expect(inputs.target.listed?.shortName).toBe('postgres');
       });
 
       it('accepts a --target that agrees with the provider', async () => {
@@ -106,7 +106,7 @@ describe(
           prompt,
         });
 
-        expect(inputs.target.shortName).toBe('postgres');
+        expect(inputs.target.listed?.shortName).toBe('postgres');
       });
 
       it('refuses a --target that disagrees with the provider, before anything is asked', async () => {
@@ -149,7 +149,7 @@ describe(
           prompt,
         });
 
-        expect(inputs.target.shortName).toBe('postgres');
+        expect(inputs.target.listed?.shortName).toBe('postgres');
       });
 
       it('refuses any other provider and lists the supported ones', async () => {
@@ -337,7 +337,7 @@ describe(
 
         expect(calls.map((call) => call.kind)).toEqual(['confirm', 'select', 'select', 'text']);
         expect(inputs).toMatchObject({
-          target: { shortName: 'mongodb' },
+          target: { listed: { shortName: 'mongodb' } },
           authoring: 'typescript',
           schemaPath: 'src/prisma/contract.ts',
           contractSource: {
@@ -395,7 +395,7 @@ describe(
 
         expect(calls.map((call) => call.question)).not.toContain(PRISMA7_QUESTION);
         expect(inputs).toMatchObject({
-          target: { shortName: 'mongodb' },
+          target: { listed: { shortName: 'mongodb' } },
           contractSource: { kind: 'starter' },
         });
       });
