@@ -137,7 +137,7 @@ A level that is closed reports `RUNTIME.TRANSACTION_CLOSED`, not `RUNTIME.TRANSA
 
 The one exception to "settle from the top" is the outer transaction's timeout. After the deadline passes, the callback, and any savepoint it opened, may still be running, so the outer transaction can end with savepoints still open: its `rollback()` is allowed then and sends `ROLLBACK`, and so is the cleanup when its connection is released or destroyed, which is what `withTransaction` does on a timeout. Either ends only the outer transaction's activity. The open savepoints then refuse work with `RUNTIME.TRANSACTION_CLOSED`, and the nested call's `rollback()` sends nothing and ends the savepoint's activity.
 
-A consequence for users: while an ORM write of several statements runs in its savepoint, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`. Each call on `tx` is awaited before the next starts when one of them is such a write.
+A consequence for users: while an ORM write of several statements runs in its savepoint, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`. Each call on `tx` is awaited before the next starts when one of them is such a write. When that rejection makes the callback throw while the write still runs, as in `Promise.all`, the transaction itself rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED` and its connection is destroyed (§ 8).
 
 ### 7. Savepoint names come from a counter per transaction
 
@@ -160,6 +160,8 @@ Savepoints are named `sp_1`, `sp_2` and so on, from a counter kept with the tran
 These rules are the outer transaction's rules from `withTransaction`, applied to one level, and the error codes are the same: a nested call reuses `RUNTIME.TRANSACTION_COMMIT_FAILED` and `RUNTIME.TRANSACTION_ROLLBACK_FAILED` rather than adding savepoint-specific codes.
 
 A nested call that the enclosing callback does not await, and that is still running when the enclosing callback returns, leaves the enclosing level unable to settle: its `commit()` and `rollback()` are refused as suspended. The settle sequence then invalidates the stack, the enclosing call rejects with `RUNTIME.TRANSACTION_COMMIT_FAILED`, every context of the transaction is closed, and the connection is destroyed.
+
+When the enclosing callback throws while such a nested call is still running, its `rollback()` is refused as suspended in the same way. The enclosing call rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, with the callback's error as `cause` and the refused rollback's `RUNTIME.TRANSACTION_SUSPENDED` in `rollbackError`, every context of the transaction is closed, and the connection is destroyed. This is the usual path of a callback that runs an ORM write of several statements in `Promise.all` with other work on the same context: the other work rejects as suspended, `Promise.all` rejects, and the callback throws while the write still holds its savepoint.
 
 ### 9. Middleware sees each savepoint as a transaction activity
 
@@ -185,7 +187,7 @@ A read of several statements and a single-statement write open no savepoint.
 
 - Code that opens its own transaction can be called inside another transaction without changing, and its work is still applied together or not at all.
 - A single ORM call is atomic whether or not it runs inside a user's transaction, on every SQL target.
-- Concurrent work on one transaction context, which worked before when it did not involve a write of several statements, can now reject with `RUNTIME.TRANSACTION_SUSPENDED` when a nested call or such a write is running. The error names the open savepoint.
+- Concurrent work on one transaction context, which worked before when it did not involve a write of several statements, can now reject with `RUNTIME.TRANSACTION_SUSPENDED` when a nested call or such a write is running. The error names the open savepoint. When that rejection makes the enclosing callback throw while the nested call or write still runs, the enclosing call rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, with the suspended error as `cause`, and the connection is destroyed (§ 8).
 - Every `SqlTransaction` implementation, including test stubs, implements `savepoint(name)`.
 - A new facade adds `transaction` to its transaction context as § 5 shows, or its nested callback receives the runtime's context without the facade's members.
 - A middleware that treats every `'transaction'` activity as a top-level transaction sees savepoints as well, and filters them with `ctx.inTransaction()` when it needs only the outermost.

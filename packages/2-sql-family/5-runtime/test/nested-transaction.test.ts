@@ -234,6 +234,66 @@ describe('TransactionContext.transaction', () => {
   );
 
   it.each([
+    { enclosing: 'the outer transaction', depth: 0, sent: 'begin, SAVEPOINT sp_1, destroy' },
+    { enclosing: 'a savepoint', depth: 1, sent: 'begin, SAVEPOINT sp_1, SAVEPOINT sp_2, destroy' },
+  ])(
+    'rejects with RUNTIME.TRANSACTION_ROLLBACK_FAILED and closes the transaction when $enclosing throws while a nested call it did not await is running',
+    async ({ depth, sent }) => {
+      const { runtime, events } = createSetup();
+      const proceed = deferred();
+      const error = new Error('nope');
+      const contexts: TransactionContext[] = [];
+      let nested: Promise<unknown> = Promise.resolve();
+      const enclosingCall = deferred<{ call: Promise<unknown> }>();
+      const leave = (ctx: TransactionContext) => {
+        contexts.push(ctx);
+        nested = ctx.transaction(async (inner) => {
+          contexts.push(inner);
+          await proceed.promise;
+        });
+        throw error;
+      };
+
+      const run = withTransaction(runtime, async (tx) => {
+        if (depth === 0) return leave(tx);
+        contexts.push(tx);
+        const call = tx.transaction(async (middle) => leave(middle));
+        enclosingCall.resolve({ call });
+        await call.catch(() => undefined);
+      });
+
+      await expect(depth === 0 ? run : (await enclosingCall.promise).call).rejects.toMatchObject({
+        code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
+        cause: error,
+        details: { rollbackError: { code: 'RUNTIME.TRANSACTION_SUSPENDED' } },
+      });
+      await run.catch(() => undefined);
+      const before = events.length;
+      expect(contexts).toHaveLength(depth + 2);
+      for (const ctx of contexts) {
+        await rejectsWith(ctx.execute(statementC), 'TRANSACTION_CLOSED');
+      }
+      proceed.resolve();
+      await nested.catch(() => undefined);
+
+      const ends = transactionIds(events).map(
+        (id) =>
+          events.filter((event) => event.activity?.id === id && event.name.startsWith('ended:'))
+            .length,
+      );
+      expect({
+        afterClose: trace(events.slice(before)),
+        trace: trace(events),
+        ends,
+      }).toEqual({
+        afterClose: '',
+        trace: sent,
+        ends: Array.from({ length: depth + 2 }, () => 1),
+      });
+    },
+  );
+
+  it.each([
     { enclosing: 'the outer transaction', depth: 0 },
     { enclosing: 'a savepoint', depth: 1 },
   ])(
