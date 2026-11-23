@@ -12,8 +12,8 @@ import {
   type EnumValueCoordinate,
   enumValueCoordinateJson,
   enumValueStatementText,
-  type KeepDataEdit,
   type MigrationPlannerConflict,
+  modelStatementText,
   type ResolvedEnumValueRenameStatement,
   type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
@@ -35,8 +35,8 @@ import { type StoredValue, unrewritableKeyReason } from './migration-factories';
 import { modelCoordinates } from './mongo-model-coordinates';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
-import { statementFlag } from './mongo-statement-flags';
 import { collectionControlPolicy } from './mongo-statement-planning';
+import { handWrittenMigrationSteps, joinedList, renameRefused } from './mongo-storage-renames';
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
   type StoredPlace,
@@ -44,7 +44,7 @@ import {
   storedPlacesOf,
   type UnlistedPlace,
 } from './mongo-stored-places';
-import { callInSentence, RemoveStoredValueCall, ReplaceStoredValueCall } from './op-factory-call';
+import { RemoveStoredValueCall, ReplaceStoredValueCall } from './op-factory-call';
 import { jsonPathText } from './stored-key-path';
 
 /** A rewrite of one stored value of an enum in one place, with the enum value and the statement it carries out. */
@@ -57,10 +57,6 @@ export interface EnumValueRewrite<
   /** The enum value whose stored value is rewritten, as the origin contract names it. */
   readonly enumValue: EnumValueCoordinate;
   readonly statement: ResolvedEnumValueRenameStatement | undefined;
-  /** For a removal the plan asks about, the edit to `migration.ts` that keeps its data instead. */
-  readonly keepDataEdit: KeepDataEdit | undefined;
-  /** For a removal whose data no edit of this migration can keep safely, how to keep it instead. */
-  readonly keepDataAdvice: string | undefined;
   /** How to make a change of this enum's stored values in two steps, when one migration cannot make it safely. */
   readonly twoMigrationsAdvice: string;
   /** The variant whose documents the call selects; `undefined` for a root model's documents. */
@@ -86,6 +82,8 @@ interface EnumPlace {
   readonly keys: readonly string[];
   /** Whether the field or key must hold a single value. */
   readonly required: boolean;
+  /** Whether the field is its model's discriminator, whose values a variant change rewrites. */
+  readonly discriminator: boolean;
 }
 
 /** What changes for one member of the origin enum: its stored value `from` becomes `to`, or, with no `to`, is removed. */
@@ -163,12 +161,15 @@ function placesOfEnum(
     const collection = collectionOfModel(contract.domain, coordinate);
     if (collection === undefined) continue;
     const variant = selectedVariantOf(contract.domain, coordinate);
+    const discriminator =
+      model.discriminator === undefined ? undefined : storedNames[model.discriminator.field];
     for (const [storedName, field] of typed) {
       places.push({
         place: { collection, field: storedName, model: coordinate, variant },
         path: undefined,
         keys: [storedName],
         required: isRequired(field),
+        discriminator: storedName === discriminator,
       });
     }
   }
@@ -199,6 +200,7 @@ function placesOfEnum(
             ...path.flatMap((step) => (step.kind === 'member' ? [step.name] : [])),
           ],
           required: isRequired(field),
+          discriminator: false,
         });
       }
     }
@@ -242,23 +244,6 @@ function valueChanges(
   });
 }
 
-/**
- * The changes of an enum whose new value another change reads, or whose old value another change
- * writes: swaps and chains. A removal among them cannot keep its data with a replacement in the
- * same migration, which the plan would refuse.
- */
-function overlappingChanges(changes: readonly ValueChange[]): readonly ValueChange[] {
-  const replacing = changes.filter((change) => change.to !== undefined);
-  return replacing.filter((change) =>
-    replacing.some(
-      (other) =>
-        other !== change &&
-        ((other.to !== undefined && sameValue(other.to, change.from)) ||
-          (change.to !== undefined && sameValue(change.to, other.from))),
-    ),
-  );
-}
-
 function isBooleanEnum(enums: EnumComparison): boolean {
   return enums.originEnum.members.some(({ value }) => typeof value === 'boolean');
 }
@@ -268,20 +253,6 @@ const NO_THIRD_BOOLEAN =
 
 const SWAP_IN_ONE_UPDATE =
   'swap the stored values yourself in one update of the database, such as an updateMany whose pipeline sets each field that holds the enum to its negation with $not';
-
-function twoMigrationsAdvice(enums: EnumComparison, changes: readonly ValueChange[]): string {
-  if (isBooleanEnum(enums)) {
-    return `${NO_THIRD_BOOLEAN} To keep that data, plan the change with migration plan, remove the removeStoredValue calls of this enum from the migration.ts it writes, and ${SWAP_IN_ONE_UPDATE}, before you apply it.`;
-  }
-  const names = changes.map(
-    ({ enumValue }) => `"${enumValueStatementText(enums.fromContract, enumValue)}"`,
-  );
-  const named =
-    names.length === 1
-      ? `enum value ${names.join('')}`
-      : `enum values ${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-  return `To keep that data: ${inTwoSteps(`move the stored values of ${named} to values the enum does not use`, 'move them to their final values')} MongoDB applies the operations one at a time, so replacements whose old values other replacements write cannot safely run again after a later operation stops.`;
-}
 
 /** How to make a change of the enum's stored values that one migration cannot make safely. */
 function enumTwoMigrationsAdvice(enums: EnumComparison): string {
@@ -309,11 +280,21 @@ function enumValueText(contract: ContractWithDomain, value: EnumValueCoordinate)
 
 function refused(
   enums: EnumComparison,
-  change: Pick<ValueChange, 'enumValue' | 'statement'>,
+  change: Pick<ValueChange, 'enumValue' | 'statement'> & {
+    readonly to?: StoredValue | undefined;
+    readonly from?: JsonValue;
+  },
   reason: string,
   why: string,
 ): MigrationPlannerConflict {
   const { statement } = change;
+  if (statement === undefined && change.to !== undefined) {
+    return renameRefused(
+      undefined,
+      `Cannot change the stored value of ${enumValueText(enums.fromContract, change.enumValue)} from ${JSON.stringify(change.from)} to ${JSON.stringify(change.to)}: ${reason}`,
+      why,
+    );
+  }
   if (statement === undefined) {
     return {
       kind: 'fieldRemovalRefused',
@@ -357,38 +338,6 @@ function stillStoredRefusal(
   );
 }
 
-/**
- * For a member that keeps its name and takes the stored value of an origin member the destination no longer has: the plan cannot tell whether that member is gone, so it says how to name the member it became. The member it suggests is the destination's only new member that no rename names, as the question picks it.
- */
-function takenValueAdvice(
-  enums: EnumComparison,
-  enumValue: EnumValueCoordinate,
-  to: StoredValue,
-  holder: string | undefined,
-  renamedTo: readonly string[],
-): string | undefined {
-  const { originEnum, destinationEnum } = enums;
-  if (holder === undefined || destinationEnum.members.some(({ name }) => name === holder)) {
-    return undefined;
-  }
-  const added = destinationEnum.members.filter(
-    ({ name }) =>
-      !renamedTo.includes(name) && !originEnum.members.some((member) => member.name === name),
-  );
-  const [only] = added;
-  if (only === undefined) return undefined;
-  const holderText = enumValueStatementText(enums.fromContract, { ...enumValue, member: holder });
-  const lead = `Its new stored value ${JSON.stringify(to)} was the stored value of enum value "${holderText}", which the enum no longer has.`;
-  const ask = 'and the next question says how to keep the data of both.';
-  const memberText = (member: string) =>
-    enumValueStatementText(enums.contract, { ...enumValue, member });
-  const rename = (member: string) => statementFlag('rename', `${holderText}:${memberText(member)}`);
-  if (added.length > 1) {
-    return `${lead} If "${holderText}" is now another member, add ${rename('<new member>')}, ${ask}`;
-  }
-  return `${lead} If "${holderText}" is now "${memberText(only.name)}", add ${rename(only.name)}, ${ask}`;
-}
-
 function mergingRefusal(
   enums: EnumComparison,
   statement: ResolvedEnumValueRenameStatement,
@@ -427,6 +376,200 @@ function unlistedRefusal(
         `${where} holds a ${unlisted.reach.kind} of value objects`,
         `The plan rewrites a stored value only in a field that holds it, a value object, a list of them, or an embedded model. Rewrite ${where} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.`,
       );
+}
+
+/** A change of a member that keeps its name, with its new stored value. */
+type MemberMove = ValueChange & { readonly to: StoredValue };
+
+function valueText(value: StoredValue): string {
+  return JSON.stringify(value);
+}
+
+function enumNameText(enums: EnumComparison, value: EnumValueCoordinate): string {
+  return modelStatementText(enums.fromContract, {
+    namespaceId: value.namespaceId,
+    model: value.enum,
+  });
+}
+
+function memberText(enums: EnumComparison, value: EnumValueCoordinate): string {
+  return `"${enumValueStatementText(enums.fromContract, value)}"`;
+}
+
+/** How a refusal names a member's new stored value when no statement asks for it. */
+function changeText(enums: EnumComparison, change: MemberMove): string {
+  return `Cannot change the stored value of enum value ${memberText(enums, change.enumValue)} from ${valueText(change.from)} to ${valueText(change.to)}`;
+}
+
+/** A value no member of either enum stores, of the kind of `value`: the next whole number, or a marked string. */
+function temporaryValue(value: StoredValue, taken: readonly JsonValue[]): StoredValue {
+  const numbers = taken.flatMap((stored) => {
+    const number = typeof stored === 'string' ? Number(stored) : stored;
+    return typeof number === 'number' && Number.isFinite(number) ? [number] : [];
+  });
+  const nextWholeNumber = numbers.length === 0 ? 0 : Math.floor(Math.max(...numbers)) + 1;
+  if (typeof value === 'number') return nextWholeNumber;
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) return String(nextWholeNumber);
+  let candidate = 'prisma_swap';
+  while (taken.some((stored) => sameValue(stored, candidate))) candidate = `${candidate}_`;
+  return candidate;
+}
+
+/**
+ * The members that keep their names and move stored values along a chain or around a cycle, each
+ * group with whether it is a cycle. A change that moves to a value no other change frees is alone.
+ */
+function linkedMoves(
+  moves: readonly MemberMove[],
+): readonly { readonly moves: readonly MemberMove[]; readonly cycle: boolean }[] {
+  const bySource = new Map(moves.map((move) => [JSON.stringify(move.from), move]));
+  const placed = new Set<MemberMove>();
+  const groups: { readonly moves: readonly MemberMove[]; readonly cycle: boolean }[] = [];
+  const startsOf = moves.filter(
+    (move) => !moves.some((other) => other !== move && sameValue(other.to, move.from)),
+  );
+  for (const start of [...startsOf, ...moves]) {
+    if (placed.has(start)) continue;
+    const path: MemberMove[] = [];
+    let cycle = false;
+    for (
+      let move: MemberMove | undefined = start;
+      move !== undefined && !placed.has(move);
+      move = bySource.get(JSON.stringify(move.to))
+    ) {
+      if (path.includes(move)) {
+        cycle = true;
+        break;
+      }
+      path.push(move);
+    }
+    for (const move of path) placed.add(move);
+    groups.push({ moves: path, cycle });
+  }
+  return groups;
+}
+
+const CYCLE_WHY =
+  'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle.';
+
+const CHAIN_WHY =
+  "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents, so a rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops.";
+
+const BOOLEAN_BY_HAND = `A boolean enum has no third value to move a stored value to, so the change cannot be made in two plans. Write this change as a hand-written migration instead: ${handWrittenMigrationSteps('the stored values of the enum, in one update whose pipeline sets each field that holds the enum to its negation with $not,')}`;
+
+/**
+ * The route through stored values no member stores, which works on both commands: a plan that
+ * gives each member whose new value another member of the group still holds a value nothing
+ * stores, and the others their new values, then a plan that gives the first ones their new values.
+ */
+function movesTwoPlans(
+  enums: EnumComparison,
+  moves: readonly MemberMove[],
+  taken: readonly JsonValue[],
+): string {
+  const reserved: JsonValue[] = [...taken];
+  const steps = moves.map((move) => {
+    const waits = moves.some((other) => other !== move && sameValue(other.from, move.to));
+    const through = waits ? temporaryValue(move.to, reserved) : undefined;
+    if (through !== undefined) reserved.push(through);
+    return { move, through };
+  });
+  const first = joinedList(
+    steps.map(({ move, through }) =>
+      through === undefined
+        ? `${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`
+        : `${memberText(enums, move.enumValue)} a stored value no member stores, such as ${valueText(through)}`,
+    ),
+  );
+  const second = joinedList(
+    steps.flatMap(({ move, through }) =>
+      through === undefined
+        ? []
+        : [`${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`],
+    ),
+  );
+  return `Make the change in two plans: first give ${first}, and plan and apply that; then give ${second}, and plan again.`;
+}
+
+/** Members that keep their names and move stored values in a cycle, or along a chain, which MongoDB cannot rewrite in one migration. */
+function movesRefusal(
+  enums: EnumComparison,
+  moves: readonly MemberMove[],
+  cycle: boolean,
+  taken: readonly JsonValue[],
+): MigrationPlannerConflict {
+  const [first] = moves;
+  const members = joinedList(moves.map(({ enumValue }) => memberText(enums, enumValue)));
+  const listed = joinedList(moves.map(({ from, to }) => `${valueText(from)} to ${valueText(to)}`));
+  const enumName = first === undefined ? '' : enumNameText(enums, first.enumValue);
+  return renameRefused(
+    undefined,
+    cycle
+      ? `Cannot change the stored values of enum "${enumName}": enum values ${members} move stored values in a cycle, ${listed}, and a rewrite of one would overwrite the other before it is read`
+      : `Cannot change the stored values of enum "${enumName}": enum values ${members} move stored values along a chain, ${listed}, and a rewrite of one would write a value another still has to read`,
+    `${cycle ? CYCLE_WHY : CHAIN_WHY} ${isBooleanEnum(enums) ? BOOLEAN_BY_HAND : movesTwoPlans(enums, moves, taken)}`,
+  );
+}
+
+/** A member that keeps its name and takes the stored value `to`, which `holder` keeps in the origin enum, so their data would merge. */
+function memberMergingRefusal(
+  enums: EnumComparison,
+  move: MemberMove,
+  holder: string,
+): MigrationPlannerConflict {
+  const member = memberText(enums, move.enumValue);
+  const holderText = memberText(enums, { ...move.enumValue, member: holder });
+  const holderFlag = enumValueStatementText(enums.fromContract, {
+    ...move.enumValue,
+    member: holder,
+  });
+  return renameRefused(
+    undefined,
+    `${changeText(enums, move)}: the origin enum stores ${valueText(move.to)} as enum value ${holderText}`,
+    `A changed stored value is rewritten in every document that holds it, so the documents of ${member} would hold ${valueText(move.to)} as the documents of ${holderText} do, and their data would merge. Make the change in two plans: first remove enum value ${holderText}, and plan and apply that; then give ${member} the stored value ${valueText(move.to)}, and plan again. The first plan asks about the documents that hold ${valueText(move.to)}. If you answer it with --delete ${holderFlag}, a required field cannot lose its value: before that plan applies, delete those documents in the database, or set them to ${valueText(move.from)} there to merge their data with the data of ${member} on purpose.`,
+  );
+}
+
+/**
+ * The refusal of the first change of a member that keeps its name and that MongoDB cannot make in
+ * one migration: one that takes the stored value another member of the origin keeps, whether the
+ * destination keeps that member or removes it (a merge), or one of members that move values along
+ * a chain or around a cycle. A group
+ * that involves a statement is left to the statement refusals and the overlap check.
+ */
+function memberMovesRefusal(
+  enums: EnumComparison,
+  changes: readonly ValueChange[],
+  taken: readonly JsonValue[],
+): MigrationPlannerConflict | undefined {
+  const moves = changes.flatMap((change): MemberMove[] =>
+    change.statement === undefined && change.to !== undefined ? [{ ...change, to: change.to }] : [],
+  );
+  for (const move of moves) {
+    const holder = enums.originEnum.members.find(
+      ({ name, value }) => name !== move.enumValue.member && sameValue(value, move.to),
+    );
+    if (holder === undefined) continue;
+    if (!changes.some(({ enumValue }) => enumValue.member === holder.name)) {
+      return memberMergingRefusal(enums, move, holder.name);
+    }
+  }
+  const replacing = changes.filter(({ to }) => to !== undefined);
+  for (const group of linkedMoves(moves)) {
+    if (group.moves.length < 2) continue;
+    const involvesStatement = replacing.some(
+      (change) =>
+        change.statement !== undefined &&
+        group.moves.some(
+          (move) =>
+            (change.to !== undefined && sameValue(change.to, move.from)) ||
+            sameValue(change.from, move.to),
+        ),
+    );
+    if (involvesStatement) continue;
+    return movesRefusal(enums, group.moves, group.cycle, taken);
+  }
+  return undefined;
 }
 
 /** The input the stored value rewrites read. */
@@ -523,7 +666,12 @@ function planEnum(
     }
   }
   if (checked.length === 0) return ok({ replacements: [], removals: [] });
-  const overlapping = overlappingChanges(checked);
+  const taken = [
+    ...originEnum.members.map(({ value }) => value),
+    ...destinationEnum.members.map(({ value }) => value),
+  ];
+  const moved = memberMovesRefusal(enums, checked, taken);
+  if (moved !== undefined) return notOk([moved]);
   const advice = enumTwoMigrationsAdvice(enums);
   const places = placesOfEnum(contract, namespaceId, enumName);
   if (!places.ok) {
@@ -547,28 +695,6 @@ function planEnum(
   const replacements: EnumValueReplacement[] = [];
   const removals: EnumValueRewrite<RemoveStoredValueCall>[] = [];
   for (const change of checked) {
-    const keepsDataBy =
-      change.statement !== undefined || change.to === undefined || merging(change.to) !== undefined
-        ? undefined
-        : overlapping.includes(change)
-          ? 'advice'
-          : 'edit';
-    const removalAdvice =
-      keepsDataBy === 'advice'
-        ? twoMigrationsAdvice(enums, overlapping)
-        : change.statement === undefined && change.to !== undefined
-          ? takenValueAdvice(
-              enums,
-              change.enumValue,
-              change.to,
-              merging(change.to)?.name,
-              valueRenames.flatMap((statement) =>
-                statement.to.enum === enumName && statement.to.namespaceId === namespaceId
-                  ? [statement.to.member]
-                  : [],
-              ),
-            )
-          : undefined;
     for (const enumPlace of live) {
       const policy = collectionControlPolicy(contract, enumPlace.place.collection);
       if (policy !== 'managed') continue;
@@ -580,46 +706,34 @@ function planEnum(
           ? {}
           : { filter: variantFilter(enumPlace.place.variant) }),
       };
-      const replacementCall = (to: StoredValue) =>
-        new ReplaceStoredValueCall({
-          ...at,
-          from: change.from,
-          to: valueExpression(to, bsonTypes),
-        });
-      if (change.statement !== undefined && change.to !== undefined) {
+      if (change.to !== undefined) {
+        if (change.statement === undefined && enumPlace.discriminator) continue;
         replacements.push({
-          call: replacementCall(change.to),
+          call: new ReplaceStoredValueCall({
+            ...at,
+            from: change.from,
+            to: valueExpression(change.to, bsonTypes),
+          }),
           enumValue: change.enumValue,
           statement: change.statement,
-          keepDataEdit: undefined,
-          keepDataAdvice: undefined,
           twoMigrationsAdvice: advice,
           writtenValue: change.to,
           variant: enumPlace.place.variant,
         });
         continue;
       }
-      const call = new RemoveStoredValueCall(
-        {
-          ...at,
-          value: change.from,
-          ...(enumPlace.required ? { required: true } : {}),
-          enumValue: enumValueCoordinateJson(change.enumValue),
-        },
-        { importsReplacement: keepsDataBy === 'edit' || enumPlace.required },
-      );
       removals.push({
-        call,
+        call: new RemoveStoredValueCall(
+          {
+            ...at,
+            value: change.from,
+            ...(enumPlace.required ? { required: true } : {}),
+            enumValue: enumValueCoordinateJson(change.enumValue),
+          },
+          { importsReplacement: enumPlace.required },
+        ),
         enumValue: change.enumValue,
         statement: undefined,
-        keepDataEdit:
-          keepsDataBy === 'edit' && change.to !== undefined
-            ? {
-                remove: callInSentence(call),
-                replaceWith: callInSentence(replacementCall(change.to)),
-              }
-            : undefined,
-        keepDataAdvice: removalAdvice,
         twoMigrationsAdvice: advice,
         variant: enumPlace.place.variant,
       });
@@ -645,7 +759,7 @@ function placeRefusals(
   };
   for (const change of changes) {
     const kind: PlannedRewrite['kind'] =
-      change.statement === undefined ? 'removeStoredValue' : 'replaceStoredValue';
+      change.to === undefined ? 'removeStoredValue' : 'replaceStoredValue';
     for (const { place, keys } of places) {
       const policy = collectionControlPolicy(input.contract, place.collection);
       if (policy !== 'managed') {
@@ -668,7 +782,7 @@ function placeRefusals(
             enums,
             change,
             `the stored name "${unrewritable}" cannot be rewritten`,
-            `${unrewritableKeyReason(unrewritable)}, so the plan cannot rewrite the value there. Rewrite it in the database yourself, or ${change.statement === undefined ? 'keep the enum value in the contract' : 'leave out this statement'}.`,
+            `${unrewritableKeyReason(unrewritable)}, so the plan cannot rewrite the value there. Rewrite it in the database yourself, or ${change.statement !== undefined ? 'leave out this statement' : change.to === undefined ? 'keep the enum value in the contract' : `keep its stored value ${JSON.stringify(change.from)} in the contract`}.`,
           ),
         );
         continue;

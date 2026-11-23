@@ -261,7 +261,7 @@ describe('MongoMigrationPlanner, an enum-typed discriminator', () => {
     ).toEqual([
       {
         kind: 'statementRefused',
-        summary: `Cannot rename enum value "Kind.EPIC" to "Kind.ISSUE": the migration writes a value that another of its operations reads (${deleteLabel('bug')}; ${replaceLabel('epic', 'bug')}; Remove value "bug" from field type of collection tasks)`,
+        summary: `Cannot rename enum value "Kind.EPIC" to "Kind.ISSUE": the migration writes a value that another of its operations reads (${deleteLabel('bug')}; ${replaceLabel('epic', 'bug')})`,
         why: TWO_MIGRATIONS,
         refusedStatement: renameEpic,
         leaveOut: undefined,
