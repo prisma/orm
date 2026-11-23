@@ -608,9 +608,3 @@ Under `--yes` the 0.10.2 refusal says "This command requires explicit consent, a
 **Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
 
 In a terminal, `db update` prints each progress step twice, as a `▸` line and then a `✔` line, so four lines come before the error. `migration plan` prints none.
-
-## The engine's refusal for `--confirm` begins with a different sentence
-
-**Found:** second-round review of the move to `@prisma/cli-engine` 0.10.2, 2026-11-23.
-
-Engine 0.10.2 changed the first line of the refusal for unanswered questions to "This command requires explicit consent, but it was not provided." The engine's other consent refusal, for a command that takes `--confirm` (`consentUnavailable` in the engine), still begins with the question, as in `"<question>" requires explicit consent, and the session is not interactive.`, or `…, which --yes cannot grant.` under `--yes`. So the two refusals with the same code, `CLI.CONSENT_REQUIRED`, open with different sentences. With engine 0.10.0 both began with the quoted question; the move to 0.10.2 is what made them differ. The text is the engine's, so a change belongs in prisma/prisma-cli.

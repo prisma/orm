@@ -28,7 +28,7 @@
     "pg": "catalog:"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.10.2",
+    "@prisma/cli-engine": "0.10.3",
     "@prisma/dev": "catalog:",
     "@repo/prisma-bin": "workspace:8.0.0-rc.24",
     "@repo/test-utils": "workspace:8.0.0-rc.24",
