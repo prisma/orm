@@ -30,10 +30,10 @@ changes:
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '"arktype"\s*:\s*"[\^~]?2\.(?:[01]\.\d+|2\.[0-8])(?!\d)'
-        - '(?<![\w@/-])[''"]?arktype[''"]?:\s*[''"]?[\^~]?2\.(?:[01]\.\d+|2\.[0-8])(?!\d)'
-        - '"bson"\s*:\s*"[\^~]?7\.(?:[0-2]\.\d+|3\.[0-3])(?!\d)'
-        - '(?<![\w@/-])[''"]?bson[''"]?:\s*[''"]?[\^~]?7\.(?:[0-2]\.\d+|3\.[0-3])(?!\d)'
+        - '"arktype"\s*:\s*"[\^~]?2\.(?:[01](?:\.\d+)?|2(?:\.[0-8])?)(?![\d.])'
+        - '(?<![\w@/-])[''"]?arktype[''"]?:\s*[''"]?[\^~]?2\.(?:[01](?:\.\d+)?|2(?:\.[0-8])?)(?![\d.])'
+        - '"bson"\s*:\s*"[\^~]?7\.(?:[0-2](?:\.\d+)?|3(?:\.[0-3])?)(?![\d.])'
+        - '(?<![\w@/-])[''"]?bson[''"]?:\s*[''"]?[\^~]?7\.(?:[0-2](?:\.\d+)?|3(?:\.[0-3])?)(?![\d.])'
   - id: config-type-renamed-to-prisma-config
     summary: |
       The config type that `defineConfig` returns is renamed from `PrismaNextConfig` to `PrismaConfig`, in `@prisma/orm-framework/config/config-types`, `@prisma/orm-toolchain/cli/config-types` and every package that re-exports it, including the target facades' `defineConfig` return types. The old name is gone. The detection matches TypeScript sources that name the old type.
@@ -268,12 +268,12 @@ changes:
         - '(?<![\w$])ActivityRoute(?![\w$])'
   - id: orm-write-inside-transaction-suspends-tx
     summary: |
-      An ORM write of more than one statement inside a transaction runs in a savepoint. While it runs, other work sent on the same transaction rejects with `RUNTIME.TRANSACTION_SUSPENDED`. In `Promise.all`, that rejection makes the callback throw while the write still runs, so the transaction rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the `RUNTIME.TRANSACTION_SUSPENDED` error, keeps nothing the transaction wrote, and closes the connection. When such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the write itself rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. On PostgreSQL and SQLite many writes are one statement and open no savepoint; on MySQL and MariaDB every write that returns rows opens one. The detection matches TypeScript sources where `Promise.all` or `Promise.allSettled` follows the start of a `transaction` callback and is given the callback's parameter, and sources that call `transaction` and give `Promise.all` an ORM write.
+      An ORM write of more than one statement inside a transaction runs in a savepoint. While it runs, other work sent on the same transaction rejects with `RUNTIME.TRANSACTION_SUSPENDED`. In `Promise.all`, that rejection makes the callback throw while the write still runs, so the transaction rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the `RUNTIME.TRANSACTION_SUSPENDED` error, keeps nothing the transaction wrote, and closes the connection. When such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the write itself rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. On PostgreSQL and SQLite many writes are one statement and open no savepoint; on MySQL and MariaDB every write that returns rows opens one. The detection matches TypeScript sources where `Promise.all` or `Promise.allSettled` follows the start of a `transaction` call, sources that pass `transaction` a callback by name and call `Promise.all`, and sources that call `transaction` and give `Promise.all` an ORM write.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '\.transaction\s*\(\s*(?:async\s*)?(?:function\b[\w$\s]*)?\(?\s*(?!(?:async|function)\b)([\w$]+)(?![\w$])[\s\S]*?Promise\.all(?:Settled)?\s*\([\s\S]*?(?<![\w$.])\1(?![\w$])'
-        - '\.transaction\s*\(\s*(?:async\s*)?(?:function\b[\w$\s]*)?\(\s*\{[\s\S]*?Promise\.all(?:Settled)?\s*\('
+        - '\.transaction\s*\([\s\S]*?Promise\.all(?:Settled)?\s*\('
+        - '(?<![\s\S])(?=[\s\S]*\.transaction\s*\(\s*[\w$.]+\s*[,)])[\s\S]*Promise\.all(?:Settled)?\s*\('
         - '(?<![\s\S])(?=[\s\S]*\.transaction\s*\()[\s\S]*Promise\.all(?:Settled)?\s*\([^;]*?\.orm\b[^;]*?\.(?:create|createAll|update|updateAll|upsert|delete|deleteAll)\s*\('
   - id: sql-runtime-base-own-transaction-removed
     summary: |
@@ -425,12 +425,12 @@ changes:
         - '(?<![\w$])(?:keepDataEdit|keepData|swapsValues)(?![\w$])'
   - id: engine-pin-moves-to-0-10-4
     summary: |
-      The toolchain now peers `@prisma/cli-engine@0.10.4` (up from 0.10.0). An extension package that depends on `@prisma/cli-engine` for its tests or tooling must move to `0.10.4`. The detection matches a `package.json` that pins an older engine and lists an `@prisma/orm-*` package, and a `pnpm-workspace.yaml` that pins an older engine.
+      The toolchain now peers `@prisma/cli-engine@0.10.4` (up from 0.10.0). An extension package that depends on `@prisma/cli-engine` for its tests or tooling must move to `0.10.4`. The detection matches a `pnpm-workspace.yaml` that pins an older engine, and a `package.json` that pins an older engine and either lists an `@prisma/orm-*` package or pins the engine in `overrides` or `resolutions`.
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*"@prisma/orm-[a-z-]+"\s*:)|(?!\s*\{))[\s\S]*"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.(?:\d|10\.[0123xX*])(?!\d)'
-        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*"@prisma/orm-[a-z-]+"\s*:)|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine[''"]?:\s*[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[0123xX*])(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*"@prisma/cli-engine"))|(?!\s*\{))[\s\S]*"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.(?:\d|10\.[0123xX*])(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*"@prisma/cli-engine"))|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine[''"]?:\s*[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[0123xX*])(?!\d)'
   - id: consent-required-summary-is-one-fixed-sentence
     summary: |
       The first line of `CLI.CONSENT_REQUIRED` is now one fixed sentence. It no longer names the subject of a statement question, and it no longer quotes the question of a consent that `--confirm` answers. Code that matched the old first line must read the error's `code`, `why` and `meta` instead.
@@ -1078,6 +1078,8 @@ A MariaDB contract gains only `"jsonAgg": true`: MariaDB does not report the oth
 
 A match under `migrations/snapshots/` needs no change: every snapshot written before this release lacks the new keys, and the snapshots stay as they are.
 
+A `contract.d.ts` that `prisma contract emit` writes for a PostgreSQL, SQLite, MySQL or MariaDB contract, such as a pack's contract or an example's, now lists the aggregate operations, the codec ids under each of them in `AggregateTypes`, the value sets, the tables and the namespaces in byte order, where earlier releases sorted them in the locale's order. So `'pg/float8@1'` now comes before `'pg/float@1'`, and a table whose name starts with a capital letter comes before one that starts with a lowercase letter. Most of the diff of a re-emitted `contract.d.ts` is lines that moved; the types are the same, and no hash changes.
+
 ### `mysql-reemit-contract`
 
 On MySQL and MariaDB, `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are now convenience types, as on PostgreSQL, SQLite and MongoDB. Each chooses one explicit type named after the MySQL column type that stores it: `Int` is `Int4`, `BigInt` is `Int8BigInt`, `BigInt(as: number)` is `Int8Number`, `Float` is `Float8` (a `double`), `Decimal` is `NumericString(65, 30)`, `String` is `Varchar(191)` and `String(storage: text)` is `Text`, `Boolean` is `Bool` (a `tinyint(1)`), `Bytes` is `Longblob` and `Json` is `PlainJson`. A field written `Int`, `BigInt` or `String` gives the same codec as before, so no schema needs a change.
@@ -1160,11 +1162,17 @@ Left in `Promise.all`, the whole transaction fails. The other work rejects with 
 
 Which writes take more than one statement, and so run in a savepoint:
 
-- On PostgreSQL and SQLite: a write with `.include(...)`, because the rows are read back with their includes; a `create()` or `update()` whose data has a relation callback; an `update()` or `delete()` whose `where` does not name one row by its primary key or a unique key, or that has an `offset` or a `cursor`, because the row is found with a `SELECT` first; a `create()` or `createAll()` on a variant stored in its own table, which inserts the base row and the variant row; a write that returns rows of a polymorphic base model with such a variant, because the rows are read back with the variant's table; and, since 8.0.0-rc.24, an `updateAll()` or `deleteAll()` that returns rows of a collection built with two or more `where()` calls.
-- On PostgreSQL and SQLite, these take one statement and open no savepoint: `create()` and `upsert()` without includes or relation callbacks, `createAll()`, `updateAll()` and `deleteAll()` of a collection built with at most one `where()` call, `update()` and `delete()` by primary key or unique key, `createAndCount()`, `updateAndCount()`, `deleteAndCount()`, and every read.
+- On PostgreSQL and SQLite, these take more than one statement:
+  - a write with `.include(...)`, `createAll()`, `updateAll()` and `deleteAll()` included, because the rows are read back with their includes;
+  - a `create()` or `update()` whose data has a relation callback;
+  - an `update()` or `delete()` whose `where` does not name one row by its primary key or a unique key, or that has an `offset` or a `cursor`, because the row is found with a `SELECT` first;
+  - a write on a variant stored in its own table, such as `create()` (the base row and the variant row are two inserts) or `update()` and `delete()` even by primary key, and a write that returns rows of a polymorphic base model with such a variant, because the rows are read back with the variant's table;
+  - on SQLite, a `createAll()` or `createAndCount()` whose rows do not all set the same fields, because SQLite sends one `INSERT` for each set of fields;
+  - since 8.0.0-rc.24, an `updateAll()` or `deleteAll()` that returns rows of a collection with two or more filters, where each `where()`, `whereUnique()`, `variant()` and method from `using` adds one. This is a known problem, not an intended behaviour; the release notes list it under "Known problems".
+- On PostgreSQL and SQLite, a write takes one statement and opens no savepoint only when nothing in the list above applies to it. Then `create()`, `upsert()`, `createAll()`, `createAndCount()`, `updateAll()` and `deleteAll()` with at most one filter, `update()` and `delete()` by primary key or unique key, `updateAndCount()` and `deleteAndCount()` are one statement. A read never opens a savepoint.
 - On MySQL and MariaDB, which have no `RETURNING`, every write that returns rows takes more than one statement, because the ORM reads the rows back with a `SELECT`: `create()`, `createAll()`, `upsert()`, `update()`, `updateAll()`, `delete()` and `deleteAll()`. Only `createAndCount()`, `updateAndCount()` and `deleteAndCount()` take one.
 
-A file the detection matches needs a change only where a write from the first or third list runs in `Promise.all`, or otherwise at the same time, beside other work on the same transaction. It does not find `Promise.all` in a helper in another file that is given the transaction; check those helpers too.
+Treat a write as more than one statement unless the second list covers it. A file the detection matches needs a change only where such a write runs in `Promise.all`, or otherwise at the same time, beside other work on the same transaction. The detection does not find every such file. Check by hand a callback passed to `transaction` by name and defined in another file, a helper in another file that is given the transaction, and an array of writes built in one place and passed to `Promise.all` in another.
 
 On any SQL database, when such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the rollback to the savepoint fails too. The write then rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. Before, it rejected with the database's error itself. Code that retries on the database's deadlock error reads that error from `error.cause`.
 
@@ -1567,7 +1575,7 @@ Remove reads of `keepDataEdit`, `keepData` and `swapsValues`. `keepRowsEdit` is 
 
 ### `engine-pin-moves-to-0-10-4`
 
-For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.10.3`, `0.10.2`, `0.10.1`, `0.10.0` or any earlier 0.x) to `0.10.4` and reinstall. A package that uses `@prisma/cli-engine` without any `@prisma/orm-*` package keeps its own pin. A `pnpm-workspace.yaml` matches whatever its packages are, so change its pin only when a package that takes the engine from it also lists an `@prisma/orm-*` package.
+For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.10.3`, `0.10.2`, `0.10.1`, `0.10.0` or any earlier 0.x) to `0.10.4` and reinstall. A package that uses `@prisma/cli-engine` without any `@prisma/orm-*` package keeps its own pin. An `overrides` or `resolutions` entry for `@prisma/cli-engine` (npm, pnpm or Yarn) pins the engine for every package of the workspace, so change it even in a root `package.json` that lists no `@prisma/orm-*` package. A `pnpm-workspace.yaml` matches whatever its packages are, so change its pin only when a package that takes the engine from it also lists an `@prisma/orm-*` package.
 
 ### `consent-required-summary-is-one-fixed-sentence`
 
