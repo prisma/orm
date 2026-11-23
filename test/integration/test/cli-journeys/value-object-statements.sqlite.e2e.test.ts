@@ -203,8 +203,11 @@ withTempDir(({ createTempDir }) => {
 
         const asked = await refusal(ctx, via, 'O1.04');
         if (via === 'db update') {
-          expect(asked, 'O1.04: one question, the rename offered').toContain(
+          expect(asked, 'O1.04: the consent error').toContain(
             '"summary":"This command requires explicit consent, but it was not provided."',
+          );
+          expect(asked, 'O1.04: one question, about GeoPoint.lat').toContain(
+            '"unanswered":[{"subject":"GeoPoint.lat","verbs":["rename","delete"]}]',
           );
           expect(asked, 'O1.04: what --delete leaves in the new field').toContain(
             'the existing objects get a temporary value in the new required field \\"GeoPoint.latitude\\"',

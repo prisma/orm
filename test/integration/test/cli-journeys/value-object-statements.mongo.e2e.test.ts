@@ -351,6 +351,7 @@ describe('Journeys (MongoDB): renames and removals inside value objects and embe
       summary: question?.summary,
       why: question?.why,
       answers: question?.nextActions?.map(({ label }) => label),
+      unanswered: question?.meta?.['unanswered'],
     }).toEqual({
       exitCode: 'failed',
       code: 'CLI.CONSENT_REQUIRED',
@@ -360,6 +361,7 @@ describe('Journeys (MongoDB): renames and removals inside value objects and embe
         "Run the command again with --rename 'Address.zip:Address.<new name>'",
         'Run the command again with --delete Address.zip',
       ],
+      unanswered: [{ subject: 'Address.zip', verbs: ['rename', 'delete'] }],
     });
 
     const answered = await runMigrationPlan(ctx, [
