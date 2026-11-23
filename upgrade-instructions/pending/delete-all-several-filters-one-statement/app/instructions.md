@@ -15,7 +15,7 @@ changes:
 Cannot load include "author" of model "Log": table "Log" has no primary key, and no unique constraint whose columns are all NOT NULL, to match the included rows to their parent rows by.
 ```
 
-Find each `deleteAll()` on such a model that has an `include(...)` and whose result the code uses. Do one of these:
+Find each `deleteAll()` on such a model that has an `include(...)`, whether or not the code uses its result: the call is refused when it is made. Do one of these:
 
 - Drop the include from the `deleteAll()`. If the code needs the related rows, read them with the same filter before the delete, in the same `db.transaction(...)`.
 - Give the table a primary key, or a unique constraint whose columns are all `NOT NULL`, in the contract and in the database.
