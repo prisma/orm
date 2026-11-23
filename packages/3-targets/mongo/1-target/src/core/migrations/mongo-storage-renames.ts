@@ -147,7 +147,7 @@ export class CollectionRenames {
   }
 
   /** Whether the control policy is `managed` for the old collection in the origin contract and the new one in the destination contract. */
-  managedOnBothSides(change: CollectionChange): boolean {
+  managedOnBothSides(change: Pick<CollectionChange, 'from' | 'to'>): boolean {
     return (
       declaredControlPolicy(this.#fromContract, change.from) === 'managed' &&
       declaredControlPolicy(this.#contract, change.to) === 'managed'

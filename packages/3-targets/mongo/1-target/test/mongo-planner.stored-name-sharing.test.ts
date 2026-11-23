@@ -231,6 +231,39 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
     });
   });
 
+  it('renames nothing when two root models of their own collections move to one new collection', () => {
+    expect(
+      planned(
+        plan({
+          from: shared('from', { admin: 'admins', user: 'users' }),
+          to: shared('to', { admin: 'people', user: 'people' }),
+          schema: [
+            schemaCollection('admins', { jsonSchema: sharedJsonSchema(['level'], ['level']) }),
+            ...liveUsers,
+          ],
+        }),
+      ),
+    ).toEqual({
+      labels: ['Create collection people', 'Drop collection admins', 'Drop collection users'],
+      classes: ['additive', 'destructive', 'destructive'],
+      applied: [],
+      dataLoss: [
+        {
+          operationIndex: 1,
+          subject: { kind: 'model', namespaceId: NS, model: 'Admin' },
+          loss: 'drop',
+          label: 'Drop collection admins',
+        },
+        {
+          operationIndex: 2,
+          subject: { kind: 'model', namespaceId: NS, model: 'User' },
+          loss: 'drop',
+          label: 'Drop collection users',
+        },
+      ],
+    });
+  });
+
   it('renames the collection once when every root model moves to the same collection', () => {
     expect(
       planned(

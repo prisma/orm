@@ -35,7 +35,7 @@ import {
   modelAt,
   modelCoordinates,
 } from './mongo-statement-planning';
-import type { FieldRename } from './mongo-storage-renames';
+import { type FieldRename, renameRefused } from './mongo-storage-renames';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
 type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertStatement;
@@ -241,14 +241,7 @@ function refusedChange(
   reason: string,
   why: string,
 ): MigrationPlannerConflict {
-  return change.statement === undefined
-    ? { kind: 'unsupportedOperation', summary: `${label}: ${reason}`, why }
-    : {
-        kind: 'statementRefused',
-        summary: `${label}: ${reason}`,
-        why,
-        refusedStatement: change.statement,
-      };
+  return renameRefused(change.statement, `${label}: ${reason}`, why);
 }
 
 /** How to change discriminator values that one migration cannot change safely. */

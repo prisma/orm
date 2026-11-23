@@ -6,7 +6,7 @@ import {
 } from '@internal/framework-components/control';
 import type { SelectedVariant } from '@internal/mongo-contract';
 import { InternalError } from '@internal/utils/internal-error';
-import type { FieldRename } from './mongo-storage-renames';
+import { type FieldRename, renameRefused } from './mongo-storage-renames';
 import { type UnansweredChange, unansweredChangesAdvice } from './mongo-unanswered-changes';
 import type {
   CastFieldCall,
@@ -411,15 +411,13 @@ function refusal(
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: ContractWithDomain },
 ): MigrationPlannerConflict {
   const [refused] = involved.flatMap((rewrite) => rewrite.statements);
-  if (refused === undefined) {
-    return { kind: 'unsupportedOperation', summary: `Cannot plan the migration: ${reason}`, why };
-  }
-  return {
-    kind: 'statementRefused',
-    summary: `Cannot ${describeMigrationStatement(refused, contracts.fromContract, contracts.contract)}: ${reason}`,
+  return renameRefused(
+    refused,
+    refused === undefined
+      ? `Cannot plan the migration: ${reason}`
+      : `Cannot ${describeMigrationStatement(refused, contracts.fromContract, contracts.contract)}: ${reason}`,
     why,
-    refusedStatement: refused,
-  };
+  );
 }
 
 /**

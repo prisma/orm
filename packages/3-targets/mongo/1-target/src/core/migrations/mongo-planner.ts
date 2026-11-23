@@ -289,8 +289,9 @@ function modelStoredIn(
 
 /**
  * Each collection drop of the plan, with the model whose documents it loses. When that model keeps
- * its name, the plan brings its new collection into existence, and its documents could move there
- * whole, the drop says how to rename the collection by hand instead.
+ * its name, the plan brings its new collection into existence, and the plan does not rename the
+ * collection because its control policy is not `managed` in both contracts, the drop says how to
+ * rename the collection by hand instead.
  */
 function collectionDrops(
   calls: readonly OpFactoryCall[],
@@ -314,7 +315,7 @@ function collectionDrops(
     return [
       destinationCollection !== undefined &&
       created(destinationCollection) &&
-      renames.sharedCollection({ from: call.collection, to: destinationCollection }) === undefined
+      !renames.managedOnBothSides({ from: call.collection, to: destinationCollection })
         ? {
             ...lost,
             subject,
