@@ -14,6 +14,7 @@ import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir'
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mongoTargetDescriptor } from '../src/core/migrations/control-target';
+import { contract as fixtureContract, schemaCollection } from './mongo-statement-fixtures';
 
 const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
 
@@ -128,5 +129,76 @@ describe('db update with statements on MongoDB', () => {
         },
       },
     });
+  });
+
+  it('removes the field --delete names from the collection the plan renames', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mongo-db-update-statements-'));
+    tempDirs.push(dir);
+    const migrationsDir = join(dir, 'migrations');
+    const from = fixtureContract(
+      'from',
+      { User: { collection: 'users', fields: ['_id', 'email', 'name'] } },
+      { users: { required: ['email', 'name'] } },
+    );
+    const to = fixtureContract(
+      'to',
+      { User: { collection: 'app_users', fields: ['_id', 'email'] } },
+      { app_users: { required: ['email'] } },
+    );
+    await writeContractSnapshot(migrationsDir, from.storage.storageHash, {
+      contractJson: from,
+      contractDts: '',
+    });
+    const result = await executeDbUpdate({
+      invocation: TEST_INVOCATION,
+      answerQuestions: async () => {
+        throw new Error('no question is asked');
+      },
+      driver: {
+        close: async () => {},
+        databaseName: async () => 'appdb',
+      } as unknown as ControlDriverInstance<'mongo', 'mongo'>,
+      adapter: {} as unknown as ControlAdapterInstance<'mongo', 'mongo'>,
+      familyInstance: {
+        ...family,
+        readAllMarkers: async () =>
+          new Map([['app', { ...marker, storageHash: from.storage.storageHash }]]),
+        introspect: async () =>
+          new MongoSchemaIR([schemaCollection('users', { required: ['email', 'name'] })], {
+            fromDatabase: false,
+          }),
+      } as unknown as ControlFamilyInstance<'mongo', unknown>,
+      contract: to,
+      mode: 'plan',
+      migrations: mongoTargetDescriptor.migrations as unknown as TargetMigrationsCapability<
+        'mongo',
+        'mongo',
+        ControlFamilyInstance<'mongo', unknown>
+      >,
+      frameworkComponents: [],
+      migrationsDir,
+      targetId: 'mongo',
+      statements: [{ verb: 'delete', text: 'User.name' }],
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        appliedStatements: [
+          {
+            statement: { kind: 'delete', subject: { kind: 'field', model: 'User', field: 'name' } },
+            operationIndexes: [1],
+          },
+        ],
+        plan: {
+          operations: [
+            { label: 'Rename collection users to app_users' },
+            { label: 'Remove field name from collection app_users' },
+            { label: 'Update validator on app_users (removed: name)' },
+          ],
+        },
+      },
+    });
+    expect(result.ok ? result.value.plan.operations : result).toHaveLength(3);
   });
 });

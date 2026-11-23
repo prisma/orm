@@ -289,9 +289,10 @@ function modelStoredIn(
 
 /**
  * Each collection drop of the plan, with the model whose documents it loses. When that model keeps
- * its name, the plan brings its new collection into existence, and the plan does not rename the
- * collection because its control policy is not `managed` in both contracts, the drop says how to
- * rename the collection by hand instead.
+ * its name and the plan brings its new collection into existence, the drop says why the plan does
+ * not rename the collection: the models stored there are being split or merged, which is a data
+ * migration, or its control policy is not `managed` in both contracts, and then how to rename it by
+ * hand.
  */
 function collectionDrops(
   calls: readonly OpFactoryCall[],
@@ -312,21 +313,18 @@ function collectionDrops(
     }
     const subject: MigrationSubject = { kind: 'model', ...model };
     const destinationCollection = modelStoredInDestination(contract, model);
-    return [
-      destinationCollection !== undefined &&
-      created(destinationCollection) &&
-      !renames.managedOnBothSides({ from: call.collection, to: destinationCollection })
-        ? {
-            ...lost,
-            subject,
-            keepDataAdvice: keepCollectionByHandAdvice(
-              model,
-              call.collection,
-              destinationCollection,
-            ),
-          }
-        : { ...lost, subject },
-    ];
+    if (destinationCollection === undefined || !created(destinationCollection)) {
+      return [{ ...lost, subject }];
+    }
+    const change = { from: call.collection, to: destinationCollection };
+    const shared = renames.sharedCollection(change);
+    const keepDataAdvice =
+      shared !== undefined
+        ? renames.sharedStorageAdvice(change, shared)
+        : renames.managedOnBothSides(change)
+          ? undefined
+          : keepCollectionByHandAdvice(model, call.collection, destinationCollection);
+    return [{ ...lost, subject, ...ifDefined('keepDataAdvice', keepDataAdvice) }];
   });
 }
 

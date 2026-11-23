@@ -242,6 +242,9 @@ function shared(
   );
 }
 
+const MERGED_ADVICE =
+  'The destination stores models "Admin" and "User" in collection "people", and the origin stores them in different collections, so their storage is being merged. Keeping their documents is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of models "Admin" and "User" into collection "people" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.';
+
 const liveUsers = [
   schemaCollection('users', { jsonSchema: sharedJsonSchema(['level'], ['level']) }),
 ];
@@ -261,7 +264,7 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
     });
   });
 
-  it('renames nothing when two root models of their own collections move to one new collection', () => {
+  it('renames nothing when two root models of their own collections move to one new collection, and says the merge is a data migration', () => {
     expect(
       planned(
         plan({
@@ -283,12 +286,14 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
           subject: { kind: 'model', namespaceId: NS, model: 'Admin' },
           loss: 'drop',
           label: 'Drop collection admins',
+          keepDataAdvice: MERGED_ADVICE,
         },
         {
           operationIndex: 2,
           subject: { kind: 'model', namespaceId: NS, model: 'User' },
           loss: 'drop',
           label: 'Drop collection users',
+          keepDataAdvice: MERGED_ADVICE,
         },
       ],
     });

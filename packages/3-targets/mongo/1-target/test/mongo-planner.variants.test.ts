@@ -953,6 +953,37 @@ describe('MongoMigrationPlanner, an enum-typed discriminator', () => {
     });
   });
 
+  it('refuses an enum value rename that moves the discriminator in a collection that is not managed, as the enum value statement', () => {
+    const external = (seed: string, bug: string, members: Readonly<Record<string, string>>) =>
+      tasks(
+        seed,
+        { Bug: { ...BUG, value: bug }, Epic: EPIC },
+        { control: 'external' },
+        {
+          discriminatorType: { codecId: 'mongo/string@1', valueSet: 'Kind' },
+          enums: kind(members),
+        },
+      );
+    const result = plan({
+      from: external('from', 'bug', { BUG: 'bug', EPIC: 'epic' }),
+      to: external('to', 'defect', { DEFECT: 'defect', EPIC: 'epic' }),
+      schema: live,
+      statements: [renameBug],
+    });
+    expect(result).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary:
+            'Cannot rename enum value "Kind.BUG" to "Kind.DEFECT": collection "tasks" has control policy "external"',
+          why: 'Statements rename only collections, and fields of collections, whose control policy is "managed". Make the change in the database yourself and leave out this statement.',
+          refusedStatement: renameBug,
+        },
+      ],
+    });
+  });
+
   it('replaces the value once for the enum value rename and --convert together', () => {
     const result = plan({ from, to, schema: live, statements: [renameBug, convert('Bug')] });
     expect({ ...planned(result), rendered: rendered(result) }).toEqual({

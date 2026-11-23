@@ -485,7 +485,7 @@ function collectionRenameRefusal(
       statement,
       `${label}: collection "${from}" is a time-series collection`,
       statement === undefined
-        ? `${changed}MongoDB cannot rename a time-series collection. Keep the collection's name: store the models in "${from}" (with @@map(${JSON.stringify(from)}) in PSL), then run this command again.`
+        ? `${changed}MongoDB cannot rename a time-series collection. Keep the collection's name: store the models in "${from}" (with @@map(${JSON.stringify(from)}) in PSL), then run this command again. To start the collection under its new name without its documents, remove the model in one change and add it back in a second.`
         : `MongoDB cannot rename a time-series collection. Leave out this statement. To keep the documents, first create collection "${to}" yourself with the same time-series options and copy them into it; the plan then drops "${from}" once --delete names the model.`,
     );
   }

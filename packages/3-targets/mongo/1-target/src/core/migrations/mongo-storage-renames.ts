@@ -187,6 +187,56 @@ export class CollectionRenames {
     });
     return merged.length > 0 ? { kind: 'merged', models: merged } : undefined;
   }
+
+  /**
+   * Why the documents of collection `from` cannot be kept by renaming it to `to`: the storage of
+   * the models stored there is being split or merged. Keeping their documents is then a data
+   * migration.
+   */
+  sharedStorageAdvice(
+    change: Pick<CollectionChange, 'from' | 'to'>,
+    shared: SharedCollection,
+  ): string {
+    const byName = (a: ModelCoordinate, b: ModelCoordinate) =>
+      modelDisplayName(a).localeCompare(modelDisplayName(b));
+    const destinationOf = (model: ModelCoordinate) => {
+      const rename = this.#models.find((each) => sameModel(each.from, model));
+      return rename === undefined ? undefined : documentCollectionOf(this.#contract, rename.to);
+    };
+    const origin = [...modelsStoredIn(this.#fromContract, change.from)].sort(byName);
+    if (shared.kind === 'merged') {
+      const models = modelsStoredIn(this.#contract, change.to)
+        .flatMap((model) => {
+          const rename = this.#models.find((each) => sameModel(each.to, model));
+          return rename === undefined ||
+            documentCollectionOf(this.#fromContract, rename.from) === undefined
+            ? []
+            : [rename.from];
+        })
+        .sort(byName);
+      return `The destination stores ${modelsText(models)} in collection "${change.to}", and the origin stores them in different collections, so their storage is being merged. ${dataMigration(`the documents of ${modelsText(models)} into collection "${change.to}"`)}`;
+    }
+    const kept = origin.filter((model) => destinationOf(model) !== undefined);
+    const into = new Map<string, ModelCoordinate[]>();
+    for (const model of kept) {
+      const moved = destinationOf(model);
+      if (moved !== undefined) into.set(moved, [...(into.get(moved) ?? []), model]);
+    }
+    const moves = [...into]
+      .map(
+        ([collection, moved]) =>
+          `the documents of ${modelsText(moved)} into collection "${collection}"`,
+      )
+      .join(' and ');
+    if (shared.kind === 'removed') {
+      return `The origin stores ${modelsText(origin)} in collection "${change.from}", no discriminator tells their documents apart, and the destination removes ${modelsText(shared.models)}, so their storage is being split. ${dataMigration(moves)}`;
+    }
+    return `The origin stores ${modelsText(origin)} in collection "${change.from}", and the destination stores them in different collections, so their storage is being split. ${dataMigration(moves)}`;
+  }
+}
+
+function dataMigration(moves: string): string {
+  return `Keeping their documents is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(moves)}`;
 }
 
 /** Joins items into text: "a", "a and b", "a, b and c". */

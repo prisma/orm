@@ -608,3 +608,15 @@ Under `--yes` the refusal now says "This command requires explicit consent for w
 **Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
 
 In a terminal, `db update` prints each progress step twice, as a `▸` line and then a `✔` line, so four lines come before the error. `migration plan` prints none.
+
+## MongoDB: a variant that gains its own collection leaves its documents in the base's collection
+
+**Found:** review of the MongoDB stored-name renames, step 1, 2026-11-24. This predates that work.
+
+When a variant gains its own `@@map` (its storage is split from its base's collection), the plan creates the new collection and moves nothing. The variant's documents stay in the base's collection and are read as the other models' documents there, and no question is asked, because the variant's discriminator value does not change (`packages/3-targets/mongo/1-target/src/core/migrations/mongo-variant-planning.ts:198`, `if (to === from) return undefined`) and the collection diff (`mongo-planner.ts:366`, `planCollectionDiff`) only creates the new collection. A plan that drops no collection has no question to attach advice to. Moving them is a data migration; the plan should at least ask about the documents left behind.
+
+## SQL has no "Add --rename A:B" hint for a field statement whose model's name and table both change
+
+**Found:** review of the MongoDB stored-name renames, step 1, 2026-11-24.
+
+On MongoDB, a field rename statement on a model whose name and collection both change, with no model statement, is refused with "Add --rename A:B before this statement, so the collection is renamed with its documents." (`packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, `unrenamedCollectionWhy`). The SQL family gives the same-model text in that case, which says the plan does not rename the table and to leave out the statement, though adding the model statement is the fix. Give SQL the same hint.

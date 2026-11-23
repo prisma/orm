@@ -374,7 +374,7 @@ describe('MongoMigrationPlanner, a name both contracts keep whose storage MongoD
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename collection "readings" to "measurements": collection "readings" is a time-series collection',
-          why: 'The collection of model "Reading" changes from "readings" to "measurements", and MongoDB cannot rename a time-series collection. Keep the collection\'s name: store the models in "readings" (with @@map("readings") in PSL), then run this command again.',
+          why: 'The collection of model "Reading" changes from "readings" to "measurements", and MongoDB cannot rename a time-series collection. Keep the collection\'s name: store the models in "readings" (with @@map("readings") in PSL), then run this command again. To start the collection under its new name without its documents, remove the model in one change and add it back in a second.',
         },
       ],
     });
