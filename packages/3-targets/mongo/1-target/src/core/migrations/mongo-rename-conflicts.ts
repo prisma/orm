@@ -34,6 +34,15 @@ export interface FieldChange {
   readonly collection: string;
   readonly from: string;
   readonly to: string;
+  /** The embedded model whose objects hold the key, for a key inside documents; `undefined` for a field of the documents. */
+  readonly embeddedIn: string | undefined;
+}
+
+/** Where a change's stored name is, in words: a field of a collection's documents, or a key of an embedded model's objects. */
+function placeOf(change: FieldChange, stored: string): string {
+  return change.embeddedIn === undefined
+    ? `field "${stored}" in collection "${change.collection}"`
+    : `key "${stored}" of embedded model "${change.embeddedIn}"`;
 }
 
 const ORDER =
@@ -59,7 +68,7 @@ function changeText(change: CollectionChange): string {
 function fieldChangeText(change: FieldChange): string {
   return change.rename.statement === undefined
     ? storedNameChangeText(change.rename.from, change.from, change.to)
-    : `field "${fieldDisplayName(change.rename.from)}" is renamed to "${fieldDisplayName(change.rename.to)}", which renames field "${change.from}" to "${change.to}" in collection "${change.collection}"`;
+    : `field "${fieldDisplayName(change.rename.from)}" is renamed to "${fieldDisplayName(change.rename.to)}", which renames ${placeOf(change, change.from)} to "${change.to}"`;
 }
 
 /** A name for `name` to move through that is not in `used`. */
@@ -413,10 +422,18 @@ function fieldRenameConflict(
   changes: readonly FieldChange[],
   contracts: Contracts,
 ): MigrationPlannerConflict | undefined {
-  const label = `Cannot rename field "${change.from}" to "${change.to}" in collection "${change.collection}"`;
+  const noun = change.embeddedIn === undefined ? 'field' : 'key';
+  const label =
+    change.embeddedIn === undefined
+      ? `Cannot rename field "${change.from}" to "${change.to}" in collection "${change.collection}"`
+      : `Cannot rename key "${change.from}" to "${change.to}" of embedded model "${change.embeddedIn}"`;
+  const holding =
+    change.embeddedIn === undefined
+      ? 'the documents'
+      : `the objects of embedded model "${change.embeddedIn}"`;
   const text = capitalized(fieldChangeText(change));
   const moving = fieldsText([change.rename.from]);
-  const misread = (stored: string) => `values of field "${stored}" as values of ${moving}`;
+  const misread = (stored: string) => `values of ${noun} "${stored}" as values of ${moving}`;
   const reached = modelsReached(contracts.fromContract, change.rename.from);
   const others = changes.filter(
     (other) =>
@@ -431,7 +448,7 @@ function fieldRenameConflict(
     if (moved !== undefined) {
       return renameRefused(
         undefined,
-        `${label}: field "${change.to}" is renamed in the same plan`,
+        `${label}: ${noun} "${change.to}" is renamed in the same plan`,
         `${text}, and ${fieldChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(change.to)}. ${fieldRoute([change, moved], others, contracts)}`,
       );
     }
@@ -442,8 +459,8 @@ function fieldRenameConflict(
     ];
     return renameRefused(
       undefined,
-      `${label}: the documents already hold field "${change.to}"`,
-      `${text}, and the documents already hold field "${change.to}", the stored name of ${fieldsText(holders)}. Without the rename the plan would read the ${misread(change.to)}. Make the change in two plans: first ${freeName('stored name', change.to, { text: fieldsText(holders), count: holders.length }, unused(used, change.to))}, and plan and apply that; then make this change and plan again.`,
+      `${label}: ${holding} already hold ${noun} "${change.to}"`,
+      `${text}, and ${holding} already hold ${noun} "${change.to}", the stored name of ${fieldsText(holders)}. Without the rename the plan would read the ${misread(change.to)}. Make the change in two plans: first ${freeName('stored name', change.to, { text: fieldsText(holders), count: holders.length }, unused(used, change.to))}, and plan and apply that; then make this change and plan again.`,
     );
   }
   const takes = others.find(

@@ -269,16 +269,13 @@ function enumTwoMigrationsAdvice(enums: EnumComparison, places: readonly EnumPla
       );
 }
 
-/** The mongosh update that negates the boolean values at a place, and touches no other value. */
+/** The mongosh update that negates the boolean values of a root field, and touches no other value. */
 function negationUpdate(enumPlace: EnumPlace): string {
   const { collection, field, variant } = enumPlace.place;
   const selected = (selector: string) =>
     `{ ${variant === undefined ? '' : `${JSON.stringify(variant.field)}: ${JSON.stringify(variant.value)}, `}${JSON.stringify(field)}: ${selector} }`;
   const negated = (value: string) =>
     `{ $cond: [{ $eq: [{ $type: ${value} }, "bool"] }, { $not: [${value}] }, ${value}] }`;
-  if (enumPlace.path !== undefined) {
-    return `an update of collection ${JSON.stringify(collection)} that negates, with ${negated('<value>')}, only the boolean values at path ${enumPlace.path} of field ${JSON.stringify(field)}`;
-  }
   return enumPlace.many
     ? `db.getCollection(${JSON.stringify(collection)}).updateMany(${selected('{ $type: "array" }')}, [{ $set: { ${JSON.stringify(field)}: { $map: { input: "$${field}", in: ${negated('"$$this"')} } } } }])`
     : `db.getCollection(${JSON.stringify(collection)}).updateMany(${selected('{ $type: "bool" }')}, [{ $set: { ${JSON.stringify(field)}: { $not: ["$${field}"] } } }])`;
@@ -290,6 +287,10 @@ function negationUpdate(enumPlace: EnumPlace): string {
  * the database, touching only boolean values, and the enum comes back with its new values.
  */
 function booleanSwapRoute(places: readonly EnumPlace[], withStatements: boolean): string {
+  const nested = places.find(({ path }) => path !== undefined);
+  if (nested !== undefined) {
+    return `${NO_THIRD_BOOLEAN} The enum is stored at path ${nested.path} of field ${JSON.stringify(nested.place.field)} of collection ${JSON.stringify(nested.place.collection)}, inside objects the plan cannot swap the values of, so keep the stored values of this enum in the contract.`;
+  }
   const updates = places.map(negationUpdate).join('; ');
   return `${NO_THIRD_BOOLEAN} Make it in three steps instead, with migration plan or db update${withStatements ? ', and without the statements that rename values of this enum' : ''}: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values in the database yourself, touching only boolean values so that missing and null values stay as they are, in mongosh: ${updates}; then add the enum back with its new stored values, type the fields by it again, and apply that.`;
 }
@@ -311,7 +312,7 @@ function enumValueText(contract: ContractWithDomain, value: EnumValueCoordinate)
 function refused(
   enums: EnumComparison,
   change: Pick<ValueChange, 'enumValue' | 'statement'> & {
-    readonly to?: StoredValue | undefined;
+    readonly to?: JsonValue | undefined;
     readonly from?: JsonValue;
   },
   reason: string,
@@ -342,15 +343,25 @@ function refused(
 
 function unsupportedValueRefusal(
   enums: EnumComparison,
-  change: Pick<ValueChange, 'enumValue' | 'statement'>,
+  change: ComparedChange,
   stored: JsonValue,
 ): MigrationPlannerConflict {
   return refused(
     enums,
     change,
     `its stored value ${JSON.stringify(stored)} is not a string, a number or a boolean`,
-    `The plan matches stored enum values by equality, and MongoDB's equality on an object depends on the order of its keys and on a list matches lists that contain it. Rewrite the documents that hold ${enumValueText(enums.fromContract, change.enumValue)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, then run the command again.`,
+    `The plan matches stored enum values by equality, and MongoDB's equality on an object depends on the order of its keys and on a list matches lists that contain it, so the plan cannot change the stored values of this enum; ${keepAdvice(enums, change)}.`,
   );
+}
+
+/** How to leave a change of an enum's stored values out of the plan: keep the contract as the origin stores it. */
+function keepAdvice(enums: EnumComparison, change: ComparedChange): string {
+  if (change.statement !== undefined) {
+    return `give "${enumValueStatementText(enums.contract, change.statement.to)}" the stored value ${JSON.stringify(change.from)}, or leave out this statement and keep the enum value`;
+  }
+  return change.to === undefined
+    ? 'keep the enum value in the contract'
+    : `keep its stored value ${JSON.stringify(change.from)} in the contract`;
 }
 
 function stillStoredRefusal(
@@ -393,12 +404,7 @@ function unlistedRefusal(
   unlisted: UnlistedPlace,
 ): MigrationPlannerConflict {
   const where = `field "${unlisted.field}" of collection "${unlisted.collection}"`;
-  const keep =
-    change.statement !== undefined
-      ? `give "${enumValueStatementText(enums.contract, change.statement.to)}" the stored value ${JSON.stringify(change.from)}, or leave out this statement and keep the enum value`
-      : change.to === undefined
-        ? 'keep the enum value in the contract'
-        : `keep its stored value ${JSON.stringify(change.from)} in the contract`;
+  const keep = keepAdvice(enums, change);
   const cannot = `The plan cannot change the stored values of this enum while ${where} holds them, so ${keep}.`;
   return unlisted.reach.kind === 'containsItself'
     ? refused(
@@ -486,13 +492,6 @@ function linkedMoves(
   return groups;
 }
 
-/** Joins items with semicolons, the last with "and": "a", "a and b", "a; b; and c". */
-function semicolonList(items: readonly string[]): string {
-  return items.length <= 2
-    ? joinedList(items)
-    : `${items.slice(0, -1).join('; ')}; and ${items.at(-1)}`;
-}
-
 const CYCLE_WHY =
   'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle.';
 
@@ -516,21 +515,17 @@ function movesTwoPlans(
     if (through !== undefined) reserved.push(through);
     return { move, through };
   });
-  const first = semicolonList(
-    steps.map(({ move, through }) =>
-      through === undefined
-        ? `${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`
-        : `${memberText(enums, move.enumValue)} a stored value no member stores, such as ${valueText(through)}`,
-    ),
+  const first = steps.map(({ move, through }) =>
+    through === undefined
+      ? `give ${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`
+      : `give ${memberText(enums, move.enumValue)} a stored value no member stores, such as ${valueText(through)}`,
   );
-  const second = semicolonList(
-    steps.flatMap(({ move, through }) =>
-      through === undefined
-        ? []
-        : [`${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`],
-    ),
+  const second = steps.flatMap(({ move, through }) =>
+    through === undefined
+      ? []
+      : [`give ${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`],
   );
-  return `Make the change in two plans: first give ${first}, and plan and apply that; then give ${second}, and plan again.`;
+  return `Make the change in two plans: first ${first.join('; ')}; and plan and apply that; then ${second.join('; ')}; and plan again.`;
 }
 
 /** Members that keep their names and move stored values in a cycle, or along a chain, which MongoDB cannot rewrite in one migration. */
@@ -752,12 +747,12 @@ function planEnum(
     ...originEnum.members.map(({ value }) => value),
     ...destinationEnum.members.map(({ value }) => value),
   ];
+  const conflicts = placeRefusals(enums, checked, live, input);
+  if (conflicts.length > 0) return notOk(conflicts);
   const moved =
     managed.length === 0 ? undefined : memberMovesRefusal(enums, checked, taken, managed);
   if (moved !== undefined) return notOk([moved]);
   const advice = enumTwoMigrationsAdvice(enums, managed);
-  const conflicts = placeRefusals(enums, checked, live, input);
-  if (conflicts.length > 0) return notOk(conflicts);
   const bsonTypes = bsonTypesOfCodec(destinationEnum.codecId, input.lookups) ?? [];
   const replacements: EnumValueReplacement[] = [];
   const removals: EnumValueRewrite<RemoveStoredValueCall>[] = [];
@@ -861,14 +856,8 @@ function placeRefusals(
           field: place.field,
           variant: place.variant,
           model: place.model,
-          storedKey: {
-            key: enumValueText(enums.fromContract, change.enumValue),
-            together,
-            keep:
-              change.statement === undefined && change.to !== undefined
-                ? `keep its stored value ${JSON.stringify(change.from)} in the contract`
-                : undefined,
-          },
+          storedKey: { key: enumValueText(enums.fromContract, change.enumValue), together },
+          keep: change.statement === undefined ? keepAdvice(enums, change) : undefined,
         },
         input.contract,
         rewriteCollectionOf(input.schema, place.collection),

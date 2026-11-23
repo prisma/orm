@@ -144,8 +144,8 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
         {
           kind: 'unsupportedOperation',
           summary:
-            'Cannot rename field "sku" to "code" in collection "orders": the documents already hold field "code"',
-          why: 'The stored name of field "Line.sku" changes from "sku" to "code", and the documents already hold field "code", the stored name of field "Line.note". Without the rename the plan would read the values of field "code" as values of field "Line.sku". Make the change in two plans: first remove field "Line.note", or keep it and change its stored name to a name nothing uses, such as "prisma_swap_code", and plan and apply that; then make this change and plan again.',
+            'Cannot rename key "sku" to "code" of embedded model "Line": the objects of embedded model "Line" already hold key "code"',
+          why: 'The stored name of field "Line.sku" changes from "sku" to "code", and the objects of embedded model "Line" already hold key "code", the stored name of field "Line.note". Without the rename the plan would read the values of key "code" as values of field "Line.sku". Make the change in two plans: first remove field "Line.note", or keep it and change its stored name to a name nothing uses, such as "prisma_swap_code", and plan and apply that; then make this change and plan again.',
         },
       ],
     });
@@ -163,8 +163,8 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
         {
           kind: 'unsupportedOperation',
           summary:
-            'Cannot rename field "x" to "y" in collection "orders": field "y" is renamed in the same plan',
-          why: 'The stored name of field "Line.a" changes from "x" to "y", and the stored name of field "Line.b" changes from "y" to "x". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "Line.a". Make the change in two plans: first give field "Line.a" the stored name "prisma_swap_y" and field "Line.b" the stored name "prisma_swap_x", stored names nothing uses, and plan and apply that; then give field "Line.a" the stored name "y" and field "Line.b" the stored name "x", and plan again.',
+            'Cannot rename key "x" to "y" of embedded model "Line": key "y" is renamed in the same plan',
+          why: 'The stored name of field "Line.a" changes from "x" to "y", and the stored name of field "Line.b" changes from "y" to "x". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of key "y" as values of field "Line.a". Make the change in two plans: first give field "Line.a" the stored name "prisma_swap_y" and field "Line.b" the stored name "prisma_swap_x", stored names nothing uses, and plan and apply that; then give field "Line.a" the stored name "y" and field "Line.b" the stored name "x", and plan again.',
         },
       ],
       kind: 'failure',
@@ -172,24 +172,30 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
   });
 
   it('follows the route of the swap refusal through stored names nothing uses', () => {
-    const one = [schemaCollection('orders')];
+    const one = [schemaCollection('orders', {})];
     const through = { a: 'prisma_swap_y', b: 'prisma_swap_x' };
+    const key = (from: string, to: string) =>
+      `Rename key "${from}" to "${to}" at path "$[*]" in field lines of collection orders`;
     expect([
-      rendered(
+      planned(
         plan({ from: orders('s0', { a: 'x', b: 'y' }), to: orders('s1', through), schema: one }),
       ),
-      rendered(
+      planned(
         plan({ from: orders('s1', through), to: orders('s2', { a: 'y', b: 'x' }), schema: one }),
       ),
     ]).toEqual([
-      [
-        'renameStoredKey({collection:"orders",field:"lines",path:"$[*].x",to:"prisma_swap_y"})',
-        'renameStoredKey({collection:"orders",field:"lines",path:"$[*].y",to:"prisma_swap_x"})',
-      ],
-      [
-        'renameStoredKey({collection:"orders",field:"lines",path:"$[*].prisma_swap_y",to:"y"})',
-        'renameStoredKey({collection:"orders",field:"lines",path:"$[*].prisma_swap_x",to:"x"})',
-      ],
+      {
+        labels: ['Create collection quotes', key('x', 'prisma_swap_y'), key('y', 'prisma_swap_x')],
+        classes: ['additive', 'widening', 'widening'],
+        applied: [],
+        dataLoss: [],
+      },
+      {
+        labels: ['Create collection quotes', key('prisma_swap_y', 'y'), key('prisma_swap_x', 'x')],
+        classes: ['additive', 'widening', 'widening'],
+        applied: [],
+        dataLoss: [],
+      },
     ]);
   });
 
@@ -267,5 +273,38 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
         }),
       ).dataLoss.map(({ subject }) => subject),
     ).toEqual([{ kind: 'field', namespaceId: NS, model: 'Line', field: 'note' }]);
+  });
+});
+
+describe('MongoMigrationPlanner, embedded keys that swap in a collection the plan does not rewrite', () => {
+  it('plans nothing in a collection that is not managed', () => {
+    const result = plan({
+      from: orders('from', { a: 'x', b: 'y' }, { control: 'external' }),
+      to: orders('to', { a: 'y', b: 'x' }, { control: 'external' }),
+      schema: [schemaCollection('orders')],
+    });
+    expect(planned(result)).toEqual({
+      applied: [],
+      classes: ['additive'],
+      dataLoss: [],
+      labels: ['Create collection quotes'],
+    });
+  });
+
+  it('plans nothing when the database lacks the collection', () => {
+    expect(
+      planned(
+        plan({
+          from: orders('from', { a: 'x', b: 'y' }),
+          to: orders('to', { a: 'y', b: 'x' }),
+          schema: [],
+        }),
+      ),
+    ).toEqual({
+      applied: [],
+      classes: ['additive', 'additive'],
+      dataLoss: [],
+      labels: ['Create collection orders', 'Create collection quotes'],
+    });
   });
 });

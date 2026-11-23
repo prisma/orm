@@ -199,11 +199,14 @@ export function useStatementsDatabase(dbName: string) {
     to: MongoContract,
     statements: readonly ResolvedMigrationStatement[] = [],
     frameworkComponents: Parameters<MongoMigrationPlanner['plan']>[0]['frameworkComponents'] = [],
+    options: { readonly initMarker: boolean } = { initMarker: true },
   ) {
-    await controlAdapter.initMarker(new MongoControlDriver(live(), connected()), 'app', {
-      storageHash: from.storage.storageHash,
-      profileHash: 'p1',
-    });
+    if (options.initMarker) {
+      await controlAdapter.initMarker(new MongoControlDriver(live(), connected()), 'app', {
+        storageHash: from.storage.storageHash,
+        profileHash: 'p1',
+      });
+    }
     const planned = new MongoMigrationPlanner().plan({
       contract: to,
       schema: await introspectSchema(live()),

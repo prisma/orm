@@ -38,14 +38,10 @@ export interface PlannedRewrite {
   readonly variant: SelectedVariant | undefined;
   /** The model whose documents it changes; `undefined` when no origin contract names it. */
   readonly model: ModelCoordinate | undefined;
-  /** For a rewrite of a key inside the field: the field the key stores, in words, the other models whose documents the same rewrite is planned for, and, for a change no statement asks for, how to leave it out of the contract instead. */
-  readonly storedKey:
-    | {
-        readonly key: string;
-        readonly together: readonly string[];
-        readonly keep: string | undefined;
-      }
-    | undefined;
+  /** For a rewrite of a key inside the field: the field the key stores, in words, and the other models whose documents the same rewrite is planned for. */
+  readonly storedKey: { readonly key: string; readonly together: readonly string[] } | undefined;
+  /** For a rewrite no statement asks for, how to leave the change out of the contract instead; `undefined` for a statement's rewrite. */
+  readonly keep: string | undefined;
 }
 
 interface RewriteWords {
@@ -244,7 +240,7 @@ function sharedCollectionRefusal(
   return {
     kind: words.conflictKind,
     summary: `Cannot ${action(rewrite)} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: model ${named} ${words.reaches === 'holding' ? 'stores it' : 'is stored'} in the same collection`,
-    why: `${sharedCollectionWhy(collection, others, words.sharedChange)} ${words.sharedGoal(modelName, named)}, ${rewrite.storedKey?.keep === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or ${rewrite.storedKey.keep}`}.`,
+    why: `${sharedCollectionWhy(collection, others, words.sharedChange)} ${words.sharedGoal(modelName, named)}, ${rewrite.keep === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or ${rewrite.keep}`}.`,
   };
 }
 

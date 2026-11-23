@@ -414,7 +414,13 @@ export function planStatements(input: {
 }
 
 function fieldChangeOf(rename: FieldRename, { call }: FieldRenameCall): FieldChange {
-  return { rename, collection: call.collection, from: call.from, to: call.to };
+  return {
+    rename,
+    collection: call.collection,
+    from: call.from,
+    to: call.to,
+    embeddedIn: undefined,
+  };
 }
 
 /**

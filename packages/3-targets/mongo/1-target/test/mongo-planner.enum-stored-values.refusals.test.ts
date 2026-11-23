@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { flags, live, refused, STATUS, users } from './mongo-enum-fixtures';
-import { plan, planned, schemaCollection } from './mongo-statement-fixtures';
+import {
+  contract,
+  type FieldTypeSpec,
+  plan,
+  planned,
+  schemaCollection,
+} from './mongo-statement-fixtures';
 
 describe('MongoMigrationPlanner, enum values that keep their names and trade or take stored values', () => {
   it('refuses two values that trade places', () => {
@@ -17,7 +23,7 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Status": enum values "Status.ACTIVE" and "Status.ARCHIVED" move stored values in a cycle, "active" to "archived" and "archived" to "active", and a rewrite of one would overwrite the other before it is read',
-        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap" and "Status.ARCHIVED" a stored value no member stores, such as "prisma_swap_", and plan and apply that; then give "Status.ACTIVE" the stored value "archived" and "Status.ARCHIVED" the stored value "active", and plan again.',
+        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap"; give "Status.ARCHIVED" a stored value no member stores, such as "prisma_swap_"; and plan and apply that; then give "Status.ACTIVE" the stored value "archived"; give "Status.ARCHIVED" the stored value "active"; and plan again.',
       },
     ]);
   });
@@ -36,7 +42,7 @@ describe('MongoMigrationPlanner, enum values that keep their names and trade or 
         kind: 'unsupportedOperation',
         summary:
           'Cannot change the stored values of enum "Status": enum values "Status.A" and "Status.B" move stored values along a chain, "a" to "b" and "b" to "c", and a rewrite of one would write a value another still has to read',
-        why: 'MongoDB applies a migration\'s operations one at a time, without a transaction, and knows that an operation already ran only from the documents, so a rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops. Make the change in two plans: first give "Status.A" a stored value no member stores, such as "prisma_swap" and "Status.B" the stored value "c", and plan and apply that; then give "Status.A" the stored value "b", and plan again.',
+        why: 'MongoDB applies a migration\'s operations one at a time, without a transaction, and knows that an operation already ran only from the documents, so a rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops. Make the change in two plans: first give "Status.A" a stored value no member stores, such as "prisma_swap"; give "Status.B" the stored value "c"; and plan and apply that; then give "Status.A" the stored value "b"; and plan again.',
       },
     ]);
   });
@@ -161,6 +167,84 @@ describe('MongoMigrationPlanner, the route of a boolean enum swap, followed', ()
     ]).toEqual([
       { labels: [], classes: [], applied: [], dataLoss: [] },
       { labels: [], classes: [], applied: [], dataLoss: [] },
+    ]);
+  });
+});
+
+describe('MongoMigrationPlanner, a boolean enum swap the plan cannot give a hand route for', () => {
+  const bool = (enumed: boolean, extra: Partial<FieldTypeSpec> = {}): FieldTypeSpec => ({
+    codecId: 'mongo/bool@1',
+    nullable: true,
+    ...(enumed ? { valueSet: 'Status' } : {}),
+    ...extra,
+  });
+
+  it('refuses it as a shared-collection rewrite when another root model stores the field as a plain boolean', () => {
+    const people = (seed: string, members: Readonly<Record<string, unknown>>) =>
+      contract(
+        seed,
+        {
+          User: { collection: 'people', fields: ['_id', 'flag'], types: { flag: bool(true) } },
+          Admin: { collection: 'people', fields: ['_id', 'flag'], types: { flag: bool(false) } },
+        },
+        { people: {} },
+        {},
+        { Status: { codecId: 'mongo/bool@1', members } },
+      );
+    expect(
+      refused(
+        plan({
+          from: people('from', { YES: true, NO: false }),
+          to: people('to', { YES: false, NO: true }),
+          schema: [schemaCollection('people')],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot replace enum value "Status.YES" inside field "flag" of model "User" in collection "people": model "Admin" stores it in the same collection',
+        why: 'Collection "people" stores several models and no discriminator tells their documents apart, so replacing the value would replace it in the documents of "Admin" too. To replace it in "User" documents only, move the models to separate collections, or keep its stored value true in the contract.',
+      },
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot replace enum value "Status.NO" inside field "flag" of model "User" in collection "people": model "Admin" stores it in the same collection',
+        why: 'Collection "people" stores several models and no discriminator tells their documents apart, so replacing the value would replace it in the documents of "Admin" too. To replace it in "User" documents only, move the models to separate collections, or keep its stored value false in the contract.',
+      },
+    ]);
+  });
+
+  it('gives no hand route when the enum is stored inside a value object', () => {
+    const prefs = (seed: string, members: Readonly<Record<string, unknown>>) =>
+      contract(
+        seed,
+        {
+          User: {
+            collection: 'users',
+            fields: ['_id', 'prefs'],
+            types: { prefs: { codecId: 'mongo/object@1', valueObject: 'Prefs', many: true } },
+          },
+        },
+        { users: {} },
+        { Prefs: { flag: bool(true) } },
+        { Status: { codecId: 'mongo/bool@1', members } },
+      );
+    expect(
+      refused(
+        plan({
+          from: prefs('from', { YES: true, NO: false }),
+          to: prefs('to', { YES: false, NO: true }),
+          schema: live,
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot change the stored values of enum "Status": enum values "Status.YES" and "Status.NO" move stored values in a cycle, true to false and false to true, and a rewrite of one would overwrite the other before it is read',
+        why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps. The enum is stored at path $[*].flag of field "prefs" of collection "users", inside objects the plan cannot swap the values of, so keep the stored values of this enum in the contract.',
+      },
     ]);
   });
 });

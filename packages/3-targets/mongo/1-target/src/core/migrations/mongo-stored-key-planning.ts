@@ -266,7 +266,9 @@ function unlistedRefusal(
   contracts: StoredKeyContracts,
 ): MigrationPlannerConflict {
   const byHand = (advice: string) =>
-    `Rewrite ${placeText(place)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or ${advice}.`;
+    change.statement === undefined
+      ? `So ${advice}.`
+      : `Rewrite ${placeText(place)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or ${advice}.`;
   if (place.reach.kind === 'containsItself') {
     return refused(
       change,
@@ -345,14 +347,13 @@ function plannedRewriteOf(
     field: planned.place.field,
     variant: planned.place.variant,
     model: planned.place.model,
-    storedKey: {
-      key: fieldText(planned.change, contracts),
-      together: planned.models,
-      keep:
-        planned.change.statement === undefined && planned.change.to !== undefined
-          ? `keep the stored name ${JSON.stringify(planned.change.from)} in the contract`
-          : undefined,
-    },
+    storedKey: { key: fieldText(planned.change, contracts), together: planned.models },
+    keep:
+      planned.change.statement !== undefined
+        ? undefined
+        : planned.change.to === undefined
+          ? 'keep the field in the contract'
+          : `keep the stored name ${JSON.stringify(planned.change.from)} in the contract`,
   };
 }
 
@@ -398,7 +399,8 @@ export function planStoredKeyRewrites(
           field: call.options.field,
           variant: undefined,
           model: undefined,
-          storedKey: { key: `key ${JSON.stringify(key)}`, together: [], keep: undefined },
+          storedKey: { key: `key ${JSON.stringify(key)}`, together: [] },
+          keep: 'keep the field in the contract',
         },
         contract,
         rewriteCollectionOf(input.schema, call.options.collection),
@@ -417,6 +419,18 @@ export function planStoredKeyRewrites(
     ...valueObjectChanges(fromContract, contract, input.statements),
     ...embeddedModelChanges(fromContract, contract, input.statements),
   ];
+  const placesOf = storedPlacesOf(contract);
+  const managedLive = (change: KeyChange) => {
+    const places = placesOf(change.type);
+    return (
+      places.ok &&
+      places.value.some(
+        (place) =>
+          input.schema.collection(place.collection) !== undefined &&
+          collectionControlPolicy(contract, place.collection) === 'managed',
+      )
+    );
+  };
   const keyConflict = fieldRenamesConflict(
     changes.flatMap((change) => {
       const { subject, to } = change;
@@ -425,7 +439,8 @@ export function planStoredKeyRewrites(
       return subject.kind !== 'field' ||
         to === undefined ||
         collection === undefined ||
-        change.statement?.entity === 'valueObjectField'
+        change.statement?.entity === 'valueObjectField' ||
+        !managedLive(change)
         ? []
         : [
             {
@@ -437,13 +452,13 @@ export function planStoredKeyRewrites(
               collection,
               from: change.from,
               to,
+              embeddedIn: subject.model,
             },
           ];
     }),
     contracts,
   );
   if (keyConflict !== undefined) return notOk([keyConflict]);
-  const placesOf = storedPlacesOf(contract);
   const conflicts: MigrationPlannerConflict[] = [];
   const warnings: MigrationPlannerConflict[] = [];
   const planned = new Map<string, PlannedKeyRewrite>();

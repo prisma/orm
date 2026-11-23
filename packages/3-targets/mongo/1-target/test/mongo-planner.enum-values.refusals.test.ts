@@ -94,7 +94,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
         kind: 'fieldRemovalRefused',
         summary:
           'Cannot remove enum value "Status.B": its stored value {"x":2} is not a string, a number or a boolean',
-        why: 'The plan matches stored enum values by equality, and MongoDB\'s equality on an object depends on the order of its keys and on a list matches lists that contain it. Rewrite the documents that hold enum value "Status.B" yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, then run the command again.',
+        why: "The plan matches stored enum values by equality, and MongoDB's equality on an object depends on the order of its keys and on a list matches lists that contain it, so the plan cannot change the stored values of this enum; keep the enum value in the contract.",
       },
     ]);
   });

@@ -277,7 +277,9 @@ function unlistedRefusal(
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): MigrationPlannerConflict {
   const byHand = (advice: string) =>
-    `Fill the key in ${placeText(place)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or ${advice}.`;
+    required.statement === undefined
+      ? `So ${advice}.`
+      : `Fill the key in ${placeText(place)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or ${advice}.`;
   if (place.reach.kind === 'containsItself') {
     return refused(
       required,
@@ -390,7 +392,9 @@ function plannedRewriteOf(fill: PlannedFill, contract: MongoContract): PlannedRe
     field: fill.place.field,
     variant: fill.place.variant,
     model: fill.place.model,
-    storedKey: { key: fieldText(fill.required, contract), together: fill.models, keep: undefined },
+    storedKey: { key: fieldText(fill.required, contract), together: fill.models },
+    keep:
+      fill.required.statement === undefined ? 'make the field optional in the contract' : undefined,
   };
 }
 

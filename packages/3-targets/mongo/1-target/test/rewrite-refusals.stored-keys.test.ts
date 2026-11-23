@@ -13,6 +13,7 @@ function timeSeriesRefusal(kind: 'renameStoredKey' | 'removeStoredKey' | 'fillSt
       variant: undefined,
       model: undefined,
       storedKey: undefined,
+      keep: undefined,
     },
     noModels,
     { timeSeries: true, validator: undefined },
