@@ -75,7 +75,7 @@ withTempDir(({ createTempDir }) => {
         expect(asked, 'D1.03: the question names User.nick').toEqual({
           code: 'CLI.CONSENT_REQUIRED',
           severity: 'error',
-          summary: '"User.nick" needs a statement, and the session is not interactive.',
+          summary: 'This command requires explicit consent, but it was not provided.',
           why: 'Drop column "nick" from "people" would lose the values of field "User.nick".',
           nextActions: [
             {

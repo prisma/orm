@@ -360,6 +360,27 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '(?<![\s\S])(?=[\s\S]*@prisma/orm-(?:mysql|mariadb))[\s\S]*\bmeta\??\.target\b'
+  - id: engine-pin-moves-to-0-10-4
+    summary: |
+      The toolchain now requires `@prisma/cli-engine@0.10.4` (up from 0.10.0). A project that depends on `@prisma/cli-engine` itself must move to `0.10.4`.
+    detection:
+      glob: "**/{package.json,pnpm-workspace.yaml}"
+      matches:
+        - '"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.(?:\d|10\.[0123xX*])(?!\d)'
+        - '[''"]?@prisma/cli-engine[''"]?:\s*[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[0123xX*])(?!\d)'
+  - id: consent-required-summary-is-one-fixed-sentence
+    summary: |
+      The first line of `CLI.CONSENT_REQUIRED` is now one fixed sentence. It no longer names the subject of a statement question, and it no longer quotes the question of a consent that `--confirm` answers. Code that matched the old first line must read the error's `code`, `why` and `meta` instead.
+    detection:
+      glob: "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,snap,json,sh,bash,yml,yaml}"
+      matches:
+        - 'needs? a statement'
+        - '--yes cannot give'
+        - '--yes cannot grant'
+        - '--yes does not give it'
+        - 'requires explicit consent, (?:and|which)'
+        - 'Grant it by passing --confirm'
+        - 'session is not interactive'
 ---
 
 # 8.0.0-rc.24 → 8.0.0-rc.25 — User upgrade instructions
@@ -369,13 +390,13 @@ changes:
 Do the steps in this order, and skip a step that does not apply to the project:
 
 1. Before you deploy the upgrade, on PostgreSQL with `money` columns, make the database print `money` in the `C` form (`postgres-lc-monetary-not-set`). The old release still forces it on its own connections, so do this first.
-2. Before you run the install for the upgrade, fix the dependencies in `package.json`: declare `pg` and `@types/pg` for the PostgreSQL packages (`pg-is-a-peer-dependency`), and move a declared `temporal-polyfill` to `^1.0.8` (`temporal-polyfill-peer-range-moves-to-1-0-8`). Then upgrade the Prisma packages.
+2. Before you run the install for the upgrade, fix the dependencies in `package.json`: declare `pg` and `@types/pg` for the PostgreSQL packages (`pg-is-a-peer-dependency`), move a declared `temporal-polyfill` to `^1.0.8` (`temporal-polyfill-peer-range-moves-to-1-0-8`), and move a declared `@prisma/cli-engine` to `0.10.4` (`engine-pin-moves-to-0-10-4`). Then upgrade the Prisma packages.
 3. Change the config and the scripts that call the control client: the renamed config type (`config-type-renamed-to-prisma-config`), the modules a hand-assembled config names (`hand-assembled-config-names-generated-file-modules`), `typesModule` and the removed `projectDir` (`control-api-takes-types-module`), the removed `publish-surface` entries (`toolchain-publish-surface-entrypoints-removed`), the arguments of `typescriptContractFromPath` (`typescript-contract-from-path-requires-target`), and the `migrate`, `dbUpdate` and `dbSign` options (`migrate-options-ref`, `db-sign-invocation`, `permit-policy-change`).
 4. Change the contract sources. Make each TypeScript contract import `defineContract` from its config's target (`typescript-contract-for-another-target-refused`). Save every schema file as UTF-8 (`psl-schema-must-be-utf8`). Rewrite the renamed types and helpers: `sql.String` (`psl-renamed-sql-string`, `ts-renamed-sql-string`), the PostgreSQL and SQLite column helpers (`ts-renamed-postgres-json-column-helper`, `ts-renamed-sqlite-column-helpers`), SQLite's `BigIntNumber` (`sqlite-bigintnumber-deprecated`) and MongoDB's `Int64` (`psl-renamed-mongo-int64`, `ts-removed-mongo-int64-helper`, and optionally `psl-optional-mongo-convenience-names`). Fix each `hasOne` relation without a unique key (`has-one-key-must-be-unique`) and each attribute of a single-table variant that emit refuses (`sti-variant-unscoped-index-refused`). Rename anything named `__proto__` (`sql-proto-names-refused`, `mongo-proto-names-refused`).
 5. Run `prisma contract emit` once for every contract and commit what it writes. One emit covers `contract-types-import-from-the-target-package`, `re-emit-for-include-capabilities`, `re-emit-mysql-contract-for-aggregates`, `mysql-reemit-contract`, `sqlite-decimal-codec`, `ts-sqlite-decimal-codec`, `sti-variant-foreign-keys-stored`, `json-default-proto-key-kept` and `contract-artifacts-restamp`. Leave the contract copies under `migrations/` as they are.
 6. Before you plan any migration, read what the planner now does: on PostgreSQL and SQLite a changed stored name is a rename (`sql-stored-name-change-is-a-rename`, `sql-stored-name-delete-is-unused`, `sql-stored-name-empty-table`, `sql-stored-name-swaps-refused`, `sql-lowered-table-names-renamed`), and on MongoDB changes inside documents are asked about and planned (`mongo-nested-removals-are-asked`, `mongo-nested-statements-are-planned`, `mongo-nested-required-field-gets-temporary-value`). A migration planned in the next step can hold such renames.
 7. Bring each database up to date. Plan and apply a migration for a new unique key (`has-one-key-must-be-unique`), for a JSON default that has a `__proto__` key (`json-default-proto-key-kept`) and for the indexes and foreign keys of single-table variants (`sti-variant-unscoped-index-refused`, `sti-variant-foreign-keys-stored`). On SQLite, fix stored values the stricter codecs refuse (`sqlite-decimal-codec`, `sqlite-integer-safe-range`), then sign the database with the new contract as the SQLite section describes. One migration can cover all of these.
-8. Change the application code: work sent on a transaction while an ORM write runs on it (`orm-write-inside-transaction-suspends-tx`), update data that sets a discriminator (`update-data-refuses-discriminator`), `update()` data that sets a foreign key and also has a callback on its relation (`foreign-key-with-relation-callback-refused`), tables whose only unique key has a nullable column (`nullable-unique-key-is-no-row-identity`), the ORM error codes of nested relation mutations (`relation-mutation-error-codes-merged`), nested creates on a polymorphic model (`nested-create-on-polymorphic-target-needs-variant`, `variant-create-without-returning-names-create`), `disconnect` (`disconnect-on-required-relation-refused`, `to-one-disconnect-criteria-applied`, `disconnect-empty-criteria-disconnects-nothing`), `onConflict: 'skip'` (`create-all-skip-refuses-rows-without-conflict-key`, `create-all-skip-refuses-tables-without-keys`), SQL builder comparisons (`sql-builder-enum-comparison-values-are-checked`), code that reads `meta.target` from a MySQL error (`mysql-errors-drop-meta-target`) and scripts that read the `--json` result of `prisma orm init` (`init-target-takes-a-package-name`).
+8. Change the application code: work sent on a transaction while an ORM write runs on it (`orm-write-inside-transaction-suspends-tx`), update data that sets a discriminator (`update-data-refuses-discriminator`), `update()` data that sets a foreign key and also has a callback on its relation (`foreign-key-with-relation-callback-refused`), tables whose only unique key has a nullable column (`nullable-unique-key-is-no-row-identity`), the ORM error codes of nested relation mutations (`relation-mutation-error-codes-merged`), nested creates on a polymorphic model (`nested-create-on-polymorphic-target-needs-variant`, `variant-create-without-returning-names-create`), `disconnect` (`disconnect-on-required-relation-refused`, `to-one-disconnect-criteria-applied`, `disconnect-empty-criteria-disconnects-nothing`), `onConflict: 'skip'` (`create-all-skip-refuses-rows-without-conflict-key`, `create-all-skip-refuses-tables-without-keys`), SQL builder comparisons (`sql-builder-enum-comparison-values-are-checked`), code that reads `meta.target` from a MySQL error (`mysql-errors-drop-meta-target`) scripts that read the `--json` result of `prisma orm init` (`init-target-takes-a-package-name`) and code that matches the first line of `CLI.CONSENT_REQUIRED` (`consent-required-summary-is-one-fixed-sentence`).
 
 
 ## PostgreSQL: `money` needs the database's `lc_monetary` to print the `C` form
@@ -1399,3 +1420,29 @@ In each matched file that reads the `--json` result of `prisma orm init`:
 
 - The result has a new string field, `package`: the name of the target package, such as `@prisma/orm-postgres`. A reader that refuses unknown fields must allow it.
 - `target` is still `postgres` or `mongodb` for those packages, also when the package was given by name (`--target @prisma/orm-postgres` reports `target: "postgres"`). For any other package it is the package name, so a reader that checks `target` against the two short names must accept any string. Use `package` when you need the package name.
+
+
+## The CLI engine is 0.10.4, and its consent error has one fixed first line
+
+### `engine-pin-moves-to-0-10-4`
+
+For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.10.3`, `0.10.2`, `0.10.1`, `0.10.0` or any earlier 0.x) to `0.10.4` and reinstall. Projects assembled by the `prisma` CLI resolve the engine automatically.
+
+### `consent-required-summary-is-one-fixed-sentence`
+
+Two errors have the code `CLI.CONSENT_REQUIRED`. Both are raised when the run cannot ask (it is not interactive, or `--yes` is set). The first line (the `summary`) of each changed, and both now have the same one:
+
+- `This command requires explicit consent, but it was not provided.`
+- Under `--yes`: `This command requires explicit consent for which --yes is not sufficient.` Engines 0.10.2 and 0.10.3 said `This command requires explicit consent, and --yes does not give it.`
+
+**A statement question nobody answered.** `prisma migration plan` or `prisma db update` would lose data or change access, and no `--rename`, `--delete` or similar flag answers the question.
+
+- Before: `"User.nick" needs a statement, and the session is not interactive.`, or `2 subjects need a statement, and the session is not interactive: "Bug", "Task".` for several questions. Under `--yes`, the line said `which --yes cannot give` in place of `and the session is not interactive`.
+- `why` (the questions), the next actions, `meta`, the code and the exit code (2) are unchanged. Read the unanswered subjects from `meta.unanswered` (each with its `subject` and `verbs`).
+
+**A consent that `--confirm` answers.** For example `prisma init` over a project it would replace.
+
+- Before: `"<question>" requires explicit consent, and the session is not interactive.`, or `…, which --yes cannot grant.` under `--yes`. When the consent has a token, the line ended `Grant it by passing --confirm <token>.`
+- The question is now in `why`, which this error did not have before. The next action, `meta.consentToken`, the code and the exit code (2) are unchanged. Read the token from `meta.consentToken`.
+
+For every file matched by `detection`, stop matching the first line of this error. A match on `session is not interactive` needs a change only where it is for this error; other errors still use those words. Branch on the error's `code` (`CLI.CONSENT_REQUIRED`). The code alone does not tell the two errors apart: the first has `meta.unanswered`, and the second does not.
