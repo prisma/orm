@@ -633,3 +633,21 @@ When a table that several models store their rows in is dropped (for example sin
 **Found:** MongoDB stored-name renames, journeys, 2026-11-24.
 
 After a collection is renamed by hand, `db update --rename User.name:User.fullName` together with a changed `@map` on `User.email` lists `Rename field name to fullName` before `Rename field email to mail`. The order is the order in which the field renames are collected in `planStatements` (`fieldRenameCalls` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, line 272): statements first, then stored-name changes. The two renames touch different keys, so both apply and nothing is lost; the order only differs from the order of the contract's fields. Seen in `test/integration/test/cli-journeys/stored-name-shared-collections.mongo.e2e.test.ts`, C3.
+
+## The route and refusal text of stored-name renames is copied between the SQL family and the MongoDB target
+
+**Found:** system design review of the MongoDB stored-name renames, 2026-11-24.
+
+The refusals of swaps, chains, takeovers and shared storage, and their two-plan routes, are written twice, nearly word for word: in `packages/2-sql-family/9-family/src/core/migrations/storage-renames.ts`, `statement-planning.ts` and `enum-value-planning.ts`, and in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-rename-conflicts.ts`, `mongo-statement-planning.ts` and `mongo-enum-value-planning.ts`. The copied pieces are `linkedChanges`, `temporaryNamesRoute`, `freeName`, `unused`, the `ORDER` sentence, the "both tables" / "both collections" text, `leaveOutShared` and the two-plan value route (`movesTwoPlans` on MongoDB). They cannot be shared: the only layer both may import is the framework domain (`@internal/utils` is in `packages/1-framework/0-foundation`, and `packages/0-shared` maps to the framework domain in `architecture.config.json`), which this work may not change. The cost is that the copies drift unless a change to one is made to both, and no test compares the two families' messages.
+
+## `renameRefused` builds refusals that are not renames
+
+**Found:** system design review of the MongoDB stored-name renames, 2026-11-24.
+
+`renameRefused` builds a refusal with the statement that asked for it, or as a contract change the plan cannot make when none did. Both families also use it for refusals that are not renames: on MongoDB the discriminator `--convert` refusals (`refusedChange` in `mongo-variant-planning.ts`), the overlap refusals (`mongo-rewrite-overlaps.ts`) and the key and value rewrite refusals (`refusalOf` in `mongo-rewrite-refusals.ts`); on SQL the `--backfill` refusals. A name such as `planRefusal` would say what it does. Rename it in both families in one change, so they stay alike.
+
+## MongoDB `FieldChange` is one rename, where SQL's `ColumnChange` groups renames
+
+**Found:** system design review of the MongoDB stored-name renames, 2026-11-24.
+
+When several root models of a shared collection rename one field to the same new name, MongoDB plans one `$rename` by merging equal calls (`sameFieldRename` in `mongo-statement-planning.ts`), and each model's `FieldChange` is checked on its own. SQL groups them in one `ColumnChange` with `renames`. The result is the same today; grouping would make the type say it.
