@@ -11,7 +11,7 @@
  *
  *   - **imports** — a line naming an `@internal/*` specifier.
  *   - **manifests** — an internal package a consumer's `package.json` names,
- *     as its own `name` or in `dependencies` / `devDependencies`. A consumer
+ *     as its own `name` or in any of its dependency sections. A consumer
  *     could import nothing internal and still list a dozen internal packages,
  *     and its install would look nothing like a real application's.
  *
@@ -328,7 +328,12 @@ export function scanProse(scanDir) {
   );
 }
 
-const MANIFEST_FIELDS = ['dependencies', 'devDependencies'];
+const MANIFEST_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+];
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

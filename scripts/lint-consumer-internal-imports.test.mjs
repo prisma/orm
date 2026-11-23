@@ -176,6 +176,19 @@ describe('scanManifests', () => {
     );
   });
 
+  it('reads internal packages from peerDependencies and optionalDependencies', () => {
+    manifest('examples/app/package.json', {
+      peerDependencies: { '@internal/sql-contract': '*', '@prisma/orm-framework': '8' },
+      optionalDependencies: { '@internal/postgres': 'workspace:*' },
+    });
+    commitAll('internal peer and optional packages');
+
+    assert.deepEqual(
+      scanManifests(repo, 'examples').map((r) => `${r.field}:${r.package}`),
+      ['peerDependencies:@internal/sql-contract', 'optionalDependencies:@internal/postgres'],
+    );
+  });
+
   it('reads a consumer that publishes itself under the internal scope', () => {
     writeRepoFile('examples/app/package.json', JSON.stringify({ name: '@internal/example-app' }));
     commitAll('internally scoped consumer');
