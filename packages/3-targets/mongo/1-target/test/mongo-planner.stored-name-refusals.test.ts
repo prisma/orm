@@ -661,3 +661,46 @@ describe('MongoMigrationPlanner, the routes field rename refusals give, followed
     ]);
   });
 });
+
+describe('MongoMigrationPlanner, an embedded relation whose stored name changes', () => {
+  const order = (seed: string, stored: string) =>
+    contract(
+      seed,
+      {
+        Order: { collection: 'orders', fields: ['_id'], embeds: { items: stored } },
+        Embedded: { fields: ['sku'], owner: 'Order' },
+      },
+      { orders: {} },
+    );
+
+  it('is refused, naming the contract change and no statement', () => {
+    expect(
+      refused(
+        plan({
+          from: order('from', 'items'),
+          to: order('to', 'lineItems'),
+          schema: [schemaCollection('orders')],
+        }),
+      ),
+    ).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot rename field "items" to "lineItems" in collection "orders": the field is an embedded relation',
+        why: 'The stored name of embedded relation "Order.items" changes from "items" to "lineItems", and renaming an embedded relation is not supported in this release. Keep the stored name "items" in the contract, then run this command again.',
+      },
+    ]);
+  });
+
+  it('plans nothing once the stored name is kept, as the refusal says', () => {
+    expect(
+      planned(
+        plan({
+          from: order('from', 'items'),
+          to: order('to', 'items'),
+          schema: [schemaCollection('orders')],
+        }),
+      ),
+    ).toEqual({ labels: [], classes: [], applied: [], dataLoss: [] });
+  });
+});

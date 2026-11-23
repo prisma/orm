@@ -361,6 +361,15 @@ export function planStatements(input: {
   }
 
   if (input.fromContract !== null) {
+    conflicts.push(
+      ...embedRelationRefusals({
+        statements: input.statements,
+        fieldRenames: [],
+        fromContract: input.fromContract,
+        contract: input.contract,
+        collectionAfterRenames: (collection) => renamedCollections.get(collection) ?? collection,
+      }),
+    );
     const unstated = unstatedFieldRenamesOf({
       statements: input.statements,
       fieldRenames: [],
@@ -403,6 +412,51 @@ export function planStatements(input: {
 
 function fieldChangeOf(rename: FieldRename, { call }: FieldRenameCall): FieldChange {
   return { rename, collection: call.collection, from: call.from, to: call.to };
+}
+
+/**
+ * The refusal of each embed relation whose stored name changes while its name and its model's pair
+ * stay, in a collection managed in both contracts: renaming an embedded relation is not planned, as
+ * a statement on one is refused.
+ */
+function embedRelationRefusals(match: ModelMatchInput): readonly MigrationPlannerConflict[] {
+  return modelCoordinates(match.fromContract).flatMap((origin) => {
+    const destination = destinationModelOf(origin, match);
+    const originModel = modelAt(match.fromContract, origin);
+    const destinationModel =
+      destination === undefined ? undefined : modelAt(match.contract, destination);
+    const originCollection = collectionOfModel(match.fromContract.domain, origin);
+    if (
+      destination === undefined ||
+      originModel === undefined ||
+      destinationModel === undefined ||
+      originCollection === undefined ||
+      embeddedModelReason(match.fromContract, origin) !== undefined ||
+      embeddedModelReason(match.contract, destination) !== undefined
+    ) {
+      return [];
+    }
+    const collection = match.collectionAfterRenames(originCollection);
+    if (
+      declaredControlPolicy(match.fromContract, originCollection) !== 'managed' ||
+      declaredControlPolicy(match.contract, collection) !== 'managed'
+    ) {
+      return [];
+    }
+    const after = ownEmbedStoredNamesOf(destinationModel);
+    return Object.entries(ownEmbedStoredNamesOf(originModel)).flatMap(([relation, from]) => {
+      const to = Object.hasOwn(after, relation) ? after[relation] : undefined;
+      return to === undefined || to === from
+        ? []
+        : [
+            renameRefused(
+              undefined,
+              `Cannot rename field "${from}" to "${to}" in collection "${collection}": the field is an embedded relation`,
+              `The stored name of embedded relation "${modelDisplayName(origin)}.${relation}" changes from "${from}" to "${to}", and renaming an embedded relation is not supported in this release. Keep the stored name "${from}" in the contract, then run this command again.`,
+            ),
+          ];
+    });
+  });
 }
 
 /**
