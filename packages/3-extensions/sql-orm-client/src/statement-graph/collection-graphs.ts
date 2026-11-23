@@ -569,7 +569,7 @@ function addFindOfFirstRow(
   }
   return {
     find: findRows(b, select(collection, { ...state, limit: 1 }), noInputs),
-    where: undefined,
+    where,
   };
 }
 

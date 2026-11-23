@@ -69,7 +69,7 @@ describe('writes that return rows with includes, one query per relation', () => 
         asRun(updateFirstGraph(usersWithPosts(context), { email: 'a@b.c' })),
       ).toMatchInlineSnapshot(`
         "n1 Find users where name = 'Ada' limit 1
-        n2 Update users set email = 'a@b.c' <- FilterData n1 (id->id)
+        n2 Update users set email = 'a@b.c' where name = 'Ada' <- FilterData n1 (id->id)
         n3 FindRelated posts by (id) <- Rows n2
         n4 NestJoin posts <- WholeRows n2, WholeRows n3
         result: n4"
@@ -101,7 +101,7 @@ describe('writes that return rows with includes, one query per relation', () => 
         "n1 Find users where name = 'Ada' limit 1
         n2 FindRelated posts by (id) <- Rows n1
         n3 NestJoin posts <- WholeRows n1, WholeRows n2
-        n4 Delete users <- FilterData n1 (id->id)
+        n4 Delete users where name = 'Ada' <- FilterData n1 (id->id)
         result: n3"
       `);
     });
@@ -137,7 +137,7 @@ describe('writes that return rows with includes, one query per relation', () => 
         asRun(updateFirstGraph(usersWithPosts(context), { email: 'a@b.c' })),
       ).toMatchInlineSnapshot(`
         "n1 Find users where name = 'Ada' limit 1
-        n2 Update users set email = 'a@b.c' <- FilterData n1 (id->id)
+        n2 Update users set email = 'a@b.c' where name = 'Ada' <- FilterData n1 (id->id)
         n3 Find users <- FilterData n2 (id->id)
         n4 FindRelated posts by (id) <- Rows n3
         n5 NestJoin posts <- WholeRows n3, WholeRows n4

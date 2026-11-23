@@ -143,7 +143,7 @@ describe('updateFirstGraph', () => {
     expect(printGraph(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc limit 1",
-        "n2 Update users set email = 'ada@example.com' <- FilterData n1 (id->id)",
+        "n2 Update users set email = 'ada@example.com' where name = 'Ada' <- FilterData n1 (id->id)",
         'result: n2',
       ].join('\n'),
     );
@@ -157,7 +157,7 @@ describe('updateFirstGraph', () => {
     expect(printGraph(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc limit 1",
-        "n2 Update users set email = 'ada@example.com' <- FilterData n1 (id->id)",
+        "n2 Update users set email = 'ada@example.com' where name = 'Ada' <- FilterData n1 (id->id)",
         'n3 Find users <- FilterData n2 (id->id)',
         'result: n3',
       ].join('\n'),
@@ -230,7 +230,7 @@ describe('deleteFirstGraph', () => {
     expect(printAsRun(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc limit 1",
-        'n2 Delete users <- FilterData n1 (id->id)',
+        "n2 Delete users where name = 'Ada' <- FilterData n1 (id->id)",
         'result: n1',
       ].join('\n'),
     );
@@ -243,7 +243,7 @@ describe('deleteFirstGraph', () => {
     expect(printGraph(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc limit 1",
-        'n2 Delete users <- FilterData n1 (id->id)',
+        "n2 Delete users where name = 'Ada' <- FilterData n1 (id->id)",
         'result: n1',
       ].join('\n'),
     );
@@ -359,13 +359,13 @@ describe('updateFirstGraph and deleteFirstGraph by key', () => {
   describe.each(notByKey)('with $name', ({ target: unkeyed }) => {
     it('keeps the Find of the first row for update()', () => {
       expect(printAsRun(updateFirstGraph(unkeyed, { name: 'Grace' }))).toMatch(
-        /^n1 Find .* limit 1( offset 1)?\nn2 Update \S+ set name = 'Grace' <- FilterData n1/,
+        /^n1 Find .* limit 1( offset 1)?\nn2 Update \S+ set name = 'Grace' where .+ <- FilterData n1/,
       );
     });
 
     it('keeps the Find of the first row for delete()', () => {
       expect(printAsRun(deleteFirstGraph(unkeyed))).toMatch(
-        /^n1 Find .* limit 1( offset 1)?\nn2 Delete \S+ <- FilterData n1/,
+        /^n1 Find .* limit 1( offset 1)?\nn2 Delete \S+ where .+ <- FilterData n1/,
       );
     });
   });
