@@ -8,6 +8,7 @@ import {
   getPackageDistTag,
   getPublishChannel,
   parseCustomDistTag,
+  PRISMA_CLI_OWNED_DIST_TAGS,
   type PublishChannel,
   type PublishChannelInput,
 } from './publish-channel'
@@ -21,7 +22,7 @@ const push: PublishChannelInput = {
 
 describe('getPublishChannel', () => {
   const cases: [string, PublishChannelInput, PublishChannel][] = [
-    ['push to v7', push, { kind: 'dev', tag: 'prev-dev' }],
+    ['push to v7', push, { kind: 'dev', tag: 'dev' }],
     [
       '--release on v7',
       { ...push, releaseVersion: '7.11.0' },
@@ -54,14 +55,16 @@ describe('getPublishChannel', () => {
 
 describe('getPackageDistTag', () => {
   const cases: [string, string, string][] = [
-    ['prisma', 'prev-dev', 'prev-dev'],
-    ['@prisma/client', 'prev-dev', 'prev-dev'],
+    ['prisma', 'dev', 'prev-dev'],
+    ['@prisma/client', 'dev', 'dev'],
     ['prisma', 'latest', 'prev'],
     ['@prisma/client', 'latest', 'latest'],
+    ['prisma', 'prev', 'prev'],
+    ['prisma', 'prev-dev', 'prev-dev'],
     ['prisma', 'patch-dev', 'patch-dev'],
     ['prisma', 'integration', 'integration'],
     ['prisma', 'my-custom-tag', 'my-custom-tag'],
-    ['@prisma/client', 'dev', 'dev'],
+    ['@prisma/client', 'next', 'next'],
   ]
 
   for (const [pkgName, tag, expected] of cases) {
@@ -70,11 +73,26 @@ describe('getPackageDistTag', () => {
     })
   }
 
-  for (const tag of ['dev', 'next']) {
-    test(`refuses to publish prisma under ${tag}`, () => {
-      assert.throws(() => getPackageDistTag('prisma', tag), /prisma\/prisma-cli owns it.*"prev-dev"/)
-    })
-  }
+  test('refuses to publish prisma under next', () => {
+    assert.throws(() => getPackageDistTag('prisma', 'next'), /prisma\/prisma-cli owns it/)
+  })
+
+  test('prisma/prisma-cli owns latest, dev and next', () => {
+    assert.deepEqual([...PRISMA_CLI_OWNED_DIST_TAGS].sort(), ['dev', 'latest', 'next'])
+  })
+
+  test('never publishes prisma under a tag prisma/prisma-cli owns', () => {
+    const runTags = [...new Set([...cases.map(([, tag]) => tag), ...PRISMA_CLI_OWNED_DIST_TAGS])]
+    for (const runTag of runTags) {
+      let prismaTag: string
+      try {
+        prismaTag = getPackageDistTag('prisma', runTag)
+      } catch {
+        continue
+      }
+      assert.ok(!PRISMA_CLI_OWNED_DIST_TAGS.has(prismaTag), `${runTag} put prisma on ${prismaTag}`)
+    }
+  })
 })
 
 describe('parseCustomDistTag', () => {
@@ -83,8 +101,9 @@ describe('parseCustomDistTag', () => {
     assert.equal(parseCustomDistTag('dev '), 'dev')
   })
 
-  test('a padded prisma-cli tag is still refused for prisma', () => {
-    assert.throws(() => getPackageDistTag('prisma', parseCustomDistTag(' dev ')), /prisma\/prisma-cli owns it/)
+  test('a padded prisma-cli tag still maps for prisma', () => {
+    assert.equal(getPackageDistTag('prisma', parseCustomDistTag(' dev ')), 'prev-dev')
+    assert.throws(() => getPackageDistTag('prisma', parseCustomDistTag(' next ')), /prisma\/prisma-cli owns it/)
   })
 
   for (const input of ['', 'my tag', 'Dev', 'dev;next', '--tag']) {
