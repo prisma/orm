@@ -61,3 +61,5 @@ On 2026-11-23 every rule in the spec was checked against the repository. The evi
 21. **Keep changes for a package below GA from reaching GA packages** (maturity levels 5). MySQL, MariaDB and SQLite share the SQL family package and the framework with PostgreSQL, and every package is released together. Either such changes stay out of shared packages, or tests show they do not affect a GA target.
 
 22. **Move our own products onto covered APIs** (spec 4.3). Composer, the `prisma` tool and the control plane import ORM entrypoints that task 3 may remove or rename. Task 3 keeps or replaces each one they use, and each product changes its imports.
+
+23. **Publish the policy for users.** A page in the Prisma 8 docs that tells an application developer and an extension author what a release will never break, what may change and how they will be told, and how long Prisma 8 receives fixes. It is the spec rewritten for users, not a new design. Write it last, once the other tasks are complete, so that it states what was built and includes what we learned on the way.

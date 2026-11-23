@@ -169,6 +169,7 @@ What we promise a user who upgrades within Prisma 8, and the work that makes the
 | 20 | ⏳ | CI tests every supported version of Node.js, TypeScript, each database and each driver | Not decided | Will | Not started | |
 | 21 | ⏳ | A change for a package below GA does not reach a GA package through the code they share | Not decided | Will | Not started | |
 | 22 | ⏳ | Composer, the `prisma` tool and the control plane use only ORM APIs the policy covers | Not decided | Will | Not started | |
+| 23 | ⏳ | Publish the policy for users: a docs page that says what a release will never break, what may change, and how long Prisma 8 gets fixes | Not decided | Will | Written last, once the other rows are done, so it states what was built | |
 
 ## Databases
 
