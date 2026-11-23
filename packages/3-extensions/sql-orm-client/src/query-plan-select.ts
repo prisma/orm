@@ -666,13 +666,23 @@ function buildIncludeChildRowsSelect(
 
   // Recurse: each nested include produces a correlated subquery
   // projection. The nested aggregates are attached to *this* child
-  // SELECT, so they correlate against the child's own aliased tables.
+  // SELECT, so they correlate against the child's own aliased tables — or,
+  // under the `distinctOn` derived-table wrap below, against the deduped
+  // rows, which the child alias denotes there. They are built once either
+  // way: one projection item per nested include.
+  const dedupesNestedIncludes =
+    childState.distinctOn !== undefined &&
+    childState.distinctOn.length > 0 &&
+    tied.nestsIncludes &&
+    childState.includes.length > 0;
   const nestedProjections = tied.nestsIncludes
     ? buildNestedIncludeProjections(
         contract,
         aggregates,
         scope,
-        { tables: childState.tables },
+        dedupesNestedIncludes
+          ? { tables: childState.tables, projectedThrough: child.alias }
+          : { tables: childState.tables },
         childState.includes,
       )
     : [];
@@ -681,12 +691,18 @@ function buildIncludeChildRowsSelect(
   // model-field mapping, so it disappears before the row reaches the caller.
   // Hidden order-by projections stay separate because they must not enter the
   // JSON object at all.
-  const childProjection: ReadonlyArray<ProjectionItem> = [
+  // The child's own columns. The nested include subqueries join them only in
+  // a row read straight from the child tables; the `distinctOn` derived-table
+  // wrap attaches them outside the dedup query instead.
+  const ownChildProjection: ReadonlyArray<ProjectionItem> = [
     ...tied.parentKey,
     ...scalarProjection,
     ...polyJoinsAndProjection.projection,
     ...polyJoinsAndProjection.hiddenProjection,
-    ...nestedProjections,
+  ];
+  const childProjection: ReadonlyArray<ProjectionItem> = [
+    ...ownChildProjection,
+    ...(dedupesNestedIncludes ? [] : nestedProjections),
   ];
 
   let childRows = SelectAst.from(child.tableSource(contract))
@@ -699,8 +715,8 @@ function buildIncludeChildRowsSelect(
 
   const partitionByParent = tied.parentKey.map((key) => key.expr);
   // The `distinctOn` derived-table wrap re-binds the outer projection to the
-  // deduped rows; the original `childProjection` then describes the inner
-  // query only.
+  // deduped rows; `childProjection` is the projection of a row read straight
+  // from the child tables, and the wrap builds its own inner and outer ones.
   let outerChildProjection: ReadonlyArray<ProjectionItem> = childProjection;
   if (childState.distinctOn && childState.distinctOn.length > 0) {
     let distinctOnOrderBy = childOrderBy;
@@ -709,7 +725,7 @@ function buildIncludeChildRowsSelect(
       // step when the statement has no LIMIT, so the nested include subqueries
       // would run for every candidate row. Dedupe in a derived table aliased
       // back to the child alias and run the nested includes outside it, once
-      // per kept row.
+      // per kept row: the dedup query projects none of them.
       //
       // The derived table exposes only what it projects, but the outer read
       // still references child columns an explicit `select()` may omit: the
@@ -724,7 +740,7 @@ function buildIncludeChildRowsSelect(
       let deduped = SelectAst.from(child.tableSource(contract))
         .withProjection(
           mergeProjectionByAlias(
-            [...childProjection, ...hiddenOrderProjection],
+            [...ownChildProjection, ...hiddenOrderProjection],
             [
               ...buildRequiredChildJoinColumnProjection(contract, childState),
               ...buildRequiredMtiJoinKeyProjection(
@@ -759,13 +775,7 @@ function buildIncludeChildRowsSelect(
           (item) =>
             ProjectionItem.of(item.alias, ColumnRef.of(derivedAlias, item.alias), item.codec),
         ),
-        ...buildNestedIncludeProjections(
-          contract,
-          aggregates,
-          scope,
-          { tables: childState.tables, projectedThrough: derivedAlias },
-          childState.includes,
-        ),
+        ...nestedProjections,
       ];
       childRows = SelectAst.from(DerivedTableSource.as(child.alias, deduped)).withProjection([
         ...derivedChildProjection,

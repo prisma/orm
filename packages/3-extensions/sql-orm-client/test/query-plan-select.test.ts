@@ -457,6 +457,32 @@ describe('compileSelectWithIncludes', () => {
     expectSubqueryExpr(authorProjection?.expr);
   });
 
+  it('builds the nested include once and keeps it out of the child DISTINCT ON dedup query', () => {
+    const { collection } = createCollection();
+    const state = collection.include('posts', (posts) =>
+      posts
+        .orderBy((post) => post.title.asc())
+        .distinctOn('title')
+        .include('author', (author) => author.select('name')),
+    ).state;
+
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
+    expectSelectAst(plan.ast);
+
+    const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
+    expectSubqueryExpr(postsProjection?.expr);
+
+    const aggregateQuery = postsProjection.expr.query;
+    expectDerivedTableSource(aggregateQuery.from);
+    const childRows = aggregateQuery.from.query;
+    expectDerivedTableSource(childRows.from);
+    // The dedup query projects the child's own columns only: a nested include
+    // in its select list would run for every candidate row before the
+    // DISTINCT ON step, and the row read outside never references it.
+    expect(childRows.from.query.projection.map((item) => item.alias)).not.toContain('author');
+    expectSubqueryExpr(childRows.projection.find((item) => item.alias === 'author')?.expr);
+  });
+
   it('keeps every outer reference resolvable across the child distinctOn derived table', () => {
     const { collection } = createCollection();
     const state = collection.include('posts', (posts) =>
