@@ -77,6 +77,10 @@ describe('getPackageDistTag', () => {
     assert.throws(() => getPackageDistTag('prisma', 'next'), /prisma\/prisma-cli owns it/)
   })
 
+  test('prisma/prisma-cli owns latest, dev and next', () => {
+    assert.deepEqual([...PRISMA_CLI_OWNED_DIST_TAGS].sort(), ['dev', 'latest', 'next'])
+  })
+
   test('never publishes prisma under a tag prisma/prisma-cli owns', () => {
     const runTags = [...new Set([...cases.map(([, tag]) => tag), ...PRISMA_CLI_OWNED_DIST_TAGS])]
     for (const runTag of runTags) {
