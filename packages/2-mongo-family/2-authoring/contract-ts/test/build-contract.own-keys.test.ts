@@ -117,10 +117,106 @@ describe('Mongo contract names every object has as a property', () => {
         message: `A field of value object "Address" ${reason}`,
         meta: {
           name: '__proto__',
-          kind: 'field',
+          kind: 'valueObjectField',
           valueObjectName: 'Address',
           reason: 'name-not-a-key',
         },
+      },
+    ]);
+  });
+
+  const objectId: FieldNode = { ...id, fieldName: 'userId' };
+
+  it.each<[string, readonly ModelNode[]]>([
+    [
+      'a reference relation',
+      [
+        {
+          ...stored('User', 'users', [{ ...objectId, fieldName: 'postId' }]),
+          relations: [
+            {
+              relationName: '__proto__',
+              toModel: 'Post',
+              cardinality: 'N:1',
+              nullable: false,
+              on: { localFields: ['postId'], targetFields: ['_id'] },
+            },
+          ],
+        },
+        stored('Post', 'posts'),
+      ],
+    ],
+    [
+      'an embed relation',
+      [
+        {
+          ...stored('User', 'users'),
+          relations: [
+            { relationName: '__proto__', toModel: 'Address', cardinality: '1:1', nullable: false },
+          ],
+        },
+        { modelName: 'Address', owner: 'User', fields: [street] },
+      ],
+    ],
+    [
+      'a back relation',
+      [
+        {
+          ...stored('User', 'users'),
+          relations: [
+            {
+              relationName: '__proto__',
+              toModel: 'Post',
+              cardinality: '1:N',
+              nullable: undefined,
+              on: { localFields: ['_id'], targetFields: ['userId'] },
+            },
+          ],
+        },
+        stored('Post', 'posts', [objectId]),
+      ],
+    ],
+  ])('refuses %s named __proto__', (_, models) => {
+    const built = build({ models });
+    expect(
+      (built.ok ? [] : built.failure.refusals).map((refusal) => {
+        const error = refusalError(refusal);
+        return { code: error.code, message: error.message, meta: error.meta };
+      }),
+    ).toEqual([
+      {
+        code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
+        message:
+          'A relation of model "User" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.',
+        meta: { name: '__proto__', kind: 'relation', modelName: 'User', reason: 'name-not-a-key' },
+      },
+    ]);
+  });
+
+  it('refuses an embed relation stored as __proto__', () => {
+    const built = build({
+      models: [
+        {
+          ...stored('User', 'users'),
+          storageRelations: { address: { field: '__proto__' } },
+          relations: [
+            { relationName: 'address', toModel: 'Address', cardinality: '1:1', nullable: false },
+          ],
+        },
+        { modelName: 'Address', owner: 'User', fields: [street] },
+      ],
+    });
+    expect(
+      (built.ok ? [] : built.failure.refusals).map((refusal) => {
+        const error = refusalError(refusal);
+        return { code: error.code, message: error.message, meta: error.meta };
+      }),
+    ).toEqual([
+      {
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message:
+          'Model "User" relation "address" is stored as "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Give it another stored name.',
+        meta: { modelName: 'User', relationName: 'address', reason: 'stored-name-unsupported' },
       },
     ]);
   });

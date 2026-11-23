@@ -45,7 +45,9 @@ export type UnsupportedNameSubject =
   | 'enum'
   | 'collection'
   | 'root'
-  | 'field';
+  | 'field'
+  | 'valueObjectField'
+  | 'relation';
 
 export type CollectionSetting = 'indexes' | 'collectionOptions' | 'controlPolicy';
 
@@ -62,10 +64,20 @@ export type IndexShapeRule =
 export type BuildRefusal =
   | { readonly kind: 'duplicateModel'; readonly key: ModelKey }
   | { readonly kind: 'duplicateValueObject'; readonly key: ValueObjectKey }
-  | { readonly kind: 'storedNameUnsupported'; readonly key: FieldKey; readonly reason: string }
+  | {
+      readonly kind: 'storedNameUnsupported';
+      readonly key: FieldKey | RelationKey;
+      readonly reason: string;
+    }
   | {
       readonly kind: 'nameUnsupported';
-      readonly key: ModelKey | ValueObjectKey | EnumKey | CollectionSettingsKey | FieldKey;
+      readonly key:
+        | ModelKey
+        | ValueObjectKey
+        | EnumKey
+        | CollectionSettingsKey
+        | FieldKey
+        | RelationKey;
       readonly subject: UnsupportedNameSubject;
       readonly name: string;
     }
