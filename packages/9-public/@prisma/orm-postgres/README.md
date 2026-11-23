@@ -59,7 +59,7 @@ Beneath the client factories the facade also publishes the layers they are built
 | `/relational-core/types` | the plan and scope types: `SqlOrmPlan`, the shape `db.query(plan)` and `db.execute(plan)` accept |
 | `/driver/runtime` | `createPgPool(config, sessionSettings)` and `createPgClient(config, sessionSettings)` — a pool or client whose every session starts with the session settings the target declares |
 | `/target/runtime` | the Postgres runtime target descriptor (the default export), with `sessionSettings` and the codec, query-operation and collection-method contributions a decomposed install composes |
-| `/migration-tools/io` | the migration package reader: `readMigrationPackage(dir, options)` reads one package, `readMigrationsDir(root, options)` reads the graph directory, returns per-package load problems in `problems`, skips directories without `migration.json` silently, and throws for filesystem errors while listing the root or stat-ing an entry |
+| `/migration-tools/io` | the migration package reader: `readMigrationPackage(dir, options)` reads one package, `readMigrationsDir(root, options)` reads the graph directory, returns per-package load problems in `problems`, skips directories without `migration.json` silently, returns empty `packages` and `problems` when the root does not exist, and throws for any other filesystem error while listing the root or stat-ing an entry |
 
 ```ts
 import { param } from '@prisma/orm-postgres/relational-core/expression';
