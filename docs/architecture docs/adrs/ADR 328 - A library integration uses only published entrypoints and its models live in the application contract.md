@@ -135,11 +135,11 @@ A library integration is written against that published set only, the same set a
 
 ### How the integration depends on Prisma's packages
 
-The integration declares `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain` as peer dependencies, at the exact version of the application's database package. The database package always installs all three, so the application ends up with one copy of each, shared by its client and the integration.
+The integration declares `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain` as peer dependencies, at the exact version of the application's database package. The database package always installs all three, so the application ends up with one copy of each, shared by its client and the integration. The application still names only its database package and the integration: the peers are met by what the database package brings in, at that package's version.
 
 One copy matters, because the integration builds query filters with functions from `@prisma/orm-family-sql` and hands them to the client. Because they are peers, the package manager reports a version mismatch at install time. If they were regular dependencies, it would silently install a second copy of those functions beside the client's.
 
-The third package, `@prisma/orm-toolchain`, is Prisma's tooling. The integration uses it for one thing, to find the contract's source files through the project's `prisma.config.ts`, and loads it only when the developer runs the library's generate command. An application that serves requests through the integration never loads Prisma's tooling.
+The third package, `@prisma/orm-toolchain`, is Prisma's tooling. The integration uses it for one thing, to find the contract's source files through the project's `prisma.config.ts`, and loads it only when the developer runs the library's generate command. An application that serves requests through the integration never loads Prisma's tooling. It is an exact peer like the other two, because the config loader must read the project's config as the same version of Prisma's own commands reads it.
 
 ### How the rule is kept
 
@@ -182,7 +182,7 @@ Prisma 8 also lets a package own tables. Such a package ships a **contract space
 - The integration inserts the new lines as text at those positions: new fields after a model's last field, new models at the end of the file. It does not reformat or reprint the file, so every line the developer wrote stays as it was.
 - The library's command asks the developer and writes the file. The integration hands it the edited text and writes nothing itself.
 
-The edit is all or nothing. When the contract needs anything other than additions, or the additions cannot all be placed in one PSL file, the command writes nothing and prints the same message the check gives. That covers a contract written in TypeScript, a file that does not parse, and a field that must change type.
+The edit is all or nothing. When the contract needs anything other than additions, or the additions cannot all be placed in one PSL file, the command writes nothing and prints the message the check gives, with a line that says why nothing was written. That covers a contract written in TypeScript, a file that does not parse, and a field that must change type.
 
 **It never changes the database.** The integration reads and writes rows, as the library asks. Creating and altering tables stays with Prisma, driven by the application's contract.
 
