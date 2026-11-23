@@ -185,6 +185,31 @@ describe('auth generate when the source stores what Better Auth needs under a na
     );
   });
 
+  it('folds only the letters A to Z when it compares SQLite names, as SQLite does', async () => {
+    const withKind = {
+      user: { additionalFields: { kind: { type: 'string' as const, required: false } } },
+    };
+    const kelvin = insertAfter(appPsl, userLastField, '\n  legacyKind String? @map("\u212Aind")');
+    const ascii = insertAfter(appPsl, userLastField, '\n  legacyKind String? @map("KIND")');
+    const kelvinComparison = await comparisonOver(kelvin, 'sqlite', withKind);
+    const asciiComparison = await comparisonOver(ascii, 'sqlite', withKind);
+    expect(editContractSource([{ path: contractPath, text: kelvin }], kelvinComparison).code).toBe(
+      insertAfter(kelvin, '  legacyKind String? @map("\u212Aind")', '\n  kind String?'),
+    );
+    expect(() =>
+      editContractSource([{ path: contractPath, text: ascii }], asciiComparison),
+    ).toThrow(
+      refusal(
+        asciiComparison,
+        storedUnderAnotherName(
+          'User.legacyKind in the column "KIND"',
+          'a field named kind in User',
+          'User.legacyKind to kind',
+        ),
+      ),
+    );
+  });
+
   it('compares table names exactly on Postgres', async () => {
     const text = `${appPsl}\nmodel Mfa {\n  id String @id\n\n  @@map("TWOFACTOR")\n}\n`;
     const comparison = await comparisonOver(text, 'postgres');

@@ -125,8 +125,13 @@ interface Conflicts {
   readonly storedUnderAnotherName: StoredUnderAnotherName[];
 }
 
+/** The name with only the ASCII letters A to Z lower-cased, the case SQLite ignores in table and column names. */
+function foldAsciiCase(name: string): string {
+  return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+}
+
 function sameStorageName(a: string, b: string, comparison: ContractComparison): boolean {
-  return comparison.storageNamesIgnoreCase ? a.toLowerCase() === b.toLowerCase() : a === b;
+  return comparison.storageNamesIgnoreCase ? foldAsciiCase(a) === foldAsciiCase(b) : a === b;
 }
 
 /** What the model already declares that conflicts with the fields the block would add. A Better Auth field is found by its exact name. */

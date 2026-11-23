@@ -75,7 +75,7 @@ export interface ContractComparison {
   readonly namespace: string | undefined;
   /** The namespace a model printed outside a `namespace` block belongs to. */
   readonly defaultNamespace: string;
-  /** Whether the database treats table and column names that differ only in case as the same name. */
+  /** Whether the database treats table and column names that differ only in the case of the letters A to Z as the same name. */
   readonly storageNamesIgnoreCase: boolean;
   /** Contract models that Better Auth's foreign keys reference but that are not among the models it expects, by physical model name. */
   readonly referencedModels: ReadonlyMap<string, FoundModel>;
