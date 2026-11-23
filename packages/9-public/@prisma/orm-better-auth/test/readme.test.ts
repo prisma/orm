@@ -11,11 +11,31 @@ const fixture = useContractFixture();
 const readme = () => readFile(fileURLToPath(new URL('../README.md', import.meta.url)), 'utf8');
 
 function fencedBlock(text: string, opening: string): string {
-  const start = text.indexOf(opening);
+  const lines = text.split('\n');
+  const start = lines.indexOf(opening);
   if (start === -1) throw new Error(`The README has no block starting ${opening}`);
-  const body = text.indexOf('\n', start) + 1;
-  return text.slice(body, text.indexOf('\n```', body));
+  const end = lines.indexOf('```', start + 1);
+  if (end === -1) throw new Error(`The README block starting ${opening} has no closing fence`);
+  return lines.slice(start + 1, end).join('\n');
 }
+
+describe('fencedBlock', () => {
+  it('reads a block whose fences stand on their own lines', () => {
+    expect(fencedBlock('Intro\n```prisma\nmodel A {}\n```\n', '```prisma')).toBe('model A {}');
+  });
+
+  it('ignores a fence that does not start its line', () => {
+    expect(() => fencedBlock('Example: ```prisma\nmodel A {}\n```\n', '```prisma')).toThrow(
+      'The README has no block starting ```prisma',
+    );
+  });
+
+  it('ignores a closing fence that does not stand alone on its line', () => {
+    expect(() => fencedBlock('```prisma\nmodel A {}\n```suffix\n', '```prisma')).toThrow(
+      'The README block starting ```prisma has no closing fence',
+    );
+  });
+});
 
 describe('the README', () => {
   it.each(targets)(
