@@ -420,7 +420,7 @@ function fieldChangeOf(rename: FieldRename, { call }: FieldRenameCall): FieldCha
     collection: call.collection,
     from: call.from,
     to: call.to,
-    embeddedIn: undefined,
+    place: { kind: 'document' },
   };
 }
 
@@ -883,7 +883,7 @@ function planFieldRename(
     fromStored,
   ).filter((name) => !renamedTogether.has(name));
   if (others.length > 0) {
-    const sharedWhy = `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${SEPARATE_THE_MODELS}.`;
+    const sharedWhy = `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${changed === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or keep the stored name ${JSON.stringify(fromStored)} in the contract`}.`;
     return refuse(
       `model ${others.map((name) => JSON.stringify(name)).join(', ')} stores field ${JSON.stringify(fromStored)} in the same collection, ${JSON.stringify(collection)}`,
       changed === undefined ? sharedWhy : `${changed}. ${sharedWhy}`,

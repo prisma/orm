@@ -12,6 +12,7 @@ import {
   modelAndBasesOf,
   mongoModelsOf,
   otherModelsReached,
+  ownEmbedStoredNamesOf,
   ownStoredNamesOf,
   selectedVariantOf,
 } from '@internal/mongo-contract';
@@ -29,21 +30,35 @@ import {
   storedNameChangeText,
 } from './mongo-storage-renames';
 
-/** A field rename the plan makes, with the collection it is made in and the stored names it moves between. */
+/** Where a renamed name is stored: a field of a collection's documents, or a key of an embedded model's objects. */
+export type StoredPlace =
+  | { readonly kind: 'document' }
+  | { readonly kind: 'embedded'; readonly model: string };
+
+/** A rename of a field's stored name the plan makes, with the collection it is made in, where the name is stored, and the names it moves between. */
 export interface FieldChange {
   readonly rename: FieldRename;
   readonly collection: string;
+  readonly place: StoredPlace;
   readonly from: string;
   readonly to: string;
-  /** The embedded model whose objects hold the key, for a key inside documents; `undefined` for a field of the documents. */
-  readonly embeddedIn: string | undefined;
 }
 
-/** Where a change's stored name is, in words: a field of a collection's documents, or a key of an embedded model's objects. */
-function placeOf(change: FieldChange, stored: string): string {
-  return change.embeddedIn === undefined
-    ? `field "${stored}" in collection "${change.collection}"`
-    : `key "${stored}" of embedded model "${change.embeddedIn}"`;
+/** The noun a route gives the names it moves through at `place`. */
+function routeNoun(place: StoredPlace): 'field name' | 'key' {
+  return place.kind === 'document' ? 'field name' : 'key';
+}
+
+/** The noun for a name stored at `place`, as labels and routes use it. */
+function nounOf(place: StoredPlace): 'field' | 'key' {
+  return place.kind === 'document' ? 'field' : 'key';
+}
+
+/** Where the name is stored, in words, after the names: in a collection's documents, or of an embedded model. */
+function whereText(change: FieldChange): string {
+  return change.place.kind === 'document'
+    ? `in collection "${change.collection}"`
+    : `of embedded model "${change.place.model}"`;
 }
 
 const ORDER =
@@ -69,7 +84,7 @@ function changeText(change: CollectionChange): string {
 function fieldChangeText(change: FieldChange): string {
   return change.rename.statement === undefined
     ? storedNameChangeText(change.rename.from, change.from, change.to)
-    : `field "${fieldDisplayName(change.rename.from)}" is renamed to "${fieldDisplayName(change.rename.to)}", which renames ${placeOf(change, change.from)} to "${change.to}"`;
+    : `field "${fieldDisplayName(change.rename.from)}" is renamed to "${fieldDisplayName(change.rename.to)}", which renames ${nounOf(change.place)} "${change.from}" to "${change.to}" ${whereText(change)}`;
 }
 
 /** A name for `name` to move through that is not in `used`. */
@@ -97,7 +112,7 @@ interface RouteMove {
  * object to a name nothing uses, then a plan that moves it to its final name.
  */
 function temporaryNamesRoute(
-  noun: 'collection' | 'stored name',
+  noun: 'collection' | 'field name' | 'key',
   moves: readonly RouteMove[],
   withStatements: boolean,
 ): string {
@@ -136,7 +151,7 @@ function linkedChanges<TChange>(
 
 /** How the first of two plans frees a name: it removes what the origin stores there, or gives it a name nothing uses. */
 function freeName(
-  noun: 'collection' | 'stored name',
+  noun: 'collection' | 'field name' | 'key',
   held: string,
   holders: { readonly text: string; readonly count: number },
   unusedName: string,
@@ -401,26 +416,62 @@ function modelsReached(
   return [...new Set([...own, ...variants, ...others])];
 }
 
-/** The fields of the origin contract stored as `storedName` in the documents a rename of `field` reaches. */
+/** A field or an embedded relation of the origin contract, which holds a stored name in the documents. */
+interface Holder {
+  readonly coordinate: FieldCoordinate;
+  readonly kind: 'field' | 'relation';
+}
+
+function holdersText(holders: readonly Holder[]): string {
+  const of = (kind: Holder['kind']) =>
+    holders.filter((holder) => holder.kind === kind).map(({ coordinate }) => coordinate);
+  const fields = of('field');
+  const relations = of('relation');
+  const relationNames = relations.map((relation) => `"${fieldDisplayName(relation)}"`);
+  return joinedList([
+    ...(fields.length === 0 ? [] : [fieldsText(fields)]),
+    ...(relations.length === 0
+      ? []
+      : [`embedded relation${relations.length === 1 ? '' : 's'} ${joinedList(relationNames)}`]),
+  ]);
+}
+
+/** The stored names a model of `definition` holds in its documents: its fields', and its embedded relations'. */
+function ownHeldNamesOf(
+  definition: Parameters<typeof ownStoredNamesOf>[0] & Parameters<typeof ownEmbedStoredNamesOf>[0],
+): readonly (readonly [string, string, Holder['kind']])[] {
+  return [
+    ...Object.entries(ownStoredNamesOf(definition)).map(
+      ([name, stored]) => [name, stored, 'field'] as const,
+    ),
+    ...Object.entries(ownEmbedStoredNamesOf(definition)).map(
+      ([name, stored]) => [name, stored, 'relation'] as const,
+    ),
+  ];
+}
+
+/** The fields and embedded relations of the origin contract stored as `storedName` in the documents a rename of `field` reaches. */
 function originFieldsStoring(
   fromContract: ContractWithDomain,
   field: FieldCoordinate,
   storedName: string,
-): readonly FieldCoordinate[] {
+): readonly Holder[] {
   const models = mongoModelsOf(fromContract.domain, field.namespaceId);
   return modelsReached(fromContract, field).flatMap((model) => {
     const definition = models[model];
     return definition === undefined
       ? []
-      : Object.entries(ownStoredNamesOf(definition)).flatMap(([name, stored]) =>
-          stored === storedName ? [{ namespaceId: field.namespaceId, model, field: name }] : [],
+      : ownHeldNamesOf(definition).flatMap(([name, stored, kind]) =>
+          stored === storedName
+            ? [{ coordinate: { namespaceId: field.namespaceId, model, field: name }, kind }]
+            : [],
         );
   });
 }
 
 function storedNamesOf(contract: ContractWithDomain, model: ModelCoordinate): readonly string[] {
   return modelAndBasesOf(mongoModelsOf(contract.domain, model.namespaceId), model.model).flatMap(
-    (each) => Object.values(ownStoredNamesOf(each)),
+    (each) => ownHeldNamesOf(each).map(([, stored]) => stored),
   );
 }
 
@@ -441,7 +492,7 @@ function fieldRoute(
     return { objects: fieldsText([moving.rename.to]), through, to: moving.to };
   });
   return temporaryNamesRoute(
-    'stored name',
+    routeNoun(pair[0].place),
     moves,
     linked.some((change) => change.rename.statement !== undefined),
   );
@@ -457,15 +508,12 @@ function fieldRenameConflict(
   changes: readonly FieldChange[],
   contracts: Contracts,
 ): MigrationPlannerConflict | undefined {
-  const noun = change.embeddedIn === undefined ? 'field' : 'key';
-  const label =
-    change.embeddedIn === undefined
-      ? `Cannot rename field "${change.from}" to "${change.to}" in collection "${change.collection}"`
-      : `Cannot rename key "${change.from}" to "${change.to}" of embedded model "${change.embeddedIn}"`;
+  const noun = nounOf(change.place);
+  const label = `Cannot rename ${noun} "${change.from}" to "${change.to}" ${whereText(change)}`;
   const holding =
-    change.embeddedIn === undefined
+    change.place.kind === 'document'
       ? 'the documents'
-      : `the objects of embedded model "${change.embeddedIn}"`;
+      : `the objects of embedded model "${change.place.model}"`;
   const text = capitalized(fieldChangeText(change));
   const moving = fieldsText([change.rename.from]);
   const misread = (stored: string) => `values of ${noun} "${stored}" as values of ${moving}`;
@@ -490,12 +538,12 @@ function fieldRenameConflict(
     const used = [
       ...storedNamesOf(contracts.fromContract, change.rename.from),
       ...storedNamesOf(contracts.contract, change.rename.to),
-      ...holders.flatMap((holder) => storedNamesOf(contracts.fromContract, holder)),
+      ...holders.flatMap((holder) => storedNamesOf(contracts.fromContract, holder.coordinate)),
     ];
     return renameRefused(
       undefined,
       `${label}: ${holding} already hold ${noun} "${change.to}"`,
-      `${text}, and ${holding} already hold ${noun} "${change.to}", the stored name of ${fieldsText(holders)}. Without the rename the plan would read the ${misread(change.to)}. Make the change in two plans: first ${freeName('stored name', change.to, { text: fieldsText(holders), count: holders.length }, unused(used, change.to))}, and plan and apply that; then make this change and plan again.`,
+      `${text}, and ${holding} already hold ${noun} "${change.to}", the stored name of ${holdersText(holders)}. Without the rename the plan would read the ${misread(change.to)}. Make the change in two plans: first ${freeName(routeNoun(change.place), change.to, { text: holdersText(holders), count: holders.length }, unused(used, change.to))}, and plan and apply that; then make this change and plan again.`,
     );
   }
   const takes = others.find(

@@ -54,7 +54,7 @@ describe('MongoMigrationPlanner, field renames that swap, chain or take a stored
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename field "x" to "y" in collection "users": field "y" is renamed in the same plan',
-        why: 'The stored name of field "User.a" changes from "x" to "y", and the stored name of field "User.b" changes from "y" to "x". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first give field "User.a" the stored name "prisma_swap_y" and field "User.b" the stored name "prisma_swap_x", stored names nothing uses, and plan and apply that; then give field "User.a" the stored name "y" and field "User.b" the stored name "x", and plan again.',
+        why: 'The stored name of field "User.a" changes from "x" to "y", and the stored name of field "User.b" changes from "y" to "x". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first give field "User.a" the field name "prisma_swap_y" and field "User.b" the field name "prisma_swap_x", field names nothing uses, and plan and apply that; then give field "User.a" the field name "y" and field "User.b" the field name "x", and plan again.',
       },
     ]);
   });
@@ -73,7 +73,7 @@ describe('MongoMigrationPlanner, field renames that swap, chain or take a stored
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename field "x" to "y" in collection "users": field "y" is renamed in the same plan',
-        why: 'The stored name of field "User.a" changes from "x" to "y", and the stored name of field "User.b" changes from "y" to "z". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first give field "User.a" the stored name "prisma_swap_y" and field "User.b" the stored name "prisma_swap_z", stored names nothing uses, and plan and apply that; then give field "User.a" the stored name "y" and field "User.b" the stored name "z", and plan again.',
+        why: 'The stored name of field "User.a" changes from "x" to "y", and the stored name of field "User.b" changes from "y" to "z". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first give field "User.a" the field name "prisma_swap_y" and field "User.b" the field name "prisma_swap_z", field names nothing uses, and plan and apply that; then give field "User.a" the field name "y" and field "User.b" the field name "z", and plan again.',
       },
     ]);
   });
@@ -92,7 +92,7 @@ describe('MongoMigrationPlanner, field renames that swap, chain or take a stored
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename field "x" to "y" in collection "users": the documents already hold field "y"',
-        why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "User.b". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove field "User.b", or keep it and change its stored name to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
+        why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of field "User.b". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove field "User.b", or keep it and change its field name to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
       },
     ]);
   });
@@ -112,7 +112,7 @@ describe('MongoMigrationPlanner, field renames that swap, chain or take a stored
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename field "x" to "y" in collection "users": field "y" is renamed in the same plan',
-        why: 'The stored name of field "User.a" changes from "x" to "y", and field "User.b" is renamed to "User.c", which renames field "y" to "z" in collection "users". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first give field "User.a" the stored name "prisma_swap_y" and field "User.c" the stored name "prisma_swap_z", stored names nothing uses, and plan and apply that with the same statements; then give field "User.a" the stored name "y" and field "User.c" the stored name "z", and plan again without them.',
+        why: 'The stored name of field "User.a" changes from "x" to "y", and field "User.b" is renamed to "User.c", which renames field "y" to "z" in collection "users". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first give field "User.a" the field name "prisma_swap_y" and field "User.c" the field name "prisma_swap_z", field names nothing uses, and plan and apply that with the same statements; then give field "User.a" the field name "y" and field "User.c" the field name "z", and plan again without them.',
       },
     ]);
   });
@@ -132,7 +132,7 @@ describe('MongoMigrationPlanner, field renames that swap, chain or take a stored
         kind: 'unsupportedOperation',
         summary:
           'Cannot rename field "x" to "z" in collection "users": another rename in the same plan takes stored name "x"',
-        why: 'The stored name of field "User.a" changes from "x" to "z", and field "User.b" is renamed to "User.c", which renames field "y" to "x" in collection "users". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out. Make the change in two plans: first give field "User.a" the stored name "prisma_swap_z" and field "User.c" the stored name "prisma_swap_x", stored names nothing uses, and plan and apply that with the same statements; then give field "User.a" the stored name "z" and field "User.c" the stored name "x", and plan again without them.',
+        why: 'The stored name of field "User.a" changes from "x" to "z", and field "User.b" is renamed to "User.c", which renames field "y" to "x" in collection "users". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out. Make the change in two plans: first give field "User.a" the field name "prisma_swap_z" and field "User.c" the field name "prisma_swap_x", field names nothing uses, and plan and apply that with the same statements; then give field "User.a" the field name "z" and field "User.c" the field name "x", and plan again without them.',
       },
     ]);
   });
@@ -335,6 +335,35 @@ describe('MongoMigrationPlanner, the routes field rename refusals give, followed
         labels: ['Fill field email in collection users where it is missing or null'],
         applied: [],
         dataLoss: [],
+      },
+    ]);
+  });
+
+  it('refuses a field rename onto the stored name of an embedded relation the destination removes, as a takeover', () => {
+    const from = contract(
+      'from',
+      {
+        User: {
+          collection: 'users',
+          fields: ['_id', 'a'],
+          storedAs: { a: 'x' },
+          embeds: { notes: 'y' },
+        },
+        Embedded: { fields: ['text'], owner: 'User' },
+      },
+      { users: {} },
+    );
+    const to = contract(
+      'to',
+      { User: { collection: 'users', fields: ['_id', 'a'], storedAs: { a: 'y' } } },
+      { users: {} },
+    );
+    expect(refused(plan({ from, to, schema: [schemaCollection('users')] }))).toEqual([
+      {
+        kind: 'unsupportedOperation',
+        summary:
+          'Cannot rename field "x" to "y" in collection "users": the documents already hold field "y"',
+        why: 'The stored name of field "User.a" changes from "x" to "y", and the documents already hold field "y", the stored name of embedded relation "User.notes". Without the rename the plan would read the values of field "y" as values of field "User.a". Make the change in two plans: first remove embedded relation "User.notes", or keep it and change its field name to a name nothing uses, such as "prisma_swap_y", and plan and apply that; then make this change and plan again.',
       },
     ]);
   });

@@ -453,7 +453,7 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
           kind: 'unsupportedOperation',
           summary:
             'Cannot rename field "level" to "rank" in collection "people": model "Admin" stores field "level" in the same collection, "people"',
-          why: 'The stored name of field "User.level" changes from "level" to "rank". Collection "people" stores several models and no discriminator tells their documents apart, so renaming the field would rename it in the documents of "Admin" too. To change it, move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.',
+          why: 'The stored name of field "User.level" changes from "level" to "rank". Collection "people" stores several models and no discriminator tells their documents apart, so renaming the field would rename it in the documents of "Admin" too. To change it, move the models to separate collections, or keep the stored name "level" in the contract.',
         },
       ],
     });

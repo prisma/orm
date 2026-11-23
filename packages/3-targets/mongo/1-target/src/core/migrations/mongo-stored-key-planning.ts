@@ -446,13 +446,13 @@ export function planStoredKeyRewrites(
             {
               rename: {
                 from: subject,
-                to: { ...subject, field: subject.field },
-                statement: change.statement,
+                to: change.statement?.entity === 'field' ? change.statement.to : subject,
+                statement: change.statement?.entity === 'field' ? change.statement : undefined,
               },
               collection,
+              place: { kind: 'embedded', model: subject.model },
               from: change.from,
               to,
-              embeddedIn: subject.model,
             },
           ];
     }),

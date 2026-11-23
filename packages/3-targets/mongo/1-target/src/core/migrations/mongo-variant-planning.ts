@@ -298,7 +298,7 @@ function sharedCollectionRefusal(
     change,
     label,
     `model ${named} ${others.length === 1 ? 'is' : 'are'} stored in collection ${quoted(change.collection)} and its documents can hold ${change.originField} ${quoted(change.from)}`,
-    `${sharedCollectionWhy(change.collection, others, effect)} To change only the documents of ${variantText(change.model)}, ${SEPARATE_THE_MODELS}.`,
+    `${sharedCollectionWhy(change.collection, others, effect)} To change only the documents of ${variantText(change.model)}, ${change.statement === undefined ? `move the models to separate collections, or keep ${change.to === undefined ? variantText(change.model) : `the discriminator value ${quoted(change.from)}`} in the contract` : SEPARATE_THE_MODELS}.`,
   );
 }
 
