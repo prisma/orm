@@ -155,7 +155,20 @@ What we promise a user who upgrades within Prisma 8, and the work that makes the
 | 6 | ⏳ | State, for each runtime, database and driver, which event ends our support for a version, and publish it on the supported-versions page | Not decided | Will | Not started | |
 | 7 | ⏳ | The upgrade tool: where an upgrade needs a change to a user's project, a deterministic tool makes it | Not decided | Will | Principle agreed. Not started | |
 | 8 | ⏳ | Finish renaming "extension pack" to "extension" in the docs, the code and the docs site | Not decided | Will | Not started | |
-| 9 | ⏳ | Check every rule in the policy against the code and add a task for each one that is not yet true | Not decided | Will | In progress since 2026-11-23 | |
+| 9 | ✅ | Check every rule in the policy against the code and add a task for each one that is not yet true | Not decided | Will | Done 2026-11-23. 135 rules checked, 19 already true. The reports are in [ga-readiness/research/](ga-readiness/research/), and rows 10 to 22 came from it | |
+| 10 | ⏳ | Every stored file carries a format version and every reader checks it first; rename the contract's `schemaVersion` field | Not decided | Will | Not started | |
+| 11 | ⏳ | Hashes stay the same for the whole major: take the format version out of the storage hash, and test saved hashes | Not decided | Will | Not started | |
+| 12 | ⏳ | Test on every release that it reads the files, records and migrations that `8.0.0` wrote | Not decided | Will | Not started | |
+| 13 | ⏳ | The runtime marker check warns and never stops an application | Not decided | Will | Not started | |
+| 14 | ⏳ | Reference documentation for every export, CLI command, config option, error code and file format, shipped inside the packages | Not decided | Will | Not started | |
+| 15 | ⏳ | Each change states its class, from the pull request to the release notes | Not decided | Will | Not started | |
+| 16 | ⏳ | The release process publishes packages at different maturity levels, and can cut `8.0.0` | Not decided | Will | Not started | |
+| 17 | ⏳ | The command-line tool stops when its major version differs from the library's | Not decided | Will | Not started | |
+| 18 | ⏳ | Decide where `definePrismaConfig` comes from: applications import it from `@prisma/cli-engine` today, a package the policy does not list | Not decided | Will | Not started | |
+| 19 | ⏳ | Make additions safe where they are not: sets a user handles case by case, built-in names a user's name can hide, and extension names a later release can take | Not decided | Will | Not started | |
+| 20 | ⏳ | CI tests every supported version of Node.js, TypeScript, each database and each driver | Not decided | Will | Not started | |
+| 21 | ⏳ | A change for a package below GA does not reach a GA package through the code they share | Not decided | Will | Not started | |
+| 22 | ⏳ | Composer, the `prisma` tool and the control plane use only ORM APIs the policy covers | Not decided | Will | Not started | |
 
 ## Databases
 
