@@ -212,4 +212,23 @@ describe('tx.transaction on postgres', () => {
       users: await db.orm.public.User.select('id').all(),
     }).toEqual({ names: ['next'], posts: [], users: [] });
   });
+
+  it('suspends only the other work when the callback waits for an ORM write with Promise.allSettled, and the transaction commits', async () => {
+    await db.transaction(async (tx) => {
+      const [write, read] = await Promise.allSettled([
+        createWithAuthor(tx, 1, 'A', 1),
+        tx.orm.public.User.select('id').all(),
+      ]);
+      expect({ write: write.status, read }).toMatchObject({
+        write: 'fulfilled',
+        read: { status: 'rejected', reason: { code: 'RUNTIME.TRANSACTION_SUSPENDED' } },
+      });
+      await insert(tx, 'after');
+    });
+
+    expect({
+      names: await names(db),
+      posts: await db.orm.public.Post.select('id').all(),
+    }).toEqual({ names: ['after'], posts: [{ id: 1 }] });
+  });
 });

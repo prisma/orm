@@ -311,7 +311,7 @@ changes:
         - 'orm init\b[^\n]*--json'
   - id: orm-write-inside-transaction-suspends-tx
     summary: |
-      An ORM write of more than one statement on `tx.orm`, such as a create with a nested relation, runs in a savepoint. While it runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`. When such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, it rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. The detection matches TypeScript sources that call `transaction` and `Promise.all` or `Promise.allSettled`.
+      An ORM write of more than one statement on `tx.orm`, such as a create with a nested relation, runs in a savepoint. While it runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`. In `Promise.all`, that rejection makes the callback throw while the write still runs, so `db.transaction` rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the `RUNTIME.TRANSACTION_SUSPENDED` error, keeps nothing the transaction wrote, and closes the connection. When such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the write itself rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. The detection matches TypeScript sources that call `transaction` and `Promise.all` or `Promise.allSettled`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -1215,6 +1215,8 @@ Inside `db.transaction(async (tx) => ...)`, where an ORM write of several statem
 await tx.orm.public.Post.create({ title, author: (author) => author.create(user) });
 await tx.execute(plan);
 ```
+
+Left in `Promise.all`, the whole transaction fails. The other work rejects with `RUNTIME.TRANSACTION_SUSPENDED`, which makes the callback throw while the write still runs. The transaction cannot be rolled back while the write holds its savepoint, so it rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is that `RUNTIME.TRANSACTION_SUSPENDED` error, and the connection is closed instead of given back to the pool. Nothing the transaction wrote is kept. Code that matched `RUNTIME.TRANSACTION_SUSPENDED` on the error the transaction rejects with reads it from `error.cause`.
 
 On any SQL database, when such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the rollback to the savepoint fails too. The write then rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. Before, it rejected with the database's error itself. Code that retries on the database's deadlock error reads that error from `error.cause`.
 

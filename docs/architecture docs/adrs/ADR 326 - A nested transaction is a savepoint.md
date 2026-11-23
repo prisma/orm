@@ -161,6 +161,8 @@ These rules are the outer transaction's rules from `withTransaction`, applied to
 
 A nested call that the enclosing callback does not await, and that is still running when the enclosing callback returns, leaves the enclosing level unable to settle: its `commit()` and `rollback()` are refused as suspended. The settle sequence then invalidates the stack, the enclosing call rejects with `RUNTIME.TRANSACTION_COMMIT_FAILED`, every context of the transaction is closed, and the connection is destroyed.
 
+When the enclosing callback throws while such a nested call is still running, its `rollback()` is refused as suspended in the same way. The enclosing call rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, with the callback's error as `cause` and the refused rollback's `RUNTIME.TRANSACTION_SUSPENDED` in `rollbackError`, every context of the transaction is closed, and the connection is destroyed. This is the usual path of a callback that runs an ORM write of several statements in `Promise.all` with other work on the same context: the other work rejects as suspended, `Promise.all` rejects, and the callback throws while the write still holds its savepoint.
+
 ### 9. Middleware sees each savepoint as a transaction activity
 
 A savepoint is a `'transaction'` activity beneath the activity it was opened on: the enclosing transaction or savepoint, or the activity handle that opened it. Its `SAVEPOINT`, `RELEASE` and `ROLLBACK TO` statements are sent by the driver and never reach middleware as statement activities. A middleware recognizes a savepoint with `activity.kind === 'transaction' && ctx.inTransaction()`; `TransactionActivity` has no field for it.

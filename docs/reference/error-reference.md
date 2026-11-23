@@ -1517,7 +1517,7 @@ Committing a transaction failed; the runtime attempts a cleanup rollback and des
 
 ### RUNTIME.TRANSACTION_ROLLBACK_FAILED
 
-Rolling back after callback failure itself failed; the connection is destroyed rather than returned to the pool. The callback error is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. Timeout skips rollback and destroys the connection directly.
+Rolling back after callback failure itself failed; the connection is destroyed rather than returned to the pool. The callback error is the wrapper `cause`; payload `rollbackError` is the actual underlying rollback failure, unchanged. Destruction failures do not replace this error. Timeout skips rollback and destroys the connection directly. The rollback is also refused, and `rollbackError` is `RUNTIME.TRANSACTION_SUSPENDED`, when the callback throws while a call on the transaction that it did not await still has a savepoint open, such as an ORM write of several statements in `Promise.all` beside other work on `tx`; nothing the transaction wrote is kept. Await each call on `tx` before sending the next; with `Promise.allSettled` the callback waits for the write, and the transaction can go on.
 
 ### RUNTIME.TRANSACTION_SUSPENDED
 
