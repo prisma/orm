@@ -10,7 +10,14 @@ changes:
         - '@default\("(?:[^"\\\n]|\\.)*\\"__proto__\\"'
   - id: mongo-proto-names-refused
     summary: |
-      A MongoDB contract now refuses a model, field, relation, composite type or value object, enum, collection or root named `__proto__`. Choose another name.
+      A MongoDB contract now refuses a model, field, relation, composite type or value object, enum, collection or root named `__proto__`, and an embed relation stored under that name. Choose another name.
+    detection:
+      glob: "**/*.{prisma,ts,mts,cts,tsx}"
+      matches:
+        - '__proto__'
+  - id: sql-proto-names-refused
+    summary: |
+      A SQL contract now refuses a table, column, model, field, relation, enum or other name that is `__proto__`; `contract emit` used to leave such a table or column out without an error. Rename it, in the database first if the database has it.
     detection:
       glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
@@ -27,14 +34,14 @@ changes:
     summary: |
       On Postgres, `prisma contract infer` now fails with `CONTRACT.INFER_UNSUPPORTED` when the database has a table or column named `__proto__`. Rename it in the database first.
     detection:
-      glob: "**/{package.json,*.sh,*.yml,*.yaml,Makefile,justfile}"
+      glob: "{**/{package.json,*.sh,*.yml,*.yaml,Makefile,justfile},.github/workflows/*.{yml,yaml},.gitlab-ci.yml}"
       contains:
         - 'contract infer'
 ---
 
 # Names and keys that JavaScript objects inherit
 
-Names such as `constructor` and `toString` now work everywhere as model, table, column and field names, and need no action. Four cases with `__proto__` do, one section each below.
+Names such as `constructor` and `toString` now work everywhere as model, table, column and field names, and need no action. Five cases with `__proto__` do, one section each below.
 
 ## A JSON default with a `__proto__` key
 
@@ -57,7 +64,7 @@ Until the default is applied, the SQL runtime logs `CONTRACT.MARKER_MISMATCH` as
 
 ## A MongoDB name `__proto__`
 
-JavaScript reads `__proto__` as the prototype of an object rather than as a key, so a contract could not hold such a name: the client lost the model, field, relation or collection. A MongoDB contract now refuses it. The TypeScript builder raises `CONTRACT.NAME_UNUSABLE_AS_KEY`; a PSL contract reports `PSL_STORED_NAME_UNSUPPORTED` at the declaration:
+JavaScript reads `__proto__` as the prototype of an object rather than as a key, so a contract could not hold such a name: the client lost the model, field, relation or collection. A MongoDB contract now refuses it. The TypeScript builder raises `CONTRACT.NAME_UNUSABLE_AS_KEY`; a PSL contract reports `PSL_STORED_NAME_UNSUPPORTED`:
 
 ```text
 A model is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
@@ -66,8 +73,17 @@ A model is named "__proto__", which JavaScript reads as the prototype of an obje
 Rename the model, field, relation, composite type, enum or root. What a rename does to stored documents:
 
 - **A model's field.** Keep its stored name with `@map("…")`, or `.mongo({ field })` in TypeScript, and no document changes. A field stored as `__proto__` cannot be kept under that name; give it another stored name.
-- **A member of a composite type or value object.** It is always stored under its own name, so renaming it changes the key in the embedded documents. The client never read a value stored under `__proto__`; if documents hold one and you need it, move it to the new key with an update of your own.
-- **A relation.** Its name is not stored for a reference relation. An embed relation is stored under its name unless the TypeScript contract gives it another one, so treat it like a composite type member.
+- **A member of a composite type or value object.** It is always stored under its own name, so renaming it changes the key in the embedded documents. Documents may already hold values under `__proto__`, and a rename leaves them under the old key. Move them to the new key. For a member of an embedded document:
+
+  ```js
+  db.getCollection("<collection>").updateMany(
+    { "<field>.__proto__": { $exists: true } },
+    [{ $set: { "<field>.<new name>": "$<field>.__proto__" } }, { $unset: "<field>.__proto__" }],
+  )
+  ```
+
+  For a list of composite values, rewrite each element in the same way with `$map`.
+- **A relation.** A reference relation's name is not stored, so no document changes. An embed relation is stored under its name, or under the name the TypeScript contract gives it with `storageRelations`. The client never read or wrote an embed relation named `__proto__`, and a create dropped the value of one stored as `__proto__`; that stored name is now refused with `CONTRACT.ARGUMENT_INVALID`. Give the relation another name or stored name, and move any embedded documents that another writer stored under `__proto__` with the update above.
 
 The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
@@ -85,6 +101,16 @@ For a collection, name another collection with `@@map`. `@@map` only changes whi
   db.getCollection("__proto__").aggregate([{ $merge: { into: "<new name>" } }])
   db.getCollection("__proto__").drop()
   ```
+
+## A SQL name `__proto__`
+
+A SQL contract now refuses `__proto__` as the name of a table, column, model, field, relation, enum, namespace or any other name it keys an object by, with `CONTRACT.NAME_UNUSABLE_AS_KEY`:
+
+```text
+The namespace of table "users" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
+```
+
+`prisma contract emit` used to succeed on a contract with `@@map("__proto__")` or `@map("__proto__")` and leave the table or column out of `contract.json` without an error. Rename it in the contract source. If the database already has a table or column of that name, rename it in the database as well, before you plan the next migration.
 
 ## A SQL `select` alias `__proto__`
 

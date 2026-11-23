@@ -75,14 +75,14 @@ function unsupportedNameSubject(refusal: UnsupportedNameRefusal): string {
 }
 
 const UNSUPPORTED_NAME_WORDS = {
-  model: 'model',
-  valueObject: 'composite type',
-  enum: 'enum',
-  collection: 'collection',
-  root: 'root',
-  field: 'field',
-  valueObjectField: 'field',
-  relation: 'relation',
+  model: 'a model',
+  valueObject: 'a composite type',
+  enum: 'an enum',
+  collection: 'a collection',
+  root: 'a root',
+  field: 'a field',
+  valueObjectField: 'a field',
+  relation: 'a relation',
 } as const satisfies Record<UnsupportedNameRefusal['subject'], string>;
 
 /**
@@ -100,7 +100,7 @@ export function refusalDiagnostic(
         key.kind === 'field' || key.kind === 'relation' ? fieldSiteOf(sites, key) : undefined;
       return {
         code: 'PSL_STORED_NAME_UNSUPPORTED',
-        message: `${unsupportedNameSubject(refusal)}, which JavaScript reads as the prototype of an object rather than as a key. Prisma 8 cannot read or write a ${UNSUPPORTED_NAME_WORDS[refusal.subject]} of that name.`,
+        message: `${unsupportedNameSubject(refusal)}, which JavaScript reads as the prototype of an object rather than as a key. Prisma 8 cannot read or write ${UNSUPPORTED_NAME_WORDS[refusal.subject]} of that name.`,
         sourceId: site?.sourceId ?? fallbackSourceId,
         ...ifDefined('span', site?.span),
       };
