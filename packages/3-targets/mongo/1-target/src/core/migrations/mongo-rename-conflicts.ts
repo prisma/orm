@@ -1,0 +1,375 @@
+import type { ContractWithDomain } from '@internal/contract/types';
+import {
+  type FieldCoordinate,
+  type MigrationPlannerConflict,
+  type ModelCoordinate,
+  modelDisplayName,
+} from '@internal/framework-components/control';
+import {
+  collectionOfModel,
+  embeddingModelOf,
+  modelAndBasesOf,
+  mongoModelsOf,
+  ownStoredNamesOf,
+} from '@internal/mongo-contract';
+import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
+import { modelCoordinates } from './mongo-model-coordinates';
+import {
+  type CollectionChange,
+  capitalized,
+  collectionChangeText,
+  type FieldRename,
+  fieldDisplayName,
+  joinedList,
+  modelsText,
+  renameRefused,
+  storedNameChangeText,
+} from './mongo-storage-renames';
+
+/** A field rename the plan makes, with the collection it is made in and the stored names it moves between. */
+export interface FieldChange {
+  readonly rename: FieldRename;
+  readonly collection: string;
+  readonly from: string;
+  readonly to: string;
+}
+
+const ORDER =
+  'A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out';
+
+function hasStatement(change: CollectionChange): boolean {
+  return change.renames.some((rename) => rename.statement !== undefined);
+}
+
+function fieldsText(fields: readonly FieldCoordinate[]): string {
+  const names = fields.map((field) => `"${fieldDisplayName(field)}"`);
+  return `field${names.length === 1 ? '' : 's'} ${joinedList(names)}`;
+}
+
+/** What a collection change does, in words: the statement that asks for it, or the contract change. */
+function changeText(change: CollectionChange): string {
+  const stated = change.renames.find((rename) => rename.statement !== undefined);
+  return stated === undefined
+    ? collectionChangeText(change)
+    : `model "${modelDisplayName(stated.from)}" is renamed to "${modelDisplayName(stated.to)}", which renames collection "${change.from}" to "${change.to}"`;
+}
+
+function fieldChangeText(change: FieldChange): string {
+  return change.rename.statement === undefined
+    ? storedNameChangeText(change.rename.from, change.from, change.to)
+    : `field "${fieldDisplayName(change.rename.from)}" is renamed to "${fieldDisplayName(change.rename.to)}", which renames field "${change.from}" to "${change.to}" in collection "${change.collection}"`;
+}
+
+/** A name for `name` to move through that is not in `used`. */
+function unused(used: readonly string[], name: string): string {
+  let candidate = `prisma_swap_${name}`;
+  while (used.includes(candidate)) candidate = `${candidate}_`;
+  return candidate;
+}
+
+function collectionsOf(contract: ContractWithDomain): readonly string[] {
+  return Object.values(contract.storage.namespaces).flatMap((namespace) =>
+    Object.keys(namespace.entries['collection'] ?? {}),
+  );
+}
+
+/** One object's move in the route through names nothing uses: what moves, through which name, to which. */
+interface RouteMove {
+  readonly objects: string;
+  readonly through: string;
+  readonly to: string;
+}
+
+/**
+ * The route that works on both commands for a chain or swap of names: a plan that moves each
+ * object to a name nothing uses, then a plan that moves it to its final name.
+ */
+function temporaryNamesRoute(
+  noun: 'collection' | 'stored name',
+  moves: readonly RouteMove[],
+  withStatements: boolean,
+): string {
+  const give = (name: (move: RouteMove) => string) =>
+    joinedList(moves.map((move) => `${move.objects} the ${noun} "${name(move)}"`));
+  return `Make the change in two plans: first give ${give(({ through }) => through)}, ${noun}s nothing uses, and plan and apply that${withStatements ? ' with the same statements' : ''}; then give ${give(({ to }) => to)}, and plan again${withStatements ? ' without them' : ''}.`;
+}
+
+/**
+ * The changes of `pair` and every change of `changes` linked to them by a name one frees and
+ * another takes, in either direction, in the order `pair`, the changes after it in the chain, then
+ * those before it.
+ */
+function linkedChanges<TChange>(
+  pair: readonly [TChange, TChange],
+  changes: readonly TChange[],
+  takesFrom: (taker: TChange, freer: TChange) => boolean,
+): readonly TChange[] {
+  const linked: TChange[] = [...pair];
+  for (const current of linked) {
+    for (const other of changes) {
+      if (linked.includes(other)) continue;
+      if (takesFrom(current, other) || takesFrom(other, current)) linked.push(other);
+    }
+  }
+  const ordered: TChange[] = [...pair];
+  const follow = (from: TChange, step: (change: TChange) => TChange | undefined) => {
+    for (let next = step(from); next !== undefined && !ordered.includes(next); next = step(next)) {
+      ordered.push(next);
+    }
+  };
+  follow(pair[1], (change) => linked.find((other) => takesFrom(change, other)));
+  follow(pair[0], (change) => linked.find((other) => takesFrom(other, change)));
+  return [...ordered, ...linked.filter((change) => !ordered.includes(change))];
+}
+
+/** How the first of two plans frees a name: it removes what the origin stores there, or gives it a name nothing uses. */
+function freeName(
+  noun: 'collection' | 'stored name',
+  held: string,
+  holders: { readonly text: string; readonly count: number },
+  unusedName: string,
+): string {
+  if (holders.count === 0) {
+    return `remove ${noun} "${held}" or give it a name nothing uses, such as "${unusedName}"`;
+  }
+  const [them, their] = holders.count === 1 ? ['it', 'its'] : ['them', 'their'];
+  return `remove ${holders.text}, or keep ${them} and change ${their} ${noun} to a name nothing uses, such as "${unusedName}"`;
+}
+
+interface Contracts {
+  readonly fromContract: ContractWithDomain;
+  readonly contract: ContractWithDomain;
+}
+
+function collectionRoute(
+  pair: readonly [CollectionChange, CollectionChange],
+  changes: readonly CollectionChange[],
+  contracts: Contracts,
+): string {
+  const linked = linkedChanges(pair, changes, (taker, freer) => taker.to === freer.from);
+  const used = [...collectionsOf(contracts.fromContract), ...collectionsOf(contracts.contract)];
+  const reserved: string[] = [];
+  const moves = linked.map((moving) => {
+    const through = unused([...used, ...reserved], moving.to);
+    reserved.push(through);
+    return {
+      objects: modelsText(moving.renames.map((rename) => rename.to)),
+      through,
+      to: moving.to,
+    };
+  });
+  return temporaryNamesRoute('collection', moves, linked.some(hasStatement));
+}
+
+function originModelsIn(fromContract: ContractWithDomain, collection: string) {
+  return modelCoordinates(fromContract).filter(
+    (model) =>
+      embeddingModelOf(fromContract.domain, model) === undefined &&
+      collectionOfModel(fromContract.domain, model) === collection,
+  );
+}
+
+/** Whether the origin contract has collection `name`. */
+function originHasCollection(fromContract: ContractWithDomain, name: string): boolean {
+  return (
+    collectionsOf(fromContract).includes(name) || originModelsIn(fromContract, name).length > 0
+  );
+}
+
+/**
+ * Refuses a collection rename no statement asks for when it swaps or chains with another rename,
+ * moves onto a collection the schema being planned from already has, or moves out of a name a
+ * statement rename takes. `held` is the schema before any rename is applied, so the outcome does
+ * not depend on the order of the renames. `undefined` when the rename can be planned.
+ */
+function collectionRenameConflict(
+  change: CollectionChange,
+  changes: readonly CollectionChange[],
+  schema: MongoSchemaIR,
+  contracts: Contracts,
+): MigrationPlannerConflict | undefined {
+  const { from, to } = change;
+  const label = `Cannot rename collection "${from}" to "${to}"`;
+  const text = capitalized(changeText(change));
+  const moving = modelsText(change.renames.map((rename) => rename.from));
+  const misread = (collection: string) =>
+    `documents of collection "${collection}" as documents of ${moving}`;
+  const others = changes.filter((other) => other !== change);
+  if (schema.collection(to) !== undefined) {
+    const moved = others.find((other) => other.from === to);
+    if (moved !== undefined) {
+      return renameRefused(
+        undefined,
+        `${label}: collection "${to}" is renamed in the same plan`,
+        `${text}, and ${changeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(to)}. ${collectionRoute([change, moved], others, contracts)}`,
+      );
+    }
+    const holders = originModelsIn(contracts.fromContract, to);
+    const used = [...collectionsOf(contracts.fromContract), ...collectionsOf(contracts.contract)];
+    return renameRefused(
+      undefined,
+      `${label}: the schema being planned from already has a collection "${to}"`,
+      `${text}, and the schema being planned from already has collection "${to}"${holders.length === 0 ? '' : `, the collection of ${modelsText(holders)}`}. Without the rename the plan would read the ${misread(to)}. Make the change in two plans: first ${freeName('collection', to, { text: modelsText(holders), count: holders.length }, unused(used, to))}, and plan and apply that; then make this change and plan again.`,
+    );
+  }
+  const takes = others.find((other) => hasStatement(other) && other.to === from);
+  if (takes !== undefined) {
+    return renameRefused(
+      undefined,
+      `${label}: another rename in the same plan takes collection name "${from}"`,
+      `${text}, and ${changeText(takes)}. ${ORDER}. ${collectionRoute([change, takes], others, contracts)}`,
+    );
+  }
+  return undefined;
+}
+
+/**
+ * The collection renames no statement asks for that the plan makes, checked against every rename
+ * of the plan before any is applied, or the first that cannot be planned. A rename whose new name
+ * the schema being planned from has, and the origin contract does not, is left out: the database
+ * may already hold it renamed.
+ */
+export function plannedCollectionChanges(
+  candidates: readonly CollectionChange[],
+  stated: readonly CollectionChange[],
+  schema: MongoSchemaIR,
+  contracts: Contracts,
+):
+  | { readonly kind: 'planned'; readonly changes: readonly CollectionChange[] }
+  | { readonly kind: 'refused'; readonly conflict: MigrationPlannerConflict } {
+  const changes = [...stated, ...candidates];
+  const planned: CollectionChange[] = [];
+  for (const change of [...candidates].sort((a, b) => a.from.localeCompare(b.from))) {
+    if (
+      schema.collection(change.to) !== undefined &&
+      !originHasCollection(contracts.fromContract, change.to)
+    ) {
+      continue;
+    }
+    const conflict = collectionRenameConflict(change, changes, schema, contracts);
+    if (conflict !== undefined) return { kind: 'refused', conflict };
+    planned.push(change);
+  }
+  return {
+    kind: 'planned',
+    changes: candidates.filter((change) => planned.includes(change)),
+  };
+}
+
+/** The stored names of the documents of the origin model of `field`, its own and its bases', with the fields that store them. */
+function originFieldsStoring(
+  fromContract: ContractWithDomain,
+  field: FieldCoordinate,
+  storedName: string,
+): readonly FieldCoordinate[] {
+  const models = mongoModelsOf(fromContract.domain, field.namespaceId);
+  const names = [field.model];
+  for (let base = models[field.model]?.base; base !== undefined; base = models[base.model]?.base) {
+    if (names.includes(base.model)) break;
+    names.push(base.model);
+  }
+  return names.flatMap((model) => {
+    const definition = models[model];
+    return definition === undefined
+      ? []
+      : Object.entries(ownStoredNamesOf(definition)).flatMap(([name, stored]) =>
+          stored === storedName ? [{ namespaceId: field.namespaceId, model, field: name }] : [],
+        );
+  });
+}
+
+function storedNamesOf(contract: ContractWithDomain, model: ModelCoordinate): readonly string[] {
+  return modelAndBasesOf(mongoModelsOf(contract.domain, model.namespaceId), model.model).flatMap(
+    (each) => Object.values(ownStoredNamesOf(each)),
+  );
+}
+
+function fieldRoute(
+  pair: readonly [FieldChange, FieldChange],
+  changes: readonly FieldChange[],
+  contracts: Contracts,
+): string {
+  const linked = linkedChanges(pair, changes, (taker, freer) => taker.to === freer.from);
+  const used = [
+    ...storedNamesOf(contracts.fromContract, pair[0].rename.from),
+    ...storedNamesOf(contracts.contract, pair[0].rename.to),
+  ];
+  const reserved: string[] = [];
+  const moves = linked.map((moving) => {
+    const through = unused([...used, ...reserved], moving.to);
+    reserved.push(through);
+    return { objects: fieldsText([moving.rename.to]), through, to: moving.to };
+  });
+  return temporaryNamesRoute(
+    'stored name',
+    moves,
+    linked.some((change) => change.rename.statement !== undefined),
+  );
+}
+
+/**
+ * Refuses a field rename no statement asks for when it swaps or chains with another field rename
+ * in the documents of the same model, takes the stored name of a field the destination removes, or
+ * moves out of a stored name a statement rename takes. `undefined` when it can be planned.
+ */
+function fieldRenameConflict(
+  change: FieldChange,
+  changes: readonly FieldChange[],
+  contracts: Contracts,
+): MigrationPlannerConflict | undefined {
+  const label = `Cannot rename field "${change.from}" to "${change.to}" in collection "${change.collection}"`;
+  const text = capitalized(fieldChangeText(change));
+  const moving = fieldsText([change.rename.from]);
+  const misread = (stored: string) => `values of field "${stored}" as values of ${moving}`;
+  const others = changes.filter(
+    (other) =>
+      other !== change &&
+      other.collection === change.collection &&
+      other.rename.from.namespaceId === change.rename.from.namespaceId &&
+      other.rename.from.model === change.rename.from.model,
+  );
+  const holders = originFieldsStoring(contracts.fromContract, change.rename.from, change.to);
+  if (holders.length > 0) {
+    const moved = others.find((other) => other.from === change.to);
+    if (moved !== undefined) {
+      return renameRefused(
+        undefined,
+        `${label}: field "${change.to}" is renamed in the same plan`,
+        `${text}, and ${fieldChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(change.to)}. ${fieldRoute([change, moved], others, contracts)}`,
+      );
+    }
+    const used = [
+      ...storedNamesOf(contracts.fromContract, change.rename.from),
+      ...storedNamesOf(contracts.contract, change.rename.to),
+    ];
+    return renameRefused(
+      undefined,
+      `${label}: the documents already hold field "${change.to}"`,
+      `${text}, and the documents already hold field "${change.to}", the stored name of ${fieldsText(holders)}. Without the rename the plan would read the ${misread(change.to)}. Make the change in two plans: first ${freeName('stored name', change.to, { text: fieldsText(holders), count: holders.length }, unused(used, change.to))}, and plan and apply that; then make this change and plan again.`,
+    );
+  }
+  const takes = others.find(
+    (other) => other.rename.statement !== undefined && other.to === change.from,
+  );
+  if (takes !== undefined) {
+    return renameRefused(
+      undefined,
+      `${label}: another rename in the same plan takes stored name "${change.from}"`,
+      `${text}, and ${fieldChangeText(takes)}. ${ORDER}. ${fieldRoute([change, takes], others, contracts)}`,
+    );
+  }
+  return undefined;
+}
+
+/** The first field rename no statement asks for that cannot be planned against every field rename of the plan. */
+export function fieldRenamesConflict(
+  changes: readonly FieldChange[],
+  contracts: Contracts,
+): MigrationPlannerConflict | undefined {
+  for (const change of changes) {
+    if (change.rename.statement !== undefined) continue;
+    const conflict = fieldRenameConflict(change, changes, contracts);
+    if (conflict !== undefined) return conflict;
+  }
+  return undefined;
+}

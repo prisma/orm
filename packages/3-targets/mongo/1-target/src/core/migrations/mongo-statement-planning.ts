@@ -45,6 +45,11 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import {
+  type FieldChange,
+  fieldRenamesConflict,
+  plannedCollectionChanges,
+} from './mongo-rename-conflicts';
+import {
   type DiscriminatorFilter,
   type RewriteCall,
   variantDiscriminatorFilter,
@@ -267,6 +272,7 @@ export function planStatements(input: {
     statement.entity === 'field' ? [{ from: statement.from, to: statement.to, statement }] : [],
   );
   const callOfStatement: (OpFactoryCall | undefined)[] = [];
+  const fieldChanges: FieldChange[] = [];
   const conflicts: MigrationPlannerConflict[] = [];
   const renamedCollections = new Map<string, string>();
   const renameCollection = (call: RenameCollectionCall) => {
@@ -281,16 +287,22 @@ export function planStatements(input: {
     return rename.call;
   };
 
-  for (const change of collections.changes) {
-    if (change.renames.some((rename) => rename.statement !== undefined)) continue;
-    if (
-      !collections.managedOnBothSides(change) ||
-      collections.sharedCollection(change) !== undefined ||
-      schema.collection(change.from) === undefined ||
-      schema.collection(change.to) !== undefined
-    ) {
-      continue;
-    }
+  const stated = (change: CollectionChange) =>
+    change.renames.some((rename) => rename.statement !== undefined);
+  const plannedChanges = plannedCollectionChanges(
+    collections.changes.filter(
+      (change) =>
+        !stated(change) &&
+        collections.managedOnBothSides(change) &&
+        collections.sharedCollection(change) === undefined &&
+        input.schema.collection(change.from) !== undefined,
+    ),
+    collections.changes.filter(stated),
+    input.schema,
+    planning,
+  );
+  if (plannedChanges.kind === 'refused') return notOk([plannedChanges.conflict]);
+  for (const change of plannedChanges.changes) {
     const outcome = planCollectionChange(change, schema);
     if (outcome.kind === 'refused') conflicts.push(outcome.conflict);
     if (outcome.kind === 'renameCollection') renameCollection(outcome.call);
@@ -334,6 +346,11 @@ export function planStatements(input: {
       continue;
     }
     if (outcome.kind === 'renameCollection') renameCollection(outcome.call);
+    if (outcome.kind === 'renameField' && statement.entity === 'field') {
+      fieldChanges.push(
+        fieldChangeOf({ from: statement.from, to: statement.to, statement }, outcome.rename),
+      );
+    }
     callOfStatement.push(
       outcome.kind === 'unchanged'
         ? undefined
@@ -364,9 +381,13 @@ export function planStatements(input: {
       if (outcome.kind === 'renameField') {
         addFieldRename(outcome.rename);
         fieldRenames.push(rename);
+        fieldChanges.push(fieldChangeOf(rename, outcome.rename));
       }
     }
   }
+  const fieldConflict =
+    conflicts.length > 0 ? undefined : fieldRenamesConflict(fieldChanges, planning);
+  if (fieldConflict !== undefined) return notOk([fieldConflict]);
 
   return conflicts.length > 0
     ? notOk(conflicts)
@@ -378,6 +399,10 @@ export function planStatements(input: {
         callOfStatement,
         collections,
       });
+}
+
+function fieldChangeOf(rename: FieldRename, { call }: FieldRenameCall): FieldChange {
+  return { rename, collection: call.collection, from: call.from, to: call.to };
 }
 
 /**
