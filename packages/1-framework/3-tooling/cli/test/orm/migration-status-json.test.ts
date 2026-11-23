@@ -78,6 +78,20 @@ describe('migration status --json', () => {
     ]);
   });
 
+  it('repeats --db in the migrate command when status was given --db', async () => {
+    const project = await projectWithOneMigration();
+    const run = await harness(driverConfig(project)).run(
+      ['migration', 'status', '--db', 'postgresql://localhost/app', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.presented?.presentation.next).toEqual([
+      expect.objectContaining({
+        command: `prisma-test db migrate --to ${HASH_HEAD.slice(0, 12)} --db <url>`,
+      }),
+    ]);
+  });
+
   it('plans the missing migration from the --from contract to the --to target', async () => {
     const run = await noPath();
 

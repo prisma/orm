@@ -465,7 +465,7 @@ export const migrationStatusCommand = defineOrmCommand({
     }
 
     const appGraph = aggregate.app.graph();
-    const invocation = cliInvocation(ctx, undefined);
+    const invocation = cliInvocation(ctx, args.flags.db);
     const refContext = { graph: appGraph, refs, contractHash };
 
     let toRef: ContractRef | undefined;
