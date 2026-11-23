@@ -102,7 +102,7 @@ const twoFactorModel = twoFactorMissing.slice(
 );
 
 const twoFactorAdded =
-  'Adding 2 fields to User and the model TwoFactor to prisma/contract.prisma. After the file is written, run `prisma contract emit` and update your database.';
+  'Changes to prisma/contract.prisma: 2 fields added to User, model TwoFactor added. After the file is written, run `prisma contract emit` and update your database.';
 
 const prismaConfig = `import { definePrismaConfig } from '${cliEngine}';
 import { defineConfig } from '${facade}/config';
@@ -173,11 +173,13 @@ function printedMessage(run: AuthRun): string {
 // package's version, and Better Auth with its `auth` program from the
 // registry, both at the lowest version the adapter's peer range admits, so
 // they share one copy and the oldest supported release is the one tested. The adapter's
-// two Prisma peers are declared too, because pnpm resolves a peer through
+// three Prisma peers are declared too, because pnpm resolves a peer through
 // the registry rather than through the tarball overrides, and these exact
 // versions are not on the registry until they are released. From the
 // registry the peers and the database package's dependencies are the same
-// packages; the one-copy assertion below checks that here.
+// packages; the one-copy assertion below checks that here. The toolchain's
+// own peer, the CLI engine, is installed as an application with a
+// prisma.config.ts has it.
 describe('the Better Auth adapter installed next to the SQLite database package', () => {
   let scratch: string;
 

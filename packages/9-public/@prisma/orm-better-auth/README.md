@@ -157,14 +157,14 @@ The adapter compares your contract with what your Better Auth configuration need
 
 ```console
 $ npx auth@latest generate
-Adding 2 fields to User and the model TwoFactor to prisma/contract.prisma. After the file is written, run `prisma contract emit` and update your database.
-✔ The file prisma/contract.prisma already exists. Do you want to overwrite the schema to the file? … yes
+Changes to prisma/contract.prisma: 2 fields added to User, model TwoFactor added. After the file is written, run `prisma contract emit` and update your database.
+✔ The file /home/me/my-app/prisma/contract.prisma already exists. Do you want to overwrite the schema to the file? … yes
 🚀 Schema was overwritten successfully!
 ```
 
-Better Auth asks before it writes the file, and `--yes` answers for you. The new fields go at the end of the models they belong to, indented like the model's last field, and the new models go at the end of the file, inside `namespace <name> { ... }` when you set the adapter's `namespace` option. Every line you wrote stays as it was. Then run `prisma contract emit` and `prisma db update`. After that, `auth generate` prints `Your schema is already up to date.` and `auth check` prints `Schema check passed against adapter "prisma-8".`, both with exit code 0.
+Better Auth asks before it writes the file, and `--yes` answers for you. Its question names the file by its full path. The new fields go after the last field of the model they belong to, before its `@@` lines, indented like that field. The new models go at the end of the file, indented like your other models, and inside `namespace <name> { ... }` when you set the adapter's `namespace` option. Every line you wrote stays as it was. When Better Auth asks for a foreign-key action the printed PSL cannot use, a `Note:` line after the first line says what is written instead. Then run `prisma contract emit` and `prisma db update`. After that, `auth generate` prints `Your schema is already up to date.` and `auth check` prints `Schema check passed against adapter "prisma-8".`, both with exit code 0.
 
-`auth generate` finds the contract file through `prisma.config.ts` in the directory you run it in. To name the file yourself, pass it with `--output`, for example `npx auth@latest generate --output prisma/contract.prisma`. A contract split over several files works when everything to add belongs in one of them.
+`auth generate` finds the contract files through `prisma.config.ts` in the directory the command runs in, and skips any file there that does not start with `// use prisma-8`, as `prisma contract emit` does. To name the file yourself, pass it with `--output`, for example `npx auth@latest generate --output prisma/contract.prisma`; the file must be one of your contract's files. With Better Auth's `--cwd` option, always pass `--output`: Better Auth does not tell the adapter the directory `--cwd` names, so the adapter would look for `prisma.config.ts` in the directory you run the command in. A contract split over several files works when everything to add belongs in one of them.
 
 ### When nothing is written
 
@@ -210,8 +210,10 @@ The message can also list fields whose type is wrong; optional Better Auth field
 `auth generate` also writes nothing, and adds a line to the message that says why, when:
 
 - the contract is written in TypeScript. The message is in PSL: add the equivalent models and fields in TypeScript.
-- there is neither `--output` nor a `prisma.config.ts` that names the contract, or the file `--output` names does not exist.
-- a contract file does not parse, or does not start with `// use prisma-8`.
+- the contract is read from a Prisma 7 schema. The message is in Prisma 8 syntax: add the equivalent lines by hand.
+- there is neither `--output` nor a `prisma.config.ts` that names the contract, `prisma.config.ts` does not load, or Prisma's config loader is not installed.
+- the file `--output` names does not exist or cannot be read.
+- a contract file does not parse, or the file `--output` names does not start with `// use prisma-8`.
 - a model it would add fields to is declared in none of the contract files, or in more than one.
 - the additions belong in more than one file, because Better Auth writes one file.
 - a model has no field named `id` (see [Limits](#limits)).
@@ -264,7 +266,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
 
 ## Dependencies
 
-- `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, as peers at the same version as your database package, which already depends on all three. The adapter loads `@prisma/orm-toolchain` only while `auth generate` runs, to read `prisma.config.ts`.
+- `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, as peers at the same version as your database package, which already depends on all three. The adapter loads `@prisma/orm-toolchain` only while `auth generate` runs, to read `prisma.config.ts`. Reading it also needs `@prisma/cli-engine`, which your `prisma.config.ts` already imports.
 - `@better-auth/core` 1.7.6 or a later 1.7 release, below 1.8, as a peer.
 
 The package imports only published entrypoints, so it works outside the Prisma repository. [DEVELOPING.md](DEVELOPING.md) has notes for people who change it.
