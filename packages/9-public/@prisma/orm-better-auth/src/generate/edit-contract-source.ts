@@ -3,6 +3,7 @@ import {
   CompositeTypeDeclarationAst,
   type DocumentAst,
   type FieldAttributeAst,
+  type FieldDeclarationAst,
   GenericBlockDeclarationAst,
   MixinDeclarationAst,
   type ModelAttributeAst,
@@ -56,9 +57,15 @@ interface OtherDeclaration {
   readonly kind: string;
 }
 
+interface DeclaredField {
+  readonly name: string;
+  /** The column the field is stored in: its `@map` name, or its own. */
+  readonly column: string;
+}
+
 interface DeclaredMixin {
   readonly name: string;
-  readonly fields: readonly string[];
+  readonly fields: readonly DeclaredField[];
 }
 
 interface Declarations<F extends ContractSourceFile> {
@@ -75,6 +82,34 @@ function otherKind(declaration: unknown): string | undefined {
     return declaration.keyword()?.text ?? 'block';
   }
   return undefined;
+}
+
+function declaredFields(fields: Iterable<FieldDeclarationAst>): DeclaredField[] {
+  return [...fields].flatMap((field) => {
+    const name = field.name()?.name();
+    return name === undefined ? [] : [{ name, column: mappedName(field.attributes()) ?? name }];
+  });
+}
+
+/** A field of a model as the contract will have it, and where it is written. */
+interface ModelField extends DeclaredField {
+  /** The mixin it comes from; `undefined` for the model's own field. */
+  readonly mixin: string | undefined;
+}
+
+/** The model's fields as the contract will have them: its own, then those of every mixin it includes. */
+function modelFields(
+  declaration: ModelDeclarationAst,
+  mixins: readonly DeclaredMixin[],
+): ModelField[] {
+  const own = declaredFields(declaration.fields()).map((field) => ({ ...field, mixin: undefined }));
+  const included = [...declaration.inclusions()].flatMap((inclusion) => {
+    const mixinName = inclusion.name()?.path().at(-1);
+    return mixins
+      .filter(({ name }) => name === mixinName)
+      .flatMap((mixin) => mixin.fields.map((field) => ({ ...field, mixin: mixin.name })));
+  });
+  return [...own, ...included];
 }
 
 function collectDeclarations<F extends ContractSourceFile>(
@@ -99,8 +134,7 @@ function collectDeclarations<F extends ContractSourceFile>(
       return;
     }
     if (declaration instanceof MixinDeclarationAst) {
-      const fields = [...declaration.fields()].flatMap((field) => field.name()?.name() ?? []);
-      into.mixins.push({ name, fields });
+      into.mixins.push({ name, fields: declaredFields(declaration.fields()) });
     }
     const kind = otherKind(declaration);
     if (kind !== undefined) into.others.push({ path: file.path, namespaceId, name, kind });
@@ -233,37 +267,19 @@ function fieldConflicts(
   into: Conflicts,
 ): void {
   const additions = new Set(block.fieldNames);
-  for (const inclusion of declaration.inclusions()) {
-    const mixinName = inclusion.name()?.path().at(-1);
-    for (const mixin of mixins.filter(({ name }) => name === mixinName)) {
-      for (const name of mixin.fields.filter((field) => additions.has(field))) {
-        into.aheadOfEmit.push({
-          name: `${block.modelName}.${name} (from the mixin ${mixin.name})`,
-          namespaceId: undefined,
-          path: file.path,
-        });
-      }
-    }
-  }
-  for (const field of declaration.fields()) {
-    const name = field.name()?.name();
-    if (name === undefined) continue;
+  for (const { name, column, mixin } of modelFields(declaration, mixins)) {
+    const declared = `${block.modelName}.${name}${mixin === undefined ? '' : ` (from the mixin ${mixin})`}`;
     if (additions.has(name)) {
-      into.aheadOfEmit.push({
-        name: `${block.modelName}.${name}`,
-        namespaceId: undefined,
-        path: file.path,
-      });
+      into.aheadOfEmit.push({ name: declared, namespaceId: undefined, path: file.path });
       continue;
     }
-    const column = mappedName(field.attributes()) ?? name;
     const needed = block.columns.find((candidate) =>
       sameStorageName(candidate, column, comparison),
     );
     if (needed === undefined) continue;
     into.storedUnderAnotherName.push({
       path: file.path,
-      declared: `${block.modelName}.${name}`,
+      declared,
       storage: `the column "${column}"`,
       lookedFor: `a field named ${needed} in ${block.modelName}`,
       renameTo: needed,
@@ -528,6 +544,7 @@ export function editContractSource<F extends ContractSourceFile>(
     files,
     files.map((candidate) => (candidate === file ? { path: file.path, text: code } : candidate)),
     comparison.defaultNamespace,
+    insertions.map(({ offset, text }) => ({ path: file.path, offset, length: text.length })),
   );
   if (rejected !== undefined) {
     throw notChanged(

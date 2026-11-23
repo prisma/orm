@@ -157,6 +157,21 @@ describe('auth generate when the source stores what Better Auth needs under a na
     );
   });
 
+  it('refuses a field an included mixin stores in the column of a field it would add', async () => {
+    const text = `${appPsl.replace(userLastField, `${userLastField}\n  +Mfa`)}\nmodel mixin Mfa {\n  mfaOn Boolean? @map("twoFactorEnabled")\n}\n`;
+    const comparison = await comparisonOver(text);
+    expect(() => editContractSource([{ path: contractPath, text }], comparison)).toThrow(
+      refusal(
+        comparison,
+        storedUnderAnotherName(
+          'User.mfaOn (from the mixin Mfa) in the column "twoFactorEnabled"',
+          'a field named twoFactorEnabled in User',
+          'User.mfaOn (from the mixin Mfa) to twoFactorEnabled',
+        ),
+      ),
+    );
+  });
+
   it('names the plural model Better Auth looks for under usePlural', async () => {
     const plural = pslForConfiguration(fixture().emptyContract('sqlite'), {}, { usePlural: true });
     const text = `${plural}\nmodel TwoFactorRecord {\n  id String @id\n\n  @@map("twoFactors")\n}\n`;
