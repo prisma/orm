@@ -1,16 +1,21 @@
 import { isPrisma8Schema } from '@prisma/orm-framework/psl-parser';
 import {
+  CompositeTypeDeclarationAst,
   type DocumentAst,
   type FieldAttributeAst,
+  GenericBlockDeclarationAst,
+  MixinDeclarationAst,
   type ModelAttributeAst,
   ModelDeclarationAst,
   NamespaceDeclarationAst,
   parse,
   StringLiteralExprAst,
+  TypesBlockAst,
 } from '@prisma/orm-framework/psl-parser/syntax';
 import type { ContractComparison } from '../contract/compare';
 import { type PrintedBlock, printPsl, renderBlocks } from '../contract/print-psl';
 import { isSearchedNamespace, modelNameCandidates } from '../models/model-lookup';
+import { firstNewDiagnostic } from './check-edited-source';
 import { assertOnlyAdditions, listOf, notChanged } from './refusal';
 
 export interface ContractSourceFile {
@@ -43,33 +48,116 @@ function modelKey(namespaceId: string, name: string): string {
   return `${namespaceId}.${name}`;
 }
 
-function declaredModels<F extends ContractSourceFile>(
+/** A declaration other than a model that takes a name a model could take, as Prisma's symbol table claims names. */
+interface OtherDeclaration {
+  readonly path: string;
+  readonly namespaceId: string;
+  readonly name: string;
+  readonly kind: string;
+}
+
+interface DeclaredMixin {
+  readonly name: string;
+  readonly fields: readonly string[];
+}
+
+interface Declarations<F extends ContractSourceFile> {
+  readonly models: Map<string, DeclaredModel<F>[]>;
+  readonly others: OtherDeclaration[];
+  readonly mixins: DeclaredMixin[];
+}
+
+/** The kind of a declaration that shares the name slot of models, or `undefined` for a model or a declaration that does not. Read from `buildSymbolTable` in `psl-parser/src/symbol-table.ts`. */
+function otherKind(declaration: unknown): string | undefined {
+  if (declaration instanceof CompositeTypeDeclarationAst) return 'composite type';
+  if (declaration instanceof MixinDeclarationAst) return 'mixin';
+  if (declaration instanceof GenericBlockDeclarationAst) {
+    return declaration.keyword()?.text ?? 'block';
+  }
+  return undefined;
+}
+
+function collectDeclarations<F extends ContractSourceFile>(
   file: F,
   document: DocumentAst,
   defaultNamespace: string,
-  into: Map<string, DeclaredModel<F>[]>,
+  into: Declarations<F>,
 ): void {
-  const add = (namespaceId: string, declaration: ModelDeclarationAst) => {
+  const add = (
+    namespaceId: string,
+    declaration:
+      | ModelDeclarationAst
+      | CompositeTypeDeclarationAst
+      | GenericBlockDeclarationAst
+      | MixinDeclarationAst,
+  ) => {
     const name = declaration.name()?.name();
     if (name === undefined) return;
-    const key = modelKey(namespaceId, name);
-    into.set(key, [...(into.get(key) ?? []), { file, namespaceId, declaration }]);
+    if (declaration instanceof ModelDeclarationAst) {
+      const key = modelKey(namespaceId, name);
+      into.models.set(key, [...(into.models.get(key) ?? []), { file, namespaceId, declaration }]);
+      return;
+    }
+    if (declaration instanceof MixinDeclarationAst) {
+      const fields = [...declaration.fields()].flatMap((field) => field.name()?.name() ?? []);
+      into.mixins.push({ name, fields });
+    }
+    const kind = otherKind(declaration);
+    if (kind !== undefined) into.others.push({ path: file.path, namespaceId, name, kind });
   };
   for (const declaration of document.declarations()) {
-    if (declaration instanceof ModelDeclarationAst) add(defaultNamespace, declaration);
+    if (
+      declaration instanceof ModelDeclarationAst ||
+      declaration instanceof CompositeTypeDeclarationAst ||
+      declaration instanceof GenericBlockDeclarationAst ||
+      declaration instanceof MixinDeclarationAst
+    ) {
+      add(defaultNamespace, declaration);
+      continue;
+    }
+    if (declaration instanceof TypesBlockAst) {
+      for (const binding of declaration.declarations()) {
+        const name = binding.name()?.name();
+        if (name !== undefined) {
+          into.others.push({
+            path: file.path,
+            namespaceId: defaultNamespace,
+            name,
+            kind: 'named type',
+          });
+        }
+      }
+      continue;
+    }
     if (!(declaration instanceof NamespaceDeclarationAst)) continue;
-    const namespaceId = declaration.name()?.name() ?? defaultNamespace;
+    const namespaceName = declaration.name()?.name();
+    if (namespaceName !== undefined) {
+      into.others.push({
+        path: file.path,
+        namespaceId: defaultNamespace,
+        name: namespaceName,
+        kind: 'namespace',
+      });
+    }
+    const namespaceId = namespaceName ?? defaultNamespace;
     for (const member of declaration.declarations()) {
-      if (member instanceof ModelDeclarationAst) add(namespaceId, member);
+      if (
+        member instanceof ModelDeclarationAst ||
+        member instanceof CompositeTypeDeclarationAst ||
+        member instanceof GenericBlockDeclarationAst ||
+        member instanceof MixinDeclarationAst
+      ) {
+        add(namespaceId, member);
+      }
     }
   }
 }
 
-function parsedModels<F extends ContractSourceFile>(
+function parsedDeclarations<F extends ContractSourceFile>(
   files: readonly F[],
   comparison: ContractComparison,
-): Map<string, DeclaredModel<F>[]> {
-  const models = new Map<string, DeclaredModel<F>[]>();
+): Declarations<F> {
+  const declarations: Declarations<F> = { models: new Map(), others: [], mixins: [] };
   for (const file of files) {
     if (!isPrisma8Schema(file.text)) {
       throw notChanged(comparison, `${file.path} does not start with \`// use prisma-8\`.`);
@@ -82,9 +170,9 @@ function parsedModels<F extends ContractSourceFile>(
         `${file.path} does not parse: ${first.message} (line ${first.range.start.line + 1}).`,
       );
     }
-    declaredModels(file, document, comparison.defaultNamespace, models);
+    collectDeclarations(file, document, comparison.defaultNamespace, declarations);
   }
-  return models;
+  return declarations;
 }
 
 /** The name `@map("x")` or `@@map("x")` gives, read as the contract emitter reads it: the first `map` attribute, and its first positional argument when that is a string. */
@@ -140,10 +228,23 @@ function sameStorageName(a: string, b: string, comparison: ContractComparison): 
 function fieldConflicts(
   block: PrintedBlock,
   { file, declaration }: DeclaredModel,
+  mixins: readonly DeclaredMixin[],
   comparison: ContractComparison,
   into: Conflicts,
 ): void {
   const additions = new Set(block.fieldNames);
+  for (const inclusion of declaration.inclusions()) {
+    const mixinName = inclusion.name()?.path().at(-1);
+    for (const mixin of mixins.filter(({ name }) => name === mixinName)) {
+      for (const name of mixin.fields.filter((field) => additions.has(field))) {
+        into.aheadOfEmit.push({
+          name: `${block.modelName}.${name} (from the mixin ${mixin.name})`,
+          namespaceId: undefined,
+          path: file.path,
+        });
+      }
+    }
+  }
   for (const field of declaration.fields()) {
     const name = field.name()?.name();
     if (name === undefined) continue;
@@ -330,7 +431,7 @@ export function editContractSource<F extends ContractSourceFile>(
     );
   }
 
-  const declared = parsedModels(files, comparison);
+  const { models: declared, others, mixins } = parsedDeclarations(files, comparison);
   const printed = printPsl(comparison);
   const extended = printed.blocks.filter((block) => block.existing);
   const added = printed.blocks.filter((block) => !block.existing);
@@ -355,7 +456,9 @@ export function editContractSource<F extends ContractSourceFile>(
 
   const allDeclared = [...declared.values()].flat();
   const conflicts: Conflicts = { aheadOfEmit: [], storedUnderAnotherName: [] };
-  for (const { block, ...model } of targets) fieldConflicts(block, model, comparison, conflicts);
+  for (const { block, ...model } of targets) {
+    fieldConflicts(block, model, mixins, comparison, conflicts);
+  }
   for (const block of added) modelConflicts(block, allDeclared, comparison, conflicts);
   const { aheadOfEmit, storedUnderAnotherName } = conflicts;
   if (aheadOfEmit.length > 0) {
@@ -368,6 +471,17 @@ export function editContractSource<F extends ContractSourceFile>(
     throw notChanged(
       comparison,
       storedUnderAnotherName.map(storedUnderAnotherNameReason).join(' '),
+    );
+  }
+  const newNamespace = comparison.namespace ?? comparison.defaultNamespace;
+  for (const block of added) {
+    const other = others.find(
+      ({ namespaceId, name }) => namespaceId === newNamespace && name === block.modelName,
+    );
+    if (other === undefined) continue;
+    throw notChanged(
+      comparison,
+      `${other.path} declares the ${other.kind} ${other.name}, and Better Auth's model ${block.physicalName ?? block.modelName} needs that name. Rename the ${other.kind}, then run \`auth generate\` again.`,
     );
   }
 
@@ -409,6 +523,17 @@ export function editContractSource<F extends ContractSourceFile>(
   let code = file.text;
   for (const { offset, text } of [...insertions].sort((a, b) => b.offset - a.offset)) {
     code = `${code.slice(0, offset)}${text}${code.slice(offset)}`;
+  }
+  const rejected = firstNewDiagnostic(
+    files,
+    files.map((candidate) => (candidate === file ? { path: file.path, text: code } : candidate)),
+    comparison.defaultNamespace,
+  );
+  if (rejected !== undefined) {
+    throw notChanged(
+      comparison,
+      `Prisma would not accept the edited ${rejected.path}: ${rejected.message} (line ${rejected.line}).`,
+    );
   }
   return { file, code, summary: summaryOf(file.path, extended, added, printed.notes) };
 }
