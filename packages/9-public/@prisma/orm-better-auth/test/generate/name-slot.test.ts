@@ -117,17 +117,40 @@ describe('the check of the edited source', () => {
     ).toEqual({ path: contractPath, message: 'Duplicate declaration of "User"', line: 77 });
   });
 
-  it('reports nothing when the original already had the same diagnostic', () => {
-    const original = `${appPsl}\nmodel User {\n  id String @id\n}\n`;
-    const added = '\nmodel Extra {\n  id String @id\n}\n';
+  it('reports nothing when the original already had the same diagnostic after the inserted text', () => {
+    const original = `${appPsl}\nmodel A {\n  id   String @id\n  name Int\n  name Int\n}\n`;
+    const added = '\n  extra String';
+    const at = original.indexOf(userLastField) + userLastField.length;
     expect(
       firstNewDiagnostic(
         [{ path: contractPath, text: original }],
-        [{ path: contractPath, text: `${original}${added}` }],
+        [{ path: contractPath, text: `${original.slice(0, at)}${added}${original.slice(at)}` }],
         'public',
-        [{ path: contractPath, offset: original.length, length: added.length }],
+        [{ path: contractPath, offset: at, length: added.length }],
       ),
     ).toBeUndefined();
+  });
+
+  it('edits a CRLF file whose existing duplicates sit after several insertions', async () => {
+    const withoutIp = appPsl.replace('  ipAddress String?\n', '');
+    const comparison = await comparisonOver(withoutIp);
+    const duplicate = (name: string) => `model ${name} {\n  id String @id\n  x  Int\n  x  Int\n}\n`;
+    const lf = `${withoutIp.replace('/// A doc comment', `${duplicate('B')}\n/// A doc comment`)}\n${duplicate('A')}`;
+    const sessionLastField =
+      '  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)';
+    const edited = `${insertAfter(
+      insertAfter(
+        lf,
+        userLastField,
+        '\n  twoFactorEnabled Boolean?\n  twoFactors       TwoFactor[]',
+      ),
+      sessionLastField,
+      '\n  ipAddress String?',
+    )}\n${twoFactorModel}\n`;
+    const text = lf.replaceAll('\n', '\r\n');
+    expect(editContractSource([{ path: contractPath, text }], comparison).code).toBe(
+      edited.replaceAll('\n', '\r\n'),
+    );
   });
 
   it('names where the edit introduced a diagnostic the original also has elsewhere', () => {

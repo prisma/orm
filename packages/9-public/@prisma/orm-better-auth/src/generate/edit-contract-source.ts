@@ -65,6 +65,7 @@ interface DeclaredField {
 
 interface DeclaredMixin {
   readonly name: string;
+  readonly path: string;
   readonly fields: readonly DeclaredField[];
 }
 
@@ -95,19 +96,27 @@ function declaredFields(fields: Iterable<FieldDeclarationAst>): DeclaredField[] 
 interface ModelField extends DeclaredField {
   /** The mixin it comes from; `undefined` for the model's own field. */
   readonly mixin: string | undefined;
+  /** The file the field is written in: the model's, or the mixin's. */
+  readonly path: string;
 }
 
 /** The model's fields as the contract will have them: its own, then those of every mixin it includes. */
 function modelFields(
-  declaration: ModelDeclarationAst,
+  { file, declaration }: DeclaredModel,
   mixins: readonly DeclaredMixin[],
 ): ModelField[] {
-  const own = declaredFields(declaration.fields()).map((field) => ({ ...field, mixin: undefined }));
+  const own = declaredFields(declaration.fields()).map((field) => ({
+    ...field,
+    mixin: undefined,
+    path: file.path,
+  }));
   const included = [...declaration.inclusions()].flatMap((inclusion) => {
     const mixinName = inclusion.name()?.path().at(-1);
     return mixins
       .filter(({ name }) => name === mixinName)
-      .flatMap((mixin) => mixin.fields.map((field) => ({ ...field, mixin: mixin.name })));
+      .flatMap((mixin) =>
+        mixin.fields.map((field) => ({ ...field, mixin: mixin.name, path: mixin.path })),
+      );
   });
   return [...own, ...included];
 }
@@ -134,7 +143,7 @@ function collectDeclarations<F extends ContractSourceFile>(
       return;
     }
     if (declaration instanceof MixinDeclarationAst) {
-      into.mixins.push({ name, fields: declaredFields(declaration.fields()) });
+      into.mixins.push({ name, path: file.path, fields: declaredFields(declaration.fields()) });
     }
     const kind = otherKind(declaration);
     if (kind !== undefined) into.others.push({ path: file.path, namespaceId, name, kind });
@@ -261,16 +270,16 @@ function sameStorageName(a: string, b: string, comparison: ContractComparison): 
 /** What the model already declares that conflicts with the fields the block would add. A Better Auth field is found by its exact name. */
 function fieldConflicts(
   block: PrintedBlock,
-  { file, declaration }: DeclaredModel,
+  model: DeclaredModel,
   mixins: readonly DeclaredMixin[],
   comparison: ContractComparison,
   into: Conflicts,
 ): void {
   const additions = new Set(block.fieldNames);
-  for (const { name, column, mixin } of modelFields(declaration, mixins)) {
+  for (const { name, column, mixin, path } of modelFields(model, mixins)) {
     const declared = `${block.modelName}.${name}${mixin === undefined ? '' : ` (from the mixin ${mixin})`}`;
     if (additions.has(name)) {
-      into.aheadOfEmit.push({ name: declared, namespaceId: undefined, path: file.path });
+      into.aheadOfEmit.push({ name: declared, namespaceId: undefined, path });
       continue;
     }
     const needed = block.columns.find((candidate) =>
@@ -278,7 +287,7 @@ function fieldConflicts(
     );
     if (needed === undefined) continue;
     into.storedUnderAnotherName.push({
-      path: file.path,
+      path,
       declared,
       storage: `the column "${column}"`,
       lookedFor: `a field named ${needed} in ${block.modelName}`,

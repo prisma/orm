@@ -172,6 +172,27 @@ describe('auth generate when the source stores what Better Auth needs under a na
     );
   });
 
+  it('names the file a mixin is declared in when the mixin is in another file', async () => {
+    const users = appPsl.replace(userLastField, `${userLastField}\n  +Mfa`);
+    const mixin = 'model mixin Mfa {\n  mfaOn Boolean? @map("twoFactorEnabled")\n}\n';
+    const comparison = await comparisonOver(`${users}\n${mixin}`);
+    const mixinPath = 'prisma/mixins.prisma';
+    expect(() =>
+      editContractSource(
+        [
+          { path: contractPath, text: users },
+          { path: mixinPath, text: `// use prisma-8\n\n${mixin}` },
+        ],
+        comparison,
+      ),
+    ).toThrow(
+      refusal(
+        comparison,
+        `${notChanged} ${mixinPath} stores User.mfaOn (from the mixin Mfa) in the column "twoFactorEnabled", but Better Auth looks for a field named twoFactorEnabled in User. Rename User.mfaOn (from the mixin Mfa) to twoFactorEnabled, then run \`prisma contract emit\`, and \`auth generate\` again.`,
+      ),
+    );
+  });
+
   it('names the plural model Better Auth looks for under usePlural', async () => {
     const plural = pslForConfiguration(fixture().emptyContract('sqlite'), {}, { usePlural: true });
     const text = `${plural}\nmodel TwoFactorRecord {\n  id String @id\n\n  @@map("twoFactors")\n}\n`;
