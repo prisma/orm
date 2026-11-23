@@ -37,19 +37,20 @@ function selectedUsers() {
   return { users: collection.select('id', 'name'), runtime };
 }
 
+type Users = ReturnType<typeof selectedUsers>['users'];
+
 const postsTitled =
   "exists (select user_id from posts where (user_id = users.id and title = 'Hello'))";
 
 const filters = [
   {
     name: 'two where() calls',
-    apply: (users: ReturnType<typeof selectedUsers>['users']) =>
-      users.where({ name: 'Ada' }).where({ email: 'ada@example.com' }),
+    apply: (users: Users) => users.where({ name: 'Ada' }).where({ email: 'ada@example.com' }),
     condition: "(name = 'Ada' and email = 'ada@example.com')",
   },
   {
     name: 'three where() calls',
-    apply: (users: ReturnType<typeof selectedUsers>['users']) =>
+    apply: (users: Users) =>
       users
         .where({ name: 'Ada' })
         .where({ email: 'ada@example.com' })
@@ -58,7 +59,7 @@ const filters = [
   },
   {
     name: 'a relation filter and a second where() call',
-    apply: (users: ReturnType<typeof selectedUsers>['users']) =>
+    apply: (users: Users) =>
       users
         .where((user) => user.posts.some((post) => post.title.eq('Hello')))
         .where({

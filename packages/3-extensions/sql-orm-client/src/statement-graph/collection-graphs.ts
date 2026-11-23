@@ -119,7 +119,7 @@ export function addUpdateAll(
   set: Readonly<Record<string, unknown>>,
   { filters, links }: KeyFilters,
   returns: Returns,
-  where = whereOf(collection),
+  where: AnyExpression | undefined,
 ): NodeId {
   return updateRows(b, modelOf(collection), set, {
     where,
@@ -137,7 +137,7 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
   const { state } = collection;
   const b = builderOf(collection);
   if (returns === 'count') {
-    b.graph.setResult(addDeleteAll(b, collection, { filters: [], links: [] }));
+    b.graph.setResult(addDeleteAll(b, collection, { filters: [], links: [] }, whereOf(collection)));
     return b.graph;
   }
   const where = whereOf(collection);
@@ -162,7 +162,7 @@ export function addDeleteAll(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   keyFilters: KeyFilters,
-  where = whereOf(collection),
+  where: AnyExpression | undefined,
 ): NodeId {
   return deleteRows(b, collection.state.tables, { where, ...keyFilters });
 }
@@ -631,7 +631,7 @@ export function sameRowColumnsOf(
   );
 }
 
-function whereOf(collection: DescribeCollectionRowsOptions): AnyExpression | undefined {
+export function whereOf(collection: DescribeCollectionRowsOptions): AnyExpression | undefined {
   const { context, state } = collection;
   return countMutationWhere(context.contract, state.tables, state.filters, state.variantValue);
 }
