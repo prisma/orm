@@ -1157,6 +1157,24 @@ model posts {
 
 exports[`introspection: queryRaw - basic validation in custom schema: warnings 1`] = `null`;
 
+exports[`introspection: queryRaw - custom schema goes in front of the existing search path: datamodel 1`] = `
+"generator client {
+  provider = "prisma-client-js"
+  output = "***"
+}
+
+datasource postgresql {
+  provider = "postgresql"
+}
+
+model posts {
+  id Int @id @default(autoincrement())
+}
+"
+`;
+
+exports[`introspection: queryRaw - custom schema goes in front of the existing search path: warnings 1`] = `null`;
+
 exports[`introspection: update where composite PK: datamodel 1`] = `
 "generator client {
   provider = "prisma-client-js"

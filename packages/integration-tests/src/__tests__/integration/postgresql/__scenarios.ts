@@ -2035,4 +2035,19 @@ export const scenarios = [
     },
     expect: [],
   },
+  {
+    name: 'queryRaw - custom schema goes in front of the existing search path',
+    up: `
+        create table posts (
+          id serial primary key not null
+        );
+        `,
+    do: async (client) => {
+      return await client.$queryRaw`
+        SELECT
+          current_schema() <> 'public' AS "customSchemaFirst",
+          current_setting('search_path') LIKE '%, "$user", public' AS "existingPathKept"`
+    },
+    expect: [{ customSchemaFirst: true, existingPathKept: true }],
+  },
 ] as Input['scenarios']
