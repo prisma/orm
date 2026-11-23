@@ -103,6 +103,11 @@ function reference(value: string): RunnablePlanArgument {
   return { kind: 'reference', reference: value };
 }
 
+/** The ref `refs` defines under `name`; not one `Object.prototype` holds, such as `constructor`. */
+function refNamed(refs: Refs, name: string): Refs[string] | undefined {
+  return Object.hasOwn(refs, name) ? refs[name] : undefined;
+}
+
 /** The names of `refs`, the `db` ref first. */
 function refNames(refs: Refs): readonly string[] {
   return Object.keys(refs).sort((a, b) => (a === 'db' ? -1 : b === 'db' ? 1 : a.localeCompare(b)));
@@ -190,7 +195,7 @@ function startAtEndOf(graph: MigrationGraph, hash: string, history: string): Mig
  */
 export function migrationPlanTo(space: PlanSpace, end: PlanEnd): MigrationPlanTargetArgument {
   if (end.kind === 'emitted') return { kind: 'default' };
-  const hash = end.kind === 'ref' ? space.refs[end.name]?.hash : end.hash;
+  const hash = end.kind === 'ref' ? refNamed(space.refs, end.name)?.hash : end.hash;
   if (hash === EMPTY_CONTRACT_HASH) {
     return {
       kind: 'none',
@@ -296,7 +301,7 @@ function planEndContract(
         ? undefined
         : { hash: space.emittedHash, invariants: [] };
     case 'ref':
-      return space.refs[end.name];
+      return refNamed(space.refs, end.name);
     case 'contract':
       return { hash: end.hash, invariants: [] };
   }

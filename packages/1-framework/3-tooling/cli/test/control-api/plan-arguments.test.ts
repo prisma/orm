@@ -445,4 +445,25 @@ describe('migrationPlanForDatabase', () => {
       migrationPlanForDatabase(planSpace, at(A), { kind: 'ref', name: 'unknown' }),
     ).not.toHaveProperty('migrationsToTarget');
   });
+
+  it('reads only refs the ref map defines, not a name Object.prototype holds', () => {
+    const constructorRef = { hash: B, invariants: [] };
+    expect([
+      migrationPlanForDatabase({ graph, refs: {}, emittedHash: B }, at(A), {
+        kind: 'ref',
+        name: 'constructor',
+      }),
+      migrationPlanForDatabase(
+        { graph, refs: { constructor: constructorRef }, emittedHash: B },
+        at(A),
+        { kind: 'ref', name: 'constructor' },
+      ).migrationsToTarget,
+    ]).toEqual([
+      {
+        from: { kind: 'reference', reference: A },
+        to: { kind: 'reference', reference: 'constructor' },
+      },
+      { kind: 'on-disk' },
+    ]);
+  });
 });
