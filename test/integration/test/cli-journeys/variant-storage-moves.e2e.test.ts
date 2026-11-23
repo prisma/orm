@@ -117,9 +117,8 @@ withTempDir(({ createTempDir }) => {
           expect(asked, 'J1.03: the question names Bug.severity').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary:
-              'Drop column "severity" from "task" would lose the values of field "Bug.severity".',
-            why: 'You have to choose what happens, and this run cannot ask you.',
+            summary: 'This command requires explicit consent, but it was not provided.',
+            why: 'Drop column "severity" from "task" would lose the values of field "Bug.severity".',
             nextActions: [
               {
                 kind: 'user-choice',
@@ -169,8 +168,8 @@ withTempDir(({ createTempDir }) => {
           expect(askedBack, 'J1.07: the question names Bug').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: 'Drop table "bug" would lose the data of model "Bug".',
-            why: 'You have to choose what happens, and this run cannot ask you.',
+            summary: 'This command requires explicit consent, but it was not provided.',
+            why: 'Drop table "bug" would lose the data of model "Bug".',
             nextActions: [
               {
                 kind: 'user-choice',
@@ -236,9 +235,8 @@ withTempDir(({ createTempDir }) => {
           ).toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary:
-              'These operations would lose the data of model "Bug":\n- Drop column "severity" from "task"\n- Delete the rows of "task" that hold value "bug" in column "type"',
-            why: 'You have to choose what happens, and this run cannot ask you.',
+            summary: 'This command requires explicit consent, but it was not provided.',
+            why: 'These operations would lose the data of model "Bug":\n- Drop column "severity" from "task"\n- Delete the rows of "task" that hold value "bug" in column "type"',
             nextActions: [
               {
                 kind: 'user-choice',

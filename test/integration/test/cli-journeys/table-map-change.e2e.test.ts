@@ -165,8 +165,8 @@ withTempDir(({ createTempDir }) => {
           expect(asked, 'M4.03: the question names User.nick').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: 'Drop column "nick" from "people" would lose the values of field "User.nick".',
-            why: 'You have to choose what happens, and this run cannot ask you.',
+            summary: 'This command requires explicit consent, but it was not provided.',
+            why: 'Drop column "nick" from "people" would lose the values of field "User.nick".',
             nextActions: [
               {
                 kind: 'user-choice',

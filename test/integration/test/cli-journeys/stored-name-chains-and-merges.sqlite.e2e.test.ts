@@ -195,9 +195,8 @@ withTempDir(({ createTempDir }) => {
           ).toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary:
-              'These operations would lose the data of model "Bug":\n- Drop table "bug"\n- Delete the rows of "task" that hold value "bug" in column "type"',
-            why: 'You have to choose what happens, and this run cannot ask you.',
+            summary: 'This command requires explicit consent, but it was not provided.',
+            why: 'These operations would lose the data of model "Bug":\n- Drop table "bug"\n- Delete the rows of "task" that hold value "bug" in column "type"',
             nextActions: [
               { kind: 'user-choice', label: 'Run the command again with --rename Bug:Defect' },
               { kind: 'user-choice', label: 'Run the command again with --delete Bug' },
@@ -244,7 +243,7 @@ withTempDir(({ createTempDir }) => {
           expect(await refusal(journey, [], 'G2.03'), 'G2.03: the questions').toEqual({
             code: 'CLI.CONSENT_REQUIRED',
             severity: 'error',
-            summary: '2 choices are needed, and this run cannot ask you.',
+            summary: 'This command requires explicit consent, but it was not provided.',
             why: `Drop table "bug" would lose the data of model "Bug". ${MERGE_ADVICE}\nDrop table "task" would lose the data of model "Task". ${MERGE_ADVICE}`,
             nextActions: [
               { kind: 'user-choice', label: 'Run the command again with --delete Bug' },

@@ -92,7 +92,7 @@ describe('Journey (MongoDB): keeping the documents of a collection created only 
     await emitFixture(project, 'contract-indexed-events-remapped.ts', 'K.04');
     const asked = await runMigrationPlan(project, ['--from', origin, '--json']);
     expect(asked.exitCode, 'K.05: the drop of events needs a statement').toBe(2);
-    const question = String(engineError(asked)?.summary);
+    const question = String(engineError(asked)?.why);
     expect(question, 'K.05: the question says where the rename goes').toContain(
       'make renameCollection("events", "occasions") the first operation, imported with the other operations, delete the drop of "events", and delete the create of "occasions" if there is one',
     );

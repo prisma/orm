@@ -321,7 +321,7 @@ describe('Journeys (MongoDB): --rename and --delete', {
     const printed = printedFlags(refused, 'delete');
     expect(printed, 'R3.04: named by its collection').toEqual(['--delete', 'profiles.nickname']);
     expect(
-      String(engineError(refused)?.summary)
+      String(engineError(refused)?.why)
         .split('\n')
         .map((line) => line.slice(0, 3)),
       'R3.04: the question, then each way to keep the data on a line of its own',

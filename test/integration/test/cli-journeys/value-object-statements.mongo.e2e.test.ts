@@ -354,9 +354,8 @@ describe('Journeys (MongoDB): renames and removals inside value objects and embe
     }).toEqual({
       exitCode: 'failed',
       code: 'CLI.CONSENT_REQUIRED',
-      summary:
-        'Remove key "zip" at path "$" in field home of collection users would lose the values of value object field "Address.zip".',
-      why: 'You have to choose what happens, and this run cannot ask you.',
+      summary: 'This command requires explicit consent, but it was not provided.',
+      why: 'Remove key "zip" at path "$" in field home of collection users would lose the values of value object field "Address.zip".',
       answers: [
         "Run the command again with --rename 'Address.zip:Address.<new name>'",
         'Run the command again with --delete Address.zip',

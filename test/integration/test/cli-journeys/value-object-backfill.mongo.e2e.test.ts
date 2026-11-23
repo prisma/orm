@@ -371,11 +371,11 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
     const asked = engineError(await runMigrationPlan(ctx, [...from, '--json']));
     expect({
       code: asked?.code,
-      summary: asked?.summary,
+      why: asked?.why,
       answers: asked?.nextActions?.map(({ label }) => label),
     }).toEqual({
       code: 'CLI.CONSENT_REQUIRED',
-      summary: [
+      why: [
         'These operations would lose the values of value object field "Address.zip":',
         '- Remove key "zip" at path "$" in field home of collection users',
         '- Remove key "zip" at path "$[*]" in field addresses of collection users',
@@ -428,10 +428,7 @@ describe('Journeys (MongoDB): required fields new inside value objects and embed
         '--json',
       ]),
     );
-    expect(
-      seen?.summary,
-      'B3.11: a field with no temporary value still needs --backfill',
-    ).toContain(
+    expect(seen?.why, 'B3.11: a field with no temporary value still needs --backfill').toContain(
       'If you answer delete, the new required field "Address.seen" still needs a value: add --backfill Address.seen to write it in migration.ts.',
     );
   });

@@ -134,7 +134,7 @@ function unansweredSubjects(error: CliStructuredError): ReadonlySet<string> | un
 
 /**
  * The engine's refusal to answer, led by the ways to keep the data that the unanswered questions
- * name: the next actions give them first, so they are not repeated in the summary or why.
+ * name: the next actions give them first, so they are not repeated in why.
  */
 function ledByKeepDataWays(error: unknown, questions: readonly PlanQuestion[]): unknown {
   if (!isConsentRequired(error) || !CliStructuredError.is(error)) return error;
@@ -147,11 +147,15 @@ function ledByKeepDataWays(error: unknown, questions: readonly PlanQuestion[]): 
     ),
   ];
   if (ways.length === 0) return error;
-  const withoutWays = (text: string) =>
-    ways.reduce((rest, way) => rest.replaceAll(` ${way}`, '').replaceAll(`\n${way}`, ''), text);
-  return new CliStructuredError(error.code, withoutWays(error.message), {
+  return new CliStructuredError(error.code, error.message, {
     severity: error.severity,
-    ...ifDefined('why', error.why === undefined ? undefined : withoutWays(error.why)),
+    ...ifDefined(
+      'why',
+      ways.reduce(
+        (why, way) => why?.replaceAll(` ${way}`, '').replaceAll(`\n${way}`, ''),
+        error.why,
+      ),
+    ),
     nextActions: [...ways.map(chooseAction), ...error.nextActions],
     diagnostics: error.diagnostics,
     ...ifDefined('where', error.where),
