@@ -74,7 +74,10 @@ function rowCount(result: Record<string, unknown>): number {
 }
 
 interface ModelCall {
+  /** The physical model name, which finds the contract model. */
   readonly model: string;
+  /** Better Auth's key for the model in its table description, which maps field names. */
+  readonly modelKey?: string | undefined;
 }
 
 interface FilteredCall extends ModelCall {
@@ -170,10 +173,13 @@ function customAdapter({
       return fields;
     };
 
-    const selected = (model: string, select: readonly string[] | undefined): readonly string[] => {
+    const selected = (
+      { model, modelKey = model }: ModelCall,
+      select: readonly string[] | undefined,
+    ): readonly string[] => {
       const fields =
         select !== undefined && select.length > 0
-          ? select.map((field) => getFieldName({ model, field }))
+          ? select.map((field) => getFieldName({ model: modelKey, field }))
           : selectionOf(model);
       assertFieldNames(model, fields);
       return fields;
@@ -185,22 +191,22 @@ function customAdapter({
         const { collection } = resolve(model);
         return collection.create(data);
       },
-      async findOne({ model, where, select, join }) {
+      async findOne({ model, modelKey, where, select, join }) {
         const { found, collection } = resolve(model);
         const filtered = collection
           .where(filterFor(model, found, where))
-          .select(...selected(model, select));
+          .select(...selected({ model, modelKey }, select));
         const joins = planJoins(filtered, found, join, collections, debugLog);
         const row = await joins.collection.first();
         return row === null ? null : moveJoinedRows(row, joins.included);
       },
-      async findMany({ model, where, limit, select, sortBy, offset, join }) {
+      async findMany({ model, modelKey, where, limit, select, sortBy, offset, join }) {
         const { found, collection } = resolve(model);
         let query = collection
           .where(filterFor(model, found, where))
-          .select(...selected(model, select));
+          .select(...selected({ model, modelKey }, select));
         if (sortBy !== undefined) {
-          const field = getFieldName({ model, field: sortBy.field });
+          const field = getFieldName({ model: modelKey ?? model, field: sortBy.field });
           assertFieldNames(model, [field]);
           const direction: unknown = sortBy.direction;
           if (direction !== 'asc' && direction !== 'desc') {
