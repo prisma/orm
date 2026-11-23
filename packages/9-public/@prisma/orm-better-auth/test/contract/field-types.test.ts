@@ -232,6 +232,24 @@ describe('id types on postgres only', () => {
     expect(await idProblems(uuid, 'String')).toEqual([]);
   });
 
+  it('a foreign key to a Uuid id must be a Uuid', async () => {
+    const uuid: BetterAuthOptions = { advanced: { database: { generateId: 'uuid' } } };
+    const psl = pslForConfiguration(emptyContract('postgres'), uuid)
+      .replace(/(model User \{\n\s+id\s+)\S+/, '$1Uuid')
+      .replace(/(model Session \{[^}]*userId\s+)String/, '$1Int   ')
+      .replace(/(model Account \{[^}]*userId\s+)String/, '$1Uuid  ');
+    const contract = await contractOf('postgres', psl);
+    expect(problemsOf(compare(contract, uuid))).toEqual([
+      {
+        kind: 'wrong-type',
+        model: 'Session',
+        field: 'userId',
+        expectedType: 'Uuid',
+        found: 'pg/int4@1',
+      },
+    ]);
+  });
+
   it('Better Auth string ids refuse Uuid', async () => {
     expect(await idProblems({}, 'Uuid')).toEqual([
       {

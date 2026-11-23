@@ -25,7 +25,7 @@ function changeLines(comparison: ContractComparison): string[] {
           break;
         }
         lines.push(
-          `${problem.model}.${problem.field}: must be \`${pslTypeOf(problem.attribute, comparison.idStrategy)}\` (found ${problem.found})`,
+          `${problem.model}.${problem.field}: must be \`${pslTypeOf(problem.attribute, problem.reference, comparison)}\` (found ${problem.found})`,
         );
         break;
     }

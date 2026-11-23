@@ -91,7 +91,7 @@ function typeName(of: PrintedModel, from: PrintedModel): string {
 
 function scalarLine(field: BetterAuthField, comparison: ContractComparison): FieldLine {
   const optional = field.attribute.required === false ? '?' : '';
-  const type = `${pslTypeOf(field.attribute, comparison.idStrategy)}${optional}`;
+  const type = `${pslTypeOf(field.attribute, field.reference, comparison)}${optional}`;
   return field.attribute.unique === true ? [field.name, type, '@unique'] : [field.name, type];
 }
 

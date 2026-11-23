@@ -7,6 +7,7 @@ import type { ContractField, ContractModelBase } from '@prisma/orm-framework/con
 import {
   type BetterAuthField,
   type BetterAuthModel,
+  type BetterAuthReference,
   type IdStrategy,
   idStrategyOf,
   isIdReference,
@@ -47,6 +48,7 @@ export type ContractProblem =
       readonly field: string;
       /** Better Auth's description of the field, or `undefined` for `id`. */
       readonly attribute: DBFieldAttribute | undefined;
+      readonly reference: BetterAuthReference | undefined;
       readonly found: string;
     }
   | { readonly kind: 'id-without-default'; readonly model: string }
@@ -61,6 +63,8 @@ export interface ContractComparison {
   readonly defaultNamespace: string;
   /** Contract models that Better Auth's foreign keys reference but that are not among the models it expects, by physical model name. */
   readonly referencedModels: ReadonlyMap<string, FoundModel>;
+  /** Physical names of the models whose contract `id` uses the PostgreSQL `uuid` codec, when the id strategy accepts one. */
+  readonly uuidKeyedModels: ReadonlySet<string>;
 }
 
 export interface ComparisonInput {
@@ -153,6 +157,7 @@ function compareFoundModel(
         model,
         field: 'id',
         attribute: undefined,
+        reference: undefined,
         found: wrong,
       });
     }
@@ -176,6 +181,7 @@ function compareFoundModel(
         model,
         field: field.name,
         attribute: field.attribute,
+        reference: field.reference,
         found: wrong,
       });
     }
@@ -193,6 +199,24 @@ function compareFoundModel(
     }
   }
   return missingFields;
+}
+
+function hasUuidId(found: FoundModel): boolean {
+  const id = found.model.fields['id'];
+  return id?.type.kind === 'scalar' && codecKind(id.type.codecId) === 'uuid';
+}
+
+function uuidKeyedModelsOf(
+  models: readonly ComparedModel[],
+  referencedModels: ReadonlyMap<string, FoundModel>,
+): Set<string> {
+  const found: [string, FoundModel][] = [
+    ...models.flatMap((model): [string, FoundModel][] =>
+      model.status === 'found' ? [[model.expected.physicalName, model.found]] : [],
+    ),
+    ...referencedModels,
+  ];
+  return new Set(found.filter(([, model]) => hasUuidId(model)).map(([name]) => name));
 }
 
 /** A model or field name that is not a Prisma identifier can be neither matched nor printed, so it is the only problem reported. */
@@ -225,6 +249,7 @@ export function compareContract(input: ComparisonInput): ContractComparison {
       models: [],
       problems: invalidNames,
       referencedModels: new Map(),
+      uuidKeyedModels: new Set(),
       idStrategy,
       namespace,
       defaultNamespace,
@@ -267,6 +292,9 @@ export function compareContract(input: ComparisonInput): ContractComparison {
     models,
     problems,
     referencedModels,
+    uuidKeyedModels: acceptedKindsByIdStrategy[idStrategy].includes('uuid')
+      ? uuidKeyedModelsOf(models, referencedModels)
+      : new Set(),
     idStrategy,
     namespace,
     defaultNamespace,

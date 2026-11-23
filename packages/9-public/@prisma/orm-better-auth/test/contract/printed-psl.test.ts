@@ -223,6 +223,27 @@ model Project {
   });
 });
 
+describe('printed PSL referencing an existing id of each type the comparison accepts on postgres', () => {
+  const idTypes: readonly { readonly type: string; readonly options: BetterAuthOptions }[] = [
+    { type: 'Uuid', options: { advanced: { database: { generateId: 'uuid' } } } },
+    { type: 'Varchar(36)', options: {} },
+    { type: 'Char(36)', options: {} },
+    { type: 'Int2', options: { advanced: { database: { generateId: 'serial' } } } },
+    { type: 'Int8Number', options: { advanced: { database: { generateId: 'serial' } } } },
+  ];
+
+  it.each(idTypes)('a new model references a $type id', async ({ type, options }) => {
+    const keyType = type.startsWith('Int') ? 'Int' : 'String';
+    const base = pslForConfiguration(emptyContract('postgres'), options)
+      .replace(/(model User \{\n\s+id\s+)\w+/, `$1${type}`)
+      .replace(new RegExp(`userId(\\s+)${keyType}\\b`, 'g'), `userId$1${type}`);
+    const baseContract = await fixture().contractOf('postgres', base);
+    const withTwoFactor: BetterAuthOptions = { ...options, plugins: [twoFactor()] };
+    const printed = printPsl(compare(baseContract, withTwoFactor));
+    await emitAndApply('postgres', addPrintedPsl(base, printed), withTwoFactor);
+  });
+});
+
 describe('printed PSL on postgres namespaces', () => {
   it('puts missing models in the namespace the option names', async () => {
     const adapterOptions = { namespace: 'auth' };

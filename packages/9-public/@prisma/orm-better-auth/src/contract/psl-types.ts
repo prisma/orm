@@ -1,9 +1,23 @@
 import type { DBFieldAttribute } from '@better-auth/core/db';
-import { type IdStrategy, isIdReference } from '../models/better-auth-models';
+import {
+  type BetterAuthReference,
+  type IdStrategy,
+  isIdReference,
+} from '../models/better-auth-models';
+import type { ContractComparison } from './compare';
 
-/** How a Better Auth field is written in PSL, without `?`. */
-export function pslTypeOf(attribute: DBFieldAttribute, idStrategy: IdStrategy): string {
-  if (isIdReference(attribute)) return idStrategy === 'serial' ? 'Int' : 'String';
+export type PslTypeContext = Pick<ContractComparison, 'idStrategy' | 'uuidKeyedModels'>;
+
+/** How a Better Auth field is written in PSL, without `?`. A foreign key to a model whose `id` is a `Uuid` is a `Uuid`, since PostgreSQL refuses a `text` key that references a `uuid`. */
+export function pslTypeOf(
+  attribute: DBFieldAttribute,
+  reference: BetterAuthReference | undefined,
+  { idStrategy, uuidKeyedModels }: PslTypeContext,
+): string {
+  if (isIdReference(attribute)) {
+    if (reference !== undefined && uuidKeyedModels.has(reference.model)) return 'Uuid';
+    return idStrategy === 'serial' ? 'Int' : 'String';
+  }
   switch (attribute.type) {
     case 'number':
       return attribute.bigint === true ? 'BigInt(as: number)' : 'Int';

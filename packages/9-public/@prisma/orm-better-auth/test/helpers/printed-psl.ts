@@ -71,13 +71,13 @@ export function addPrintedPsl(basePsl: string, printed: PrintedPsl): string {
 export function problemsOf(comparison: ContractComparison): unknown[] {
   return comparison.problems.map((problem: ContractProblem) => {
     if (problem.kind !== 'wrong-type') return problem;
-    const { attribute, ...rest } = problem;
+    const { attribute, reference, ...rest } = problem;
     return {
       ...rest,
       expectedType:
         attribute === undefined
           ? idLineOf(comparison.idStrategy)
-          : pslTypeOf(attribute, comparison.idStrategy),
+          : pslTypeOf(attribute, reference, comparison),
     };
   });
 }
