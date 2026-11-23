@@ -152,6 +152,26 @@ export function errorAdvanceRefArgConflict(options: {
   );
 }
 
+/**
+ * `db migrate --advance-ref <name>` targets the empty contract, which a ref cannot name, so the ref
+ * could never be written. Raised before anything is applied.
+ */
+export function errorRefTargetEmpty(options: {
+  readonly name: string;
+  readonly rerunWithoutRef: string;
+}): ActionableCliError {
+  return new ActionableCliError(
+    'MIGRATION.REF_TARGET_EMPTY',
+    `Cannot advance ref "${options.name}" to the empty contract`,
+    {
+      why: 'This run would bring the database to the empty contract. The empty contract is where the planner starts, not a contract a ref can name, so the ref could never be written. Nothing was applied.',
+      fix: 'Run the command again without --advance-ref.',
+      nextActions: [runCommandAction('Apply without advancing a ref', options.rerunWithoutRef)],
+      meta: { name: options.name },
+    },
+  );
+}
+
 /** A ref `db sign` meant to advance, and why writing it or its snapshot failed. */
 export interface UnwrittenRef {
   readonly space: string;

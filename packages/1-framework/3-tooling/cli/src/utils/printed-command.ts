@@ -27,11 +27,13 @@ export function cliInvocation(
 export function rerunFlags(flags: {
   readonly to: string | undefined;
   readonly advanceRef: string | undefined;
+  readonly noAdvanceRef: boolean | undefined;
   readonly permitPolicyChange: boolean | undefined;
 }): readonly string[] {
   return [
     ...(flags.to === undefined ? [] : ['--to', shellQuoted(flags.to)]),
     ...(flags.advanceRef === undefined ? [] : ['--advance-ref', shellQuoted(flags.advanceRef)]),
+    ...(flags.noAdvanceRef === true ? ['--no-advance-ref'] : []),
     ...(flags.permitPolicyChange === true ? ['--permit-policy-change'] : []),
   ];
 }
