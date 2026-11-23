@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { authClient } from '../src/lib/auth-client';
+import { failureMessage } from '../src/lib/failure-message';
 
 export function SignOutButton() {
   const router = useRouter();
@@ -11,7 +12,7 @@ export function SignOutButton() {
   async function signOut() {
     const { error } = await authClient.signOut();
     if (error) {
-      setError(error.message);
+      setError(failureMessage(error, 'Sign out'));
       return;
     }
     router.refresh();

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { authClient } from '../../src/lib/auth-client';
+import { failureMessage } from '../../src/lib/failure-message';
 
 export default function SignIn() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function SignIn() {
       password: String(form.get('password')),
     });
     if (error) {
-      setError(error.message);
+      setError(failureMessage(error, 'Sign in'));
       return;
     }
     router.push('/');

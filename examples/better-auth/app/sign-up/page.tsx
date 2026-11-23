@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import { authClient } from '../../src/lib/auth-client';
+import { failureMessage } from '../../src/lib/failure-message';
 
 export default function SignUp() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function SignUp() {
       password: String(form.get('password')),
     });
     if (error) {
-      setError(error.message);
+      setError(failureMessage(error, 'Sign up'));
       return;
     }
     router.push('/');

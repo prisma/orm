@@ -9,6 +9,7 @@ A small Next.js application (App Router) that signs users up and in with [Better
 | `src/lib/db.ts` | The Prisma client, connected with `DATABASE_URL` |
 | `src/lib/auth.ts` | The Better Auth instance, with `prismaAdapter(db)` and email and password sign-in |
 | `src/lib/auth-client.ts` | Better Auth's client for the browser |
+| `src/lib/failure-message.ts` | The text the forms and the sign-out button show when a Better Auth call fails |
 | `app/api/auth/[...all]/route.ts` | Better Auth's route handler |
 | `app/page.tsx` | The home page: the signed-in user's name and email and a sign-out button, or links to sign in and sign up |
 | `app/sign-up/page.tsx`, `app/sign-in/page.tsx` | The sign-up and sign-in forms |
