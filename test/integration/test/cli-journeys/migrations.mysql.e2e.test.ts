@@ -1,6 +1,6 @@
 /**
  * MySQL end to end through the CLI: `migration plan`, `db migrate`, `db verify` and `db sign` on the
- * example contract, then a nullable column added and dropped again. Skipped when `MYSQL_URL` is not set.
+ * example contract, then a nullable column added and dropped again. Fails when `MYSQL_URL` is not set; `docker compose up -d --wait mysql` starts the server.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -79,8 +79,8 @@ withTempDir(({ createTempDir }) => {
   describe('MySQL: migrations, db verify and db sign', () => {
     it(
       'plans, migrates, verifies and signs the example contract, then adds and drops a column',
-      async (test) => {
-        await withMysqlDatabase(test, async ({ url }) => {
+      async () => {
+        await withMysqlDatabase(async ({ url }) => {
           const ctx = setup(createTempDir, url);
           await emit(ctx, BASE);
 

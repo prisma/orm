@@ -12,8 +12,8 @@ export function describeOrmReads(server: LiveServer): void {
   describe(`${server.displayName} reads through the ORM and the SQL builder`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('filters, orders and limits', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('filters, orders and limits', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const users = await db.orm.User.where({ role: 'ADMIN' })
           .select('id', 'email')
@@ -27,8 +27,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('skips rows with an offset, with and without a limit', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('skips rows with an offset, with and without a limit', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const ordered = db.orm.User.select('id', 'role').orderBy((u) => u.id.asc());
         expect({
@@ -47,8 +47,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('finds the first row matching a filter', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('finds the first row matching a filter', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         expect({
           found: await db.orm.User.select('id', 'email').first({ id: 3 }),
@@ -57,8 +57,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('matches a bigint past 2^53 exactly on a column with no index', async (test) => {
-      await withSeededDatabase(test, server, countersDatabase, async (url) => {
+    it('matches a bigint past 2^53 exactly on a column with no index', async () => {
+      await withSeededDatabase(server, countersDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         expect(
           await db.orm.Counter.where({ big: 9007199254740993n })
@@ -69,8 +69,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('compares a bigint past 2^53 as an integer when the column side is an expression', async (test) => {
-      await withSeededDatabase(test, server, countersDatabase, async (url) => {
+    it('compares a bigint past 2^53 as an integer when the column side is an expression', async () => {
+      await withSeededDatabase(server, countersDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const rows = await db.query(
           db.sql.Counter.select('id')
@@ -83,8 +83,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('aggregates a collection, and answers an empty one with a zero count and nulls', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('aggregates a collection, and answers an empty one with a zero count and nulls', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const stats = (minId: number) =>
           db.orm.Post.where((p) => p.id.gte(minId)).aggregate((a) => ({
@@ -101,8 +101,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('takes the least and greatest enum member by its text, where ORDER BY and PostgreSQL follow the declared order', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('takes the least and greatest enum member by its text, where ORDER BY and PostgreSQL follow the declared order', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const extremes = await db.orm.User.aggregate((a) => ({
           least: a.min('role'),
@@ -118,9 +118,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('reads the mean of integers exactly when it groups by a column with no index or by an expression', async (test) => {
+    it('reads the mean of integers exactly when it groups by a column with no index or by an expression', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...exampleDatabase,
@@ -154,9 +153,8 @@ export function describeOrmReads(server: LiveServer): void {
       );
     });
 
-    it('keeps the groups whose mean of integers passes a having, and reads that mean exactly', async (test) => {
+    it('keeps the groups whose mean of integers passes a having, and reads that mean exactly', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...exampleDatabase,
@@ -175,9 +173,8 @@ export function describeOrmReads(server: LiveServer): void {
       );
     });
 
-    it("compares a having on the mean of integers with the server's own AVG rounding, so a group whose mean is exactly the threshold passes on one server and not the other", async (test) => {
+    it("compares a having on the mean of integers with the server's own AVG rounding, so a group whose mean is exactly the threshold passes on one server and not the other", async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...exampleDatabase,
@@ -198,8 +195,8 @@ export function describeOrmReads(server: LiveServer): void {
       );
     });
 
-    it('groups a collection and counts each group', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('groups a collection and counts each group', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const groups = await db.orm.Post.groupBy('authorId').aggregate((a) => ({
           posts: a.count(),
@@ -212,8 +209,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('runs a SQL builder select', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('runs a SQL builder select', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const rows = await db.query(
           db.sql.User.select('id', 'email')
@@ -229,8 +226,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('binds a join condition param and a WHERE param to their own placeholders', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('binds a join condition param and a WHERE param to their own placeholders', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const rows = await db.query(
           db.sql.User.innerJoin(db.sql.Post, (f, fns) =>
@@ -244,8 +241,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('binds a derived join source param and a WHERE param to their own placeholders', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('binds a derived join source param and a WHERE param to their own placeholders', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const titled = db.sql.Post.select('authorId', 'title')
           .where((f, fns) => fns.eq(f.title, 'Delta'))
@@ -260,8 +257,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('binds the WHERE param of a distinct query and of its include to their own placeholders', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('binds the WHERE param of a distinct query and of its include to their own placeholders', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const rows = await db.orm.User.where({ email: 'b@example.com' })
           .distinct('role')
@@ -272,8 +269,8 @@ export function describeOrmReads(server: LiveServer): void {
       });
     });
 
-    it('checks the marker the control tables hold, and warns when it is missing or differs', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url, driver) => {
+    it('checks the marker the control tables hold, and warns when it is missing or differs', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url, driver) => {
         const { contract } = server.client({ url, verifyMarker: false });
         const warnings = async () => {
           const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };

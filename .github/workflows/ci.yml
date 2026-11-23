@@ -446,7 +446,7 @@ jobs:
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
       MYSQL_URL: mysql://root:root@127.0.0.1:3306/mysql?allowPublicKeyRetrieval=true
-    # For the MySQL tests in test/integration, which fail in CI when MYSQL_URL is not set.
+    # For the MySQL tests in test/integration, which fail when MYSQL_URL is not set.
     services:
       mysql:
         image: mysql:8.4

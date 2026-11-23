@@ -122,7 +122,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
     timeout: timeouts.databaseOperation,
   }, () => {
     it('updates the rows a filter on a relation from the model to itself selects', async (test) => {
-      await withSeededDatabase(test, server, taskTree, async (url) => {
+      await withSeededDatabase(server, taskTree, async (url) => {
         const sent = watchStatements(server, test);
         await using db = server.client({ url, verifyMarker: false });
         expect({
@@ -189,7 +189,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
     });
 
     it('deletes the rows a filter on a relation from the model to itself selects', async (test) => {
-      await withSeededDatabase(test, server, taskTree, async (url) => {
+      await withSeededDatabase(server, taskTree, async (url) => {
         const sent = watchStatements(server, test);
         await using db = server.client({ url, verifyMarker: false });
         expect({
@@ -248,8 +248,8 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
 
     it.runIf(runs)(
       'evaluates the filter against the rows as they were before the statement',
-      async (test) => {
-        await withSeededDatabase(test, server, upwardChain, async (url) => {
+      async () => {
+        await withSeededDatabase(server, upwardChain, async (url) => {
           await using db = server.client({ url, verifyMarker: false });
           expect({
             counted: await db.orm.Task.where((task) => task.subtasks.none()).deleteAndCount(),
@@ -268,7 +268,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
     );
 
     it('updates the rows of a variant stored in its own table', async (test) => {
-      await withSeededDatabase(test, server, taskTree, async (url) => {
+      await withSeededDatabase(server, taskTree, async (url) => {
         const sent = watchStatements(server, test);
         await using db = server.client({ url, verifyMarker: false });
         expect({
@@ -332,7 +332,7 @@ export function describeOrmWritesReadingOwnTable(server: LiveServer): void {
     });
 
     it('deletes the rows of a variant stored in its own table', async (test) => {
-      await withSeededDatabase(test, server, taskTree, async (url) => {
+      await withSeededDatabase(server, taskTree, async (url) => {
         const sent = watchStatements(server, test);
         await using db = server.client({ url, verifyMarker: false });
         expect({

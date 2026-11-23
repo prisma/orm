@@ -42,8 +42,8 @@ async function lockIsFree(url: string): Promise<boolean> {
 describe('MysqlControlAdapter against a MySQL server', {
   timeout: timeouts.databaseOperation,
 }, () => {
-  it('creates the control tables, reads them back, and leaves them out of introspection', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
+  it('creates the control tables, reads them back, and leaves them out of introspection', async () => {
+    await withMysqlDatabase(async ({ url }) => {
       const adapter = createAdapter();
       const driver = await mysqlDriver.create(url);
       try {
@@ -78,8 +78,8 @@ describe('MysqlControlAdapter against a MySQL server', {
     });
   });
 
-  it('stamps control-table rows with the current time in UTC, in a session with the settings the target declares', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
+  it('stamps control-table rows with the current time in UTC, in a session with the settings the target declares', async () => {
+    await withMysqlDatabase(async ({ url }) => {
       const adapter = createAdapter();
       const driver = await mysqlDriver.create(url, {
         ...ifDefined('sessionSettings', mysqlTarget.sessionSettings),
@@ -111,8 +111,8 @@ describe('MysqlControlAdapter against a MySQL server', {
     });
   });
 
-  it('names the database a foreign key into another database references', async (test) => {
-    await withMysqlDatabase(test, async ({ url, name }) => {
+  it('names the database a foreign key into another database references', async () => {
+    await withMysqlDatabase(async ({ url, name }) => {
       const adapter = createAdapter();
       const driver = await mysqlDriver.create(url);
       const other = `${name}_other`;
@@ -143,8 +143,8 @@ describe('MysqlControlAdapter against a MySQL server', {
     });
   });
 
-  it('commits and rolls back on one connection', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
+  it('commits and rolls back on one connection', async () => {
+    await withMysqlDatabase(async ({ url }) => {
       const adapter = createAdapter();
       const driver = await mysqlDriver.create(url);
       try {
@@ -162,8 +162,8 @@ describe('MysqlControlAdapter against a MySQL server', {
       }
     });
   });
-  it('writes markers and ledger entries, and advances a marker only from the hash it holds', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
+  it('writes markers and ledger entries, and advances a marker only from the hash it holds', async () => {
+    await withMysqlDatabase(async ({ url }) => {
       const adapter = createAdapter();
       const driver = await mysqlDriver.create(url);
       try {
@@ -218,8 +218,8 @@ describe('MysqlControlAdapter against a MySQL server', {
     });
   });
 
-  it('records database policies in meta, and later marker writes without them leave meta', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
+  it('records database policies in meta, and later marker writes without them leave meta', async () => {
+    await withMysqlDatabase(async ({ url }) => {
       const adapter = createAdapter();
       const driver = await mysqlDriver.create(url);
       try {
@@ -277,8 +277,8 @@ describe('MysqlControlAdapter against a MySQL server', {
     });
   });
 
-  it('releases the marker lock when the transaction it guards commits or rolls back', async (test) => {
-    await withMysqlDatabase(test, async ({ url }) => {
+  it('releases the marker lock when the transaction it guards commits or rolls back', async () => {
+    await withMysqlDatabase(async ({ url }) => {
       const adapter = createAdapter();
       const driver = await mysqlDriver.create(url);
       try {

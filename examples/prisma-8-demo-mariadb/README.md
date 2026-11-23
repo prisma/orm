@@ -47,7 +47,7 @@ model Product {
 You need a MariaDB server and an empty application database for the example. The example is tested on MariaDB 10.11. The repository's `docker-compose.yaml` starts a server on port 3308 with an empty `root` password; create the `prisma_demo` database on it before running anything. `MARIADB_URL` must name that database, never the `mysql` system database, or the CLI creates the example's tables inside it.
 
 ```bash
-docker compose up -d mariadb
+docker compose up -d --wait mariadb
 docker compose exec mariadb mariadb -uroot -e 'CREATE DATABASE prisma_demo'
 pnpm install
 pnpm emit                                   # generates src/prisma/contract.json + contract.d.ts
@@ -71,7 +71,7 @@ pnpm db:sign                                # records the contract the database 
 | `db:sign` | `prisma db sign` | Signs a database whose schema satisfies the contract |
 | `test` | `vitest run` | The whole flow against a fresh database at `MARIADB_URL` |
 
-`pnpm test` uses only the server part of `MARIADB_URL`. It creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI; `test/reads.test.ts`, `test/writes.test.ts`, `test/events.test.ts` and `test/products.test.ts` migrate a database and read and write it through `mariadb()`. Without `MARIADB_URL` the tests are skipped, except in CI, where they fail.
+`pnpm test` uses only the server part of `MARIADB_URL`. It creates a uniquely named database on that server and drops it afterwards. `test/migrations.test.ts` runs `db migrate`, `db verify`, `db sign` and `migration plan` through the `prisma` CLI; `test/reads.test.ts`, `test/writes.test.ts`, `test/events.test.ts` and `test/products.test.ts` migrate a database and read and write it through `mariadb()`. The tests need the MariaDB server and fail when `MARIADB_URL` is not set; `docker compose up -d --wait mariadb` starts it.
 
 ## What the migrations create
 
