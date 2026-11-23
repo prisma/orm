@@ -195,7 +195,7 @@ describe('PrismaPgAdapterFactory', () => {
       await adapter.queryRaw(selectOne)
 
       expect(queries).toEqual([
-        { text: expect.stringContaining("set_config('search_path'"), values: ['my_schema'] },
+        { text: expect.stringMatching(/set_config\(\s*'search_path'/), values: ['my_schema'] },
         { text: 'SELECT 1', values: [] },
       ])
     })
