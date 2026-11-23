@@ -32,10 +32,10 @@ changes:
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '"arktype"\s*:\s*"[\^~]?2\.(?:[01](?:\.\d+)?|2(?:\.[0-8])?)(?![\d.])'
-        - '(?<![\w@/-])[''"]?arktype[''"]?:\s*[''"]?[\^~]?2\.(?:[01](?:\.\d+)?|2(?:\.[0-8])?)(?![\d.])'
-        - '"bson"\s*:\s*"[\^~]?7\.(?:[0-2](?:\.\d+)?|3(?:\.[0-3])?)(?![\d.])'
-        - '(?<![\w@/-])[''"]?bson[''"]?:\s*[''"]?[\^~]?7\.(?:[0-2](?:\.\d+)?|3(?:\.[0-3])?)(?![\d.])'
+        - '"arktype"\s*:\s*"[\^~]?2(?:\.(?:[xX*]|[01](?:\.(?:\d+|[xX*]))?|2(?:\.(?:[0-8]|[xX*]))?))?(?![\d.])'
+        - '(?<![\w@/-])[''"]?arktype[''"]?:\s*[''"]?[\^~]?2(?:\.(?:[xX*]|[01](?:\.(?:\d+|[xX*]))?|2(?:\.(?:[0-8]|[xX*]))?))?(?![\d.])'
+        - '"bson"\s*:\s*"[\^~]?7(?:\.(?:[xX*]|[0-2](?:\.(?:\d+|[xX*]))?|3(?:\.(?:[0-3]|[xX*]))?))?(?![\d.])'
+        - '(?<![\w@/-])[''"]?bson[''"]?:\s*[''"]?[\^~]?7(?:\.(?:[xX*]|[0-2](?:\.(?:\d+|[xX*]))?|3(?:\.(?:[0-3]|[xX*]))?))?(?![\d.])'
   - id: config-type-renamed-to-prisma-config
     summary: |
       The config type that `defineConfig` returns is renamed from `PrismaNextConfig` to `PrismaConfig`, in `@prisma/orm-toolchain/cli/config-types` and every package that re-exports it. The old name is gone. The detection matches TypeScript sources that name the old type.
@@ -382,11 +382,11 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*@prisma/orm-(?:mysql|mariadb))[\s\S]*\bmeta\??\.target\b'
   - id: db-migrate-advances-db-ref
     summary: |
-      `prisma db migrate` now advances the `db` ref after a successful apply when the connection comes from `prisma.config.ts` and the CLI does not detect CI. Without `--advance-ref`, it still advances nothing with `--db` or in CI. A `db migrate --advance-ref db` that reads its connection from the config outside CI can drop the flag; one that passes `--db` or runs in CI keeps it. A deploy or script that runs `db migrate` from the config outside a CI runner, and must not change `migrations/app/refs/db.json`, passes the new `--no-advance-ref` or `--db`. A failed ref write is now a warning and the command exits 0, which matters to a script that checks the exit code of `db migrate --advance-ref`. The detection finds `prisma db migrate` commands that pass `--advance-ref`, and those that pass neither `--db` nor `--no-advance-ref`, including a Dockerfile's exec form, a YAML list, a command split with a backslash between its words, a command whose `prisma` comes from a variable such as `$PRISMA` or `$(PRISMA)`, and a program that passes the arguments as a list, such as `execa('prisma', ['db', 'migrate'])`; it reads the flags on the line where `migrate` is and on the lines that line continues with a backslash; check each against the cases below, and look for others in files it does not search and in commands that reach `prisma` through a script of another name.
+      `prisma db migrate` now advances the `db` ref after a successful apply when the connection comes from `prisma.config.ts` and the CLI does not detect CI. Without `--advance-ref`, it still advances nothing with `--db` or in CI. A `db migrate --advance-ref db` that reads its connection from the config outside CI can drop the flag; one that passes `--db` or runs in CI keeps it. A deploy or script that runs `db migrate` from the config outside a CI runner, and must not change `migrations/app/refs/db.json`, passes the new `--no-advance-ref` or `--db`. A failed ref write is now a warning and the command exits 0, which matters to a script that checks the exit code of `db migrate --advance-ref`. The detection finds `prisma db migrate` commands that pass `--advance-ref`, and those that pass neither `--db` nor `--no-advance-ref`, including a Dockerfile's exec form, a YAML list, a command split with a backslash between its words, a command whose `prisma` comes from a shell or Make variable such as `$PRISMA`, `$CLI` or `$(PRISMA)`, and a program that passes the arguments as a list, such as `execa('prisma', ['db', 'migrate'])`; it reads the flags on the line where `migrate` is and on the lines that line continues with a backslash; check each against the cases below, and look for others in files it does not search and in commands that reach `prisma` through a script of another name.
     detection:
       glob: "**/{*.json,*.sh,*.bash,*.zsh,*.yml,*.yaml,*.toml,*.md,*.mdx,*.ts,*.mts,*.js,*.mjs,*.cjs,Dockerfile*,*.dockerfile,Procfile*,Makefile,justfile}"
       matches:
-        - '(?:(?<![\w-])prisma(?![\w-])|\$[({]?[A-Za-z_]*(?:PRISMA|Prisma|prisma)[A-Za-z_]*[)}]?)(?:[^\S\n](?:[^\n]*?[^\S\n])?|\s*\\\n\s*|["'']?\s*[,\n]\s*(?:-\s+)?\[?\s*["'']?)db(?:\s+|\s*\\\n\s*|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)migrate\b(?:(?=[^\n]*(?:\\\n[^\n]*)*--advance-ref\b)|(?![^\n]*(?:\\\n[^\n]*)*--(?:db|no-advance-ref)\b))'
+        - '(?:(?<![\w-])prisma(?![\w-])|\$[({]?[A-Za-z_]\w*[)}]?)(?:[^\S\n](?:[^\n]*?[^\S\n])?|\s*\\\n\s*|["'']?\s*[,\n]\s*(?:-\s+)?\[?\s*["'']?)db(?:\s+|\s*\\\n\s*|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)migrate\b(?:(?=[^\n]*(?:\\\n[^\n]*)*--advance-ref\b)|(?![^\n]*(?:\\\n[^\n]*)*--(?:db|no-advance-ref)\b))'
   - id: engine-pin-moves-to-0-10-4
     summary: |
       The toolchain now requires `@prisma/cli-engine@0.10.4` (up from 0.10.0). A project that depends on `@prisma/cli-engine` itself must move to `0.10.4`. The detection matches a `pnpm-workspace.yaml` that pins an older engine, and a `package.json` that pins an older engine and either lists an `@prisma/orm-*` package or pins the engine in `overrides` or `resolutions`.
@@ -486,7 +486,7 @@ In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` ma
 
 `arktype` and `bson` are dependencies of the Prisma 8 packages, not peers, so the package manager installs the version Prisma 8 asks for beside the project's own when the project's range or lockfile keeps an older one. A project that pins `arktype` at `2.2.3`, for example, then has two copies, and code such as `if (result instanceof type.errors)` on a value from the other copy no longer narrows `result`. On MongoDB the same holds for `bson` classes such as `ObjectId`.
 
-In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `arktype` range to `^2.2.9` and the `bson` range to `^7.3.4`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. The detection does not match a range with fewer than three version parts, such as `^2` or `^7`, or one with `x` or `*`, such as `2.2.x`; check those by hand, since they also allow an older version. Then check that the lockfile has one version of each, for example with `pnpm why arktype`. A project that does not declare either itself needs no change.
+In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `arktype` range to `^2.2.9` and the `bson` range to `^7.3.4`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. The detection also matches a range with fewer version parts, such as `^2` or `7.3`, or with `x` or `*`, such as `2.2.x`, since each allows an older version. Then check that the lockfile has one version of each, for example with `pnpm why arktype`. A project that does not declare either itself needs no change.
 
 
 ## `PrismaNextConfig` is now `PrismaConfig`
