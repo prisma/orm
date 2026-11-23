@@ -1,0 +1,235 @@
+import type { ContractWithDomain, ControlPolicy } from '@internal/contract/types';
+import {
+  type FieldCoordinate,
+  type MigrationPlannerConflict,
+  type ModelCoordinate,
+  modelDisplayName,
+  type ResolvedFieldRenameStatement,
+  type ResolvedMigrationStatement,
+  type ResolvedModelRenameStatement,
+  type ResolvedRenameStatement,
+} from '@internal/framework-components/control';
+import {
+  collectionControlPoliciesOf,
+  collectionControlPolicyOf,
+  collectionOfModel,
+  embeddingModelOf,
+} from '@internal/mongo-contract';
+import { modelCoordinates } from './mongo-statement-planning';
+
+/**
+ * An origin model planned as a destination model: by a statement, or, when `statement` is
+ * `undefined`, because both contracts have a model with its namespace and name.
+ */
+export interface ModelRename {
+  readonly from: ModelCoordinate;
+  readonly to: ModelCoordinate;
+  readonly statement: ResolvedModelRenameStatement | undefined;
+}
+
+/**
+ * An origin field planned as a destination field: by a statement, or, when `statement` is
+ * `undefined`, because the two models it belongs to are planned as one and both have a field of
+ * its name.
+ */
+export interface FieldRename {
+  readonly from: FieldCoordinate;
+  readonly to: FieldCoordinate;
+  readonly statement: ResolvedFieldRenameStatement | undefined;
+}
+
+/** A collection that moves from the origin contract to the destination contract, with the model renames that move it. */
+export interface CollectionChange {
+  readonly from: string;
+  readonly to: string;
+  readonly renames: readonly ModelRename[];
+}
+
+/**
+ * Why a collection cannot be renamed whole: the origin models stored in it that move elsewhere, or
+ * the origin models of destination models stored in the new name that come from elsewhere.
+ */
+export interface SharedCollection {
+  readonly kind: 'split' | 'merged';
+  readonly models: readonly ModelCoordinate[];
+}
+
+function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
+  return a.namespaceId === b.namespaceId && a.model === b.model;
+}
+
+function hasModel(contract: ContractWithDomain, model: ModelCoordinate): boolean {
+  return Object.hasOwn(contract.domain.namespaces[model.namespaceId]?.models ?? {}, model.model);
+}
+
+/** The collection whose top-level documents are the model's: `undefined` for an embedded model or one with no collection. */
+function documentCollectionOf(
+  contract: ContractWithDomain,
+  model: ModelCoordinate,
+): string | undefined {
+  return embeddingModelOf(contract.domain, model) === undefined
+    ? collectionOfModel(contract.domain, model)
+    : undefined;
+}
+
+/** The models of `contract` whose documents are the top-level documents of `collection`. */
+function modelsStoredIn(
+  contract: ContractWithDomain,
+  collection: string,
+): readonly ModelCoordinate[] {
+  return modelCoordinates(contract).filter(
+    (model) => documentCollectionOf(contract, model) === collection,
+  );
+}
+
+/**
+ * The model renames of a plan: each model rename statement, and, with an origin contract, each
+ * origin model the destination has under its namespace and name and that no statement names.
+ */
+export function modelRenamesOf(
+  statements: readonly ResolvedRenameStatement[],
+  fromContract: ContractWithDomain | null,
+  contract: ContractWithDomain,
+): readonly ModelRename[] {
+  const stated = statements.flatMap((statement) =>
+    statement.entity === 'model' ? [{ from: statement.from, to: statement.to, statement }] : [],
+  );
+  if (fromContract === null) return stated;
+  const named = (model: ModelCoordinate) =>
+    stated.some((rename) => sameModel(rename.from, model) || sameModel(rename.to, model));
+  const kept = modelCoordinates(fromContract).flatMap((model) =>
+    hasModel(contract, model) && !named(model)
+      ? [{ from: model, to: model, statement: undefined }]
+      : [],
+  );
+  return [...stated, ...kept];
+}
+
+/** The control policy of `collection` as `contract` declares it. */
+export function declaredControlPolicy(
+  contract: ContractWithDomain,
+  collection: string,
+): ControlPolicy {
+  return collectionControlPolicyOf(collection, collectionControlPoliciesOf(contract));
+}
+
+/** The collections the model renames move, each with the renames that move it, in the order of the renames. */
+export class CollectionRenames {
+  readonly changes: readonly CollectionChange[];
+  readonly #models: readonly ModelRename[];
+  readonly #fromContract: ContractWithDomain;
+  readonly #contract: ContractWithDomain;
+
+  constructor(
+    models: readonly ModelRename[],
+    fromContract: ContractWithDomain,
+    contract: ContractWithDomain,
+  ) {
+    this.#models = models;
+    this.#fromContract = fromContract;
+    this.#contract = contract;
+    const changes = new Map<string, { from: string; to: string; renames: ModelRename[] }>();
+    for (const rename of models) {
+      const from = documentCollectionOf(fromContract, rename.from);
+      const to = documentCollectionOf(contract, rename.to);
+      if (from === undefined || to === undefined || from === to) continue;
+      const key = JSON.stringify([from, to]);
+      const change = changes.get(key);
+      if (change === undefined) changes.set(key, { from, to, renames: [rename] });
+      else change.renames.push(rename);
+    }
+    this.changes = [...changes.values()];
+  }
+
+  /** The change that moves the collection of `rename`'s origin model, if its collection changes. */
+  changeOf(rename: ModelRename): CollectionChange | undefined {
+    return this.changes.find((change) => change.renames.includes(rename));
+  }
+
+  /** Whether the control policy is `managed` for the old collection in the origin contract and the new one in the destination contract. */
+  managedOnBothSides(change: CollectionChange): boolean {
+    return (
+      declaredControlPolicy(this.#fromContract, change.from) === 'managed' &&
+      declaredControlPolicy(this.#contract, change.to) === 'managed'
+    );
+  }
+
+  /**
+   * Why the documents of collection `from` cannot move whole to collection `to`: an origin model
+   * stored in it that the destination keeps in another collection, or a destination model stored in
+   * the new collection whose origin model is stored elsewhere. Models pair through the renames.
+   * `undefined` when the whole collection moves and nothing else moves there. A model the
+   * destination removes, or a new model, blocks nothing.
+   */
+  sharedCollection(change: Pick<CollectionChange, 'from' | 'to'>): SharedCollection | undefined {
+    const split = modelsStoredIn(this.#fromContract, change.from).filter((model) => {
+      const rename = this.#models.find((each) => sameModel(each.from, model));
+      const destination =
+        rename === undefined ? undefined : documentCollectionOf(this.#contract, rename.to);
+      return destination !== undefined && destination !== change.to;
+    });
+    if (split.length > 0) return { kind: 'split', models: split };
+    const merged = modelsStoredIn(this.#contract, change.to).flatMap((model) => {
+      const rename = this.#models.find((each) => sameModel(each.to, model));
+      const origin =
+        rename === undefined ? undefined : documentCollectionOf(this.#fromContract, rename.from);
+      return rename !== undefined && origin !== undefined && origin !== change.from
+        ? [rename.from]
+        : [];
+    });
+    return merged.length > 0 ? { kind: 'merged', models: merged } : undefined;
+  }
+}
+
+/** Joins items into text: "a", "a and b", "a, b and c". */
+export function joinedList(items: readonly string[]): string {
+  return items.length === 1
+    ? (items[0] ?? '')
+    : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+}
+
+function namedList(noun: string, names: readonly string[]): string {
+  return `${noun}${names.length === 1 ? '' : 's'} ${joinedList(names.map((name) => `"${name}"`))}`;
+}
+
+export function modelsText(models: readonly ModelCoordinate[]): string {
+  return namedList('model', models.map(modelDisplayName));
+}
+
+export function fieldDisplayName(field: FieldCoordinate): string {
+  return `${modelDisplayName(field)}.${field.field}`;
+}
+
+export function capitalized(text: string): string {
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+}
+
+/** What a collection change no statement asks for does, in words. */
+export function collectionChangeText(change: CollectionChange): string {
+  return `the collection of ${modelsText(change.renames.map((rename) => rename.from))} changes from "${change.from}" to "${change.to}"`;
+}
+
+/** What a field rename no statement asks for does, in words. */
+export function storedNameChangeText(field: FieldCoordinate, from: string, to: string): string {
+  return `the stored name of field "${fieldDisplayName(field)}" changes from "${from}" to "${to}"`;
+}
+
+/**
+ * Refuses a rename. With the statement that asks for it, the conflict carries the statement; a
+ * rename no statement asks for is refused as a contract change the plan cannot make, and its text
+ * names that change.
+ */
+export function renameRefused(
+  statement: ResolvedMigrationStatement | undefined,
+  summary: string,
+  why: string,
+): MigrationPlannerConflict {
+  return statement === undefined
+    ? { kind: 'unsupportedOperation', summary, why }
+    : { kind: 'statementRefused', summary, why, refusedStatement: statement };
+}
+
+/** The steps of a migration the user writes by hand, which rewrites `what` with the other operations of the change. */
+export function handWrittenMigrationSteps(what: string): string {
+  return `run prisma migration new, and in the operations of the migration.ts it writes, rewrite ${what} yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`;
+}

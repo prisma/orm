@@ -148,7 +148,7 @@ function requiredInOrigin(
   }
   const origin = originModelOf(field, input.match);
   const model = origin === undefined ? undefined : modelAt(input.match.fromContract, origin);
-  const originField = originFieldOf(field, input.match.statements);
+  const originField = originFieldOf(field, input.match.fieldRenames);
   return model !== undefined && Object.hasOwn(model.fields, originField)
     ? model.fields[originField]?.nullable === false
     : false;

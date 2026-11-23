@@ -199,36 +199,54 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
-  it("refuses a field rename when the model's collection changes and no statement renames it", () => {
+  it("refuses a field rename when the model's collection changes and the plan does not rename it", () => {
+    const statement = renameField('Profile', 'name', 'Profile', 'fullName');
+    const from = contract(
+      'from',
+      { Profile: { collection: 'profiles', fields: ['_id', 'name'] } },
+      { profiles: { unique: ['name'], required: ['name'], control: 'tolerated' } },
+    );
     const to = contract(
       'to',
       { Profile: { collection: 'users', fields: ['_id', 'fullName'] } },
       { users: {} },
     );
+    expect(plan({ from, to, schema: profilesSchema, statements: [statement] })).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary:
+            'Cannot rename field "Profile.name" to "Profile.fullName": the model\'s collection changes from "profiles" to "users", and the plan does not rename it',
+          why: 'The plan renames a collection only when every model stored in it moves to the same new collection, its control policy is "managed" in both contracts, and the schema being planned from has the old collection and not the new one, so the field would be renamed in a collection the destination does not store the model in. Leave out this statement.',
+          refusedStatement: statement,
+        },
+      ],
+    });
+  });
+
+  it('refuses a field rename of a model that changes its name and collection with no model statement, and says which to add', () => {
     expect(
       refusal(
         plan({
           from: profiles,
-          to,
+          to: contract(
+            'to',
+            { User: { collection: 'users', fields: ['_id', 'fullName'] } },
+            { users: {} },
+          ),
           schema: profilesSchema,
-          statements: [renameField('Profile', 'name', 'Profile', 'fullName')],
+          statements: [renameField('Profile', 'name', 'User', 'fullName')],
         }),
-      ).map(({ summary }) => summary),
+      ),
     ).toEqual([
-      'Cannot rename field "Profile.name" to "Profile.fullName": the model\'s collection changes from "profiles" to "users", and no statement renames it',
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename field "User.name" to "User.fullName": the model\'s collection changes from "profiles" to "users", and the plan does not rename it',
+        why: 'Add --rename Profile:User before this statement, so the collection is renamed with its documents.',
+      },
     ]);
-    expect(
-      refusal(
-        plan({
-          from: profiles,
-          to,
-          schema: profilesSchema,
-          statements: [renameField('Profile', 'name', 'Profile', 'fullName')],
-        }),
-      )[0]?.why,
-    ).toBe(
-      'A statement cannot rename the collection of a model that keeps its name. Rename the collection in a step of its own first: change only @@map and emit the contract. With db update, rename the collection in the database yourself, for example db.getCollection("profiles").renameCollection("users") in mongosh, then run db update. With migration plan, plan it, passing --delete Profile to answer its question; in its migration.ts make renameCollection("profiles", "users") the first operation, imported with the other operations, delete the drop of "profiles", and delete the create of "users" if there is one; run node on that migration.ts so it writes ops.json again; then apply it with prisma db migrate. Then change the field and run this statement again.',
-    );
   });
 });
 

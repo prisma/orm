@@ -13,7 +13,7 @@ import {
 import { contract, NS } from './mongo-statement-fixtures';
 
 const tasks = contract('tasks', { Task: { collection: 'tasks', fields: ['_id'] } }, { tasks: {} });
-const contracts = { fromContract: tasks, contract: tasks, statements: [] };
+const contracts = { fromContract: tasks, contract: tasks, statements: [], fieldRenames: [] };
 
 function rewrite(facts: RewriteFacts): OrderedRewrite {
   return { ...facts, statements: [], twoMigrationsAdvice: undefined, unanswered: undefined };
@@ -85,6 +85,7 @@ describe('overlapRefusal', () => {
         fromContract: users('from', 'a'),
         contract: users('to', 'c'),
         statements: [],
+        fieldRenames: [],
       })?.why,
     ).toEqual(
       `The plan holds changes that no --rename or --convert statement carries: field "User.a", which the plan removes. To keep their data, run the command again with: --rename User.a:User.c. ${FILTER_REASON} If every answer is --delete, the plan stays as it is: make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first make only the part of the change that "${replaceType.call.label}" carries out; then the rest.`,

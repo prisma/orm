@@ -15,6 +15,7 @@ function match(
 ): ModelMatchInput {
   return {
     statements,
+    fieldRenames: [],
     fromContract: contract('from', from, { items: {} }),
     contract: contract('to', to, { items: {} }),
     collectionAfterRenames: (collection) => collection,

@@ -68,6 +68,7 @@ import {
   planValidatorFieldRemovals,
   type StatementCalls,
 } from './mongo-statement-planning';
+import type { CollectionRenames } from './mongo-storage-renames';
 import { planStoredKeyFills } from './mongo-stored-key-fills';
 import { planStoredKeyRewrites } from './mongo-stored-key-planning';
 import {
@@ -288,13 +289,14 @@ function modelStoredIn(
 
 /**
  * Each collection drop of the plan, with the model whose documents it loses. When that model keeps
- * its name and the plan brings its new collection into existence, the drop says how to rename the
- * collection by hand instead.
+ * its name, the plan brings its new collection into existence, and its documents could move there
+ * whole, the drop says how to rename the collection by hand instead.
  */
 function collectionDrops(
   calls: readonly OpFactoryCall[],
   fromContract: ContractWithDomain | null,
   contract: ContractWithDomain,
+  renames: CollectionRenames,
   collections: { readonly origin: MongoSchemaIR; readonly destination: MongoSchemaIR },
 ): readonly MigrationDataLoss[] {
   const created = (collection: string) =>
@@ -310,7 +312,9 @@ function collectionDrops(
     const subject: MigrationSubject = { kind: 'model', ...model };
     const destinationCollection = modelStoredInDestination(contract, model);
     return [
-      destinationCollection !== undefined && created(destinationCollection)
+      destinationCollection !== undefined &&
+      created(destinationCollection) &&
+      renames.sharedCollection({ from: call.collection, to: destinationCollection }) === undefined
         ? {
             ...lost,
             subject,
@@ -627,12 +631,19 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     );
     const statementPlan = planStatements({
       statements: renames,
-      fromContract: fromContract ?? contract,
+      fromContract,
       contract,
       schema: originIR,
     });
     if (!statementPlan.ok) return { kind: 'failure', conflicts: statementPlan.failure };
-    const { schema, collectionRenames, fieldRenames, callOfStatement } = statementPlan.value;
+    const {
+      schema,
+      collectionRenames,
+      fieldRenameCalls,
+      fieldRenames,
+      callOfStatement,
+      collections,
+    } = statementPlan.value;
     const destinationIR = contractToMongoSchemaIR(contract);
     const storedKeys = planStoredKeyRewrites({
       statements: renames,
@@ -658,6 +669,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         ? undefined
         : {
             statements: renames,
+            fieldRenames,
             fromContract,
             contract,
             collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
@@ -685,7 +697,8 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       enumReplacements: valueReplacements.flatMap(({ call }) =>
         call instanceof ReplaceStoredValueCall ? [call] : [],
       ),
-      fieldRenames: fieldRenames.map(({ call }) => call),
+      fieldRenames,
+      fieldRenameCalls: fieldRenameCalls.map(({ call }) => call),
     });
     if (!variants.ok) return { kind: 'failure', conflicts: [...variants.failure] };
     const { deletes: variantDeletes, replacements: variantReplacements } = variants.value;
@@ -695,6 +708,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         ? planValidatorFieldRemovals({ origin: schema, destination: destinationIR, contract })
         : planFieldRemovals({
             statements: renames,
+            fieldRenames,
             fromContract,
             contract,
             collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
@@ -708,6 +722,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         : planFieldTypeChanges(
             {
               statements: renames,
+              fieldRenames,
               fromContract,
               contract,
               collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
@@ -890,7 +905,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           : [],
       );
     const fieldRenamesSelecting = (kind: DiscriminatorFilter['kind'] | undefined) =>
-      fieldRenames.flatMap(({ call, discriminatorFilter }) =>
+      fieldRenameCalls.flatMap(({ call, discriminatorFilter }) =>
         discriminatorFilter?.kind === kind
           ? [rewriteOf({ kind: 'renameField', call, discriminatorFilter })]
           : [],
@@ -975,6 +990,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const overlap = overlapRefusal(orderedRewrites, {
       ...contracts,
       statements: options.statements,
+      fieldRenames,
     });
     if (overlap !== undefined) return { kind: 'failure', conflicts: [overlap] };
     const result = this.planCalls({
@@ -1050,7 +1066,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         operationIndexes: (callsOf.get(statement) ?? []).map((call) => calls.indexOf(call)),
       })),
       dataLoss: [
-        ...collectionDrops(calls, fromContract, contract, {
+        ...collectionDrops(calls, fromContract, contract, collections, {
           origin: schema,
           destination: destinationIR,
         }),

@@ -154,7 +154,7 @@ export function planFieldTypeChanges(
     return Object.keys(model.fields)
       .sort()
       .flatMap((field): TypeChange[] => {
-        const destinationField = destinationFieldOf({ ...origin, field }, input.statements);
+        const destinationField = destinationFieldOf({ ...origin, field }, input.fieldRenames);
         if (!Object.hasOwn(destinationModel.fields, destinationField)) return [];
         const from = fieldShapeOf(model.fields[field], lookups);
         const to = fieldShapeOf(destinationModel.fields[destinationField], lookups);

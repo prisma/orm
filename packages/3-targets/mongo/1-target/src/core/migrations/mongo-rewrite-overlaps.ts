@@ -6,6 +6,7 @@ import {
 } from '@internal/framework-components/control';
 import type { SelectedVariant } from '@internal/mongo-contract';
 import { InternalError } from '@internal/utils/internal-error';
+import type { FieldRename } from './mongo-storage-renames';
 import { type UnansweredChange, unansweredChangesAdvice } from './mongo-unanswered-changes';
 import type {
   CastFieldCall,
@@ -444,6 +445,8 @@ export function overlapRefusal(
     readonly contract: ContractWithDomain;
     /** The statements the plan carries out. */
     readonly statements: readonly ResolvedMigrationStatement[];
+    /** The field renames the plan makes, those of its statements and those no statement asks for. */
+    readonly fieldRenames: readonly FieldRename[];
   },
 ): MigrationPlannerConflict | undefined {
   const accessed = rewrites.map((rewrite) => ({ rewrite, access: accessOf(rewrite) }));

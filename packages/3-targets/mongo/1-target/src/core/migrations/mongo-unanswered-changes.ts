@@ -14,12 +14,15 @@ import {
 } from '@internal/framework-components/control';
 import { statementFlag } from './mongo-statement-flags';
 import { modelAt } from './mongo-statement-planning';
+import type { FieldRename } from './mongo-storage-renames';
 
 interface Contracts {
   readonly fromContract: ContractWithDomain;
   readonly contract: ContractWithDomain;
   /** The statements the plan carries out. */
   readonly statements: readonly ResolvedMigrationStatement[];
+  /** The field renames the plan makes, those of its statements and those no statement asks for. */
+  readonly fieldRenames: readonly FieldRename[];
 }
 
 /**
@@ -143,12 +146,9 @@ function newModelFields(subject: FieldCoordinate, contracts: Contracts): readonl
   return added(
     Object.keys(modelAt(contracts.contract, destination)?.fields ?? {}),
     Object.keys(modelAt(contracts.fromContract, subject)?.fields ?? {}),
-    contracts.statements.flatMap((statement) =>
-      statement.kind === 'rename' &&
-      statement.entity === 'field' &&
-      statement.to.namespaceId === destination.namespaceId &&
-      statement.to.model === destination.model
-        ? [statement.to.field]
+    contracts.fieldRenames.flatMap((rename) =>
+      rename.to.namespaceId === destination.namespaceId && rename.to.model === destination.model
+        ? [rename.to.field]
         : [],
     ),
   );

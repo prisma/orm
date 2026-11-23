@@ -55,6 +55,20 @@ import {
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
 import {
+  type CollectionChange,
+  CollectionRenames,
+  capitalized,
+  collectionChangeText,
+  declaredControlPolicy,
+  type FieldRename,
+  handWrittenMigrationSteps,
+  type ModelRename,
+  modelRenamesOf,
+  modelsText,
+  renameRefused,
+  storedNameChangeText,
+} from './mongo-storage-renames';
+import {
   type OpFactoryCall,
   RenameCollectionCall,
   RenameFieldCall,
@@ -195,8 +209,8 @@ export interface StatementCalls {
   readonly rewrites: readonly RewriteCall[];
 }
 
-/** A field rename, with the discriminator values its filter selects documents by. */
-export interface FieldRename {
+/** A field rename call, with the discriminator values its filter selects documents by. */
+export interface FieldRenameCall {
   readonly call: RenameFieldCall;
   readonly discriminatorFilter: DiscriminatorFilter | undefined;
 }
@@ -205,89 +219,153 @@ export interface StatementPlan {
   /** The origin schema with each renamed collection under its new name, for the diff to compare. */
   readonly schema: MongoSchemaIR;
   readonly collectionRenames: readonly RenameCollectionCall[];
-  /** In statement order. */
+  /** The calls of the statements' field renames, in statement order, then of the field renames no statement asks for. */
+  readonly fieldRenameCalls: readonly FieldRenameCall[];
+  /** Every field rename statement, and every field rename no statement asks for that the plan makes. */
   readonly fieldRenames: readonly FieldRename[];
   /** For each statement, in order, the call that carries it out, or `undefined` when storage does not change. */
   readonly callOfStatement: readonly (OpFactoryCall | undefined)[];
-}
-
-function refused(
-  statement: ResolvedMigrationStatement,
-  label: string,
-  reason: string,
-  why: string,
-): MigrationPlannerConflict {
-  return {
-    kind: 'statementRefused',
-    summary: `${label}: ${reason}`,
-    why,
-    refusedStatement: statement,
-  };
+  /** The collections the model renames move. */
+  readonly collections: CollectionRenames;
 }
 
 const LEAVE_OUT = 'Leave out this statement.';
 
+interface PlanningInput {
+  readonly statements: readonly ResolvedRenameStatement[];
+  /** The origin contract; the destination stands in for it when the plan has none. */
+  readonly fromContract: ContractWithDomain;
+  readonly contract: MongoContract;
+}
+
 /**
- * Plans the rename each statement states, in order: a model statement whose collection changes renames the
- * collection in the schema the diff then starts from, and a field statement whose stored name
- * changes renames the field in the documents that hold it.
+ * Plans the renames of a plan against the schema it starts from: those its statements ask for,
+ * and, with an origin contract, those of the collections and fields whose models and fields both
+ * contracts name alike. In order: the collection renames no statement asks for, the statements in
+ * the order given, and the field renames no statement asks for. A collection rename renames the
+ * collection in the schema the diff then starts from, and a field rename renames the field in the
+ * documents that hold it. A collection is renamed only when every model stored in it moves to the
+ * new collection and no other model joins it there.
  */
 export function planStatements(input: {
   readonly statements: readonly ResolvedRenameStatement[];
-  readonly fromContract: ContractWithDomain;
+  readonly fromContract: ContractWithDomain | null;
   readonly contract: MongoContract;
   readonly schema: MongoSchemaIR;
 }): Result<StatementPlan, readonly MigrationPlannerConflict[]> {
+  const planning: PlanningInput = {
+    statements: input.statements,
+    fromContract: input.fromContract ?? input.contract,
+    contract: input.contract,
+  };
+  const models = modelRenamesOf(input.statements, input.fromContract, input.contract);
+  const collections = new CollectionRenames(models, planning.fromContract, input.contract);
   let schema = input.schema;
   const collectionRenames: RenameCollectionCall[] = [];
-  const fieldRenames: FieldRename[] = [];
+  const fieldRenameCalls: FieldRenameCall[] = [];
+  const fieldRenames: FieldRename[] = input.statements.flatMap((statement) =>
+    statement.entity === 'field' ? [{ from: statement.from, to: statement.to, statement }] : [],
+  );
   const callOfStatement: (OpFactoryCall | undefined)[] = [];
   const conflicts: MigrationPlannerConflict[] = [];
   const renamedCollections = new Map<string, string>();
+  const renameCollection = (call: RenameCollectionCall) => {
+    schema = renameInSchema(schema, call.from, call.to);
+    renamedCollections.set(call.from, call.to);
+    collectionRenames.push(call);
+  };
+  const addFieldRename = (rename: FieldRenameCall): RenameFieldCall => {
+    const same = fieldRenameCalls.find(({ call }) => sameFieldRename(call, rename.call));
+    if (same !== undefined) return same.call;
+    fieldRenameCalls.push(rename);
+    return rename.call;
+  };
+
+  for (const change of collections.changes) {
+    if (change.renames.some((rename) => rename.statement !== undefined)) continue;
+    if (
+      !collections.managedOnBothSides(change) ||
+      collections.sharedCollection(change) !== undefined ||
+      schema.collection(change.from) === undefined ||
+      schema.collection(change.to) !== undefined
+    ) {
+      continue;
+    }
+    const outcome = planCollectionChange(change, schema);
+    if (outcome.kind === 'refused') conflicts.push(outcome.conflict);
+    if (outcome.kind === 'renameCollection') renameCollection(outcome.call);
+  }
 
   for (const statement of input.statements) {
-    const label = `Cannot ${describeMigrationStatement(statement, input.fromContract, input.contract)}`;
+    const label = `Cannot ${describeMigrationStatement(statement, planning.fromContract, input.contract)}`;
     const outcome: StatementOutcome =
       statement.entity === 'namespace'
         ? {
             kind: 'refused',
-            conflict: refused(
+            conflict: renameRefused(
               statement,
-              label,
-              'MongoDB does not rename namespaces in this release',
+              `${label}: MongoDB does not rename namespaces in this release`,
               LEAVE_OUT,
             ),
           }
         : statement.entity === 'enumValue' || statement.entity === 'valueObjectField'
           ? { kind: 'unchanged' }
           : statement.entity === 'model'
-            ? planModelStatement(statement, label, schema, input)
-            : planFieldStatement(statement, label, renamedCollections, schema, input);
+            ? planModelStatement(
+                statement,
+                label,
+                renamedCollections,
+                schema,
+                collections,
+                models,
+                planning,
+              )
+            : planFieldRename(
+                { from: statement.from, to: statement.to, statement },
+                label,
+                renamedCollections,
+                schema,
+                fieldRenames,
+                planning,
+              );
     if (outcome.kind === 'refused') {
       conflicts.push(outcome.conflict);
       callOfStatement.push(undefined);
       continue;
     }
-    if (outcome.kind === 'renameCollection') {
-      schema = renameInSchema(schema, outcome.call.from, outcome.call.to);
-      renamedCollections.set(outcome.call.from, outcome.call.to);
-      collectionRenames.push(outcome.call);
-    }
-    if (outcome.kind === 'renameField') {
-      const same = fieldRenames.find(({ call }) => sameFieldRename(call, outcome.rename.call));
-      if (same !== undefined) {
-        callOfStatement.push(same.call);
-        continue;
-      }
-      fieldRenames.push(outcome.rename);
-    }
+    if (outcome.kind === 'renameCollection') renameCollection(outcome.call);
     callOfStatement.push(
       outcome.kind === 'unchanged'
         ? undefined
         : outcome.kind === 'renameField'
-          ? outcome.rename.call
+          ? addFieldRename(outcome.rename)
           : outcome.call,
     );
+  }
+
+  if (input.fromContract !== null) {
+    const unstated = unstatedFieldRenamesOf({
+      statements: input.statements,
+      fieldRenames: [],
+      fromContract: input.fromContract,
+      contract: input.contract,
+      collectionAfterRenames: (collection) => renamedCollections.get(collection) ?? collection,
+    });
+    for (const rename of unstated) {
+      const outcome = planFieldRename(
+        rename,
+        undefined,
+        renamedCollections,
+        schema,
+        [...fieldRenames, ...unstated],
+        planning,
+      );
+      if (outcome.kind === 'refused') conflicts.push(outcome.conflict);
+      if (outcome.kind === 'renameField') {
+        addFieldRename(outcome.rename);
+        fieldRenames.push(rename);
+      }
+    }
   }
 
   return conflicts.length > 0
@@ -295,9 +373,41 @@ export function planStatements(input: {
     : ok({
         schema,
         collectionRenames,
+        fieldRenameCalls,
         fieldRenames,
         callOfStatement,
+        collections,
       });
+}
+
+/**
+ * The field renames no statement asks for: each field of an origin model, root or variant, that the
+ * destination model it is paired with has under its name, whichever rule paired the models, and
+ * that no field rename statement names.
+ */
+function unstatedFieldRenamesOf(match: ModelMatchInput): readonly FieldRename[] {
+  const named = (field: FieldCoordinate) =>
+    match.statements.some(
+      (statement) =>
+        statement.entity === 'field' &&
+        (sameField(statement.from, field) || sameField(statement.to, field)),
+    );
+  return modelCoordinates(match.fromContract).flatMap((origin) => {
+    const destination = destinationModelOf(origin, match);
+    const originModel = modelAt(match.fromContract, origin);
+    const destinationModel =
+      destination === undefined ? undefined : modelAt(match.contract, destination);
+    if (destination === undefined || originModel === undefined || destinationModel === undefined) {
+      return [];
+    }
+    return Object.keys(originModel.fields).flatMap((field) => {
+      const from = { ...origin, field };
+      const to = { ...destination, field };
+      return Object.hasOwn(destinationModel.fields, field) && !named(from) && !named(to)
+        ? [{ from, to, statement: undefined }]
+        : [];
+    });
+  });
 }
 
 /** Whether two field renames rewrite the same documents the same way, as when every root model of a shared collection renames a field together. */
@@ -313,8 +423,18 @@ function sameFieldRename(a: RenameFieldCall, b: RenameFieldCall): boolean {
 type StatementOutcome =
   | { readonly kind: 'unchanged' }
   | { readonly kind: 'renameCollection'; readonly call: RenameCollectionCall }
-  | { readonly kind: 'renameField'; readonly rename: FieldRename }
+  | { readonly kind: 'renameField'; readonly rename: FieldRenameCall }
   | { readonly kind: 'refused'; readonly conflict: MigrationPlannerConflict };
+
+const UNCHANGED: StatementOutcome = { kind: 'unchanged' };
+
+function refusedOutcome(
+  statement: ResolvedMigrationStatement | undefined,
+  summary: string,
+  why: string,
+): StatementOutcome {
+  return { kind: 'refused', conflict: renameRefused(statement, summary, why) };
+}
 
 function renameInSchema(schema: MongoSchemaIR, from: string, to: string): MongoSchemaIR {
   return new MongoSchemaIR(
@@ -340,77 +460,130 @@ function controlPolicyRefusal(
 ): StatementOutcome | undefined {
   const policy = collectionControlPolicy(contract, collection);
   if (policy === 'managed') return undefined;
-  return {
-    kind: 'refused',
-    conflict: refused(
+  return refusedOutcome(
+    statement,
+    `${label}: collection "${collection}" has control policy "${policy}"`,
+    `Statements rename only collections, and fields of collections, whose control policy is "managed". Make the change in the database yourself and leave out this statement.`,
+  );
+}
+
+/**
+ * Why MongoDB cannot rename collection `change.from` to `change.to`: a time-series collection, or a
+ * name it rejects. With no statement, the text names the contract change.
+ */
+function collectionRenameRefusal(
+  statement: ResolvedModelRenameStatement | undefined,
+  label: string,
+  change: CollectionChange,
+  schema: MongoSchemaIR,
+): StatementOutcome | undefined {
+  const { from, to } = change;
+  const changed =
+    statement === undefined ? `${capitalized(collectionChangeText(change))}, and ` : '';
+  if (schema.collection(from)?.options?.timeseries !== undefined) {
+    return refusedOutcome(
       statement,
-      label,
-      `collection "${collection}" has control policy "${policy}"`,
-      `Statements rename only collections, and fields of collections, whose control policy is "managed". Make the change in the database yourself and leave out this statement.`,
-    ),
-  };
+      `${label}: collection "${from}" is a time-series collection`,
+      statement === undefined
+        ? `${changed}MongoDB cannot rename a time-series collection. Keep the collection's name: store the models in "${from}" (with @@map(${JSON.stringify(from)}) in PSL), then run this command again.`
+        : `MongoDB cannot rename a time-series collection. Leave out this statement. To keep the documents, first create collection "${to}" yourself with the same time-series options and copy them into it; the plan then drops "${from}" once --delete names the model.`,
+    );
+  }
+  const invalid = invalidCollectionNameReason(to);
+  if (invalid !== undefined) {
+    return refusedOutcome(
+      statement,
+      `${label}: MongoDB does not accept the collection name "${to}": ${invalid}`,
+      `${changed === '' ? '' : `${capitalized(collectionChangeText(change))}. `}Give the model a collection name MongoDB accepts with @@map, then run this command again.`,
+    );
+  }
+  return undefined;
+}
+
+/** The rename of a collection no statement asks for, which every model stored in it moves: refused only when MongoDB cannot rename it. */
+function planCollectionChange(change: CollectionChange, schema: MongoSchemaIR): StatementOutcome {
+  return (
+    collectionRenameRefusal(
+      undefined,
+      `Cannot rename collection "${change.from}" to "${change.to}"`,
+      change,
+      schema,
+    ) ?? { kind: 'renameCollection', call: new RenameCollectionCall(change.from, change.to) }
+  );
+}
+
+function leaveOutShared(moving: string): string {
+  return `Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. A question about ${moving} offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.`;
+}
+
+const HAND_WRITTEN_WITH_MIGRATION_PLAN =
+  'To keep the data with migration plan, write this change as a hand-written migration instead: ';
+
+/** The refusal of a model rename statement whose collection holds other models that do not move with it, or whose new collection holds models from elsewhere. */
+function sharedCollectionRefusal(
+  statement: ResolvedModelRenameStatement,
+  label: string,
+  collections: CollectionRenames,
+  models: readonly ModelRename[],
+): StatementOutcome | undefined {
+  const rename = models.find((model) => model.statement === statement);
+  const change = rename === undefined ? undefined : collections.changeOf(rename);
+  const shared = change === undefined ? undefined : collections.sharedCollection(change);
+  if (change === undefined || shared === undefined) return undefined;
+  const { from, to } = change;
+  const moving = modelsText(change.renames.map((renamed) => renamed.from));
+  const others = modelsText(shared.models);
+  return refusedOutcome(
+    statement,
+    shared.kind === 'split'
+      ? `${label}: collection "${from}" also stores ${others}`
+      : `${label}: collection "${to}" also stores ${others}, whose documents are not in collection "${from}"`,
+    shared.kind === 'split'
+      ? `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leaveOutShared(moving)} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the documents of ${moving} into collection "${to}"`)}`
+      : `A collection rename moves the documents of one collection, and collection "${to}" would also store the documents of ${others}. Moving the documents of two collections into one is a data migration, which a plan does not write. ${leaveOutShared(moving)} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the documents of ${moving}, and those of ${others} that collection "${to}" does not already hold, into collection "${to}"`)}`,
+  );
 }
 
 function planModelStatement(
   statement: ResolvedModelRenameStatement,
   label: string,
+  renamedCollections: ReadonlyMap<string, string>,
   schema: MongoSchemaIR,
-  input: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
+  collections: CollectionRenames,
+  models: readonly ModelRename[],
+  input: PlanningInput,
 ): StatementOutcome {
+  const refuse = (reason: string, why: string) =>
+    refusedOutcome(statement, `${label}: ${reason}`, why);
   const embedded =
     embeddedModelReason(input.fromContract, statement.from) ??
     embeddedModelReason(input.contract, statement.to);
   if (embedded !== undefined) {
-    return {
-      kind: 'refused',
-      conflict: refused(
-        statement,
-        label,
-        embedded,
-        `Embedded models are not renamed in this release. ${LEAVE_OUT}`,
-      ),
-    };
+    return refuse(embedded, `Embedded models are not renamed in this release. ${LEAVE_OUT}`);
   }
   const from = collectionOfModel(input.fromContract.domain, statement.from);
   const to = collectionOfModel(input.contract.domain, statement.to);
   if (from === undefined || to === undefined) {
-    return {
-      kind: 'refused',
-      conflict: refused(
-        statement,
-        label,
-        noCollectionReason(from === undefined ? statement.from : statement.to),
-        `A statement renames the documents of a model in its collection. Give the model a collection, then run this command again, or ${LEAVE_OUT.toLowerCase()}`,
-      ),
-    };
+    return refuse(
+      noCollectionReason(from === undefined ? statement.from : statement.to),
+      `A statement renames the documents of a model in its collection. Give the model a collection, then run this command again, or ${LEAVE_OUT.toLowerCase()}`,
+    );
   }
-  if (from === to) return { kind: 'unchanged' };
+  if (from === to) return UNCHANGED;
+  const shared = sharedCollectionRefusal(statement, label, collections, models);
+  if (shared !== undefined) return shared;
+  if (renamedCollections.get(from) === to) return UNCHANGED;
   const policyRefusal = controlPolicyRefusal(statement, label, input.contract, to);
   if (policyRefusal !== undefined) return policyRefusal;
-  const refuse = (reason: string, why: string): StatementOutcome => ({
-    kind: 'refused',
-    conflict: refused(statement, label, reason, why),
-  });
-  const source = schema.collection(from);
-  if (source === undefined) {
+  if (schema.collection(from) === undefined) {
     return refuse(
       `the schema being planned from has no collection "${from}"`,
       `The database has no collection "${from}", or "${from}" is a view, which MongoDB cannot rename. Inspect it with prisma db schema, or ${LEAVE_OUT.toLowerCase()}`,
     );
   }
-  if (source.options?.timeseries !== undefined) {
-    return refuse(
-      `collection "${from}" is a time-series collection`,
-      `MongoDB cannot rename a time-series collection. Leave out this statement. To keep the documents, first create collection "${to}" yourself with the same time-series options and copy them into it; the plan then drops "${from}" once --delete names the model.`,
-    );
-  }
-  const invalid = invalidCollectionNameReason(to);
-  if (invalid !== undefined) {
-    return refuse(
-      `MongoDB does not accept the collection name "${to}": ${invalid}`,
-      'Give the model a collection name MongoDB accepts with @@map, then run this command again.',
-    );
-  }
+  const change = { from, to, renames: [{ from: statement.from, to: statement.to, statement }] };
+  const refusal = collectionRenameRefusal(statement, label, change, schema);
+  if (refusal !== undefined) return refusal;
   if (schema.collection(to) !== undefined) {
     return refuse(
       `the schema being planned from already has a collection "${to}"`,
@@ -420,24 +593,17 @@ function planModelStatement(
   return { kind: 'renameCollection', call: new RenameCollectionCall(from, to) };
 }
 
-function planFieldStatement(
+/** Why a field rename statement cannot be planned before its stored names are compared, if it cannot; `unchanged` when it renames nothing stored. */
+function fieldStatementRefusal(
   statement: ResolvedFieldRenameStatement,
   label: string,
-  renamedCollections: ReadonlyMap<string, string>,
-  schema: MongoSchemaIR,
-  input: {
-    readonly statements: readonly ResolvedRenameStatement[];
-    readonly fromContract: ContractWithDomain;
-    readonly contract: MongoContract;
-  },
-): StatementOutcome {
-  const refuse = (reason: string, why: string): StatementOutcome => ({
-    kind: 'refused',
-    conflict: refused(statement, label, reason, why),
-  });
+  input: PlanningInput,
+): StatementOutcome | undefined {
+  const refuse = (reason: string, why: string) =>
+    refusedOutcome(statement, `${label}: ${reason}`, why);
   const embeddedFrom = embeddedModelReason(input.fromContract, statement.from);
   const embeddedTo = embeddedModelReason(input.contract, statement.to);
-  if (embeddedFrom !== undefined && embeddedTo !== undefined) return { kind: 'unchanged' };
+  if (embeddedFrom !== undefined && embeddedTo !== undefined) return UNCHANGED;
   const embedded = embeddedFrom ?? embeddedTo;
   if (embedded !== undefined) {
     return refuse(
@@ -453,15 +619,13 @@ function planFieldStatement(
       `Renaming an embedded relation is not supported in this release. ${LEAVE_OUT}`,
     );
   }
-  if (fromField.kind !== 'field' && toField.kind !== 'field') return { kind: 'unchanged' };
+  if (fromField.kind !== 'field' && toField.kind !== 'field') return UNCHANGED;
   if (fromField.kind !== 'field' || toField.kind !== 'field') {
     return refuse(
       'the field is stored in documents on one side of the statement only',
       `A relation is not stored in documents, so a statement cannot rename a field to or from one. ${LEAVE_OUT}`,
     );
   }
-  const fromStored = resolvedStoredNameAt(input.fromContract, statement.from);
-  const toStored = resolvedStoredNameAt(input.contract, statement.to);
   const originCollection = collectionOfModel(input.fromContract.domain, statement.from);
   const destinationCollection = collectionOfModel(input.contract.domain, statement.to);
   if (originCollection === undefined || destinationCollection === undefined) {
@@ -470,46 +634,124 @@ function planFieldStatement(
       `A statement renames a field in the documents of its model's collection. ${LEAVE_OUT}`,
     );
   }
-  const collection = renamedCollections.get(originCollection) ?? originCollection;
-  if (fromStored === toStored && collection === destinationCollection) {
-    return { kind: 'unchanged' };
+  return undefined;
+}
+
+/** Why the plan does not rename a collection a field rename statement's model moves between. */
+function unrenamedCollectionWhy(statement: ResolvedFieldRenameStatement): string {
+  if (!sameModel(statement.from, statement.to)) {
+    return `Add --rename ${modelDisplayName(statement.from)}:${modelDisplayName(statement.to)} before this statement, so the collection is renamed with its documents.`;
   }
+  return `The plan renames a collection only when every model stored in it moves to the same new collection, its control policy is "managed" in both contracts, and the schema being planned from has the old collection and not the new one, so the field would be renamed in a collection the destination does not store the model in. ${LEAVE_OUT}`;
+}
+
+/**
+ * Plans a field rename, of a statement or of a field both contracts name alike, in the documents
+ * of its model's collection once the collection renames are made. A rename no statement asks for
+ * renames nothing in a collection the plan does not rename to the model's new collection, does not
+ * keep, or does not manage in both contracts; the plan then is what it is without the rename.
+ */
+function planFieldRename(
+  rename: FieldRename,
+  statementLabel: string | undefined,
+  renamedCollections: ReadonlyMap<string, string>,
+  schema: MongoSchemaIR,
+  renames: readonly FieldRename[],
+  input: PlanningInput,
+): StatementOutcome {
+  const { statement } = rename;
+  if (statement !== undefined && statementLabel !== undefined) {
+    const refusal = fieldStatementRefusal(statement, statementLabel, input);
+    if (refusal !== undefined) return refusal;
+  } else if (
+    embeddedModelReason(input.fromContract, rename.from) !== undefined ||
+    embeddedModelReason(input.contract, rename.to) !== undefined
+  ) {
+    return UNCHANGED;
+  }
+  const fromStored = resolvedStoredNameAt(input.fromContract, rename.from);
+  const toStored = resolvedStoredNameAt(input.contract, rename.to);
+  const originCollection = collectionOfModel(input.fromContract.domain, rename.from);
+  const destinationCollection = collectionOfModel(input.contract.domain, rename.to);
+  if (originCollection === undefined || destinationCollection === undefined) return UNCHANGED;
+  const collection = renamedCollections.get(originCollection) ?? originCollection;
+  if (
+    fromStored === toStored &&
+    (statement === undefined || collection === destinationCollection)
+  ) {
+    return UNCHANGED;
+  }
+  if (
+    statement === undefined &&
+    (collection !== destinationCollection ||
+      schema.collection(collection) === undefined ||
+      declaredControlPolicy(input.fromContract, originCollection) !== 'managed' ||
+      declaredControlPolicy(input.contract, destinationCollection) !== 'managed')
+  ) {
+    return UNCHANGED;
+  }
+  const label =
+    statementLabel ??
+    `Cannot rename field "${fromStored}" to "${toStored}" in collection "${collection}"`;
+  const changed =
+    statement === undefined
+      ? capitalized(storedNameChangeText(rename.from, fromStored, toStored))
+      : undefined;
+  const refuse = (reason: string, why: string) =>
+    refusedOutcome(statement, `${label}: ${reason}`, why);
   if (fromStored === '_id' || toStored === '_id') {
-    return refuse('it renames _id', `MongoDB does not let a document change its _id. ${LEAVE_OUT}`);
+    return refuse(
+      'it renames _id',
+      changed === undefined
+        ? `MongoDB does not let a document change its _id. ${LEAVE_OUT}`
+        : `${changed}, and MongoDB does not let a document change its _id. Keep the stored name ${JSON.stringify(fromStored)} (with @map(${JSON.stringify(fromStored)}) in PSL), then run this command again.`,
+    );
   }
   const unsafeFrom = unrewritableFieldNameReason(fromStored);
   if (unsafeFrom !== undefined) {
     return refuse(
       `the stored name "${fromStored}" cannot be rewritten`,
-      `${unsafeFrom}, so a statement cannot move its values. Rename it in the database yourself, or ${LEAVE_OUT.toLowerCase()}`,
+      changed === undefined
+        ? `${unsafeFrom}, so a statement cannot move its values. Rename it in the database yourself, or ${LEAVE_OUT.toLowerCase()}`
+        : `${changed}. ${unsafeFrom}, so the plan cannot move its values. Keep the stored name ${JSON.stringify(fromStored)} (with @map(${JSON.stringify(fromStored)}) in PSL), then run this command again.`,
     );
   }
   const unsafeTo = unrewritableFieldNameReason(toStored);
   if (unsafeTo !== undefined) {
     return refuse(
       `the stored name "${toStored}" cannot be written`,
-      `${unsafeTo}. Give the field a stored name without "." that does not start with "$" (with @map), or ${LEAVE_OUT.toLowerCase()}`,
+      changed === undefined
+        ? `${unsafeTo}. Give the field a stored name without "." that does not start with "$" (with @map), or ${LEAVE_OUT.toLowerCase()}`
+        : `${changed}. ${unsafeTo}. Give the field a stored name without "." that does not start with "$" (with @map), then run this command again.`,
     );
   }
-  if (collection !== destinationCollection) {
+  if (statement !== undefined && collection !== destinationCollection) {
     return refuse(
-      `the model's collection changes from "${originCollection}" to "${destinationCollection}", and no statement renames it`,
-      collectionChangeAdvice(statement, originCollection, destinationCollection),
+      `the model's collection changes from "${originCollection}" to "${destinationCollection}", and the plan does not rename it`,
+      unrenamedCollectionWhy(statement),
     );
   }
   if (schema.collection(collection)?.options?.timeseries !== undefined) {
     return refuse(
       `collection "${collection}" is a time-series collection`,
-      `${TIME_SERIES_UPDATES}, so a statement cannot move the values of a field in them. Keep the stored name: store the field as ${JSON.stringify(fromStored)} (with @map(${JSON.stringify(fromStored)}) in PSL), then run this command again without this statement.`,
+      changed === undefined
+        ? `${TIME_SERIES_UPDATES}, so a statement cannot move the values of a field in them. Keep the stored name: store the field as ${JSON.stringify(fromStored)} (with @map(${JSON.stringify(fromStored)}) in PSL), then run this command again without this statement.`
+        : `${changed}, and ${TIME_SERIES_UPDATES}, so the plan cannot move the values of a field in them. Keep the stored name: store the field as ${JSON.stringify(fromStored)} (with @map(${JSON.stringify(fromStored)}) in PSL), then run this command again.`,
     );
   }
-  const policyRefusal = controlPolicyRefusal(statement, label, input.contract, collection);
-  if (policyRefusal !== undefined) return policyRefusal;
-  const variant = selectedVariantOf(input.fromContract.domain, statement.from);
+  if (statement !== undefined && statementLabel !== undefined) {
+    const policyRefusal = controlPolicyRefusal(
+      statement,
+      statementLabel,
+      input.contract,
+      collection,
+    );
+    if (policyRefusal !== undefined) return policyRefusal;
+  }
+  const variant = selectedVariantOf(input.fromContract.domain, rename.from);
   const renamedTogether = new Set(
-    input.statements.flatMap((other) =>
-      other.entity === 'field' &&
-      other.from.namespaceId === statement.from.namespaceId &&
+    renames.flatMap((other) =>
+      other.from.namespaceId === rename.from.namespaceId &&
       storedFieldNameAt(input.fromContract, other.from) === fromStored &&
       storedFieldNameAt(input.contract, other.to) === toStored
         ? [other.from.model]
@@ -518,20 +760,21 @@ function planFieldStatement(
   );
   const others = otherModelsReached(
     input.fromContract.domain,
-    statement.from,
+    rename.from,
     originCollection,
     variant,
     fromStored,
   ).filter((name) => !renamedTogether.has(name));
   if (others.length > 0) {
+    const sharedWhy = `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${SEPARATE_THE_MODELS}.`;
     return refuse(
       `model ${others.map((name) => JSON.stringify(name)).join(', ')} stores field ${JSON.stringify(fromStored)} in the same collection, ${JSON.stringify(collection)}`,
-      `${sharedCollectionWhy(collection, others, 'renaming the field would rename it in the documents')} To change it, ${SEPARATE_THE_MODELS}.`,
+      changed === undefined ? sharedWhy : `${changed}. ${sharedWhy}`,
     );
   }
   const selected =
     variant === undefined
-      ? rootDocumentsLosing(input.contract, statement.to, fromStored)
+      ? rootDocumentsLosing(input.contract, rename.to, fromStored)
       : {
           filter: variantFilter(variant),
           discriminatorFilter: variantDiscriminatorFilter(variant),
@@ -545,31 +788,20 @@ function planFieldStatement(
   };
 }
 
-function collectionChangeAdvice(
-  statement: ResolvedFieldRenameStatement,
-  from: string,
-  to: string,
-): string {
-  if (!sameModel(statement.from, statement.to)) {
-    return `Add --rename ${modelDisplayName(statement.from)}:${modelDisplayName(statement.to)} before this statement, so the collection is renamed with its documents.`;
-  }
-  return `A statement cannot rename the collection of a model that keeps its name. Rename the collection in a step of its own first: change only @@map and emit the contract. ${renameCollectionByHandSteps(statement.from, from, to)} Then change the field and run this statement again.`;
-}
-
 function renameCollectionByHandSteps(model: ModelCoordinate, from: string, to: string): string {
   return `With db update, rename the collection in the database yourself, for example db.getCollection(${JSON.stringify(from)}).renameCollection(${JSON.stringify(to)}) in mongosh, then run db update. With migration plan, plan it, passing --delete ${modelDisplayName(model)} to answer its question; in its migration.ts make renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)}) the first operation, imported with the other operations, delete the drop of "${from}", and delete the create of "${to}" if there is one; run node on that migration.ts so it writes ops.json again; then apply it with prisma db migrate.`;
 }
 
 /**
  * How to keep the documents of a model that keeps its name while its collection changes from
- * `from` to `to`: no statement can rename that collection, so the user renames it by hand.
+ * `from` to `to` and the plan does not rename the collection: the user renames it by hand.
  */
 export function keepCollectionByHandAdvice(
   model: ModelCoordinate,
   from: string,
   to: string,
 ): string {
-  return `To keep its documents, rename collection "${from}" to "${to}" instead; a statement cannot rename the collection of a model that keeps its name. ${renameCollectionByHandSteps(model, from, to)}`;
+  return `To keep its documents, rename collection "${from}" to "${to}" instead. The plan does not rename it: a plan renames the collection of a model that keeps its name only when the control policy of the collection is "managed" in both contracts. ${renameCollectionByHandSteps(model, from, to)}`;
 }
 
 export interface FieldRemoval {
@@ -664,6 +896,8 @@ function sameVariant(a: SelectedVariant | undefined, b: SelectedVariant | undefi
 /** What finding a model or field of one contract in the other reads: the renames, both contracts, and the collection each origin collection becomes. */
 export interface ModelMatchInput {
   readonly statements: readonly ResolvedRenameStatement[];
+  /** The field renames the plan makes, those of its statements and those no statement asks for. */
+  readonly fieldRenames: readonly FieldRename[];
   readonly fromContract: ContractWithDomain;
   readonly contract: MongoContract;
   readonly collectionAfterRenames: (collection: string) => string;
@@ -684,41 +918,31 @@ function sameField(a: FieldCoordinate, b: FieldCoordinate): boolean {
   return sameModel(a, b) && a.field === b.field;
 }
 
-/** The name a field of the origin has in the destination: its rename statement's new name, else its own. */
+/** The name a field of the origin has in the destination: its rename's new name, else its own. */
 export function destinationFieldOf(
   origin: FieldCoordinate,
-  statements: readonly ResolvedRenameStatement[],
+  fieldRenames: readonly FieldRename[],
 ): string {
-  const renamed = statements.find(
-    (statement): statement is ResolvedFieldRenameStatement =>
-      statement.entity === 'field' && sameField(statement.from, origin),
-  );
-  return renamed?.to.field ?? origin.field;
+  return fieldRenames.find((rename) => sameField(rename.from, origin))?.to.field ?? origin.field;
 }
 
-/** The name a field of the destination had in the origin: its rename statement's old name, else its own. */
+/** The name a field of the destination had in the origin: its rename's old name, else its own. */
 export function originFieldOf(
   destination: FieldCoordinate,
-  statements: readonly ResolvedRenameStatement[],
+  fieldRenames: readonly FieldRename[],
 ): string {
-  const renamed = statements.find(
-    (statement): statement is ResolvedFieldRenameStatement =>
-      statement.entity === 'field' && sameField(statement.to, destination),
+  return (
+    fieldRenames.find((rename) => sameField(rename.to, destination))?.from.field ??
+    destination.field
   );
-  return renamed?.from.field ?? destination.field;
 }
 
 export interface FieldRemovalInput extends ModelMatchInput {
   readonly keptCollections: ReadonlySet<string>;
 }
 
-function renamedByStatement(input: FieldRemovalInput, field: FieldCoordinate): boolean {
-  return input.statements.some(
-    (statement) =>
-      statement.entity === 'field' &&
-      sameModel(statement.from, field) &&
-      statement.from.field === field.field,
-  );
+function renamed(input: FieldRemovalInput, field: FieldCoordinate): boolean {
+  return input.fieldRenames.some((rename) => sameField(rename.from, field));
 }
 
 /** Whether one of `model`'s own fields or embed relations is stored under `storedName`. */
@@ -798,13 +1022,12 @@ function storedNameMoves(
   const destination = destinationModelOf(origin, input);
   const destinationModel =
     destination === undefined ? undefined : modelAt(input.contract, destination);
-  return input.statements.flatMap((statement) => {
-    if (statement.entity !== 'field') return [];
-    const from = storedFieldNameAt(input.fromContract, statement.from);
-    const to = storedFieldNameAt(input.contract, statement.to);
+  return input.fieldRenames.flatMap((rename) => {
+    const from = storedFieldNameAt(input.fromContract, rename.from);
+    const to = storedFieldNameAt(input.contract, rename.to);
     if (from === undefined || to === undefined || from === to) return [];
-    if (sameModel(statement.from, origin)) return [{ from, to }];
-    const fromModel = modelAt(input.fromContract, statement.from);
+    if (sameModel(rename.from, origin)) return [{ from, to }];
+    const fromModel = modelAt(input.fromContract, rename.from);
     const ofABase = fromModel !== undefined && bases.includes(fromModel);
     const keptByDestination = destinationModel !== undefined && ownStores(destinationModel, from);
     return ofABase && !keptByDestination ? [{ from, to }] : [];
@@ -820,7 +1043,7 @@ export function storedFieldsKeptOf(input: ModelMatchInput, origin: ModelCoordina
 }
 
 /**
- * The stored names that field rename statements move a field of `origin`'s documents into from
+ * The stored names that field renames move a field of `origin`'s documents into from
  * another stored name. The origin's own field under such a name no longer has a place in the
  * destination's documents, so it is removed.
  */
@@ -833,7 +1056,7 @@ function storedNamesRenamedInto(
 
 /**
  * Each field an origin model stores that its destination model no longer stores, or whose stored
- * name a rename statement gives to another of its fields, in a collection
+ * name a rename gives to another of its fields, in a collection
  * the plan keeps: removing it is data loss, carried out by unsetting it from the documents that
  * hold it, in a collection whose control policy is `managed`. A variant's field is unset only from that variant's documents, by the discriminator value they hold once the plan's replacements ran, unless its destination
  * base now stores it. A base field is unset from the documents of every variant that does not now
@@ -875,7 +1098,7 @@ export function planFieldRemovals(input: FieldRemovalInput): readonly FieldRemov
       .filter(
         ([field, storedName]) =>
           unrewritableFieldNameReason(storedName) === undefined &&
-          !renamedByStatement(input, { ...origin, field }),
+          !renamed(input, { ...origin, field }),
       )
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .flatMap(([field, storedName]) => {

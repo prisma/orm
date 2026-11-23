@@ -103,11 +103,11 @@ export function documentsNotRewrittenWarnings(
     if (after === undefined || before === undefined) return [];
     if (embeddedModelReason(input.contract, model) !== undefined) {
       const fieldName = (field: string) => fieldStatementText(input.contract, { ...model, field });
-      const originField = (field: string) => originFieldOf({ ...model, field }, input.statements);
+      const originField = (field: string) => originFieldOf({ ...model, field }, input.fieldRenames);
       return embeddedModelChanges(fieldName, originField, model.model, before, after).map(warning);
     }
     return Object.entries(after.fields).flatMap(([field, definition]) => {
-      const originField = originFieldOf({ ...model, field }, input.statements);
+      const originField = originFieldOf({ ...model, field }, input.fieldRenames);
       if (!Object.hasOwn(before.fields, originField)) return [];
       const previous = before.fields[originField];
       const change =

@@ -35,6 +35,7 @@ import {
   modelAt,
   modelCoordinates,
 } from './mongo-statement-planning';
+import type { FieldRename } from './mongo-storage-renames';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
 type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertStatement;
@@ -77,8 +78,10 @@ export interface VariantInput {
   readonly collectionAfterRenames: (collection: string) => string;
   /** The plan's replacements of enum values, one of which may already move a variant's discriminator value. */
   readonly enumReplacements: readonly ReplaceStoredValueCall[];
-  /** The plan's renames of fields, as stored. */
-  readonly fieldRenames: readonly {
+  /** The plan's field renames, those of its statements and those no statement asks for. */
+  readonly fieldRenames: readonly FieldRename[];
+  /** The calls of the plan's field renames, as stored. */
+  readonly fieldRenameCalls: readonly {
     readonly collection: string;
     readonly from: string;
     readonly to: string;
@@ -123,6 +126,7 @@ function destinationOf(
     ),
     fromContract,
     contract: input.contract,
+    fieldRenames: input.fieldRenames,
     collectionAfterRenames: input.collectionAfterRenames,
   });
 }
@@ -323,7 +327,7 @@ function unrenamedDiscriminatorRefusal(
   input: VariantInput,
   fromContract: ContractWithDomain,
 ): MigrationPlannerConflict | undefined {
-  const renamed = input.fieldRenames.some(
+  const renamed = input.fieldRenameCalls.some(
     (rename) =>
       rename.collection === change.collection &&
       rename.from === change.originField &&
@@ -338,6 +342,7 @@ function unrenamedDiscriminatorRefusal(
           fromContract,
           contract: input.contract,
           statements: input.statements,
+          fieldRenames: input.fieldRenames,
         });
   const field = quoted(change.field);
   const discriminator =
