@@ -40,7 +40,7 @@ The application code names only published packages. `package.json` and `tsconfig
 
 ## Add a Better Auth plugin
 
-Plugins add models and fields to Better Auth. After you add a plugin to `src/lib/auth.ts`, run `pnpm auth generate`: it prints the models and fields your contract lacks and writes nothing. Add them to `prisma/contract.prisma`, run `pnpm emit` and `pnpm prisma db update`, and `pnpm auth generate` then prints `Your schema is already up to date.`. `prisma db update` makes the database match the contract, so it plans to drop any table the contract has no model for and asks you to confirm each one; in a database that holds only this application's tables there is none to drop. The [adapter's README](../../packages/9-public/@prisma/orm-better-auth/README.md#when-the-contract-is-missing-something) explains the message and the options.
+Plugins add models and fields to Better Auth. After you add a plugin to `src/lib/auth.ts`, run `pnpm auth generate`: it prints the models and fields your contract lacks and writes nothing. Add them to `prisma/contract.prisma`, run `pnpm emit` and `pnpm prisma db update`, and `pnpm auth generate` then prints `Your schema is already up to date.`. `prisma db update` makes the database match the contract, so it plans to drop any table the contract has no model for and asks you to confirm each one. Do not confirm a deletion you did not expect. The [adapter's README](../../packages/9-public/@prisma/orm-better-auth/README.md#when-the-contract-is-missing-something) explains the message and the options.
 
 ## Test
 
