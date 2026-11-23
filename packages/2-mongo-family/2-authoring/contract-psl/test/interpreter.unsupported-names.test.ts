@@ -20,6 +20,17 @@ function diagnosticsOf(schema: string) {
     : result.failure.diagnostics.map(({ code, message }) => ({ code, message }));
 }
 
+function placedDiagnosticsOf(schema: string) {
+  const result = interpretMongoContract(schema, lookups);
+  return result.ok
+    ? []
+    : result.failure.diagnostics.map(({ code, message, span }) => ({
+        code,
+        message,
+        start: span?.start,
+      }));
+}
+
 const reason =
   'which JavaScript reads as the prototype of an object rather than as a key. Choose another name.';
 
@@ -47,13 +58,76 @@ describe('a Mongo schema naming something __proto__', () => {
 
   it('refuses a field named __proto__ that is stored under another name', () => {
     expect(
-      diagnosticsOf(
+      placedDiagnosticsOf(
         'model Item {\n  id ObjectId @id @map("_id")\n  __proto__ String @map("proto")\n}',
       ),
     ).toEqual([
       {
         code: 'PSL_STORED_NAME_UNSUPPORTED',
-        message: `Field "Item.__proto__" is named "__proto__", ${reason}`,
+        message: `A field of model "Item" is named "__proto__", ${reason}`,
+        start: expect.objectContaining({ line: 3, column: 3 }),
+      },
+    ]);
+  });
+
+  it('refuses a composite type member named __proto__', () => {
+    expect(
+      placedDiagnosticsOf(
+        'type Addr {\n  __proto__ String\n}\nmodel Item {\n  id ObjectId @id @map("_id")\n  a Addr\n}',
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_STORED_NAME_UNSUPPORTED',
+        message: `A field of composite type "Addr" is named "__proto__", ${reason}`,
+        start: expect.objectContaining({ line: 2, column: 3 }),
+      },
+    ]);
+  });
+
+  it('refuses a relation named __proto__', () => {
+    expect(
+      placedDiagnosticsOf(
+        [
+          'model User {',
+          '  id ObjectId @id @map("_id")',
+          '  postId ObjectId',
+          '  __proto__ Post @relation(fields: [postId], references: [id])',
+          '}',
+          'model Post {',
+          '  id ObjectId @id @map("_id")',
+          '  users User[]',
+          '}',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_STORED_NAME_UNSUPPORTED',
+        message: `A relation of model "User" is named "__proto__", ${reason}`,
+        start: expect.objectContaining({ line: 4, column: 3 }),
+      },
+    ]);
+  });
+
+  it('refuses a back relation named __proto__', () => {
+    expect(
+      placedDiagnosticsOf(
+        [
+          'model User {',
+          '  id ObjectId @id @map("_id")',
+          '  __proto__ Post[]',
+          '}',
+          'model Post {',
+          '  id ObjectId @id @map("_id")',
+          '  userId ObjectId',
+          '  user User @relation(fields: [userId], references: [id])',
+          '}',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_STORED_NAME_UNSUPPORTED',
+        message: `A relation of model "User" is named "__proto__", ${reason}`,
+        start: expect.objectContaining({ line: 3, column: 3 }),
       },
     ]);
   });
