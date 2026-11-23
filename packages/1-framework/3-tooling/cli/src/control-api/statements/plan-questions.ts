@@ -649,80 +649,16 @@ export interface KeptSubject {
 }
 
 /**
- * How a command says to keep the data of the subject `subject`: with its edits, when the target gives any, or by changing a member that keeps its name. `kept` are the subjects of the round's questions whose data the command may say how to keep, `subject` among them, in question order; a plan keeps their data together.
+ * How a command says to keep the data of the subject `subject`: with the edits the target gives. `kept` are the subjects of the round's questions whose data the command may say how to keep, `subject` among them, in question order; a plan keeps their data together.
  */
 export type KeepDataEditAdvice = (
   subject: KeptSubject,
   kept: readonly KeptSubject[],
 ) => KeepDataAdvice;
 
-function enumMembers(
-  contract: ContractWithDomain,
-  value: EnumValueCoordinate,
-): readonly { readonly name: string; readonly value: unknown }[] {
-  return domainEnum(contract, value.namespaceId, value.enum)?.members ?? [];
-}
-
-function booleanEnum(contract: ContractWithDomain, value: EnumValueCoordinate): boolean {
-  return enumMembers(contract, value).some((member) => typeof member.value === 'boolean');
-}
-
-/**
- * Whether a command may say how to keep the subject's data: the target gives edits that keep it, or
- * it is an enum value whose member keeps its name with a new stored value, in an enum whose values
- * are not booleans, since a boolean enum has no unused value to pass through.
- */
-function keepsDataByCommand(
-  subject: MigrationSubject,
-  edits: readonly KeepDataEdit[],
-  contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): boolean {
-  return (
-    edits.length > 0 ||
-    (subject.kind === 'enumValue' &&
-      inDestination(subject, contracts) &&
-      !booleanEnum(contracts.origin, subject))
-  );
-}
-
-function sameStoredValue(left: unknown, right: unknown): boolean {
-  return left !== undefined && JSON.stringify(left) === JSON.stringify(right);
-}
-
-/**
- * Whether an enum member takes the stored value of another member the destination still has, under
- * its name or the name a rename gives it, or gives its own stored value to one: the overlap for which
- * a target advises two migrations, since one rewrite writes a value another reads. A command's own
- * route for the members changes them all together.
- */
-function sharesValueWithKeptMember(
-  subject: MigrationSubject,
-  contracts: StatementContracts & { readonly destination: ContractWithDomain },
-): boolean {
-  if (subject.kind !== 'enumValue') return false;
-  const destinationEnum = renamedEnumValue(subject, contracts) ?? subject;
-  const renamedTo = new Map(
-    resolvedRenames(contracts).flatMap((statement) =>
-      statement.kind === 'rename' &&
-      statement.entity === 'enumValue' &&
-      statement.from.namespaceId === subject.namespaceId &&
-      statement.from.enum === subject.enum
-        ? [[statement.from.member, statement.to.member] as const]
-        : [],
-    ),
-  );
-  const destinationMembers = enumMembers(contracts.destination, destinationEnum);
-  const newValue = (member: string) =>
-    destinationMembers.find(({ name }) => name === (renamedTo.get(member) ?? member))?.value;
-  const originMembers = enumMembers(contracts.origin, subject);
-  const oldValue = originMembers.find(({ name }) => name === subject.member)?.value;
-  return originMembers.some(
-    (other) =>
-      other.name !== subject.member &&
-      newValue(other.name) !== undefined &&
-      (sameStoredValue(newValue(subject.member), other.value) ||
-        sameStoredValue(oldValue, newValue(other.name))),
-  );
+/** Whether a command may say how to keep the subject's data: the target gives edits that keep it. */
+function keepsDataByCommand(edits: readonly KeepDataEdit[]): boolean {
+  return edits.length > 0;
 }
 
 /**
@@ -901,8 +837,7 @@ function quotedList(items: readonly string[]): string {
  * other renames, and its old name must be the subject. Anything else, and data no model stores,
  * can only be deleted. A field whose model the destination names differently can be renamed only
  * after a statement renames the model, so the question says to pass one. The question ends with
- * the planner's advice on keeping the data, when it gives any, except for enum members that share
- * stored values when the command gives its own route for them.
+ * the planner's advice on keeping the data, when it gives any.
  */
 export function dataLossQuestion(
   loss: PlannedDataLoss,
@@ -914,26 +849,19 @@ export function dataLossQuestion(
   const deleteNames = namesSubject('delete', subject);
   const missingModel = missingFieldModel(loss.subject, contracts);
   const keepData =
-    contracts.keepDataEditAdvice === undefined ||
-    !keepsDataByCommand(loss.subject, edits, contracts)
+    contracts.keepDataEditAdvice === undefined || !keepsDataByCommand(edits)
       ? undefined
       : contracts.keepDataEditAdvice(
           { subject: loss.subject, text: subject, edits },
           contracts.keptSubjects ?? [{ subject: loss.subject, text: subject, edits }],
         );
-  const commandRoutesSharedValues =
-    keepData !== undefined &&
-    keepData.ways.length > 0 &&
-    sharesValueWithKeptMember(loss.subject, contracts);
   const lost = lossText(loss.subject, subject, contracts.originKnown, loss.loss);
   const operations = [...new Set(labels)];
   const advice = [
     ...typeChangeNote(loss, contracts.canConvert),
     ...changedVariantNote(loss.subject, contracts),
     ...(missingModel === undefined ? [] : [modelRenameAdvice(missingModel, contracts)]),
-    ...(loss.keepDataAdvice === undefined || commandRoutesSharedValues
-      ? []
-      : [loss.keepDataAdvice]),
+    ...(loss.keepDataAdvice === undefined ? [] : [loss.keepDataAdvice]),
     ...(keepData?.lead === undefined ? [] : [keepData.lead]),
     ...(keepData?.ways ?? []),
     ...newRequiredFieldNote(loss.subject, contracts),
@@ -1309,7 +1237,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
     const roundContracts = {
       ...contracts,
       keptSubjects: losses
-        .filter((loss) => keepsDataByCommand(loss.subject, editsOf(loss), contracts))
+        .filter((loss) => keepsDataByCommand(editsOf(loss)))
         .map((loss) => ({
           subject: loss.subject,
           text: subjectText(loss.subject, contracts),

@@ -122,7 +122,7 @@ describe('a question about an enum value', () => {
     ]);
   });
 
-  it('offers only delete for a value whose member keeps its name, with one advice that covers every column', async () => {
+  it('offers only delete for a value whose member the destination keeps, with one advice from the edits of every column', async () => {
     const changed = contractOf({
       app: { models: { Task: { fields: ['status'] } }, enums: { Status: ['OPEN', 'ARCHIVED'] } },
     });
@@ -185,7 +185,7 @@ describe('a question about an enum value', () => {
     ]);
   });
 
-  it('asks the command how to keep the data of every member that keeps its name, with or without an edit, naming them in question order', async () => {
+  it('asks the command how to keep the data only of the members the target gives edits for', async () => {
     const withOld = contractOf({
       app: {
         models: { Task: { fields: ['status'] } },
@@ -238,13 +238,10 @@ describe('a question about an enum value', () => {
     });
 
     expect(asked.map(({ subject, keepDataWays }) => ({ subject, keepDataWays }))).toEqual([
-      {
-        subject: 'Status.ARCHIVED',
-        keepDataWays: ['Keep Status.ARCHIVED with 0 edits among Status.ARCHIVED, Status.OPEN.'],
-      },
+      { subject: 'Status.ARCHIVED', keepDataWays: undefined },
       {
         subject: 'Status.OPEN',
-        keepDataWays: ['Keep Status.OPEN with 1 edits among Status.ARCHIVED, Status.OPEN.'],
+        keepDataWays: ['Keep Status.OPEN with 1 edits among Status.OPEN.'],
       },
       { subject: 'Status.OLD', keepDataWays: undefined },
     ]);
@@ -296,141 +293,5 @@ describe('a question about an enum value', () => {
     expect(
       asked[0]?.validate('rename', 'finance.Status.ARCHIVED:finance.Status.RETIRED'),
     ).toBeUndefined();
-  });
-});
-
-describe("an enum member's planner advice beside the command's own route", () => {
-  const withValues = (members: Readonly<Record<string, string | boolean>>) => {
-    const contract = contractOf({
-      app: { models: { Task: { fields: ['status'] } }, enums: { Status: Object.keys(members) } },
-    });
-    const app = contract.domain.namespaces['app'];
-    const status = app?.enum?.['Status'];
-    if (app === undefined || status === undefined) throw new Error('Expected enum Status');
-    return {
-      ...contract,
-      domain: {
-        ...contract.domain,
-        namespaces: {
-          app: {
-            ...app,
-            enum: {
-              Status: {
-                ...status,
-                members: Object.entries(members).map(([name, value]) => ({ name, value })),
-              },
-            },
-          },
-        },
-      },
-    };
-  };
-  const member = (name: string) => ({ ...archived, member: name });
-  const BEFORE = withValues({ ACTIVE: 'active', ARCHIVED: 'archived' });
-
-  async function askedOf(
-    origin: ReturnType<typeof withValues>,
-    destination: ReturnType<typeof withValues>,
-    members: readonly string[],
-    commandWays: readonly string[],
-  ) {
-    const asked: PlanQuestion[] = [];
-    await askPlanQuestions({
-      plan: {
-        dataLoss: members.map((name, index) => ({
-          operationIndex: index,
-          label: `Remove value of ${name}`,
-          loss: 'drop' as const,
-          subject: member(name),
-          keepDataAdvice: `Planner advice for ${name}.`,
-        })),
-        accessChanges: [],
-        temporaryValues: [],
-      },
-      askAccess: false,
-      canConvert: false,
-      statements: [],
-      preAnswers: [],
-      consentAll: { delete: false, allow: false },
-      origin,
-      originKnown: true,
-      destination,
-      keepDataEditAdvice: () => ({ lead: undefined, ways: commandWays }),
-      answer: async (batch) => {
-        asked.push(...batch);
-        return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
-      },
-      replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
-    });
-    return asked;
-  }
-
-  async function waysOf(
-    destination: ReturnType<typeof withValues>,
-    members: readonly string[],
-    commandWays: readonly string[],
-  ) {
-    return (await askedOf(BEFORE, destination, members, commandWays)).map(
-      ({ subject, question }) => ({ subject, planner: question.includes('Planner advice') }),
-    );
-  }
-
-  it('leaves out the planner advice for members that swap stored values when the command gives its own route', async () => {
-    const swapped = withValues({ ACTIVE: 'archived', ARCHIVED: 'active' });
-    expect({
-      commandRoute: await waysOf(swapped, ['ACTIVE', 'ARCHIVED'], ['Two runs.']),
-      noCommandRoute: await waysOf(swapped, ['ACTIVE', 'ARCHIVED'], []),
-    }).toEqual({
-      commandRoute: [
-        { subject: 'Status.ACTIVE', planner: false },
-        { subject: 'Status.ARCHIVED', planner: false },
-      ],
-      noCommandRoute: [
-        { subject: 'Status.ACTIVE', planner: true },
-        { subject: 'Status.ARCHIVED', planner: true },
-      ],
-    });
-  });
-
-  it('leaves out the planner advice for every member of a chain when the command gives its own route', async () => {
-    expect(
-      await waysOf(
-        withValues({ ACTIVE: 'archived', ARCHIVED: 'gone' }),
-        ['ACTIVE', 'ARCHIVED'],
-        ['Two runs.'],
-      ),
-    ).toEqual([
-      { subject: 'Status.ACTIVE', planner: false },
-      { subject: 'Status.ARCHIVED', planner: false },
-    ]);
-  });
-
-  it('gives no command route for a boolean enum, which has no unused stored value, and keeps the planner advice', async () => {
-    const asked = await askedOf(
-      withValues({ ACTIVE: true, ARCHIVED: false }),
-      withValues({ ACTIVE: false, ARCHIVED: true }),
-      ['ACTIVE', 'ARCHIVED'],
-      ['Two runs.'],
-    );
-    expect(
-      asked.map(({ subject, question }) => ({
-        subject,
-        planner: question.includes('Planner advice'),
-        command: question.includes('Two runs.'),
-      })),
-    ).toEqual([
-      { subject: 'Status.ACTIVE', planner: true, command: false },
-      { subject: 'Status.ARCHIVED', planner: true, command: false },
-    ]);
-  });
-
-  it('keeps the planner advice for a member that takes the stored value of a member the destination no longer has', async () => {
-    expect(
-      await waysOf(
-        withValues({ ACTIVE: 'archived', RETIRED: 'retired' }),
-        ['ACTIVE'],
-        ['Two runs.'],
-      ),
-    ).toEqual([{ subject: 'Status.ACTIVE', planner: true }]);
   });
 });
