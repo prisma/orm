@@ -10,6 +10,7 @@ import {
 } from '@prisma/orm-framework/psl-parser/syntax';
 import type { ContractComparison } from '../contract/compare';
 import { type PrintedBlock, printPsl, renderBlocks } from '../contract/print-psl';
+import { modelNameCandidates } from '../models/model-lookup';
 import { assertOnlyAdditions, listOf, notChanged } from './refusal';
 
 export interface ContractSourceFile {
@@ -86,63 +87,120 @@ function parsedModels<F extends ContractSourceFile>(
   return models;
 }
 
-/** The string an attribute such as `@map("x")` or `@@map("x")` names, read from the syntax tree; `undefined` when the attributes have no such attribute with a string. */
-function attributeString(
+/** The name `@map("x")` or `@@map("x")` gives, read as the contract emitter reads it: the first `map` attribute, and its first positional argument when that is a string. */
+function mappedName(
   attributes: Iterable<FieldAttributeAst | ModelAttributeAst>,
-  name: string,
 ): string | undefined {
   for (const attribute of attributes) {
     const path = attribute.name()?.path() ?? [];
-    if (path.length !== 1 || path[0] !== name) continue;
-    for (const argument of attribute.argList()?.args() ?? []) {
-      const argumentName = argument.name()?.name();
-      if (argumentName !== undefined && argumentName !== 'name') continue;
-      const value = argument.value();
-      if (value instanceof StringLiteralExprAst) return value.value();
-    }
+    if (path.length !== 1 || path[0] !== 'map') continue;
+    const [first] = [...(attribute.argList()?.args() ?? [])].filter(
+      (argument) => argument.name() === undefined,
+    );
+    const value = first?.value();
+    return value instanceof StringLiteralExprAst ? value.value() : undefined;
   }
   return undefined;
 }
 
-interface StaleDeclaration {
+/** A declaration the adapter will find, which the emitted contract does not have yet. */
+interface AheadOfEmit {
   readonly name: string;
   readonly path: string;
 }
 
-/** The fields the model already declares that the block would add: by name, or stored in a column the block adds. */
-function staleFields(
-  block: PrintedBlock,
-  { file, declaration }: DeclaredModel,
-): StaleDeclaration[] {
-  const additions = new Set(block.fieldNames);
-  const columns = new Set(block.columns);
-  return [...declaration.fields()].flatMap((field) => {
-    const name = field.name()?.name();
-    if (name === undefined) return [];
-    if (additions.has(name)) return [{ name: `${block.modelName}.${name}`, path: file.path }];
-    const column = attributeString(field.attributes(), 'map') ?? name;
-    return columns.has(column)
-      ? [
-          {
-            name: `${block.modelName}.${name} (stored in the column "${column}")`,
-            path: file.path,
-          },
-        ]
-      : [];
-  });
+/** A declaration stored where Better Auth's model or field is stored, under a name the adapter does not look up. */
+interface StoredUnderAnotherName {
+  readonly path: string;
+  /** The declaration as the developer wrote it: the model's name, or the field's name after its model's. */
+  readonly declared: string;
+  /** The name alone, which Better Auth's renaming option would point at. */
+  readonly declaredName: string;
+  readonly storage: string;
+  readonly kind: 'model' | 'field';
+  readonly betterAuthName: string;
+  readonly renameTo: string;
 }
 
-/** The models of the namespace that the source already declares for a model the block would add: by name, or stored in its table. */
-function staleModels(block: PrintedBlock, models: readonly DeclaredModel[]): StaleDeclaration[] {
-  return models.flatMap(({ file, declaration }) => {
+interface Conflicts {
+  readonly aheadOfEmit: AheadOfEmit[];
+  readonly storedUnderAnotherName: StoredUnderAnotherName[];
+}
+
+function sameStorageName(a: string, b: string, comparison: ContractComparison): boolean {
+  return comparison.storageNamesIgnoreCase ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+/** What the model already declares that conflicts with the fields the block would add. A Better Auth field is found by its exact name. */
+function fieldConflicts(
+  block: PrintedBlock,
+  { file, declaration }: DeclaredModel,
+  comparison: ContractComparison,
+  into: Conflicts,
+): void {
+  const additions = new Set(block.fieldNames);
+  for (const field of declaration.fields()) {
+    const name = field.name()?.name();
+    if (name === undefined) continue;
+    if (additions.has(name)) {
+      into.aheadOfEmit.push({ name: `${block.modelName}.${name}`, path: file.path });
+      continue;
+    }
+    const column = mappedName(field.attributes()) ?? name;
+    const needed = block.columns.find((candidate) =>
+      sameStorageName(candidate, column, comparison),
+    );
+    if (needed === undefined) continue;
+    into.storedUnderAnotherName.push({
+      path: file.path,
+      declared: `${block.modelName}.${name}`,
+      declaredName: name,
+      storage: `the column "${column}"`,
+      kind: 'field',
+      betterAuthName: needed,
+      renameTo: needed,
+    });
+  }
+}
+
+/** The models of the namespace that conflict with a model the block would add: by a name the adapter looks the model up by, or by its table. */
+function modelConflicts(
+  block: PrintedBlock,
+  models: readonly DeclaredModel[],
+  comparison: ContractComparison,
+  into: Conflicts,
+): void {
+  const { physicalName, table } = block;
+  if (physicalName === undefined || table === undefined) return;
+  const lookedUp = new Set(modelNameCandidates(physicalName));
+  for (const { file, declaration } of models) {
     const name = declaration.name()?.name();
-    if (name === undefined) return [];
-    if (name === block.modelName) return [{ name, path: file.path }];
-    const table = attributeString(declaration.attributes(), 'map') ?? name;
-    return table === block.table
-      ? [{ name: `${name} (stored in the table "${table}")`, path: file.path }]
-      : [];
-  });
+    if (name === undefined) continue;
+    if (lookedUp.has(name)) {
+      into.aheadOfEmit.push({ name, path: file.path });
+      continue;
+    }
+    const stored = mappedName(declaration.attributes()) ?? name;
+    if (!sameStorageName(stored, table, comparison)) continue;
+    into.storedUnderAnotherName.push({
+      path: file.path,
+      declared: name,
+      declaredName: name,
+      storage: `the table "${stored}"`,
+      kind: 'model',
+      betterAuthName: physicalName,
+      renameTo: block.modelName,
+    });
+  }
+}
+
+function storedUnderAnotherNameReason(conflict: StoredUnderAnotherName): string {
+  const { path, declared, declaredName, storage, kind, betterAuthName, renameTo } = conflict;
+  const option =
+    kind === 'model'
+      ? `set Better Auth's \`modelName\` for ${betterAuthName} to ${declaredName}`
+      : `map Better Auth's field ${betterAuthName} to ${declaredName} with the \`fields\` option`;
+  return `${path} stores ${declared} in ${storage}, which Better Auth's ${kind} ${betterAuthName} needs, but Better Auth finds a ${kind} by its name. Rename ${declared} to ${renameTo}, or ${option} (for a plugin's ${kind}, in the plugin's \`schema\` option), then run \`auth generate\` again.`;
 }
 
 function uniquePaths(models: readonly DeclaredModel[]): string[] {
@@ -280,14 +338,20 @@ export function editContractSource<F extends ContractSourceFile>(
   const inNewNamespace = [...declared.values()]
     .flat()
     .filter(({ namespaceId }) => namespaceId === newNamespace);
-  const stale = [
-    ...targets.flatMap(({ block, ...model }) => staleFields(block, model)),
-    ...added.flatMap((block) => staleModels(block, inNewNamespace)),
-  ];
-  if (stale.length > 0) {
+  const conflicts: Conflicts = { aheadOfEmit: [], storedUnderAnotherName: [] };
+  for (const { block, ...model } of targets) fieldConflicts(block, model, comparison, conflicts);
+  for (const block of added) modelConflicts(block, inNewNamespace, comparison, conflicts);
+  const { aheadOfEmit, storedUnderAnotherName } = conflicts;
+  if (aheadOfEmit.length > 0) {
     throw notChanged(
       comparison,
-      `${listOf([...new Set(stale.map(({ path }) => path))])} already declares ${listOf(stale.map(({ name }) => name))}, which the emitted contract does not have. Run \`prisma contract emit\`, then update your database.`,
+      `${listOf([...new Set(aheadOfEmit.map(({ path }) => path))])} already declares ${listOf(aheadOfEmit.map(({ name }) => name))}, which the emitted contract does not have. Run \`prisma contract emit\`, then update your database.`,
+    );
+  }
+  if (storedUnderAnotherName.length > 0) {
+    throw notChanged(
+      comparison,
+      storedUnderAnotherName.map(storedUnderAnotherNameReason).join(' '),
     );
   }
 

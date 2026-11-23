@@ -13,11 +13,14 @@ const typeScriptContract =
   'it is written in TypeScript. Add the equivalent models and fields in TypeScript.';
 const typeScriptFile = /\.[cm]?tsx?$/;
 
-/** The error's code, or its name when it has none. Its message is left out: from the operating system or the module loader it differs between systems and can hold absolute paths. */
-function errorKind(error: unknown): string {
+/**
+ * How a reason line names a caught error: by its code, as the operating system and the module loader give one, since their messages differ between systems and hold absolute paths; otherwise by the first line of its message, which comes from the developer's own config.
+ */
+function errorDetail(error: unknown): string {
   const code: unknown = error instanceof Error ? Reflect.get(error, 'code') : undefined;
-  if (typeof code === 'string') return code;
-  return error instanceof Error ? error.name : typeof error;
+  if (typeof code === 'string') return ` (${code})`;
+  const message = error instanceof Error ? error.message : String(error);
+  return `: ${message.split('\n')[0]}`;
 }
 
 function isMissingFile(error: unknown): boolean {
@@ -30,7 +33,7 @@ async function configLoader(comparison: ContractComparison) {
   } catch (error) {
     throw notChanged(
       comparison,
-      `Prisma's config loader could not be loaded (${errorKind(error)}). ${passOutput}`,
+      `Prisma's config loader could not be loaded${errorDetail(error)}. ${passOutput}`,
     );
   }
 }
@@ -47,7 +50,7 @@ async function contractInputs(
   try {
     loaded = await loader.loadConfigForSections(undefined, ['contract']);
   } catch (error) {
-    throw didNotLoad(` (${errorKind(error)})`);
+    throw didNotLoad(errorDetail(error));
   }
   if (!loaded.ok) {
     if (loaded.failure.code === 'CONFIG.FILE_NOT_FOUND') {
@@ -107,7 +110,7 @@ export async function contractSourceFiles(
         comparison,
         isMissingFile(error)
           ? `${path} was not found. ${passOutput}`
-          : `${path} could not be read (${errorKind(error)}). ${passOutput}`,
+          : `${path} could not be read${errorDetail(error)}. ${passOutput}`,
       );
     }
     if (file === undefined && !isPrisma8Schema(text)) continue;

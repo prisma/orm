@@ -75,6 +75,8 @@ export interface ContractComparison {
   readonly namespace: string | undefined;
   /** The namespace a model printed outside a `namespace` block belongs to. */
   readonly defaultNamespace: string;
+  /** Whether the database treats table and column names that differ only in case as the same name. */
+  readonly storageNamesIgnoreCase: boolean;
   /** Contract models that Better Auth's foreign keys reference but that are not among the models it expects, by physical model name. */
   readonly referencedModels: ReadonlyMap<string, FoundModel>;
   /** Physical names of the models whose contract `id` uses the PostgreSQL `uuid` codec, when the id strategy accepts one. */
@@ -94,6 +96,10 @@ const acceptedKindsByIdStrategy: Readonly<Record<IdStrategy, readonly CodecKind[
   uuid: ['string', 'uuid'],
   string: ['string'],
   contract: ['string'],
+};
+
+const storageNamesIgnoreCaseByTarget: Readonly<Record<string, boolean>> = {
+  sqlite: true,
 };
 
 const defaultNamespaceByTarget: Readonly<Record<string, string>> = {
@@ -266,6 +272,7 @@ export function compareContract(input: ComparisonInput): ContractComparison {
   const { contract, betterAuthOptions, namespace } = input;
   const idStrategy = idStrategyOf(betterAuthOptions);
   const defaultNamespace = defaultNamespaceByTarget[contract.target] ?? UNBOUND_DOMAIN_NAMESPACE_ID;
+  const storageNamesIgnoreCase = storageNamesIgnoreCaseByTarget[contract.target] ?? false;
   const expectedModelList = managedModels(input.tables, input);
   const nameProblems: ContractProblem[] = [
     ...invalidNameProblems(expectedModelList),
@@ -283,6 +290,7 @@ export function compareContract(input: ComparisonInput): ContractComparison {
       idStrategy,
       namespace,
       defaultNamespace,
+      storageNamesIgnoreCase,
     };
   }
   const problems: ContractProblem[] = [];
@@ -328,5 +336,6 @@ export function compareContract(input: ComparisonInput): ContractComparison {
     idStrategy,
     namespace,
     defaultNamespace,
+    storageNamesIgnoreCase,
   };
 }

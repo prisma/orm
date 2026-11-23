@@ -30,7 +30,7 @@ async function expectedHead(): Promise<string> {
 }
 
 describe('createSchema when Prisma config loader is unavailable', () => {
-  it('prints the message when the config loader cannot be imported, with the error name and not its message', async () => {
+  it('prints the message when the config loader cannot be imported', async () => {
     vi.doMock(loader, () => {
       throw new Error("Cannot find package '/somewhere/@prisma/cli-engine'");
     });
@@ -38,20 +38,24 @@ describe('createSchema when Prisma config loader is unavailable', () => {
       'prisma.config.ts': configWithContract("{ contract: './prisma/contract.prisma' }"),
       'prisma/contract.prisma': appPsl,
     });
-    const head = await expectedHead();
-    expect(await messageOf(() => inDirectory(dir, () => generate()))).toBe(
-      `${head}Prisma's config loader could not be loaded (Error). ${passOutput}`,
-    );
+    const head = `${await expectedHead()}Prisma's config loader could not be loaded: `;
+    const message = await messageOf(() => inDirectory(dir, () => generate()));
+    expect({
+      head: message.slice(0, head.length),
+      endsWithAdvice: message.endsWith(`. ${passOutput}`),
+      oneLine: !message.slice(head.length).includes('\n'),
+    }).toEqual({ head, endsWithAdvice: true, oneLine: true });
   });
 
   it('prints the message when loading the config throws', async () => {
     vi.doMock(loader, () => ({
-      loadConfigForSections: () => Promise.reject(new Error('the config exploded')),
+      loadConfigForSections: () =>
+        Promise.reject(new Error('the config exploded\nat prisma.config.ts:3')),
     }));
     const dir = await projectWith({ 'prisma/contract.prisma': appPsl });
     const head = await expectedHead();
     expect(await messageOf(() => inDirectory(dir, () => generate()))).toBe(
-      `${head}prisma.config.ts did not load (Error). ${passOutput}`,
+      `${head}prisma.config.ts did not load: the config exploded. ${passOutput}`,
     );
   });
 
