@@ -39,9 +39,23 @@ const betterAuthFloor = (() => {
 })();
 const facade = '@prisma/orm-sqlite';
 const familySql = '@prisma/orm-family-sql';
+const toolchain = '@prisma/orm-toolchain';
+const cliEngine = '@prisma/cli-engine';
+const cliEngineVersion = (() => {
+  const toolchainDir = publicShells.get(toolchain)?.dir;
+  if (toolchainDir === undefined) throw new Error(`unknown shell ${toolchain}`);
+  const manifest = JSON.parse(
+    readFileSync(join(repoRoot, toolchainDir, 'package.json'), 'utf8'),
+  ) as {
+    peerDependencies: Record<string, string>;
+  };
+  const version = manifest.peerDependencies[cliEngine];
+  if (version === undefined) throw new Error(`${toolchain} declares no ${cliEngine} peer`);
+  return version;
+})();
 const platform: ShellName[] = [
   '@prisma/orm-framework',
-  '@prisma/orm-toolchain',
+  toolchain,
   '@prisma/orm-family-sql',
   '@prisma/orm-target-sqlite',
 ];
@@ -81,6 +95,20 @@ model TwoFactor {
 }
 
 Then run \`prisma contract emit\` and update your database.`;
+
+const twoFactorModel = twoFactorMissing.slice(
+  twoFactorMissing.indexOf('model TwoFactor'),
+  twoFactorMissing.indexOf('\n\nThen run'),
+);
+
+const twoFactorAdded =
+  'Adding 2 fields to User and the model TwoFactor to prisma/contract.prisma. After the file is written, run `prisma contract emit` and update your database.';
+
+const prismaConfig = `import { definePrismaConfig } from '${cliEngine}';
+import { defineConfig } from '${facade}/config';
+
+export default definePrismaConfig({ orm: defineConfig({ contract: './prisma/contract.prisma' }) });
+`;
 
 const twoFactorAuth = `import { prismaAdapter } from '${adapter}';
 import { betterAuth } from 'better-auth';
@@ -159,8 +187,12 @@ describe('the Better Auth adapter installed next to the SQLite database package'
       scratch,
       [packShell(adapterDir, scratch), ...pack(scratch, [facade, ...platform])],
       {
-        direct: [adapter, facade, familySql, '@prisma/orm-framework'],
-        registryDependencies: { 'better-auth': betterAuthFloor, auth: betterAuthFloor },
+        direct: [adapter, facade, familySql, '@prisma/orm-framework', toolchain],
+        registryDependencies: {
+          'better-auth': betterAuthFloor,
+          auth: betterAuthFloor,
+          [cliEngine]: cliEngineVersion,
+        },
       },
     );
     writeFileSync(join(scratch, 'contract.prisma'), corePsl);
@@ -240,12 +272,12 @@ describe('the Better Auth adapter installed next to the SQLite database package'
     expect(runInScratch(scratch, script)).toContain('signed up');
   });
 
-  it('runs auth generate and auth check until the contract has what the two-factor plugin needs', () => {
-    const projectDir = join(scratch, 'auth-cli');
-    const contractPath = join(projectDir, 'prisma/contract.prisma');
+  function authProject(name: string, contract: string) {
+    const projectDir = join(scratch, name);
     mkdirSync(join(projectDir, 'prisma'), { recursive: true });
     mkdirSync(join(projectDir, 'src/lib'), { recursive: true });
-    writeFileSync(contractPath, corePsl);
+    writeFileSync(join(projectDir, 'prisma/contract.prisma'), contract);
+    writeFileSync(join(projectDir, 'prisma.config.ts'), prismaConfig);
     writeFileSync(join(projectDir, 'src/lib/auth.ts'), twoFactorAuth);
     writeFileSync(join(projectDir, 'src/lib/db.ts'), sqliteClient);
     const emit = `
@@ -253,42 +285,69 @@ describe('the Better Auth adapter installed next to the SQLite database package'
       import { defineConfig } from '${facade}/config';
       import { createSqliteControlClient } from '${facade}/control';
 
-      const { contract: contractConfig } = defineConfig({ contract: './auth-cli/prisma/contract.prisma' });
+      const { contract: contractConfig } = defineConfig({ contract: './${name}/prisma/contract.prisma' });
       const emitted = await createSqliteControlClient().emit({ contractConfig });
       if (!emitted.ok) throw new Error(JSON.stringify(emitted.failure));
-      writeFileSync('./auth-cli/prisma/contract.json', emitted.value.contractJson);
+      writeFileSync('./${name}/prisma/contract.json', emitted.value.contractJson);
       console.log('emitted');
     `;
-    expect(runInScratch(scratch, emit)).toContain('emitted');
+    return {
+      projectDir,
+      contractPath: join(projectDir, 'prisma/contract.prisma'),
+      emit: () => expect(runInScratch(scratch, emit)).toContain('emitted'),
+    };
+  }
 
-    const filesBeforeGenerate = projectFiles(projectDir);
-    const generated = runAuth(projectDir, scratch, ['generate', '--yes']);
-    expect(generated.status).toBe(1);
-    expect(printedMessage(generated)).toBe(twoFactorMissing);
-    expect(projectFiles(projectDir)).toEqual(filesBeforeGenerate);
-    const checked = runAuth(projectDir, scratch, ['check']);
-    expect(checked.status).toBe(1);
-    expect(printedMessage(checked)).toBe(twoFactorMissing);
-    expect(readFileSync(contractPath, 'utf8')).toBe(corePsl);
+  it('auth generate adds what the two-factor plugin needs to the contract, and auth check passes once it is emitted', () => {
+    const project = authProject('auth-cli', corePsl);
+    project.emit();
 
+    const filesBeforeGenerate = projectFiles(project.projectDir);
+    const generated = runAuth(project.projectDir, scratch, ['generate', '--yes']);
+    expect(generated.status, generated.stderr).toBe(0);
+    expect(generated.stdout.split('\n').filter((line) => line !== '')).toEqual([
+      twoFactorAdded,
+      '🚀 Schema was overwritten successfully!',
+    ]);
     const completed = corePsl.replace(
       '  accounts      Account[]\n',
       '  accounts      Account[]\n  twoFactorEnabled Boolean?\n  twoFactors       TwoFactor[]\n',
     );
     expect(completed).not.toBe(corePsl);
-    const twoFactorModel = twoFactorMissing.slice(
-      twoFactorMissing.indexOf('model TwoFactor'),
-      twoFactorMissing.indexOf('\n\nThen run'),
-    );
-    writeFileSync(contractPath, `${completed}\n${twoFactorModel}\n`);
-    expect(runInScratch(scratch, emit)).toContain('emitted');
+    expect(projectFiles(project.projectDir)).toEqual({
+      ...filesBeforeGenerate,
+      'prisma/contract.prisma': `${completed}\n${twoFactorModel}\n`,
+    });
 
-    const regenerated = runAuth(projectDir, scratch, ['generate', '--yes']);
+    const checkedBeforeEmit = runAuth(project.projectDir, scratch, ['check']);
+    expect(checkedBeforeEmit.status).toBe(1);
+    expect(printedMessage(checkedBeforeEmit)).toBe(twoFactorMissing);
+
+    project.emit();
+    const regenerated = runAuth(project.projectDir, scratch, ['generate', '--yes']);
     expect(regenerated.status, regenerated.stderr).toBe(0);
     expect(regenerated.stdout).toContain('Your schema is already up to date.');
-    const rechecked = runAuth(projectDir, scratch, ['check']);
+    const rechecked = runAuth(project.projectDir, scratch, ['check']);
     expect(rechecked.status, rechecked.stderr).toBe(0);
     expect(rechecked.stdout).toContain('Schema check passed against adapter "prisma-8".');
+  });
+
+  it('auth generate prints the message and writes nothing when the contract needs more than additions', () => {
+    const project = authProject(
+      'auth-cli-wrong-type',
+      corePsl.replace('  image         String?', '  image         Int?'),
+    );
+    project.emit();
+    const filesBeforeGenerate = projectFiles(project.projectDir);
+    const generated = runAuth(project.projectDir, scratch, ['generate', '--yes']);
+    expect(generated.status).toBe(1);
+    expect(printedMessage(generated)).toBe(
+      twoFactorMissing.replace(
+        '\n\nThen run',
+        '\n\nChange in your contract:\n\n  User.image: must be `String?` (found sqlite/integer@1)\n\nThen run',
+      ),
+    );
+    expect(projectFiles(project.projectDir)).toEqual(filesBeforeGenerate);
   });
 });
 
@@ -311,11 +370,11 @@ describe('the Better Auth adapter next to an ORM client of a different version',
     if (familyDir === undefined) throw new Error(`unknown shell ${familySql}`);
     const packed = [
       packShell(adapterDir, scratch),
-      ...pack(scratch, ['@prisma/orm-framework', '@prisma/orm-toolchain']),
+      ...pack(scratch, ['@prisma/orm-framework', toolchain]),
       packShellAtVersion(join(repoRoot, familyDir), scratch, skewedVersion),
     ];
     const result = tryInstallShells(scratch, packed, {
-      direct: [adapter, familySql, '@prisma/orm-framework'],
+      direct: [adapter, familySql, '@prisma/orm-framework', toolchain],
       registryDependencies: { '@better-auth/core': '1.7' },
       npmrc: ['strict-peer-dependencies=true', 'auto-install-peers=false'],
     });
