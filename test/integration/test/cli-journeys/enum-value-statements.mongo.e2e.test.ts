@@ -3,7 +3,7 @@
  *
  * `User` has an optional `status`, a list `tags` and an optional value object `home` whose `kind` is a `Status`. `Status.ARCHIVED` stores `archived`.
  *
- * E1 renames it to `RETIRED`, which stores `retired`, with `--rename Status.ARCHIVED:Status.RETIRED`: the scalar, the list and the nested key that held `archived` hold `retired`. E2 swaps the stored values of `ACTIVE` and `ARCHIVED`: both are asked about, the question advises two migrations, and two migrations that each keep the data through the printed edits swap them. E3 removes `ARCHIVED` with `--delete Status.ARCHIVED`: the optional field and key lose it and the lists drop it. E4 makes `status` required: while a document holds `archived` there, the apply stops, counts the documents and advises a rename, and once the documents change it succeeds. E5 removes `ARCHIVED` through `db update` with no snapshot of the origin contract: nothing is rewritten, and the validator's document check stops the apply.
+ * E1 renames it to `RETIRED`, which stores `retired`, with `--rename Status.ARCHIVED:Status.RETIRED`: the scalar, the list and the nested key that held `archived` hold `retired`. E2 swaps the stored values of `ACTIVE` and `ARCHIVED`: the swap is refused, and the route it prints, through values no member stores, swaps them in two migrations. E6 does the same through `db update`. E7 gives `ACTIVE` the stored value of `ARCHIVED`, which the destination removes: refused as a merge, and its route removes `ARCHIVED` first. E3 removes `ARCHIVED` with `--delete Status.ARCHIVED`: the optional field and key lose it and the lists drop it. E4 makes `status` required: while a document holds `archived` there, the apply stops, counts the documents and advises a rename, and once the documents change it succeeds. E5 removes `ARCHIVED` through `db update` with no snapshot of the origin contract: nothing is rewritten, and the validator's document check stops the apply.
  *
  * Every journey that applies ends with an empty further plan, a clean `db verify --schema-only`, and every document accepting an update; each `migration.ts` written is run again and reproduces its `ops.json`.
  */
@@ -27,10 +27,9 @@ import {
   runDbVerify,
   runMigrate,
   runMigrationPlan,
-  selfEmitMigration,
 } from '../utils/journey-test-helpers';
 import { writeMongoPslConfig } from '../utils/journey-workspace-helpers';
-import { followEdits } from '../utils/stored-value-edits';
+import { planningFailure } from '../utils/stored-name-journeys';
 
 /** A PSL contract whose `Status` has `members`, and whose `User.status` is optional unless `required`. */
 function usersPsl(members: string, required = false): string {
@@ -61,6 +60,25 @@ const BEFORE = usersPsl('  ACTIVE = "active"\n  ARCHIVED = "archived"');
 const RENAMED = usersPsl('  ACTIVE = "active"\n  RETIRED = "retired"');
 const REMOVED = usersPsl('  ACTIVE = "active"');
 const SWAPPED = usersPsl('  ACTIVE = "archived"\n  ARCHIVED = "active"');
+
+const THROUGH_SWAP = usersPsl('  ACTIVE = "prisma_swap"\n  ARCHIVED = "prisma_swap_"');
+
+const SWAP_REFUSAL = {
+  summary:
+    'Cannot change the stored values of enum "Status": enum values "Status.ACTIVE" and "Status.ARCHIVED" move stored values in a cycle, "active" to "archived" and "archived" to "active", and a rewrite of one would overwrite the other before it is read',
+  why: 'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.ACTIVE" a stored value no member stores, such as "prisma_swap"; give "Status.ARCHIVED" a stored value no member stores, such as "prisma_swap_"; and plan and apply that; then give "Status.ACTIVE" the stored value "archived"; give "Status.ARCHIVED" the stored value "active"; and plan again.',
+};
+
+const SWAPPED_DOCUMENTS: readonly Document[] = [
+  {
+    email: 'a@example.com',
+    status: 'active',
+    tags: ['active', 'archived'],
+    home: { street: 'Main St', kind: 'active' },
+  },
+  { email: 'b@example.com', status: 'archived', tags: [], home: null },
+  { email: 'c@example.com', tags: ['archived'] },
+];
 
 const DOCUMENTS: readonly Document[] = [
   {
@@ -238,27 +256,6 @@ describe('Journeys (MongoDB): enum value statements', {
     return after;
   }
 
-  /** Plans a change whose removals keep their data through the edits the question prints, makes those edits, runs the file, and applies it. */
-  async function planKeepingDataAndMigrate(
-    ctx: JourneyContext,
-    from: string,
-    name: string,
-    statements: readonly string[],
-    label: string,
-  ) {
-    const asked = await runMigrationPlan(ctx, ['--from', from, '--json']);
-    const question = (engineError(asked)?.nextActions ?? []).map(({ label }) => label).join('\n');
-    const planned = await runMigrationPlan(ctx, ['--name', name, '--from', from, ...statements]);
-    expect(planned.exitCode, `${label}: plan: ${planned.stdout}\n${planned.stderr}`).toBe(0);
-    const dirName = latestMigrationDirName(ctx);
-    const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
-    writeFileSync(file, followEdits(readFileSync(file, 'utf-8'), question));
-    const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
-    expect(reEmit.exitCode, `${label}: node migration.ts: ${reEmit.stderr}`).toBe(0);
-    const applied = await runMigrate(ctx);
-    expect(applied.exitCode, `${label}: migrate: ${applied.stdout}\n${applied.stderr}`).toBe(0);
-  }
-
   /** The stored value calls of a `migration.ts`, without white space. */
   function storedValueCalls(migrationTs: string): readonly string[] {
     return (
@@ -302,52 +299,36 @@ describe('Journeys (MongoDB): enum value statements', {
     expect(await throughDbUpdate('mongo_e1_update', journey, 'E1')).toEqual(renamed);
   });
 
-  it('E2: two values that trade places are asked about with advice to use two migrations, and two migrations swap them', async () => {
+  it('E2: two values that trade places are refused, and the route through values no member stores swaps them with migration plan', async () => {
     const journey: Journey = {
       before: BEFORE,
       after: SWAPPED,
       documents: DOCUMENTS,
-      statements: ['--delete', 'Status.ACTIVE', '--delete', 'Status.ARCHIVED'],
+      statements: [],
     };
     const dbName = 'mongo_e2_plan';
     const { ctx, origin } = await migratedThenChanged(dbName, journey, 'E2');
-    const asked = await runMigrationPlan(ctx, ['--from', origin, '--json']);
-    const question = JSON.stringify(engineError(asked));
-    expect({
-      code: engineError(asked)?.code,
-      asksActive: question.includes('Status.ACTIVE'),
-      asksArchived: question.includes('Status.ARCHIVED'),
-      twoMigrations: question.includes('Make the change as two changes to the contract'),
-      temporaryValue: question.includes('replaceStoredValue'),
-    }).toEqual({
-      code: 'CLI.CONSENT_REQUIRED',
-      asksActive: true,
-      asksArchived: true,
-      twoMigrations: true,
-      temporaryValue: false,
-    });
-
-    await emit(ctx, usersPsl('  ACTIVE = "was_active"\n  ARCHIVED = "was_archived"'), 'E2.06');
-    await planKeepingDataAndMigrate(ctx, origin, 'away', journey.statements, 'E2.07');
-    await emit(ctx, SWAPPED, 'E2.08');
-    await planKeepingDataAndMigrate(
-      ctx,
-      latestMigrationDirName(ctx),
-      'swap',
-      journey.statements,
-      'E2.09',
+    const refused = await runMigrationPlan(ctx, ['--from', origin, '--json']);
+    expect(engineError(refused), 'E2.05: the swap is refused').toEqual(
+      planningFailure(SWAP_REFUSAL),
     );
 
-    expect(await documents(dbName)).toEqual([
-      {
-        email: 'a@example.com',
-        status: 'active',
-        tags: ['active', 'archived'],
-        home: { street: 'Main St', kind: 'active' },
-      },
-      { email: 'b@example.com', status: 'archived', tags: [], home: null },
-      { email: 'c@example.com', tags: ['archived'] },
+    await emit(ctx, THROUGH_SWAP, 'E2.06');
+    const away = await runMigrationPlan(ctx, ['--name', 'away', '--from', origin, '--json']);
+    expect(away.exitCode, `E2.07: ${away.stderr}`).toBe(0);
+    expect((await runMigrate(ctx)).exitCode, 'E2.07: migrate').toBe(0);
+    await emit(ctx, SWAPPED, 'E2.08');
+    const back = await runMigrationPlan(ctx, [
+      '--name',
+      'swap',
+      '--from',
+      latestMigrationDirName(ctx),
+      '--json',
     ]);
+    expect(back.exitCode, `E2.09: ${back.stderr}`).toBe(0);
+    expect((await runMigrate(ctx)).exitCode, 'E2.09: migrate').toBe(0);
+
+    expect(await documents(dbName)).toEqual(SWAPPED_DOCUMENTS);
     await verifiedAndSettled(ctx, dbName, 'E2', furtherMigrationPlan(ctx));
   });
 
@@ -463,7 +444,7 @@ describe('Journeys (MongoDB): enum value statements', {
     });
   });
 
-  it('E6: two values that trade places under db update with no migrations get the two-run route once, and following it swaps them', async () => {
+  it('E6: two values that trade places are refused under db update, and the route through values no member stores swaps them', async () => {
     const dbName = 'mongo_e6_update';
     const ctx = setup(dbName);
     await emit(ctx, BEFORE, 'E6.01');
@@ -472,137 +453,57 @@ describe('Journeys (MongoDB): enum value statements', {
     await emit(ctx, SWAPPED, 'E6.03');
 
     const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-    const nextActions = (engineError(refused)?.nextActions ?? []).map(({ label }) => label);
-    const lost = (member: string, value: string) =>
-      [
-        `These operations would lose enum value "Status.${member}" from the data that holds it:`,
-        `- Remove value "${value}" from field status of collection users`,
-        `- Remove value "${value}" from field tags of collection users`,
-        `- Remove value "${value}" at path "$.kind" in field home of collection users`,
-        `db update cannot keep that data in one run, and --delete Status.${member} removes it.`,
-      ].join('\n');
-    expect({
-      code: engineError(refused)?.code,
-      why: engineError(refused)?.why,
-      twoRuns: nextActions.filter((label) => label.startsWith('To keep it with db update')),
-      documents: await documents(dbName),
-    }).toEqual({
-      code: 'CLI.CONSENT_REQUIRED',
-      why: `${lost('ACTIVE', 'active')}\n${lost('ARCHIVED', 'archived')}`,
-      twoRuns: [
-        expect.stringMatching(
-          /^To keep it with db update, change them in two runs\. First rename members ACTIVE and ARCHIVED of enum Status .*db update --rename 'Status\.ACTIVE:Status\.<temporary member for ACTIVE>' --rename 'Status\.ARCHIVED:Status\.<temporary member for ARCHIVED>'`\. Then rename those members back to ACTIVE and ARCHIVED .*db update --rename 'Status\.<temporary member for ACTIVE>:Status\.ACTIVE' --rename 'Status\.<temporary member for ARCHIVED>:Status\.ARCHIVED'`\.$/,
-        ),
-      ],
+    expect({ error: engineError(refused), documents: await documents(dbName) }).toEqual({
+      error: planningFailure(SWAP_REFUSAL),
       documents: DOCUMENTS,
     });
 
-    await emit(
-      ctx,
-      usersPsl('  ACTIVE_TMP = "active_tmp"\n  ARCHIVED_TMP = "archived_tmp"'),
-      'E6.04',
-    );
-    const first = await runDbUpdate(ctx, [
-      '--rename',
-      'Status.ACTIVE:Status.ACTIVE_TMP',
-      '--rename',
-      'Status.ARCHIVED:Status.ARCHIVED_TMP',
-      '--no-interactive',
-      '--json',
-    ]);
+    await emit(ctx, THROUGH_SWAP, 'E6.04');
+    const first = await runDbUpdate(ctx, ['--no-interactive', '--json']);
     expect(first.exitCode, `E6.05: ${JSON.stringify(engineError(first))}`).toBe(0);
     await emit(ctx, SWAPPED, 'E6.06');
-    const second = await runDbUpdate(ctx, [
-      '--rename',
-      'Status.ACTIVE_TMP:Status.ACTIVE',
-      '--rename',
-      'Status.ARCHIVED_TMP:Status.ARCHIVED',
-      '--no-interactive',
-      '--json',
-    ]);
+    const second = await runDbUpdate(ctx, ['--no-interactive', '--json']);
     expect(second.exitCode, `E6.07: ${JSON.stringify(engineError(second))}`).toBe(0);
 
-    expect(await documents(dbName)).toEqual([
-      {
-        email: 'a@example.com',
-        status: 'active',
-        tags: ['active', 'archived'],
-        home: { street: 'Main St', kind: 'active' },
-      },
-      { email: 'b@example.com', status: 'archived', tags: [], home: null },
-      { email: 'c@example.com', tags: ['archived'] },
-    ]);
+    expect(await documents(dbName)).toEqual(SWAPPED_DOCUMENTS);
     await verifiedAndSettled(ctx, dbName, 'E6', async () => {
       const further = await runDbUpdate(ctx, ['--dry-run', '--no-interactive', '--json']);
       return parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(further).plan.operations;
     });
   });
 
-  it('E7: a member that takes the stored value of a member that became another is asked to name it, and the two runs then keep the data of both', async () => {
+  it('E7: a member that takes the stored value of a removed member is refused as a merge, and the route removes that member first', async () => {
     const dbName = 'mongo_e7_update';
     const ctx = setup(dbName);
-    const chained = usersPsl('  ACTIVE = "archived"\n  RETIRED = "retired"');
+    const merged = usersPsl('  ACTIVE = "archived"');
     await emit(ctx, BEFORE, 'E7.01');
     expect((await runDbUpdate(ctx, ['--no-interactive'])).exitCode, 'E7.02').toBe(0);
     await seed(dbName, DOCUMENTS);
-    await emit(ctx, chained, 'E7.03');
+    await emit(ctx, merged, 'E7.03');
 
-    const asked = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-    expect(engineError(asked)?.why).toContain(
-      'If "Status.ARCHIVED" is now "Status.RETIRED", add --rename Status.ARCHIVED:Status.RETIRED, and the next question says how to keep the data of both.',
+    const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
+    expect(engineError(refused), 'E7.04: the merge is refused').toEqual(
+      planningFailure({
+        summary:
+          'Cannot change the stored value of enum value "Status.ACTIVE" from "active" to "archived": the origin enum stores "archived" as enum value "Status.ARCHIVED"',
+        why: 'A changed stored value is rewritten in every document that holds it, so the documents of "Status.ACTIVE" would hold "archived" as the documents of "Status.ARCHIVED" do, and their data would merge. Make the change in two plans: first remove enum value "Status.ARCHIVED", and plan and apply that; then give "Status.ACTIVE" the stored value "archived", and plan again. The first plan asks about the documents that hold "archived". If you answer it with --delete Status.ARCHIVED, a required field cannot lose its value: before that plan applies, delete those documents in the database, or set them to "active" there to merge their data with the data of "Status.ACTIVE" on purpose.',
+      }),
     );
-    const renamed = await runDbUpdate(ctx, [
-      '--rename',
-      'Status.ARCHIVED:Status.RETIRED',
-      '--no-interactive',
-      '--json',
-    ]);
-    expect({
-      why: engineError(renamed)?.why,
-      twoRuns: (engineError(renamed)?.nextActions ?? [])
-        .map(({ label }) => label)
-        .filter((label) => label.startsWith('To keep it with db update')),
-    }).toEqual({
-      why: [
-        'These operations would lose enum value "Status.ACTIVE" from the data that holds it:',
-        '- Remove value "active" from field status of collection users',
-        '- Remove value "active" from field tags of collection users',
-        '- Remove value "active" at path "$.kind" in field home of collection users',
-        'db update cannot keep that data in one run, and --delete Status.ACTIVE removes it.',
-      ].join('\n'),
-      twoRuns: [
-        expect.stringContaining(
-          "db update --rename Status.ARCHIVED:Status.RETIRED --rename 'Status.ACTIVE:Status.<temporary member>'`",
-        ),
-      ],
-    });
 
-    await emit(ctx, usersPsl('  ACTIVE_TMP = "active_tmp"\n  RETIRED = "retired"'), 'E7.04');
+    await emit(ctx, REMOVED, 'E7.05');
     const first = await runDbUpdate(ctx, [
-      '--rename',
-      'Status.ARCHIVED:Status.RETIRED',
-      '--rename',
-      'Status.ACTIVE:Status.ACTIVE_TMP',
+      '--delete',
+      'Status.ARCHIVED',
       '--no-interactive',
       '--json',
     ]);
-    expect(first.exitCode, `E7.05: ${JSON.stringify(engineError(first))}`).toBe(0);
-    await emit(ctx, chained, 'E7.06');
-    const second = await runDbUpdate(ctx, [
-      '--rename',
-      'Status.ACTIVE_TMP:Status.ACTIVE',
-      '--no-interactive',
-      '--json',
-    ]);
-    expect(second.exitCode, `E7.07: ${JSON.stringify(engineError(second))}`).toBe(0);
+    expect(first.exitCode, `E7.06: ${JSON.stringify(engineError(first))}`).toBe(0);
+    await emit(ctx, merged, 'E7.07');
+    const second = await runDbUpdate(ctx, ['--no-interactive', '--json']);
+    expect(second.exitCode, `E7.08: ${JSON.stringify(engineError(second))}`).toBe(0);
 
     expect(await documents(dbName)).toEqual([
-      {
-        email: 'a@example.com',
-        status: 'retired',
-        tags: ['retired', 'archived'],
-        home: { street: 'Main St', kind: 'retired' },
-      },
+      { email: 'a@example.com', tags: ['archived'], home: { street: 'Main St' } },
       { email: 'b@example.com', status: 'archived', tags: [], home: null },
       { email: 'c@example.com', tags: ['archived'] },
     ]);
