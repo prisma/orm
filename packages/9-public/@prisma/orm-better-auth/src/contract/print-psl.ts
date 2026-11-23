@@ -16,6 +16,10 @@ export interface PrintedBlock {
   readonly modelName: string;
   readonly namespaceId: string;
   readonly existing: boolean;
+  /** The table a missing model is stored in; `undefined` for an existing model. */
+  readonly table: string | undefined;
+  /** The columns of the scalar fields the block adds to an existing model. */
+  readonly columns: readonly string[];
   readonly fieldNames: readonly string[];
   readonly fieldLines: readonly string[];
   readonly attributeLines: readonly string[];
@@ -31,6 +35,8 @@ interface PrintedModel {
   readonly name: string;
   readonly namespaceId: string;
   readonly existing: boolean;
+  readonly table: string | undefined;
+  readonly columns: string[];
   readonly taken: Set<string>;
   readonly fields: FieldLine[];
   readonly backRelations: FieldLine[];
@@ -53,6 +59,8 @@ function existingPrintedModel(
     name: found.name,
     namespaceId: found.namespaceId,
     existing: true,
+    table: undefined,
+    columns: [],
     taken: new Set([
       ...betterAuthFields,
       ...Object.keys(found.model.fields),
@@ -75,6 +83,8 @@ function printedModelFor(
         name: upperFirst(model.expected.physicalName),
         namespaceId: comparison.namespace ?? comparison.defaultNamespace,
         existing: false,
+        table: model.expected.physicalName,
+        columns: [],
         taken: new Set(betterAuthFields),
         fields: [],
         backRelations: [],
@@ -199,6 +209,7 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
         holder.fields.push(
           field === undefined ? idLine(comparison) : scalarLine(field, comparison),
         );
+        holder.columns.push(name);
       }
       continue;
     }
@@ -265,6 +276,8 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
       modelName: printed.name,
       namespaceId: printed.namespaceId,
       existing: printed.existing,
+      table: printed.table,
+      columns: printed.columns,
       fieldNames: lines.map(([name]) => name),
       fieldLines: alignedLines(lines),
       attributeLines: printed.attributes,

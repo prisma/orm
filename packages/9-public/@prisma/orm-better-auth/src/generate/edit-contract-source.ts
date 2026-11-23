@@ -1,9 +1,12 @@
 import { isPrisma8Schema } from '@prisma/orm-framework/psl-parser';
 import {
   type DocumentAst,
+  type FieldAttributeAst,
+  type ModelAttributeAst,
   ModelDeclarationAst,
   NamespaceDeclarationAst,
   parse,
+  StringLiteralExprAst,
 } from '@prisma/orm-framework/psl-parser/syntax';
 import type { ContractComparison } from '../contract/compare';
 import { type PrintedBlock, printPsl, renderBlocks } from '../contract/print-psl';
@@ -26,6 +29,7 @@ export interface ContractEdit<F extends ContractSourceFile = ContractSourceFile>
 
 interface DeclaredModel<F extends ContractSourceFile = ContractSourceFile> {
   readonly file: F;
+  readonly namespaceId: string;
   readonly declaration: ModelDeclarationAst;
 }
 
@@ -48,7 +52,7 @@ function declaredModels<F extends ContractSourceFile>(
     const name = declaration.name()?.name();
     if (name === undefined) return;
     const key = modelKey(namespaceId, name);
-    into.set(key, [...(into.get(key) ?? []), { file, declaration }]);
+    into.set(key, [...(into.get(key) ?? []), { file, namespaceId, declaration }]);
   };
   for (const declaration of document.declarations()) {
     if (declaration instanceof ModelDeclarationAst) add(defaultNamespace, declaration);
@@ -80,6 +84,65 @@ function parsedModels<F extends ContractSourceFile>(
     declaredModels(file, document, comparison.defaultNamespace, models);
   }
   return models;
+}
+
+/** The string an attribute such as `@map("x")` or `@@map("x")` names, read from the syntax tree; `undefined` when the attributes have no such attribute with a string. */
+function attributeString(
+  attributes: Iterable<FieldAttributeAst | ModelAttributeAst>,
+  name: string,
+): string | undefined {
+  for (const attribute of attributes) {
+    const path = attribute.name()?.path() ?? [];
+    if (path.length !== 1 || path[0] !== name) continue;
+    for (const argument of attribute.argList()?.args() ?? []) {
+      const argumentName = argument.name()?.name();
+      if (argumentName !== undefined && argumentName !== 'name') continue;
+      const value = argument.value();
+      if (value instanceof StringLiteralExprAst) return value.value();
+    }
+  }
+  return undefined;
+}
+
+interface StaleDeclaration {
+  readonly name: string;
+  readonly path: string;
+}
+
+/** The fields the model already declares that the block would add: by name, or stored in a column the block adds. */
+function staleFields(
+  block: PrintedBlock,
+  { file, declaration }: DeclaredModel,
+): StaleDeclaration[] {
+  const additions = new Set(block.fieldNames);
+  const columns = new Set(block.columns);
+  return [...declaration.fields()].flatMap((field) => {
+    const name = field.name()?.name();
+    if (name === undefined) return [];
+    if (additions.has(name)) return [{ name: `${block.modelName}.${name}`, path: file.path }];
+    const column = attributeString(field.attributes(), 'map') ?? name;
+    return columns.has(column)
+      ? [
+          {
+            name: `${block.modelName}.${name} (stored in the column "${column}")`,
+            path: file.path,
+          },
+        ]
+      : [];
+  });
+}
+
+/** The models of the namespace that the source already declares for a model the block would add: by name, or stored in its table. */
+function staleModels(block: PrintedBlock, models: readonly DeclaredModel[]): StaleDeclaration[] {
+  return models.flatMap(({ file, declaration }) => {
+    const name = declaration.name()?.name();
+    if (name === undefined) return [];
+    if (name === block.modelName) return [{ name, path: file.path }];
+    const table = attributeString(declaration.attributes(), 'map') ?? name;
+    return table === block.table
+      ? [{ name: `${name} (stored in the table "${table}")`, path: file.path }]
+      : [];
+  });
 }
 
 function uniquePaths(models: readonly DeclaredModel[]): string[] {
@@ -214,19 +277,12 @@ export function editContractSource<F extends ContractSourceFile>(
   });
 
   const newNamespace = comparison.namespace ?? comparison.defaultNamespace;
+  const inNewNamespace = [...declared.values()]
+    .flat()
+    .filter(({ namespaceId }) => namespaceId === newNamespace);
   const stale = [
-    ...targets.flatMap(({ block, file, declaration }) => {
-      const written = new Set([...declaration.fields()].map((field) => field.name()?.name()));
-      return block.fieldNames
-        .filter((name) => written.has(name))
-        .map((name) => ({ name: `${block.modelName}.${name}`, path: file.path }));
-    }),
-    ...added.flatMap((block) =>
-      (declared.get(modelKey(newNamespace, block.modelName)) ?? []).map(({ file }) => ({
-        name: block.modelName,
-        path: file.path,
-      })),
-    ),
+    ...targets.flatMap(({ block, ...model }) => staleFields(block, model)),
+    ...added.flatMap((block) => staleModels(block, inNewNamespace)),
   ];
   if (stale.length > 0) {
     throw notChanged(
