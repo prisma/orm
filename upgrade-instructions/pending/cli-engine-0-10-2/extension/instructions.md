@@ -12,12 +12,10 @@ changes:
     summary: |
       When `prisma migration plan` or `prisma db update` cannot ask a statement question, the first line of `CLI.CONSENT_REQUIRED` is now one fixed sentence that names no subject. Code that matched the old first line must check the error's `code` and `meta.unanswered` instead.
     detection:
-      glob: "**/*.{js,mjs,cjs,ts,mts,cts,sh,bash,yml,yaml}"
+      glob: "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,snap,sh,bash,yml,yaml}"
       matches:
-        - 'needs a statement, and the session is not interactive'
-        - 'subjects? need a statement, and the session is not interactive'
-        - 'needs a statement, which --yes cannot give'
-        - 'need a statement, which --yes cannot give'
+        - 'needs? a statement'
+        - 'which --yes cannot give'
 ---
 
 ## `engine-pin-moves-to-0-10-2`
