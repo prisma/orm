@@ -30,8 +30,8 @@ export function describeNestedTransactions(server: LiveServer): void {
   describe(`tx.transaction on ${server.displayName}`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('passes the facade context to the nested callback and commits the work around the nested transaction that threw', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('passes the facade context to the nested callback and commits the work around the nested transaction that threw', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false, poolOptions: { max: 1 } });
         let inside: string[] = [];
         await db.transaction(async (tx) => {
@@ -53,8 +53,8 @@ export function describeNestedTransactions(server: LiveServer): void {
       });
     });
 
-    it('rolls back the innermost of three nested transactions and commits the middle and outer ones', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('rolls back the innermost of three nested transactions and commits the middle and outer ones', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false, poolOptions: { max: 1 } });
         let inside: string[] = [];
         await db.transaction(async (tx) => {
@@ -78,8 +78,8 @@ export function describeNestedTransactions(server: LiveServer): void {
       });
     });
 
-    it('runs an ORM write of several statements in a savepoint, so a failed write leaves none of its rows and the transaction commits', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('runs an ORM write of several statements in a savepoint, so a failed write leaves none of its rows and the transaction commits', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false, poolOptions: { max: 1 } });
         await db.transaction(async (tx) => {
           await createWithAuthor(tx, 10, 'a', 10);

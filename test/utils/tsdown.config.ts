@@ -3,6 +3,7 @@ import { defineConfig } from '@repo/tsdown';
 export default defineConfig({
   entry: {
     index: 'src/exports/index.ts',
+    ci: 'src/ci.ts',
     'contract-factories': 'src/contract-factories.ts',
     'data-loss-expectations': 'src/data-loss-expectations.ts',
     'column-descriptors': 'src/column-descriptors.ts',

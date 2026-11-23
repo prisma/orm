@@ -32,27 +32,22 @@ function describeSavepoints(server: DriverServer): void {
   }
 
   async function withConnection(
-    test: Parameters<typeof withMysqlDatabase>[0],
     run: (connection: SqlConnection, client: PoolConnection) => Promise<void>,
   ): Promise<void> {
-    await withMysqlDatabase(
-      test,
-      async ({ url }) => {
-        const driver = server.runtime.create({ poolOptions: { max: 1 } });
-        await driver.connect({ kind: 'url', url });
-        const connection = await driver.acquireConnection();
-        try {
-          await connection.execute({ sql: 'CREATE TABLE t (value INT) ENGINE=InnoDB' });
-          const client = captured.clients.at(-1);
-          if (!client) throw new Error('No acquired client');
-          await run(connection, client);
-        } finally {
-          await connection.destroy();
-          await driver.close();
-        }
-      },
-      server.urlVariable,
-    );
+    await withMysqlDatabase(async ({ url }) => {
+      const driver = server.runtime.create({ poolOptions: { max: 1 } });
+      await driver.connect({ kind: 'url', url });
+      const connection = await driver.acquireConnection();
+      try {
+        await connection.execute({ sql: 'CREATE TABLE t (value INT) ENGINE=InnoDB' });
+        const client = captured.clients.at(-1);
+        if (!client) throw new Error('No acquired client');
+        await run(connection, client);
+      } finally {
+        await connection.destroy();
+        await driver.close();
+      }
+    }, server.urlVariable);
   }
 
   const values = (connection: SqlConnection) =>
@@ -61,8 +56,8 @@ function describeSavepoints(server: DriverServer): void {
   describe(`${server.displayName} savepoints on a real connection`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('keeps the work of a released savepoint', async (test) => {
-      await withConnection(test, async (connection) => {
+    it('keeps the work of a released savepoint', async () => {
+      await withConnection(async (connection) => {
         const tx = await connection.beginTransaction();
         await tx.execute({ sql: 'INSERT INTO t VALUES (1)' });
         const sp = await tx.savepoint('sp_1');
@@ -73,8 +68,8 @@ function describeSavepoints(server: DriverServer): void {
       });
     });
 
-    it('loses the work of a rolled-back savepoint while the outer work commits', async (test) => {
-      await withConnection(test, async (connection) => {
+    it('loses the work of a rolled-back savepoint while the outer work commits', async () => {
+      await withConnection(async (connection) => {
         const tx = await connection.beginTransaction();
         await tx.execute({ sql: 'INSERT INTO t VALUES (1)' });
         const sp = await tx.savepoint('sp_1');
@@ -86,8 +81,8 @@ function describeSavepoints(server: DriverServer): void {
       });
     });
 
-    it('nests a savepoint inside a savepoint', async (test) => {
-      await withConnection(test, async (connection) => {
+    it('nests a savepoint inside a savepoint', async () => {
+      await withConnection(async (connection) => {
         const tx = await connection.beginTransaction();
         const outer = await tx.savepoint('outer_sp');
         await outer.execute({ sql: 'INSERT INTO t VALUES (1)' });
