@@ -5,6 +5,7 @@ import {
   cliCommand,
   planAction,
   printedPlan,
+  printedWayToTarget,
   rerunFlags,
   selfEmitCommand,
 } from '../../src/utils/printed-command';
@@ -106,5 +107,28 @@ describe('printedPlan', () => {
         [],
       ),
     ).toEqual({ kind: 'none', reason: 'No start. No end' });
+  });
+});
+
+describe('printedWayToTarget', () => {
+  const PROJECT = { cwd: '/p', configPath: undefined, dbGiven: true };
+  const ON_DISK =
+    'Migrations on disk already lead from the database to the emitted contract, so a migration planned now would be a second path between the same two contracts, and `db migrate` applies only one of them';
+
+  it('says a database with no marker replays the migrations on disk from the first, which fits only an empty one', () => {
+    const way = (unmarked: boolean) =>
+      printedWayToTarget(
+        PROJECT,
+        {
+          from: reference('db'),
+          to: { kind: 'default' },
+          migrationsToTarget: unmarked ? { kind: 'on-disk', unmarked: true } : { kind: 'on-disk' },
+        },
+        [],
+      );
+    expect([way(false), way(true)].map((each) => each.kind === 'on-disk' && each.reason)).toEqual([
+      ON_DISK,
+      `${ON_DISK}. The database has no marker, so \`db migrate\` applies them from the first migration, which fits only an empty database. If it already has tables, adopt it first with \`{bin} db sign --db <url>\``,
+    ]);
   });
 });

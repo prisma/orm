@@ -28,7 +28,8 @@ function missingInvariants(
  * How a database at `marker` reaches `target` through migrations:
  * - `none-needed`: it is at the target and records every invariant the target requires;
  * - `on-disk`: a path on disk leads there and provides every such invariant it does not record, so
- *   `db migrate` alone moves it;
+ *   `db migrate` alone moves it; `unmarked` when the database has no marker, so that path starts at
+ *   the empty contract and fits only an empty database;
  * - `at-target-missing-invariants`: it is at the target's contract, but no migration on disk
  *   provides `missingInvariants`, and `migration plan` cannot write one, because a plan from a
  *   contract to itself is empty, so the migration is written by hand. `newMigration` is there when a
@@ -42,7 +43,7 @@ function missingInvariants(
  */
 export type MigrationsToTarget =
   | { readonly kind: 'none-needed' }
-  | { readonly kind: 'on-disk' }
+  | { readonly kind: 'on-disk'; readonly unmarked?: true }
   | {
       readonly kind: 'at-target-missing-invariants';
       readonly missingInvariants: readonly string[];
@@ -60,7 +61,9 @@ export function migrationsToTarget(
   const missing = missingInvariants(marker, target);
   if (from === target.hash && missing.size === 0) return { kind: 'none-needed' };
   if (findPathWithInvariants(space.graph, from, target.hash, missing) !== null) {
-    return { kind: 'on-disk' };
+    return marker === null || marker === undefined
+      ? { kind: 'on-disk', unmarked: true }
+      : { kind: 'on-disk' };
   }
   const missingInvariantIds = [...missing].sort();
   if (from !== target.hash) return { kind: 'plan-needed', missingInvariants: missingInvariantIds };

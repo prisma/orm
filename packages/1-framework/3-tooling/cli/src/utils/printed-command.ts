@@ -196,7 +196,11 @@ export function printedWayToTarget(
         reason: `The database is already at ${target} and records every invariant it requires, so there is no migration to apply`,
       };
     case 'on-disk': {
-      const reason = `Migrations on disk already lead from the database to ${target}, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them`;
+      const onDisk = `Migrations on disk already lead from the database to ${target}, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them`;
+      const reason =
+        migrations.unmarked === true
+          ? `${onDisk}. The database has no marker, so \`db migrate\` applies them from the first migration, which fits only an empty database. If it already has tables, adopt it first with \`${cliCommand(invocation, 'db sign')}\``
+          : onDisk;
       return {
         kind: 'on-disk',
         reason,
