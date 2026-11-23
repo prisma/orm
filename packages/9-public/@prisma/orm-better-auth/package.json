@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-better-auth",
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -31,12 +31,12 @@
     "@better-auth/sso": "1.7.27",
     "@better-auth/test-utils": "1.7.27",
     "@prisma/dev": "catalog:",
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
-    "@prisma/orm-sqlite": "workspace:8.0.0-rc.24",
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
-    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-sqlite": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
+    "@repo/tsdown": "workspace:8.0.0-rc.25",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "better-auth": "1.7.27",
@@ -49,8 +49,8 @@
   },
   "peerDependencies": {
     "@better-auth/core": ">=1.7.6 <1.8.0",
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

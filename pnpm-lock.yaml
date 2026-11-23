@@ -283,10 +283,10 @@ importers:
   examples/better-auth:
     dependencies:
       '@prisma/orm-better-auth':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-better-auth
       '@prisma/orm-postgres':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../../packages/9-public/@prisma/orm-postgres
       better-auth:
         specifier: 1.7.27
@@ -314,13 +314,13 @@ importers:
         specifier: 'catalog:'
         version: 0.25.2(typescript@5.9.3)(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       '@repo/prisma-bin':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../../test/prisma-bin
       '@repo/test-utils':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../../test/utils
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../../packages/0-config/tsconfig
       '@types/node':
         specifier: 'catalog:'
@@ -5617,22 +5617,22 @@ importers:
         specifier: 'catalog:'
         version: 0.25.2(typescript@5.9.3)(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       '@prisma/orm-family-sql':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../orm-family-sql
       '@prisma/orm-framework':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../orm-framework
       '@prisma/orm-postgres':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../orm-postgres
       '@prisma/orm-sqlite':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../orm-sqlite
       '@repo/tsconfig':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsconfig
       '@repo/tsdown':
-        specifier: workspace:8.0.0-rc.24
+        specifier: workspace:8.0.0-rc.25
         version: link:../../../0-config/tsdown
       '@types/node':
         specifier: 'catalog:'

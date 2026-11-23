@@ -229,6 +229,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
 - **Numbers.** The printed PSL declares Better Auth's number fields as `Int`, which on Postgres holds whole numbers up to about two billion. A number field that holds fractions or larger values, such as an interval in milliseconds, should be declared `Float` or `BigInt(as: number)` instead; both are accepted.
 - **Optional fields must be optional.** Every field Better Auth declares optional must be optional (`?`) in your contract, as the printed PSL writes it, because Better Auth can write `null` to it. A default does not help, whether it is a database default or Better Auth's own, since a default replaces only a missing value and never an explicit `null`. The contract check reports an optional field that is not optional.
 - **Ids.** With `generateId: false`, declare the id with a default, as the printed PSL does (`id String @id @onCreate(uuid())`). A `generateId` function that returns `false` for some models needs the same for those models' ids.
+- **A primary key that is not named `id`.** Better Auth needs a field named `id`. When a model's primary key has another name and the model has no `id` field, the printed PSL adds `id String @id`, which gives the model two `@id` fields and does not emit. Remove `@id` from the added line.
 
 ## Responsibilities
 
@@ -241,7 +242,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
 - `@prisma/orm-framework` and `@prisma/orm-family-sql`, as peers at the same version as your database package.
 - `@better-auth/core` 1.7.6 or a later 1.7 release, below 1.8, as a peer.
 
-The package imports only published entrypoints, so it works outside the Prisma repository.
+The package imports only published entrypoints, so it works outside the Prisma repository. [DEVELOPING.md](DEVELOPING.md) has notes for people who change it.
 
 ## Where this package lives
 
