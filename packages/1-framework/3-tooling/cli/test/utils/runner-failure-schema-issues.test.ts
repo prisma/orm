@@ -127,7 +127,7 @@ describe('a failed schema check after apply', () => {
       expect(
         (migrateError(schemaCheckFailure([explained])).nextActions ?? []).map(({ label }) => label),
       ).toEqual([
-        'If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run `{bin} contract emit`, run the `migration plan` that `{bin} migration status` prints, run that migration.ts with the `node` command `migration plan` prints, and run `{bin} db migrate`',
+        'If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run `{bin} contract emit`, and run `{bin} migration status`. If it prints a `migration plan`, run it, run that migration.ts with the `node` command `migration plan` prints, and run `{bin} db migrate`; otherwise run the command it prints',
         'If a migration you edited by hand does not reach its destination contract, find it with `{bin} migration list`, change its operations to resolve the issues listed, run its migration.ts with `node`, and run `{bin} db migrate`',
       ]);
     });

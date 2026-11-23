@@ -714,7 +714,7 @@ function migrateSchemaCheckAdvice(
   if (failedMigration === undefined) {
     return [
       editFileAction(
-        `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, run the \`migration plan\` that ${quoted(cliCommand(invocation, 'migration status'))} prints, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(invocation)}`,
+        `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, and run ${quoted(cliCommand(invocation, 'migration status'))}. If it prints a \`migration plan\`, run it, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(invocation)}; otherwise run the command it prints`,
       ),
       editFileAction(
         `If a migration you edited by hand does not reach its destination contract, find it with ${quoted(cliCommand(invocation, 'migration list'))}, change its operations to resolve the issues listed, run its migration.ts with \`node\`, and run ${dbMigrateAgain(invocation)}`,
