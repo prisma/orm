@@ -20,9 +20,10 @@ changes:
     summary: |
       The required peer range of `temporal-polyfill` moves from `^1.0.4` to `^1.0.8` on every database package: `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`, `@prisma/orm-mongo` and their `@prisma/orm-target-*` packages. An extension package that declares `temporal-polyfill` itself, for example in the `devDependencies` its tests install, changes its range to `^1.0.8` and reinstalls, so the lockfile does not keep a version below 1.0.8.
     detection:
-      glob: "**/package.json"
+      glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
         - '"temporal-polyfill"\s*:\s*"[\^~]?1\.0\.[0-7](?![\d])'
+        - '[''"]?temporal-polyfill[''"]?:\s*[''"]?[\^~]?1\.0\.[0-7](?![\d])'
   - id: config-type-renamed-to-prisma-config
     summary: |
       The config type that `defineConfig` returns is renamed from `PrismaNextConfig` to `PrismaConfig`, in `@prisma/orm-framework/config/config-types`, `@prisma/orm-toolchain/cli/config-types` and every package that re-exports it, including the target facades' `defineConfig` return types. The old name is gone. The detection matches TypeScript sources that name the old type.
@@ -465,7 +466,7 @@ For each published extension package whose source files `detection` matches, mov
 
 ### `temporal-polyfill-peer-range-moves-to-1-0-8`
 
-In each `package.json` that `detection` matches, change the `temporal-polyfill` range to `^1.0.8`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. A package that does not declare `temporal-polyfill` itself needs no change: its package manager installs the peer at a version inside the new range.
+In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `temporal-polyfill` range to `^1.0.8`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. A package that does not declare `temporal-polyfill` itself needs no change: its package manager installs the peer at a version inside the new range.
 
 ### `config-type-renamed-to-prisma-config`
 

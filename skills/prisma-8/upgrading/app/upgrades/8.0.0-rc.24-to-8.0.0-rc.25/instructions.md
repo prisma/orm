@@ -22,9 +22,10 @@ changes:
     summary: |
       The required peer range of `temporal-polyfill` moves from `^1.0.4` to `^1.0.8` on every database package: `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`, `@prisma/orm-mongo` and their `@prisma/orm-target-*` packages. A project that declares `temporal-polyfill` itself, as earlier guides told Yarn projects and npm projects with `legacy-peer-deps` to do, changes its range to `^1.0.8` and reinstalls, so the lockfile does not keep a version below 1.0.8.
     detection:
-      glob: "**/package.json"
+      glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
         - '"temporal-polyfill"\s*:\s*"[\^~]?1\.0\.[0-7](?![\d])'
+        - '[''"]?temporal-polyfill[''"]?:\s*[''"]?[\^~]?1\.0\.[0-7](?![\d])'
   - id: config-type-renamed-to-prisma-config
     summary: |
       The config type that `defineConfig` returns is renamed from `PrismaNextConfig` to `PrismaConfig`, in `@prisma/orm-toolchain/cli/config-types` and every package that re-exports it. The old name is gone. The detection matches TypeScript sources that name the old type.
@@ -460,7 +461,7 @@ Without `pg`, the application fails at startup because Node.js cannot find the p
 
 ### `temporal-polyfill-peer-range-moves-to-1-0-8`
 
-In each `package.json` that `detection` matches, change the `temporal-polyfill` range to `^1.0.8`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. A project that does not declare `temporal-polyfill` itself needs no change: its package manager installs the peer at a version inside the new range.
+In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `temporal-polyfill` range to `^1.0.8`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. A project that does not declare `temporal-polyfill` itself needs no change: its package manager installs the peer at a version inside the new range.
 
 
 ## `PrismaNextConfig` is now `PrismaConfig`
@@ -976,7 +977,7 @@ A relation with `fields:` on a variant now puts its foreign key on the base mode
 When another model of the table maps the same column, it must declare the same relation: the same target, the same column pairs and the same referential actions. If it declares a different one, or maps the column as a plain field, the emit fails with `PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT`, because its rows would have to satisfy the foreign key too. It fails the same way when the relation's column has a `@default`, which every row of the table gets; remove the default. When the other foreign key is the base model's, keep only one of the two relations. Otherwise give the variant's field its own column with `@map`, in this order, so that no value is lost:
 
 1. Keep the old shared column. Add the variant's new column beside it, nullable and without a foreign key yet: map the field to the new column, and remove both the relation field and its back-relation on the relation's target model for now, since a back-relation without its relation fails with `PSL_ORPHANED_BACKRELATION`. If the other model of the table declares a relation on the old column, remove that relation and its back-relation for now too, and keep its scalar field. Then plan and apply a migration that adds the new column. Check that it does not drop the old column, which the other model of the table still maps, and that it adds no foreign key on the old column.
-2. Copy the values across for that variant's rows only, by discriminator value, as in `UPDATE actor SET human_contact_id = "contactId" WHERE kind = 'human'`.
+2. Do steps 2 to 5 while the application does not write the variant's rows through the old column, for example with the application stopped or in a maintenance window, because a value written to the old column after the copy is lost. Copy the values across for that variant's rows only, by discriminator value, as in `UPDATE actor SET human_contact_id = "contactId" WHERE kind = 'human'`.
 3. Check that every copied value has its target row, as in `SELECT human_contact_id FROM actor WHERE human_contact_id IS NOT NULL AND human_contact_id NOT IN (SELECT id FROM contact)`, which must return no rows.
 4. If you removed the relation of the other model of the table in step 1, clear the old column on the variant's rows, as in `UPDATE actor SET "contactId" = NULL WHERE kind = 'human'`, because that relation's foreign key will apply to every row of the table.
 5. Restore the relations you removed, the variant's on its new column, with their back-relations. Plan and apply the migration that adds their foreign keys, and drop the old column only when no model maps it any more.
