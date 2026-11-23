@@ -253,8 +253,8 @@ withTempDir(({ createTempDir }) => {
         expect(
           `${human.stdout}${human.stderr}`,
           'B2.04: names the value and the statement',
-        ).toMatch(
-          /Field "Address\.country" would get the temporary value "" where existing data has none\. To choose the value, plan a migration with .*--backfill Address\.country` instead\./s,
+        ).toContain(
+          'Field "Address.country" would get the temporary value "" where existing data has none. To choose the value instead, plan a migration with `prisma-test migration plan --from db --backfill Address.country`, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `prisma-test db migrate`.',
         );
         const update = await runDbUpdate(ctx, ['--json']);
         expect(update.exitCode, `B2.05: db update: ${JSON.stringify(engineError(update))}`).toBe(0);

@@ -38,7 +38,7 @@ export type WithPolicyProject = (
 const DOCS = 'https://docs.prisma.io/docs/orm/v8/reference/error-reference';
 
 function forbidsMigrationsOnly(command: 'db update' | 'db sign', base: string) {
-  const recovery = `Author a migration with \`prisma-test migration plan --from ${base}\`, then apply it with \`prisma-test db migrate\`.`;
+  const recovery = `Author a migration with \`prisma-test migration plan --from ${base}\`, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`prisma-test db migrate\`.`;
   return {
     code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
     severity: 'error',
@@ -48,6 +48,10 @@ function forbidsMigrationsOnly(command: 'db update' | 'db sign', base: string) {
     nextActions: [{ kind: 'user-choice', label: recovery }],
     meta: { spaceId: 'app', command, change: ['migrate'] },
   };
+}
+
+function migrationsOnDiskLeadTo(target: string): string {
+  return `Migrations on disk already lead from the database to \`${target}\`, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them. Apply them with \`prisma-test db migrate --to ${target}\`, which names the migration.ts to change if one of them fails.`;
 }
 
 /** Migrates to the base contract, then records `change: [migrate]` with a policy-only run. */
@@ -113,17 +117,15 @@ export function definePolicyEnforcementJourneys(
       await withProject(test, async (project) => {
         await migrationsOnlyDatabase(project);
         const next = await planTo(project, 'next', 'next');
-        const recovery = (migrate: string) =>
-          `The planned migrations already lead there: apply them with \`${migrate}\`.`;
 
         const update = errorOf(await runDbUpdate(project.ctx, ['--json']));
         const sign = errorOf(await runDbSign(project.ctx, ['--json']));
 
         expect(update['nextActions']).toEqual([
-          { kind: 'user-choice', label: recovery(`prisma-test db migrate --to ${next}`) },
+          { kind: 'user-choice', label: migrationsOnDiskLeadTo(next) },
         ]);
         expect(sign['nextActions']).toEqual([
-          { kind: 'user-choice', label: recovery(`prisma-test db migrate --to ${next}`) },
+          { kind: 'user-choice', label: migrationsOnDiskLeadTo(next) },
         ]);
         const migrated = await runMigrate(project.ctx);
         expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
@@ -142,9 +144,7 @@ export function definePolicyEnforcementJourneys(
 
         const sign = errorOf(await runDbSign(project.ctx, [next, '--json']));
         const [advice] = (sign['nextActions'] ?? []) as readonly { readonly label: string }[];
-        expect(advice?.label).toBe(
-          `The planned migrations already lead there: apply them with \`prisma-test db migrate --to ${next}\`.`,
-        );
+        expect(advice?.label).toBe(migrationsOnDiskLeadTo(next));
         const [migrate] = printedCommands(advice?.label ?? '');
         expect(migrate?.slice(0, 2)).toEqual(['db', 'migrate']);
         const migrated = await runMigrate(project.ctx, [...(migrate ?? []).slice(2)]);

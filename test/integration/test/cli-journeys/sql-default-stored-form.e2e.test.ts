@@ -137,7 +137,7 @@ withTempDir(({ createTempDir }) => {
         }).toEqual({
           advised: literal,
           folder: expect.stringMatching(/^migrations\/app\/\w+_initial$/),
-          planArgs: '--name initial',
+          planArgs: '--from @empty --name initial',
         });
         if (advised === undefined || fix?.[1] === undefined || fix[2] === undefined) return;
 
