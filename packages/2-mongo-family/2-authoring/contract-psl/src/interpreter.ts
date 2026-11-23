@@ -959,9 +959,9 @@ function processEnumDeclarations(input: {
   /** Filled with where each enum is declared, for diagnostics about it. */
   readonly sites: Map<string, EnumSite>;
 }): Record<string, EnumTypeHandle> {
-  const handles: Record<string, EnumTypeHandle> = {};
+  const handles = new Map<string, EnumTypeHandle>();
 
-  if (input.enumSymbols.length === 0) return handles;
+  if (input.enumSymbols.length === 0) return {};
 
   const enumDescriptor =
     input.authoringContributions?.entityTypes?.['enum'] !== undefined &&
@@ -978,7 +978,7 @@ function processEnumDeclarations(input: {
         ...source.at(enumSymbol.span),
       });
     }
-    return handles;
+    return {};
   }
 
   for (const enumSymbol of input.enumSymbols) {
@@ -994,7 +994,7 @@ function processEnumDeclarations(input: {
     );
 
     if (handle === undefined || handle === null) continue;
-    handles[envelope.name] = handle;
+    handles.set(envelope.name, handle);
     const typeAttribute = envelope.attributes['type'];
     input.sites.set(envelope.name, {
       block: {
@@ -1008,7 +1008,7 @@ function processEnumDeclarations(input: {
     });
   }
 
-  return handles;
+  return Object.fromEntries(handles);
 }
 
 function withoutMergedIndexSites(

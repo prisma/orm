@@ -1,4 +1,6 @@
+import { enumType } from '@internal/contract-authoring';
 import { mongoCodecLookup } from '@internal/mongo-contract/test';
+import { jsonValue, mapBlock } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { interpretMongoContract } from './interpreter-test-helpers';
 import { mongoDataTypeSupport } from './mongo-type-lookups';
@@ -141,6 +143,57 @@ describe('a Mongo schema naming something __proto__', () => {
       {
         code: 'PSL_STORED_NAME_UNSUPPORTED',
         message: `A composite type is named "__proto__", ${reason}`,
+      },
+    ]);
+  });
+
+  it('refuses an enum named __proto__', () => {
+    const result = interpretMongoContract(
+      'enum __proto__ {\n  A\n}\nmodel Item {\n  id ObjectId @id @map("_id")\n  kind __proto__\n}',
+      {
+        ...lookups,
+        authoringContributions: {
+          type: {},
+          modelAttributes: {},
+          entityTypes: {
+            enum: {
+              kind: 'entity',
+              discriminator: 'enum',
+              output: {
+                factory: () =>
+                  enumType('__proto__', { codecId: 'mongo/string@1' }, { name: 'A', value: 'A' }),
+              },
+            },
+          },
+          pslBlockDescriptors: {
+            enum: {
+              kind: 'pslBlock',
+              keyword: 'enum',
+              discriminator: 'enum',
+              name: { required: true },
+              spec: () =>
+                mapBlock({
+                  value: { type: jsonValue(), documentation: 'The member value.' },
+                  allowBare: true,
+                }),
+            },
+          },
+        },
+      },
+    );
+    expect(
+      result.ok
+        ? []
+        : result.failure.diagnostics.map(({ code, message, span }) => ({
+            code,
+            message,
+            start: span?.start,
+          })),
+    ).toEqual([
+      {
+        code: 'PSL_STORED_NAME_UNSUPPORTED',
+        message: `An enum is named "__proto__", ${reason}`,
+        start: { offset: 0, line: 1, column: 1 },
       },
     ]);
   });
