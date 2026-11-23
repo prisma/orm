@@ -254,7 +254,7 @@ describe('MongoMigrationPlanner, a model and field whose names both contracts ke
     });
   });
 
-  it('plans a new model in the collection a rename frees', () => {
+  it('refuses a new model in the collection a rename frees, since a stopped migration could not be run again', () => {
     const to = contract(
       'to',
       {
@@ -263,11 +263,40 @@ describe('MongoMigrationPlanner, a model and field whose names both contracts ke
       },
       { app_users: { required: ['email'] }, users: { required: ['note'] } },
     );
-    expect(planned(plan({ from: users('from'), to, schema: live }))).toEqual({
-      labels: ['Rename collection users to app_users', 'Create collection users'],
-      classes: ['widening', 'additive'],
-      applied: [],
-      dataLoss: [],
+    expect(plan({ from: users('from'), to, schema: live })).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'unsupportedOperation',
+          summary:
+            'Cannot rename collection "users" to "app_users": the destination stores model "Legacy" in collection "users", the name the rename frees',
+          why: 'The collection of model "User" changes from "users" to "app_users", and the destination stores model "Legacy" in collection "users". MongoDB applies a migration\'s operations one at a time, without a transaction, and a collection rename runs again only while its old collection exists and its new one does not. Once collection "users" exists again, a migration that stopped after the rename cannot be run again to finish it. Make the change in two plans: first rename collection "users" to "app_users" and leave collection "users" out of the contract, and plan and apply that; then add what the destination stores in collection "users", and plan again.',
+        },
+      ],
+    });
+  });
+
+  it('refuses a model rename statement whose old collection a new model takes, naming the statement', () => {
+    const statement = renameModel('User', 'Member');
+    const to = contract(
+      'to',
+      {
+        Member: { collection: 'members', fields: ['_id', 'email'] },
+        Legacy: { collection: 'users', fields: ['_id', 'note'] },
+      },
+      { members: { required: ['email'] }, users: { required: ['note'] } },
+    );
+    expect(plan({ from: users('from'), to, schema: live, statements: [statement] })).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary:
+            'Cannot rename model "User" to "Member": the destination stores model "Legacy" in collection "users", the name the rename frees',
+          why: 'Model "User" is renamed to "Member", which renames collection "users" to "members", and the destination stores model "Legacy" in collection "users". MongoDB applies a migration\'s operations one at a time, without a transaction, and a collection rename runs again only while its old collection exists and its new one does not. Once collection "users" exists again, a migration that stopped after the rename cannot be run again to finish it. Make the change in two plans: first rename collection "users" to "members" and leave collection "users" out of the contract, and plan and apply that with the same statement; then add what the destination stores in collection "users", and plan again without it.',
+          refusedStatement: statement,
+        },
+      ],
     });
   });
 

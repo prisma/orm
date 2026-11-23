@@ -47,6 +47,7 @@ import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import {
   type FieldChange,
   fieldRenamesConflict,
+  freedNameReusedConflict,
   plannedCollectionChanges,
 } from './mongo-rename-conflicts';
 import {
@@ -692,6 +693,14 @@ function planModelStatement(
   const change = { from, to, renames: [{ from: statement.from, to: statement.to, statement }] };
   const refusal = collectionRenameRefusal(statement, label, change, schema);
   if (refusal !== undefined) return refusal;
+  const reused = freedNameReusedConflict(
+    change,
+    statement,
+    label,
+    `Model "${modelDisplayName(statement.from)}" is renamed to "${modelDisplayName(statement.to)}", which renames collection "${from}" to "${to}"`,
+    input.contract,
+  );
+  if (reused !== undefined) return { kind: 'refused', conflict: reused };
   if (schema.collection(to) !== undefined) {
     return refuse(
       `the schema being planned from already has a collection "${to}"`,

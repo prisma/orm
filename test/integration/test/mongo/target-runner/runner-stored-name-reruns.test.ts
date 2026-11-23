@@ -52,7 +52,8 @@ async function runPrintedUpdates(db: Db, text: string): Promise<number> {
 describe('a db update that stopped part way, run again', {
   timeout: timeouts.spinUpMongoMemoryServer,
 }, () => {
-  const { db, planAndRun, documents } = useStatementsDatabase('stored_name_reruns');
+  const { db, planAndRun, documents, initMarker, runOperations } =
+    useStatementsDatabase('stored_name_reruns');
 
   it('finishes a collection and field rename that a document holding both keys stopped after renameCollection', async () => {
     await db().collection('users').insertOne({ email: 'old@example.com', email_address: 'stale' });
@@ -164,6 +165,53 @@ describe('a db update that stopped part way, run again', {
       ok: true,
       orders: [{ lines: [{ code: 'A' }] }],
       quotes: [{ lines: [{ code: 'B' }] }],
+    });
+  });
+
+  it('runs the same operations again to the end when a new field takes the stored name a field rename frees, after a later rename stopped', async () => {
+    const from = contract('from', {
+      User: { collection: 'users', fields: { email: 'email' } },
+      Account: { collection: 'accounts', fields: { name: 'name' } },
+    });
+    const to = contract('to', {
+      User: { collection: 'users', fields: { email: 'email_address', legacy: 'email' } },
+      Account: { collection: 'accounts', fields: { name: 'title' } },
+    });
+    await db().collection('users').insertOne({ email: 'a@example.com' });
+    await db().collection('accounts').insertOne({ name: 'Acme', title: 'stale' });
+    await initMarker(from);
+    const planned = new MongoMigrationPlanner().plan({
+      contract: to,
+      schema: await introspectSchema(db()),
+      policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
+      fromContract: from,
+      origin: { storageHash: 'from' },
+      statements: [],
+      frameworkComponents: [],
+      snapshotsImportPath: '../../snapshots',
+    });
+    if (planned.kind !== 'success') throw new Error(JSON.stringify(planned.conflicts));
+    const operations = planned.plan.operations as readonly AnyMongoMigrationOperation[];
+    const first = await runOperations(operations, from, to);
+    await db()
+      .collection('accounts')
+      .updateMany({}, { $unset: { title: '' } });
+    const second = await runOperations(operations, from, to);
+    expect({
+      labels: operations.map(({ label }) => label),
+      first: first.ok,
+      second: second.ok,
+      users: await documents('users'),
+      accounts: await documents('accounts'),
+    }).toEqual({
+      labels: [
+        'Rename field email to email_address in collection users',
+        'Rename field name to title in collection accounts',
+      ],
+      first: false,
+      second: true,
+      users: [{ email_address: 'a@example.com' }],
+      accounts: [{ title: 'Acme' }],
     });
   });
 

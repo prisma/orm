@@ -4,6 +4,7 @@ import {
   type MigrationPlannerConflict,
   type ModelCoordinate,
   modelDisplayName,
+  type ResolvedModelRenameStatement,
 } from '@internal/framework-components/control';
 import {
   collectionOfModel,
@@ -272,7 +273,41 @@ function collectionRenameConflict(
       `${text}, and ${changeText(takes)}. ${ORDER}. ${collectionRoute([change, takes], others, contracts)}`,
     );
   }
-  return undefined;
+  return freedNameReusedConflict(change, undefined, label, text, contracts.contract);
+}
+
+/** The models the destination stores in `collection`, the collection itself when it stores none, as text. */
+function destinationHolding(contract: ContractWithDomain, collection: string): string {
+  const models = modelCoordinates(contract).filter(
+    (model) => destinationCollectionOf(contract, model) === collection,
+  );
+  return models.length === 0
+    ? `has collection "${collection}" again`
+    : `stores ${modelsText(models)} in collection "${collection}"`;
+}
+
+/**
+ * Refuses a collection rename whose old name the destination uses again. MongoDB applies a
+ * migration's operations one at a time, and a rename runs again only while its old collection
+ * exists and its new one does not, so once the old name is used again a migration that stopped
+ * after the rename cannot be run again to finish. `undefined` when the destination does not use the
+ * old name.
+ */
+export function freedNameReusedConflict(
+  change: Pick<CollectionChange, 'from' | 'to'>,
+  statement: ResolvedModelRenameStatement | undefined,
+  label: string,
+  text: string,
+  contract: ContractWithDomain,
+): MigrationPlannerConflict | undefined {
+  const { from, to } = change;
+  if (!collectionsOf(contract).includes(from)) return undefined;
+  const holding = destinationHolding(contract, from);
+  return renameRefused(
+    statement,
+    `${label}: the destination ${holding}, the name the rename frees`,
+    `${text}, and the destination ${holding}. MongoDB applies a migration's operations one at a time, without a transaction, and a collection rename runs again only while its old collection exists and its new one does not. Once collection "${from}" exists again, a migration that stopped after the rename cannot be run again to finish it. Make the change in two plans: first rename collection "${from}" to "${to}" and leave collection "${from}" out of the contract, and plan and apply that${statement === undefined ? '' : ' with the same statement'}; then add what the destination stores in collection "${from}", and plan again${statement === undefined ? '' : ' without it'}.`,
+  );
 }
 
 /**
