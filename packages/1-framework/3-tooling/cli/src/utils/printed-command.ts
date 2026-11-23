@@ -238,7 +238,8 @@ export function printedWayToTarget(
       if (
         plan.startsAfterUnapplied === true &&
         carriesStatement(flags) &&
-        plan.from.kind !== 'none'
+        plan.from.kind !== 'none' &&
+        !(plan.from.kind === 'reference' && plan.from.reference === '@empty')
       ) {
         return applyUnappliedFirst(invocation, plan.from, adoptFirst);
       }

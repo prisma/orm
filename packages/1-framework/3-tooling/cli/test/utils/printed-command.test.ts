@@ -243,4 +243,17 @@ describe('printedWayToTarget', () => {
       },
     ]);
   });
+
+  it('names no db migrate to the empty contract when the history from the database ends with a teardown', () => {
+    const X = 'd'.repeat(64);
+    const tornDown = buildGraph([entry(X, A, 'm1'), entry(A, EMPTY_CONTRACT_HASH, 'm2')]);
+    const plan = migrationPlanForDatabase({ graph: tornDown, refs: {}, emittedHash: C }, at(A), {
+      kind: 'emitted',
+    });
+    expect(printedWayToTarget(PROJECT, plan, ['--convert', 'User.age'])).toEqual({
+      kind: 'none',
+      reason:
+        'A plan from `@empty` creates every model, so its statements name nothing it can resolve',
+    });
+  });
 });
