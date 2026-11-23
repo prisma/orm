@@ -2,7 +2,7 @@
 changes:
   - id: mongo-proto-field-and-relation-names-refused
     summary: |
-      A MongoDB contract now refuses a field, a relation, or a member of a composite type or value object named `__proto__`, an embed relation stored under that name, and, in a PSL contract, an enum named `__proto__` and a wildcard index path `__proto__`. Choose another name, and move the values that documents hold under the old key.
+      A MongoDB contract now refuses a field, a relation, or a member of a composite type or value object named `__proto__`, an embed relation stored under that name, and, in a Mongo PSL contract, an enum named `__proto__` and a wildcard index path `__proto__`. Choose another name, and move the values that documents hold under the old key.
     detection:
       glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
@@ -13,13 +13,13 @@ changes:
 
 ## `mongo-proto-field-and-relation-names-refused`
 
-JavaScript reads `__proto__` as the prototype of an object rather than as a key. The previous release refused a MongoDB model, composite type, collection or root of that name, but not a field or a relation: depending on the contract source, such a field or relation was left out of the contract or out of every row the client read, without an error. A PSL contract also left an enum named `__proto__` out of the contract. All of these are now refused. The TypeScript builder raises `CONTRACT.NAME_UNUSABLE_AS_KEY`; a PSL contract reports `PSL_STORED_NAME_UNSUPPORTED` at the field, relation or enum:
+JavaScript reads `__proto__` as the prototype of an object rather than as a key. The previous release refused a MongoDB model, composite type, collection or root of that name, and a field stored under that name. It did not refuse a relation, a member of a composite type or value object, a field stored under another name, or a field of a Prisma 6 schema with no `@map`: depending on the contract source, such a name was left out of the contract or out of every row the client read, without an error. A Mongo PSL contract also left an enum named `__proto__` out of the contract. All of these are now refused. The TypeScript builder raises `CONTRACT.NAME_UNUSABLE_AS_KEY`; a PSL contract reports `PSL_STORED_NAME_UNSUPPORTED` at the field, relation or enum:
 
 ```text
 A field of model "Item" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-A PSL contract also refuses `__proto__` as an `include` or `exclude` path of a wildcard index, with `PSL_INVALID_INDEX`; the path used to be dropped from the index without an error. Remove it.
+A Mongo PSL contract also refuses `__proto__` as an `include` or `exclude` path of a wildcard index, with `PSL_INVALID_INDEX`; the path used to be dropped from the index without an error. Remove it.
 
 Rename the field, relation, member or enum. Renaming an enum changes no document. What the other renames do to stored documents is listed below. Two rules hold for every update in this section. Stop every process that writes to the collection before you start, and restart one only when the update has finished, including any run you repeat, and the process uses the new names. And where an update moves a value to `<new name>`, choose a name that no document already uses as a key in that place; otherwise one of the two values is lost.
 

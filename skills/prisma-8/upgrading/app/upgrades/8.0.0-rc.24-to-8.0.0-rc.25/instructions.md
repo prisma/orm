@@ -272,7 +272,7 @@ changes:
         - '@default\("(?:[^"\\\n]|\\.)*\\"__proto__\\"'
   - id: mongo-proto-names-refused
     summary: |
-      A MongoDB contract now refuses a model, composite type or value object, collection or root named `__proto__`, and the TypeScript builder refuses an enum with that name too. In a PSL contract, an enum named `__proto__` is not refused: it is left out of the contract without an error, together with every field typed by it. A field or relation of that name is not refused either. Choose another name.
+      A MongoDB contract now refuses a model, composite type or value object, collection or root named `__proto__`, and the TypeScript builder refuses an enum with that name too. In a PSL contract, an enum named `__proto__` is not refused: it is left out of the contract without an error, together with every field typed by it. A relation, a member of a composite type or value object, and a field stored under another name are not refused either. Choose another name.
     detection:
       glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
@@ -1149,7 +1149,7 @@ A Prisma 7 schema writes the same default as a string, `meta Json @default("{\"_
 
 `prisma contract emit` used to leave the `__proto__` key out of `contract.json`. On Postgres and MySQL it also left it out of the storage hash, so the database got the default `{"a": 2}`. It now keeps the key. What to do for each file the detection matches depends on the database:
 
-- **Postgres.** Run `prisma contract emit`; the storage hash changes. Then run `prisma migration plan` and apply the migration, or run `prisma db update`. Either plans one operation per such column, `Set default on "<table>"."<column>"`.
+- **Postgres.** Run `prisma contract emit`; the storage hash changes. Then run `prisma migration plan` and apply the migration, or run `prisma db update`. Either plans one operation per such column, `Set default on "<table>"."<column>"`. The planned migration applies as it is. If you run its `migration.ts` to regenerate `ops.json`, the run fails with `CONTRACT.DEFAULT_INVALID`, because the file writes the key as `__proto__:`, which JavaScript reads as the prototype; write the key as `['__proto__']:` in `migration.ts` first.
 - **MySQL.** Run `prisma contract emit`; the storage hash changes. The migration planner does not plan a change of a column's default, so create a migration with `prisma migration new` and write a raw SQL operation in it that sets the column's default.
 - **SQLite.** No action. SQLite stores the default as JSON text that already kept the key, so nothing changes.
 
@@ -1163,7 +1163,7 @@ JavaScript reads `__proto__` as the prototype of an object rather than as a key,
 A model is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-Two cases are not refused in this release and still go wrong without an error. In a PSL contract, an enum named `__proto__` is left out of the contract, together with every field typed by it. And a field or relation named `__proto__` is, depending on the contract source, left out of the contract or out of every row the client reads. A later release refuses these names, and its guide covers the rename and the values that documents hold under the old key; leave them as they are until then.
+Some cases are not refused in this release and still go wrong without an error. In a Mongo PSL contract, an enum named `__proto__` is left out of the contract, together with every field typed by it. A relation, a member of a composite type or value object, a field stored under another name, and a field of a Prisma 6 schema with no `@map` are, depending on the contract source, left out of the contract or out of every row the client reads. Rename the enum, and a field whose stored name you keep with `@map`; neither changes a document. Leave a relation, a member and a Prisma 6 field with no `@map` as they are: a later release refuses them, and its guide covers the rename together with the values that documents hold under the old key.
 
 Rename the model, composite type, enum or root. The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
