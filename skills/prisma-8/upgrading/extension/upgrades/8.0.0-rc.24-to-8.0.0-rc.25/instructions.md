@@ -16,6 +16,13 @@ changes:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '(?:from|import|require)\s*\(?\s*[''"]pg[''"]'
+  - id: temporal-polyfill-peer-range-moves-to-1-0-8
+    summary: |
+      The required peer range of `temporal-polyfill` moves from `^1.0.4` to `^1.0.8` on every database package: `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/orm-mysql`, `@prisma/orm-mariadb`, `@prisma/orm-mongo` and their `@prisma/orm-target-*` packages. An extension package that declares `temporal-polyfill` itself, for example in the `devDependencies` its tests install, changes its range to `^1.0.8` and reinstalls, so the lockfile does not keep a version below 1.0.8.
+    detection:
+      glob: "**/package.json"
+      matches:
+        - '"temporal-polyfill"\s*:\s*"[\^~]?1\.0\.[0-7](?![\d])'
   - id: config-type-renamed-to-prisma-config
     summary: |
       The config type that `defineConfig` returns is renamed from `PrismaNextConfig` to `PrismaConfig`, in `@prisma/orm-framework/config/config-types`, `@prisma/orm-toolchain/cli/config-types` and every package that re-exports it, including the target facades' `defineConfig` return types. The old name is gone. The detection matches TypeScript sources that name the old type.
@@ -441,7 +448,7 @@ The examples write the ORM client as `db.orm.public.<Model>`, which is the Postg
 
 Make the changes below in any order, with three exceptions:
 
-1. Add `pg` and `@types/pg` where they are needed, and move a declared `@prisma/cli-engine` to `0.10.4`, before you run the package manager's install for the upgrade (`pg-is-a-peer-dependency`, `extension-importing-pg-peers-it`, `engine-pin-moves-to-0-10-4`).
+1. Add `pg` and `@types/pg` where they are needed, move a declared `temporal-polyfill` to `^1.0.8`, and move a declared `@prisma/cli-engine` to `0.10.4`, before you run the package manager's install for the upgrade (`pg-is-a-peer-dependency`, `extension-importing-pg-peers-it`, `temporal-polyfill-peer-range-moves-to-1-0-8`, `engine-pin-moves-to-0-10-4`).
 2. Before you run `prisma contract emit` or `prisma migration plan` for any reason in this guide, make the config changes these commands need: name the types module and the migration module (`target-package-names-generated-file-modules`, `extension-config-names-generated-file-modules`, `mysql-config-components-carry-family-and-modules`), and give `typescriptContractFromPath` its target (`typescript-contract-from-path-requires-target`). Without them, emitting fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`.
 3. Make the changes to contract sources (`has-one-key-must-be-unique`, the renamed PostgreSQL, SQLite and MongoDB types and column helpers) before you re-emit the contract (`re-emit-for-include-capabilities`, `mysql-reemit-contract`, and the SQLite entries that say to re-emit). One emit then covers all of them.
 
@@ -455,6 +462,10 @@ Make this change before you run the package manager's install for the upgrade. I
 ### `extension-importing-pg-peers-it`
 
 For each published extension package whose source files `detection` matches, move `pg` and `@types/pg` out of `dependencies` if they are there, and declare them in `peerDependencies` as `"pg": "^8.22.0"` and `"@types/pg": "^8.20.0"`. Keep them in `devDependencies` too, so the extension's own tests install them. Skip files under the extension's tests: a test that imports `pg` needs only the `devDependencies` entry.
+
+### `temporal-polyfill-peer-range-moves-to-1-0-8`
+
+In each `package.json` that `detection` matches, change the `temporal-polyfill` range to `^1.0.8`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. A package that does not declare `temporal-polyfill` itself needs no change: its package manager installs the peer at a version inside the new range.
 
 ### `config-type-renamed-to-prisma-config`
 
