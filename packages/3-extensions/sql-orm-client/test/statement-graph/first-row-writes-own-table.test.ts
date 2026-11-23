@@ -86,6 +86,24 @@ describe.each(databases)(
       ]);
     });
 
+    it('update() and delete() whose filter names a unique key keep the whole filter in the write', async () => {
+      const { tasks: rows, runtime } = tasks(contract);
+      const pinned = rows.where((task) => task.subtasks.none()).where({ id: 2 });
+
+      await pinned.update({ title: 'Pinned' });
+      runtime.setNextResults([[{ id: 2 }], [{ id: 2 }]]);
+      await pinned.delete();
+
+      const condition = `(${noSubtasks} and id = 2)`;
+      expect(sent(runtime)).toEqual([
+        `select tasks left join features where ${condition}`,
+        `update tasks where (${condition} and id = 2)${returning('id')}`,
+        'select tasks left join features where id = 2',
+        `select tasks left join features where ${condition}`,
+        `delete tasks where (${condition} and id = 2)${returning(allTaskColumns)}`,
+      ]);
+    });
+
     it('update() whose filter does not read the table it writes still carries the filter', async () => {
       const { tasks: rows, runtime } = tasks(contract);
 
