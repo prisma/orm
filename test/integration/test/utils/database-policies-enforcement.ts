@@ -10,6 +10,7 @@ import { expect, it } from 'vitest';
 import {
   appMarker,
   errorOf,
+  latestMigrationTo,
   MIGRATE_ONLY_DECLARED,
   MIGRATE_ONLY_RECORDED,
   type PolicyProject,
@@ -20,6 +21,7 @@ import {
 } from './database-policies-journey';
 import {
   parseJsonOutput,
+  planMigrationAndSelfEmit,
   runContractEmit,
   runDbSign,
   runDbUpdate,
@@ -35,9 +37,8 @@ export type WithPolicyProject = (
 
 const DOCS = 'https://docs.prisma.io/docs/orm/v8/reference/error-reference';
 
-function forbidsMigrationsOnly(command: 'db update' | 'db sign') {
-  const recovery =
-    'Author a migration with prisma-test migration plan, then apply it with prisma-test db migrate.';
+function forbidsMigrationsOnly(command: 'db update' | 'db sign', base: string) {
+  const recovery = `Author a migration with \`prisma-test migration plan --from ${base}\`, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`prisma-test db migrate\`.`;
   return {
     code: 'MIGRATION.CHANGE_POLICY_FORBIDS',
     severity: 'error',
@@ -47,6 +48,10 @@ function forbidsMigrationsOnly(command: 'db update' | 'db sign') {
     nextActions: [{ kind: 'user-choice', label: recovery }],
     meta: { spaceId: 'app', command, change: ['migrate'] },
   };
+}
+
+function migrationsOnDiskLeadTo(target: string): string {
+  return `Migrations on disk already lead from the database to \`${target}\`, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them. Apply them with \`prisma-test db migrate --to ${target}\`, which names the migration.ts to change if one of them fails.`;
 }
 
 /** Migrates to the base contract, then records `change: [migrate]` with a policy-only run. */
@@ -66,6 +71,11 @@ async function migrationsOnlyDatabase(project: PolicyProject): Promise<string> {
   return base;
 }
 
+/** The commands `text` prints in backticks, as a shell passes their words after the bin. */
+function printedCommands(text: string): readonly (readonly string[])[] {
+  return [...text.matchAll(/`prisma-test ([^`]+)`/g)].map((match) => (match[1] ?? '').split(/\s+/));
+}
+
 export function definePolicyEnforcementJourneys(
   withProject: WithPolicyProject,
   timeout: number,
@@ -82,10 +92,118 @@ export function definePolicyEnforcementJourneys(
         const update = await runDbUpdate(project.ctx, ['--json']);
         const sign = await runDbSign(project.ctx, ['--json']);
 
-        expect(errorOf(dryRun)).toEqual(forbidsMigrationsOnly('db update'));
-        expect(errorOf(update)).toEqual(forbidsMigrationsOnly('db update'));
-        expect(errorOf(sign)).toEqual(forbidsMigrationsOnly('db sign'));
+        expect(errorOf(dryRun)).toEqual(forbidsMigrationsOnly('db update', base));
+        expect(errorOf(update)).toEqual(forbidsMigrationsOnly('db update', base));
+        expect(errorOf(sign)).toEqual(forbidsMigrationsOnly('db sign', base));
         expect((await appMarker(project))?.storageHash).toBe(base);
+
+        const plan = await planMigrationAndSelfEmit(project.ctx, [
+          '--from',
+          base,
+          '--name',
+          'as-advised',
+        ]);
+        expect(plan.exitCode, `the advised migration plan: ${plan.stdout}\n${plan.stderr}`).toBe(0);
+        const migrated = await runMigrate(project.ctx);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'advises db migrate alone when the migrations on disk already lead to the contract db update and db sign were refused',
+    async (test) => {
+      await withProject(test, async (project) => {
+        await migrationsOnlyDatabase(project);
+        const next = await planTo(project, 'next', 'next');
+
+        const update = errorOf(await runDbUpdate(project.ctx, ['--json']));
+        const sign = errorOf(await runDbSign(project.ctx, ['--json']));
+
+        expect(update['nextActions']).toEqual([
+          { kind: 'user-choice', label: migrationsOnDiskLeadTo(next) },
+        ]);
+        expect(sign['nextActions']).toEqual([
+          { kind: 'user-choice', label: migrationsOnDiskLeadTo(next) },
+        ]);
+        const migrated = await runMigrate(project.ctx);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'advises, for db sign of an older contract the migrations lead to, a db migrate that stops at that contract',
+    async (test) => {
+      await withProject(test, async (project) => {
+        await migrationsOnlyDatabase(project);
+        const next = await planTo(project, 'next', 'next');
+        await planTo(project, 'unique', 'unique');
+
+        const sign = errorOf(await runDbSign(project.ctx, [next, '--json']));
+        const [advice] = (sign['nextActions'] ?? []) as readonly { readonly label: string }[];
+        expect(advice?.label).toBe(migrationsOnDiskLeadTo(next));
+        const [migrate] = printedCommands(advice?.label ?? '');
+        expect(migrate?.slice(0, 2)).toEqual(['db', 'migrate']);
+        const migrated = await runMigrate(project.ctx, [...(migrate ?? []).slice(2)]);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+        expect((await appMarker(project))?.storageHash).toBe(next);
+      });
+    },
+    timeout,
+  );
+
+  it(
+    'advises, for db update --to a ref that permits only migrations, a plan to that ref and a db migrate that both run',
+    async (test) => {
+      await withProject(test, async (project) => {
+        const base = await planTo(project, 'base', 'initial');
+        const migrated = await runMigrate(project.ctx);
+        expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
+        writeContract(project, 'unique');
+        expect((await runContractEmit(project.ctx)).exitCode).toBe(0);
+        const root = await planMigrationAndSelfEmit(project.ctx, [
+          '--name',
+          'another-root',
+          '--from',
+          '@empty',
+        ]);
+        expect(root.exitCode, `plan another root: ${root.stdout}\n${root.stderr}`).toBe(0);
+        await writePolicyRef(
+          project,
+          'production',
+          latestMigrationTo(project),
+          MIGRATE_ONLY_DECLARED,
+        );
+        writeContract(project, 'next');
+        expect((await runContractEmit(project.ctx)).exitCode).toBe(0);
+
+        const refused = errorOf(
+          await runDbUpdate(project.ctx, [
+            '--to',
+            'production',
+            '--permit-policy-change',
+            '--json',
+          ]),
+        );
+        expect(refused['code'], JSON.stringify(refused)).toBe('MIGRATION.CHANGE_POLICY_FORBIDS');
+        const [plan, apply] = printedCommands(JSON.stringify(refused['nextActions']));
+        expect(plan).toEqual(['migration', 'plan', '--from', base, '--to', 'production']);
+        expect(apply).toEqual(['db', 'migrate', '--to', 'production', '--permit-policy-change']);
+
+        const planned = await planMigrationAndSelfEmit(project.ctx, [
+          ...(plan ?? []).slice(2),
+          '--name',
+          'as-advised',
+        ]);
+        expect(planned.exitCode, `the advised plan: ${planned.stdout}\n${planned.stderr}`).toBe(0);
+        const applied = await runMigrate(project.ctx, (apply ?? []).slice(2));
+        expect(
+          applied.exitCode,
+          `the advised db migrate: ${applied.stdout}\n${applied.stderr}`,
+        ).toBe(0);
       });
     },
     timeout,

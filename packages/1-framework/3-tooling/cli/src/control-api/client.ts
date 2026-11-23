@@ -443,6 +443,7 @@ class ControlClientImpl implements ControlClient {
       ...ifDefined('acceptAccessChanges', options.acceptAccessChanges),
       ...ifDefined('ref', options.ref),
       ...ifDefined('permitPolicyChange', options.permitPolicyChange),
+      ...ifDefined('emittedContractHash', options.emittedContractHash),
       ...ifDefined('statements', options.statements),
       answerQuestions: options.answerQuestions,
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),

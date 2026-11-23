@@ -180,7 +180,7 @@ describe('executeMigrateShowPlan', () => {
     });
 
     expect(planThenApplyCommands(result)).toEqual([
-      `{bin} migration plan --from ${HASH_B} --to ${HASH_A} --name <slug>`,
+      `{bin} migration plan --from ${HASH_B} --to ${HASH_A}`,
       `{bin} db migrate --to ${HASH_A}`,
     ]);
   });
@@ -200,7 +200,7 @@ describe('executeMigrateShowPlan', () => {
     });
 
     expect(planThenApplyCommands(result)).toEqual([
-      `{bin} migration plan --from ${HASH_B} --to staging --name <slug>`,
+      `{bin} migration plan --from ${HASH_B} --to staging`,
       '{bin} db migrate --to staging',
     ]);
   });
@@ -218,7 +218,7 @@ describe('executeMigrateShowPlan', () => {
 
     expect(result.ok ? undefined : result.failure.meta).toMatchObject({ targetHash: emitted });
     expect(planThenApplyCommands(result)).toEqual([
-      `{bin} migration plan --from ${HASH_B} --name <slug>`,
+      `{bin} migration plan --from ${HASH_B}`,
       '{bin} db migrate',
     ]);
   });
@@ -236,7 +236,7 @@ describe('executeMigrateShowPlan', () => {
     });
 
     expect(planThenApplyCommands(result)).toEqual([
-      `{bin} migration plan --from ${HASH_B} --name <slug>`,
+      `{bin} migration plan --from ${HASH_B}`,
       '{bin} db migrate',
     ]);
   });

@@ -26,9 +26,9 @@ import {
   isStorageHashHex,
   migrationSubjectKey,
 } from '@internal/framework-components/control';
-import type { ContractMarkerRecordLike } from '@internal/migration-tools/aggregate';
 import {
   type PlannerSuccess as AggregatePlan,
+  type ContractMarkerRecordLike,
   type ContractSpaceAggregate,
   collectAggregateNamespaces,
   type PlannerError,
@@ -118,6 +118,12 @@ import {
 import { stripOperations } from './migration-helpers';
 import { structuralPathOf } from './no-invariant-path';
 import {
+  appSpaceOf,
+  type MigrationPlanArguments,
+  migrationPlanForDatabase,
+  type PlanEnd,
+} from './plan-arguments';
+import {
   buildPerSpaceBreakdown,
   collectOrdered,
   type OrderedResolution,
@@ -188,6 +194,7 @@ export type ExecuteRunOptions<
         readonly acceptAccessChanges: boolean;
         readonly ref?: NamedRef;
         readonly permitPolicyChange: boolean;
+        readonly emittedContractHash?: string;
       }
   );
 
@@ -247,13 +254,25 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
 
   // 2. Read live DB state (markers + schema).
   const markerRows = await familyInstance.readAllMarkers({ driver });
+  const ref = options.action === 'dbUpdate' ? options.ref : undefined;
+  const emittedContractHash =
+    options.action === 'dbUpdate' ? options.emittedContractHash : undefined;
+  const appSpace = appSpaceOf(aggregate, {
+    hash: emittedContractHash ?? (ref === undefined ? contract.storage.storageHash : undefined),
+  });
+  const migrationPlan: MigrationPlanArguments = migrationPlanForDatabase(
+    appSpace,
+    markerRows.get(aggregate.app.spaceId),
+    dbUpdatePlanEnd(ref, contract.storage.storageHash),
+  );
 
   // 2c. The database's policies decide whether `db update` may move it, before anything is planned.
   let checkedPolicies: CheckedDatabasePolicies | undefined;
   if (options.action === 'dbUpdate') {
     const checked = checkRunPolicies({
       command: 'db update',
-      appSpaceId: aggregate.app.spaceId,
+      app: appSpace,
+      markers: markerRows,
       inForce: databasePoliciesInForce(
         markerRows,
         aggregate.app.spaceId,
@@ -263,6 +282,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       permitPolicyChange: options.permitPolicyChange,
       targetHash: contract.storage.storageHash,
       invocation: options.invocation,
+      migrationPlan,
     });
     if (!checked.ok) {
       return notOk(checked.failure);
@@ -311,14 +331,11 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       ? fieldConverts
       : statementsNeedingMigrationFile(statementTexts, firstResolved);
   if (needsMigrationFile.length > 0) {
-    const markerHash = markerRows.get(aggregate.app.spaceId)?.storageHash;
     throw errorStatementNeedsMigrationFile(
       statementTexts,
       needsMigrationFile,
       options.invocation,
-      aggregate.app.packages.some(({ metadata }) => metadata.to === markerHash)
-        ? markerHash
-        : undefined,
+      migrationPlan,
     );
   }
 
@@ -371,6 +388,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       appSpaceId: aggregate.app.spaceId,
       command: 'db update',
       invocation: options.invocation,
+      migrationPlan,
       forbidden: forbiddingSettingsOfRun(checkedPolicies, options.ref),
       dataLoss: operations(planned.subjects.dataLoss),
       accessChanges: operations(planned.subjects.accessChanges),
@@ -410,6 +428,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
           aggregate,
           markerRows,
           invocation: options.invocation,
+          migrationPlan,
           statements: texts,
           resolved,
         }),
@@ -474,10 +493,8 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       originKnown: fromContract !== null,
       destination: contract,
       answer: options.answerQuestions,
-      keepDataEditAdvice: dbUpdateKeepDataEditAdvice(
-        options.invocation,
-        recordedDatabaseContract(aggregate, markerRows),
-      ),
+      keepDataEditAdvice: dbUpdateKeepDataEditAdvice(options.invocation, migrationPlan),
+      migrationPlan: { ...migrationPlan, invocation: options.invocation },
       replan: (planned) => plan([...consentTexts, ...planned], resolveRenames(planned)),
     });
     if (!answered.ok) {
@@ -595,6 +612,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       appliedStatements,
       subjects,
       databaseStorageHash,
+      migrationPlan: action === 'dbUpdate' ? migrationPlan : undefined,
       permitted,
     });
   }
@@ -625,7 +643,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       action === 'dbInit'
         ? dbInitRunnerFailureError(applied.failure, facts, options.invocation)
         : dbUpdateRunnerFailureError(applied.failure, facts, {
-            databaseStorageHash,
+            migrationPlan,
             invocation: options.invocation,
           }),
     );
@@ -663,6 +681,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     appliedStatements,
     subjects,
     databaseStorageHash,
+    migrationPlan: action === 'dbUpdate' ? migrationPlan : undefined,
     changedStorageEntities: signedWithoutOperations
       ? changedStorageEntities(fromContract, contract)
       : undefined,
@@ -864,17 +883,21 @@ function mapPlannerError(
     readonly aggregate: ContractSpaceAggregate;
     readonly markerRows: ReadonlyMap<string, { readonly storageHash: string }>;
     readonly invocation: CliInvocation;
+    /** The `migration plan` that takes the database where `db update` was going. */
+    readonly migrationPlan: MigrationPlanArguments;
     readonly statements: readonly StatementText[];
     readonly resolved: readonly ResolvedMigrationStatement[];
   },
 ): CliStructuredError {
   if (error.kind === 'planFromDiffFailed') {
     return context.action === 'dbInit'
-      ? dbInitPlanningFailedError(error.conflicts)
+      ? dbInitPlanningFailedError(error.conflicts, {
+          migrationPlanOrigin: context.migrationPlan.from,
+          invocation: context.invocation,
+        })
       : planningRefusedError(error.conflicts, {
           invocation: context.invocation,
-          from: recordedDatabaseContract(context.aggregate, context.markerRows),
-          to: undefined,
+          migrationPlan: context.migrationPlan,
           statements: context.statements,
           resolved: context.resolved,
         });
@@ -923,12 +946,15 @@ function wrapPlanResult(args: {
     | undefined;
   /** `undefined` for `db init`, which prints no `migration plan`. */
   readonly databaseStorageHash: string | undefined;
+  /** `undefined` for `db init`. */
+  readonly migrationPlan: MigrationPlanArguments | undefined;
   readonly permitted: readonly DataProtectionSetting[];
 }): DbInitResult | DbUpdateResult {
   const success: DbInitSuccess | DbUpdateSuccess = {
     mode: 'plan',
     ...(args.permitted.length > 0 ? { permitted: args.permitted } : {}),
     ...ifDefined('databaseStorageHash', args.databaseStorageHash),
+    ...ifDefined('migrationPlan', args.migrationPlan),
     ...ifDefined('appliedStatements', args.appliedStatements),
     ...args.subjects,
     plan: {
@@ -960,6 +986,8 @@ function wrapApplyResult(args: {
     | undefined;
   /** `undefined` for `db init`, which prints no `migration plan`. */
   readonly databaseStorageHash: string | undefined;
+  /** `undefined` for `db init`. */
+  readonly migrationPlan: MigrationPlanArguments | undefined;
   /** Set when `db update` signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities: readonly ChangedStorageEntity[] | undefined;
   readonly databasePoliciesUpdated: readonly DatabasePolicyDifference[] | undefined;
@@ -970,6 +998,7 @@ function wrapApplyResult(args: {
     ...(args.permitted.length > 0 ? { permitted: args.permitted } : {}),
     ...ifDefined('databasePoliciesUpdated', args.databasePoliciesUpdated),
     ...ifDefined('databaseStorageHash', args.databaseStorageHash),
+    ...ifDefined('migrationPlan', args.migrationPlan),
     ...ifDefined('changedStorageEntities', args.changedStorageEntities),
     ...ifDefined('appliedStatements', args.appliedStatements),
     ...args.subjects,
@@ -992,10 +1021,16 @@ function wrapApplyResult(args: {
 }
 
 /**
- * The storage hash of the contract the application space's database is at, when the migration
- * graph has it: `migration plan --from` then resolves it. Without a migration that ends at it,
- * `migration plan` starts from the `db` ref that `db update` keeps.
+ * Where `db update` goes, as `migration plan` would end there: the ref `--to` named, a contract a
+ * migration records, or else the emitted contract, the only other contract `db update` moves to.
  */
+function dbUpdatePlanEnd(ref: NamedRef | undefined, targetHash: string): PlanEnd {
+  return ref === undefined
+    ? { kind: 'contract', hash: targetHash }
+    : { kind: 'ref', name: ref.name };
+}
+
+/** The contract the application space's database is at, when a migration records it. */
 function recordedDatabaseContract(
   aggregate: ContractSpaceAggregate,
   markerRows: ReadonlyMap<string, { readonly storageHash: string }>,

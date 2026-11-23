@@ -1,5 +1,5 @@
 /**
- * Journey: a MySQL schema written with the convenience date and time types, run with no global `Temporal`. `contract emit`, `db init` and `db verify` run as child processes with no `Temporal` and read every default, the Temporal types' included, through the fallback the MySQL target's control entry sets. An application with no `Temporal` then writes the default types through the raw SQL lane and reads them through the ORM: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read strings. No process gains a global `Temporal`. Reading a Temporal type in that application raises `RUNTIME.TEMPORAL_UNAVAILABLE`. Skipped when `MYSQL_URL` is not set.
+ * Journey: a MySQL schema written with the convenience date and time types, run with no global `Temporal`. `contract emit`, `db init` and `db verify` run as child processes with no `Temporal` and read every default, the Temporal types' included, through the fallback the MySQL target's control entry sets. An application with no `Temporal` then writes the default types through the raw SQL lane and reads them through the ORM: `DateTime` reads a JavaScript `Date`, and `Date`, `Time` and `Duration` read strings. No process gains a global `Temporal`. Reading a Temporal type in that application raises `RUNTIME.TEMPORAL_UNAVAILABLE`. Fails when `MYSQL_URL` is not set; `docker compose up -d --wait mysql` starts the server.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
@@ -121,8 +121,8 @@ withTempDir(({ createTempDir }) => {
   describe('Journey: the MySQL convenience date and time types in processes with no Temporal', () => {
     it(
       'emit, create and verify every default, and an application reads the default types',
-      async (test) => {
-        await withMysqlDatabase(test, async ({ url }) => {
+      async () => {
+        await withMysqlDatabase(async ({ url }) => {
           const ctx = setup(createTempDir, url);
 
           const emit = await runBin(ctx, ['contract', 'emit']);

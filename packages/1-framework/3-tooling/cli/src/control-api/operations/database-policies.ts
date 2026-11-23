@@ -10,7 +10,9 @@ import {
   databasePolicyDifferences,
   withDeclaredDatabasePolicies,
 } from '@internal/framework-components/control';
+import type { ContractMarkerRecordLike } from '@internal/migration-tools/aggregate';
 import type { NamedRef } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../../utils/cli-errors';
 import {
@@ -28,6 +30,11 @@ import {
   type PolicySource,
 } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
+import {
+  type MigrationPlanArguments,
+  migrationPlanForDatabase,
+  type PlanSpace,
+} from './plan-arguments';
 
 /**
  * The database's policies in force: what the application space's marker records, filled from
@@ -74,14 +81,21 @@ const STRATEGY_OF: Record<ChangePolicyCheckedCommand, ChangeStrategy> = {
  */
 export function checkRunPolicies(args: {
   readonly command: ChangePolicyCheckedCommand;
-  readonly appSpaceId: string;
+  /** The application space, whose migrations and refs the refusal's advice names. */
+  readonly app: PlanSpace & { readonly spaceId: string };
+  /** The markers the run read, which say where the database is. */
+  readonly markers: ReadonlyMap<string, ContractMarkerRecordLike | null>;
   readonly inForce: DatabasePolicies;
   readonly ref: NamedRef | undefined;
   readonly permitPolicyChange: boolean;
+  /** The contract the run moves the database to: the ref's, when there is one. */
   readonly targetHash: string;
   readonly invocation: CliInvocation | undefined;
+  /** The `migration plan` to the target that the run already derived, which the refusal's advice names. */
+  readonly migrationPlan?: MigrationPlanArguments;
 }): Result<CheckedDatabasePolicies, CliStructuredError> {
-  const { appSpaceId, inForce, ref } = args;
+  const { app, inForce, ref } = args;
+  const appSpaceId = app.spaceId;
   const declared = ref?.policies;
   const differences = declared === undefined ? [] : databasePolicyDifferences(declared, inForce);
   if (ref !== undefined && differences.length > 0 && !args.permitPolicyChange) {
@@ -105,6 +119,15 @@ export function checkRunPolicies(args: {
             ? { kind: 'ref', refName: ref.name }
             : { kind: 'marker' },
         targetHash: args.targetHash,
+        migrationPlan:
+          args.migrationPlan ??
+          migrationPlanForDatabase(
+            app,
+            args.markers.get(app.spaceId),
+            ref === undefined
+              ? { kind: 'contract', hash: args.targetHash }
+              : { kind: 'ref', name: ref.name },
+          ),
         ref:
           ref === undefined
             ? undefined
@@ -177,6 +200,7 @@ export function refuseForbiddenChanges(args: {
   readonly dataLoss: readonly DataProtectionRefusedOperation[];
   readonly accessChanges: readonly DataProtectionRefusedOperation[];
   readonly invocation: CliInvocation | undefined;
+  readonly migrationPlan?: MigrationPlanArguments;
 }): CliStructuredError | undefined {
   const operationsOf = { dataLoss: args.dataLoss, accessWidening: args.accessChanges };
   const refusals = DATA_PROTECTION_KEYS.flatMap((setting) => {
@@ -191,5 +215,6 @@ export function refuseForbiddenChanges(args: {
         command: args.command,
         refusals,
         invocation: args.invocation,
+        ...ifDefined('migrationPlan', args.migrationPlan),
       });
 }

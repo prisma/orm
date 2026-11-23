@@ -71,6 +71,10 @@
     "./mysql-database": {
       "types": "./dist/exports/mysql-database.d.mts",
       "import": "./dist/exports/mysql-database.mjs"
+    },
+    "./ci": {
+      "types": "./dist/exports/ci.d.mts",
+      "import": "./dist/exports/ci.mjs"
     }
   }
 }

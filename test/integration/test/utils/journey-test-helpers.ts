@@ -901,7 +901,7 @@ export function migrationStatusAppSpace(
  * Path of the app subspace's migrations directory under the journey
  * test root (`migrations/app/`).
  */
-function appMigrationsDir(ctx: JourneyContext): string {
+export function appMigrationsDir(ctx: JourneyContext): string {
   return join(ctx.testDir, ctx.migrationsDir ?? 'migrations', 'app');
 }
 

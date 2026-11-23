@@ -7,6 +7,7 @@ import {
   detectOrphans,
   findPath,
   findPathWithDecision,
+  historyEndsFrom,
   reconstructGraph,
 } from '../src/migration-graph';
 import type { OnDiskMigrationPackage } from '../src/package';
@@ -656,5 +657,46 @@ describe('findPathWithDecision', () => {
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
     expect(result.decision.selectedPath).toEqual([]);
+  });
+});
+
+describe('historyEndsFrom', () => {
+  it('names the one end of a linear history', () => {
+    const graph = reconstructGraph(chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2']));
+    expect(historyEndsFrom(graph, E)).toEqual(['H2']);
+  });
+
+  it('names each end of a branched history, and only those the start reaches', () => {
+    const graph = reconstructGraph(
+      chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H1', 'H3', 'm3'], ['X1', 'X2', 'm4']),
+    );
+    expect(historyEndsFrom(graph, E)).toEqual(['H2', 'H3']);
+  });
+
+  it('counts a contract whose only migration is a self-edge as an end', () => {
+    const graph = reconstructGraph([pkg(E, 'H1', 'm0'), pkgSelfEdge('H1', 'm_self')]);
+    expect(historyEndsFrom(graph, E)).toEqual(['H1']);
+  });
+
+  it('ends a history whose last migration rolls back at each contract of that cycle', () => {
+    const graph = reconstructGraph(chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H2', 'H1', 'm3']));
+    expect(historyEndsFrom(graph, E)).toEqual(['H1', 'H2']);
+  });
+
+  it('ends at the start when a rollback brought the history back to it', () => {
+    const graph = reconstructGraph(chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H2', 'H1', 'm3']));
+    expect(historyEndsFrom(graph, 'H1')).toEqual(['H1']);
+  });
+
+  it('passes over a rollback cycle that a later migration leaves', () => {
+    const graph = reconstructGraph(
+      chain([E, 'H1', 'm1'], ['H1', 'H2', 'm2'], ['H2', 'H1', 'm3'], ['H1', 'H3', 'm4']),
+    );
+    expect(historyEndsFrom(graph, 'H1')).toEqual(['H3']);
+  });
+
+  it('is the start itself when no migration leaves it', () => {
+    const graph = reconstructGraph(chain(['H1', 'H2', 'm1']));
+    expect(historyEndsFrom(graph, E)).toEqual([E]);
   });
 });

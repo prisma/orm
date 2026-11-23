@@ -1,4 +1,5 @@
 import type { MigrationRunnerFailure } from '@internal/framework-components/control';
+import type { MigrationPlanArguments } from '../control-api/operations/plan-arguments';
 import type { RunnerFailureFacts } from '../control-api/types';
 import type { CliStructuredError } from './cli-errors';
 import { chooseAction, editFileAction } from './next-actions';
@@ -14,40 +15,31 @@ import { runnerFailureError } from './runner-failure-error';
 import { schemaCheckIssues } from './schema-check-issues';
 
 /**
- * A failed `db update` apply as the CLI reports it. `databaseStorageHash` is the contract the
- * database is at when a migration of the graph ends at it: the origin a `migration plan` for this
- * database starts from.
+ * A failed `db update` apply as the CLI reports it. `migrationPlan` is the `--from` and `--to` of a
+ * `migration plan` that takes this database where the run was going.
  */
 export function dbUpdateRunnerFailureError(
   failure: MigrationRunnerFailure,
   facts: RunnerFailureFacts,
   context: {
-    readonly databaseStorageHash: string | undefined;
+    readonly migrationPlan: MigrationPlanArguments;
     readonly invocation: CliInvocation;
   },
 ): CliStructuredError {
-  const { databaseStorageHash, invocation } = context;
+  const { migrationPlan, invocation } = context;
   const update = dbUpdateRerun(invocation);
   const { blockingObjects } = failure.meta;
   const advice =
     blockingObjects !== undefined
       ? blockingObjectsAdvice(blockingObjects, update)
       : facts.failedTypeChange !== undefined
-        ? dbUpdateFailedTypeChangeAdvice(facts.failedTypeChange, databaseStorageHash, invocation)
+        ? dbUpdateFailedTypeChangeAdvice(facts.failedTypeChange, migrationPlan, invocation)
         : facts.rowsWithoutValue !== undefined
-          ? dbUpdateRowsWithoutValueAdvice(facts.rowsWithoutValue, databaseStorageHash, invocation)
+          ? dbUpdateRowsWithoutValueAdvice(facts.rowsWithoutValue, migrationPlan, invocation)
           : facts.rowsHoldingValue !== undefined
-            ? dbUpdateRowsHoldingValueAdvice(
-                facts.rowsHoldingValue,
-                databaseStorageHash,
-                invocation,
-              )
+            ? dbUpdateRowsHoldingValueAdvice(facts.rowsHoldingValue, migrationPlan, invocation)
             : facts.rowsFailingCheck !== undefined
-              ? dbUpdateRowsFailingCheckAdvice(
-                  facts.rowsFailingCheck,
-                  databaseStorageHash,
-                  invocation,
-                )
+              ? dbUpdateRowsFailingCheckAdvice(facts.rowsFailingCheck, migrationPlan, invocation)
               : schemaCheckIssues(failure) !== undefined
                 ? [
                     editFileAction(

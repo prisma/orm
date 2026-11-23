@@ -50,6 +50,8 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   readonly ref?: NamedRef;
   /** See {@link DbUpdateOptions.permitPolicyChange}. */
   readonly permitPolicyChange?: boolean;
+  /** See {@link DbUpdateOptions.emittedContractHash}. */
+  readonly emittedContractHash?: string;
   readonly migrationsDir: string;
   readonly targetId: TTargetId;
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
@@ -112,6 +114,7 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     acceptAccessChanges: options.acceptAccessChanges ?? false,
     ...ifDefined('ref', options.ref),
     permitPolicyChange: options.permitPolicyChange ?? false,
+    ...ifDefined('emittedContractHash', options.emittedContractHash),
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
     ...ifDefined('onProgress', options.onProgress),

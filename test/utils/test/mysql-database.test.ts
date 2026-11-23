@@ -1,6 +1,6 @@
 import { createConnection } from 'mariadb';
 import { describe, expect, it } from 'vitest';
-import { mysqlServerUrl, withMysqlDatabase } from '../src/mysql-database';
+import { requireMysqlServerUrl, withMysqlDatabase } from '../src/mysql-database';
 import { timeouts } from '../src/timeouts';
 
 async function asAdmin<T>(
@@ -25,12 +25,8 @@ async function asAdmin<T>(
 describe('withMysqlDatabase', () => {
   it(
     'reaches a server that requires TLS when MYSQL_URL carries the TLS parameters the MySQL driver reads',
-    async (test) => {
-      const serverUrl = mysqlServerUrl();
-      if (serverUrl === undefined) {
-        test.skip('MYSQL_URL is not set');
-        return;
-      }
+    async () => {
+      const serverUrl = requireMysqlServerUrl();
       const user = `tls_${Date.now().toString(36)}`;
       await asAdmin(serverUrl, async (run) => {
         await run(`CREATE USER '${user}'@'%' IDENTIFIED BY 'pw-tls' REQUIRE SSL`);
@@ -42,7 +38,7 @@ describe('withMysqlDatabase', () => {
         tlsUrl.searchParams.set('sslmode', 'no-verify');
         process.env['MYSQL_URL'] = tlsUrl.toString();
         try {
-          const created = await withMysqlDatabase(test, async ({ name, url }) => ({
+          const created = await withMysqlDatabase(async ({ name, url }) => ({
             name,
             sslmode: new URL(url).searchParams.get('sslmode'),
           }));
