@@ -13,7 +13,7 @@ describe('createDevDatabase', () => {
         await database.close();
       }
     },
-    timeouts.databaseOperation,
+    timeouts.spinUpPpgDev,
   );
 
   it(
