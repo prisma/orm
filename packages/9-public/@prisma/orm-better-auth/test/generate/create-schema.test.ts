@@ -149,7 +149,7 @@ export default definePrismaConfig({ orm: { ...orm, contract: { ...orm.contract, 
     const dir = await projectWith({ 'prisma/contract.prisma/keep': '' });
     const file = join(dir, 'prisma/contract.prisma');
     const expected = await refusalFor(
-      `\`auth generate\` did not change your contract, because ${relative(process.cwd(), file)} could not be read: EISDIR: illegal operation on a directory, read '${file}'. ${passOutput}`,
+      `\`auth generate\` did not change your contract, because ${relative(process.cwd(), file)} could not be read (EISDIR). ${passOutput}`,
     );
     await expect(generate(file)).rejects.toThrow(expected);
   });

@@ -13,8 +13,11 @@ const typeScriptContract =
   'it is written in TypeScript. Add the equivalent models and fields in TypeScript.';
 const typeScriptFile = /\.[cm]?tsx?$/;
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+/** The error's code, or its name when it has none. Its message is left out: from the operating system or the module loader it differs between systems and can hold absolute paths. */
+function errorKind(error: unknown): string {
+  const code: unknown = error instanceof Error ? Reflect.get(error, 'code') : undefined;
+  if (typeof code === 'string') return code;
+  return error instanceof Error ? error.name : typeof error;
 }
 
 function isMissingFile(error: unknown): boolean {
@@ -27,7 +30,7 @@ async function configLoader(comparison: ContractComparison) {
   } catch (error) {
     throw notChanged(
       comparison,
-      `Prisma's config loader could not be loaded: ${messageOf(error)}. ${passOutput}`,
+      `Prisma's config loader could not be loaded (${errorKind(error)}). ${passOutput}`,
     );
   }
 }
@@ -38,13 +41,13 @@ async function contractInputs(
   shown: (path: string) => string,
 ): Promise<readonly string[]> {
   const loader = await configLoader(comparison);
-  const didNotLoad = (message: string) =>
-    notChanged(comparison, `prisma.config.ts did not load: ${message}. ${passOutput}`);
+  const didNotLoad = (reason: string) =>
+    notChanged(comparison, `prisma.config.ts did not load${reason}. ${passOutput}`);
   let loaded: Awaited<ReturnType<typeof loader.loadConfigForSections>>;
   try {
     loaded = await loader.loadConfigForSections(undefined, ['contract']);
   } catch (error) {
-    throw didNotLoad(messageOf(error));
+    throw didNotLoad(` (${errorKind(error)})`);
   }
   if (!loaded.ok) {
     if (loaded.failure.code === 'CONFIG.FILE_NOT_FOUND') {
@@ -53,7 +56,7 @@ async function contractInputs(
         `it found no prisma.config.ts in the working directory. ${passOutput}`,
       );
     }
-    throw didNotLoad(loaded.failure.message);
+    throw didNotLoad(`: ${loaded.failure.message}`);
   }
   const source = loaded.value.contract?.source;
   if (source === undefined) {
@@ -104,7 +107,7 @@ export async function contractSourceFiles(
         comparison,
         isMissingFile(error)
           ? `${path} was not found. ${passOutput}`
-          : `${path} could not be read: ${messageOf(error)}. ${passOutput}`,
+          : `${path} could not be read (${errorKind(error)}). ${passOutput}`,
       );
     }
     if (file === undefined && !isPrisma8Schema(text)) continue;
