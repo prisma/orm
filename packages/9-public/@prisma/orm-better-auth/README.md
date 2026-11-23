@@ -242,3 +242,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
 - `@better-auth/core` 1.7.6 or a later 1.7 release, below 1.8, as a peer.
 
 The package imports only published entrypoints, so it works outside the Prisma repository.
+
+## Where this package lives
+
+The package is developed in the [prisma/orm](https://github.com/prisma/orm) repository for now. The plan is to move it to its own repository when Prisma 8 reaches general availability, and not before: until then the Prisma 8 packages change in ways that the adapter has to follow in the same pull request, and its tests run against the unreleased packages in this repository. The package name, `@prisma/orm-better-auth`, stays the same after the move.
