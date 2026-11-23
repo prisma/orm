@@ -4,12 +4,13 @@
 
 ## Summary
 
-Five slices, one pull request each, three in `prisma/orm` and two in `prisma/composer`. Slice 1 fixes the off-graph error and the texts that misled the agent, so agents benefit before policies exist. Slices 3 and 4 add the policies. Slices 2 and 5 bring each change to Composer once an ORM release carries it.
+Six slices, one pull request each, four in `prisma/orm` and two in `prisma/composer`. Slice 1 fixes the off-graph error and the texts that misled the agent, so agents benefit before policies exist. Slices 3 and 4 add the policies. Slices 2 and 5 bring each change to Composer once an ORM release carries it. Slice 6 adds a CLI command that writes a ref's policies.
 
 ```
 1 (orm) ──► 2 (composer)
    └──► 3 (orm) ──► 4 (orm)
-           └──► 5 (composer)
+           ├──► 5 (composer)
+           └──► 6 (orm)
 ```
 
 ## Slice 1: the off-graph error, and no more reset advice (orm) (TML-3725)
@@ -92,6 +93,20 @@ Slice spec: [`slices/3-policies/spec.md`](slices/3-policies/spec.md).
 - The "already at target" check compares the target ref's declared policies as well as the hash and invariants, so a policy-only change deploys.
 
 **Builds on:** slices 2 and 3, released. **Hands to:** close-out.
+
+## Slice 6: a CLI command writes a ref's policies (orm)
+
+**Why:** today a user declares a database's policies by editing the ref file by hand. The values are long fixed strings, a typo is reported only when the next command reads the ref, and `migration ref set` already writes the ref's hash, so a user expects a command for the rest. A colleague raised this on 2026-11-23 and Will agreed.
+
+**Outcome:**
+- A CLI command writes the `policies` field of a ref file. Editing the file by hand keeps working, and the file format does not change.
+- The command changes no database. A database's policy still changes only through a deploy given `--permit-policy-change`. This is not the `db policy set` command the decision record rejects, which would change the database directly.
+- No error or advice suggests the command, as with `--permit-policy-change`.
+- The decision record and the skill describe the command.
+
+**Not designed yet:** the command's name and syntax. Bring the proposed syntax to Will before building.
+
+**Builds on:** slice 3. Needs no release. **Hands to:** close-out.
 
 ## Dependencies
 
