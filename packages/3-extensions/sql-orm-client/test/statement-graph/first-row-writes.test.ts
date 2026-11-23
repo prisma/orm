@@ -123,3 +123,23 @@ describe('what update() returns when its filter names no unique key', () => {
     ]);
   });
 });
+
+describe('delete() and update() whose filter holds raw SQL', () => {
+  it('write the row they found by key alone, since the raw SQL may read the table they write', async () => {
+    const { collection, runtime } = createCollectionFor('User');
+    const rows = collection
+      .where((user, { fns }) => fns.raw`${user.name} <> ''`.returns('pg/bool@1'))
+      .select('id', 'name');
+    runtime.setNextResults([[ada], [ada], [{ id: 1 }], [ada]]);
+
+    await rows.delete();
+    await rows.update({ name: 'Grace' });
+
+    expect(sent(runtime)).toEqual([
+      'select users where <raw-expr> limit 1',
+      'delete users where id = 1 returning id, name',
+      'select users where <raw-expr> limit 1',
+      'update users where id = 1 returning id, name',
+    ]);
+  });
+});
