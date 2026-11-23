@@ -81,6 +81,12 @@ describe('customParsers', () => {
     '$1234.50',
     '120.00',
     '$',
+    'CHF 15.00',
+    '−$120.00',
+    '$−120.00',
+    '－￥120',
+    '+$5.00',
+    '$5.00-',
   ])('rejects money %s, whose separators or sign cannot be read safely', (input) => {
     expect(() => customParsers[MONEY](input)).toThrow('Unsupported money format')
   })

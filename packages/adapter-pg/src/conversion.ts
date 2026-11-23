@@ -340,18 +340,21 @@ function normalize_timez(time: string): string {
 /* Money handling */
 /******************/
 
-const SUPPORTED_MONEY_FORMAT = /^(?:-[^\d\s.,-]+|[^\d\s.,-]+-?)\d{1,3}(?:,\d{3})*(?:\.(?!\d{3}$)\d+)?$/
+const SUPPORTED_MONEY_FORMAT = /^(?:(-)[\p{L}\p{Sc}]+|[\p{L}\p{Sc}]+(-)?)(\d{1,3}(?:,\d{3})*)(\.(?!\d{3}$)\d+)?$/u
 
 function normalize_money(money: string): string {
-  // Postgres formats money using `lc_monetary`: `$1,234.50` by default, `£1,234.50`, `¥500` or `CHF-120.00` elsewhere.
-  // A locale whose separators mean something else (`1.234,50 €`) is refused rather than misread, and so is a
-  // three-digit fraction: `$1.234` could be 1234 in a locale with a "." thousands separator and no decimals.
-  if (!SUPPORTED_MONEY_FORMAT.test(money)) {
+  // Postgres formats money using `lc_monetary`: `$1,234.50` by default, `£1,234.50`, `¥500` or `HK$-120.00` elsewhere.
+  // Anything else is refused rather than misread: other separators (`1.234,50 €`), a space after the symbol
+  // (`CHF 15.00`), a sign that is not "-" (`−$5.00`, `($5.00)`), and a three-digit fraction, because `$1.234` could be
+  // 1234 in a locale with a "." thousands separator and no decimals. `,` is assumed to separate thousands.
+  const match = SUPPORTED_MONEY_FORMAT.exec(money)
+  if (match === null) {
     throw new Error(
-      `Unsupported money format "${money}": expected a currency symbol and an amount with "," thousands separators and a "." decimal point, such as -£1,234.50`,
+      `Unsupported money format "${money}": expected a currency symbol directly followed by an amount with "," thousands separators and a "." decimal point, such as -£1,234.50`,
     )
   }
-  return money.replace(/[^\d.-]/g, '')
+  const [, signBeforeSymbol = '', signAfterSymbol = '', integer, fraction = ''] = match
+  return `${signBeforeSymbol}${signAfterSymbol}${integer.replaceAll(',', '')}${fraction}`
 }
 
 /******************/
