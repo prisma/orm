@@ -32,10 +32,10 @@ changes:
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '"arktype"\s*:\s*"[\^~]?2(?:\.(?:[xX*]|[01](?:\.(?:\d+|[xX*]))?|2(?:\.(?:[0-8]|[xX*]))?))?(?![\d.])'
-        - '(?<![\w@/-])[''"]?arktype[''"]?:\s*[''"]?[\^~]?2(?:\.(?:[xX*]|[01](?:\.(?:\d+|[xX*]))?|2(?:\.(?:[0-8]|[xX*]))?))?(?![\d.])'
-        - '"bson"\s*:\s*"[\^~]?7(?:\.(?:[xX*]|[0-2](?:\.(?:\d+|[xX*]))?|3(?:\.(?:[0-3]|[xX*]))?))?(?![\d.])'
-        - '(?<![\w@/-])[''"]?bson[''"]?:\s*[''"]?[\^~]?7(?:\.(?:[xX*]|[0-2](?:\.(?:\d+|[xX*]))?|3(?:\.(?:[0-3]|[xX*]))?))?(?![\d.])'
+        - '"arktype"\s*:\s*"(?:(?:[\^~]|[<>]=?\s*)?2(?:\.(?:[xX*]|[01](?:\.(?:\d+|[xX*]))?|2(?:\.(?:[0-8]|[xX*]))?))?(?![\d.])|[*xX]?")'
+        - '(?<![\w@/-])[''"]?arktype[''"]?:\s*[''"]?(?:(?:[\^~]|[<>]=?\s*)?2(?:\.(?:[xX*]|[01](?:\.(?:\d+|[xX*]))?|2(?:\.(?:[0-8]|[xX*]))?))?(?![\d.])|[*xX](?![\w.]))'
+        - '"bson"\s*:\s*"(?:(?:[\^~]|[<>]=?\s*)?7(?:\.(?:[xX*]|[0-2](?:\.(?:\d+|[xX*]))?|3(?:\.(?:[0-3]|[xX*]))?))?(?![\d.])|[*xX]?")'
+        - '(?<![\w@/-])[''"]?bson[''"]?:\s*[''"]?(?:(?:[\^~]|[<>]=?\s*)?7(?:\.(?:[xX*]|[0-2](?:\.(?:\d+|[xX*]))?|3(?:\.(?:[0-3]|[xX*]))?))?(?![\d.])|[*xX](?![\w.]))'
   - id: config-type-renamed-to-prisma-config
     summary: |
       The config type that `defineConfig` returns is renamed from `PrismaNextConfig` to `PrismaConfig`, in `@prisma/orm-toolchain/cli/config-types` and every package that re-exports it. The old name is gone. The detection matches TypeScript sources that name the old type.
@@ -486,7 +486,7 @@ In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` ma
 
 `arktype` and `bson` are dependencies of the Prisma 8 packages, not peers, so the package manager installs the version Prisma 8 asks for beside the project's own when the project's range or lockfile keeps an older one. A project that pins `arktype` at `2.2.3`, for example, then has two copies, and code such as `if (result instanceof type.errors)` on a value from the other copy no longer narrows `result`. On MongoDB the same holds for `bson` classes such as `ObjectId`.
 
-In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `arktype` range to `^2.2.9` and the `bson` range to `^7.3.4`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. The detection also matches a range with fewer version parts, such as `^2` or `7.3`, or with `x` or `*`, such as `2.2.x`, since each allows an older version. Then check that the lockfile has one version of each, for example with `pnpm why arktype`. A project that does not declare either itself needs no change.
+In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `arktype` range to `^2.2.9` and the `bson` range to `^7.3.4`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. The detection also matches a range with fewer version parts, such as `^2` or `7.3`, one with `x` or `*`, such as `2.2.x` or `*`, and a lower bound such as `>=2.0.0`, since each allows an older version. Then check that the lockfile has one version of each, for example with `pnpm why arktype`. A project that does not declare either itself needs no change.
 
 
 ## `PrismaNextConfig` is now `PrismaConfig`
