@@ -168,7 +168,7 @@ describe('write graphs as they run, on a contract with returning', () => {
     expect(asRun(updateFirstGraph(usersOf(context), { name: 'Grace' }))).toBe(
       lines(
         "n1 Find users where name = 'Ada' limit 1",
-        "n2 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (id->id)",
+        "n2 Update users set name = 'Grace' <- FilterData n1 (id->id)",
         'result: n2',
       ),
     );
@@ -186,7 +186,7 @@ describe('write graphs as they run, on a contract with returning', () => {
     ).toBe(
       lines(
         "n1 Find users where name = 'Ada' limit 1",
-        "n2 Update users set name = 'Grace' where name = 'Ada' <- FilterData n1 (id->id)",
+        "n2 Update users set name = 'Grace' <- FilterData n1 (id->id)",
         'n3 Update posts set nothing where id = 10 <- PayloadData n2 (id->user_id)',
         'result: n2',
       ),
@@ -207,7 +207,7 @@ describe('write graphs as they run, on a contract with returning', () => {
     expect(asRun(deleteFirstGraph(usersOf(context)))).toBe(
       lines(
         "n1 Find users where name = 'Ada' limit 1",
-        "n2 Delete users where name = 'Ada' <- FilterData n1 (id->id)",
+        'n2 Delete users <- FilterData n1 (id->id)',
         'n3 DeletedRows <- WholeRows n1, Rows n2',
         'result: n3',
       ),
@@ -406,7 +406,7 @@ describe('write graphs as they run, on a contract without returning', () => {
       lines(
         'n1 State users',
         "n2 Find users where name = 'Ada' limit 1 <- state n1",
-        "n3 Update users set id = 5, name = 'Grace' where name = 'Ada' <- FilterData n2 (id->id), state n1",
+        "n3 Update users set id = 5, name = 'Grace' <- FilterData n2 (id->id), state n1",
         'n4 State users <- state n3',
         'n5 State posts',
         'n6 Update posts set nothing where id = 10 <- PayloadData n3 (id->user_id), state n5',
@@ -435,7 +435,7 @@ describe('write graphs as they run, on a contract without returning', () => {
       first: lines(
         'n1 State users',
         "n2 Find users where name = 'Ada' limit 1 <- state n1",
-        "n3 Delete users where name = 'Ada' <- FilterData n2 (id->id), state n1",
+        'n3 Delete users <- FilterData n2 (id->id), state n1',
         'n4 State users <- state n3',
         'n5 DeletedRows <- WholeRows n2, Rows n3',
         'result: n5',
