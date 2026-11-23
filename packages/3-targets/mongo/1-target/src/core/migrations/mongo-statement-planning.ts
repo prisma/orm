@@ -628,7 +628,7 @@ function sharedCollectionRefusal(
   if (change === undefined || shared === undefined) return undefined;
   const { from, to } = change;
   const moving = modelsText(change.renames.map((renamed) => renamed.from));
-  const others = modelsText(shared.models);
+  const others = modelsText(shared.objects);
   const leavesBehind = collections
     .leftBehind()
     .some((left) => change.renames.some((renamed) => sameModel(renamed.from, left.model)));

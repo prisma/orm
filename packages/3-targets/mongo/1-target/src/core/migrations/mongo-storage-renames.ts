@@ -55,7 +55,7 @@ export interface CollectionChange {
  */
 export interface SharedCollection {
   readonly kind: 'split' | 'removed' | 'merged';
-  readonly models: readonly ModelCoordinate[];
+  readonly objects: readonly ModelCoordinate[];
 }
 
 function hasModel(contract: ContractWithDomain, model: ModelCoordinate): boolean {
@@ -194,14 +194,14 @@ export class CollectionRenames {
         rename === undefined ? undefined : documentCollectionOf(this.#contract, rename.to);
       return destination !== undefined && destination !== change.to;
     });
-    if (split.length > 0) return { kind: 'split', models: split };
+    if (split.length > 0) return { kind: 'split', objects: split };
     const removed = modelsStoredIn(this.#fromContract, change.from).filter(
       (model) =>
         !this.#models.some((each) => sameModel(each.from, model)) &&
         mongoModelsOf(this.#fromContract.domain, model.namespaceId)[model.model]?.base ===
           undefined,
     );
-    if (removed.length > 0) return { kind: 'removed', models: removed };
+    if (removed.length > 0) return { kind: 'removed', objects: removed };
     const merged = modelsStoredIn(this.#contract, change.to).flatMap((model) => {
       const rename = this.#models.find((each) => sameModel(each.to, model));
       const origin =
@@ -210,7 +210,7 @@ export class CollectionRenames {
         ? [rename.from]
         : [];
     });
-    return merged.length > 0 ? { kind: 'merged', models: merged } : undefined;
+    return merged.length > 0 ? { kind: 'merged', objects: merged } : undefined;
   }
 
   #destinationCollectionOf(model: ModelCoordinate): string | undefined {
@@ -300,7 +300,7 @@ export class CollectionRenames {
       )
       .join(' and ');
     if (shared.kind === 'removed') {
-      return `The origin stores ${modelsText(origin)} in collection "${change.from}", no discriminator tells their documents apart, and the destination removes ${modelsText(shared.models)}, so their storage is being split. ${dataMigration(moves)}`;
+      return `The origin stores ${modelsText(origin)} in collection "${change.from}", no discriminator tells their documents apart, and the destination removes ${modelsText(shared.objects)}, so their storage is being split. ${dataMigration(moves)}`;
     }
     return `The origin stores ${modelsText(origin)} in collection "${change.from}", and the destination stores them in different collections, so their storage is being split. ${dataMigration(moves)}`;
   }
