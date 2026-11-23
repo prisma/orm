@@ -1,0 +1,265 @@
+import type { ResolvedMigrationStatement } from '@internal/framework-components/control';
+import { describe, expect, it } from 'vitest';
+import {
+  type CollectionSpec,
+  contract,
+  type EnumSpec,
+  type FieldTypeSpec,
+  type ModelSpec,
+  NS,
+  plan,
+  refusal,
+  schemaCollection,
+} from './mongo-statement-fixtures';
+
+const OBJECT_ID: FieldTypeSpec = { codecId: 'mongo/objectId@1' };
+const STATUS: FieldTypeSpec = { codecId: 'mongo/string@1', valueSet: 'Status' };
+
+const renameValue = (from: string, to: string): ResolvedMigrationStatement => ({
+  kind: 'rename',
+  entity: 'enumValue',
+  from: { namespaceId: NS, enum: 'Status', member: from },
+  to: { namespaceId: NS, enum: 'Status', member: to },
+});
+
+function statuses(members: Readonly<Record<string, unknown>>, codecId?: string): EnumSpec {
+  return { members, ...(codecId === undefined ? {} : { codecId }) };
+}
+
+const BEFORE = statuses({ ACTIVE: 'active', ARCHIVED: 'archived' });
+const RENAMED = statuses({ ACTIVE: 'active', RETIRED: 'retired' });
+const REMOVED = statuses({ ACTIVE: 'active' });
+
+/** Users with an optional `status` and a list `tags`, both typed by `Status`. */
+function users(
+  seed: string,
+  status: EnumSpec,
+  types: Readonly<Record<string, FieldTypeSpec>> = {
+    status: { ...STATUS, nullable: true },
+    tags: { ...STATUS, many: true },
+  },
+  collection: CollectionSpec = {},
+  models: Readonly<Record<string, ModelSpec>> = {},
+  valueObjects: Readonly<Record<string, Readonly<Record<string, FieldTypeSpec>>>> = {},
+) {
+  return contract(
+    seed,
+    {
+      User: {
+        collection: 'users',
+        fields: ['_id', ...Object.keys(types)],
+        types: { _id: OBJECT_ID, ...types },
+      },
+      ...models,
+    },
+    { users: collection },
+    valueObjects,
+    { Status: status },
+  );
+}
+
+const live = [schemaCollection('users')];
+
+const OVERLAP_WHY = (advice: string) =>
+  `MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents. An operation that reads a value another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. ${advice}`;
+
+const ENUM_TWO_MIGRATIONS =
+  'Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first move every value they swap or chain to a stored value the enum does not use; then move them to their final values.';
+
+const NO_THIRD_BOOLEAN =
+  'A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps.';
+
+const SWAP_IN_ONE_UPDATE =
+  'swap the stored values yourself in one update of the database, such as an updateMany whose pipeline sets each field that holds the enum to its negation with $not';
+
+/** The replacements of the plan's fields `status` and `tags`, as a refusal lists them. */
+const replacementsOf = (...moves: readonly (readonly [string, string])[]) =>
+  moves
+    .flatMap(([from, to]) =>
+      ['status', 'tags'].map(
+        (field) => `Replace value "${from}" with "${to}" in field ${field} of collection users`,
+      ),
+    )
+    .join('; ');
+
+describe('MongoMigrationPlanner, enum value refusals', () => {
+  it('refuses an enum whose values are objects', () => {
+    const result = plan({
+      from: users('from', statuses({ A: { x: 1 }, B: { x: 2 } }, 'mongo/document@1')),
+      to: users('to', statuses({ A: { x: 1 } }, 'mongo/document@1')),
+      schema: live,
+    });
+    expect(refusal(result)).toEqual([
+      {
+        kind: 'fieldRemovalRefused',
+        summary:
+          'Cannot remove enum value "Status.B": its stored value {"x":2} is not a string, a number or a boolean',
+        why: 'The plan matches stored enum values by equality, and MongoDB\'s equality on an object depends on the order of its keys and on a list matches lists that contain it. Rewrite the documents that hold enum value "Status.B" yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, then run the command again.',
+      },
+    ]);
+  });
+
+  it('refuses a rename that merges two values', () => {
+    const result = plan({
+      from: users('from', BEFORE),
+      to: users('to', statuses({ ACTIVE: 'active', RETIRED: 'active' })),
+      schema: live,
+      statements: [renameValue('ARCHIVED', 'RETIRED')],
+    });
+    expect(refusal(result).map(({ summary }) => summary)).toEqual([
+      'Cannot rename enum value "Status.ARCHIVED" to "Status.RETIRED": the origin enum already stores "active", as enum value "Status.ACTIVE"',
+    ]);
+  });
+
+  it('refuses renames that move values in a cycle', () => {
+    const result = plan({
+      from: users('from', statuses({ A: 'a', B: 'b' })),
+      to: users('to', statuses({ C: 'b', D: 'a' })),
+      schema: live,
+      statements: [renameValue('A', 'C'), renameValue('B', 'D')],
+    });
+    expect(refusal(result)).toEqual([
+      {
+        kind: 'statementRefused',
+        summary: `Cannot rename enum value "Status.A" to "Status.C": the migration writes a value that another of its operations reads (${replacementsOf(['a', 'b'], ['b', 'a'])})`,
+        why: OVERLAP_WHY(ENUM_TWO_MIGRATIONS),
+      },
+    ]);
+  });
+
+  it('refuses renames that move values along a chain', () => {
+    const result = plan({
+      from: users('from', statuses({ A: 'a', B: 'b' })),
+      to: users('to', statuses({ B: 'b', C: 'c' })),
+      schema: live,
+      statements: [renameValue('A', 'B'), renameValue('B', 'C')],
+    });
+    if (result.kind !== 'failure') throw new Error('Expected the plan to be refused');
+    expect(
+      result.conflicts.map(({ summary, refusedStatement, leaveOut }) => ({
+        summary,
+        refusedStatement,
+        leaveOut,
+      })),
+    ).toEqual([
+      {
+        summary: `Cannot rename enum value "Status.A" to "Status.B": the migration writes a value that another of its operations reads (${replacementsOf(['a', 'b'], ['b', 'c'])})`,
+        refusedStatement: renameValue('A', 'B'),
+        leaveOut: undefined,
+      },
+    ]);
+  });
+
+  it('refuses renames that swap the values of a boolean enum, with advice to swap them in one update', () => {
+    const flags = (seed: string, members: Readonly<Record<string, unknown>>) =>
+      users(seed, statuses(members, 'mongo/bool@1'), {
+        flag: { codecId: 'mongo/bool@1', valueSet: 'Status' },
+      });
+    const result = plan({
+      from: flags('from', { YES: true, NO: false }),
+      to: flags('to', { ON: false, OFF: true }),
+      schema: live,
+      statements: [renameValue('YES', 'ON'), renameValue('NO', 'OFF')],
+    });
+    expect(refusal(result).map(({ why }) => why)).toEqual([
+      OVERLAP_WHY(
+        `${NO_THIRD_BOOLEAN} Leave out these statements, plan the change with migration plan, remove the removeStoredValue calls of this enum from the migration.ts it writes, and ${SWAP_IN_ONE_UPDATE}, before you apply it.`,
+      ),
+    ]);
+  });
+
+  it('refuses an enum whose values are lists', () => {
+    const result = plan({
+      from: users('from', statuses({ A: ['a'], B: ['b'] }, 'mongo/array@1')),
+      to: users('to', statuses({ A: ['a'] }, 'mongo/array@1')),
+      schema: live,
+    });
+    expect(refusal(result).map(({ summary }) => summary)).toEqual([
+      'Cannot remove enum value "Status.B": its stored value ["b"] is not a string, a number or a boolean',
+    ]);
+  });
+
+  it('refuses a removal in a time-series collection', () => {
+    const result = plan({
+      from: users('from', BEFORE),
+      to: users('to', REMOVED),
+      schema: [schemaCollection('users', { timeseries: true })],
+    });
+    expect(refusal(result).map(({ summary }) => summary)).toEqual([
+      'Cannot remove enum value "Status.ARCHIVED" inside field "status" from collection "users": it is a time-series collection',
+      'Cannot remove enum value "Status.ARCHIVED" inside field "tags" from collection "users": it is a time-series collection',
+    ]);
+  });
+
+  it('refuses a removal in a collection two root models share with no discriminator', () => {
+    const shared = (seed: string, status: EnumSpec) =>
+      users(
+        seed,
+        status,
+        undefined,
+        {},
+        {
+          Guest: {
+            collection: 'users',
+            fields: ['_id', 'status'],
+            types: { _id: OBJECT_ID, status: { ...STATUS, nullable: true } },
+          },
+        },
+      );
+    const result = plan({ from: shared('from', BEFORE), to: shared('to', REMOVED), schema: live });
+    expect(refusal(result).map(({ summary }) => summary)[0]).toBe(
+      'Cannot remove enum value "Status.ARCHIVED" inside field "status" of model "User" from collection "users": model "Guest" stores it in the same collection',
+    );
+  });
+
+  it('refuses a rename in a time-series collection', () => {
+    const result = plan({
+      from: users('from', BEFORE),
+      to: users('to', RENAMED),
+      schema: [schemaCollection('users', { timeseries: true })],
+      statements: [renameValue('ARCHIVED', 'RETIRED')],
+    });
+    expect(refusal(result).map(({ summary }) => summary)).toEqual([
+      'Cannot replace enum value "Status.ARCHIVED" inside field "status" in collection "users": it is a time-series collection',
+      'Cannot replace enum value "Status.ARCHIVED" inside field "tags" in collection "users": it is a time-series collection',
+    ]);
+  });
+
+  it('refuses a rename in a collection two root models share with no discriminator', () => {
+    const shared = (seed: string, status: EnumSpec) =>
+      users(
+        seed,
+        status,
+        undefined,
+        {},
+        {
+          Guest: {
+            collection: 'users',
+            fields: ['_id', 'status'],
+            types: { _id: OBJECT_ID, status: { ...STATUS, nullable: true } },
+          },
+        },
+      );
+    const result = plan({
+      from: shared('from', BEFORE),
+      to: shared('to', RENAMED),
+      schema: live,
+      statements: [renameValue('ARCHIVED', 'RETIRED')],
+    });
+    expect(refusal(result).map(({ summary }) => summary)[0]).toBe(
+      'Cannot replace enum value "Status.ARCHIVED" inside field "status" of model "User" in collection "users": model "Guest" stores it in the same collection',
+    );
+  });
+
+  it('refuses a rename in a collection whose control policy is not managed', () => {
+    const result = plan({
+      from: users('from', BEFORE, undefined, { control: 'external' }),
+      to: users('to', RENAMED, undefined, { control: 'external' }),
+      schema: live,
+      statements: [renameValue('ARCHIVED', 'RETIRED')],
+    });
+    expect(refusal(result).map(({ summary }) => summary)).toEqual([
+      'Cannot rename enum value "Status.ARCHIVED" to "Status.RETIRED": collection "users" has control policy "external"',
+    ]);
+  });
+});
