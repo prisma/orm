@@ -133,6 +133,7 @@ describe('planSpacePath — empty-graph spaces', () => {
     expect(outcome).toEqual({
       kind: 'never-planned',
       spaceId: 'broken-extension',
+      liveMarker: null,
       targetHash: HEAD_HASH,
     });
   });
@@ -148,7 +149,12 @@ describe('planSpacePath — empty-graph spaces', () => {
       liveMarker: null,
     });
 
-    expect(outcome).toEqual({ kind: 'never-planned', spaceId: 'app', targetHash: HEAD_HASH });
+    expect(outcome).toEqual({
+      kind: 'never-planned',
+      spaceId: 'app',
+      liveMarker: null,
+      targetHash: HEAD_HASH,
+    });
   });
 
   it('a greenfield extension space whose target is the empty sentinel stays at-head', () => {

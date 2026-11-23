@@ -93,9 +93,7 @@ describe('db migrate --show with no path to the target', () => {
           nextActions: expect.arrayContaining([
             expect.objectContaining({
               label: 'Plan the missing edge',
-              command: expect.stringContaining(
-                `migration plan --from ${C2} --to production --name <slug>`,
-              ),
+              command: expect.stringContaining(`migration plan --from ${C2} --to production`),
             }),
             expect.objectContaining({
               label: 'Apply it',

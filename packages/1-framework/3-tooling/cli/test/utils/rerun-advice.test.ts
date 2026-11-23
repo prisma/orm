@@ -3,11 +3,19 @@ import {
   type SchemaDiffIssue,
 } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
+import type { MigrationPlanArguments } from '../../src/control-api/operations/plan-arguments';
 import type { RunnerFailureFacts } from '../../src/control-api/types';
-import { errorMigrationHasUnfilledPlaceholders } from '../../src/utils/cli-errors';
+import {
+  errorMigrationHasUnfilledPlaceholders,
+  errorStatementNeedsMigrationFile,
+} from '../../src/utils/cli-errors';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
+import { dbUpdateKeepDataEditAdvice } from '../../src/utils/keep-data-edit-advice';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
+import { planningRefusedError } from '../../src/utils/planning-refused-error';
 import type { CliInvocation } from '../../src/utils/printed-command';
+import { originOf, reference, toEmitted } from './plan-origins';
+import { onDisk } from './runner-failure-errors';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 const GIVEN = { ...PROJECT, rerunArgs: ['--to', 'production', '--permit-policy-change'] };
@@ -124,7 +132,7 @@ function migrateCommands(entry: AdviceCase, invocation: CliInvocation): readonly
   const error = migrateRunnerFailureError(
     failure(entry.meta),
     entry.facts,
-    entry.failed,
+    entry.failed === undefined ? undefined : onDisk(entry.failed),
     invocation,
   );
   return commandsIn(error.fix, 'db migrate');
@@ -157,7 +165,7 @@ describe('advice that repeats a failed db migrate', () => {
   });
 });
 
-const UPDATE_CASES: readonly (AdviceCase & { readonly databaseStorageHash?: string })[] = [
+const UPDATE_CASES: readonly (AdviceCase & { readonly planFrom?: string })[] = [
   {
     kind: 'blocking objects',
     meta: { blockingObjects: [{ kind: 'view', name: 'v' }] },
@@ -167,7 +175,7 @@ const UPDATE_CASES: readonly (AdviceCase & { readonly databaseStorageHash?: stri
   {
     kind: 'a cast that failed on a value',
     facts: { failedTypeChange: { field: 'User.age', by: 'cast', reason: 'value' } },
-    databaseStorageHash: FROM,
+    planFrom: FROM,
     reruns: [true],
   },
   { kind: 'rows failing a new check', facts: { rowsFailingCheck: { check: 'c' } }, reruns: [true] },
@@ -191,7 +199,7 @@ function updateCommands(
   invocation: CliInvocation,
 ): readonly string[] {
   const error = dbUpdateRunnerFailureError(failure(entry.meta), entry.facts, {
-    databaseStorageHash: entry.databaseStorageHash,
+    migrationPlan: toEmitted(originOf(entry.planFrom)),
     invocation,
   });
   return commandsIn(error.fix, 'db update').map((command) =>
@@ -212,3 +220,227 @@ describe('advice that repeats a failed db update', () => {
     expect(updateCommands(entry, PROJECT)).toEqual(entry.reruns.map(() => '{bin} db update'));
   });
 });
+
+describe('the db migrate that applies what a failed db update --to advises to plan', () => {
+  const REFUSED = adviceAfterDbUpdate({ from: reference(FROM), to: reference('production') });
+
+  it.each(REFUSED)('keeps the flags the user gave db update: %s', (_, adviceOf) => {
+    const commands = commandsIn(adviceOf(GIVEN), 'db migrate');
+    expect(commands.length).toBeGreaterThan(0);
+    expect(new Set(commands)).toEqual(
+      new Set(['{bin} db migrate --to production --permit-policy-change']),
+    );
+  });
+
+  it.each(REFUSED)('applies to the plan target when the run gave no flags: %s', (_, adviceOf) => {
+    expect(new Set(commandsIn(adviceOf(PROJECT), 'db migrate'))).toEqual(
+      new Set(['{bin} db migrate --to production']),
+    );
+  });
+});
+
+describe('advice after a failed db update --to when migrations on disk already lead there', () => {
+  it.each(
+    adviceAfterDbUpdate({
+      from: reference(FROM),
+      to: reference('production'),
+      migrationsToTarget: { kind: 'on-disk' },
+    }),
+  )('plans no second path, and applies them with the flags given: %s', (_, adviceOf) => {
+    const advice = adviceOf(GIVEN);
+    expect(advice).not.toContain('{bin} migration plan');
+    expect(advice).toContain(
+      'Migrations on disk already lead from the database to `production`, so a migration planned now would be a second path between the same two contracts, and `db migrate` applies only one of them.',
+    );
+    expect(new Set(commandsIn(advice, 'db migrate'))).toEqual(
+      new Set(['{bin} db migrate --to production --permit-policy-change']),
+    );
+  });
+});
+
+describe('advice after a failed db update --to a ref whose invariant no migration on disk provides', () => {
+  it.each(
+    adviceAfterDbUpdate({
+      from: reference(FROM),
+      to: reference('production'),
+      migrationsToTarget: { kind: 'plan-needed', missingInvariants: ['seeded'] },
+    }),
+  )('plans a migration that provides it: %s', (_, adviceOf) => {
+    const advice = adviceOf(GIVEN);
+    expect(advice).toContain(`{bin} migration plan --from ${FROM} --to production`);
+    expect(advice).toContain('add to it a `dataTransform` with `invariantId` "seeded"');
+    expect(new Set(commandsIn(advice, 'db migrate'))).toEqual(
+      new Set(['{bin} db migrate --to production --permit-policy-change']),
+    );
+  });
+
+  it.each(
+    adviceAfterDbUpdate({
+      from: reference(FROM),
+      to: reference('production'),
+      migrationsToTarget: {
+        kind: 'at-target-missing-invariants',
+        missingInvariants: ['seeded'],
+        newMigration: { from: FROM, emitFirst: false },
+      },
+    }),
+  )(
+    'when the database is already at the ref, writes that migration with migration new: %s',
+    (_, adviceOf) => {
+      const advice = adviceOf(GIVEN);
+      expect(advice).not.toContain('{bin} migration plan');
+      expect(advice).toContain(
+        `Write a migration from that contract to itself with \`{bin} migration new --from ${FROM}\`, add to its migration.ts a \`dataTransform\` with \`invariantId\` "seeded"`,
+      );
+      expect(new Set(commandsIn(advice, 'db migrate'))).toEqual(
+        new Set(['{bin} db migrate --to production --permit-policy-change']),
+      );
+    },
+  );
+});
+
+describe('advice after a failed db update when the database is already at the target', () => {
+  const AT_TARGET =
+    'The database is already at `production` and records every invariant it requires, so there is no migration to apply';
+  const atTarget: MigrationPlanArguments = {
+    from: reference(FROM),
+    to: reference('production'),
+    migrationsToTarget: { kind: 'none-needed' },
+  };
+
+  it('for rows that hold a removed enum value, says to change the stored values in the database', () => {
+    const error = dbUpdateRunnerFailureError(
+      failure(),
+      {
+        rowsHoldingValue: [{ enumValue: 'Status.OLD', enumName: 'Status', value: 'old', rows: 1 }],
+      },
+      { migrationPlan: atTarget, invocation: GIVEN },
+    );
+
+    expect(error.nextActions?.at(-1)?.label).toBe(
+      `No migration can be planned to keep that data. ${AT_TARGET}. To keep that data under another stored value, change the stored value "old" to one the enum keeps in the database yourself, then re-run \`{bin} db update --to production --permit-policy-change --delete Status.OLD\``,
+    );
+  });
+
+  const leads: Readonly<Record<string, string>> = {
+    'a cast that failed': 'No migration can be planned for the change.',
+    'rows without a value for a new field': 'No migration can be planned to backfill those rows.',
+    'rows that hold a removed enum value': 'No migration can be planned to keep that data.',
+    'rows failing a check that replaces another': 'and no migration can be planned for it.',
+    'keeping the data of an enum member': 'No migration can be planned to keep it.',
+    'a statement that needs a migration file': 'No migration can be planned for them either.',
+    'rewrites the planner asks to write by hand':
+      'The rewrites cannot be written by hand in a migration.',
+  };
+
+  it.each(adviceAfterDbUpdate(atTarget))(
+    'says why no migration is offered before it says the database is there: %s',
+    (kind, adviceOf) => {
+      const advice = adviceOf(GIVEN);
+      expect(advice).toContain(`${leads[kind]} ${AT_TARGET}`);
+      expect(advice).not.toContain('{bin} migration plan');
+    },
+  );
+});
+
+/** Every piece of advice after a failed db update that prints a `migration plan` to `TO_PRODUCTION`. */
+function adviceAfterDbUpdate(
+  plan: MigrationPlanArguments,
+): readonly (readonly [string, (invocation: CliInvocation) => string])[] {
+  return [
+    ...(
+      [
+        [
+          'a cast that failed',
+          { failedTypeChange: { field: 'User.age', by: 'cast', reason: 'value' } },
+        ],
+        [
+          'rows without a value for a new field',
+          {
+            rowsWithoutValue: [
+              { field: 'User.age', reason: 'newField', rows: 2, discriminator: false },
+            ],
+          },
+        ],
+        [
+          'rows that hold a removed enum value',
+          {
+            rowsHoldingValue: [
+              {
+                enumValue: 'Status.OLD',
+                enumName: 'Status',
+                value: 'old',
+                rows: 1,
+                keepDataEdit: { remove: 'a', replaceWith: 'b' },
+              },
+            ],
+          },
+        ],
+        [
+          'rows failing a check that replaces another',
+          { rowsFailingCheck: { check: 'c', replacedCheck: 'b' } },
+        ],
+      ] as const satisfies readonly (readonly [string, RunnerFailureFacts])[]
+    ).map(
+      ([kind, facts]) =>
+        [
+          kind,
+          (invocation: CliInvocation) =>
+            dbUpdateRunnerFailureError(failure(), facts, {
+              migrationPlan: plan,
+              invocation,
+            }).fix ?? '',
+        ] as const,
+    ),
+    [
+      'keeping the data of an enum member',
+      (invocation) => {
+        const edited = {
+          subject: { kind: 'enumValue', namespaceId: 'app', enum: 'Status', member: 'OLD' },
+          text: 'Status.OLD',
+          edits: [{ remove: 'a', replaceWith: 'b' }],
+        } as never;
+        return dbUpdateKeepDataEditAdvice(invocation, plan)(edited, [edited]).ways.join(' ');
+      },
+    ],
+    [
+      'a statement that needs a migration file',
+      (invocation) => {
+        const { why, fix } = errorStatementNeedsMigrationFile(
+          [{ verb: 'backfill', text: 'User.age' }],
+          [{ verb: 'backfill', text: 'User.age' }],
+          invocation,
+          plan,
+        ).toEnvelope();
+        return `${why ?? ''} ${fix ?? ''}`;
+      },
+    ],
+    [
+      'rewrites the planner asks to write by hand',
+      (invocation) => {
+        const rewrite = {
+          kind: 'rename',
+          entity: 'enumValue',
+          from: { namespaceId: 'app', enum: 'Status', member: 'OLD' },
+          to: { namespaceId: 'app', enum: 'Status', member: 'NEW' },
+        } as never;
+        return (
+          planningRefusedError(
+            [{ kind: 'statementRefused', summary: 's', why: 'w', leaveOut: [rewrite] } as never],
+            {
+              invocation,
+              migrationPlan: plan,
+              statements: [
+                { verb: 'rename', text: 'Status.OLD:Status.NEW' },
+                { verb: 'backfill', text: 'User.age' },
+              ],
+              resolved: [rewrite, { kind: 'backfill' } as never],
+            },
+          ).toEnvelope().nextActions ?? []
+        )
+          .map(({ label }) => label)
+          .join(' ');
+      },
+    ],
+  ];
+}

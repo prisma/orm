@@ -580,7 +580,7 @@ export function errorHashNotInGraph(hash: string, graph: MigrationGraph): Migrat
     `Hash "${hash}" is not a node in the migration graph`,
     {
       why: `The migration graph contains nodes ${reachableList}; "${hash}" isn't one of them.`,
-      fix: `Pass a hash that's the from-or-to of an on-disk migration bundle, use --from with a graph-node hash, or run "{bin} migration plan" to introduce it.`,
+      fix: `Pass a hash that's the from-or-to of an on-disk migration bundle, use --from with a graph-node hash, or plan a migration that ends at it to introduce it.`,
       nextActions: [
         {
           kind: 'user-choice',
@@ -589,9 +589,8 @@ export function errorHashNotInGraph(hash: string, graph: MigrationGraph): Migrat
           reason: `Graph nodes: ${reachableList}.`,
         },
         {
-          kind: 'run-command',
-          label: `Introduce "${hash}" by planning a migration for it`,
-          command: '{bin} migration plan',
+          kind: 'user-choice',
+          label: `Or introduce "${hash}" by planning a migration that ends at it`,
         },
       ],
       meta: { hash, reachableHashes },
@@ -608,12 +607,12 @@ export function errorContractSnapshotMissing(
     'Contract snapshot is missing',
     {
       why: `Expected a contract snapshot for ${storageHash} at "${expectedPath}" but the file does not exist.`,
-      fix: "Re-emit the contract snapshot by re-running the command that authored the migration referencing this hash (`{bin} migration plan` for app-space migrations; the extension's contract-space build for extension spaces), or restore migrations/snapshots/ from version control.",
+      fix: `Re-emit the contract snapshot, or restore migrations/snapshots/ from version control. For an app-space migration planned to the emitted contract, emit that contract again and re-run the \`migration plan\` that wrote the migration ending at ${storageHash}, with its \`--from\` and no \`--to\`, then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with \`--to\` reads the snapshot, so it cannot re-emit it. For an extension space, re-run the extension's contract-space build.`,
       nextActions: [
         {
-          kind: 'run-command',
-          label: 'Re-emit the snapshot for an app-space migration',
-          command: '{bin} migration plan',
+          kind: 'user-choice',
+          label:
+            'For an app-space migration planned to the emitted contract, emit that contract again and re-run the migration plan that wrote the migration ending at that contract, with its --from and no --to, to re-emit the snapshot. Then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with --to reads the snapshot, so it cannot re-emit it',
         },
         {
           kind: 'user-choice',

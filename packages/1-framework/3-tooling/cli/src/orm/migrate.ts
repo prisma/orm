@@ -722,6 +722,7 @@ export function createMigrateCommand(
           invocation: {
             ...cliInvocation(ctx, args.flags.db),
             rerunArgs: rerunFlags(args.flags),
+            ...ifDefined('targetRef', target.refName),
           },
           onProgress: controlProgressReporter(ctx.report),
           ...ifDefined('target', migrateTargetOf(target)),

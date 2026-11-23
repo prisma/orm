@@ -9,6 +9,7 @@ import type {
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
+import { writeRef } from '@internal/migration-tools/refs';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { executeDbUpdate } from '../../src/control-api/operations/db-update';
@@ -125,7 +126,7 @@ afterEach(() => {
 });
 
 describe('executeDbUpdate when the plan with an answered rename is refused', () => {
-  it('advises the plan without the rename typed at the prompt, keeping the given delete', async () => {
+  async function refusedRun(options: { readonly dbRef: boolean; readonly toRef?: string }) {
     const dir = createTestProjectDir('db-update-refused-replan');
     tempDirs.push(dir);
     const migrationsDir = join(dir, 'migrations');
@@ -133,8 +134,14 @@ describe('executeDbUpdate when the plan with an answered rename is refused', () 
       contractJson: origin,
       contractDts: '',
     });
+    if (options.dbRef) {
+      await writeRef(join(migrationsDir, 'app', 'refs'), 'db', {
+        hash: ORIGIN_HASH,
+        invariants: [],
+      });
+    }
 
-    const result = await executeDbUpdate({
+    return executeDbUpdate({
       invocation: TEST_INVOCATION,
       driver: { close: vi.fn() } as unknown as ControlDriverInstance<'sql', 'postgres'>,
       adapter: {} as unknown as ControlAdapterInstance<'sql', 'postgres'>,
@@ -148,13 +155,43 @@ describe('executeDbUpdate when the plan with an answered rename is refused', () 
         questions.map(() => ({ verb: 'rename', text: 'Profile:User' })),
       targetId: 'postgres',
       statements: [{ verb: 'delete', text: 'Profile.nickname' }],
+      ...(options.toRef === undefined
+        ? {}
+        : { ref: { name: options.toRef, hash: DESTINATION_HASH, invariants: [] } }),
     });
+  }
+
+  it('plans to the ref db update was given, and applies to it', async () => {
+    const result = await refusedRun({ dbRef: true, toRef: 'production' });
 
     expect(result.ok ? undefined : result.failure.nextActions).toEqual([
       {
         kind: 'user-choice',
         label:
-          'To write the rewrites by hand, plan the change without --rename Profile:User with `{bin} migration plan --delete Profile.nickname`, add the rewrites the message describes to the migration.ts it writes, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate`',
+          'To write the rewrites by hand, plan the change without --rename Profile:User with `{bin} migration plan --from db --to production --delete Profile.nickname`, add the rewrites the message describes to the migration.ts it writes, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate --to production`',
+      },
+    ]);
+  });
+
+  it('advises the plan without the rename typed at the prompt, keeping the given delete', async () => {
+    const result = await refusedRun({ dbRef: true });
+
+    expect(result.ok ? undefined : result.failure.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label:
+          'To write the rewrites by hand, plan the change without --rename Profile:User with `{bin} migration plan --from db --delete Profile.nickname`, add the rewrites the message describes to the migration.ts it writes, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate`',
+      },
+    ]);
+  });
+
+  it('says why no plan can write the rewrites when no ref or migration records the contract the database is at', async () => {
+    const result = await refusedRun({ dbRef: false });
+
+    expect(result.ok ? undefined : result.failure.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label: `The rewrites cannot be written by hand in a migration. No ref names contract ${ORIGIN_HASH}, and with no migrations \`migration plan\` starts only from \`@empty\` or a ref`,
       },
     ]);
   });
