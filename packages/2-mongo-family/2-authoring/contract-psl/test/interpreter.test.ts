@@ -2009,6 +2009,21 @@ model Item {
       expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, 'nested.path': 1 });
     });
 
+    it('keeps a projection path named __proto__', () => {
+      const ir = interpretOk(`
+        model Events {
+          id       ObjectId @id @map("_id")
+          metadata String
+          @@index([wildcard()], include: ["__proto__", "metadata"])
+        }
+      `);
+      const indexes = getIndexes(ir, 'Events');
+      expect(Object.entries(indexes![0]!['wildcardProjection'] ?? {})).toEqual([
+        ['__proto__', 1],
+        ['metadata', 1],
+      ]);
+    });
+
     it('rejects a non-list projection at the attribute boundary', () => {
       const result = interpret(`
         model Events {

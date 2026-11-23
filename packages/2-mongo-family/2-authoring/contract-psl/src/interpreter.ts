@@ -455,9 +455,7 @@ function buildProjection(
   const fields = include ?? exclude;
   if (fields === undefined || (fields.length === 0 && hasWildcard)) return undefined;
   const value = include === undefined ? 0 : 1;
-  const projection: Record<string, 0 | 1> = {};
-  for (const field of fields) projection[field] = value;
-  return projection;
+  return Object.fromEntries(fields.map((field) => [field, value]));
 }
 
 /** Index options as the attribute specs read them, which are the values MongoDB takes. */
