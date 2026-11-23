@@ -454,6 +454,15 @@ function buildProjection(
   }
   const fields = include ?? exclude;
   if (fields === undefined || (fields.length === 0 && hasWildcard)) return undefined;
+  if (fields.includes('__proto__')) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message:
+        'A wildcard index cannot include or exclude the path "__proto__", which JavaScript reads as the prototype of an object rather than as a key',
+      ...ctx.source.at(ctx.span),
+    });
+    return null;
+  }
   const value = include === undefined ? 0 : 1;
   return Object.fromEntries(fields.map((field) => [field, value]));
 }

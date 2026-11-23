@@ -1163,7 +1163,7 @@ JavaScript reads `__proto__` as the prototype of an object rather than as a key,
 A model is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-Two cases are not refused in this release and still go wrong without an error. In a PSL contract, an enum named `__proto__` is left out of the contract, together with every field typed by it. And a field or relation named `__proto__` is, depending on the contract source, left out of the contract or out of every row the client reads. Rename those as well: the release after this one refuses them, and its guide says how to move the values that documents hold under the old key.
+Two cases are not refused in this release and still go wrong without an error. In a PSL contract, an enum named `__proto__` is left out of the contract, together with every field typed by it. And a field or relation named `__proto__` is, depending on the contract source, left out of the contract or out of every row the client reads. A later release refuses these names, and its guide covers the rename and the values that documents hold under the old key; leave them as they are until then.
 
 Rename the model, composite type, enum or root. The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
