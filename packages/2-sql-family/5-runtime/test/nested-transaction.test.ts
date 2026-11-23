@@ -234,11 +234,11 @@ describe('TransactionContext.transaction', () => {
   );
 
   it.each([
-    { enclosing: 'the outer transaction', depth: 0 },
-    { enclosing: 'a savepoint', depth: 1 },
+    { enclosing: 'the outer transaction', depth: 0, sent: 'begin, SAVEPOINT sp_1, destroy' },
+    { enclosing: 'a savepoint', depth: 1, sent: 'begin, SAVEPOINT sp_1, SAVEPOINT sp_2, destroy' },
   ])(
     'rejects with RUNTIME.TRANSACTION_ROLLBACK_FAILED and closes the transaction when $enclosing throws while a nested call it did not await is running',
-    async ({ depth }) => {
+    async ({ depth, sent }) => {
       const { runtime, events } = createSetup();
       const proceed = deferred();
       const error = new Error('nope');
@@ -287,7 +287,7 @@ describe('TransactionContext.transaction', () => {
         ends,
       }).toEqual({
         afterClose: '',
-        trace: expect.stringMatching(/destroy$/),
+        trace: sent,
         ends: Array.from({ length: depth + 2 }, () => 1),
       });
     },
