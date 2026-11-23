@@ -348,14 +348,12 @@ describe('Journeys (MongoDB): renames and removals inside value objects and embe
     expect({
       exitCode: asked.exitCode === 0 ? 0 : 'failed',
       code: question?.code,
-      summary: question?.summary,
       why: question?.why,
       answers: question?.nextActions?.map(({ label }) => label),
       unanswered: question?.meta?.['unanswered'],
     }).toEqual({
       exitCode: 'failed',
       code: 'CLI.CONSENT_REQUIRED',
-      summary: 'This command requires explicit consent, but it was not provided.',
       why: 'Remove key "zip" at path "$" in field home of collection users would lose the values of value object field "Address.zip".',
       answers: [
         "Run the command again with --rename 'Address.zip:Address.<new name>'",

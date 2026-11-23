@@ -178,13 +178,10 @@ describe('a namespace answer typed at the prompt', () => {
     const prompt = {
       statements: vi.fn(async (questions: readonly { readonly subject: string }[]) => {
         asked.push(questions.map(({ subject }) => subject));
-        throw Object.assign(
-          new Error('This command requires explicit consent, but it was not provided.'),
-          {
-            code: 'CLI.CONSENT_REQUIRED',
-            unanswered: questions.map(({ subject }) => subject),
-          },
-        );
+        throw Object.assign(new Error('consent required'), {
+          code: 'CLI.CONSENT_REQUIRED',
+          unanswered: questions.map(({ subject }) => subject),
+        });
       }),
     } as unknown as PromptSurface;
 
@@ -383,17 +380,13 @@ describe('a refusal to answer a question that names ways to keep the data', () =
     };
     const prompt = {
       statements: vi.fn(async () => {
-        throw new CliStructuredError(
-          'CLI.CONSENT_REQUIRED',
-          'This command requires explicit consent, but it was not provided.',
-          {
-            why: kept.question,
-            nextActions: [
-              { kind: 'user-choice', label: 'Run the command again with --delete Status.DONE' },
-            ],
-            meta: { unanswered: [{ subject: 'Status.DONE', verbs: ['delete'] }] },
-          },
-        );
+        throw new CliStructuredError('CLI.CONSENT_REQUIRED', 'consent required', {
+          why: kept.question,
+          nextActions: [
+            { kind: 'user-choice', label: 'Run the command again with --delete Status.DONE' },
+          ],
+          meta: { unanswered: [{ subject: 'Status.DONE', verbs: ['delete'] }] },
+        });
       }),
     } as unknown as PromptSurface;
     const statements: StatementSurface = {
@@ -403,7 +396,6 @@ describe('a refusal to answer a question that names ways to keep the data', () =
 
     await expect(promptPlanQuestions(prompt, statements)([kept])).rejects.toMatchObject({
       code: 'CLI.CONSENT_REQUIRED',
-      message: 'This command requires explicit consent, but it was not provided.',
       why: 'Remove value "done" would lose enum value "Status.DONE".',
       nextActions: [
         { kind: 'user-choice', label: way },

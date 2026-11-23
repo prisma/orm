@@ -198,14 +198,26 @@ export async function refusal(
   journey: StoredNameJourney,
   args: readonly string[],
   label: string,
-): Promise<Diagnostic> {
+): Promise<Omit<Diagnostic, 'summary'> & { readonly summary?: string }> {
   const count = getMigrationDirs(journey).length;
   const result = await run(journey, args);
   expect(result.exitCode, `${label}: ${journey.command} is refused`).not.toBe(0);
   expect(getMigrationDirs(journey), `${label}: nothing written`).toHaveLength(count);
   const error = engineError(result);
   if (error === undefined) throw new Error(`${label}: no error: ${result.stderr}`);
-  return error;
+  return withoutEngineLine(error);
+}
+
+/**
+ * A consent error without its first line, which the CLI engine writes and tests; the ORM supplies
+ * the rest. Other errors are returned whole.
+ */
+export function withoutEngineLine(
+  error: Diagnostic,
+): Omit<Diagnostic, 'summary'> & { readonly summary?: string } {
+  if (error.code !== 'CLI.CONSENT_REQUIRED') return error;
+  const { summary: _engineLine, ...ours } = error;
+  return ours;
 }
 
 /** The database matches the contract, and `db update` finds nothing left to plan against it. */
