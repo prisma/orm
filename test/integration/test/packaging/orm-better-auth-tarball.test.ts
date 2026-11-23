@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -162,17 +170,16 @@ describe('the Better Auth adapter installed next to the SQLite database package'
     rmSync(scratch, { recursive: true, force: true });
   });
 
-  it('installs Better Auth and its auth program at the lowest version the adapter admits', () => {
-    const versionOf = (name: string) =>
-      (
-        JSON.parse(readFileSync(join(scratch, 'node_modules', name, 'package.json'), 'utf8')) as {
-          version: string;
-        }
-      ).version;
-    expect([versionOf('better-auth'), versionOf('auth')]).toEqual([
-      betterAuthFloor,
-      betterAuthFloor,
-    ]);
+  it('installs Better Auth, its auth program and its core at the lowest version the adapter admits', () => {
+    const versionIn = (packageDir: string) =>
+      (JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as { version: string })
+        .version;
+    const betterAuthDir = realpathSync(join(scratch, 'node_modules/better-auth'));
+    expect([
+      versionIn(betterAuthDir),
+      versionIn(join(scratch, 'node_modules/auth')),
+      versionIn(join(betterAuthDir, '../@better-auth/core')),
+    ]).toEqual([betterAuthFloor, betterAuthFloor, betterAuthFloor]);
   });
 
   it('loads one copy of the ORM client and of Better Auth core', () => {

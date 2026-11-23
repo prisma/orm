@@ -239,6 +239,6 @@ Model and field names: the adapter matches Better Auth's model names to your con
 ## Dependencies
 
 - `@prisma/orm-framework` and `@prisma/orm-family-sql`, as peers at the same version as your database package.
-- `@better-auth/core` 1.7, as a peer.
+- `@better-auth/core` 1.7.6 or a later 1.7 release, below 1.8, as a peer.
 
 The package imports only published entrypoints, so it works outside the Prisma repository.
