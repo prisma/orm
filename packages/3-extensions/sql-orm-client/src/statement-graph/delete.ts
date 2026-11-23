@@ -50,7 +50,10 @@ export class Delete extends StatementNode<Linked> {
     const keys = filter.flat().map(({ key }) => key);
     const returned = new Set(this.returns.map(({ alias }) => alias));
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
-      await run.execute(statement);
+      const { affectedRows } = await run.execute(statement);
+      if (affectedRows === 0) {
+        return;
+      }
       for (const key of keys) {
         yield Object.fromEntries(Object.entries(key).filter(([column]) => returned.has(column)));
       }

@@ -101,7 +101,10 @@ export class Update extends StatementNode<Inputs> {
     const keys = filter.flat().map(({ key }) => key);
     const { returns } = this;
     const generator = async function* (): AsyncGenerator<StorageRow, void, unknown> {
-      await run.execute(statement);
+      const { affectedRows } = await run.execute(statement);
+      if (affectedRows === 0) {
+        return;
+      }
       for (const key of keys) {
         yield columnsOf(returns, { ...key, ...set });
       }

@@ -40,6 +40,7 @@ describe('delete() and update() whose filter names no unique key', () => {
   it('delete() and update() carry the filter without RETURNING too', async () => {
     const { users: rows, runtime } = users('without RETURNING');
     runtime.setNextResults([[ada], [{ id: 1 }], [ada]]);
+    runtime.setNextStats([{ affectedRows: 1 }, { affectedRows: 1 }]);
 
     await rows.delete();
     await rows.update({ name: 'Grace' });
@@ -69,15 +70,24 @@ describe('what delete() returns when its filter names no unique key', () => {
     expect(await rows.delete()).toBeNull();
   });
 
-  it('returns the row it found on a database without RETURNING', async () => {
+  it('returns the row it found when the DELETE removed it, on a database without RETURNING', async () => {
     const { users: rows, runtime } = users('without RETURNING');
     runtime.setNextResults([[ada]]);
+    runtime.setNextStats([{ affectedRows: 1 }]);
 
     expect(await rows.delete()).toEqual(ada);
     expect(sent(runtime)).toEqual([
       "select users where name = 'Ada' limit 1",
       "delete users where (name = 'Ada' and id = 1)",
     ]);
+  });
+
+  it('returns null when the DELETE removed no row, on a database without RETURNING', async () => {
+    const { users: rows, runtime } = users('without RETURNING');
+    runtime.setNextResults([[ada]]);
+    runtime.setNextStats([{ affectedRows: 0 }]);
+
+    expect(await rows.delete()).toBeNull();
   });
 });
 
@@ -87,5 +97,29 @@ describe('what update() returns when its filter names no unique key', () => {
     runtime.setNextResults([[{ id: 1 }], []]);
 
     expect(await rows.update({ name: 'Grace' })).toBeNull();
+    expect(sent(runtime)).toEqual([
+      "select users where name = 'Ada' limit 1",
+      "update users where (name = 'Ada' and id = 1) returning id, name",
+    ]);
+  });
+
+  it('reads the row back when the UPDATE matched it, on a database without RETURNING', async () => {
+    const { users: rows, runtime } = users('without RETURNING');
+    runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Grace' }]]);
+    runtime.setNextStats([{ affectedRows: 1 }]);
+
+    expect(await rows.update({ name: 'Grace' })).toEqual({ id: 1, name: 'Grace' });
+  });
+
+  it('returns null without reading back when the UPDATE matched no row, on a database without RETURNING', async () => {
+    const { users: rows, runtime } = users('without RETURNING');
+    runtime.setNextResults([[{ id: 1 }], [{ id: 1, name: 'Ada' }]]);
+    runtime.setNextStats([{ affectedRows: 0 }]);
+
+    expect(await rows.update({ name: 'Grace' })).toBeNull();
+    expect(sent(runtime)).toEqual([
+      "select users where name = 'Ada' limit 1",
+      "update users where (name = 'Ada' and id = 1)",
+    ]);
   });
 });
