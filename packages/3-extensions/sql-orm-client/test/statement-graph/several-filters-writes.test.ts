@@ -100,14 +100,14 @@ describe('bulk writes of a variant in its own table, on a database with RETURNIN
     ]);
   });
 
-  it('deleteAll() reads the rows with the variant join, then deletes the rows it read by key', async () => {
+  it('deleteAll() reads the rows with the variant join, then deletes the rows it read by key and returns their base columns', async () => {
     const { features: rows, runtime } = features();
 
     await rows.deleteAll().toArray();
 
     expect(sent(runtime)).toEqual([
       `select tasks inner join features where ${featureCondition}`,
-      `delete tasks where (${featureCondition} and id = 1)`,
+      `delete tasks where (${featureCondition} and id = 1) returning id, title, type, project_id, parent_id`,
     ]);
   });
 });

@@ -115,18 +115,19 @@ describe('deleteAllGraph', () => {
     expect(returnedAt(graph, 0)).toEqual([]);
   });
 
-  it('builds a Find with the includes as the result and then a Delete of the rows it found by key when there are includes', () => {
+  it('builds a Find with the includes, a Delete of the rows it found by key, and keeps the found rows the Delete removed as the result when there are includes', () => {
     const graph = deleteAllGraph(targetWithIncludes, 'rows');
 
     expect(printGraph(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc",
         "n2 Delete users where name = 'Ada' <- FilterData n1 (id->id)",
-        'result: n1',
+        'n3 DeletedRows <- WholeRows n1, Rows n2',
+        'result: n3',
       ].join('\n'),
     );
     expect(returnedAt(graph, 0)).toEqual(['id', 'name', 'posts']);
-    expect(returnedAt(graph, 1)).toEqual([]);
+    expect(returnedAt(graph, 1)).toEqual(['id', 'name']);
   });
 
   it('makes that Find also return the identity columns the Delete reads', () => {

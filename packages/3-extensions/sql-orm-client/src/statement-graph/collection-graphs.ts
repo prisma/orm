@@ -145,19 +145,19 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
   }
   const where = whereOf(collection);
   const find = findRows(b, selectRowsAst(collection, state).withWhere(where), noInputs);
-  b.graph.setResult(withIncludeNodes(b, collection, find));
-  addDeleteAll(
+  const read = withIncludeNodes(b, collection, find);
+  b.graph.setResult(read);
+  if (identityColumnsOf(collection).length === 0) {
+    addDeleteAll(b, collection, { filters: [], links: [] }, where);
+    return b.graph;
+  }
+  const deleted = addDeleteAll(
     b,
     collection,
-    {
-      filters:
-        identityColumnsOf(collection).length > 0
-          ? [{ from: find, columns: sameRowColumns(collection) }]
-          : [],
-      links: [],
-    },
+    { filters: [{ from: find, columns: sameRowColumns(collection) }], links: [] },
     where,
   );
+  keepRowsTheDeleteRemoved(b, collection, { find, read, deleted });
   return b.graph;
 }
 

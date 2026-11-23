@@ -429,7 +429,8 @@ describe('write graphs as they run, on a contract without returning', () => {
         "n3 Find users where name = 'Ada' <- state n1, state n2",
         "n4 Delete users where name = 'Ada' <- FilterData n3 (id->id), state n1",
         'n5 State users <- state n4',
-        'result: n3',
+        'n6 DeletedRows <- WholeRows n3, Rows n4',
+        'result: n6',
       ),
       first: lines(
         'n1 State users',
