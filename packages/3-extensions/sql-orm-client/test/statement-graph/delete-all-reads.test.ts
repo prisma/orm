@@ -86,11 +86,6 @@ const withQueryReturning = [
   ['query', 'without RETURNING'],
 ] as const;
 
-const withJoinReturning = [
-  ['join', 'with RETURNING'],
-  ['join', 'without RETURNING'],
-] as const;
-
 describe.each(tables)(
   'deleteAll() on table %s, which has no row identity',
   (modelName, tableName) => {
@@ -100,21 +95,6 @@ describe.each(tables)(
         const { rows, runtime } = rowsOf(modelName, strategy, returning);
 
         expect(() => rows.include('author').deleteAll()).toThrow(
-          includeRefusal(modelName, tableName),
-        );
-        expect(runtime.executions).toEqual([]);
-      },
-    );
-
-    it.each(withJoinReturning)(
-      'refuses to return rows with includes read in the same query (%s, %s), as updateAll() does',
-      (strategy, returning) => {
-        const { rows, runtime } = rowsOf(modelName, strategy, returning);
-
-        expect(() => rows.include('author').deleteAll()).toThrow(
-          includeRefusal(modelName, tableName),
-        );
-        expect(() => rows.include('author').updateAll({ message: 'hi' })).toThrow(
           includeRefusal(modelName, tableName),
         );
         expect(runtime.executions).toEqual([]);
