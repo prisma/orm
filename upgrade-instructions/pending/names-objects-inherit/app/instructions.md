@@ -17,7 +17,7 @@ changes:
         - '__proto__'
   - id: sql-proto-names-refused
     summary: |
-      A SQL contract now refuses a table, column, model, field, relation, enum or other name that is `__proto__`; `contract emit` used to leave such a table or column out without an error. Rename it, in the database first if the database has it.
+      A SQL contract now refuses a table, column, model, field, relation, enum or other name that is `__proto__`. A field of that name stored under another name used to be left out of the contract without an error. Rename it in the contract source.
     detection:
       glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
@@ -82,8 +82,27 @@ Rename the model, field, relation, composite type, enum or root. What a rename d
   )
   ```
 
-  For a list of composite values, rewrite each element in the same way with `$map`.
-- **A relation.** A reference relation's name is not stored, so no document changes. An embed relation is stored under its name, or under the name the TypeScript contract gives it with `storageRelations`. The client never read or wrote an embed relation named `__proto__`, and a create dropped the value of one stored as `__proto__`; that stored name is now refused with `CONTRACT.ARGUMENT_INVALID`. Give the relation another name or stored name, and move any embedded documents that another writer stored under `__proto__` with the update above.
+  For a list of composite values, rename the key in each element:
+
+  ```js
+  db.getCollection("<collection>").updateMany(
+    { "<field>.__proto__": { $exists: true } },
+    [{ $set: { "<field>": { $map: { input: "$<field>", as: "e", in: { $arrayToObject: { $map: {
+      input: { $objectToArray: "$$e" }, as: "kv",
+      in: { k: { $cond: [{ $eq: ["$$kv.k", "__proto__"] }, "<new name>", "$$kv.k"] }, v: "$$kv.v" },
+    } } } } } } }],
+  )
+  ```
+- **A relation.** A reference relation's name is not stored, so no document changes. An embed relation is stored under its name, or under the name the TypeScript contract gives it with `storageRelations`. The client never read or wrote an embed relation named `__proto__`, and a create dropped the value of one stored as `__proto__`; that stored name is now refused with `CONTRACT.ARGUMENT_INVALID`. Give the relation another name or stored name. An embed relation is stored at the top level of the document, so to move embedded documents that another writer stored under `__proto__`, use this update:
+
+  ```js
+  db.getCollection("<collection>").updateMany(
+    { ["__proto__"]: { $exists: true } },
+    [{ $set: { "<new name>": "$__proto__" } }, { $unset: "__proto__" }],
+  )
+  ```
+
+  Write the filter key as `["__proto__"]`. Written as `"__proto__":` it sets the filter's prototype, the filter matches every document, and the update removes `<new name>` from documents that have no `__proto__`.
 
 The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
@@ -110,7 +129,12 @@ A SQL contract now refuses `__proto__` as the name of a table, column, model, fi
 The namespace of table "users" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-`prisma contract emit` used to succeed on a contract with `@@map("__proto__")` or `@map("__proto__")` and leave the table or column out of `contract.json` without an error. Rename it in the contract source. If the database already has a table or column of that name, rename it in the database as well, before you plan the next migration.
+What happened before:
+
+- A table or column stored as `__proto__`, and a model named `__proto__`, already failed `prisma contract emit` with an unrelated error. They now fail with this one.
+- A field named `__proto__` and stored under another name, as in `__proto__ String @map("label")`, emitted, but the field was missing from the model. So was an entry written as a `__proto__:` key in a TypeScript object literal. Both are now refused; the object literal has its own message, which says the record is not a plain object.
+
+Rename the field in the contract source and keep its stored name with `@map`; no database change is needed. If the database has a table or column named `__proto__`, rename it in the database too.
 
 ## A SQL `select` alias `__proto__`
 
