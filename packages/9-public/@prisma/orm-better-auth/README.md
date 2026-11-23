@@ -16,10 +16,10 @@ export const auth = betterAuth({
 
 ## Install
 
-Install the adapter at the same version as your Prisma 8 database package, together with Better Auth 1.7:
+Install the adapter at the same version as your Prisma 8 database package, together with Better Auth 1.7.6 or a later 1.7 release:
 
 ```sh
-pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@1.7
+pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@~1.7.6
 ```
 
 The adapter uses the Prisma packages your database package already installs. If the versions differ, your package manager warns you, or refuses to install when it checks peer dependencies strictly. Keep them the same, or the adapter loads a second copy of Prisma's code.
@@ -29,7 +29,7 @@ Better Auth must load one copy of `@better-auth/core`, the one `better-auth` its
 ## Supported databases and versions
 
 - Postgres and SQLite, through `@prisma/orm-postgres` and `@prisma/orm-sqlite`. The adapter refuses a client for another database.
-- Better Auth 1.7 (`>=1.7.0 <1.8.0`). It is tested against 1.7.27.
+- Better Auth 1.7.6 or a later 1.7 release (`>=1.7.6 <1.8.0`). It is tested against 1.7.6 and 1.7.27. 1.7.6 is the first release whose `auth` program has the `check` command and whose `@better-auth/core` lets the adapter register the contract check.
 
 ## Set up
 

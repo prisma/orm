@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +21,14 @@ const workspaceVersion = (
 const skewedVersion = workspaceVersion.replace(/\d+$/, (patch) => String(Number(patch) + 1));
 const adapter = '@prisma/orm-better-auth';
 const adapterDir = join(repoRoot, 'packages/9-public/@prisma/orm-better-auth');
+const betterAuthFloor = (() => {
+  const manifest = JSON.parse(readFileSync(join(adapterDir, 'package.json'), 'utf8')) as {
+    peerDependencies: Record<string, string>;
+  };
+  const floor = /^>=(\S+) /.exec(manifest.peerDependencies['@better-auth/core'] ?? '')?.[1];
+  if (floor === undefined) throw new Error('The adapter declares no lowest @better-auth/core');
+  return floor;
+})();
 const facade = '@prisma/orm-sqlite';
 const familySql = '@prisma/orm-family-sql';
 const platform: ShellName[] = [
@@ -107,6 +115,18 @@ function runAuth(projectDir: string, scratch: string, args: readonly string[]): 
   return { status: run.status, stdout: run.stdout, stderr: run.stderr };
 }
 
+/** Every file under `dir` outside `node_modules`, by relative path, with its content. */
+function projectFiles(dir: string): Record<string, string> {
+  const files = readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => join(entry.parentPath, entry.name))
+    .filter((path) => !path.split(/[\\/]/).includes('node_modules'))
+    .sort();
+  return Object.fromEntries(
+    files.map((path) => [path.slice(dir.length + 1), readFileSync(path, 'utf8')]),
+  );
+}
+
 /** The message, without what the command logs while it loads the configuration. */
 function printedMessage(run: AuthRun): string {
   expect(run.stderr).not.toContain('Error running Better Auth CLI');
@@ -114,8 +134,9 @@ function printedMessage(run: AuthRun): string {
 }
 
 // The install the adapter's README gives: the adapter at the database
-// package's version, and Better Auth 1.7 with its `auth` program from the
-// registry, both at the same range so they share one copy. The adapter's
+// package's version, and Better Auth with its `auth` program from the
+// registry, both at the lowest version the adapter's peer range admits, so
+// they share one copy and the oldest supported release is the one tested. The adapter's
 // two Prisma peers are declared too, because pnpm resolves a peer through
 // the registry rather than through the tarball overrides, and these exact
 // versions are not on the registry until they are released. From the
@@ -131,7 +152,7 @@ describe('the Better Auth adapter installed next to the SQLite database package'
       [packShell(adapterDir, scratch), ...pack(scratch, [facade, ...platform])],
       {
         direct: [adapter, facade, familySql, '@prisma/orm-framework'],
-        registryDependencies: { 'better-auth': '1.7', auth: '1.7' },
+        registryDependencies: { 'better-auth': betterAuthFloor, auth: betterAuthFloor },
       },
     );
     writeFileSync(join(scratch, 'contract.prisma'), corePsl);
@@ -139,6 +160,19 @@ describe('the Better Auth adapter installed next to the SQLite database package'
 
   afterAll(() => {
     rmSync(scratch, { recursive: true, force: true });
+  });
+
+  it('installs Better Auth and its auth program at the lowest version the adapter admits', () => {
+    const versionOf = (name: string) =>
+      (
+        JSON.parse(readFileSync(join(scratch, 'node_modules', name, 'package.json'), 'utf8')) as {
+          version: string;
+        }
+      ).version;
+    expect([versionOf('better-auth'), versionOf('auth')]).toEqual([
+      betterAuthFloor,
+      betterAuthFloor,
+    ]);
   });
 
   it('loads one copy of the ORM client and of Better Auth core', () => {
@@ -220,9 +254,11 @@ describe('the Better Auth adapter installed next to the SQLite database package'
     `;
     expect(runInScratch(scratch, emit)).toContain('emitted');
 
+    const filesBeforeGenerate = projectFiles(projectDir);
     const generated = runAuth(projectDir, scratch, ['generate', '--yes']);
     expect(generated.status).toBe(1);
     expect(printedMessage(generated)).toBe(twoFactorMissing);
+    expect(projectFiles(projectDir)).toEqual(filesBeforeGenerate);
     const checked = runAuth(projectDir, scratch, ['check']);
     expect(checked.status).toBe(1);
     expect(printedMessage(checked)).toBe(twoFactorMissing);

@@ -48,7 +48,7 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "@better-auth/core": ">=1.7.0 <1.8.0",
+    "@better-auth/core": ">=1.7.6 <1.8.0",
     "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
     "@prisma/orm-framework": "workspace:8.0.0-rc.24",
     "typescript": ">=5.9"

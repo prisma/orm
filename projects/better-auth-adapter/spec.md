@@ -75,7 +75,7 @@ Each decision gives its reason. The implementation follows these exactly. Where 
    - `docs/reference/Package Naming Conventions.md` gains a kind for library integrations, and its count of `@prisma` packages changes.
    - Tests take their timeouts from a `test/timeouts.ts` with named constants that apply `TEST_TIMEOUT_MULTIPLIER`, because the shared timeouts helper is a `@repo` package.
 4. **Dependencies.**
-   - `peerDependencies`: `@prisma/orm-family-sql` and `@prisma/orm-framework` at the exact workspace version; `@better-auth/core` `>=1.7.0 <1.8.0`; `typescript` `>=5.9`, optional in `peerDependenciesMeta`.
+   - `peerDependencies`: `@prisma/orm-family-sql` and `@prisma/orm-framework` at the exact workspace version; `@better-auth/core` `>=1.7.6 <1.8.0` (1.7.6 is the first release with both `registerSchemaCheck` and the `auth check` command); `typescript` `>=5.9`, optional in `peerDependenciesMeta`.
    - `dependencies`: none.
    - `devDependencies`: the two Prisma peers; `better-auth`, `@better-auth/core` and `@better-auth/test-utils` pinned to one exact 1.7 version; the first-party Better Auth plugin packages the PSL test needs (`@better-auth/api-key`, `passkey`, `sso`, `oauth-provider`, `scim`) at the same version; `@prisma/orm-postgres`, `@prisma/orm-sqlite`, `@prisma/dev`, `pg`, `@types/pg`, `temporal-polyfill`, `pathe`; and the build and test tooling every package has (`vitest`, `typescript`, `tsdown`, `@types/node`, `@repo/tsconfig`, `@repo/tsdown`).
 
