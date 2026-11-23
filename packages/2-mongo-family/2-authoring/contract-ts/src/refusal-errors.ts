@@ -182,6 +182,10 @@ function unsupportedNameSubject(
       return refusal.key.kind === 'collectionSettings'
         ? `The collection of model "${refusal.key.model}"`
         : 'A collection';
+    case 'field':
+      return refusal.key.kind === 'field'
+        ? `A field of ${refusal.key.owner.kind === 'model' ? 'model' : 'value object'} "${refusal.key.owner.name}"`
+        : 'A field';
   }
 }
 
@@ -222,6 +226,11 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
             kind: refusal.subject,
             ...(refusal.subject !== 'model' && 'model' in refusal.key
               ? { modelName: refusal.key.model }
+              : {}),
+            ...(refusal.key.kind === 'field'
+              ? refusal.key.owner.kind === 'model'
+                ? { modelName: refusal.key.owner.name }
+                : { valueObjectName: refusal.key.owner.name }
               : {}),
             reason: 'name-not-a-key',
           },

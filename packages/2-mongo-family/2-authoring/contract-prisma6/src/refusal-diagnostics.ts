@@ -59,6 +59,8 @@ function unsupportedNameSubject(
       return `A composite type is named "${name}"`;
     case 'enum':
       return `An enum is named "${name}"`;
+    case 'field':
+      return `Field "${key.owner.name}.${key.field}" is named "${name}"`;
   }
 }
 

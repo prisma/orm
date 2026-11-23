@@ -342,7 +342,7 @@ export function buildRoots(
   return roots;
 }
 
-/** Refuses each name of the definition that cannot be an object's own key: the name of a model, value object, enum, collection or root. */
+/** Refuses each name of the definition that cannot be an object's own key: the name of a model, value object, field, enum, collection or root. */
 export function refuseUnsupportedNames(
   definition: ContractDefinition,
   refusals: BuildRefusal[],
@@ -356,6 +356,16 @@ export function refuseUnsupportedNames(
         subject: 'model',
         name: model.modelName,
       });
+    }
+    for (const field of model.fields) {
+      if (unsupported(field.fieldName)) {
+        refusals.push({
+          kind: 'nameUnsupported',
+          key: modelFieldKey(model.modelName, field.fieldName),
+          subject: 'field',
+          name: field.fieldName,
+        });
+      }
     }
     if (model.collection !== undefined && unsupported(model.collection)) {
       refusals.push({
@@ -374,6 +384,16 @@ export function refuseUnsupportedNames(
         subject: 'valueObject',
         name: valueObject.name,
       });
+    }
+    for (const field of valueObject.fields) {
+      if (unsupported(field.fieldName)) {
+        refusals.push({
+          kind: 'nameUnsupported',
+          key: valueObjectFieldKey(valueObject.name, field.fieldName),
+          subject: 'field',
+          name: field.fieldName,
+        });
+      }
     }
   }
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {

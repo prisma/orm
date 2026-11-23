@@ -248,6 +248,12 @@ function unsupportedNameDiagnostic(
         span: site.block.span,
       };
     }
+    case 'field':
+      return atField(
+        fieldSiteOf(sites, key),
+        code,
+        `Field "${key.owner.name}.${key.field}" is named "${name}", ${UNSUPPORTED_NAME_REASON}`,
+      );
   }
 }
 

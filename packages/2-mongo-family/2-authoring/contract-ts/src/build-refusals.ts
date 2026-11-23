@@ -39,7 +39,13 @@ export type CollectionSettingsKey = Extract<RefusalKey, { readonly kind: 'collec
 export type RestatedFieldDifference = 'storedName' | 'type' | 'nullable' | 'many';
 
 /** What a definition names with a name that cannot be an object's own key. */
-export type UnsupportedNameSubject = 'model' | 'valueObject' | 'enum' | 'collection' | 'root';
+export type UnsupportedNameSubject =
+  | 'model'
+  | 'valueObject'
+  | 'enum'
+  | 'collection'
+  | 'root'
+  | 'field';
 
 export type CollectionSetting = 'indexes' | 'collectionOptions' | 'controlPolicy';
 
@@ -59,7 +65,7 @@ export type BuildRefusal =
   | { readonly kind: 'storedNameUnsupported'; readonly key: FieldKey; readonly reason: string }
   | {
       readonly kind: 'nameUnsupported';
-      readonly key: ModelKey | ValueObjectKey | EnumKey | CollectionSettingsKey;
+      readonly key: ModelKey | ValueObjectKey | EnumKey | CollectionSettingsKey | FieldKey;
       readonly subject: UnsupportedNameSubject;
       readonly name: string;
     }

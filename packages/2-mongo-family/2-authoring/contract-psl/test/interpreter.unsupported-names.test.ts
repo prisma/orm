@@ -45,6 +45,19 @@ describe('a Mongo schema naming something __proto__', () => {
     ]);
   });
 
+  it('refuses a field named __proto__ that is stored under another name', () => {
+    expect(
+      diagnosticsOf(
+        'model Item {\n  id ObjectId @id @map("_id")\n  __proto__ String @map("proto")\n}',
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_STORED_NAME_UNSUPPORTED',
+        message: `Field "Item.__proto__" is named "__proto__", ${reason}`,
+      },
+    ]);
+  });
+
   it('refuses a composite type named __proto__', () => {
     expect(
       diagnosticsOf(

@@ -93,31 +93,36 @@ describe('Mongo contract names every object has as a property', () => {
     });
   });
 
-  it('keeps the stored name of a field named __proto__ that maps to another stored name', () => {
-    const contract = contractOf({
-      models: [
-        stored('User', 'users', [
-          {
-            fieldName: '__proto__',
-            storedName: 'proto',
-            type: field.scalar(type.String()).__type,
-            nullable: false,
-            many: false,
-          },
-        ]),
-      ],
+  it('refuses a field named __proto__ of a model or value object, whatever name stores it', () => {
+    const proto: FieldNode = { ...street, fieldName: '__proto__', storedName: 'proto' };
+    const built = build({
+      models: [stored('User', 'users', [proto])],
+      valueObjects: [{ name: 'Address', fields: [{ ...street, fieldName: '__proto__' }] }],
     });
-    const user = contract.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['User'];
-    expect({
-      fields: Object.keys(user?.fields ?? {}),
-      storageFields: Object.entries(user?.storage['fields'] ?? {}),
-    }).toEqual({
-      fields: ['_id', '__proto__'],
-      storageFields: [
-        ['_id', { field: '_id' }],
-        ['__proto__', { field: 'proto' }],
-      ],
-    });
+    const reason =
+      'is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.';
+    expect(
+      (built.ok ? [] : built.failure.refusals).map((refusal) => {
+        const error = refusalError(refusal);
+        return { code: error.code, message: error.message, meta: error.meta };
+      }),
+    ).toEqual([
+      {
+        code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
+        message: `A field of model "User" ${reason}`,
+        meta: { name: '__proto__', kind: 'field', modelName: 'User', reason: 'name-not-a-key' },
+      },
+      {
+        code: 'CONTRACT.NAME_UNUSABLE_AS_KEY',
+        message: `A field of value object "Address" ${reason}`,
+        meta: {
+          name: '__proto__',
+          kind: 'field',
+          valueObjectName: 'Address',
+          reason: 'name-not-a-key',
+        },
+      },
+    ]);
   });
 
   it('gives a collection named constructor no validator when the definition writes none', () => {
