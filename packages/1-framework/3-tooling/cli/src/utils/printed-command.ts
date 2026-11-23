@@ -166,11 +166,12 @@ export function printedPlan(
  * - `on-disk`: migrations on disk lead there; `reason` says why no plan is printed, `text` says to
  *   apply them with `apply`, and `adoptFirst`, for a database with no marker, how to adopt one that
  *   is not empty before that;
- * - `none`: no `migration plan` moves it, for `reason`, which says what does where something can.
+ * - `none`: no `migration plan` moves it, for `reason`, which says what does where something can;
+ *   `applyFirst` when the database has to apply migrations on disk before the command runs again.
  */
 export type PrintedWayToTarget =
   | (Exclude<PrintedPlan, { readonly kind: 'none' }> & { readonly afterPlan: string })
-  | { readonly kind: 'none'; readonly reason: string }
+  | { readonly kind: 'none'; readonly reason: string; readonly applyFirst?: ApplyFirst }
   | { readonly kind: 'at-target'; readonly reason: string }
   | {
       readonly kind: 'on-disk';
@@ -179,6 +180,18 @@ export type PrintedWayToTarget =
       readonly text: string;
       readonly adoptFirst?: string;
     };
+
+/**
+ * The `db migrate` that applies migrations on disk the database has not applied, which `runs` as
+ * printed unless the user chooses its `--to`, after `adoptFirst` for a database with no marker;
+ * `text` says to run it and then the command again.
+ */
+export interface ApplyFirst {
+  readonly command: string;
+  readonly runs: boolean;
+  readonly text: string;
+  readonly adoptFirst?: string;
+}
 
 /**
  * How advice moves the database `plan` describes to `plan.to`: with the `migration plan` from
@@ -227,17 +240,20 @@ export function printedWayToTarget(
         carriesStatement(flags) &&
         plan.from.kind !== 'none'
       ) {
-        return { kind: 'none', reason: applyUnappliedFirst(invocation, plan.from, adoptFirst) };
+        return applyUnappliedFirst(invocation, plan.from, adoptFirst);
       }
       const printed = printedPlan(invocation, plan, flags);
       if (printed.kind === 'none') return printed;
       const { missingInvariants } = migrations;
       const provide =
         missingInvariants.length === 0 ? '' : `add to it ${transformsText(missingInvariants)}, `;
-      const applied = `${provide}run \`${writtenMigrationRunCommand(invocation)}\` for the directory it writes, and apply it with \`${apply}\``;
+      const run = `${provide}run \`${writtenMigrationRunCommand(invocation)}\` for the directory it writes`;
       return {
         ...printed,
-        afterPlan: adoptFirst === undefined ? applied : `${applied}. ${adoptFirst}`,
+        afterPlan:
+          adoptFirst === undefined
+            ? `${run}, and apply it with \`${apply}\``
+            : `${run}. ${adoptFirst}. Then apply it with \`${apply}\``,
       };
     }
   }
@@ -267,9 +283,10 @@ function applyUnappliedFirst(
   invocation: CliInvocation | undefined,
   from: Exclude<MigrationPlanArgument, { readonly kind: 'none' }>,
   adoptFirst: string | undefined,
-): string {
+): Extract<PrintedWayToTarget, { readonly kind: 'none' }> {
   const end = from.kind === 'reference' ? from.reference : CONTRACT_PLACEHOLDER;
-  const migrate = `\`${cliCommand(invocation, 'db migrate', ['--to', shellQuoted(end)])}\``;
+  const command = cliCommand(invocation, 'db migrate', ['--to', shellQuoted(end)]);
+  const migrate = `\`${command}\``;
   const choose =
     from.kind === 'ambiguous' && from.candidates.length > 0
       ? `, replacing ${CONTRACT_PLACEHOLDER} with one of ${from.candidates.map((each) => `\`${each}\``).join(', ')}`
@@ -277,7 +294,16 @@ function applyUnappliedFirst(
   const apply = `Apply them first with ${migrate}${choose}, which names the migration.ts to change if one of them fails, then run the command again`;
   const lead =
     'Migrations on disk that the database has not applied come before where a plan for this change would start, and one of them may already make the change, so the plan could not carry it';
-  return adoptFirst === undefined ? `${lead}. ${apply}` : `${lead}. ${adoptFirst}. ${apply}`;
+  return {
+    kind: 'none',
+    reason: adoptFirst === undefined ? `${lead}. ${apply}` : `${lead}. ${adoptFirst}. ${apply}`,
+    applyFirst: {
+      command,
+      runs: from.kind === 'reference',
+      text: apply,
+      ...ifDefined('adoptFirst', adoptFirst),
+    },
+  };
 }
 
 /**

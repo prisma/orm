@@ -144,6 +144,35 @@ describe('errorStatementNeedsMigrationFile', () => {
     ]);
   });
 
+  it('for a database behind its migrations, gives applying them first as the fix and the first next action', () => {
+    const A = 'a'.repeat(64);
+    const B = 'b'.repeat(64);
+    const envelope = errorStatementNeedsMigrationFile(
+      [{ verb: 'convert', text: 'User.years' }],
+      [{ verb: 'convert', text: 'User.years' }],
+      undefined,
+      migrationPlanForDatabase(
+        { graph: buildGraph([entry(A, B, 'm1')]), refs: {}, emittedHash: 'c'.repeat(64) },
+        { storageHash: A, invariants: [] },
+        { kind: 'emitted' },
+      ),
+    ).toEnvelope();
+    const reason = `Migrations on disk that the database has not applied come before where a plan for this change would start, and one of them may already make the change, so the plan could not carry it. Apply them first with \`{bin} db migrate --to ${B}\`, which names the migration.ts to change if one of them fails, then run the command again`;
+
+    expect({ fix: envelope.fix, nextActions: envelope.nextActions }).toEqual({
+      fix: `${reason}. Or leave out these statements: db update then asks before it loses any data.`,
+      nextActions: [
+        {
+          kind: 'run-command',
+          label:
+            'Apply the migrations on disk the database has not applied, then run the command again',
+          command: `{bin} db migrate --to ${B}`,
+        },
+        { kind: 'user-choice', label: 'Or run db update without these statements' },
+      ],
+    });
+  });
+
   it('names the refused statements, and gives migration plan every statement it accepts, in the order given', () => {
     const envelope = errorStatementNeedsMigrationFile(
       [

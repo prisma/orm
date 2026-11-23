@@ -154,16 +154,26 @@ describe('printedWayToTarget', () => {
   });
 
   it('prints no plan that carries a statement past migrations the database has not applied, and says to apply them first', () => {
+    const applyFirst = {
+      command: `{bin} db migrate --to ${B} --db <url>`,
+      runs: true,
+      text: APPLY_FIRST,
+    };
     expect([
       printedWayToTarget(PROJECT, toEmitted(C, at(A)), ['--convert', 'User.age']),
       printedWayToTarget(PROJECT, toEmitted(C, null), ['--convert', 'User.age']),
     ]).toEqual([
-      { kind: 'none', reason: `${UNAPPLIED}. ${APPLY_FIRST}` },
-      { kind: 'none', reason: `${UNAPPLIED}. ${NO_MARKER}. ${APPLY_FIRST}` },
+      { kind: 'none', reason: `${UNAPPLIED}. ${APPLY_FIRST}`, applyFirst },
+      {
+        kind: 'none',
+        reason: `${UNAPPLIED}. ${NO_MARKER}. ${APPLY_FIRST}`,
+        applyFirst: { ...applyFirst, adoptFirst: NO_MARKER },
+      },
     ]);
   });
 
   it('plans a statement from the database when it has applied every migration, and a plan with none past them as before', () => {
+    const RUN = 'run `node <migration directory>/migration.ts` for the directory it writes';
     expect([
       printedWayToTarget(PROJECT, toEmitted(C, at(B)), ['--convert', 'User.age']),
       printedWayToTarget(PROJECT, toEmitted(C, at(A)), []),
@@ -178,7 +188,58 @@ describe('printedWayToTarget', () => {
       {
         kind: 'runs',
         command: `{bin} migration plan --from ${B}`,
-        afterPlan: `${AFTER_PLAN}. ${NO_MARKER}`,
+        afterPlan: `${RUN}. ${NO_MARKER}. Then apply it with \`{bin} db migrate --db <url>\``,
+      },
+    ]);
+  });
+
+  it('starts a plan at @empty, with no note and no step before it, when no migration starts at the empty contract', () => {
+    const adopted = buildGraph([entry(A, B, 'm1')]);
+    const plan = migrationPlanForDatabase({ graph: adopted, refs: {}, emittedHash: C }, null, {
+      kind: 'emitted',
+    });
+    expect(plan).not.toHaveProperty('startsAfterUnapplied');
+    expect([
+      printedWayToTarget(PROJECT, plan, ['--convert', 'User.age']),
+      printedWayToTarget(PROJECT, plan, []),
+    ]).toEqual([
+      {
+        kind: 'none',
+        reason:
+          'A plan from `@empty` creates every model, so its statements name nothing it can resolve',
+      },
+      { kind: 'runs', command: '{bin} migration plan --from @empty', afterPlan: AFTER_PLAN },
+    ]);
+  });
+
+  it('starts at @empty when the history from the empty contract returns to it', () => {
+    const rolledBack = buildGraph([
+      entry(EMPTY_CONTRACT_HASH, A, 'm1'),
+      entry(A, EMPTY_CONTRACT_HASH, 'm2'),
+    ]);
+    const plans = [null, at(EMPTY_CONTRACT_HASH)].map((marker) =>
+      migrationPlanForDatabase({ graph: rolledBack, refs: {}, emittedHash: C }, marker, {
+        kind: 'emitted',
+      }),
+    );
+    expect(plans.map(({ from, startsAfterUnapplied }) => ({ from, startsAfterUnapplied }))).toEqual(
+      [
+        { from: reference('@empty'), startsAfterUnapplied: undefined },
+        { from: reference('@empty'), startsAfterUnapplied: undefined },
+      ],
+    );
+    expect(
+      plans.map((plan) => printedWayToTarget(PROJECT, plan, ['--convert', 'User.age'])),
+    ).toEqual([
+      {
+        kind: 'none',
+        reason:
+          'A plan from `@empty` creates every model, so its statements name nothing it can resolve',
+      },
+      {
+        kind: 'none',
+        reason:
+          'A plan from `@empty` creates every model, so its statements name nothing it can resolve',
       },
     ]);
   });

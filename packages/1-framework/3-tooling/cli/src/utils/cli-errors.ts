@@ -780,6 +780,28 @@ export function errorStatementNeedsMigrationFile(
       },
     );
   }
+  if (plan.kind === 'none' && plan.applyFirst !== undefined) {
+    const { command, runs, text: applyText, adoptFirst } = plan.applyFirst;
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+      `db update cannot carry out ${listed}`,
+      {
+        why: `${why} ${plan.reason}.`,
+        fix: `${plan.reason}. Or leave out these statements: db update then asks before it loses any data.`,
+        nextActions: [
+          ...(adoptFirst === undefined ? [] : [chooseAction(adoptFirst)]),
+          runs
+            ? runCommandAction(
+                'Apply the migrations on disk the database has not applied, then run the command again',
+                command,
+              )
+            : chooseAction(applyText),
+          chooseAction('Or run db update without these statements'),
+        ],
+        meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
+      },
+    );
+  }
   if (plan.kind === 'none' || plan.kind === 'at-target') {
     return new ActionableCliError(
       'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',

@@ -60,7 +60,8 @@ export interface MigrationPlanArguments {
    */
   readonly position?: DatabasePosition;
   /**
-   * Present when `from` lies past migrations on disk the database has not applied, by its marker.
+   * Present when `from` lies past migrations on disk the database has not applied, by its marker:
+   * the plan extends the history that continues from where the database is.
    *
    * @internal
    */
@@ -160,6 +161,16 @@ export function noMarkerReplayText(sign: string, list: string): string {
   return `${NO_MARKER}, so \`db migrate\` applies every migration on disk from the first, which fits only an empty database. ${ADOPT_FIRST}: record the contract it is at with \`${sign}\`, naming the migration whose result it matches (\`${list}\` shows them), and \`db migrate\` then applies only the migrations after it`;
 }
 
+/** A `--from`, and whether it lies past migrations the database has not applied. */
+interface Start {
+  readonly from: MigrationPlanArgument;
+  readonly afterUnapplied: boolean;
+}
+
+function at(from: MigrationPlanArgument): Start {
+  return { from, afterUnapplied: false };
+}
+
 /**
  * The `--from` that makes `migration plan` start where a database at `position` is. A contract a
  * migration records is named by its hash. An empty database starts where its history ends, because
@@ -168,14 +179,16 @@ export function noMarkerReplayText(sign: string, list: string): string {
  * marker may be empty or may need adopting, so the plan from `@empty` is a choice; a database at a
  * contract a ref names starts from the ref, which `migration plan` baselines.
  */
-function startAtPosition(space: PlanSpace, position: DatabasePosition): MigrationPlanArgument {
+function startAtPosition(space: PlanSpace, position: DatabasePosition): Start {
   const { graph, refs } = space;
-  if (position.kind === 'unknown') return migrationPlanChoice(space, position.reason);
+  if (position.kind === 'unknown') return at(migrationPlanChoice(space, position.reason));
   if (position.kind === 'unmarked' || position.hash === EMPTY_CONTRACT_HASH) {
     if (graph.nodes.size === 0) {
-      return position.kind === 'unmarked'
-        ? { kind: 'ambiguous', reason: NO_MARKER_REASON, candidates: ['@empty'] }
-        : reference('@empty');
+      return at(
+        position.kind === 'unmarked'
+          ? { kind: 'ambiguous', reason: NO_MARKER_REASON, candidates: ['@empty'] }
+          : reference('@empty'),
+      );
     }
     return startAtEndOf(
       graph,
@@ -183,30 +196,36 @@ function startAtPosition(space: PlanSpace, position: DatabasePosition): Migratio
       'The migration history an empty database replays',
     );
   }
-  if (isGraphNode(position.hash, graph)) return reference(position.hash);
+  if (isGraphNode(position.hash, graph)) return at(reference(position.hash));
   if (graph.nodes.size === 0) {
     const [name] = refNames(refs).filter((each) => refs[each]?.hash === position.hash);
-    if (name !== undefined) return reference(name);
-    return {
+    if (name !== undefined) return at(reference(name));
+    return at({
       kind: 'none',
       reason: `No ref names contract ${position.hash}, and with no migrations \`migration plan\` starts only from \`@empty\` or a ref`,
-    };
+    });
   }
-  return {
+  return at({
     kind: 'none',
     reason: `No migration records contract ${position.hash}, and \`migration plan\` starts only from a contract a migration records`,
-  };
+  });
 }
 
-/** Where the history that continues from `hash` ends: the one end, or a choice of them. */
-function startAtEndOf(graph: MigrationGraph, hash: string, history: string): MigrationPlanArgument {
+/**
+ * Where the history that continues from `hash` ends: the one end, or a choice of them, past
+ * migrations not applied when an end is not `hash` itself.
+ */
+function startAtEndOf(graph: MigrationGraph, hash: string, history: string): Start {
   const ends = historyEnds(graph, hash);
+  const start = hash === EMPTY_CONTRACT_HASH ? '@empty' : hash;
+  const afterUnapplied = ends.some((end) => end !== start);
   const [onlyEnd] = ends;
-  if (ends.length === 1 && onlyEnd !== undefined) return reference(onlyEnd);
+  if (ends.length === 1 && onlyEnd !== undefined) {
+    return { from: reference(onlyEnd), afterUnapplied };
+  }
   return {
-    kind: 'ambiguous',
-    reason: `${history} has more than one end`,
-    candidates: ends,
+    from: { kind: 'ambiguous', reason: `${history} has more than one end`, candidates: ends },
+    afterUnapplied,
   };
 }
 
@@ -252,15 +271,17 @@ export function migrationPlanArguments(
     position.kind === 'contract' &&
     position.hash !== EMPTY_CONTRACT_HASH &&
     isGraphNode(position.hash, space.graph);
+  const start = extendsHistory
+    ? startAtEndOf(
+        space.graph,
+        position.hash,
+        'The migration history that continues from where the database is',
+      )
+    : startAtPosition(space, position);
   return {
-    from: extendsHistory
-      ? startAtEndOf(
-          space.graph,
-          position.hash,
-          'The migration history that continues from where the database is',
-        )
-      : startAtPosition(space, position),
+    from: start.from,
     to,
+    ...ifDefined('startsAfterUnapplied', start.afterUnapplied ? true : undefined),
   };
 }
 
@@ -294,7 +315,7 @@ export function migrationPlanReplacing(
   const graph = reconstructGraph(
     space.packages.filter(({ dirName }) => dirName !== failed.dirName),
   );
-  return startAtPosition({ graph, refs: space.refs }, { kind: 'contract', hash: failed.from });
+  return startAtPosition({ graph, refs: space.refs }, { kind: 'contract', hash: failed.from }).from;
 }
 
 /**
@@ -313,31 +334,10 @@ export function migrationPlanForDatabase(
     ...plan,
     position,
     ...ifDefined(
-      'startsAfterUnapplied',
-      startsAfterUnapplied(space.graph, position, plan.from) ? true : undefined,
-    ),
-    ...ifDefined(
       'migrationsToTarget',
       target === undefined ? undefined : migrationsToTarget(space, marker, target),
     ),
   };
-}
-
-/**
- * Whether `from` lies past migrations on disk a database at `position` has not applied: it starts
- * anywhere but the database's own contract, in a space with migrations.
- */
-function startsAfterUnapplied(
-  graph: MigrationGraph,
-  position: DatabasePosition,
-  from: MigrationPlanArgument,
-): boolean {
-  if (graph.nodes.size === 0 || position.kind === 'unknown' || from.kind === 'none') return false;
-  return !(
-    position.kind === 'contract' &&
-    from.kind === 'reference' &&
-    from.reference === position.hash
-  );
 }
 
 /** The contract `end` names, with the invariants a ref requires; undefined when it is not known. */
