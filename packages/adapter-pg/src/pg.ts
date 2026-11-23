@@ -211,9 +211,10 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
 export type PrismaPgOptions = {
   /**
    * The name of the schema to use in generated queries. Raw queries are not affected: they resolve
-   * unqualified names through the connection's `search_path`. To change that, set it on the
-   * database role (`ALTER ROLE ... SET search_path = ...`) or in the connection's `options`
-   * (`-c search_path=...`).
+   * unqualified names through the connection's `search_path`. Qualify the name in raw SQL
+   * (`"mySchema"."User"`), or set the search path on the database role
+   * (`ALTER ROLE ... SET search_path = ...`). The adapter does not set it itself, because behind a
+   * connection pooler in transaction mode a session setting is shared with the pooler's other clients.
    */
   schema?: string
   /**

@@ -134,6 +134,16 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
+  it('should not add startup options to the pool config when a schema is provided', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config, { schema: 'my_schema' })
+    const adapter = await factory.connect()
+
+    expect(adapter.underlyingDriver().options.options).toBeUndefined()
+
+    await adapter.dispose()
+  })
+
   it('should not pass name when statement name generator is not provided', async () => {
     const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost/test')
     const adapter = await factory.connect()
