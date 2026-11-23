@@ -62,6 +62,8 @@ Adding a required field to a populated collection, or making an optional field r
 
 `CLI.CONSENT_REQUIRED` lists one `user-choice` next action per flag form ("Run the command again with --delete Legacy", another for the rename form), not grouped by subject and not a complete runnable command. Grouping the forms per subject and printing a full command would need the engine to know the invocation; raise it on prisma/prisma-cli once the statement prompt has shipped.
 
+Manual QA on 2026-11-23 met the cost: with two models removed, the error prints four "Run the command again with …" lines as if any one were enough. The user needs one choice per model, and following one line refuses again for the other model.
+
 ## SQL variants stored in their own tables
 
 **Found:** slice 4a design (2026-10-09). Will: SQL will need to handle multi-table storage of variants in the future.
@@ -463,15 +465,15 @@ No pair is made when the control policy is not `managed` on both sides, so the p
 
 **Found:** stored-name renames manual QA, 2026-11-18.
 
-PostgreSQL labels a table rename `Rename table "Shop Front" to "Store Front"`, and SQLite labels the same rename `Rename table Shop Front to Store Front`; column renames are `Rename column "users"."x" to "y"` against `Rename column x on users to y`. A name with a space or punctuation is hard to read in the SQLite label, and docs that quote a label have to name the target. The SQLite labels are set in `packages/3-targets/sqlite/1-target/src/core/migrations/op-factory-call.ts` (`RenameTableCall`, `RenameColumnCall` and the other calls) and predate the stored-name renames. Quoting them changes the expected labels in about twenty test and journey files across the SQLite target and adapter packages and `test/integration`, so it was left out of that pull request. Quote every SQLite label as PostgreSQL does, in one pass over all calls.
+PostgreSQL labels a table rename `Rename table "Shop Front" to "Store Front"`, and SQLite labels the same rename `Rename table Shop Front to Store Front`; column renames are `Rename column "users"."x" to "y"` against `Rename column x on users to y`. A name with a space or punctuation is hard to read in the SQLite label, and docs that quote a label have to name the target. The same holds inside questions: manual QA on 2026-11-23 met "Recreate table user would lose the values of field "User.name".", while a dropped table is quoted (`Drop table "comment"`). The SQLite labels are set in `packages/3-targets/sqlite/1-target/src/core/migrations/op-factory-call.ts` (`RenameTableCall`, `RenameColumnCall` and the other calls) and predate the stored-name renames. Quoting them changes the expected labels in about twenty test and journey files across the SQLite target and adapter packages and `test/integration`, so it was left out of that pull request. Quote every SQLite label as PostgreSQL does, in one pass over all calls.
 
 ## Three texts the stored-name renames QA found outside its scope
 
 **Found:** stored-name renames manual QA, 2026-11-18.
 
-- **`CLI.CONSENT_UNUSED` for a statement a stored-name change no longer needs.** `prisma migration plan --name move --from <latest> --delete Shop`, where only `@@map` of `Shop` changed, prints `✘ [CLI.CONSENT_UNUSED] --delete Shop was given but nothing in this run asked about Shop.` and `→ Remove the flag, or spell the subject the way the command names it.` The second half points the user at how the subject is written, which is not the cause: the model keeps its name, so the plan renames its table and asks nothing. The text should say that nothing asked about the subject and to remove the flag, and leave out the advice about how it is written when the subject is a model or field of the contract.
+- **`CLI.CONSENT_UNUSED` for a statement a stored-name change no longer needs.** `prisma migration plan --name move --from <latest> --delete Shop`, where only `@@map` of `Shop` changed, prints `✘ [CLI.CONSENT_UNUSED] --delete Shop was given but nothing in this run asked about Shop.` and `→ Remove the flag, or spell the subject the way the command names it.` The second half points the user at how the subject is written, which is not the cause: the model keeps its name, so the plan renames its table and asks nothing. The text should say that nothing asked about the subject and to remove the flag, and leave out the advice about how it is written when the subject is a model or field of the contract. Manual QA on 2026-11-23 met the same text for a mistyped `--delete Nope.field`, where the advice about how the subject is written does fit; that the typo is reported only after planning is recorded under "A mistyped `--delete` subject is reported only after planning, as a flag that answers no question".
 - **Model names carry `public.` in refusals.** On PostgreSQL, refusals name models with their namespace, as in `The table of model "public.Cat" changes from "cats" to "dogs", and the schema being planned from already has table "dogs", the table of model "public.Dog"`, while the statements a user types name the model as `Cat`. The namespace prefix of the default namespace should be left out, as statements leave it out.
-- **The DDL preview leaves out value rewrites.** `prisma migration plan` for a change of an enum's stored value prints the operations `Drop check constraint "task_level_check_bc15f0e6" on "task"`, `Replace value 1 with 2 in column "level" of "task"` and `Add check constraint "task_level_check_1d419f4a" on "task"`, but its `DDL preview` lists only the two `ALTER TABLE … DROP CONSTRAINT` and `ADD CONSTRAINT` statements, not the `UPDATE` that rewrites the value. The preview should show every statement the migration runs, or say that it shows only DDL.
+- **The DDL preview leaves out value rewrites.** `prisma migration plan` for a change of an enum's stored value prints the operations `Drop check constraint "task_level_check_bc15f0e6" on "task"`, `Replace value 1 with 2 in column "level" of "task"` and `Add check constraint "task_level_check_1d419f4a" on "task"`, but its `DDL preview` lists only the two `ALTER TABLE … DROP CONSTRAINT` and `ADD CONSTRAINT` statements, not the `UPDATE` that rewrites the value. Manual QA on 2026-11-23 met the same fault on SQLite: the preview of a table rebuild shows `CREATE TABLE "_prisma_new_user"`, `DROP TABLE "user"` and the rename, but not the `INSERT … SELECT` that copies the rows, so it reads as if every row is dropped, though the data is kept. The preview should show every statement the migration runs, or say that it shows only DDL.
 
 ## No planner sets `leaveOut` any more
 
@@ -511,21 +513,80 @@ The origin stores `User` in `users` with primary key `users_pkey`; the destinati
 
 The constraint rename is a companion inside the `renameTable` call, and running `migration.ts` again rebuilds the companions inside `this.renameTable(...)`, so it cannot simply move later in the plan. Two fixes: run a drop of a table no rename touches before the renames, or write that companion as its own call after the drop. This is a second case of the limit recorded under "A SQLite column rename followed by a table rebuild builds the replacement index twice": operations carry no dependency information. Until then the user drops the stale table first.
 
-## Problems found by manual QA on 2026-11-23
+## A rename and a backfill of the same value object field fail with a false reason
 
-**Found:** manual QA on SQLite (2026-11-23), run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problems that existed only in that version's layout of the refusal are left out, and the rest hold with 0.10.2. None is fixed. Each line says whether another entry already covers it.
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
 
-1. A value object field renamed from `GeoPoint.lat` to `GeoPoint.latitude`, through `migration plan`: the first error says to add `--backfill GeoPoint.latitude`; the question that follows offers `--rename GeoPoint.lat:GeoPoint.latitude`; giving both fails with "The field "GeoPoint.latitude" is already required in the origin contract, so every existing value has it". That is false, since `latitude` is new; the real conflict is a rename and a backfill of the same field. New. "Statement errors say "rows" on MongoDB" quotes the same message, but only for its wording.
-2. For that rename, `migration plan` first fails with "Migration planning failed" about the new required field, while `db update`, and `migration plan` on a model field, ask the question at once. The same change gives a different first error by command and by whether the field is in a model or a value object. Partly covered: "A value object field has no default, so `--backfill` has none to respect" explains why `migration plan` needs `--backfill`; the different first error is new.
-3. With two models removed, the error prints four "Run the command again with …" lines as if any one were enough. The user needs one choice per model, and following one line refuses again for the other model. Covered by "The refusal's next actions are one line per flag, not grouped by subject".
-4. A removed model or value object field with nothing to rename to is offered `--rename 'Comment:<new name>'` or `--rename 'GeoPoint.lng:GeoPoint.<new name>'`. The line cannot be run as printed, and run literally it fails with "has no field "<new name>"". New.
-5. When the run cannot ask, the question still says "If you answer delete, the existing objects get a temporary value …". There is nothing to answer; it should say "If you choose --delete GeoPoint.lat, …". The text comes from `plan-questions.ts`. New.
-6. Value object locations are written as JSON paths and table names, such as `at path "$[*]" in column "history" of "site"`, where the user knows `Site.history`; "of "site"" does not even say it is a table. The planning failure lists the same places in a different order from the question. New.
-7. A mistyped `--delete Nope.field` is reported only as "--delete Nope.field answers no question; the questions are about User.name.". After the user adds the right flag and keeps the typo, a second error says "Remove the flag, or spell the subject the way the command names it." A mistyped `--rename` target, by contrast, is rejected at once with a clear reason. The typo should be reported in the first error. Partly covered: "Three texts the stored-name renames QA found outside its scope" covers the "spell the subject" wording; reporting the typo first is new.
-8. On SQLite a removed field's question starts "Recreate table user would lose the values of field "User.name".". Recreating the table is how SQLite makes the change, not what the user did, and the table name is not quoted, while a dropped table is (`Drop table "comment"`). Partly covered: "SQLite operation labels do not quote names" covers the quoting; naming the user's change instead of SQLite's step is new.
-9. Messages use project terms a user does not know: "origin contract", "destination contract", "destination value object", "statement" (as in `Cannot resolve statement "--rename …"`), "postchecks already held", "contract space(s)", "self-emit", "attest the package". A user thinks of the old schema, the new schema and the `--rename` flag. Partly covered: "Statement errors say "rows" on MongoDB" asks for one pass over the statement errors' wording, and "Three texts the stored-name renames QA found outside its scope" covers "the subject"; the rest is new.
-10. After `--delete User.name` on SQLite, both commands say "Applied 1 of 2 operation(s) …; the other 1 had nothing to do, since their postchecks already held". "the other 1 … their" is ungrammatical, and the user is shown a `Drop column "name" from "user"` step that does nothing because the table recreate already removed the column. New. The text is in `applied-summary.ts`; "A SQLite column rename followed by a table rebuild builds the replacement index twice" is a similar extra step after a rebuild.
-11. The DDL preview of that migration shows `CREATE TABLE "_prisma_new_user"`, `DROP TABLE "user"` and the rename, but not the `INSERT … SELECT` that copies the rows, so it reads as if every row is dropped. It then shows `DROP COLUMN "name"` on a table that no longer has that column. The data is in fact kept. Partly covered: "Three texts the stored-name renames QA found outside its scope" records that the DDL preview leaves out value rewrites; the missing row copy is the same fault, and the extra drop is problem 10.
-12. After `db update --delete User.name`, the warning about the temporary value says "To choose the value, plan a migration with prisma migration plan --from 33a42cee… --backfill User.displayName instead.". The update has already run, so "instead" comes too late, and the user does not know or easily check a 64-character hash. The text is in `migration-blocks.ts`. New.
-13. Under `--yes` the refusal says "This command requires explicit consent, and --yes does not give it.", which is clear. A user may wonder whether to keep `--yes` when running the printed line again; keeping it works. New and minor.
-14. In a terminal, `db update` prints each progress step twice, as a `▸` line and then a `✔` line, so four lines come before the error. `migration plan` prints none. New.
+A value object field is renamed from `GeoPoint.lat` to `GeoPoint.latitude`, through `migration plan`. The first error says to add `--backfill GeoPoint.latitude`; the question that follows offers `--rename GeoPoint.lat:GeoPoint.latitude`. Giving both fails with "The field "GeoPoint.latitude" is already required in the origin contract, so every existing value has it". That is false, since `latitude` is new; the real conflict is a rename and a backfill of the same field. "Statement errors say "rows" on MongoDB" quotes the same message, but only for its wording.
+
+This breaks requirement 5 of the spec: "A coordinate that does not resolve in the contract it must resolve in, a rename whose new name already exists in the origin, a statement the control policy forbids, or a rename and convert statement with no origin contract: each fails before anything is planned, naming what was searched and what was found." Here the error names a reason that is not true.
+
+## The first error for a new required value object field differs by command
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+For a value object field renamed from `GeoPoint.lat` to `GeoPoint.latitude`, `migration plan` first fails with "Migration planning failed" about the new required field, while `db update`, and `migration plan` on a model field, ask the question at once. So the same change gives a different first error depending on the command and on whether the field is in a model or a value object. Why `migration plan` needs `--backfill` here is explained under "A value object field has no default, so `--backfill` has none to respect"; the different first error is the new problem.
+
+## A rename with nothing to rename to is offered with `<new name>`
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+A removed model or value object field with nothing in the new contract to rename to is offered `--rename 'Comment:<new name>'` or `--rename 'GeoPoint.lng:GeoPoint.<new name>'`. The line cannot be run as printed, and run literally it fails with "has no field "<new name>"". No name the user fills in can work either, because the new contract has nothing new to rename to.
+
+This breaks requirement 4 of the spec: "When a flag needs a new name that the user must choose, such as the new name of a renamed field, the error says so. The user copies a flag from the error, fills in any new name, and runs the command again." When nothing new exists, no new name the user fills in makes the printed rename run.
+
+## A question the run cannot ask still says "If you answer delete"
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+When the run cannot ask, the question still says "If you answer delete, the existing objects get a temporary value …". There is nothing to answer; it should say "If you choose --delete GeoPoint.lat, …". The text comes from `plan-questions.ts`.
+
+## Value object locations are written as JSON paths and table names
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+Value object locations are written as JSON paths and table names, such as `at path "$[*]" in column "history" of "site"`, where the user knows `Site.history`; "of "site"" does not even say it is a table. The planning failure lists the same places in a different order from the question.
+
+## A mistyped `--delete` subject is reported only after planning, as a flag that answers no question
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+A mistyped `--delete Nope.field` is reported only as "--delete Nope.field answers no question; the questions are about User.name.". After the user adds the right flag and keeps the typo, a second error says "Remove the flag, or spell the subject the way the command names it." A mistyped `--rename` target, by contrast, is rejected at once with a clear reason. The typo should be reported in the first error. The wording of the second error is covered under "Three texts the stored-name renames QA found outside its scope".
+
+This is a defect against requirement 5 of the spec: "A coordinate that does not resolve in the contract it must resolve in, a rename whose new name already exists in the origin, a statement the control policy forbids, or a rename and convert statement with no origin contract: each fails before anything is planned, naming what was searched and what was found." `Nope.field` does not resolve in either contract, yet the command plans first and then reports the flag as unused. The documented design matches `--delete` and `--allow` values to questions through the engine (`CLI.CONSENT_UNUSED`) after planning; the requirement stays as written, and that order is the defect.
+
+## On SQLite a removed field's question names the table rebuild, not the user's change
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+On SQLite a removed field's question starts "Recreate table user would lose the values of field "User.name".". Recreating the table is how SQLite makes the change, not what the user did; the question should name the user's change, the removed field. The missing quotes around `user` are covered under "SQLite operation labels do not quote names".
+
+## Messages use project terms a user does not know
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+Messages use project terms a user does not know: "origin contract", "destination contract", "destination value object", "statement" (as in `Cannot resolve statement "--rename …"`), "postchecks already held", "contract space(s)", "self-emit", "attest the package". A user thinks of the old schema, the new schema and the `--rename` flag. The pass over the statement errors' wording asked for under "Statement errors say "rows" on MongoDB" should cover these terms too.
+
+## After a SQLite table rebuild, the applied summary is ungrammatical and counts a step that does nothing
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+After `--delete User.name` on SQLite, both commands say "Applied 1 of 2 operation(s) …; the other 1 had nothing to do, since their postchecks already held". "the other 1 … their" is ungrammatical. The user is also shown a `Drop column "name" from "user"` step that does nothing, because the table recreate already removed the column; the DDL preview shows the same extra `DROP COLUMN "name"`. The text is in `applied-summary.ts`. "A SQLite column rename followed by a table rebuild builds the replacement index twice" is a similar extra step after a rebuild.
+
+## After `db update`, the temporary-value warning says "instead" and names a hash
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+After `db update --delete User.name`, the warning about the temporary value says "To choose the value, plan a migration with prisma migration plan --from 33a42cee… --backfill User.displayName instead.". The update has already run, so "instead" comes too late, and the user does not know or easily check a 64-character hash. The text is in `migration-blocks.ts`.
+
+## Whether to keep `--yes` when running the printed line again is not said
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+Under `--yes` the refusal says "This command requires explicit consent, and --yes does not give it.", which is clear. A user may wonder whether to keep `--yes` when running the printed line again; keeping it works. Minor.
+
+## In a terminal, `db update` prints each progress step twice
+
+**Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
+
+In a terminal, `db update` prints each progress step twice, as a `▸` line and then a `✔` line, so four lines come before the error. `migration plan` prints none.
