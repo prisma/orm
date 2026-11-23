@@ -3,11 +3,6 @@ import { withMysqlDatabase } from '@repo/test-utils/mysql-database';
 import type { LiveTargetId } from '#live-types';
 import type { LiveServer } from './live-server';
 
-/** What a vitest test context offers to skip the test. */
-interface SkippableTest {
-  skip(note?: string): void;
-}
-
 /** The `User` and `Post` tables, written by hand as a MySQL or MariaDB user would create them. */
 export const exampleTablesDdl = [
   `CREATE TABLE \`User\` (
@@ -41,27 +36,22 @@ export async function runStatements(
 }
 
 /**
- * Runs `fn` against a database of its own on `server`, holding `statements`, created with the server's control driver as a user would by hand. Skips when the server's URL variable is not set.
+ * Runs `fn` against a database of its own on `server`, holding `statements`, created with the server's control driver as a user would by hand. Throws when the server's URL variable is not set.
  */
 export async function withSeededDatabase(
-  test: SkippableTest,
   server: LiveServer,
   statements: readonly string[],
   fn: (url: string, driver: SqlControlDriverInstance<LiveTargetId>) => Promise<void>,
 ): Promise<void> {
-  await withMysqlDatabase(
-    test,
-    async ({ url }) => {
-      const driver = await server.controlDriver.create(url);
-      try {
-        await runStatements(driver, statements);
-        await fn(url, driver);
-      } finally {
-        await driver.close();
-      }
-    },
-    server.urlVariable,
-  );
+  await withMysqlDatabase(async ({ url }) => {
+    const driver = await server.controlDriver.create(url);
+    try {
+      await runStatements(driver, statements);
+      await fn(url, driver);
+    } finally {
+      await driver.close();
+    }
+  }, server.urlVariable);
 }
 
 export const exampleDatabase = [...exampleTablesDdl, ...exampleRows] as const;

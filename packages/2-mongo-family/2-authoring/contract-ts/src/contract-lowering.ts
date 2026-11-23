@@ -21,6 +21,7 @@ import {
 } from './contract-dsl';
 import { contractError } from './contract-errors';
 import type { EnumTypeHandle } from './enum-type';
+import { assertPlainNamedEntries } from './named-entries';
 
 /** What `defineContract` receives once a factory has run: the stack and the builder objects. */
 export interface DslContractInput {
@@ -166,8 +167,41 @@ function valueObjectNode(builder: AnyValueObjectBuilder): ValueObjectNode {
   return { name: builder.__name, fields: fieldNodes(builder.__fields) };
 }
 
+function assertPlainModelEntries(builder: AnyModelBuilder): void {
+  const modelName = builder.__name;
+  assertPlainNamedEntries(builder.__fields, { kind: 'field', modelName });
+  assertPlainNamedEntries(builder.__relations, { kind: 'relation', modelName });
+  if (builder.__storageRelations !== undefined) {
+    assertPlainNamedEntries(builder.__storageRelations, { kind: 'storageRelation', modelName });
+  }
+  if (builder.__variants !== undefined) {
+    assertPlainNamedEntries(builder.__variants, { kind: 'variant', modelName });
+  }
+}
+
+/** Refuses each of the author's objects of named entries that is not a plain object. */
+function assertPlainContractEntries(input: DslContractInput): void {
+  if (input.models !== undefined) assertPlainNamedEntries(input.models, { kind: 'model' });
+  if (input.valueObjects !== undefined) {
+    assertPlainNamedEntries(input.valueObjects, { kind: 'valueObject' });
+  }
+  if (input.enums !== undefined) assertPlainNamedEntries(input.enums, { kind: 'enum' });
+  if (input.roots !== undefined) assertPlainNamedEntries(input.roots, { kind: 'root' });
+  if (input.extensions !== undefined) {
+    assertPlainNamedEntries(input.extensions, { kind: 'extensionPack' });
+  }
+  for (const builder of Object.values(input.models ?? {})) assertPlainModelEntries(builder);
+  for (const builder of Object.values(input.valueObjects ?? {})) {
+    assertPlainNamedEntries(builder.__fields, {
+      kind: 'valueObjectField',
+      valueObjectName: builder.__name,
+    });
+  }
+}
+
 /** Turns `defineContract`'s builder objects into the plain-data definition the contract is built from. */
 export function buildContractDefinition(input: DslContractInput): ContractDefinition {
+  assertPlainContractEntries(input);
   const { target } = input;
   validateTargetPackRef(input.family, target);
   validateExtensionPackRefs(target, input.extensions);

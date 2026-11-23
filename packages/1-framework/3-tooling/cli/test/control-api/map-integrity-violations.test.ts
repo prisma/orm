@@ -87,7 +87,7 @@ describe('mapIntegrityViolations', () => {
       'migrations',
     );
     expect(error?.fix).toBe(
-      'Run `prisma contract emit` or `prisma migration plan` to write the pinned files of each declared extension pack under `migrations/<space>/`.',
+      'Run `{bin} contract emit` to write the pinned files of each declared extension pack under `migrations/<space>/`.',
     );
   });
 
@@ -100,7 +100,7 @@ describe('mapIntegrityViolations', () => {
       'migrations',
     );
     expect(error?.fix).toBe(
-      'Run `prisma contract emit` or `prisma migration plan` to write the pinned files of each declared extension pack under `migrations/<space>/`. For a directory no extension declares, declare its extension in `extensions` or remove `migrations/<space>/`.',
+      'Run `{bin} contract emit` to write the pinned files of each declared extension pack under `migrations/<space>/`. For a directory no extension declares, declare its extension in `extensions` or remove `migrations/<space>/`.',
     );
   });
 

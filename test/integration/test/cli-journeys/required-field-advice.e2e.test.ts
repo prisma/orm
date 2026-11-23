@@ -295,7 +295,7 @@ withTempDir(({ createTempDir }) => {
 
   describe('db update --backfill when the database cannot be reached', () => {
     it(
-      'refuses the statement and names migration plan without --from',
+      'refuses the statement and, unable to read the database, prints no plan: the only start it could name is `@empty`, where --backfill names nothing',
       async () => {
         const ctx = setupJourney({
           connectionString: 'postgresql://postgres:postgres@localhost:1/unreachable',
@@ -305,9 +305,13 @@ withTempDir(({ createTempDir }) => {
         await emit(ctx, contractWith('  nick  String\n'));
         const refused = await runDbUpdate(ctx, ['--backfill', 'User.nick', '--json']);
         expect(engineError(refused)?.code).toBe('MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE');
-        expect(JSON.stringify(engineError(refused)?.nextActions)).toContain(
-          'migration plan --backfill User.nick',
+        expect(engineError(refused)?.why).toMatch(
+          /No migration can be planned for them either\. The CLI could not read the database: .+\. A plan from `@empty` creates every model, so its statements name nothing it can resolve\.$/,
         );
+        expect(engineError(refused)?.nextActions).toEqual([
+          { kind: 'user-choice', label: 'Run db update without these statements' },
+        ]);
+        expect(JSON.stringify(engineError(refused)?.nextActions)).not.toContain('"command"');
       },
       timeouts.spinUpPpgDev,
     );

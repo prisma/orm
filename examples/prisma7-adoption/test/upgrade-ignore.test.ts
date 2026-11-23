@@ -168,14 +168,17 @@ describe('upgrading a project whose Prisma 7 schema uses @ignore, after the hand
   );
 
   it(
-    'records the ignored objects in a migration, which plain migrating skips and signing then catches the db ref up to',
+    'records the ignored objects in a migration, which migrating without advancing a ref skips and signing then catches the db ref up to',
     () =>
       upgradeAfterHandover(async (v8, hashes, _prisma, dbRef) => {
         expectRecordsIgnoredObjects(
           await v8('migration', 'plan', '--name', 'keep-ignored-objects'),
           hashes,
         );
-        expect(await v8('db', 'migrate')).toMatchObject({ ok: true, markerHash: hashes.upgraded });
+        expect(await v8('db', 'migrate', '--no-advance-ref')).toMatchObject({
+          ok: true,
+          markerHash: hashes.upgraded,
+        });
         expect(dbRef()).toBe(hashes.earlier);
         await v8('db', 'sign');
       }),

@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { AggregateContractSpace } from '@internal/migration-tools/aggregate';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
 import type { MigrationGraph } from '@internal/migration-tools/graph';
 import { assertHashIsGraphNode, isGraphNode } from '@internal/migration-tools/migration-graph';
@@ -14,6 +15,7 @@ import {
   errorSnapshotMissing,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
+import type { CliInvocation } from '../../utils/printed-command';
 import { mapContractAtError } from './contract-at-errors';
 
 const FULL_HASH_PATTERN = /^([0-9a-f]{64}|empty)$/;
@@ -52,6 +54,8 @@ export type FromResolution =
 export interface ResolveFromForPlanInput {
   readonly optionsFrom?: string | undefined;
   readonly space: AggregateContractSpace;
+  /** Where `migration plan` ran and the `--config` it was given, which the commands its errors print repeat. */
+  readonly invocation?: CliInvocation;
 }
 
 function graphIsEmpty(space: AggregateContractSpace): boolean {
@@ -73,12 +77,22 @@ function getReachableRefs(
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function assertFromIsGraphNode(fromHash: string, graph: MigrationGraph, refs: Refs): void {
+export function assertFromIsGraphNode(
+  fromHash: string,
+  graph: MigrationGraph,
+  refs: Refs,
+  invocation?: CliInvocation,
+): void {
   try {
     assertHashIsGraphNode(fromHash, graph);
   } catch (error) {
     if (MigrationToolsError.is(error) && error.code === 'MIGRATION.HASH_NOT_IN_GRAPH') {
-      throw errorPlanForgotTheFlag(fromHash, getReachableRefs(refs, graph), { cause: error });
+      throw errorPlanForgotTheFlag(
+        fromHash,
+        getReachableRefs(refs, graph),
+        { graph, refs },
+        { cause: error, invocation },
+      );
     }
     throw error;
   }
@@ -100,6 +114,7 @@ export type DefaultOriginHash =
  */
 export function resolveDefaultOriginHash(
   space: AggregateContractSpace,
+  invocation?: CliInvocation,
 ): Result<DefaultOriginHash, CliStructuredError> {
   const refs = space.refs;
   const dbRef = refs['db'];
@@ -112,10 +127,12 @@ export function resolveDefaultOriginHash(
   }
   const graph = space.graph();
   if (!dbRef) {
-    return notOk(errorPlanOriginUnknown(getReachableRefs(refs, graph)));
+    return notOk(
+      errorPlanOriginUnknown(getReachableRefs(refs, graph), { graph, refs }, invocation),
+    );
   }
   try {
-    assertFromIsGraphNode(dbRef.hash, graph, refs);
+    assertFromIsGraphNode(dbRef.hash, graph, refs, invocation);
   } catch (error) {
     if (CliStructuredError.is(error)) {
       return notOk(error);
@@ -194,7 +211,7 @@ async function resolveFromPolicy(
 
   const graph = input.space.graph();
   try {
-    assertFromIsGraphNode(hash, graph, refs);
+    assertFromIsGraphNode(hash, graph, refs, input.invocation);
   } catch (error) {
     if (CliStructuredError.is(error)) {
       return notOk(error);
@@ -221,7 +238,9 @@ export async function resolveFromForPlan(
       if (graphIsEmpty(space)) {
         return ok({ kind: 'greenfield', fromHash: null, fromContract: null, defaulted: true });
       }
-      return notOk(errorPlanOriginUnknown(getReachableRefs(refs, graph)));
+      return notOk(
+        errorPlanOriginUnknown(getReachableRefs(refs, graph), { graph, refs }, input.invocation),
+      );
     }
     const resolved = await resolveFromPolicy(
       { hash: dbRef.hash, provenance: { kind: 'ref', refName: 'db' } },
@@ -250,7 +269,14 @@ export async function resolveFromForPlan(
       if (graphIsEmpty(space)) {
         return notOk(errorSnapshotMissing(optionsFrom, { viaRef: false }));
       }
-      return notOk(errorPlanForgotTheFlag(optionsFrom, getReachableRefs(refs, graph)));
+      return notOk(
+        errorPlanForgotTheFlag(
+          optionsFrom,
+          getReachableRefs(refs, graph),
+          { graph, refs },
+          { invocation: input.invocation },
+        ),
+      );
     }
     return notOk(mapRefResolutionError(refResult.failure));
   }
@@ -286,14 +312,17 @@ export async function resolveToForPlan(
     return notOk(mapRefResolutionError(refResult.failure));
   }
 
-  if (refResult.value.provenance.kind === 'reserved-empty') {
+  if (
+    refResult.value.provenance.kind === 'reserved-empty' ||
+    refResult.value.hash === EMPTY_CONTRACT_HASH
+  ) {
     return notOk(
       mapRefResolutionError({
         kind: 'wrong-grammar',
         input: optionsTo,
         expectedGrammar: 'contract',
         message:
-          '`@empty` is only valid as an origin (`--from`); planning a migration to the empty contract is not supported through this shortcut',
+          'The empty contract is only valid as an origin (`--from @empty`); planning a migration to the empty contract is not supported through this shortcut',
         fix: 'Pass `--to` a contract hash, ref name, or migration directory name. To plan starting from an empty database, use `--from @empty`.',
       }),
     );

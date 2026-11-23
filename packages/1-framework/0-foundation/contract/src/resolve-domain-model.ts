@@ -16,8 +16,10 @@ export function resolveDomainModel(
   domain: ApplicationDomain,
   modelName: string,
 ): ResolvedDomainModel | undefined {
-  for (const namespaceId of Object.keys(domain.namespaces)) {
-    const model = domain.namespaces[namespaceId]?.models[modelName];
+  for (const [namespaceId, namespace] of Object.entries(domain.namespaces)) {
+    const model = Object.hasOwn(namespace.models, modelName)
+      ? namespace.models[modelName]
+      : undefined;
     if (model !== undefined) {
       return { namespaceId, model };
     }

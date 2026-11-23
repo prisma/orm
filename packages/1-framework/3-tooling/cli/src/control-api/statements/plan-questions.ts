@@ -26,11 +26,28 @@ import {
   STORE_ORIGIN_SNAPSHOT_STEPS,
   type UnusedConsent,
 } from '../../utils/cli-errors';
+import { type CliInvocation, printedWayToTarget, quotedPlan } from '../../utils/printed-command';
+import type { MigrationPlanArguments } from '../operations/plan-arguments';
 import type { ConsentVerb } from './parse-consent';
 import { resolveStatements } from './resolve-statements';
 import { statementFlag } from './statement-flag';
 import { ENTITY_WORDS, type StatementText } from './statement-text';
 import { newVariantsOfBase, variantValue, variantValueChanged } from './variants';
+
+function ownEntry<Entry>(
+  entries: Readonly<Record<string, Entry>> | undefined,
+  name: string,
+): Entry | undefined {
+  return entries !== undefined && Object.hasOwn(entries, name) ? entries[name] : undefined;
+}
+
+function domainModel(contract: ContractWithDomain | undefined, namespaceId: string, model: string) {
+  return ownEntry(ownEntry(contract?.domain.namespaces, namespaceId)?.models, model);
+}
+
+function domainEnum(contract: ContractWithDomain | undefined, namespaceId: string, name: string) {
+  return ownEntry(ownEntry(contract?.domain.namespaces, namespaceId)?.enum, name);
+}
 
 /** A verb a plan question accepts. */
 export type PlanQuestionVerb = 'rename' | 'convert' | ConsentVerb;
@@ -173,8 +190,7 @@ function renamedModel(
     ) {
       const moved = { namespaceId: statement.to, model: coordinate.model };
       const destinationHas =
-        contracts.destination?.domain.namespaces[moved.namespaceId]?.models[moved.model] !==
-        undefined;
+        domainModel(contracts.destination, moved.namespaceId, moved.model) !== undefined;
       return destinationHas ? moved : undefined;
     }
   }
@@ -211,8 +227,7 @@ function renamedEnumValue(
       statement.from === value.namespaceId
     ) {
       const renamed = { ...value, namespaceId: statement.to };
-      return contracts.destination?.domain.namespaces[statement.to]?.enum?.[value.enum] ===
-        undefined
+      return domainEnum(contracts.destination, statement.to, value.enum) === undefined
         ? undefined
         : renamed;
     }
@@ -314,6 +329,29 @@ export function consentDescription(
 const DELETE_CASTS =
   '--delete keeps the field and lets the database cast its values, which can change or lose some.';
 
+/**
+ * The sentence that says which `migration plan` writes the values of `fields`, or why none can; a
+ * command that gives no plan origin is told it has none to offer.
+ */
+function backfillPlanText(
+  migrationPlan: QuestionMigrationPlan | undefined,
+  fields: readonly string[],
+  values: string,
+): string {
+  const flags = fields.map((each) => statementFlag({ verb: 'backfill', text: each }));
+  if (migrationPlan === undefined) return `this command plans no migration that writes ${values}`;
+  const plan = printedWayToTarget(migrationPlan.invocation, migrationPlan, flags);
+  switch (plan.kind) {
+    case 'on-disk':
+      return `${plan.reason}. Apply them with \`${plan.apply}\` instead, which says how to write ${values} if they leave it out`;
+    case 'none':
+    case 'at-target':
+      return `no migration can be planned to write ${values} either. ${plan.reason}`;
+    default:
+      return `plan the change with ${quotedPlan(plan)} to write ${values} in migration.ts, ${plan.afterPlan}`;
+  }
+}
+
 /** What each answer to a type change does: `--convert`, where the command writes a migration to fill in, and `--delete`. */
 function typeChangeNote(loss: PlannedDataLoss, canConvert: boolean): readonly string[] {
   if (loss.loss !== 'typeChange') return [];
@@ -413,14 +451,14 @@ function onlyNewMember(
 ): string | undefined {
   const value = renamedEnumValue(subject, contracts) ?? subject;
   const originMembers =
-    contracts.origin.domain.namespaces[subject.namespaceId]?.enum?.[subject.enum]?.members ?? [];
+    domainEnum(contracts.origin, subject.namespaceId, subject.enum)?.members ?? [];
   const renamedTo = new Set(
     resolvedRenames(contracts).flatMap((statement) =>
       statement.kind === 'rename' && statement.entity === 'enumValue' ? [statement.to.member] : [],
     ),
   );
   const added = (
-    contracts.destination.domain.namespaces[value.namespaceId]?.enum?.[value.enum]?.members ?? []
+    domainEnum(contracts.destination, value.namespaceId, value.enum)?.members ?? []
   ).filter(
     ({ name }) => !renamedTo.has(name) && !originMembers.some((member) => member.name === name),
   );
@@ -477,7 +515,7 @@ function newModelFields(
 ): readonly string[] {
   const model = renamedModel(subject, contracts) ?? subject;
   const originFields = Object.keys(
-    contracts.origin.domain.namespaces[subject.namespaceId]?.models[subject.model]?.fields ?? {},
+    domainModel(contracts.origin, subject.namespaceId, subject.model)?.fields ?? {},
   );
   const renamedTo = new Set(
     resolvedRenames(contracts).flatMap((statement) =>
@@ -487,7 +525,7 @@ function newModelFields(
     ),
   );
   return Object.keys(
-    contracts.destination.domain.namespaces[model.namespaceId]?.models[model.model]?.fields ?? {},
+    domainModel(contracts.destination, model.namespaceId, model.model)?.fields ?? {},
   ).filter((name) => !renamedTo.has(name) && !originFields.includes(name));
 }
 
@@ -549,8 +587,7 @@ function inDestination(
   if (subject.kind === 'storage') return false;
   if (subject.kind === 'enumValue') {
     const value = renamedEnumValue(subject, contracts) ?? subject;
-    const destinationEnum =
-      contracts.destination.domain.namespaces[value.namespaceId]?.enum?.[value.enum];
+    const destinationEnum = domainEnum(contracts.destination, value.namespaceId, value.enum);
     return destinationEnum?.members.some(({ name }) => name === subject.member) === true;
   }
   if (subject.kind === 'valueObjectField') {
@@ -558,8 +595,7 @@ function inDestination(
     return valueObjectFields(contracts.destination, field)?.includes(subject.field) === true;
   }
   const model = renamedModel(subject, contracts) ?? subject;
-  const destinationModel =
-    contracts.destination.domain.namespaces[model.namespaceId]?.models[model.model];
+  const destinationModel = domainModel(contracts.destination, model.namespaceId, model.model);
   if (destinationModel === undefined) return false;
   return subject.kind === 'model' || Object.hasOwn(destinationModel.fields, subject.field);
 }
@@ -584,6 +620,8 @@ type DataLossContracts = StatementContracts & {
   readonly originKnown: boolean;
   /** Whether the command writes a migration whose conversion the user fills in. */
   readonly canConvert: boolean;
+  /** For a command that writes no migration, the `migration plan` that would write a value it cannot. */
+  readonly migrationPlan?: QuestionMigrationPlan;
   /** The command's words for the edits that keep a subject's data; none when it gives none. */
   readonly keepDataEditAdvice?: KeepDataEditAdvice;
   /** The subjects of the round's questions whose data the command may say how to keep, in question order. */
@@ -591,6 +629,11 @@ type DataLossContracts = StatementContracts & {
   /** The fields the plan gives a temporary value, in the destination contract. */
   readonly temporaryValues: readonly { readonly subject: MigrationSubject }[];
 };
+
+/** Where a `migration plan` a question names starts and ends, and how the CLI was run. */
+export interface QuestionMigrationPlan extends MigrationPlanArguments {
+  readonly invocation: CliInvocation | undefined;
+}
 
 /** What a command says of keeping a subject's data: why its answer loses it, if anything, and each way to keep it. */
 export interface KeepDataAdvice {
@@ -617,7 +660,7 @@ function enumMembers(
   contract: ContractWithDomain,
   value: EnumValueCoordinate,
 ): readonly { readonly name: string; readonly value: unknown }[] {
-  return contract.domain.namespaces[value.namespaceId]?.enum?.[value.enum]?.members ?? [];
+  return domainEnum(contract, value.namespaceId, value.enum)?.members ?? [];
 }
 
 function booleanEnum(contract: ContractWithDomain, value: EnumValueCoordinate): boolean {
@@ -693,8 +736,7 @@ function missingFieldModel(
 ): ModelCoordinate | undefined {
   if (subject.kind !== 'field') return undefined;
   const model = renamedModel(subject, contracts) ?? subject;
-  return contracts.destination.domain.namespaces[model.namespaceId]?.models[model.model] ===
-    undefined
+  return domainModel(contracts.destination, model.namespaceId, model.model) === undefined
     ? model
     : undefined;
 }
@@ -768,11 +810,10 @@ function newRequiredFieldsBeside(
       .map((name): MigrationSubject => ({ ...field, kind: 'valueObjectField', field: name }));
   }
   if (subject.kind !== 'field') return [];
-  const origin = contracts.origin.domain.namespaces[subject.namespaceId]?.models[subject.model];
+  const origin = domainModel(contracts.origin, subject.namespaceId, subject.model);
   if (origin?.owner === undefined) return [];
   const model = renamedModel(subject, contracts) ?? subject;
-  const fields =
-    contracts.destination.domain.namespaces[model.namespaceId]?.models[model.model]?.fields ?? {};
+  const fields = domainModel(contracts.destination, model.namespaceId, model.model)?.fields ?? {};
   return newModelFields(subject, contracts)
     .filter(
       (name) =>
@@ -832,7 +873,7 @@ function newRequiredFieldNote(
       ? []
       : !contracts.canConvert
         ? [
-            `If you answer delete, the new required ${named(needed)} ${needed.length === 1 ? 'gets' : 'get'} no temporary value: plan the change with migration plan ${backfills} to write ${needed.length === 1 ? 'its value' : 'their values'} in migration.ts.`,
+            `If you answer delete, the new required ${named(needed)} ${needed.length === 1 ? 'gets' : 'get'} no temporary value: ${backfillPlanText(contracts.migrationPlan, needed, needed.length === 1 ? 'its value' : 'their values')}.`,
           ]
         : needed.length === 1
           ? [
@@ -1180,6 +1221,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
   readonly replan: (statements: readonly StatementText[]) => Promise<Result<TPlan, TFailure>>;
   /** The command's words for the edits that keep a subject's data. */
   readonly keepDataEditAdvice?: KeepDataEditAdvice;
+  readonly migrationPlan?: QuestionMigrationPlan;
 }): Promise<
   Result<
     {
@@ -1203,6 +1245,7 @@ export async function askPlanQuestions<TPlan extends PlannedQuestions, TFailure>
       canConvert: input.canConvert,
       statements,
       ...ifDefined('keepDataEditAdvice', input.keepDataEditAdvice),
+      ...ifDefined('migrationPlan', input.migrationPlan),
       temporaryValues: plan.temporaryValues,
     };
     const pending = <TEntry extends PlannedSubject>(

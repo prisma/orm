@@ -256,6 +256,16 @@ export const finalized = (events: readonly HookEvent[]) =>
     .map((name) => name.slice('finalized:'.length))
     .join(', ');
 
+export const trace = (events: readonly HookEvent[]) =>
+  events
+    .map((event) => (event.name === 'beforeEncode' ? event.sql : event.name))
+    .filter(
+      (name): name is string =>
+        name !== undefined &&
+        /^(SAVEPOINT|RELEASE|ROLLBACK|begin|commit|rollback|release|destroy|insert)/.test(name),
+    )
+    .join(', ');
+
 export const transactionIds = (events: readonly HookEvent[]) =>
   events.filter((event) => event.name === 'started:transaction').map((e) => e.activity?.id);
 

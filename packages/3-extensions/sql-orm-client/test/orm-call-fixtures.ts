@@ -32,7 +32,7 @@ export interface RecordedCall {
 export interface ActivityRuntimeOptions {
   /** Supplies a result for a call, as an `intercept.onActivity` handler does. */
   readonly intercept?: (activity: ClientActivity) => { readonly result: unknown } | undefined;
-  /** Opens calls without `transaction()`, as a handle opened inside a transaction is. */
+  /** Opens calls whose `inTransaction()` is true, as a handle opened inside a transaction is. */
   readonly insideTransaction?: boolean;
   /** Makes `end` record the end and then reject, as the runtime does when a child is still open. */
   readonly endRejects?: Error;
@@ -102,7 +102,8 @@ export function createActivityRuntime(options: ActivityRuntimeOptions = {}): {
         ...recordingScope(call.statements),
         activity,
         intercepted: options.intercept?.(activity),
-        ...(options.insideTransaction ? {} : { transaction }),
+        transaction,
+        inTransaction: () => options.insideTransaction === true,
         startActivity: source.startActivity,
         planContentHash: source.planContentHash,
         [activitySource]: source,

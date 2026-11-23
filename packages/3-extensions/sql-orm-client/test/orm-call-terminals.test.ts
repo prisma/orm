@@ -203,7 +203,7 @@ describe('write terminals run as one orm-call', () => {
     );
   });
 
-  it('a write inside a transaction runs on the call without a transaction of its own', async () => {
+  it('a write of several statements inside a transaction runs them in a transaction of the call', async () => {
     const recorded = createActivityCollectionFor('User', {
       returning: true,
       insideTransaction: true,
@@ -215,7 +215,7 @@ describe('write terminals run as one orm-call', () => {
       .update({ name: 'Alice' }, audited);
 
     expect(summary(recorded)).toEqual(
-      oneCall(['audit'], 2, { outcome: 'succeeded', result: updated }),
+      oneCall(['audit'], 2, { outcome: 'succeeded', result: updated }, ['committed']),
     );
   });
 

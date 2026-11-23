@@ -1,11 +1,12 @@
 import type { EnumValueCoordinate, KeepDataEdit } from '@internal/framework-components/control';
+import type { MigrationPlanArguments } from '../control-api/operations/plan-arguments';
 import type {
   KeepDataAdvice,
   KeepDataEditAdvice,
   KeptSubject,
 } from '../control-api/statements/plan-questions';
 import { statementFlag } from '../control-api/statements/statement-flag';
-import { type CliInvocation, cliCommand, printedPlanCommand } from './printed-command';
+import { type CliInvocation, cliCommand, printedWayToTarget, quotedPlan } from './printed-command';
 import { runWrittenFile } from './runner-failure-advice';
 
 function editsText(edits: readonly KeepDataEdit[]): string {
@@ -97,12 +98,13 @@ function twoRuns(
 }
 
 /**
- * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with `migration plan` from the contract the database is at, when a migration ends there and the target gives edits, answering with `--delete` each kept subject whose edits it gives, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no migration ends there.
+ * How `db update` says to keep the data of a subject: it cannot in one run. It plans the change with the `migration plan` `migrationPlan` gives when the target gives edits, answering with `--delete` each kept subject whose edits it gives, or changes the stored values in two runs through temporary members; members whose edits swap values do that only when no plan can start where the database is.
  */
 export function dbUpdateKeepDataEditAdvice(
   invocation: CliInvocation,
-  databaseStorageHash: string | undefined,
+  migrationPlan: MigrationPlanArguments,
 ): KeepDataEditAdvice {
+  const origin = migrationPlan.from;
   return (subject, kept): KeepDataAdvice => {
     const deleteFlag = statementFlag({ verb: 'delete', text: subject.text });
     const swaps = subject.edits.some(({ swapsValues }) => swapsValues === true);
@@ -111,19 +113,40 @@ export function dbUpdateKeepDataEditAdvice(
       : `db update cannot keep that data in one run, and ${deleteFlag} removes it.`;
     const runs = twoRuns(invocation, subject, kept);
     const runWays = runs === undefined ? [] : [runs];
-    if (databaseStorageHash === undefined || subject.edits.length === 0) {
+    const edited = kept.filter(({ edits }) => edits.length > 0);
+    if (origin.kind === 'none' && edited.length > 0) {
+      return {
+        lead,
+        ways: [`No migration can be planned to keep it. ${origin.reason}.`, ...runWays],
+      };
+    }
+    if (subject.edits.length === 0) {
       return { lead, ways: runWays };
     }
-    const edited = kept.filter(({ edits }) => edits.length > 0);
     const deletes = edited.map(({ text }) => statementFlag({ verb: 'delete', text }));
-    const plan = printedPlanCommand(invocation, databaseStorageHash, [
+    const plan = printedWayToTarget(invocation, migrationPlan, [
       ...otherStatements(invocation, [subject.text]).filter((flag) => !deletes.includes(flag)),
       ...deletes,
     ]);
+    if (plan.kind === 'on-disk') {
+      return {
+        lead,
+        ways: [
+          `${plan.reason}. To keep it, in the migration.ts of the one that removes it ${editsText(edited.flatMap(({ edits }) => edits))}, run that migration.ts with \`node\`, and apply them with \`${plan.apply}\`.`,
+          ...(swaps ? [] : runWays),
+        ],
+      };
+    }
+    if (plan.kind === 'none' || plan.kind === 'at-target') {
+      return {
+        lead,
+        ways: [`No migration can be planned to keep it. ${plan.reason}.`, ...runWays],
+      };
+    }
     return {
       lead,
       ways: [
-        `To keep it, plan the change with ${quoted(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${runWrittenFile(invocation)}.`,
+        `To keep it, plan the change with ${quotedPlan(plan)}, in the migration.ts it writes ${editsText(edited.flatMap(({ edits }) => edits))}, ${plan.afterPlan}.`,
         ...(swaps ? [] : runWays),
       ],
     };

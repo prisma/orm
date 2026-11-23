@@ -531,3 +531,27 @@ export function detectOrphans(graph: MigrationGraph): readonly MigrationEdge[] {
 
   return orphans;
 }
+
+/**
+ * Where the history that starts at `hash` ends: of the contracts reachable from it, those from which
+ * no migration leads anywhere it cannot come back from, sorted. A plain chain ends at its last
+ * contract. A rollback makes a cycle, and a cycle no migration leaves ends at every contract in it,
+ * except that a cycle `hash` itself is in ends at `hash`: a database there went back on purpose.
+ */
+export function historyEndsFrom(graph: MigrationGraph, hash: string): readonly string[] {
+  const reachableFrom = (node: string) =>
+    new Set(
+      Array.from(
+        bfs([node], (n) => forwardNeighbours(graph, n)),
+        (step) => step.state,
+      ),
+    );
+  const reach = new Map(Array.from(reachableFrom(hash), (node) => [node, reachableFrom(node)]));
+  const ends = new Set<string>();
+  for (const [node, reached] of reach) {
+    const isFinal = [...reached].every((other) => reach.get(other)?.has(node));
+    if (!isFinal) continue;
+    ends.add(reached.has(hash) ? hash : node);
+  }
+  return [...ends].sort();
+}

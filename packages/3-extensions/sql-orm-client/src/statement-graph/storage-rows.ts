@@ -238,7 +238,11 @@ export function mappedUpdateRow(
     namespaceId,
     modelName,
   )?.discriminatorField;
-  if (discriminator !== undefined && data[discriminator] !== undefined) {
+  if (
+    discriminator !== undefined &&
+    Object.hasOwn(data, discriminator) &&
+    data[discriminator] !== undefined
+  ) {
     throw ormError(
       'ORM.FIELD_IMMUTABLE',
       `Update data for model "${modelName}" cannot set its discriminator "${discriminator}"`,

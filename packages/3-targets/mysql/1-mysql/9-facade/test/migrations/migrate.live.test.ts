@@ -167,8 +167,8 @@ async function lockIsFree(url: string): Promise<boolean> {
 }
 
 describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, () => {
-  it('applies the example contract, which then verifies and signs', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('applies the example contract, which then verifies and signs', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const contract = loadExampleContract();
         const plan = await planAgainst(driver, family, 'app', contract);
@@ -210,8 +210,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('applies a column of each scalar convenience type with its default, which then verifies strictly and plans nothing more', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('applies a column of each scalar convenience type with its default, which then verifies strictly and plans nothing more', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const contract = contractWithScalarTypes();
         const plan = await planAgainst(driver, family, 'app', contract);
@@ -253,8 +253,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('applies the empty and edge defaults of bytes, text and JSON and a whole number on a decimal without a precision, which then verify strictly, plan nothing more and fill a row', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('applies the empty and edge defaults of bytes, text and JSON and a whole number on a decimal without a precision, which then verify strictly, plan nothing more and fill a row', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const contract = contractWithEdgeDefaults();
         const applied = await apply(family, driver, [
@@ -299,9 +299,9 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('applies whole-number defaults written with a zero fraction on a decimal without a precision, which then verify strictly, plan nothing more and fill a row', async (test) => {
+  it('applies whole-number defaults written with a zero fraction on a decimal without a precision, which then verify strictly, plan nothing more and fill a row', async () => {
     const contract = await emitFixture('decimal-defaults');
-    await withMysqlDatabase(test, ({ url }) =>
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const applied = await apply(family, driver, [
           ['app', await planAgainst(driver, family, 'app', contract), contract],
@@ -349,8 +349,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     ],
   ] as const)(
     'fails to apply a key on a %s field, @%s, when the migration runs, as the scalar type reference says',
-    async ([key, kind, message], test) => {
-      await withMysqlDatabase(test, ({ url }) =>
+    async ([key, kind, message]) => {
+      await withMysqlDatabase(({ url }) =>
         withDriver(url, async (driver, family) => {
           const contract = contractWithKeyOn(key, kind);
           const applied = await apply(family, driver, [
@@ -365,8 +365,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     },
   );
 
-  it('signs a database made by hand, creating the marker table first', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('signs a database made by hand, creating the marker table first', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         for (const statement of exampleTablesDdl) await driver.query(statement);
         const contract = loadExampleContract();
@@ -387,8 +387,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('adds a nullable column and drops it again', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('adds a nullable column and drops it again', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const base = loadExampleContract();
         const withNickname = contractWithNickname();
@@ -426,8 +426,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('drops the index InnoDB made for a foreign key when the key goes and its column stays', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('drops the index InnoDB made for a foreign key when the key goes and its column stays', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const planned: { id: string; sql: string[] }[][] = [];
         for (const contract of [contractWithUnindexedForeignKey(), contractWithoutForeignKey()]) {
@@ -465,8 +465,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('re-points a relation on a column with no index, and the database then verifies strictly', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('re-points a relation on a column with no index, and the database then verifies strictly', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const planned: { id: string; sql: string[] }[][] = [];
         for (const contract of [contractWithUnindexedForeignKey(), contractRepointedToAdmin()]) {
@@ -498,8 +498,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('refuses to drop the index a kept foreign key uses, before it changes anything', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('refuses to drop the index a kept foreign key uses, before it changes anything', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const contract = loadExampleContract();
         const applied = await apply(family, driver, [
@@ -522,8 +522,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('leaves the spaces before a failed one applied, and finishes on a second run', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('leaves the spaces before a failed one applied, and finishes on a second run', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const audit = auditContract();
         const app = loadExampleContract();
@@ -577,8 +577,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('refuses the second of two runners started at once with a marker origin mismatch, changing nothing', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('refuses the second of two runners started at once with a marker origin mismatch, changing nothing', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const base = loadExampleContract();
         const applied = await apply(family, driver, [
@@ -624,8 +624,8 @@ describe('migrating a MySQL database', { timeout: timeouts.databaseOperation }, 
     );
   });
 
-  it('says the apply changed nothing when the first space fails before it runs anything', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('says the apply changed nothing when the first space fails before it runs anything', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         const app = loadExampleContract();
         const failed = await apply(family, driver, [['app', failingPlan(app), app]]);

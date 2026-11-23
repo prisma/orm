@@ -533,6 +533,71 @@ describe('transaction activity', () => {
       },
     );
 
+    it('finalizes a released savepoint and its statements committed when the outer transaction commits', async () => {
+      const { events, open, statement } = finalizations();
+      const outer = await open('outer', undefined);
+      const savepoint = await open('savepoint', outer);
+      await statement('s1', savepoint);
+      await statement('s2', savepoint);
+      await savepoint.end(released);
+      const afterRelease = [...events];
+      await outer.end(committed);
+
+      expect(afterRelease).toEqual([]);
+      expect(events).toEqual([
+        's1:committed',
+        's2:committed',
+        'savepoint:committed',
+        'outer:committed',
+      ]);
+    });
+
+    it('finalizes a savepoint released inside a released savepoint only when the outer transaction ends, in post-order with its outcome', async () => {
+      const { events, open, statement } = finalizations();
+      const outer = await open('outer', undefined);
+      const middle = await open('middle', outer);
+      await statement('s1', middle);
+      const inner = await open('inner', middle);
+      await statement('s2', inner);
+      await inner.end(released);
+      await middle.end(released);
+      const afterRelease = [...events];
+      await outer.end(committed);
+
+      expect(afterRelease).toEqual([]);
+      expect(events).toEqual([
+        's1:committed',
+        's2:committed',
+        'inner:committed',
+        'middle:committed',
+        'outer:committed',
+      ]);
+    });
+
+    it('finalizes a savepoint released inside a savepoint that rolls back, with both levels and their statements, rolled-back at once and not again when the outer transaction ends', async () => {
+      const { events, open, statement } = finalizations();
+      const outer = await open('outer', undefined);
+      const middle = await open('middle', outer);
+      await statement('s1', middle);
+      const inner = await open('inner', middle);
+      await statement('s2', inner);
+      await inner.end(released);
+      const afterRelease = [...events];
+      await middle.end(rolledBack());
+      const afterRollback = [...events];
+      await statement('s3', outer);
+      await outer.end(committed);
+
+      expect(afterRelease).toEqual([]);
+      expect(afterRollback).toEqual([
+        's1:rolled-back',
+        's2:rolled-back',
+        'inner:rolled-back',
+        'middle:rolled-back',
+      ]);
+      expect(events).toEqual([...afterRollback, 's3:committed', 'outer:committed']);
+    });
+
     it('makes the resolved outer commit unknown after a failed statement beneath a released savepoint', async () => {
       const { events, open, statement } = finalizations();
       const outer = await open('outer', undefined);

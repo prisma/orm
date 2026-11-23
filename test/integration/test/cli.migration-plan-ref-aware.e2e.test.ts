@@ -241,18 +241,20 @@ withTempDir(({ createTempDir }) => {
                 ])
               ).exitCode,
             ).toBe(0);
-            expect((await runMigrate(ctx)).exitCode).toBe(0);
+            const applied = await runMigrate(ctx, ['--json']);
+            expect(applied.exitCode).toBe(0);
+            const appliedHash = parseJsonOutput<{ markerHash: string }>(applied).markerHash;
 
-            swapContract(ctx, 'contract-phone');
+            swapContract(ctx, 'contract-phone-bio');
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
 
-            const dbRefHash = readDbRefHash(ctx);
-            const plan = await runMigrationPlan(ctx, ['--delete', 'User.name', '--json']);
+            const plan = await runMigrationPlan(ctx, ['--json']);
             expect(plan.exitCode).toBe(0);
             const planJson = parseJsonOutput<PlanJsonResult>(plan);
             expect(planJson.baselineDir).toBeUndefined();
             expect(listAppMigrationBundleDirs(ctx)).toHaveLength(3);
-            expect(planJson.from).toBe(dbRefHash);
+            expect(readDbRefHash(ctx)).toBe(appliedHash);
+            expect(planJson.from).toBe(appliedHash);
           });
         });
       },

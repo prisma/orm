@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { errorDataProtectionForbids } from '../../src/utils/policy-errors';
 import type { CliInvocation } from '../../src/utils/printed-command';
+import { NOT_RECORDED, NOT_RECORDED_REASON, reference } from './plan-origins';
 
 const invocation: CliInvocation = { cwd: '/work/app', configPath: undefined, dbGiven: true };
 
@@ -322,15 +323,138 @@ describe('errorDataProtectionForbids advice', () => {
         },
       ],
       invocation: { ...invocation, configPath: 'app.config.ts' },
+      migrationPlan: { from: reference('db'), to: { kind: 'default' } },
     }).toEnvelope();
 
     expect(envelope.nextActions).toEqual([
       {
         kind: 'user-choice',
         label:
-          "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with {bin} migration plan --convert <field> --config app.config.ts. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.",
+          "This database's data protection policy forbids losing data, so these operations cannot run on it. If a model or field was only renamed, state the rename with --rename <old>:<new>. For a type change, write the conversion with `{bin} migration plan --from db --convert <field> --config app.config.ts`, run `node <migration directory>/migration.ts --config app.config.ts` for the directory it writes, and apply it with `{bin} db migrate --config app.config.ts --db <url>`. Otherwise keep it in the contract. To do it anyway, whoever owns the database must first change its data protection policy.",
       },
     ]);
+  });
+
+  it('ends the --convert plan at the ref db update was given', () => {
+    const { fix } = errorDataProtectionForbids({
+      spaceId: 'app',
+      command: 'db update',
+      refusals: [
+        {
+          setting: 'dataLoss',
+          source: { kind: 'ref', refName: 'production' },
+          operations: [
+            {
+              spaceId: 'app',
+              operationId: 'column.user.age.type',
+              subject: 'User.age',
+              label: 'Change the type of column "age"',
+              loss: 'typeChange',
+            },
+          ],
+        },
+      ],
+      invocation,
+      migrationPlan: { from: reference('db'), to: reference('production') },
+    });
+
+    expect(fix).toContain(
+      'For a type change, write the conversion with `{bin} migration plan --from db --to production --convert <field>`, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate --to production --db <url>`.',
+    );
+  });
+
+  it('points a type change at the migrations on disk that already lead to the ref, and plans no second path', () => {
+    const { fix } = errorDataProtectionForbids({
+      spaceId: 'app',
+      command: 'db update',
+      refusals: [
+        {
+          setting: 'dataLoss',
+          source: { kind: 'ref', refName: 'production' },
+          operations: [
+            {
+              spaceId: 'app',
+              operationId: 'column.user.age.type',
+              subject: 'User.age',
+              label: 'Change the type of column "age"',
+              loss: 'typeChange',
+            },
+          ],
+        },
+      ],
+      invocation: { ...invocation, rerunArgs: ['--to', 'production', '--permit-policy-change'] },
+      migrationPlan: {
+        from: reference('db'),
+        to: reference('production'),
+        migrationsToTarget: { kind: 'on-disk' },
+      },
+    });
+
+    expect(fix).not.toContain('{bin} migration plan');
+    expect(fix).toContain(
+      'Migrations on disk already lead from the database to `production`, so a migration planned now would be a second path between the same two contracts, and `db migrate` applies only one of them. For a type change, write the conversion in the migration.ts of the one that changes the field, run that migration.ts with `node`, and apply them with `{bin} db migrate --to production --permit-policy-change --db <url>`.',
+    );
+  });
+
+  it('says why a type change cannot be written as a migration when no plan can start where the database is', () => {
+    const { fix } = errorDataProtectionForbids({
+      spaceId: 'app',
+      command: 'db update',
+      refusals: [
+        {
+          setting: 'dataLoss',
+          source: { kind: 'marker' },
+          operations: [
+            {
+              spaceId: 'app',
+              operationId: 'column.user.age.type',
+              subject: 'User.age',
+              label: 'Change the type of column "age"',
+              loss: 'typeChange',
+            },
+          ],
+        },
+      ],
+      invocation,
+      migrationPlan: { from: NOT_RECORDED, to: { kind: 'default' } },
+    });
+
+    expect(fix).toContain(
+      `A type change cannot be written as a migration here. ${NOT_RECORDED_REASON}.`,
+    );
+    expect(fix).not.toContain('migration plan --');
+  });
+
+  it('says why a type change cannot be written as a migration when the database is already at the target', () => {
+    const { fix } = errorDataProtectionForbids({
+      spaceId: 'app',
+      command: 'db update',
+      refusals: [
+        {
+          setting: 'dataLoss',
+          source: { kind: 'marker' },
+          operations: [
+            {
+              spaceId: 'app',
+              operationId: 'column.user.age.type',
+              subject: 'User.age',
+              label: 'Change the type of column "age"',
+              loss: 'typeChange',
+            },
+          ],
+        },
+      ],
+      invocation,
+      migrationPlan: {
+        from: { kind: 'reference', reference: 'db' },
+        to: { kind: 'default' },
+        migrationsToTarget: { kind: 'none-needed' },
+      },
+    });
+
+    expect(fix).toContain(
+      'A type change cannot be written as a migration here. The database is already at the emitted contract and records every invariant it requires, so there is no migration to apply.',
+    );
   });
 
   it.each(['db migrate', 'db update', 'migration plan'] as const)(

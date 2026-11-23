@@ -29,6 +29,19 @@ const names = async (q: Queryable) =>
       .toArray()
   ).map((row) => row.name);
 
+const createWithAuthor = (
+  tx: PostgresTransactionContext<Contract>,
+  id: number,
+  title: string,
+  authorId: number,
+) =>
+  tx.orm.public.Post.select('id').create({
+    id,
+    title,
+    views: 0,
+    author: (author) => author.create({ id: authorId, email: `${title}@example.com`, name: title }),
+  });
+
 describe('tx.transaction on postgres', () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>>;
   let pool: pg.Pool;
@@ -41,6 +54,18 @@ describe('tx.transaction on postgres', () => {
     await db.execute(
       db.raw.sql`CREATE TABLE nested_rows (name TEXT NOT NULL)`.affectedCount().build(),
     );
+    await db.execute(
+      db.raw
+        .sql`CREATE TABLE users (id INT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL, invited_by_id INT)`
+        .affectedCount()
+        .build(),
+    );
+    await db.execute(
+      db.raw
+        .sql`CREATE TABLE posts (id INT PRIMARY KEY, title TEXT NOT NULL, user_id INT NOT NULL, views INT NOT NULL)`
+        .affectedCount()
+        .build(),
+    );
   }, timeouts.spinUpPpgDev);
 
   afterAll(async () => {
@@ -51,6 +76,8 @@ describe('tx.transaction on postgres', () => {
 
   beforeEach(async () => {
     await db.execute(db.raw.sql`DELETE FROM nested_rows`.affectedCount().build());
+    await db.execute(db.raw.sql`DELETE FROM posts`.affectedCount().build());
+    await db.execute(db.raw.sql`DELETE FROM users`.affectedCount().build());
   });
 
   it.each(['pooled', 'serverless'] as const)(
@@ -140,5 +167,31 @@ describe('tx.transaction on postgres', () => {
     });
 
     expect(await names(db)).toEqual(['A', 'B']);
+  });
+
+  it('runs an ORM write of several statements in a savepoint, so a failed write leaves none of its rows and the transaction commits', async () => {
+    await db.transaction(async (tx) => {
+      await createWithAuthor(tx, 1, 'A', 1);
+      await expect(createWithAuthor(tx, 1, 'B', 2)).rejects.toThrow(/duplicate key value/);
+      await createWithAuthor(tx, 3, 'C', 3);
+    });
+
+    expect({
+      posts: await db.orm.public.Post.select('id', 'title', 'userId')
+        .orderBy((post) => post.id.asc())
+        .all(),
+      users: await db.orm.public.User.select('id', 'name')
+        .orderBy((user) => user.id.asc())
+        .all(),
+    }).toEqual({
+      posts: [
+        { id: 1, title: 'A', userId: 1 },
+        { id: 3, title: 'C', userId: 3 },
+      ],
+      users: [
+        { id: 1, name: 'A' },
+        { id: 3, name: 'C' },
+      ],
+    });
   });
 });

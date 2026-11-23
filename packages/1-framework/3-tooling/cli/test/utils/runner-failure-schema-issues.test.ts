@@ -11,7 +11,8 @@ import { runnerFailureFacts } from '../../src/control-api/operations/run-migrati
 import { dbInitRunnerFailureError } from '../../src/utils/db-init-failure';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
-import type { FailedMigrationOnDisk } from '../../src/utils/runner-failure-advice';
+import { originOf, toEmitted } from './plan-origins';
+import { onDisk, type WrittenMigration } from './runner-failure-errors';
 
 const node: DiffableNode = {
   id: 'default',
@@ -66,19 +67,21 @@ const withoutIssues = schemaCheckFailure(undefined);
 
 function migrateError(
   failure: MigrationRunnerFailure,
-  failedMigration: FailedMigrationOnDisk | undefined = undefined,
+  failedMigration: WrittenMigration | undefined = undefined,
+  rerunArgs: readonly string[] = [],
+  targetRef: string | undefined = undefined,
 ) {
   return migrateRunnerFailureError(
     failure,
     runnerFailureFacts(failure, []),
-    failedMigration,
-    invocation,
+    failedMigration === undefined ? undefined : onDisk(failedMigration),
+    { ...invocation, rerunArgs, ...(targetRef === undefined ? {} : { targetRef }) },
   );
 }
 
 function dbUpdateError(failure: MigrationRunnerFailure) {
   return dbUpdateRunnerFailureError(failure, runnerFailureFacts(failure, []), {
-    databaseStorageHash: undefined,
+    migrationPlan: toEmitted(originOf(undefined)),
     invocation,
   });
 }
@@ -113,19 +116,63 @@ describe('a failed schema check after apply', () => {
       expect(error.cause).toBe(failure);
     });
 
-    it('plans the first migration again without --from, which does not take the empty contract', () => {
+    it('plans the first migration again from the empty contract', () => {
       expect(
         migrateError(schemaCheckFailure([explained]), {
           directory: `${PROJECT}/migrations/app/20261015T1200_initial`,
           from: EMPTY_CONTRACT_HASH,
         }).fix,
-      ).toContain('plan it again with `{bin} migration plan --name initial`,');
+      ).toContain('plan it again with `{bin} migration plan --from @empty --name initial`,');
     });
 
-    it('says to carry written code over when the runner names no migration', () => {
-      expect(migrateError(schemaCheckFailure([explained])).fix).toBe(
-        `${CONTRACT_CAUSE("the failed migration's directory", '{bin} migration plan')}. Or: ${MIGRATION_CAUSE('the migration.ts of the failed migration', 'run that file with node')}.`,
+    it('names no migration directory when the runner names no migration, and points to the commands that find one', () => {
+      expect(
+        (migrateError(schemaCheckFailure([explained])).nextActions ?? []).map(({ label }) => label),
+      ).toEqual([
+        'If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run `{bin} contract emit`, and run `{bin} migration status`. If it prints a `migration plan`, run it, run that migration.ts with the `node` command `migration plan` prints, and run `{bin} db migrate`; otherwise run the command it prints',
+        'If a migration you edited by hand does not reach its destination contract, find it with `{bin} migration list`, change its operations to resolve the issues listed, run its migration.ts with `node`, and run `{bin} db migrate`',
+      ]);
+    });
+
+    it('with --to, names no migration directory and says only how to fix a migration edited by hand, since a change of the contract source cannot move a fixed target', () => {
+      expect(
+        (
+          migrateError(schemaCheckFailure([explained]), undefined, ['--to', 'production'])
+            .nextActions ?? []
+        ).map(({ label }) => label),
+      ).toEqual([
+        'If a migration you edited by hand does not reach its destination contract, find it with `{bin} migration list`, change its operations to resolve the issues listed, run its migration.ts with `node`, and run `{bin} db migrate --to production`',
+      ]);
+    });
+
+    it('applies the migration planned again to the new contract with the flags that do not name the old target, and says the ref still names the old one', () => {
+      const failed = { directory: `${PROJECT}/${INITIAL}`, from: FROM };
+      const given = ['--to', 'production', '--advance-ref', 'staging', '--permit-policy-change'];
+      const contractCause = (apply: string) =>
+        CONTRACT_CAUSE(
+          `\`${INITIAL}\``,
+          `{bin} migration plan --from ${FROM} --name initial`,
+        ).replace(/`\{bin\} db migrate`$/, apply);
+      const migrationCause = MIGRATION_CAUSE(
+        `\`${INITIAL}/migration.ts\``,
+        `run \`node ${INITIAL}/migration.ts\``,
+      ).replace(
+        /`\{bin\} db migrate`$/,
+        '`{bin} db migrate --to production --advance-ref staging --permit-policy-change`',
       );
+      const labels = (targetRef: string | undefined) =>
+        (migrateError(schemaCheckFailure([plain]), failed, given, targetRef).nextActions ?? []).map(
+          ({ label }) => label,
+        );
+      expect([labels(undefined), labels('production')]).toEqual([
+        [contractCause('`{bin} db migrate --advance-ref staging`'), migrationCause],
+        [
+          contractCause(
+            "`{bin} db migrate --advance-ref staging`, which goes to the new migration's contract and not to `production`; `production` still names the contract the failed migration went to, so if it should name the new one, run `{bin} migration ref set production <contract>` with the contract the new migration ends at",
+          ),
+          migrationCause,
+        ],
+      ]);
     });
 
     it('gives each cause its own next action, an edit of a file that names the commands to run after it', () => {
