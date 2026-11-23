@@ -8,9 +8,20 @@ import {
 import { buildMixedPolyContract } from '../helpers';
 import { sent } from './sent-statements';
 
+const noSubtasks = 'not exists (select parent_id from tasks tasks_2 where parent_id = tasks.id)';
+const allTaskColumns = 'id, title, type, severity, project_id, parent_id, assignee_id';
+
 const databases = [
-  ['with RETURNING', withReturningCapability(buildMixedPolyContract())],
-  ['without RETURNING', withoutCapabilityKeys(buildMixedPolyContract(), ['returning'])],
+  {
+    name: 'with RETURNING',
+    contract: withReturningCapability(buildMixedPolyContract()),
+    returning: (columns: string) => ` returning ${columns}`,
+  },
+  {
+    name: 'without RETURNING',
+    contract: withoutCapabilityKeys(buildMixedPolyContract(), ['returning']),
+    returning: (_columns: string) => '',
+  },
 ] as const;
 
 interface TaskRows {
@@ -24,7 +35,7 @@ interface TaskFields {
   readonly subtasks: { none(): unknown };
 }
 
-function tasks(contract: (typeof databases)[number][1]) {
+function tasks(contract: (typeof databases)[number]['contract']) {
   const { collection, runtime } = createCollectionFor('Task' as never, contract);
   runtime.setNextResults([[{ id: 2 }], [{ id: 2 }], [{ id: 2 }]]);
   runtime.setNextStats([{ affectedRows: 1 }]);
@@ -38,14 +49,18 @@ function tasks(contract: (typeof databases)[number][1]) {
 }
 
 describe.each(databases)(
-  'delete() and update() whose filter reads the table they write (%s)',
-  (_, contract) => {
+  'delete() and update() whose filter reads the table they write ($name)',
+  ({ contract, returning }) => {
     it('update() after a relation filter from the model to itself writes the row it found by key alone', async () => {
       const { tasks: rows, runtime } = tasks(contract);
 
       await rows.where((task) => task.subtasks.none()).update({ title: 'Leaf' });
 
-      expect(sent(runtime)[1]).toMatch(/^update tasks where id = 2( returning .*)?$/);
+      expect(sent(runtime)).toEqual([
+        `select tasks left join features where ${noSubtasks} limit 1`,
+        `update tasks where id = 2${returning('id')}`,
+        'select tasks left join features where id = 2',
+      ]);
     });
 
     it('delete() after a relation filter from the model to itself deletes the row it found by key alone', async () => {
@@ -53,7 +68,10 @@ describe.each(databases)(
 
       await rows.where((task) => task.subtasks.none()).delete();
 
-      expect(sent(runtime)[1]).toMatch(/^delete tasks where id = 2( returning .*)?$/);
+      expect(sent(runtime)).toEqual([
+        `select tasks left join features where ${noSubtasks} limit 1`,
+        `delete tasks where id = 2${returning(allTaskColumns)}`,
+      ]);
     });
 
     it('update() of a variant stored in its own table writes the row it found by key alone', async () => {
@@ -61,7 +79,11 @@ describe.each(databases)(
 
       await rows.variant('feature').where({ id: 2 }).update({ title: 'Second' });
 
-      expect(sent(runtime)[1]).toMatch(/^update tasks where id = 2( returning .*)?$/);
+      expect(sent(runtime)).toEqual([
+        "select tasks inner join features where (type = 'feature' and id = 2) limit 1",
+        `update tasks where id = 2${returning('id')}`,
+        'select tasks inner join features where id = 2',
+      ]);
     });
 
     it('update() whose filter does not read the table it writes still carries the filter', async () => {
@@ -69,9 +91,11 @@ describe.each(databases)(
 
       await rows.where({ title: 'Crash' }).update({ title: 'Crash!' });
 
-      expect(sent(runtime)[1]).toMatch(
-        /^update tasks where \(title = 'Crash' and id = 2\)( returning .*)?$/,
-      );
+      expect(sent(runtime)).toEqual([
+        "select tasks left join features where title = 'Crash' limit 1",
+        `update tasks where (title = 'Crash' and id = 2)${returning('id')}`,
+        'select tasks left join features where id = 2',
+      ]);
     });
   },
 );
