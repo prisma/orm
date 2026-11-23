@@ -444,7 +444,15 @@ describe('executeMigrate with no path to the target', () => {
       },
     );
 
-    expect(JSON.stringify(failure.toEnvelope())).not.toContain('migration plan --from');
+    const envelope = failure.toEnvelope();
+    expect(JSON.stringify(envelope)).not.toContain('{bin} migration plan');
+    expect(envelope.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label: `No migration records contract ${ELSEWHERE}, and \`migration plan --to\` ends only at a contract a migration records, a ref, or the emitted contract`,
+      },
+      { kind: 'run-command', label: 'Inspect the on-disk graph', command: '{bin} migration list' },
+    ]);
   });
 
   it('maps the target db migrate was given to where migration plan ends', () => {
