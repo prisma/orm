@@ -106,6 +106,8 @@ function mappedName(
 /** A declaration the adapter will find, which the emitted contract does not have yet. */
 interface AheadOfEmit {
   readonly name: string;
+  /** The namespace of a model, which the list names when two models have the same name. */
+  readonly namespaceId: string | undefined;
   readonly path: string;
 }
 
@@ -146,7 +148,11 @@ function fieldConflicts(
     const name = field.name()?.name();
     if (name === undefined) continue;
     if (additions.has(name)) {
-      into.aheadOfEmit.push({ name: `${block.modelName}.${name}`, path: file.path });
+      into.aheadOfEmit.push({
+        name: `${block.modelName}.${name}`,
+        namespaceId: undefined,
+        path: file.path,
+      });
       continue;
     }
     const column = mappedName(field.attributes()) ?? name;
@@ -181,7 +187,7 @@ function modelConflicts(
     const name = declaration.name()?.name();
     if (name === undefined) continue;
     if (lookedUp.has(name) && isSearchedNamespace(namespaceId, comparison.namespace)) {
-      into.aheadOfEmit.push({ name, path: file.path });
+      into.aheadOfEmit.push({ name, namespaceId, path: file.path });
       continue;
     }
     if (namespaceId !== newNamespace) continue;
@@ -197,6 +203,15 @@ function modelConflicts(
   }
 }
 
+/** The listed names, each prefixed with its namespace when another listed name is the same. */
+function aheadOfEmitNames(declarations: readonly AheadOfEmit[]): string[] {
+  return declarations.map(({ name, namespaceId }) =>
+    namespaceId !== undefined && declarations.filter((other) => other.name === name).length > 1
+      ? `${namespaceId}.${name}`
+      : name,
+  );
+}
+
 function storedUnderAnotherNameReason({
   path,
   declared,
@@ -204,7 +219,7 @@ function storedUnderAnotherNameReason({
   lookedFor,
   renameTo,
 }: StoredUnderAnotherName): string {
-  return `${path} stores ${declared} in ${storage}, but Better Auth looks for ${lookedFor}. Rename ${declared} to ${renameTo}, then run \`prisma contract emit\`.`;
+  return `${path} stores ${declared} in ${storage}, but Better Auth looks for ${lookedFor}. Rename ${declared} to ${renameTo}, then run \`prisma contract emit\`, and \`auth generate\` again.`;
 }
 
 function uniquePaths(models: readonly DeclaredModel[]): string[] {
@@ -346,7 +361,7 @@ export function editContractSource<F extends ContractSourceFile>(
   if (aheadOfEmit.length > 0) {
     throw notChanged(
       comparison,
-      `${listOf([...new Set(aheadOfEmit.map(({ path }) => path))])} already declares ${listOf(aheadOfEmit.map(({ name }) => name))}, which the emitted contract does not have. Run \`prisma contract emit\`, then update your database.`,
+      `${listOf([...new Set(aheadOfEmit.map(({ path }) => path))])} already declares ${listOf(aheadOfEmitNames(aheadOfEmit))}, which the emitted contract does not have. Run \`prisma contract emit\`, then update your database.`,
     );
   }
   if (storedUnderAnotherName.length > 0) {

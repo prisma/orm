@@ -12,6 +12,7 @@ import {
 import {
   appPsl,
   contractPath,
+  editAndEmit,
   insertAfter,
   refusal,
   twoFactorModel,
@@ -35,7 +36,7 @@ async function comparisonOver(
 }
 
 function storedUnderAnotherName(stored: string, lookedFor: string, renameTo: string): string {
-  return `${notChanged} ${contractPath} stores ${stored}, but Better Auth looks for ${lookedFor}. Rename ${renameTo}, then run \`prisma contract emit\`.`;
+  return `${notChanged} ${contractPath} stores ${stored}, but Better Auth looks for ${lookedFor}. Rename ${renameTo}, then run \`prisma contract emit\`, and \`auth generate\` again.`;
 }
 
 describe('auth generate when the source declares, and has not emitted, what it would add', () => {
@@ -73,6 +74,51 @@ describe('auth generate when the source declares, and has not emitted, what it w
     expect(editContractSource([{ path: contractPath, text }], comparison).code).toBe(
       `${insertAfter(text, userLastField, twoFactorAdded)}\nnamespace public {\n${indentedModel}\n}\n`,
     );
+  });
+
+  it('names the namespaces when it lists one model name twice', async () => {
+    const comparison = await comparisonOver(appPsl, 'postgres');
+    const text = `${appPsl}\nnamespace legacy {\n  model TwoFactor {\n    id String @id\n  }\n}\n\nnamespace auth {\n  model TwoFactor {\n    id String @id\n  }\n}\n`;
+    expect(() => editContractSource([{ path: contractPath, text }], comparison)).toThrow(
+      refusal(
+        comparison,
+        `${notChanged} ${contractPath} already declares legacy.TwoFactor and auth.TwoFactor, ${emitFirst}`,
+      ),
+    );
+  });
+});
+
+describe('auth generate after the rename a refusal advises', () => {
+  it('adds what is missing to a model renamed to the name Better Auth looks for', async () => {
+    const text = `${appPsl}\nmodel TwoFactor {\n  id String @id\n\n  @@map("twoFactor")\n}\n`;
+    expect(
+      (await editAndEmit(fixture(), 'sqlite', [{ path: contractPath, text }], options))
+        .problemsAfter,
+    ).toEqual([]);
+  });
+
+  it('adds what is missing to a model renamed to the plural name under usePlural', async () => {
+    const plural = pslForConfiguration(fixture().emptyContract('sqlite'), {}, { usePlural: true });
+    const text = `${plural}\nmodel TwoFactors {\n  id String @id\n\n  @@map("twoFactors")\n}\n`;
+    expect(
+      (
+        await editAndEmit(fixture(), 'sqlite', [{ path: contractPath, text }], options, {
+          usePlural: true,
+        })
+      ).problemsAfter,
+    ).toEqual([]);
+  });
+
+  it('finds a field from additionalFields renamed to the name Better Auth looks for', async () => {
+    const text = insertAfter(appPsl, userLastField, '\n  nickname String? @map("nickname")');
+    const withNickname = {
+      ...options,
+      user: { additionalFields: { nickname: { type: 'string' as const, required: false } } },
+    };
+    expect(
+      (await editAndEmit(fixture(), 'sqlite', [{ path: contractPath, text }], withNickname))
+        .problemsAfter,
+    ).toEqual([]);
   });
 });
 
@@ -147,7 +193,7 @@ describe('auth generate when the source stores what Better Auth needs under a na
           'User.tfEnabled in the column "mfaOn"',
           'a field named mfaOn in User',
           'User.tfEnabled to mfaOn',
-        )} ${contractPath} stores MfaRecord in the table "mfa", but Better Auth looks for a model named Mfa. Rename MfaRecord to Mfa, then run \`prisma contract emit\`.`,
+        )} ${contractPath} stores MfaRecord in the table "mfa", but Better Auth looks for a model named Mfa. Rename MfaRecord to Mfa, then run \`prisma contract emit\`, and \`auth generate\` again.`,
       ),
     );
   });
