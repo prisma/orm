@@ -69,12 +69,13 @@ function migrateError(
   failure: MigrationRunnerFailure,
   failedMigration: WrittenMigration | undefined = undefined,
   rerunArgs: readonly string[] = [],
+  targetRef: string | undefined = undefined,
 ) {
   return migrateRunnerFailureError(
     failure,
     runnerFailureFacts(failure, []),
     failedMigration === undefined ? undefined : onDisk(failedMigration),
-    { ...invocation, rerunArgs },
+    { ...invocation, rerunArgs, ...(targetRef === undefined ? {} : { targetRef }) },
   );
 }
 
@@ -144,33 +145,33 @@ describe('a failed schema check after apply', () => {
       ]);
     });
 
-    it('applies the migration planned again with the db migrate the user ran, flags included', () => {
+    it('applies the migration planned again to the new contract with the flags that do not name the old target, and says the ref still names the old one', () => {
       const failed = { directory: `${PROJECT}/${INITIAL}`, from: FROM };
-      const given =
-        '`{bin} db migrate --to production --advance-ref staging --permit-policy-change`';
-      expect(
-        migrateError(schemaCheckFailure([plain]), failed, [
-          '--to',
-          'production',
-          '--advance-ref',
-          'staging',
-          '--permit-policy-change',
-        ]).nextActions,
-      ).toEqual([
-        {
-          kind: 'edit-file',
-          label: CONTRACT_CAUSE(
-            `\`${INITIAL}\``,
-            `{bin} migration plan --from ${FROM} --name initial`,
-          ).replace(/`\{bin\} db migrate`$/, given),
-        },
-        {
-          kind: 'edit-file',
-          label: MIGRATION_CAUSE(
-            `\`${INITIAL}/migration.ts\``,
-            `run \`node ${INITIAL}/migration.ts\``,
-          ).replace(/`\{bin\} db migrate`$/, given),
-        },
+      const given = ['--to', 'production', '--advance-ref', 'staging', '--permit-policy-change'];
+      const contractCause = (apply: string) =>
+        CONTRACT_CAUSE(
+          `\`${INITIAL}\``,
+          `{bin} migration plan --from ${FROM} --name initial`,
+        ).replace(/`\{bin\} db migrate`$/, apply);
+      const migrationCause = MIGRATION_CAUSE(
+        `\`${INITIAL}/migration.ts\``,
+        `run \`node ${INITIAL}/migration.ts\``,
+      ).replace(
+        /`\{bin\} db migrate`$/,
+        '`{bin} db migrate --to production --advance-ref staging --permit-policy-change`',
+      );
+      const labels = (targetRef: string | undefined) =>
+        (migrateError(schemaCheckFailure([plain]), failed, given, targetRef).nextActions ?? []).map(
+          ({ label }) => label,
+        );
+      expect([labels(undefined), labels('production')]).toEqual([
+        [contractCause('`{bin} db migrate --advance-ref staging`'), migrationCause],
+        [
+          contractCause(
+            "`{bin} db migrate --advance-ref staging`, which goes to the new migration's contract and not to `production`; `production` still names the contract the failed migration went to, so if it should name the new one, run `{bin} migration ref set production <contract>` with the contract the new migration ends at",
+          ),
+          migrationCause,
+        ],
       ]);
     });
 

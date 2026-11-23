@@ -24,6 +24,8 @@ export interface CliInvocation {
   readonly rerunArgs?: readonly string[];
   /** The run's statements, as flags, which another command that plans the same change repeats. */
   readonly statementArgs?: readonly string[];
+  /** The ref the run's `--to` named, when it named one. */
+  readonly targetRef?: string;
 }
 
 /** The invocation of a command run with `ctx`, given `--db` when `db` is defined. */
@@ -52,6 +54,20 @@ export function rerunFlags(flags: {
 /** The `db migrate` the user ran, with the flags they gave. */
 export function dbMigrateRerun(invocation: CliInvocation): string {
   return cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? []);
+}
+
+/**
+ * The `db migrate` that applies a migration planned after changing the contract source: it ends at
+ * the new emitted contract, so it leaves out the user's `--to` and the `--permit-policy-change`
+ * that goes with it, and keeps the other flags.
+ */
+export function dbMigrateToEmitted(invocation: CliInvocation): string {
+  const given = invocation.rerunArgs ?? [];
+  const kept = given.filter(
+    (word, index) =>
+      word !== '--to' && given[index - 1] !== '--to' && word !== '--permit-policy-change',
+  );
+  return cliCommand(invocation, 'db migrate', kept);
 }
 
 /**

@@ -86,7 +86,7 @@ const MIGRATE_CASES: readonly AdviceCase[] = [
       ],
     },
     failed: FAILED,
-    reruns: [true, true, true],
+    reruns: [true, true, false],
   },
   {
     kind: 'rows that hold a removed enum value',
@@ -102,7 +102,7 @@ const MIGRATE_CASES: readonly AdviceCase[] = [
       ],
     },
     failed: FAILED,
-    reruns: [true, true],
+    reruns: [false, true],
   },
   { kind: 'rows failing a new check', facts: { rowsFailingCheck: { check: 'c' } }, reruns: [true] },
   {
@@ -116,7 +116,7 @@ const MIGRATE_CASES: readonly AdviceCase[] = [
     meta: { schemaIssues: [SCHEMA_ISSUE] },
     facts: {},
     failed: FAILED,
-    reruns: [true, true],
+    reruns: [false, true],
   },
   {
     kind: 'a failed precheck',

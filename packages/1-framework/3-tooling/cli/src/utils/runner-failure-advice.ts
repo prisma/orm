@@ -8,7 +8,7 @@ import type {
   MigrationPlanArgument,
   MigrationPlanArguments,
 } from '../control-api/operations/plan-arguments';
-import { statementFlag } from '../control-api/statements/statement-flag';
+import { shellQuoted, statementFlag } from '../control-api/statements/statement-flag';
 import type {
   FailedTypeChangeReport,
   RowsFailingCheckReport,
@@ -20,8 +20,10 @@ import { migrateFailedPrecheckAdvice } from './failed-precheck-advice';
 import { chooseAction, editFileAction } from './next-actions';
 import {
   type CliInvocation,
+  CONTRACT_PLACEHOLDER,
   cliCommand,
   dbMigrateRerun,
+  dbMigrateToEmitted,
   dbUpdateRerun,
   type PrintedPlan,
   printedPath,
@@ -72,11 +74,25 @@ function dbMigrateAgain(invocation: CliInvocation): string {
 }
 
 /**
- * The steps after filling the migration.ts a `migration plan` wrote with no placeholders: run it,
- * which writes its operations, and apply it with the `db migrate` the user ran, or a plain one.
+ * Applying a migration planned after a change of the contract source, which ends at the new emitted
+ * contract: the ref the run's `--to` named still names the contract the failed migration went to.
+ */
+function applyToEmitted(invocation: CliInvocation): string {
+  const apply = quoted(dbMigrateToEmitted(invocation));
+  const ref = invocation.targetRef;
+  if (ref === undefined) return apply;
+  const refSet = quoted(
+    cliCommand(invocation, 'migration ref set', [shellQuoted(ref), CONTRACT_PLACEHOLDER]),
+  );
+  return `${apply}, which goes to the new migration's contract and not to \`${ref}\`; \`${ref}\` still names the contract the failed migration went to, so if it should name the new one, run ${refSet} with the contract the new migration ends at`;
+}
+
+/**
+ * The steps after filling the migration.ts a `migration plan` wrote with no placeholders, after a
+ * change of the contract source: run it, which writes its operations, and apply it.
  */
 export function runWrittenFile(invocation: CliInvocation): string {
-  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${dbMigrateAgain(invocation)}`;
+  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${applyToEmitted(invocation)}`;
 }
 
 /** The step between filling a planned migration.ts and applying it, which writes its operations. */
@@ -686,7 +702,7 @@ function keepOptional(
   const plan = replacingPlan(failedMigration, []);
   if (plan.kind === 'none') return undefined;
   return editFileAction(
-    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and plan it again with ${quotedPlan(plan)}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateAgain(invocation)}`,
+    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and plan it again with ${quotedPlan(plan)}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${applyToEmitted(invocation)}`,
   );
 }
 
@@ -727,7 +743,7 @@ function migrateSchemaCheckAdvice(
     return [keepFailedMigration(failedMigration, plan.reason), fixMigration];
   return [
     editFileAction(
-      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quotedPlan(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(invocation)}`,
+      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quotedPlan(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${applyToEmitted(invocation)}`,
     ),
     fixMigration,
   ];
