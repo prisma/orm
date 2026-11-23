@@ -9,19 +9,19 @@ import {
   contractToMongoSchemaIR,
 } from '@internal/family-mongo/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import type {
-  MigrationDataLoss,
-  MigrationOperationPolicy,
-  MigrationPlanner,
-  MigrationPlannerConflict,
-  MigrationPlannerResult,
-  MigrationPlanWithAuthoringSurface,
-  MigrationScaffoldContext,
-  MigrationSubject,
-  ModelCoordinate,
-  PlanOrigin,
-  ResolvedMigrationStatement,
-  ResolvedRenameStatement,
+import {
+  type MigrationDataLoss,
+  type MigrationOperationPolicy,
+  type MigrationPlanner,
+  type MigrationPlannerConflict,
+  type MigrationPlannerResult,
+  type MigrationPlanWithAuthoringSurface,
+  type MigrationScaffoldContext,
+  type ModelCoordinate,
+  modelDisplayName,
+  type PlanOrigin,
+  type ResolvedMigrationStatement,
+  type ResolvedRenameStatement,
 } from '@internal/framework-components/control';
 import {
   canonicalize,
@@ -268,31 +268,36 @@ export type PlanCallsResult =
   | { readonly kind: 'failure'; readonly conflicts: MigrationPlannerConflict[] };
 
 /**
- * The model of `fromContract` that stores its documents in `collection`, if any: the root model
- * when variants share the collection with it.
+ * The models of `fromContract` whose documents a drop of `collection` loses, sorted by name: its
+ * root models, which variants stored there belong to, else the variants that store their documents
+ * there themselves.
  */
-function modelStoredIn(
+function modelsStoredIn(
   fromContract: ContractWithDomain,
   collection: string,
-): ModelCoordinate | undefined {
+): readonly ModelCoordinate[] {
   const storing = Object.entries(fromContract.domain.namespaces).flatMap(
     ([namespaceId, namespace]) =>
       Object.entries(namespace.models).flatMap(([model, definition]) => {
         const coordinate = { namespaceId: asNamespaceId(namespaceId), model };
-        return collectionOfModel(fromContract.domain, coordinate) === collection
+        return embeddingModelOf(fromContract.domain, coordinate) === undefined &&
+          collectionOfModel(fromContract.domain, coordinate) === collection
           ? [{ coordinate, isRoot: definition.base === undefined }]
           : [];
       }),
   );
-  return (storing.find(({ isRoot }) => isRoot) ?? storing[0])?.coordinate;
+  const roots = storing.filter(({ isRoot }) => isRoot);
+  return (roots.length > 0 ? roots : storing)
+    .map(({ coordinate }) => coordinate)
+    .sort((a, b) => modelDisplayName(a).localeCompare(modelDisplayName(b)));
 }
 
 /**
- * Each collection drop of the plan, with the model whose documents it loses. When that model keeps
- * its name and the plan brings its new collection into existence, the drop says why the plan does
- * not rename the collection: the models stored there are being split or merged, which is a data
- * migration, or its control policy is not `managed` in both contracts, and then how to rename it by
- * hand.
+ * Each collection drop of the plan, with every model whose documents it loses. When such a model
+ * keeps its name and the plan brings its new collection into existence, its question says why the
+ * plan does not rename the collection: the models stored there are being split or merged, which is
+ * a data migration, or its control policy is not `managed` in both contracts, and then how to
+ * rename it by hand.
  */
 function collectionDrops(
   calls: readonly OpFactoryCall[],
@@ -304,27 +309,28 @@ function collectionDrops(
   const created = (collection: string) =>
     collections.origin.collection(collection) === undefined &&
     collections.destination.collection(collection) !== undefined;
+  const adviceFor = (model: ModelCoordinate, dropped: string): string | undefined => {
+    const destinationCollection = modelStoredInDestination(contract, model);
+    if (destinationCollection === undefined || !created(destinationCollection)) return undefined;
+    const change = { from: dropped, to: destinationCollection };
+    const shared = renames.sharedCollection(change);
+    if (shared !== undefined) return renames.sharedStorageAdvice(change, shared);
+    return renames.managedOnBothSides(change)
+      ? undefined
+      : keepCollectionByHandAdvice(model, dropped, destinationCollection);
+  };
   return calls.flatMap((call, operationIndex): readonly MigrationDataLoss[] => {
     if (!(call instanceof DropCollectionCall)) return [];
-    const model = fromContract === null ? undefined : modelStoredIn(fromContract, call.collection);
     const lost = { operationIndex, loss: 'drop', label: call.label } as const;
-    if (model === undefined) {
+    const models = fromContract === null ? [] : modelsStoredIn(fromContract, call.collection);
+    if (models.length === 0) {
       return [{ ...lost, subject: { kind: 'storage', name: call.collection } }];
     }
-    const subject: MigrationSubject = { kind: 'model', ...model };
-    const destinationCollection = modelStoredInDestination(contract, model);
-    if (destinationCollection === undefined || !created(destinationCollection)) {
-      return [{ ...lost, subject }];
-    }
-    const change = { from: call.collection, to: destinationCollection };
-    const shared = renames.sharedCollection(change);
-    const keepDataAdvice =
-      shared !== undefined
-        ? renames.sharedStorageAdvice(change, shared)
-        : renames.managedOnBothSides(change)
-          ? undefined
-          : keepCollectionByHandAdvice(model, call.collection, destinationCollection);
-    return [{ ...lost, subject, ...ifDefined('keepDataAdvice', keepDataAdvice) }];
+    return models.map((model) => ({
+      ...lost,
+      subject: { kind: 'model', ...model },
+      ...ifDefined('keepDataAdvice', adviceFor(model, call.collection)),
+    }));
   });
 }
 

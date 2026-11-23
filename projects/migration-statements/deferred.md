@@ -620,3 +620,9 @@ When a variant gains its own `@@map` (its storage is split from its base's colle
 **Found:** review of the MongoDB stored-name renames, step 1, 2026-11-24.
 
 On MongoDB, a field rename statement on a model whose name and collection both change, with no model statement, is refused with "Add --rename A:B before this statement, so the collection is renamed with its documents." (`packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, `unrenamedCollectionWhy`). The SQL family gives the same-model text in that case, which says the plan does not rename the table and to leave out the statement, though adding the model statement is the fix. Give SQL the same hint.
+
+## SQL: a dropped table shared by several models asks about one of them
+
+**Found:** review of the MongoDB stored-name renames, step 2, 2026-11-24.
+
+When a table that several models store their rows in is dropped (for example single-table variants of different bases, or a variant moving out while the base is removed), the SQL family names one model in the question: the root model if there is one, else the first model in declaration order (`packages/2-sql-family/9-family/src/core/migrations/operation-subjects.ts`, the `models.find(({ isRoot }) => isRoot) ?? models[0]` lookup in the subject of a dropped table). `--delete` on that model then drops rows of models never named. MongoDB now asks about every root model stored in a dropped collection. SQL should do the same where several root models share a table.

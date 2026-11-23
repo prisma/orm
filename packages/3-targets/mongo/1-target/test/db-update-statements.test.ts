@@ -201,4 +201,78 @@ describe('db update with statements on MongoDB', () => {
     });
     expect(result.ok ? result.value.plan.operations : result).toHaveLength(3);
   });
+
+  it('follows the route of a collection swap refusal through two runs', async () => {
+    const stage = (seed: string, user: string, account: string) =>
+      fixtureContract(
+        seed,
+        {
+          User: { collection: user, fields: ['_id', 'name'] },
+          Account: { collection: account, fields: ['_id', 'name'] },
+        },
+        { [user]: {}, [account]: {} },
+      );
+    const run = async (
+      from: ReturnType<typeof stage>,
+      to: ReturnType<typeof stage>,
+      live: readonly string[],
+    ) => {
+      const dir = await mkdtemp(join(tmpdir(), 'mongo-db-update-statements-'));
+      tempDirs.push(dir);
+      const migrationsDir = join(dir, 'migrations');
+      await writeContractSnapshot(migrationsDir, from.storage.storageHash, {
+        contractJson: from,
+        contractDts: '',
+      });
+      const result = await executeDbUpdate({
+        invocation: TEST_INVOCATION,
+        answerQuestions: async () => {
+          throw new Error('no question is asked');
+        },
+        driver: {
+          close: async () => {},
+          databaseName: async () => 'appdb',
+        } as unknown as ControlDriverInstance<'mongo', 'mongo'>,
+        adapter: {} as unknown as ControlAdapterInstance<'mongo', 'mongo'>,
+        familyInstance: {
+          ...family,
+          readAllMarkers: async () =>
+            new Map([['app', { ...marker, storageHash: from.storage.storageHash }]]),
+          introspect: async () =>
+            new MongoSchemaIR(
+              live.map((name) => schemaCollection(name)),
+              { fromDatabase: false },
+            ),
+        } as unknown as ControlFamilyInstance<'mongo', unknown>,
+        contract: to,
+        mode: 'plan',
+        migrations: mongoTargetDescriptor.migrations as unknown as TargetMigrationsCapability<
+          'mongo',
+          'mongo',
+          ControlFamilyInstance<'mongo', unknown>
+        >,
+        frameworkComponents: [],
+        migrationsDir,
+        targetId: 'mongo',
+        statements: [],
+      });
+      return result.ok ? result.value.plan.operations.map(({ label }) => label) : result.failure;
+    };
+    const origin = stage('s0', 'users', 'accounts');
+    const through = stage('s1', 'prisma_swap_accounts', 'prisma_swap_users');
+    const swapped = stage('s2', 'accounts', 'users');
+    expect([
+      await run(origin, through, ['users', 'accounts']),
+      await run(through, swapped, ['prisma_swap_accounts', 'prisma_swap_users']),
+    ]).toEqual([
+      [
+        'Rename collection accounts to prisma_swap_users',
+        'Rename collection users to prisma_swap_accounts',
+      ],
+      [
+        'Rename collection prisma_swap_users to users',
+        'Rename collection prisma_swap_accounts to accounts',
+      ],
+    ]);
+  });
 });

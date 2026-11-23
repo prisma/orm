@@ -306,29 +306,44 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
       { [collection]: { required: ['level'] } },
     );
 
-  it('renames nothing when the destination removes one root model and moves the other, and asks about the drop', () => {
-    expect(
-      planned(
-        plan({
-          from: shared('from', { admin: 'users', user: 'users' }),
-          to: userAlone('to', 'members'),
-          schema: liveUsers,
-        }),
-      ),
-    ).toEqual({
-      labels: ['Create collection members', 'Drop collection users'],
-      classes: ['additive', 'destructive'],
-      applied: [],
-      dataLoss: [
-        {
-          operationIndex: 1,
-          subject: { kind: 'model', namespaceId: NS, model: 'Admin' },
-          loss: 'drop',
-          label: 'Drop collection users',
-        },
-      ],
-    });
-  });
+  const REMOVED_ADVICE =
+    'The origin stores models "Admin" and "User" in collection "users", no discriminator tells their documents apart, and the destination removes model "Admin", so their storage is being split. Keeping their documents is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.';
+
+  it.each([
+    ['Admin first', ['Admin', 'User']],
+    ['User first', ['User', 'Admin']],
+  ] as const)(
+    'renames nothing when the destination removes one root model and moves the other, and asks about every model the drop loses (%s)',
+    (_, order) => {
+      const from = contract(
+        'from',
+        Object.fromEntries(
+          order.map((model) => [model, { collection: 'users', fields: ['_id', 'level'] }]),
+        ),
+        { users: { jsonSchema: sharedJsonSchema(['level'], ['level']) } },
+      );
+      expect(planned(plan({ from, to: userAlone('to', 'members'), schema: liveUsers }))).toEqual({
+        labels: ['Create collection members', 'Drop collection users'],
+        classes: ['additive', 'destructive'],
+        applied: [],
+        dataLoss: [
+          {
+            operationIndex: 1,
+            subject: { kind: 'model', namespaceId: NS, model: 'Admin' },
+            loss: 'drop',
+            label: 'Drop collection users',
+          },
+          {
+            operationIndex: 1,
+            subject: { kind: 'model', namespaceId: NS, model: 'User' },
+            loss: 'drop',
+            label: 'Drop collection users',
+            keepDataAdvice: REMOVED_ADVICE,
+          },
+        ],
+      });
+    },
+  );
 
   it('refuses a model rename statement on a collection whose other root model the destination removes', () => {
     const statement = renameModel('User', 'Member');

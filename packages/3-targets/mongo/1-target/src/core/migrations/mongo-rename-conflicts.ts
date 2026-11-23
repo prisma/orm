@@ -10,7 +10,9 @@ import {
   embeddingModelOf,
   modelAndBasesOf,
   mongoModelsOf,
+  otherModelsReached,
   ownStoredNamesOf,
+  selectedVariantOf,
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { modelCoordinates } from './mongo-model-coordinates';
@@ -176,6 +178,47 @@ function originHasCollection(fromContract: ContractWithDomain, name: string): bo
   );
 }
 
+/** The collection the destination stores a model of that name in, if it keeps one. */
+function destinationCollectionOf(
+  contract: ContractWithDomain,
+  model: ModelCoordinate,
+): string | undefined {
+  return Object.hasOwn(contract.domain.namespaces[model.namespaceId]?.models ?? {}, model.model) &&
+    embeddingModelOf(contract.domain, model) === undefined
+    ? collectionOfModel(contract.domain, model)
+    : undefined;
+}
+
+/**
+ * Why the plan does not move the models of collection `held` out of its way, when they move to a
+ * collection that models of other collections move to as well: their storage is being merged.
+ */
+function mergedText(
+  holders: readonly ModelCoordinate[],
+  held: string,
+  contracts: Contracts,
+): string {
+  const moves = holders.flatMap((holder) => {
+    const to = destinationCollectionOf(contracts.contract, holder);
+    if (to === undefined || to === held) return [];
+    const joining = modelCoordinates(contracts.fromContract).filter(
+      (model) =>
+        !holders.some(
+          (each) => each.namespaceId === model.namespaceId && each.model === model.model,
+        ) &&
+        collectionOfModel(contracts.fromContract.domain, model) !== held &&
+        embeddingModelOf(contracts.fromContract.domain, model) === undefined &&
+        destinationCollectionOf(contracts.contract, model) === to,
+    );
+    return joining.length === 0
+      ? []
+      : [
+          `${capitalized(modelsText([holder]))} moves to collection "${to}" with ${modelsText(joining)}, whose documents are in another collection, so their storage is being merged, which the plan does not do, and collection "${held}" keeps its name. `,
+        ];
+  });
+  return moves.join('');
+}
+
 /**
  * Refuses a collection rename no statement asks for when it swaps or chains with another rename,
  * moves onto a collection the schema being planned from already has, or moves out of a name a
@@ -209,7 +252,7 @@ function collectionRenameConflict(
     return renameRefused(
       undefined,
       `${label}: the schema being planned from already has a collection "${to}"`,
-      `${text}, and the schema being planned from already has collection "${to}"${holders.length === 0 ? '' : `, the collection of ${modelsText(holders)}`}. Without the rename the plan would read the ${misread(to)}. Make the change in two plans: first ${freeName('collection', to, { text: modelsText(holders), count: holders.length }, unused(used, to))}, and plan and apply that; then make this change and plan again.`,
+      `${text}, and the schema being planned from already has collection "${to}"${holders.length === 0 ? '' : `, the collection of ${modelsText(holders)}`}. ${mergedText(holders, to, contracts)}Without the rename the plan would read the ${misread(to)}. Make the change in two plans: first ${freeName('collection', to, { text: modelsText(holders), count: holders.length }, unused(used, to))}, and plan and apply that; then make this change and plan again.`,
     );
   }
   const takes = others.find((other) => hasStatement(other) && other.to === from);
@@ -256,19 +299,33 @@ export function plannedCollectionChanges(
   };
 }
 
-/** The stored names of the documents of the origin model of `field`, its own and its bases', with the fields that store them. */
+/**
+ * The fields of the origin contract stored as `storedName` in the documents a rename of `field`
+ * reaches: those of its model and its bases, of the variants of a root model, and of the other
+ * models stored in its collection whose documents the rename's filter can select.
+ */
 function originFieldsStoring(
   fromContract: ContractWithDomain,
   field: FieldCoordinate,
   storedName: string,
 ): readonly FieldCoordinate[] {
   const models = mongoModelsOf(fromContract.domain, field.namespaceId);
-  const names = [field.model];
+  const own = [field.model];
   for (let base = models[field.model]?.base; base !== undefined; base = models[base.model]?.base) {
-    if (names.includes(base.model)) break;
-    names.push(base.model);
+    if (own.includes(base.model)) break;
+    own.push(base.model);
   }
-  return names.flatMap((model) => {
+  const variant = selectedVariantOf(fromContract.domain, field);
+  const variants =
+    variant === undefined
+      ? Object.values(models[field.model]?.variants ?? {}).map(({ model }) => model)
+      : [];
+  const collection = collectionOfModel(fromContract.domain, field);
+  const others =
+    collection === undefined
+      ? []
+      : otherModelsReached(fromContract.domain, field, collection, variant, undefined);
+  return [...new Set([...own, ...variants, ...others])].flatMap((model) => {
     const definition = models[model];
     return definition === undefined
       ? []
@@ -322,11 +379,7 @@ function fieldRenameConflict(
   const moving = fieldsText([change.rename.from]);
   const misread = (stored: string) => `values of field "${stored}" as values of ${moving}`;
   const others = changes.filter(
-    (other) =>
-      other !== change &&
-      other.collection === change.collection &&
-      other.rename.from.namespaceId === change.rename.from.namespaceId &&
-      other.rename.from.model === change.rename.from.model,
+    (other) => other !== change && other.collection === change.collection,
   );
   const holders = originFieldsStoring(contracts.fromContract, change.rename.from, change.to);
   if (holders.length > 0) {
@@ -341,6 +394,7 @@ function fieldRenameConflict(
     const used = [
       ...storedNamesOf(contracts.fromContract, change.rename.from),
       ...storedNamesOf(contracts.contract, change.rename.to),
+      ...holders.flatMap((holder) => storedNamesOf(contracts.fromContract, holder)),
     ];
     return renameRefused(
       undefined,
