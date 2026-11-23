@@ -125,29 +125,13 @@ describe('a table whose only unique key has a nullable column', () => {
     expect(runtime.executions).toEqual([]);
   });
 
-  it('runs a deleteAll() with includes under the one-query include, deleting by the condition alone', async () => {
+  it('refuses a deleteAll() with includes under the one-query include, as updateAll() does', async () => {
     const { collection, runtime } = logs();
-    runtime.setNextResults([
-      [{ message: 'hello', code: null, user_id: 1, author: '{"id":1}' }],
-      [],
-    ]);
 
-    await collection.include('author').deleteAll();
-
-    const [find, remove] = runtime.executions.map(({ plan }) => {
-      const ast = 'ast' in plan ? plan.ast : undefined;
-      return ast?.kind === 'select' || ast?.kind === 'delete'
-        ? { kind: ast.kind, where: ast.where }
-        : undefined;
-    });
-    expect({
-      find: find?.kind,
-      remove: remove?.kind,
-      sameCondition: remove?.where === find?.where,
-    }).toEqual({
-      find: 'select',
-      remove: 'delete',
-      sameCondition: true,
-    });
+    expect(() => collection.include('author').deleteAll()).toThrow(includeRefusal);
+    expect(() => collection.include('author').updateAll({ message: 'bye' })).toThrow(
+      includeRefusal,
+    );
+    expect(runtime.executions).toEqual([]);
   });
 });

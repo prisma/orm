@@ -143,6 +143,7 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
     b.graph.setResult(addDeleteAll(b, collection, { filters: [], links: [] }, whereOf(collection)));
     return b.graph;
   }
+  requireIdentityColumnsForIncludes(collection);
   const where = whereOf(collection);
   const find = findRows(b, selectRowsAst(collection, state).withWhere(where), noInputs);
   const read = withIncludeNodes(b, collection, find);
