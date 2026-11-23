@@ -197,6 +197,7 @@ describe('tx.transaction on postgres', () => {
 
   it('rejects with RUNTIME.TRANSACTION_ROLLBACK_FAILED when the callback throws while an ORM write it did not await holds a savepoint, and leaves no rows', async () => {
     const run = db.transaction(async (tx) => {
+      await insert(tx, 'before');
       await Promise.all([createWithAuthor(tx, 1, 'A', 1), tx.orm.public.User.select('id').all()]);
     });
 

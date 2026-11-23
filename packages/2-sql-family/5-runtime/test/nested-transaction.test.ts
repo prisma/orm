@@ -269,14 +269,27 @@ describe('TransactionContext.transaction', () => {
       });
       await run.catch(() => undefined);
       const before = events.length;
+      expect(contexts).toHaveLength(depth + 2);
       for (const ctx of contexts) {
         await rejectsWith(ctx.execute(statementC), 'TRANSACTION_CLOSED');
       }
       proceed.resolve();
       await nested.catch(() => undefined);
 
-      expect(trace(events.slice(before))).toBe('');
-      expect(trace(events).endsWith('destroy')).toBe(true);
+      const ends = transactionIds(events).map(
+        (id) =>
+          events.filter((event) => event.activity?.id === id && event.name.startsWith('ended:'))
+            .length,
+      );
+      expect({
+        afterClose: trace(events.slice(before)),
+        trace: trace(events),
+        ends,
+      }).toEqual({
+        afterClose: '',
+        trace: expect.stringMatching(/destroy$/),
+        ends: Array.from({ length: depth + 2 }, () => 1),
+      });
     },
   );
 
