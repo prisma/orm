@@ -3,7 +3,6 @@ import { findModel, type SqlContract } from '../../src/models/model-lookup';
 import { useContractFixture } from '../helpers/contract-fixture';
 
 const fixture = useContractFixture();
-const noOtherModels: ReadonlySet<string> = new Set();
 let sqliteContract: SqlContract;
 let postgresContract: SqlContract;
 
@@ -52,7 +51,7 @@ namespace auth {
 
 describe('findModel', () => {
   it('finds a model by its exact name before the upper-cased name', () => {
-    expect(findModel(sqliteContract, 'user', undefined, noOtherModels)).toMatchObject({
+    expect(findModel(sqliteContract, 'user', undefined)).toMatchObject({
       kind: 'found',
       name: 'user',
       namespaceId: '__unbound__',
@@ -60,26 +59,18 @@ describe('findModel', () => {
   });
 
   it('finds the upper-cased name when no model has the exact name', () => {
-    expect(findModel(sqliteContract, 'session', undefined, noOtherModels)).toMatchObject({
+    expect(findModel(sqliteContract, 'session', undefined)).toMatchObject({
       kind: 'found',
       name: 'Session',
     });
   });
 
-  it('does not take the upper-cased name when another Better Auth model has it', () => {
-    expect(findModel(sqliteContract, 'session', undefined, new Set(['Session']))).toEqual({
-      kind: 'missing',
-    });
-  });
-
   it('reports a model the contract lacks', () => {
-    expect(findModel(sqliteContract, 'verification', undefined, noOtherModels)).toEqual({
-      kind: 'missing',
-    });
+    expect(findModel(sqliteContract, 'verification', undefined)).toEqual({ kind: 'missing' });
   });
 
   it('finds a model in a second Postgres schema without the namespace option', () => {
-    expect(findModel(postgresContract, 'account', undefined, noOtherModels)).toMatchObject({
+    expect(findModel(postgresContract, 'account', undefined)).toMatchObject({
       kind: 'found',
       name: 'Account',
       namespaceId: 'auth',
@@ -87,7 +78,7 @@ describe('findModel', () => {
   });
 
   it('reports a name found in more than one namespace', () => {
-    expect(findModel(postgresContract, 'session', undefined, noOtherModels)).toEqual({
+    expect(findModel(postgresContract, 'session', undefined)).toEqual({
       kind: 'ambiguous',
       name: 'Session',
       namespaceIds: ['auth', 'public'],
@@ -95,15 +86,11 @@ describe('findModel', () => {
   });
 
   it('searches only the namespace the option names', () => {
-    expect(findModel(postgresContract, 'session', 'auth', noOtherModels)).toMatchObject({
+    expect(findModel(postgresContract, 'session', 'auth')).toMatchObject({
       kind: 'found',
       namespaceId: 'auth',
     });
-    expect(findModel(postgresContract, 'account', 'public', noOtherModels)).toEqual({
-      kind: 'missing',
-    });
-    expect(findModel(postgresContract, 'account', 'elsewhere', noOtherModels)).toEqual({
-      kind: 'missing',
-    });
+    expect(findModel(postgresContract, 'account', 'public')).toEqual({ kind: 'missing' });
+    expect(findModel(postgresContract, 'account', 'elsewhere')).toEqual({ kind: 'missing' });
   });
 });

@@ -8,6 +8,8 @@ import {
   type BetterAuthField,
   type BetterAuthModel,
   type BetterAuthReference,
+  betterAuthModels,
+  caseOnlyNameCollisions,
   type IdStrategy,
   idStrategyOf,
   isIdReference,
@@ -34,6 +36,11 @@ export type ContractProblem =
       readonly model: string;
       /** The field whose name is not an identifier; absent when it is the model's name. */
       readonly field?: string;
+    }
+  | {
+      readonly kind: 'colliding-model-names';
+      /** Physical model names that differ only in the case of the first letter. */
+      readonly models: readonly string[];
     }
   | { readonly kind: 'missing-model'; readonly model: string }
   | {
@@ -265,11 +272,17 @@ export function compareContract(input: ComparisonInput): ContractComparison {
   const idStrategy = idStrategyOf(betterAuthOptions);
   const defaultNamespace = defaultNamespaceByTarget[contract.target] ?? UNBOUND_DOMAIN_NAMESPACE_ID;
   const expectedModelList = managedModels(input.tables, input);
-  const invalidNames = invalidNameProblems(expectedModelList);
-  if (invalidNames.length > 0) {
+  const nameProblems: ContractProblem[] = [
+    ...invalidNameProblems(expectedModelList),
+    ...caseOnlyNameCollisions(betterAuthModels(input.tables, input)).map((models) => ({
+      kind: 'colliding-model-names' as const,
+      models,
+    })),
+  ];
+  if (nameProblems.length > 0) {
     return {
       models: [],
-      problems: invalidNames,
+      problems: nameProblems,
       referencedModels: new Map(),
       uuidKeyedModels: new Set(),
       idStrategy,
@@ -277,11 +290,10 @@ export function compareContract(input: ComparisonInput): ContractComparison {
       defaultNamespace,
     };
   }
-  const expectedNames = new Set(expectedModelList.map((model) => model.physicalName));
   const problems: ContractProblem[] = [];
   const models: ComparedModel[] = [];
   for (const expected of expectedModelList) {
-    const lookup = findModel(contract, expected.physicalName, namespace, expectedNames);
+    const lookup = findModel(contract, expected.physicalName, namespace);
     switch (lookup.kind) {
       case 'missing':
         problems.push({ kind: 'missing-model', model: expected.physicalName });
@@ -302,11 +314,12 @@ export function compareContract(input: ComparisonInput): ContractComparison {
       }
     }
   }
+  const expectedNames = new Set(expectedModelList.map((model) => model.physicalName));
   const referencedModels = new Map<string, FoundModel>();
   for (const model of expectedModelList) {
     for (const { reference } of model.fields) {
       if (reference === undefined || expectedNames.has(reference.model)) continue;
-      const lookup = findModel(contract, reference.model, namespace, expectedNames);
+      const lookup = findModel(contract, reference.model, namespace);
       if (lookup.kind === 'found') referencedModels.set(reference.model, lookup);
     }
   }

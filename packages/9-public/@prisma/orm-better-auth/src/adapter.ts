@@ -15,13 +15,14 @@ import { blindCast } from '@prisma/orm-framework/utils/casts';
 import { createModelCollections, type ModelCollections } from './collections';
 import {
   contractMismatch,
+  contractMismatchError,
   createContractCheck,
   registerContractCheck,
 } from './contract/contract-check';
 import { fieldOf, unsupportedError, whereFilter } from './filters';
 import { moveJoinedRows, planJoins } from './joins';
-import { betterAuthModels } from './models/better-auth-models';
-import { assertFieldName } from './models/identifiers';
+import { betterAuthModels, caseOnlyNameCollisions } from './models/better-auth-models';
+import { assertFieldName, caseOnlyNameCollisionMessage } from './models/identifiers';
 import type { FoundModel, SqlContract } from './models/model-lookup';
 import type { PrismaAdapterOptions } from './options';
 import { callMethod, hasMethod, type OrmCollection, type Row } from './orm';
@@ -117,6 +118,8 @@ interface InstanceState {
   readonly collections: ModelCollections;
   /** For each physical model name, the fields a read without `select` returns; computed on the first such read. */
   defaultSelections: ReadonlyMap<string, readonly string[]> | undefined;
+  /** The error every call raises when Better Auth's model names collide, `null` when they do not; computed on the first call. */
+  nameCollision: Error | null | undefined;
 }
 
 interface AdapterContext {
@@ -144,6 +147,16 @@ function customAdapter({
   const { collections } = instance;
   return ({ schema, options: betterAuthOptions, getFieldName, debugLog }) => {
     const resolve = (model: string): { found: FoundModel; collection: OrmCollection } => {
+      if (instance.nameCollision === undefined) {
+        const [collision] = caseOnlyNameCollisions(
+          betterAuthModels(schema, { betterAuthOptions, usePlural }),
+        );
+        instance.nameCollision =
+          collision === undefined
+            ? null
+            : contractMismatchError(caseOnlyNameCollisionMessage(collision));
+      }
+      if (instance.nameCollision !== null) throw instance.nameCollision;
       const found = collections.model(model);
       return { found, collection: collections.collection(orm, found) };
     };
@@ -299,26 +312,13 @@ export function prismaAdapter(
 ): (betterAuthOptions: BetterAuthOptions) => DBAdapter<BetterAuthOptions> {
   assertClient(db, adapterOptions);
   return (betterAuthOptions) => {
-    let modelNames: ReadonlySet<string> | undefined;
-    const betterAuthModelNames = () => {
-      modelNames ??= new Set(
-        betterAuthModels(getAuthTables(betterAuthOptions), {
-          betterAuthOptions,
-          usePlural: adapterOptions.usePlural ?? false,
-        }).map((model) => model.physicalName),
-      );
-      return modelNames;
-    };
     const context: AdapterContext = {
       orm: db.orm,
       contract: db.contract,
       instance: {
-        collections: createModelCollections(
-          db.contract,
-          adapterOptions.namespace,
-          betterAuthModelNames,
-        ),
+        collections: createModelCollections(db.contract, adapterOptions.namespace),
         defaultSelections: undefined,
+        nameCollision: undefined,
       },
       adapterOptions,
     };

@@ -119,6 +119,23 @@ describe.each(targets)('the comparison on %s', (target) => {
       ]);
     });
 
+    it('two model names that differ only in the case of the first letter, as the only problem', async () => {
+      const options: BetterAuthOptions = {
+        plugins: [
+          {
+            id: 'upper-user',
+            schema: { upperUser: { modelName: 'User', fields: { note: { type: 'string' } } } },
+          },
+        ],
+      };
+      const contract = await contractOf(target, editedPsl(target, {}));
+      const comparison = compare(contract, options);
+      expect(problemsOf(comparison)).toEqual([
+        { kind: 'colliding-model-names', models: ['user', 'User'] },
+      ]);
+      expect(comparison.models).toEqual([]);
+    });
+
     it('a missing field and a missing id', async () => {
       const contract = await contractOf(
         target,

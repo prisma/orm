@@ -62,13 +62,6 @@ function existingPrintedModel(
   };
 }
 
-/** A missing model's name: its physical name with the first letter upper-cased, or unchanged when another Better Auth model has the upper-cased name. */
-function printedModelName(physicalName: string, comparison: ContractComparison): string {
-  const upper = upperFirst(physicalName);
-  const taken = comparison.models.some(({ expected }) => expected.physicalName === upper);
-  return upper !== physicalName && taken ? physicalName : upper;
-}
-
 function printedModelFor(
   model: ComparedModel,
   comparison: ContractComparison,
@@ -77,7 +70,7 @@ function printedModelFor(
   switch (model.status) {
     case 'missing':
       return {
-        name: printedModelName(model.expected.physicalName, comparison),
+        name: upperFirst(model.expected.physicalName),
         namespaceId: comparison.namespace ?? comparison.defaultNamespace,
         existing: false,
         taken: new Set(betterAuthFields),

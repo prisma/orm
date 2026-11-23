@@ -32,24 +32,19 @@ export function ambiguousModelMessage(name: string, namespaceIds: readonly strin
 }
 
 /**
- * Finds the contract model for a Better Auth physical model name: the exact name first, then the name with its first letter upper-cased, in the namespace the adapter's `namespace` option names or else in every namespace. The physical model name is matched to a contract model name, never to a table name. The upper-cased name is skipped when it is another Better Auth model's physical name, since that contract model is the other one's.
+ * Finds the contract model for a Better Auth physical model name: the exact name first, then the name with its first letter upper-cased, in the namespace the adapter's `namespace` option names or else in every namespace. The physical model name is matched to a contract model name, never to a table name.
  */
 export function findModel(
   contract: SqlContract,
   physicalName: string,
   namespace: string | undefined,
-  betterAuthModelNames: ReadonlySet<string>,
 ): ModelLookup {
   const namespaces = contract.domain.namespaces;
   const searched =
     namespace === undefined
       ? Object.keys(namespaces)
       : [namespace].filter((id) => Object.hasOwn(namespaces, id));
-  const upper = upperFirst(physicalName);
-  const candidates =
-    upper === physicalName || betterAuthModelNames.has(upper)
-      ? [physicalName]
-      : [physicalName, upper];
+  const candidates = [...new Set([physicalName, upperFirst(physicalName)])];
   for (const name of candidates) {
     const hits = searched.filter((id) => Object.hasOwn(namespaces[id]?.models ?? {}, name)).sort();
     const [only] = hits;

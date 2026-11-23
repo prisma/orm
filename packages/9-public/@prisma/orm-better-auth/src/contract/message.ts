@@ -1,4 +1,8 @@
-import { invalidFieldNameMessage, invalidModelNameMessage } from '../models/identifiers';
+import {
+  caseOnlyNameCollisionMessage,
+  invalidFieldNameMessage,
+  invalidModelNameMessage,
+} from '../models/identifiers';
 import { ambiguousModelMessage } from '../models/model-lookup';
 import type { ContractComparison } from './compare';
 import { printPsl } from './print-psl';
@@ -52,6 +56,8 @@ function unwrittenLines(comparison: ContractComparison): string[] {
 export function contractMessage(comparison: ContractComparison): string | undefined {
   if (comparison.problems.length === 0) return undefined;
   const invalidNames = comparison.problems.flatMap((problem) => {
+    if (problem.kind === 'colliding-model-names')
+      return [caseOnlyNameCollisionMessage(problem.models)];
     if (problem.kind !== 'invalid-name') return [];
     const message =
       problem.field === undefined

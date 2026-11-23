@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from '@better-auth/core';
 import type { BetterAuthDBSchema, DBFieldAttribute } from '@better-auth/core/db';
+import { upperFirst } from './identifiers';
 
 export type ReferentialAction = NonNullable<
   NonNullable<DBFieldAttribute['references']>['onDelete']
@@ -118,6 +119,16 @@ export function betterAuthModels(
     indexes,
     managed,
   }));
+}
+
+/** Groups of physical model names that differ only in the case of the first letter. The lookup and the printed PSL would give each group one model name, and SQLite cannot hold both tables. */
+export function caseOnlyNameCollisions(models: readonly BetterAuthModel[]): string[][] {
+  const byModelName = new Map<string, string[]>();
+  for (const { physicalName } of models) {
+    const name = upperFirst(physicalName);
+    byModelName.set(name, [...(byModelName.get(name) ?? []), physicalName]);
+  }
+  return [...byModelName.values()].filter((names) => names.length > 1);
 }
 
 /** The models of the schema Better Auth manages, which the comparison checks. */

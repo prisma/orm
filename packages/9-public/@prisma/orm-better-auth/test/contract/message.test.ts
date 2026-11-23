@@ -72,6 +72,20 @@ Fields Better Auth does not write:
 Then run \`prisma contract emit\` and update your database.`);
   });
 
+  it('names two models whose names differ only in the case of the first letter, and prints no PSL', () => {
+    const options: BetterAuthOptions = {
+      plugins: [
+        {
+          id: 'upper-user',
+          schema: { upperUser: { modelName: 'User', fields: { note: { type: 'string' } } } },
+        },
+      ],
+    };
+    expect(contractMessage(compare(emptyContract, options))).toBe(
+      `Better Auth's models "user" and "User" have names that differ only in the case of the first letter. Prisma matches both to the model "User", and SQLite cannot hold both tables. Set a different "modelName" on one of them in your Better Auth configuration.`,
+    );
+  });
+
   it('asks for an optional field Better Auth writes null to to be optional', async () => {
     const psl = pslForConfiguration(emptyContract, {}).replace(
       /image(\s+)String\?/,

@@ -244,28 +244,6 @@ describe('printed PSL referencing an existing id of each type the comparison acc
   });
 });
 
-describe('printed PSL for model names that differ only in the case of the first letter', () => {
-  const upperUser: BetterAuthOptions = {
-    plugins: [plugin({ upperUser: { modelName: 'User', fields: { note: { type: 'string' } } } })],
-  };
-
-  it('prints each under a distinct model name', () => {
-    const { text } = printPsl(compare(emptyContract('postgres'), upperUser));
-    expect(text).toContain('model user {');
-    expect(text).toContain('@@map("user")');
-    expect(text).toContain('model User {');
-    expect(text).toContain('@@map("User")');
-  });
-
-  it('emits and applies on postgres', async () => {
-    await emitAndApply(
-      'postgres',
-      pslForConfiguration(emptyContract('postgres'), upperUser),
-      upperUser,
-    );
-  });
-});
-
 describe('printed PSL on postgres namespaces', () => {
   it('puts missing models in the namespace the option names', async () => {
     const adapterOptions = { namespace: 'auth' };

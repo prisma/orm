@@ -209,7 +209,7 @@ Some things to know:
 | `transaction` | `boolean` | `false` | When `true`, Better Auth's multi-step operations run in a database transaction. |
 | `debugLogs` | Better Auth's debug log option | none | Logs each call the adapter makes. |
 
-Model and field names: the adapter matches Better Auth's model names to your contract's model names, either exactly (`user`) or with the first letter upper-cased (`User`), and Better Auth's field names to your field names exactly. Table and column names come from `@@map` and `@map` in your contract. Rename a model or field on Better Auth's side with its `modelName` and `fields` options. A name must be letters, digits and `_`, and must not start with a digit.
+Model and field names: the adapter matches Better Auth's model names to your contract's model names, either exactly (`user`) or with the first letter upper-cased (`User`), and Better Auth's field names to your field names exactly. Table and column names come from `@@map` and `@map` in your contract. Rename a model or field on Better Auth's side with its `modelName` and `fields` options. A name must be letters, digits and `_`, and must not start with a digit. Two Better Auth model names must not differ only in the case of the first letter (`user` and `User`): both would match the model `User`, so the adapter refuses that configuration. Set a different `modelName` on one of them.
 
 ## Limits
 

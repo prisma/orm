@@ -21,7 +21,6 @@ export interface ModelCollections {
 export function createModelCollections(
   contract: SqlContract,
   namespace: string | undefined,
-  betterAuthModelNames: () => ReadonlySet<string>,
 ): ModelCollections {
   const found = new Map<string, FoundModel>();
   const namespaceIds = Object.keys(contract.domain.namespaces);
@@ -31,7 +30,7 @@ export function createModelCollections(
       const known = found.get(physicalName);
       if (known !== undefined) return known;
       assertModelName(physicalName);
-      const lookup = findModel(contract, physicalName, namespace, betterAuthModelNames());
+      const lookup = findModel(contract, physicalName, namespace);
       if (lookup.kind === 'ambiguous') {
         throw new BetterAuthError(ambiguousModelMessage(lookup.name, lookup.namespaceIds));
       }
