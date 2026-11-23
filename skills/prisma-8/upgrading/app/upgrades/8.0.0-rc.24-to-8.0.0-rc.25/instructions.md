@@ -9,7 +9,7 @@ changes:
       glob: "**/*.{prisma,ts,mts,cts,sql,json}"
       matches:
         - '(?<![\w$])Money(?![\w$])'
-        - 'pg/money@1'
+        - '(?<!output: )[''"]pg/money@1[''"](?!\s*:)'
         - '::\s*(?:money|MONEY)(?![\w$])'
   - id: pg-is-a-peer-dependency
     summary: |
@@ -26,6 +26,16 @@ changes:
       matches:
         - '"temporal-polyfill"\s*:\s*"[\^~]?1\.0\.[0-7](?![\d])'
         - '[''"]?temporal-polyfill[''"]?:\s*[''"]?[\^~]?1\.0\.[0-7](?![\d])'
+  - id: arktype-and-bson-ranges-move
+    summary: |
+      The `@prisma/orm-*` packages now depend on `arktype` `^2.2.9` (up from `^2.2.2`), and `@prisma/orm-target-mongo`, which `@prisma/orm-mongo` installs, on `bson` `^7.3.4` (up from `^7.2.0`). A project that declares either itself in a range that allows an older version, or whose lockfile keeps one, can install two copies: its own and the one Prisma 8 uses. With two copies, an `instanceof` check against one copy's class, such as `instanceof type.errors`, does not recognise a value the other copy made and does not narrow its type, and TypeScript reports errors where the two copies' types meet. Move the declared range inside the new one and reinstall, so one copy is installed.
+    detection:
+      glob: "**/{package.json,pnpm-workspace.yaml}"
+      matches:
+        - '"arktype"\s*:\s*"[\^~]?2\.(?:[01]\.\d+|2\.[0-8])(?!\d)'
+        - '(?<![\w@/-])[''"]?arktype[''"]?:\s*[''"]?[\^~]?2\.(?:[01]\.\d+|2\.[0-8])(?!\d)'
+        - '"bson"\s*:\s*"[\^~]?7\.(?:[0-2]\.\d+|3\.[0-3])(?!\d)'
+        - '(?<![\w@/-])[''"]?bson[''"]?:\s*[''"]?[\^~]?7\.(?:[0-2]\.\d+|3\.[0-3])(?!\d)'
   - id: config-type-renamed-to-prisma-config
     summary: |
       The config type that `defineConfig` returns is renamed from `PrismaNextConfig` to `PrismaConfig`, in `@prisma/orm-toolchain/cli/config-types` and every package that re-exports it. The old name is gone. The detection matches TypeScript sources that name the old type.
@@ -147,18 +157,11 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*[''"](?:@prisma/orm-sqlite|@internal/sqlite)/contract-builder[''"])[\s\S]*\.\s*Decimal\s*\('
   - id: sqlite-integer-safe-range
     summary: |
-      On SQLite, an `Int` field, and every field whose codec is `sqlite/integer@1` (`IntegerNumber`, `BigInt(as: number)`, the deprecated `BigIntNumber`), now refuses to write a number that is not an integer within ±(2^53 − 1), such as `1.5`, with `RUNTIME.ENCODE_FAILED`, and reading a stored number that is not an integer, such as a `real`, raises `RUNTIME.DECODE_FAILED` naming the table and column. Before, the codec wrote any number as it was and read such a number as it was. A stored integer outside the range, which failed to read in a row with a `RangeError` from `node:sqlite` before, now raises `RUNTIME.DECODE_FAILED` naming the table and column. `sql/int@1` checks a read the same way. Find rows that hold such values and fix them.
+      On SQLite, an `Int` field, and every field whose codec is `sqlite/integer@1` (`IntegerNumber`, `BigInt(as: number)`, the deprecated `BigIntNumber`), now refuses to write a number that is not an integer within ±(2^53 − 1), such as `1.5`, with `RUNTIME.ENCODE_FAILED`, and reading a stored number that is not an integer, such as a `real`, raises `RUNTIME.DECODE_FAILED` naming the table and column. Before, the codec wrote any number as it was and read such a number as it was. A stored integer outside the range, which failed to read in a row with a `RangeError` from `node:sqlite` before, now raises `RUNTIME.DECODE_FAILED` naming the table and column. `sql/int@1` checks a read the same way. Find rows that hold such values and fix them. The detection matches a project that depends on the SQLite package or whose config imports it.
     detection:
-      glob: "**/*.{prisma,ts,mts,cts,tsx}"
+      glob: "**/{package.json,prisma.config.{ts,mts,cts,js,mjs}}"
       matches:
-        - '(?:^|\n)[ \t]*[A-Za-z_]\w*[ \t]+(?:Int|IntegerNumber)(?![\w])'
-        - '=[ \t]*(?:Int|IntegerNumber)(?![\w])'
-        - 'BigInt[ \t]*\([ \t]*as[ \t]*:[ \t]*number'
-        - '(?<![\s\S])(?=[\s\S]*[''"](?:@prisma/orm-sqlite|@internal/sqlite)/contract-builder[''"])[\s\S]*\.\s*(?:Int|IntegerNumber)\s*\('
-        - '(?<![\s\S])(?=[\s\S]*[''"](?:@prisma/orm-sqlite|@internal/sqlite)/contract-builder[''"])[\s\S]*\.\s*BigInt\s*\(\s*\{[^}]*as\s*:\s*[''"]number[''"]'
-        - '(?<![\w$])(?:integerNumberColumn|sqliteIntegerColumn)(?![\w$])'
-        - '(?:import|export)[ \t]+(?:type[ \t]+)?\{[^}]*(?<![\w$])integerColumn(?![\w$])[^}]*\}[ \t]*from[ \t]*[''"](?:@prisma/orm-sqlite/adapter/column-types|@prisma/orm-target-sqlite/adapter/column-types|@internal/adapter-sqlite/column-types)[''"]'
-        - 'import[ \t]+(?:type[ \t]+)?\*[ \t]*as[ \t]+([\w$]+)[ \t]+from[ \t]*[''"](?:@prisma/orm-sqlite/adapter/column-types|@prisma/orm-target-sqlite/adapter/column-types|@internal/adapter-sqlite/column-types)[''"][\s\S]*(?<![\w$])\1\s*\.\s*integerColumn(?![\w$])'
+        - '[''"]@prisma/orm-(?:sqlite|target-sqlite)(?:/[\w./-]*)?[''"]'
   - id: psl-renamed-mongo-int64
     summary: |
       On MongoDB, the explicit type `Int64` (a BSON long read as a `bigint`) is renamed `Int64BigInt`. `Int64` stays for one release line as a deprecated alias that warns with `PSL_DEPRECATED_SCALAR_NAME`. The contract does not change.
@@ -311,11 +314,13 @@ changes:
         - 'orm init\b[^\n]*--json'
   - id: orm-write-inside-transaction-suspends-tx
     summary: |
-      An ORM write of more than one statement on `tx.orm`, such as a create with a nested relation, runs in a savepoint. While it runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`. In `Promise.all`, that rejection makes the callback throw while the write still runs, so `db.transaction` rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the `RUNTIME.TRANSACTION_SUSPENDED` error, keeps nothing the transaction wrote, and closes the connection. When such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the write itself rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. The detection matches TypeScript sources that call `transaction` and `Promise.all` or `Promise.allSettled`.
+      An ORM write of more than one statement on `tx.orm`, such as a create with a nested relation, runs in a savepoint. While it runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`. In `Promise.all`, that rejection makes the callback throw while the write still runs, so `db.transaction` rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the `RUNTIME.TRANSACTION_SUSPENDED` error, keeps nothing the transaction wrote, and closes the connection. When such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the write itself rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. On PostgreSQL and SQLite many writes are one statement and open no savepoint; on MySQL and MariaDB every write that returns rows opens one. The detection matches TypeScript sources where `Promise.all` or `Promise.allSettled` follows the start of a `transaction` callback and is given the callback's parameter, and sources that call `transaction` and give `Promise.all` an ORM write.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '(?<![\s\S])(?=[\s\S]*\.transaction\s*\()[\s\S]*Promise\.all'
+        - '\.transaction\s*\(\s*(?:async\s*)?(?:function\b[\w$\s]*)?\(?\s*(?!(?:async|function)\b)([\w$]+)(?![\w$])[\s\S]*?Promise\.all(?:Settled)?\s*\([\s\S]*?(?<![\w$.])\1(?![\w$])'
+        - '\.transaction\s*\(\s*(?:async\s*)?(?:function\b[\w$\s]*)?\(\s*\{[\s\S]*?Promise\.all(?:Settled)?\s*\('
+        - '(?<![\s\S])(?=[\s\S]*\.transaction\s*\()[\s\S]*Promise\.all(?:Settled)?\s*\([^;]*?\.orm\b[^;]*?\.(?:create|createAll|update|updateAll|upsert|delete|deleteAll)\s*\('
   - id: foreign-key-with-relation-callback-refused
     summary: |
       `update()` data that sets a field of the foreign key the record holds for a relation (many-to-one, such as `Post.authorId` for `Post.author`) and also has a callback on that relation is refused with `ORM.ARGUMENT_INVALID` (`meta.problem: 'foreign-key-with-relation-mutation'`, with `meta.relation` and `meta.fields`) before any statement runs. It used to run, and a `create`, `connect` or `disconnect` callback overwrote the foreign key the data set. Keep either the foreign key or the callback.
@@ -379,19 +384,19 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*@prisma/orm-(?:mysql|mariadb))[\s\S]*\bmeta\??\.target\b'
   - id: db-migrate-advances-db-ref
     summary: |
-      `prisma db migrate` now advances the `db` ref after a successful apply when the connection comes from `prisma.config.ts` and the CLI does not detect CI. Without `--advance-ref`, it still advances nothing with `--db` or in CI. A `db migrate --advance-ref db` that reads its connection from the config outside CI can drop the flag; one that passes `--db` or runs in CI keeps it. A deploy or script that runs `db migrate` from the config outside a CI runner, and must not change `migrations/app/refs/db.json`, passes the new `--no-advance-ref` or `--db`. A failed ref write is now a warning and the command exits 0, which matters to a script that checks the exit code of `db migrate --advance-ref`. The detection finds `db migrate` commands that pass `--advance-ref`, and those that pass neither `--db` nor `--no-advance-ref`, including a Dockerfile's exec form, a YAML list and a command split with a backslash between `db` and `migrate`; it reads the flags only on the line where `migrate` is; check each against the cases below, and look for others in files it does not search.
+      `prisma db migrate` now advances the `db` ref after a successful apply when the connection comes from `prisma.config.ts` and the CLI does not detect CI. Without `--advance-ref`, it still advances nothing with `--db` or in CI. A `db migrate --advance-ref db` that reads its connection from the config outside CI can drop the flag; one that passes `--db` or runs in CI keeps it. A deploy or script that runs `db migrate` from the config outside a CI runner, and must not change `migrations/app/refs/db.json`, passes the new `--no-advance-ref` or `--db`. A failed ref write is now a warning and the command exits 0, which matters to a script that checks the exit code of `db migrate --advance-ref`. The detection finds `prisma db migrate` commands that pass `--advance-ref`, and those that pass neither `--db` nor `--no-advance-ref`, including a Dockerfile's exec form, a YAML list and a command split with a backslash between its words; it reads the flags on the line where `migrate` is and on the lines that line continues with a backslash; check each against the cases below, and look for others in files it does not search and in commands that reach `prisma` through a script of another name.
     detection:
       glob: "**/{*.json,*.sh,*.bash,*.zsh,*.yml,*.yaml,*.toml,*.md,*.mdx,*.ts,*.mts,*.js,*.mjs,*.cjs,Dockerfile*,*.dockerfile,Procfile*,Makefile,justfile}"
       matches:
-        - '(?<![\w-])db(?:\s+|\s*\\\n\s*|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)migrate\b(?:(?=[^\n]*--advance-ref\b)|(?![^\n]*--(?:db|no-advance-ref)\b))'
+        - '(?<![\w-])prisma(?![\w-])(?:[^\S\n](?:[^\n]*?[^\S\n])?|\s*\\\n\s*|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)db(?:\s+|\s*\\\n\s*|["'']?\s*[,\n]\s*(?:-\s+)?["'']?)migrate\b(?:(?=[^\n]*(?:\\\n[^\n]*)*--advance-ref\b)|(?![^\n]*(?:\\\n[^\n]*)*--(?:db|no-advance-ref)\b))'
   - id: engine-pin-moves-to-0-10-4
     summary: |
-      The toolchain now requires `@prisma/cli-engine@0.10.4` (up from 0.10.0). A project that depends on `@prisma/cli-engine` itself must move to `0.10.4`.
+      The toolchain now requires `@prisma/cli-engine@0.10.4` (up from 0.10.0). A project that depends on `@prisma/cli-engine` itself must move to `0.10.4`. The detection matches a `package.json` that pins an older engine and lists an `@prisma/orm-*` package, and a `pnpm-workspace.yaml` that pins an older engine.
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.(?:\d|10\.[0123xX*])(?!\d)'
-        - '[''"]?@prisma/cli-engine[''"]?:\s*[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[0123xX*])(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*"@prisma/orm-[a-z-]+"\s*:)|(?!\s*\{))[\s\S]*"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.(?:\d|10\.[0123xX*])(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*"@prisma/orm-[a-z-]+"\s*:)|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine[''"]?:\s*[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[0123xX*])(?!\d)'
   - id: consent-required-summary-is-one-fixed-sentence
     summary: |
       The first line of `CLI.CONSENT_REQUIRED` is now one fixed sentence. It no longer names the subject of a statement question, and it no longer quotes the question of a consent that `--confirm` answers. Code that matched the old first line must read the error's `code`, `why` and `meta` instead.
@@ -416,7 +421,7 @@ The examples write the ORM client as `db.orm.public.<Model>`, which is the Postg
 Do the steps in this order, and skip a step that does not apply to the project:
 
 1. Before you deploy the upgrade, on PostgreSQL with `money` columns, make the database print `money` in the `C` form (`postgres-lc-monetary-not-set`). The old release still forces it on its own connections, so do this first.
-2. Before you run the install for the upgrade, fix the dependencies in `package.json`: declare `pg` and `@types/pg` for the PostgreSQL packages (`pg-is-a-peer-dependency`), move a declared `temporal-polyfill` to `^1.0.8` (`temporal-polyfill-peer-range-moves-to-1-0-8`), and move a declared `@prisma/cli-engine` to `0.10.4` (`engine-pin-moves-to-0-10-4`). Then upgrade the Prisma packages.
+2. Before you run the install for the upgrade, fix the dependencies in `package.json`: declare `pg` and `@types/pg` for the PostgreSQL packages (`pg-is-a-peer-dependency`), move a declared `temporal-polyfill` to `^1.0.8` (`temporal-polyfill-peer-range-moves-to-1-0-8`), move a declared `arktype` to `^2.2.9` and a declared `bson` to `^7.3.4` (`arktype-and-bson-ranges-move`), and move a declared `@prisma/cli-engine` to `0.10.4` (`engine-pin-moves-to-0-10-4`). Then upgrade the Prisma packages.
 3. Change the config and the scripts that call the control client: the renamed config type (`config-type-renamed-to-prisma-config`), the modules a hand-assembled config names (`hand-assembled-config-names-generated-file-modules`), `typesModule` and the removed `projectDir` (`control-api-takes-types-module`), the removed `publish-surface` entries (`toolchain-publish-surface-entrypoints-removed`), the arguments of `typescriptContractFromPath` (`typescript-contract-from-path-requires-target`), and the `migrate`, `dbUpdate` and `dbSign` options (`migrate-options-ref`, `db-sign-invocation`, `permit-policy-change`). Change the commands that run `prisma db migrate`, in scripts, deploys and docs, for the `db` ref it now advances (`db-migrate-advances-db-ref`).
 4. Change the contract sources. Make each TypeScript contract import `defineContract` from its config's target (`typescript-contract-for-another-target-refused`). Save every schema file as UTF-8 (`psl-schema-must-be-utf8`). Rewrite the renamed types and helpers: `sql.String` (`psl-renamed-sql-string`, `ts-renamed-sql-string`), the PostgreSQL and SQLite column helpers (`ts-renamed-postgres-json-column-helper`, `ts-renamed-sqlite-column-helpers`), SQLite's `BigIntNumber` (`sqlite-bigintnumber-deprecated`) and MongoDB's `Int64` (`psl-renamed-mongo-int64`, `ts-removed-mongo-int64-helper`, and optionally `psl-optional-mongo-convenience-names`). Fix each `hasOne` relation without a unique key (`has-one-key-must-be-unique`) and each attribute of a single-table variant that emit refuses (`sti-variant-unscoped-index-refused`). Rename anything named `__proto__` (`sql-proto-names-refused`, `mongo-proto-names-refused`); on MongoDB, read that section first, because a collection of that name needs its documents moved. On Postgres, rename a table or column named `__proto__` in the database before the next `prisma contract infer` (`postgres-infer-proto-name-refused`).
 5. Run `prisma contract emit` once for every contract and commit what it writes. One emit covers `contract-types-import-from-the-target-package`, `re-emit-for-include-capabilities`, `re-emit-mysql-contract-for-aggregates`, `mysql-reemit-contract`, `sqlite-decimal-codec`, `ts-sqlite-decimal-codec`, `sti-variant-foreign-keys-stored`, `json-default-proto-key-kept` and `contract-artifacts-restamp`. Leave the contract copies under `migrations/` as they are.
@@ -458,7 +463,7 @@ Raw SQL of your own that selects a `money` value as text printed the `C` form, `
 The CLI needs nothing: it sets `lc_monetary` itself while it reads the database and applies migrations.
 
 
-## Dependencies: `pg` and `@types/pg` are peer dependencies, and `temporal-polyfill` moves to `^1.0.8`
+## Dependencies: `pg` and `@types/pg` are peer dependencies, and `temporal-polyfill`, `arktype` and `bson` move
 
 ### `pg-is-a-peer-dependency`
 
@@ -478,6 +483,12 @@ Without `pg`, the application fails at startup because Node.js cannot find the p
 ### `temporal-polyfill-peer-range-moves-to-1-0-8`
 
 In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `temporal-polyfill` range to `^1.0.8`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. A project that does not declare `temporal-polyfill` itself needs no change: its package manager installs the peer at a version inside the new range.
+
+### `arktype-and-bson-ranges-move`
+
+`arktype` and `bson` are dependencies of the Prisma 8 packages, not peers, so the package manager installs the version Prisma 8 asks for beside the project's own when the project's range or lockfile keeps an older one. A project that pins `arktype` at `2.2.3`, for example, then has two copies, and code such as `if (result instanceof type.errors)` on a value from the other copy no longer narrows `result`. On MongoDB the same holds for `bson` classes such as `ObjectId`.
+
+In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `arktype` range to `^2.2.9` and the `bson` range to `^7.3.4`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. Then check that the lockfile has one version of each, for example with `pnpm why arktype`. A project that does not declare either itself needs no change.
 
 
 ## `PrismaNextConfig` is now `PrismaConfig`
@@ -519,7 +530,9 @@ In `contract.json`, each extension under `extensions` no longer records where it
 
 A file generated before the upgrade keeps working, because the modules it imports are still exported.
 
-Leave the copies of the contract kept beside each migration, under `migrations/snapshots/`, as they are. They keep working, and no command rewrites a snapshot that already exists; only a snapshot written from now on has the new form. Do not edit them or any `migration.ts` by hand.
+The regenerated `contract.d.ts` of a PostgreSQL, SQLite, MySQL or MariaDB contract also lists the aggregate operations, the codec ids under each of them in `AggregateTypes`, the value sets, the tables and the namespaces in byte order, where earlier releases sorted them in the locale's order. So `'pg/float8@1'` now comes before `'pg/float@1'`, and a table whose name starts with a capital letter comes before one that starts with a lowercase letter. Most of the diff of a re-emitted `contract.d.ts` is lines that moved; the types are the same, and no hash changes.
+
+Leave the copies of the contract kept beside each migration, under `migrations/snapshots/`, as they are. They keep working, and no command rewrites a snapshot that already exists; only a snapshot written from now on has the new form. Do not edit them or any `migration.ts` by hand. A match under `migrations/snapshots/` needs no change.
 
 ### `hand-assembled-config-names-generated-file-modules`
 
@@ -824,7 +837,7 @@ In a SQLite TypeScript contract, `type.Decimal()` and `type.DecimalString()` giv
 
 ### `sqlite-integer-safe-range`
 
-This applies to a SQLite schema or TypeScript contract. On PostgreSQL and MongoDB, `Int` does not change; skip this entry there. The detection matches every schema with an `Int` field, whatever its target, because the change is to what the codec accepts, not to how the field is written.
+This applies to a SQLite schema or TypeScript contract. On PostgreSQL and MongoDB, `Int` does not change; skip this entry there. The detection matches a project that uses SQLite: a `package.json` that depends on `@prisma/orm-sqlite` or `@prisma/orm-target-sqlite`, or a `prisma.config.ts` that imports from one of them. In such a project, find the fields this entry covers: in a schema, every field, value object member and `types {}` alias written `Int`, `IntegerNumber`, `BigInt(as: number)` or `BigIntNumber`; in a TypeScript contract, `type.Int()`, `type.IntegerNumber()`, `type.BigInt({ as: 'number' })` and the column helpers `integerNumberColumn` (`integerColumn` before this release) and `sqliteIntegerColumn`.
 
 Nothing in the schema or the contract changes. The codec `sqlite/integer@1`, which `Int`, `IntegerNumber`, `BigInt(as: number)` and the deprecated `BigIntNumber` give, now checks every value in both directions:
 
@@ -1014,6 +1027,8 @@ Run `prisma contract emit` for every SQL contract. The emitted `capabilities.sql
 ```
 
 A MariaDB contract gains only `"jsonAgg": true`: MariaDB does not report the other two, and the emitter leaves out a capability that is `false`. Without them the ORM loads includes on MariaDB with one query per relation.
+
+A match under `migrations/snapshots/` needs no change: every snapshot written before this release lacks the new keys, and the snapshots stay as they are.
 
 
 ## MySQL and MariaDB: scalars get convenience types, and the ORM's aggregates run
@@ -1217,6 +1232,14 @@ await tx.execute(plan);
 ```
 
 Left in `Promise.all`, the whole transaction fails. The other work rejects with `RUNTIME.TRANSACTION_SUSPENDED`, which makes the callback throw while the write still runs. The transaction cannot be rolled back while the write holds its savepoint, so it rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is that `RUNTIME.TRANSACTION_SUSPENDED` error, and the connection is closed instead of given back to the pool. Nothing the transaction wrote is kept.
+
+Which writes take more than one statement, and so run in a savepoint:
+
+- On PostgreSQL and SQLite: a write with `.include(...)`, because the rows are read back with their includes; a `create()` or `update()` whose data has a relation callback; an `update()` or `delete()` whose `where` does not name one row by its primary key or a unique key, or that has an `offset` or a `cursor`, because the row is found with a `SELECT` first; a `create()` or `createAll()` on a variant stored in its own table, which inserts the base row and the variant row; a write that returns rows of a polymorphic base model with such a variant, because the rows are read back with the variant's table; and, since 8.0.0-rc.24, an `updateAll()` or `deleteAll()` that returns rows of a collection built with two or more `where()` calls.
+- On PostgreSQL and SQLite, these take one statement and open no savepoint: `create()` and `upsert()` without includes or relation callbacks, `createAll()`, `updateAll()` and `deleteAll()` of a collection built with at most one `where()` call, `update()` and `delete()` by primary key or unique key, `createAndCount()`, `updateAndCount()`, `deleteAndCount()`, and every read.
+- On MySQL and MariaDB, which have no `RETURNING`, every write that returns rows takes more than one statement, because the ORM reads the rows back with a `SELECT`: `create()`, `createAll()`, `upsert()`, `update()`, `updateAll()`, `delete()` and `deleteAll()`. Only `createAndCount()`, `updateAndCount()` and `deleteAndCount()` take one.
+
+A file the detection matches needs a change only where a write from the first or third list runs in `Promise.all`, or otherwise at the same time, beside other work on the same `tx`. It does not find `Promise.all` in a helper in another file that is given `tx`; check those helpers too.
 
 On any SQL database, when such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the rollback to the savepoint fails too. The write then rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. Before, it rejected with the database's error itself. Code that retries on the database's deadlock error reads that error from `error.cause`.
 
@@ -1448,6 +1471,8 @@ A value whose type is wider than the column's is also refused. For example, `fns
 
 To find rows that hold a value the column's type no longer lists, compare with a raw SQL operand, which keeps the codec's input type: ``fns.eq(fns.raw`kind`.returns('pg/text@1'), 'old_value')``.
 
+A match needs a change only where the type checker reports an error on the comparison. A comparison whose value already has the column's type needs none, and neither does an applied `migration.ts` that type-checks; its `ops.json` does not change.
+
 
 ## Errors from MySQL's shared code carry no `meta.target`
 
@@ -1492,7 +1517,7 @@ In each matched file that reads the `--json` result of `prisma orm init`:
 | The run ends at the empty contract, for example `--to @empty`; connection from `prisma.config.ts`, neither flag | None; `db` is left unchanged, with a warning when it exists |
 | The run ends at the empty contract, `--advance-ref <name>` | Refused before anything is applied; before, the write failed after the apply |
 
-Change the commands the project runs:
+Change the commands the project runs. A match in prose that mentions the command, and runs nothing, needs no change.
 
 - In a development command that reads the connection from the config, such as a `package.json` script or a README step, remove `--advance-ref db` from `db migrate`. Keep it where the command passes `--db` or runs in CI, because there `db migrate` advances nothing by default.
 
@@ -1512,7 +1537,7 @@ A ref that `db migrate` cannot write, for example on a read-only filesystem, is 
 
 ### `engine-pin-moves-to-0-10-4`
 
-For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.10.3`, `0.10.2`, `0.10.1`, `0.10.0` or any earlier 0.x) to `0.10.4` and reinstall. Projects assembled by the `prisma` CLI resolve the engine automatically.
+For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.10.3`, `0.10.2`, `0.10.1`, `0.10.0` or any earlier 0.x) to `0.10.4` and reinstall. Projects assembled by the `prisma` CLI resolve the engine automatically. A package that uses `@prisma/cli-engine` without any `@prisma/orm-*` package keeps its own pin. A `pnpm-workspace.yaml` matches whatever its packages are, so change its pin only when a package that takes the engine from it also lists an `@prisma/orm-*` package.
 
 ### `consent-required-summary-is-one-fixed-sentence`
 
