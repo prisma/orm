@@ -152,9 +152,9 @@ export function idStrategyOf(options: BetterAuthOptions): IdStrategy {
   return 'string';
 }
 
-/** Better Auth writes `null` to an optional field it has no default value for, so the contract must declare it optional. */
+/** Better Auth can write `null` to any optional field: its default value replaces only a missing value on create, never an explicit `null`. So the contract must declare the field optional. */
 export function mayBeNull(attribute: DBFieldAttribute): boolean {
-  return attribute.required === false && attribute.defaultValue === undefined;
+  return attribute.required === false;
 }
 
 export function isIdReference(attribute: DBFieldAttribute): boolean {

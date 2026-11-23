@@ -199,7 +199,7 @@ The inner adapter receives database field names and already-converted values fro
     | Missing field | the model exists and has no field with the Better Auth field name, or no `id` field |
     | Wrong type | the field exists and decision 32 rejects its type |
     | Id has no default | Better Auth will not send an id (`advanced.database.generateId` is `"serial"` or `false`) and the id column has neither a database default nor an `onCreate` generator |
-    | Optional field not nullable | a Better Auth field with `required: false` and no `defaultValue` exists and is not nullable. Better Auth writes `null` to such a field (an admin unban clears `banReason`, `updateUser` passes `image: null`), so a database default or an `onCreate` generator does not satisfy it. The message asks for the field's type with `?` |
+    | Optional field not nullable | a Better Auth field with `required: false` exists and is not nullable. Every field Better Auth declares optional must be optional in the contract. Better Auth can write `null` to it (an admin unban clears `banReason`, `updateUser` passes `image: null`), and `withApplyDefault` replaces only a missing value on create, so neither Better Auth's `defaultValue` nor a database default or an `onCreate` generator satisfies it. The message asks for the field's type with `?` |
     | Required field Better Auth never writes | the model has a field that is not `id` and not in Better Auth's description, that is not nullable, with neither a database default nor an `onCreate` generator |
 
     - A database default is a `default` on the storage column. An `onCreate` generator is an entry in `execution.mutations.defaults` for that table and column with an `onCreate` part.
@@ -263,7 +263,7 @@ The inner adapter receives database field names and already-converted values fro
 
       <Model>.<field>: must be `<PSL type>` (found <what the contract has>)
       <Model>.id: must be `<id line of decision 42>`
-      <Model>.<field>: must be `<PSL type>?`, because Better Auth writes null to it
+      <Model>.<field>: must be `<PSL type>?`, because Better Auth can write null to it
       <text of a several-namespaces problem>
 
     Fields Better Auth does not write:

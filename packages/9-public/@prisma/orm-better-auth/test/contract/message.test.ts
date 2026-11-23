@@ -102,7 +102,7 @@ Change in your contract:
 Then run \`prisma contract emit\` and update your database.`);
   });
 
-  it('asks for an optional field Better Auth writes null to to be optional', async () => {
+  it('asks for an optional field Better Auth can write null to to be optional', async () => {
     const psl = pslForConfiguration(emptyContract, {}).replace(
       /image(\s+)String\?/,
       'image$1String @default("")',
@@ -113,7 +113,7 @@ Then run \`prisma contract emit\` and update your database.`);
 
 Change in your contract:
 
-  User.image: must be \`String?\`, because Better Auth writes null to it
+  User.image: must be \`String?\`, because Better Auth can write null to it
 
 Then run \`prisma contract emit\` and update your database.`);
   });

@@ -23,7 +23,7 @@ function changeLines(comparison: ContractComparison): string[] {
         break;
       case 'optional-field-not-nullable':
         lines.push(
-          `${problem.model}.${problem.field}: must be \`${pslTypeOf(problem.attribute, problem.reference, comparison)}?\`, because Better Auth writes null to it`,
+          `${problem.model}.${problem.field}: must be \`${pslTypeOf(problem.attribute, problem.reference, comparison)}?\`, because Better Auth can write null to it`,
         );
         break;
       case 'id-without-default':

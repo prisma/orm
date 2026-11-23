@@ -213,7 +213,7 @@ describe.each(targets)('the comparison on %s', (target) => {
         expect(await imageProblems('String')).toEqual(notNullable);
       });
 
-      it('is reported when it has a database default, since Better Auth writes null to it', async () => {
+      it('is reported when it has a database default, since Better Auth can write null to it', async () => {
         expect(await imageProblems('String @default("")')).toEqual(notNullable);
       });
 
@@ -221,13 +221,13 @@ describe.each(targets)('the comparison on %s', (target) => {
         expect(await imageProblems('String? @default("")')).toEqual([]);
       });
 
-      it('is not reported when Better Auth gives it a default value', async () => {
+      it('is reported when Better Auth gives it a default value, which an explicit null skips', async () => {
         const options: BetterAuthOptions = {
           user: {
             additionalFields: { image: { type: 'string', required: false, defaultValue: '' } },
           },
         };
-        expect(await imageProblems('String', options)).toEqual([]);
+        expect(await imageProblems('String', options)).toEqual(notNullable);
       });
     });
 
