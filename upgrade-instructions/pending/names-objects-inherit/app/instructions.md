@@ -70,7 +70,7 @@ JavaScript reads `__proto__` as the prototype of an object rather than as a key,
 A model is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-Rename the model, field, relation, composite type, enum or root. What a rename does to stored documents:
+Rename the model, field, relation, composite type, enum or root. What a rename does to stored documents is listed below. Where an update moves a value to `<new name>`, choose a name that no document already uses as a key in that place; otherwise one of the two values is lost.
 
 - **A model's field.** Keep its stored name with `@map("…")`, or `.mongo({ field })` in TypeScript, and no document changes. A field stored as `__proto__` cannot keep that stored name; give it another one. The TypeScript builder and Mongo PSL already refused such a field. A Prisma 6 schema with a field named `__proto__` and no `@map` lost the field from the contract without an error; documents may hold its values under a top-level `__proto__` key, so move them with the top-level update in the relation bullet below.
 - **A member of a composite type or value object.** It is always stored under its own name, so renaming it changes the key in the embedded documents. Documents may already hold values under `__proto__`, and a rename leaves them under the old key. Move them to the new key. For a member of an embedded document:
@@ -103,8 +103,6 @@ Rename the model, field, relation, composite type, enum or root. What a rename d
   ```
 
   Write the filter key as `["__proto__"]`. Written as `"__proto__":` it sets the filter's prototype, the filter matches every document, and the update removes `<new name>` from documents that have no `__proto__`.
-
-  In each of these updates, choose a `<new name>` that no document already uses as a key in that place: the update replaces a value already stored under it.
 
 The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
