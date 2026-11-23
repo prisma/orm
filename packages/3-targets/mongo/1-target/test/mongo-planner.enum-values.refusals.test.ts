@@ -69,8 +69,8 @@ const ENUM_TWO_MIGRATIONS =
 const NO_THIRD_BOOLEAN =
   'A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps.';
 
-const SWAP_IN_ONE_UPDATE =
-  'swap the stored values yourself in one update of the database, such as an updateMany whose pipeline sets each field that holds the enum to its negation with $not';
+const SWAP_FLAG =
+  'db.getCollection("users").updateMany({ "flag": { $type: "bool" } }, [{ $set: { "flag": { $not: ["$flag"] } } }])';
 
 /** The replacements of the plan's fields `status` and `tags`, as a refusal lists them. */
 const replacementsOf = (...moves: readonly (readonly [string, string])[]) =>
@@ -150,7 +150,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     ]);
   });
 
-  it('refuses renames that swap the values of a boolean enum, with advice to swap them in one update', () => {
+  it('refuses renames that swap the values of a boolean enum, with the route through plain booleans', () => {
     const flags = (seed: string, members: Readonly<Record<string, unknown>>) =>
       users(seed, statuses(members, 'mongo/bool@1'), {
         flag: { codecId: 'mongo/bool@1', valueSet: 'Status' },
@@ -163,7 +163,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     });
     expect(refusal(result).map(({ why }) => why)).toEqual([
       OVERLAP_WHY(
-        `${NO_THIRD_BOOLEAN} Leave out these statements, plan the change with migration plan, remove the removeStoredValue calls of this enum from the migration.ts it writes, and ${SWAP_IN_ONE_UPDATE}, before you apply it.`,
+        `${NO_THIRD_BOOLEAN} Make it in three steps instead, with migration plan or db update, and without the statements that rename values of this enum: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values in the database yourself, touching only boolean values so that missing and null values stay as they are, in mongosh: ${SWAP_FLAG}; then add the enum back with its new stored values, type the fields by it again, and apply that.`,
       ),
     ]);
   });
@@ -191,7 +191,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     ]);
   });
 
-  it('refuses a removal in a collection two root models share with no discriminator', () => {
+  it('refuses a removal in a collection another root model shares with no discriminator and stores the field untyped by the enum', () => {
     const shared = (seed: string, status: EnumSpec) =>
       users(
         seed,
@@ -202,7 +202,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
           Guest: {
             collection: 'users',
             fields: ['_id', 'status'],
-            types: { _id: OBJECT_ID, status: { ...STATUS, nullable: true } },
+            types: { _id: OBJECT_ID, status: { codecId: 'mongo/string@1', nullable: true } },
           },
         },
       );
@@ -225,7 +225,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     ]);
   });
 
-  it('refuses a rename in a collection two root models share with no discriminator', () => {
+  it('refuses a rename in a collection another root model shares with no discriminator and stores the field untyped by the enum', () => {
     const shared = (seed: string, status: EnumSpec) =>
       users(
         seed,
@@ -236,7 +236,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
           Guest: {
             collection: 'users',
             fields: ['_id', 'status'],
-            types: { _id: OBJECT_ID, status: { ...STATUS, nullable: true } },
+            types: { _id: OBJECT_ID, status: { codecId: 'mongo/string@1', nullable: true } },
           },
         },
       );

@@ -597,7 +597,7 @@ function nestedBackfillStatement(
       field: key.field,
       variant: found.place.variant,
       model: found.place.model,
-      storedKey: { key: found.text, together: [] },
+      storedKey: { key: found.text, together: [], keep: undefined },
     },
     contract,
     rewriteCollection,

@@ -390,7 +390,7 @@ function plannedRewriteOf(fill: PlannedFill, contract: MongoContract): PlannedRe
     field: fill.place.field,
     variant: fill.place.variant,
     model: fill.place.model,
-    storedKey: { key: fieldText(fill.required, contract), together: fill.models },
+    storedKey: { key: fieldText(fill.required, contract), together: fill.models, keep: undefined },
   };
 }
 

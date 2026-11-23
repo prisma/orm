@@ -1,5 +1,6 @@
 import {
   asNamespaceId,
+  type Contract,
   type ContractWithDomain,
   valueObjectAt,
   valueObjectsWithCoordinates,
@@ -16,6 +17,7 @@ import {
   valueObjectFieldStatementText,
 } from '@internal/framework-components/control';
 import {
+  collectionOfModel,
   embeddingModelOf,
   type MongoContract,
   ownEmbedStoredNamesOf,
@@ -29,12 +31,13 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableKeyReason } from './migration-factories';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
+import { fieldRenamesConflict } from './mongo-rename-conflicts';
 import {
   type PlannedRewrite,
   type RewriteCollection,
   rewriteRefusals,
 } from './mongo-rewrite-refusals';
-import { collectionControlPolicy, modelAt } from './mongo-statement-planning';
+import { collectionControlOf, collectionControlPolicy, modelAt } from './mongo-statement-planning';
 import { renameRefused } from './mongo-storage-renames';
 import {
   type StoredPlace,
@@ -42,6 +45,7 @@ import {
   storedPlacesOf,
   type UnlistedPlace,
 } from './mongo-stored-places';
+import { suppressedCallWarning } from './mongo-suppressed-calls';
 import { RemoveStoredKeyCall, RenameStoredKeyCall } from './op-factory-call';
 import { type JsonPathStep, jsonPathText } from './stored-key-path';
 
@@ -73,13 +77,15 @@ export interface StoredKeyRewrite<
 
 /** The key rewrites of a plan: renames, run first in the rewrite step, and removals, run last. */
 export interface StoredKeyRewrites {
+  /** One for each key rename a collection's control policy left out of the plan. */
+  readonly warnings: readonly MigrationPlannerConflict[];
   readonly renames: readonly StoredKeyRewrite<RenameStoredKeyCall>[];
   readonly removals: readonly StoredKeyRewrite<RemoveStoredKeyCall>[];
 }
 
 interface StoredKeyInput {
   readonly statements: readonly ResolvedRenameStatement[];
-  readonly fromContract: ContractWithDomain | null;
+  readonly fromContract: Contract | null;
   readonly contract: MongoContract;
   /** The schema the plan starts from, with each renamed collection under its new name. */
   readonly schema: MongoSchemaIR;
@@ -339,7 +345,14 @@ function plannedRewriteOf(
     field: planned.place.field,
     variant: planned.place.variant,
     model: planned.place.model,
-    storedKey: { key: fieldText(planned.change, contracts), together: planned.models },
+    storedKey: {
+      key: fieldText(planned.change, contracts),
+      together: planned.models,
+      keep:
+        planned.change.statement === undefined && planned.change.to !== undefined
+          ? `keep the stored name ${JSON.stringify(planned.change.from)} in the contract`
+          : undefined,
+    },
   };
 }
 
@@ -385,7 +398,7 @@ export function planStoredKeyRewrites(
           field: call.options.field,
           variant: undefined,
           model: undefined,
-          storedKey: { key: `key ${JSON.stringify(key)}`, together: [] },
+          storedKey: { key: `key ${JSON.stringify(key)}`, together: [], keep: undefined },
         },
         contract,
         rewriteCollectionOf(input.schema, call.options.collection),
@@ -393,15 +406,46 @@ export function planStoredKeyRewrites(
     );
     return refusals.length > 0
       ? notOk(dedupe(refusals))
-      : ok({ renames: [], removals: removals.map(({ key: _, ...removal }) => removal) });
+      : ok({
+          warnings: [],
+          renames: [],
+          removals: removals.map(({ key: _, ...removal }) => removal),
+        });
   }
   const contracts = { fromContract, contract };
   const changes = [
     ...valueObjectChanges(fromContract, contract, input.statements),
     ...embeddedModelChanges(fromContract, contract, input.statements),
   ];
+  const keyConflict = fieldRenamesConflict(
+    changes.flatMap((change) => {
+      const { subject, to } = change;
+      const collection =
+        subject.kind === 'field' ? collectionOfModel(fromContract.domain, subject) : undefined;
+      return subject.kind !== 'field' ||
+        to === undefined ||
+        collection === undefined ||
+        change.statement?.entity === 'valueObjectField'
+        ? []
+        : [
+            {
+              rename: {
+                from: subject,
+                to: { ...subject, field: subject.field },
+                statement: change.statement,
+              },
+              collection,
+              from: change.from,
+              to,
+            },
+          ];
+    }),
+    contracts,
+  );
+  if (keyConflict !== undefined) return notOk([keyConflict]);
   const placesOf = storedPlacesOf(contract);
   const conflicts: MigrationPlannerConflict[] = [];
+  const warnings: MigrationPlannerConflict[] = [];
   const planned = new Map<string, PlannedKeyRewrite>();
   for (const change of changes) {
     const places = placesOf(change.type);
@@ -412,7 +456,22 @@ export function planStoredKeyRewrites(
     for (const place of places.value) {
       if (input.schema.collection(place.collection) === undefined) continue;
       const policy = collectionControlPolicy(contract, place.collection);
-      if (policy !== 'managed' && change.to === undefined) continue;
+      if (policy !== 'managed' && change.statement === undefined) {
+        if (change.to !== undefined) {
+          const path: readonly JsonPathStep[] = [
+            ...place.steps,
+            { kind: 'member', name: change.from },
+          ];
+          warnings.push(
+            suppressedCallWarning(
+              callOf({ change, place, path, models: [place.model.model] }),
+              place.collection,
+              collectionControlOf(contract, fromContract, place.collection),
+            ),
+          );
+        }
+        continue;
+      }
       const refusal =
         policy !== 'managed'
           ? policyRefusal(change, place, policy, contracts)
@@ -459,6 +518,7 @@ export function planStoredKeyRewrites(
       variant: each.place.variant,
     }));
   return ok({
+    warnings,
     renames: rewrites.flatMap(({ call, ...rewrite }) =>
       call instanceof RenameStoredKeyCall ? [{ ...rewrite, call }] : [],
     ),

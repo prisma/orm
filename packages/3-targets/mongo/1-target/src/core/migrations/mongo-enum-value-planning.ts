@@ -36,7 +36,7 @@ import { modelCoordinates } from './mongo-model-coordinates';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import { collectionControlPolicy } from './mongo-statement-planning';
-import { handWrittenMigrationSteps, joinedList, renameRefused } from './mongo-storage-renames';
+import { joinedList, renameRefused } from './mongo-storage-renames';
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
   type StoredPlace,
@@ -84,6 +84,10 @@ interface EnumPlace {
   readonly required: boolean;
   /** Whether the field is its model's discriminator, whose values a variant change rewrites. */
   readonly discriminator: boolean;
+  /** Whether the field or key holds a list of the enum's values. */
+  readonly many: boolean;
+  /** The models whose documents hold the enum at this place, when several root models of one collection type the same field. */
+  readonly together: readonly string[];
 }
 
 /** What changes for one member of the origin enum: its stored value `from` becomes `to`, or, with no `to`, is removed. */
@@ -170,6 +174,8 @@ function placesOfEnum(
         keys: [storedName],
         required: isRequired(field),
         discriminator: storedName === discriminator,
+        many: field.many !== undefined && field.many !== false,
+        together: [coordinate.model],
       });
     }
   }
@@ -201,6 +207,8 @@ function placesOfEnum(
           ],
           required: isRequired(field),
           discriminator: false,
+          many: field.many !== undefined && field.many !== false,
+          together: [place.model.model],
         });
       }
     }
@@ -251,17 +259,39 @@ function isBooleanEnum(enums: EnumComparison): boolean {
 const NO_THIRD_BOOLEAN =
   'A boolean enum has no third value to move a stored value to, so the change cannot be split into two steps.';
 
-const SWAP_IN_ONE_UPDATE =
-  'swap the stored values yourself in one update of the database, such as an updateMany whose pipeline sets each field that holds the enum to its negation with $not';
-
 /** How to make a change of the enum's stored values that one migration cannot make safely. */
-function enumTwoMigrationsAdvice(enums: EnumComparison): string {
+function enumTwoMigrationsAdvice(enums: EnumComparison, places: readonly EnumPlace[]): string {
   return isBooleanEnum(enums)
-    ? `${NO_THIRD_BOOLEAN} Leave out these statements, plan the change with migration plan, remove the removeStoredValue calls of this enum from the migration.ts it writes, and ${SWAP_IN_ONE_UPDATE}, before you apply it.`
+    ? booleanSwapRoute(places, true)
     : inTwoSteps(
         'move every value they swap or chain to a stored value the enum does not use',
         'move them to their final values',
       );
+}
+
+/** The mongosh update that negates the boolean values at a place, and touches no other value. */
+function negationUpdate(enumPlace: EnumPlace): string {
+  const { collection, field, variant } = enumPlace.place;
+  const selected = (selector: string) =>
+    `{ ${variant === undefined ? '' : `${JSON.stringify(variant.field)}: ${JSON.stringify(variant.value)}, `}${JSON.stringify(field)}: ${selector} }`;
+  const negated = (value: string) =>
+    `{ $cond: [{ $eq: [{ $type: ${value} }, "bool"] }, { $not: [${value}] }, ${value}] }`;
+  if (enumPlace.path !== undefined) {
+    return `an update of collection ${JSON.stringify(collection)} that negates, with ${negated('<value>')}, only the boolean values at path ${enumPlace.path} of field ${JSON.stringify(field)}`;
+  }
+  return enumPlace.many
+    ? `db.getCollection(${JSON.stringify(collection)}).updateMany(${selected('{ $type: "array" }')}, [{ $set: { ${JSON.stringify(field)}: { $map: { input: "$${field}", in: ${negated('"$$this"')} } } } }])`
+    : `db.getCollection(${JSON.stringify(collection)}).updateMany(${selected('{ $type: "bool" }')}, [{ $set: { ${JSON.stringify(field)}: { $not: ["$${field}"] } } }])`;
+}
+
+/**
+ * The route for a boolean enum whose stored values trade places, which works on both commands: no
+ * third value exists to move through, so the enum leaves the fields, their values are swapped in
+ * the database, touching only boolean values, and the enum comes back with its new values.
+ */
+function booleanSwapRoute(places: readonly EnumPlace[], withStatements: boolean): string {
+  const updates = places.map(negationUpdate).join('; ');
+  return `${NO_THIRD_BOOLEAN} Make it in three steps instead, with migration plan or db update${withStatements ? ', and without the statements that rename values of this enum' : ''}: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values in the database yourself, touching only boolean values so that missing and null values stay as they are, in mongosh: ${updates}; then add the enum back with its new stored values, type the fields by it again, and apply that.`;
 }
 
 /** The expression that writes a stored value with the BSON type the enum's codec stores. */
@@ -359,22 +389,29 @@ function mergingRefusal(
 
 function unlistedRefusal(
   enums: EnumComparison,
-  change: Pick<ValueChange, 'enumValue' | 'statement'>,
+  change: ValueChange,
   unlisted: UnlistedPlace,
 ): MigrationPlannerConflict {
   const where = `field "${unlisted.field}" of collection "${unlisted.collection}"`;
+  const keep =
+    change.statement !== undefined
+      ? `give "${enumValueStatementText(enums.contract, change.statement.to)}" the stored value ${JSON.stringify(change.from)}, or leave out this statement and keep the enum value`
+      : change.to === undefined
+        ? 'keep the enum value in the contract'
+        : `keep its stored value ${JSON.stringify(change.from)} in the contract`;
+  const cannot = `The plan cannot change the stored values of this enum while ${where} holds them, so ${keep}.`;
   return unlisted.reach.kind === 'containsItself'
     ? refused(
         enums,
         change,
         `${where} holds it inside "${unlisted.reach.type}", which contains itself, so the documents can hold it at any depth`,
-        `The plan rewrites a stored value at every path from a field to it, and a type that contains itself has no last path. Rewrite ${where} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.`,
+        `The plan rewrites a stored value at every path from a field to it, and a type that contains itself has no last path. ${cannot}`,
       )
     : refused(
         enums,
         change,
         `${where} holds a ${unlisted.reach.kind} of value objects`,
-        `The plan rewrites a stored value only in a field that holds it, a value object, a list of them, or an embedded model. Rewrite ${where} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.`,
+        `The plan rewrites a stored value only in a field that holds it, a value object, a list of them, or an embedded model. ${cannot}`,
       );
 }
 
@@ -449,13 +486,18 @@ function linkedMoves(
   return groups;
 }
 
+/** Joins items with semicolons, the last with "and": "a", "a and b", "a; b; and c". */
+function semicolonList(items: readonly string[]): string {
+  return items.length <= 2
+    ? joinedList(items)
+    : `${items.slice(0, -1).join('; ')}; and ${items.at(-1)}`;
+}
+
 const CYCLE_WHY =
   'The plan rewrites a changed stored value in every document that holds it, one value after another, and no order of the rewrites moves values in a cycle.';
 
 const CHAIN_WHY =
   "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents, so a rewrite of a value that another rewrite of the same migration writes would act on what that one wrote when the migration runs again after a later operation stops.";
-
-const BOOLEAN_BY_HAND = `A boolean enum has no third value to move a stored value to, so the change cannot be made in two plans. Write this change as a hand-written migration instead: ${handWrittenMigrationSteps('the stored values of the enum, in one update whose pipeline sets each field that holds the enum to its negation with $not,')}`;
 
 /**
  * The route through stored values no member stores, which works on both commands: a plan that
@@ -474,14 +516,14 @@ function movesTwoPlans(
     if (through !== undefined) reserved.push(through);
     return { move, through };
   });
-  const first = joinedList(
+  const first = semicolonList(
     steps.map(({ move, through }) =>
       through === undefined
         ? `${memberText(enums, move.enumValue)} the stored value ${valueText(move.to)}`
         : `${memberText(enums, move.enumValue)} a stored value no member stores, such as ${valueText(through)}`,
     ),
   );
-  const second = joinedList(
+  const second = semicolonList(
     steps.flatMap(({ move, through }) =>
       through === undefined
         ? []
@@ -497,6 +539,7 @@ function movesRefusal(
   moves: readonly MemberMove[],
   cycle: boolean,
   taken: readonly JsonValue[],
+  places: readonly EnumPlace[],
 ): MigrationPlannerConflict {
   const [first] = moves;
   const members = joinedList(moves.map(({ enumValue }) => memberText(enums, enumValue)));
@@ -507,7 +550,7 @@ function movesRefusal(
     cycle
       ? `Cannot change the stored values of enum "${enumName}": enum values ${members} move stored values in a cycle, ${listed}, and a rewrite of one would overwrite the other before it is read`
       : `Cannot change the stored values of enum "${enumName}": enum values ${members} move stored values along a chain, ${listed}, and a rewrite of one would write a value another still has to read`,
-    `${cycle ? CYCLE_WHY : CHAIN_WHY} ${isBooleanEnum(enums) ? BOOLEAN_BY_HAND : movesTwoPlans(enums, moves, taken)}`,
+    `${cycle ? CYCLE_WHY : CHAIN_WHY} ${isBooleanEnum(enums) ? booleanSwapRoute(places, false) : movesTwoPlans(enums, moves, taken)}`,
   );
 }
 
@@ -541,6 +584,7 @@ function memberMovesRefusal(
   enums: EnumComparison,
   changes: readonly ValueChange[],
   taken: readonly JsonValue[],
+  places: readonly EnumPlace[],
 ): MigrationPlannerConflict | undefined {
   const moves = changes.flatMap((change): MemberMove[] =>
     change.statement === undefined && change.to !== undefined ? [{ ...change, to: change.to }] : [],
@@ -567,7 +611,7 @@ function memberMovesRefusal(
         ),
     );
     if (involvesStatement) continue;
-    return movesRefusal(enums, group.moves, group.cycle, taken);
+    return movesRefusal(enums, group.moves, group.cycle, taken, places);
   }
   return undefined;
 }
@@ -620,6 +664,25 @@ export function planEnumValueRewrites(
   return conflicts.length > 0 ? notOk(conflicts) : ok({ replacements, removals });
 }
 
+/** One place for each field or key several root models of one collection type alike, with every model whose documents hold it. */
+function placesTogether(places: readonly EnumPlace[]): readonly EnumPlace[] {
+  const byPlace = new Map<string, EnumPlace>();
+  for (const each of places) {
+    const key = JSON.stringify([
+      each.place.collection,
+      each.place.field,
+      each.path ?? null,
+      each.place.variant ?? null,
+    ]);
+    const known = byPlace.get(key);
+    byPlace.set(
+      key,
+      known === undefined ? each : { ...known, together: [...known.together, ...each.together] },
+    );
+  }
+  return [...byPlace.values()];
+}
+
 function planEnum(
   enums: EnumComparison,
   namespaceId: string,
@@ -666,13 +729,6 @@ function planEnum(
     }
   }
   if (checked.length === 0) return ok({ replacements: [], removals: [] });
-  const taken = [
-    ...originEnum.members.map(({ value }) => value),
-    ...destinationEnum.members.map(({ value }) => value),
-  ];
-  const moved = memberMovesRefusal(enums, checked, taken);
-  if (moved !== undefined) return notOk([moved]);
-  const advice = enumTwoMigrationsAdvice(enums);
   const places = placesOfEnum(contract, namespaceId, enumName);
   if (!places.ok) {
     const [first] = checked;
@@ -686,9 +742,20 @@ function planEnum(
           ),
         ]);
   }
-  const live = places.value.filter(
-    ({ place }) => input.schema.collection(place.collection) !== undefined,
+  const live = placesTogether(
+    places.value.filter(({ place }) => input.schema.collection(place.collection) !== undefined),
   );
+  const managed = live.filter(
+    ({ place }) => collectionControlPolicy(contract, place.collection) === 'managed',
+  );
+  const taken = [
+    ...originEnum.members.map(({ value }) => value),
+    ...destinationEnum.members.map(({ value }) => value),
+  ];
+  const moved =
+    managed.length === 0 ? undefined : memberMovesRefusal(enums, checked, taken, managed);
+  if (moved !== undefined) return notOk([moved]);
+  const advice = enumTwoMigrationsAdvice(enums, managed);
   const conflicts = placeRefusals(enums, checked, live, input);
   if (conflicts.length > 0) return notOk(conflicts);
   const bsonTypes = bsonTypesOfCodec(destinationEnum.codecId, input.lookups) ?? [];
@@ -760,7 +827,7 @@ function placeRefusals(
   for (const change of changes) {
     const kind: PlannedRewrite['kind'] =
       change.to === undefined ? 'removeStoredValue' : 'replaceStoredValue';
-    for (const { place, keys } of places) {
+    for (const { place, keys, together } of places) {
       const policy = collectionControlPolicy(input.contract, place.collection);
       if (policy !== 'managed') {
         if (change.statement !== undefined) {
@@ -796,7 +863,11 @@ function placeRefusals(
           model: place.model,
           storedKey: {
             key: enumValueText(enums.fromContract, change.enumValue),
-            together: [],
+            together,
+            keep:
+              change.statement === undefined && change.to !== undefined
+                ? `keep its stored value ${JSON.stringify(change.from)} in the contract`
+                : undefined,
           },
         },
         input.contract,

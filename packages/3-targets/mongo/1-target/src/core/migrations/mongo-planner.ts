@@ -58,7 +58,6 @@ import {
 } from './mongo-rewrite-overlaps';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
 import {
-  type CollectionControl,
   collectionControlOf,
   type FieldRemoval,
   keepCollectionByHandAdvice,
@@ -71,6 +70,7 @@ import {
 import type { CollectionRenames } from './mongo-storage-renames';
 import { planStoredKeyFills } from './mongo-stored-key-fills';
 import { planStoredKeyRewrites } from './mongo-stored-key-planning';
+import { suppressedCallWarning } from './mongo-suppressed-calls';
 import {
   castFieldCallOf,
   noCastRefusals,
@@ -452,28 +452,6 @@ function planCollectionDiff(
     }
   }
   return { collCreates, drops, creates, validatorOps, mutableOptionOps, collDrops, conflicts };
-}
-
-/**
- * The warning for a change a collection's control policy left out of the plan, worded as the Postgres planner words a suppressed call.
- */
-function suppressedCallWarning(
-  call: OpFactoryCall,
-  collection: string,
-  control: CollectionControl,
-): MigrationPlannerConflict & { readonly meta: Record<string, string> } {
-  const declared =
-    control.declared !== undefined && control.declared !== control.policy
-      ? ` but declared '${control.declared}'`
-      : '';
-  return {
-    kind: 'controlPolicySuppressedCall',
-    summary: `control policy suppressed: ${call.label} — collection "${collection}" has effective control '${control.policy}'${declared}`,
-    meta: {
-      controlPolicy: control.policy,
-      ...ifDefined('declaredControlPolicy', control.declared),
-    },
-  };
 }
 
 function withIndexesOf(schema: MongoSchemaIR, indexesFrom: MongoSchemaIR): MongoSchemaIR {
@@ -1010,6 +988,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     const { calls, warnings } = result;
     const allWarnings = [
       ...warnings,
+      ...storedKeys.value.warnings,
       ...(match === undefined ? [] : documentsNotRewrittenWarnings(match)),
     ];
     const fieldLoss: readonly MigrationDataLoss[] = [

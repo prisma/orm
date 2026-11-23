@@ -300,21 +300,22 @@ export function plannedCollectionChanges(
 }
 
 /**
- * The fields of the origin contract stored as `storedName` in the documents a rename of `field`
- * reaches: those of its model and its bases, of the variants of a root model, and of the other
- * models stored in its collection whose documents the rename's filter can select.
+ * The models of the origin contract whose documents a rename of `field` reaches: its model and its
+ * bases, the variants of a root model, and the other models stored in its collection whose
+ * documents the rename's filter can select. A rename of a key of an embedded model reaches the
+ * objects of that model and its bases only.
  */
-function originFieldsStoring(
+function modelsReached(
   fromContract: ContractWithDomain,
   field: FieldCoordinate,
-  storedName: string,
-): readonly FieldCoordinate[] {
+): readonly string[] {
   const models = mongoModelsOf(fromContract.domain, field.namespaceId);
   const own = [field.model];
   for (let base = models[field.model]?.base; base !== undefined; base = models[base.model]?.base) {
     if (own.includes(base.model)) break;
     own.push(base.model);
   }
+  if (embeddingModelOf(fromContract.domain, field) !== undefined) return own;
   const variant = selectedVariantOf(fromContract.domain, field);
   const variants =
     variant === undefined
@@ -325,7 +326,17 @@ function originFieldsStoring(
     collection === undefined
       ? []
       : otherModelsReached(fromContract.domain, field, collection, variant, undefined);
-  return [...new Set([...own, ...variants, ...others])].flatMap((model) => {
+  return [...new Set([...own, ...variants, ...others])];
+}
+
+/** The fields of the origin contract stored as `storedName` in the documents a rename of `field` reaches. */
+function originFieldsStoring(
+  fromContract: ContractWithDomain,
+  field: FieldCoordinate,
+  storedName: string,
+): readonly FieldCoordinate[] {
+  const models = mongoModelsOf(fromContract.domain, field.namespaceId);
+  return modelsReached(fromContract, field).flatMap((model) => {
     const definition = models[model];
     return definition === undefined
       ? []
@@ -378,8 +389,13 @@ function fieldRenameConflict(
   const text = capitalized(fieldChangeText(change));
   const moving = fieldsText([change.rename.from]);
   const misread = (stored: string) => `values of field "${stored}" as values of ${moving}`;
+  const reached = modelsReached(contracts.fromContract, change.rename.from);
   const others = changes.filter(
-    (other) => other !== change && other.collection === change.collection,
+    (other) =>
+      other !== change &&
+      other.collection === change.collection &&
+      other.rename.from.namespaceId === change.rename.from.namespaceId &&
+      reached.includes(other.rename.from.model),
   );
   const holders = originFieldsStoring(contracts.fromContract, change.rename.from, change.to);
   if (holders.length > 0) {

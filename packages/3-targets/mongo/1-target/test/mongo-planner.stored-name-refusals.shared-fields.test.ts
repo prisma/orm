@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { contract, NS, plan, planned, schemaCollection } from './mongo-statement-fixtures';
+import {
+  contract,
+  NS,
+  plan,
+  planned,
+  renameField,
+  schemaCollection,
+} from './mongo-statement-fixtures';
 
 function refused(result: ReturnType<typeof plan>) {
   if (result.kind !== 'failure') throw new Error('Expected the plan to be refused');
@@ -205,5 +212,51 @@ describe('MongoMigrationPlanner, field renames onto a stored name another model 
         dataLoss: [],
       },
     ]);
+  });
+});
+
+describe('MongoMigrationPlanner, variant field renames whose documents never meet', () => {
+  const nullable = { codecId: 'mongo/string@1', nullable: true };
+  const typed = (fields: Readonly<Record<string, string>>) =>
+    Object.fromEntries(Object.keys(fields).map((field) => [field, nullable]));
+  const tasks = (
+    seed: string,
+    bug: Readonly<Record<string, string>>,
+    epic: Readonly<Record<string, string>>,
+  ) =>
+    contract(
+      seed,
+      {
+        Task: {
+          collection: 'tasks',
+          fields: ['_id', 'type'],
+          discriminator: 'type',
+          variants: { Bug: 'bug', Epic: 'epic' },
+        },
+        Bug: { fields: Object.keys(bug), storedAs: bug, types: typed(bug), base: 'Task' },
+        Epic: { fields: Object.keys(epic), storedAs: epic, types: typed(epic), base: 'Task' },
+      },
+      { tasks: {} },
+    );
+
+  it("plans a variant field rename beside another variant's statement that takes its old key", () => {
+    expect(
+      planned(
+        plan({
+          from: tasks('from', { a: 'x' }, { c: 'z' }),
+          to: tasks('to', { a: 'y' }, { d: 'x' }),
+          schema: [schemaCollection('tasks')],
+          statements: [renameField('Epic', 'c', 'Epic', 'd')],
+        }),
+      ),
+    ).toEqual({
+      labels: [
+        'Rename field z to x in collection tasks in documents whose type is "epic"',
+        'Rename field x to y in collection tasks in documents whose type is "bug"',
+      ],
+      classes: ['widening', 'widening'],
+      applied: [[0]],
+      dataLoss: [],
+    });
   });
 });

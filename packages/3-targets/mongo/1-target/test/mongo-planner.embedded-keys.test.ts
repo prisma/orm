@@ -86,21 +86,26 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
     ]);
   });
 
-  it('refuses the rename in a collection that is not managed, naming the contract change and no statement', () => {
-    expect(
-      plan({
-        from: orders('from', { sku: 'sku' }, { control: 'external' }),
-        to: orders('to', { sku: 'code' }, { control: 'external' }),
-        schema: live,
-      }),
-    ).toEqual({
-      kind: 'failure',
-      conflicts: [
+  it('leaves the rename out in a collection that is not managed, with a warning, and renames it where the collection is managed', () => {
+    const result = plan({
+      from: orders('from', { sku: 'sku' }, { control: 'external' }),
+      to: orders('to', { sku: 'code' }, { control: 'external' }),
+      schema: live,
+    });
+    if (result.kind !== 'success') throw new Error(JSON.stringify(result.conflicts, null, 2));
+    expect({
+      ...planned(result),
+      warnings: (result.warnings ?? []).map(({ kind, summary }) => ({ kind, summary })),
+    }).toEqual({
+      labels: ['Rename key "sku" to "code" at path "$[*]" in field lines of collection quotes'],
+      classes: ['widening'],
+      applied: [],
+      dataLoss: [],
+      warnings: [
         {
-          kind: 'unsupportedOperation',
+          kind: 'controlPolicySuppressedCall',
           summary:
-            'Cannot rename key "sku" to "code" of field "Line.sku": collection "orders" has control policy "external"',
-          why: 'The stored name of field "Line.sku" changes from "sku" to "code". The plan rewrites keys only in collections whose control policy is "managed". Make the change in the database yourself, or keep the stored name "sku" in the contract.',
+            'control policy suppressed: Rename key "sku" to "code" at path "$[*]" in field lines of collection orders — collection "orders" has effective control \'external\'',
         },
       ],
     });
@@ -126,7 +131,7 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
     });
   });
 
-  it('refuses the rename onto the key of a removed field', () => {
+  it('refuses the rename onto the key of a removed field, with the route that names it', () => {
     expect(
       plan({
         from: orders('from', { sku: 'sku', note: 'code' }),
@@ -139,11 +144,53 @@ describe('MongoMigrationPlanner, a field of an embedded model whose name both co
         {
           kind: 'unsupportedOperation',
           summary:
-            'Cannot plan the migration: the migration writes a key that another of its operations reads (Rename key "sku" to "code" at path "$[*]" in field lines of collection orders; Remove key "code" at path "$[*]" in field lines of collection orders)',
-          why: "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents. An operation that reads a key another operation of the same migration writes acts on what that operation wrote: at once when it runs later, and when the migration runs again after a later operation stops. Make the change as two changes to the contract, and apply the first, by a migration or by db update, before you make the second: first remove the key whose name the rename takes; then make the rename.",
+            'Cannot rename field "sku" to "code" in collection "orders": the documents already hold field "code"',
+          why: 'The stored name of field "Line.sku" changes from "sku" to "code", and the documents already hold field "code", the stored name of field "Line.note". Without the rename the plan would read the values of field "code" as values of field "Line.sku". Make the change in two plans: first remove field "Line.note", or keep it and change its stored name to a name nothing uses, such as "prisma_swap_code", and plan and apply that; then make this change and plan again.',
         },
       ],
     });
+  });
+
+  it('refuses two keys that swap stored names', () => {
+    expect(
+      plan({
+        from: orders('from', { a: 'x', b: 'y' }),
+        to: orders('to', { a: 'y', b: 'x' }),
+        schema: [schemaCollection('orders')],
+      }),
+    ).toEqual({
+      conflicts: [
+        {
+          kind: 'unsupportedOperation',
+          summary:
+            'Cannot rename field "x" to "y" in collection "orders": field "y" is renamed in the same plan',
+          why: 'The stored name of field "Line.a" changes from "x" to "y", and the stored name of field "Line.b" changes from "y" to "x". A rename onto a name another rename frees, or takes, needs an order or a temporary name that the plan does not work out, and without the renames the plan would read the values of field "y" as values of field "Line.a". Make the change in two plans: first give field "Line.a" the stored name "prisma_swap_y" and field "Line.b" the stored name "prisma_swap_x", stored names nothing uses, and plan and apply that; then give field "Line.a" the stored name "y" and field "Line.b" the stored name "x", and plan again.',
+        },
+      ],
+      kind: 'failure',
+    });
+  });
+
+  it('follows the route of the swap refusal through stored names nothing uses', () => {
+    const one = [schemaCollection('orders')];
+    const through = { a: 'prisma_swap_y', b: 'prisma_swap_x' };
+    expect([
+      rendered(
+        plan({ from: orders('s0', { a: 'x', b: 'y' }), to: orders('s1', through), schema: one }),
+      ),
+      rendered(
+        plan({ from: orders('s1', through), to: orders('s2', { a: 'y', b: 'x' }), schema: one }),
+      ),
+    ]).toEqual([
+      [
+        'renameStoredKey({collection:"orders",field:"lines",path:"$[*].x",to:"prisma_swap_y"})',
+        'renameStoredKey({collection:"orders",field:"lines",path:"$[*].y",to:"prisma_swap_x"})',
+      ],
+      [
+        'renameStoredKey({collection:"orders",field:"lines",path:"$[*].prisma_swap_y",to:"y"})',
+        'renameStoredKey({collection:"orders",field:"lines",path:"$[*].prisma_swap_x",to:"x"})',
+      ],
+    ]);
   });
 
   it('follows the route of that refusal: removes the field first, then renames', () => {
