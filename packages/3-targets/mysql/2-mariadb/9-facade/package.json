@@ -42,7 +42,7 @@
     "@internal/framework-components": "workspace:8.0.0-rc.24",
     "@internal/migration-tools": "workspace:8.0.0-rc.24",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.24",
-    "@prisma/cli-engine": "0.10.3",
+    "@prisma/cli-engine": "0.10.4",
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",

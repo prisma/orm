@@ -601,7 +601,7 @@ After `db update --delete User.name`, the warning about the temporary value says
 
 **Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1, whose refusal under `--yes` said "You have to choose what happens, and --yes does not choose for you."; the problem holds with 0.10.2.
 
-Under `--yes` the 0.10.2 refusal says "This command requires explicit consent, and --yes does not give it.", which is clear. A user may wonder whether to keep `--yes` when running the printed line again; keeping it works. Minor.
+Under `--yes` the refusal now says "This command requires explicit consent for which --yes is not sufficient.", which is clear. A user may wonder whether to keep `--yes` when running the printed line again; keeping it works. Minor.
 
 ## In a terminal, `db update` prints each progress step twice
 

@@ -119,7 +119,7 @@ withTempDir(({ createTempDir }) => {
         expect(yesAlone.exitCode, 'E.04: --yes does not grant consent').toBe(2);
         expect(parseJsonOutput(yesAlone), 'E.04: consent error').toMatchObject({
           code: 'CLI.CONSENT_REQUIRED',
-          summary: 'This command requires explicit consent, and --yes does not give it.',
+          summary: 'This command requires explicit consent for which --yes is not sufficient.',
         });
 
         // E.05: db update --confirm <database> — answers no question
