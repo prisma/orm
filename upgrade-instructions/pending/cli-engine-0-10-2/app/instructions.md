@@ -7,15 +7,16 @@ changes:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
         - '"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.(?:\d|10\.[01])(?!\d)'
-        - '[''"]?@prisma/cli-engine[''"]?:\s*[''"]?[\^~]?0\.(?:\d|10\.[01])(?!\d)'
+        - '[''"]?@prisma/cli-engine[''"]?:\s*[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[01])(?!\d)'
   - id: consent-required-summary-names-no-subject
     summary: |
       When `prisma migration plan` or `prisma db update` cannot ask a statement question, the first line of `CLI.CONSENT_REQUIRED` is now one fixed sentence that names no subject. Code that matched the old first line must check the error's `code` and `meta.unanswered` instead.
     detection:
-      glob: "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,snap,sh,bash,yml,yaml}"
+      glob: "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,snap,json,sh,bash,yml,yaml}"
       matches:
         - 'needs? a statement'
         - '--yes cannot give'
+        - 'session is not interactive'
 ---
 
 ## `engine-pin-moves-to-0-10-2`
@@ -31,4 +32,4 @@ When `prisma migration plan` or `prisma db update` would lose data or change acc
 
 `why` (the questions), the next actions, `meta`, the code and the exit code (2) are unchanged.
 
-For every file matched by `detection`, stop matching the first line of this error. Branch on the error's `code` (`CLI.CONSENT_REQUIRED`) and read the unanswered subjects from `meta.unanswered` (each with its `subject` and `verbs`).
+For every file matched by `detection`, stop matching the first line of this error. A match on `session is not interactive` needs a change only where it is for this error: the error for a missing `--confirm` still ends with those words. Branch on the error's `code` (`CLI.CONSENT_REQUIRED`) and read the unanswered subjects from `meta.unanswered` (each with its `subject` and `verbs`).
