@@ -200,6 +200,16 @@ describe('Postgres planner, a namespace the destination removes', () => {
     });
   });
 
+  it('drops no schema named constructor that the database does not have', async () => {
+    const withConstructor = contractOf({ public: ['user'], constructor: ['invoice'] }, 'ctor');
+    const live = postgresContractToSchema(withoutBilling, postgresTypeComponents);
+
+    expect(await planned(plan(withConstructor, withoutBilling, { schema: live }))).toEqual({
+      labels: [],
+      dataLoss: [],
+    });
+  });
+
   it('leaves the namespace alone without an origin contract', async () => {
     expect(await planned(plan(withBilling, withoutBilling, { fromContract: null }))).toEqual({
       labels: [],

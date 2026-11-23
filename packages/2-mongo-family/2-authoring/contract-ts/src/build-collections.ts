@@ -18,6 +18,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { storedFieldNameIn } from './build-models';
 import type { BuildRefusal, IndexKey, IndexShapeRule } from './build-refusals';
 import type { FieldNode, IndexNode, ModelNode } from './contract-definition';
+import { defineOwn, ownEntry } from './own-keys';
 
 /** The stored form of an index key: the field's stored name, with a wildcard scope kept. */
 function storedIndexKey(fields: readonly FieldNode[], key: string): string {
@@ -245,7 +246,7 @@ export function buildCollections(input: {
       continue;
     }
     const collectionKey = { kind: 'collectionSettings', model: modelName } as const;
-    const existingCollection: MongoCollectionInput = intermediate[collection] ?? {};
+    const existingCollection: MongoCollectionInput = ownEntry(intermediate, collection) ?? {};
     const existingIndexes = existingCollection.indexes ?? [];
     const indexOwners = indexOwnersByCollection.get(collection) ?? new Map<string, IndexKey>();
     indexOwnersByCollection.set(collection, indexOwners);
@@ -318,12 +319,12 @@ export function buildCollections(input: {
       ? toStorageCollectionOptions(model.collectionOptions)
       : undefined;
 
-    intermediate[collection] = {
+    defineOwn(intermediate, collection, {
       ...existingCollection,
       ...(storageIndexes.length > 0 ? { indexes: [...existingIndexes, ...storageIndexes] } : {}),
       ...ifDefined('options', storageOptions),
       ...ifDefined('control', model.controlPolicy),
-    };
+    });
   }
 
   return intermediate;

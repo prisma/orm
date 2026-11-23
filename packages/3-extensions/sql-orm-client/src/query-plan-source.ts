@@ -111,7 +111,7 @@ function buildCursorWhere(
       throw new InternalError('assertCursorCompatibleOrder admits only column orders');
     }
     const column = order.expr.column;
-    const value = cursor[column];
+    const value = Object.hasOwn(cursor, column) ? cursor[column] : undefined;
     if (value === undefined) {
       throw ormError(
         'ORM.CURSOR_VALUE_MISSING',

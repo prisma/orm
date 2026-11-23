@@ -108,6 +108,10 @@ function getMergedColumnToFieldMap(
   return merged;
 }
 
+function ownValue(row: Record<string, unknown>, column: string): unknown {
+  return Object.hasOwn(row, column) ? row[column] : undefined;
+}
+
 function variantTableOf(
   tables: CollectionTables,
   variant: PolymorphismVariantInfo,
@@ -125,7 +129,7 @@ export function mapPolymorphicRow(
   variantValue?: string,
 ): Record<string, unknown> {
   const discriminatorValue =
-    row[polyInfo.discriminatorColumn] ?? row[POLYMORPHIC_DISCRIMINATOR_ALIAS];
+    ownValue(row, polyInfo.discriminatorColumn) ?? row[POLYMORPHIC_DISCRIMINATOR_ALIAS];
   const selectedValue = variantValue ?? discriminatorValue;
   const variant =
     typeof selectedValue === 'string' ? polyInfo.variants.get(selectedValue) : undefined;
@@ -173,7 +177,7 @@ export function createPolymorphicRowMapper(
   }
   const discriminatorColumn = polyInfo.discriminatorColumn;
   return (row) => {
-    const value = row[discriminatorColumn] ?? row[POLYMORPHIC_DISCRIMINATOR_ALIAS];
+    const value = ownValue(row, discriminatorColumn) ?? row[POLYMORPHIC_DISCRIMINATOR_ALIAS];
     const mapper = variantValue
       ? pinnedMapper
       : typeof value === 'string'

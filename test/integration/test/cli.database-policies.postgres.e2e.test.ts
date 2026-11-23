@@ -47,13 +47,18 @@ withTempDir(({ createTempDir }) => {
           expect((await planMigrationAndSelfEmit(ctx, ['--name', 'add-name'])).exitCode).toBe(0);
           const deleted = getLatestMigrationDir(ctx)!;
           const markerHash = migrationTo(ctx, deleted);
-          expect((await runMigrate(ctx)).exitCode).toBe(0);
+          expect((await runMigrate(ctx, ['--no-advance-ref'])).exitCode).toBe(0);
           await writeRef(join(ctx.testDir, 'migrations', 'app', 'refs'), 'production', {
             hash: markerHash,
             invariants: [],
             policies: MIGRATE_ONLY_DECLARED,
           });
-          const recorded = await runMigrate(ctx, ['--to', 'production', '--permit-policy-change']);
+          const recorded = await runMigrate(ctx, [
+            '--to',
+            'production',
+            '--permit-policy-change',
+            '--no-advance-ref',
+          ]);
           expect(recorded.exitCode, `${recorded.stdout}\n${recorded.stderr}`).toBe(0);
 
           rmSync(join(ctx.testDir, 'migrations', 'app', deleted), { recursive: true, force: true });
@@ -111,7 +116,7 @@ withTempDir(({ createTempDir }) => {
           expect((await runContractEmit(ctx)).exitCode).toBe(0);
           expect((await planMigrationAndSelfEmit(ctx, ['--name', 'add-name'])).exitCode).toBe(0);
           const deleted = getLatestMigrationDir(ctx)!;
-          expect((await runMigrate(ctx)).exitCode).toBe(0);
+          expect((await runMigrate(ctx, ['--no-advance-ref'])).exitCode).toBe(0);
           rmSync(join(ctx.testDir, 'migrations', 'app', deleted), { recursive: true, force: true });
           swapContract(ctx, 'contract-phone');
           expect((await runContractEmit(ctx)).exitCode).toBe(0);
