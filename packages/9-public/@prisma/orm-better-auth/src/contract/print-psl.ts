@@ -213,7 +213,7 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
       let action = reference.onDelete;
       if ((action === 'set null' && !optional) || action === 'set default') {
         notes.push(
-          `${holder.name}.${field.name}: Better Auth asks for onDelete ${action}, which needs ${action === 'set null' ? 'an optional field' : 'a default'}; NoAction is printed instead`,
+          `${holder.name}.${field.name}: Better Auth asks for onDelete ${action}, which needs ${action === 'set null' ? 'an optional field' : 'a default'}; NoAction is used instead`,
         );
         action = 'no action';
       }

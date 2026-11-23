@@ -33,7 +33,10 @@ async function configLoader(comparison: ContractComparison) {
 }
 
 /** The absolute paths of the contract's inputs in `prisma.config.ts` in the working directory. Better Auth does not tell the adapter its `--cwd`. */
-async function contractInputs(comparison: ContractComparison): Promise<readonly string[]> {
+async function contractInputs(
+  comparison: ContractComparison,
+  shown: (path: string) => string,
+): Promise<readonly string[]> {
   const loader = await configLoader(comparison);
   const didNotLoad = (message: string) =>
     notChanged(comparison, `prisma.config.ts did not load: ${message}. ${passOutput}`);
@@ -65,7 +68,10 @@ async function contractInputs(comparison: ContractComparison): Promise<readonly 
   }
   const inputs = await loader.expandContractInputs(source.inputs);
   if (inputs.length === 0) {
-    throw notChanged(comparison, `prisma.config.ts names no contract. ${passOutput}`);
+    throw notChanged(
+      comparison,
+      `the contract inputs prisma.config.ts names match no file: ${(source.inputs ?? []).map(shown).join(', ')}. ${passOutput}`,
+    );
   }
   return inputs;
 }
@@ -86,7 +92,7 @@ export async function contractSourceFiles(
     const fromCwd = relative(process.cwd(), path);
     return fromCwd.startsWith('..') || isAbsolute(fromCwd) ? path : fromCwd;
   };
-  const paths = file === undefined ? await contractInputs(comparison) : [resolve(file)];
+  const paths = file === undefined ? await contractInputs(comparison, shown) : [resolve(file)];
   const files: ReadContractSourceFile[] = [];
   for (const absolutePath of paths) {
     const path = shown(absolutePath);

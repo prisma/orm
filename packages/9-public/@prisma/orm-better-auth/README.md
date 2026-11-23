@@ -213,7 +213,8 @@ The message can also list fields whose type is wrong; optional Better Auth field
 - the contract is read from a Prisma 7 schema. The message is in Prisma 8 syntax: add the equivalent lines by hand.
 - there is neither `--output` nor a `prisma.config.ts` that names the contract, `prisma.config.ts` does not load, or Prisma's config loader is not installed.
 - the file `--output` names does not exist or cannot be read.
-- a contract file does not parse, or the file `--output` names does not start with `// use prisma-8`.
+- a contract file does not parse, the file `--output` names does not start with `// use prisma-8`, or none of the files `prisma.config.ts` names does.
+- the contract inputs `prisma.config.ts` names match no file.
 - a model it would add fields to is declared in none of the contract files, or in more than one.
 - the additions belong in more than one file, because Better Auth writes one file.
 - a model has no field named `id` (see [Limits](#limits)).

@@ -15,16 +15,17 @@ export interface ContractSourceFile {
   readonly text: string;
 }
 
-export interface ContractEdit {
-  readonly path: string;
+export interface ContractEdit<F extends ContractSourceFile = ContractSourceFile> {
+  /** The source file the edit changes. */
+  readonly file: F;
   /** The whole edited file. */
   readonly code: string;
   /** What is added where and what to do after the file is written, then a line for each note the printed PSL carries. */
   readonly summary: string;
 }
 
-interface DeclaredModel {
-  readonly file: ContractSourceFile;
+interface DeclaredModel<F extends ContractSourceFile = ContractSourceFile> {
+  readonly file: F;
   readonly declaration: ModelDeclarationAst;
 }
 
@@ -37,11 +38,11 @@ function modelKey(namespaceId: string, name: string): string {
   return `${namespaceId}.${name}`;
 }
 
-function declaredModels(
-  file: ContractSourceFile,
+function declaredModels<F extends ContractSourceFile>(
+  file: F,
   document: DocumentAst,
   defaultNamespace: string,
-  into: Map<string, DeclaredModel[]>,
+  into: Map<string, DeclaredModel<F>[]>,
 ): void {
   const add = (namespaceId: string, declaration: ModelDeclarationAst) => {
     const name = declaration.name()?.name();
@@ -59,11 +60,11 @@ function declaredModels(
   }
 }
 
-function parsedModels(
-  files: readonly ContractSourceFile[],
+function parsedModels<F extends ContractSourceFile>(
+  files: readonly F[],
   comparison: ContractComparison,
-): Map<string, DeclaredModel[]> {
-  const models = new Map<string, DeclaredModel[]>();
+): Map<string, DeclaredModel<F>[]> {
+  const models = new Map<string, DeclaredModel<F>[]>();
   for (const file of files) {
     if (!isPrisma8Schema(file.text)) {
       throw notChanged(comparison, `${file.path} does not start with \`// use prisma-8\`.`);
@@ -174,10 +175,10 @@ function summaryOf(
 /**
  * Adds what the comparison found missing to the PSL source files, as text inserted at positions from the syntax tree: missing fields after the last field of their model, missing models at the end of the file that holds the first model the edit extends. Every original line is kept as written. Throws the contract message, with the reason, when the edit cannot be made.
  */
-export function editContractSource(
-  files: readonly ContractSourceFile[],
+export function editContractSource<F extends ContractSourceFile>(
+  files: readonly F[],
   comparison: ContractComparison,
-): ContractEdit {
+): ContractEdit<F> {
   assertOnlyAdditions(comparison);
   const withoutId = comparison.models.find(
     (model) => model.status === 'found' && model.missingFields.includes('id'),
@@ -273,5 +274,5 @@ export function editContractSource(
   for (const { offset, text } of [...insertions].sort((a, b) => b.offset - a.offset)) {
     code = `${code.slice(0, offset)}${text}${code.slice(offset)}`;
   }
-  return { path: file.path, code, summary: summaryOf(file.path, extended, added, printed.notes) };
+  return { file, code, summary: summaryOf(file.path, extended, added, printed.notes) };
 }

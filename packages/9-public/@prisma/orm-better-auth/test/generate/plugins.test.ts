@@ -135,7 +135,7 @@ model Grant {
   @@map("grant")
 }
 `,
-        summary: `Changes to ${contractPath}: 1 field added to User, model Grant added. ${afterEdit}\nNote: Grant.ownerId: Better Auth asks for onDelete set null, which needs an optional field; NoAction is printed instead`,
+        summary: `Changes to ${contractPath}: 1 field added to User, model Grant added. ${afterEdit}\nNote: Grant.ownerId: Better Auth asks for onDelete set null, which needs an optional field; NoAction is used instead`,
       },
       problemsAfter: [],
     });

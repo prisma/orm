@@ -95,6 +95,27 @@ export default definePrismaConfig({ orm: { ...orm, contract: { ...orm.contract, 
     await expect(inDirectory(dir, () => generate())).rejects.toThrow(expected);
   });
 
+  it('prints the message when the contract inputs prisma.config.ts names match no file', async () => {
+    const dir = await projectWith({
+      'prisma.config.ts': configWithContract("{ contract: './prisma/*.prisma' }"),
+    });
+    const expected = await refusalFor(
+      `\`auth generate\` did not change your contract, because the contract inputs prisma.config.ts names match no file: prisma/*.prisma. ${passOutput}`,
+    );
+    await expect(inDirectory(dir, () => generate())).rejects.toThrow(expected);
+  });
+
+  it('prints the message when none of the files prisma.config.ts names starts with the Prisma 8 line', async () => {
+    const dir = await projectWith({
+      'prisma.config.ts': configWithContract("{ contract: './prisma/*.prisma' }"),
+      'prisma/schema.prisma': 'model Old {\n  id Int @id\n}\n',
+    });
+    const expected = await refusalFor(
+      `\`auth generate\` did not change your contract, because none of the files prisma.config.ts names starts with \`// use prisma-8\`. ${passOutput}`,
+    );
+    await expect(inDirectory(dir, () => generate())).rejects.toThrow(expected);
+  });
+
   it('prints the message when prisma.config.ts does not load', async () => {
     const dir = await projectWith({ 'prisma.config.ts': "throw new Error('broken config');\n" });
     const expected = await refusalFor(

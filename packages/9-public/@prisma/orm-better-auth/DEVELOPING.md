@@ -14,6 +14,7 @@ Notes for people who change this package. For how to use it, see the [README](RE
 
 ## Choices that look wrong but are deliberate
 
+- **`src/generate/` is tooling code in a package registered as runtime plane.** It runs only under `auth generate`, never while an application serves requests, and it loads the PSL parser and Prisma's tooling. `architecture.config.json` still registers the whole package as one runtime-plane package. Splitting it would need the contract comparison (`src/contract/`, `src/models/`) in a shared plane and an exception for the adapter's dynamic import of `src/generate/`, and the plane rules allow no exception: `pnpm lint:deps` counts a dynamic import as a dependency. The property that matters is that nothing in `src/generate/` loads when an application serves requests, and `test/source-imports.test.ts` checks it.
 - **The adapter id is `prisma-8`, not `prisma`.** Better Auth's command-line program treats the id `prisma` as its own Prisma 7 adapter.
 - **Pattern filters (`contains`, `starts_with`, `ends_with`) do not use `LIKE`.** Prisma 8's `like` has no escape clause, so `%` and `_` in a value would act as wildcards, and SQLite's `LIKE` ignores ASCII case. The filters compare raw string expressions instead, which is the same SQL on both databases.
 - **MySQL and MariaDB are refused.** Those filters would be wrong there: `length()` counts bytes, and the default collation ignores case. Adding the targets to the accepted list is not enough; the filters must be made right and Better Auth's suites run on those databases first.

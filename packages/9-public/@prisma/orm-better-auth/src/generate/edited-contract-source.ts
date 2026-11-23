@@ -1,5 +1,4 @@
 import type { DBAdapterSchemaCreation } from '@better-auth/core/db/adapter';
-import { BetterAuthError } from '@better-auth/core/error';
 import type { ContractComparison } from '../contract/compare';
 import { contractSourceFiles } from './contract-source-files';
 import { editContractSource } from './edit-contract-source';
@@ -13,11 +12,7 @@ export async function editedContractSource(
   comparison: ContractComparison,
 ): Promise<DBAdapterSchemaCreation> {
   assertOnlyAdditions(comparison);
-  const files = await contractSourceFiles(file, comparison);
-  const edit = editContractSource(files, comparison);
-  const edited = files.find((candidate) => candidate.path === edit.path);
-  if (edited === undefined)
-    throw new BetterAuthError(`The edit names ${edit.path}, which was not read`);
+  const edit = editContractSource(await contractSourceFiles(file, comparison), comparison);
   console.log(edit.summary);
-  return { code: edit.code, path: edited.absolutePath, overwrite: true };
+  return { code: edit.code, path: edit.file.absolutePath, overwrite: true };
 }

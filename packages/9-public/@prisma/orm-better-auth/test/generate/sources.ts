@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from '@better-auth/core';
 import { expect } from 'vitest';
 import type { ContractComparison } from '../../src/contract/compare';
 import { contractMessage } from '../../src/contract/message';
-import { type ContractEdit, editContractSource } from '../../src/generate/edit-contract-source';
+import { editContractSource } from '../../src/generate/edit-contract-source';
 import type { ContractFixture } from '../helpers/contract-fixture';
 import { emitContractFiles, type PslFile, type TargetName } from '../helpers/databases';
 import { type AdapterOptionsForComparison, compare } from '../helpers/printed-psl';
@@ -123,7 +123,8 @@ export function twoFactorSummary(path: string): string {
 }
 
 export interface EditRun {
-  readonly edit: ContractEdit;
+  /** The edit, with the edited file named by its path. */
+  readonly edit: { readonly path: string; readonly code: string; readonly summary: string };
   /** What the comparison finds after the edited files are emitted. */
   readonly problemsAfter: ContractComparison['problems'];
 }
@@ -137,12 +138,18 @@ export async function editAndEmit(
   adapterOptions: AdapterOptionsForComparison = {},
 ): Promise<EditRun> {
   const before = await emitContractFiles(target, files, fixture.workDir);
-  const edit = editContractSource(files, compare(before.contract, options, adapterOptions));
-  const editedFiles = files.map((file) =>
-    file.path === edit.path ? { path: file.path, text: edit.code } : file,
+  const { file, code, summary } = editContractSource(
+    files,
+    compare(before.contract, options, adapterOptions),
+  );
+  const editedFiles = files.map((candidate) =>
+    candidate === file ? { path: file.path, text: code } : candidate,
   );
   const after = await emitContractFiles(target, editedFiles, fixture.workDir);
-  return { edit, problemsAfter: compare(after.contract, options, adapterOptions).problems };
+  return {
+    edit: { path: file.path, code, summary },
+    problemsAfter: compare(after.contract, options, adapterOptions).problems,
+  };
 }
 
 /** The error `auth generate` throws when it writes nothing: today's message, then the reason when there is one. */
