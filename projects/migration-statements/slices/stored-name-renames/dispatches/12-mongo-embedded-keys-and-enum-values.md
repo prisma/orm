@@ -6,6 +6,15 @@ Notes in `wip/mongo-stored-names/d3-progress.md`. The rules of dispatch 10 (`dis
 
 The reference is the SQL half's enum step, `dispatches/03-enum-stored-values.md`, and its code in `packages/2-sql-family/9-family/src/core/migrations/enum-value-planning.ts` (`valueChanges`, `cycleRefusal`, `mergingRefusal`, `stillStoredRefusal`). Plan and refuse the same cases with the same texts in MongoDB words, except one difference the spec records: MongoDB has no transaction, so its overlap check (ADR 188) refuses chains of enum values that SQL plans in order. Keep that, and make its advice a route that works.
 
+## Part 0: fixes from the step 2 review, before anything else
+
+The review is `wip/mongo-stored-names/d2-review.md`, with probes in `wip/mongo-stored-names/probes/d2.test.ts`. Commit these fixes before starting the outcome below.
+
+1. **A dropped collection asks about every model whose documents it loses.** Today `collectionDrops` (via `modelStoredIn`) asks about one model, chosen by declaration order, so `--delete Admin` can delete every `User` document without `User` being named. A drop of a collection asks about every origin model stored there whose documents the plan does not move elsewhere, kept and removed alike. A kept model's question carries the split or merge advice. The result does not depend on declaration order: tests with both orders. Check how SQL handles the same case (a shared table dropped while one model leaves) and match it where MongoDB allows; say what you found.
+2. **A field rename counts every model whose documents the rename reaches.** In `mongo-rename-conflicts.ts` (`originFieldsStoring`), a key counts as taken by any field of any origin model whose documents the rename reaches: other root models of a collection with no discriminator, the model's variants, and its bases. Then `User.a` moving from `x` to `y` while `Admin.b` keeps `y` in the same collection is refused with the takeover route, as SQL refuses it. When a base field takes the key of a removed variant field, the route names that field.
+3. **Test files at most 500 lines.** Split `mongo-planner.stored-name-refusals.test.ts` into a collection file and a field file. Split `mongo-planner.variants.test.ts` by functionality.
+4. **Minor.** Remove the false comment on the test helper `refused()`. A chain whose middle link is a merge says the model is being merged. Add one test that follows a route through `db update` (`executeDbUpdate`, as `db-update-statements.test.ts` does).
+
 ## Inputs
 
 - `projects/migration-statements/handover-notes/mongo-code-map.md` § 1 "Embedded model and value object fields" and "Enum stored values", § 3 rows for embedded keys and enum values (line numbers have drifted; find functions by name).
