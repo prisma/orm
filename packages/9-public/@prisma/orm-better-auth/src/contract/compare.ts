@@ -5,7 +5,6 @@ import type { SqlModelStorage } from '@prisma/orm-family-sql/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@prisma/orm-framework/contract/default-namespace';
 import type { ContractField, ContractModelBase } from '@prisma/orm-framework/contract/types';
 import {
-  type BetterAuthField,
   type BetterAuthModel,
   type BetterAuthReference,
   betterAuthModels,
@@ -14,6 +13,7 @@ import {
   idStrategyOf,
   isIdReference,
   managedModels,
+  mayBeNull,
 } from '../models/better-auth-models';
 import { type CodecKind, codecKind } from '../models/codec-kinds';
 import { describeFieldType } from '../models/field-type';
@@ -151,11 +151,6 @@ function columnFacts(contract: SqlContract, found: FoundModel, field: string): C
   };
 }
 
-/** Better Auth writes `null` to an optional field it has no default value for, so a database default does not help. */
-function mayBeNull(field: BetterAuthField): boolean {
-  return field.attribute.required === false && field.attribute.defaultValue === undefined;
-}
-
 function compareFoundModel(
   contract: SqlContract,
   expected: BetterAuthModel,
@@ -205,7 +200,7 @@ function compareFoundModel(
         reference: field.reference,
         found: wrong,
       });
-    } else if (mayBeNull(field) && !contractField.nullable) {
+    } else if (mayBeNull(field.attribute) && !contractField.nullable) {
       problems.push({
         kind: 'optional-field-not-nullable',
         model,

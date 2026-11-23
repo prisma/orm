@@ -1,3 +1,4 @@
+import { mayBeNull } from '../models/better-auth-models';
 import {
   caseOnlyNameCollisionMessage,
   invalidFieldNameMessage,
@@ -34,7 +35,7 @@ function changeLines(comparison: ContractComparison): string[] {
           break;
         }
         lines.push(
-          `${problem.model}.${problem.field}: must be \`${pslTypeOf(problem.attribute, problem.reference, comparison)}\` (found ${problem.found})`,
+          `${problem.model}.${problem.field}: must be \`${pslTypeOf(problem.attribute, problem.reference, comparison)}${mayBeNull(problem.attribute) ? '?' : ''}\` (found ${problem.found})`,
         );
         break;
     }

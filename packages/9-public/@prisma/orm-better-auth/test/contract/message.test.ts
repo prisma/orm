@@ -86,6 +86,22 @@ Then run \`prisma contract emit\` and update your database.`);
     );
   });
 
+  it('gives the full type, with ?, for an optional field with a wrong type', async () => {
+    const psl = pslForConfiguration(emptyContract, {}).replace(
+      /image(\s+)String\?/,
+      'image$1Int    ',
+    );
+    expect(
+      contractMessage(compare(await contractOf(psl), {})),
+    ).toBe(`Your Prisma contract does not match what Better Auth needs.
+
+Change in your contract:
+
+  User.image: must be \`String?\` (found sqlite/integer@1)
+
+Then run \`prisma contract emit\` and update your database.`);
+  });
+
   it('asks for an optional field Better Auth writes null to to be optional', async () => {
     const psl = pslForConfiguration(emptyContract, {}).replace(
       /image(\s+)String\?/,
