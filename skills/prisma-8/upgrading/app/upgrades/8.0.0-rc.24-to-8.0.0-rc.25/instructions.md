@@ -264,25 +264,41 @@ changes:
       A required field new inside a MongoDB value object or embedded model is now filled with a temporary value in the objects that lack it, as at the top level, unless `--backfill` names it.
   - id: json-default-proto-key-kept
     summary: |
-      A JSON column default that has a `__proto__` key now keeps that key in `contract.json` and in the storage hash; it used to be dropped. Re-emit the contract, then plan and apply a migration.
+      A JSON column default that has a `__proto__` key now keeps that key in `contract.json` and, on Postgres and MySQL, in the storage hash; it used to be dropped. Re-emit the contract, then bring the database's default in line.
     detection:
       glob: "**/*.prisma"
       matches:
         - 'json`[^`]*__proto__'
+        - '@default\("(?:[^"\\\n]|\\.)*\\"__proto__\\"'
   - id: mongo-proto-names-refused
     summary: |
-      A MongoDB contract now refuses a model, composite type or value object, collection or root named `__proto__`, and the TypeScript builder refuses an enum with that name too. In a PSL contract, an enum named `__proto__` is not refused: it is left out of the contract without an error, together with every field typed by it. Choose another name.
+      A MongoDB contract now refuses a model, field, relation, composite type or value object, enum, collection or root named `__proto__`, and an embed relation stored under that name. Choose another name.
     detection:
-      glob: "**/*.{prisma,ts}"
+      glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
         - '__proto__'
   - id: sql-proto-names-refused
     summary: |
-      A SQL contract now refuses a namespace, table, column, model, field or enum named `__proto__` with `CONTRACT.NAME_UNUSABLE_AS_KEY`, and a `__proto__` key in an object literal of a TypeScript contract. Before, the entry was dropped or the contract came out wrong. Choose another name.
+      A SQL contract now refuses a table, column, model, field, relation, enum or other name that is `__proto__`. A field of that name stored under another name used to be left out of the contract without an error. Rename it in the contract source.
     detection:
-      glob: "**/*.{prisma,ts}"
+      glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
         - '__proto__'
+  - id: sql-select-alias-proto-refused
+    summary: |
+      A SQL query builder `select` that names a result column `__proto__` is refused with `RUNTIME.AST_INVALID`. Choose another alias.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - 'select\(\s*[''"`]__proto__[''"`]'
+        - '\[\s*[''"`]__proto__[''"`]\s*[\],]'
+  - id: postgres-infer-proto-name-refused
+    summary: |
+      On Postgres, `prisma contract infer` now fails with `CONTRACT.INFER_UNSUPPORTED` when the database has a table or column named `__proto__`. Rename it in the database first.
+    detection:
+      glob: "{**/{package.json,*.sh,*.yml,*.yaml,Makefile,justfile},.github/workflows/*.{yml,yaml},.gitlab-ci.yml}"
+      contains:
+        - 'contract infer'
   - id: update-data-refuses-discriminator
     summary: |
       Update data on a polymorphic model no longer takes the discriminator field: setting it is a type error, and at run time it is refused with `ORM.FIELD_IMMUTABLE`. Before, it changed only the base table and left the variant's rows inconsistent. Remove the discriminator from update data.
@@ -402,10 +418,10 @@ Do the steps in this order, and skip a step that does not apply to the project:
 1. Before you deploy the upgrade, on PostgreSQL with `money` columns, make the database print `money` in the `C` form (`postgres-lc-monetary-not-set`). The old release still forces it on its own connections, so do this first.
 2. Before you run the install for the upgrade, fix the dependencies in `package.json`: declare `pg` and `@types/pg` for the PostgreSQL packages (`pg-is-a-peer-dependency`), move a declared `temporal-polyfill` to `^1.0.8` (`temporal-polyfill-peer-range-moves-to-1-0-8`), and move a declared `@prisma/cli-engine` to `0.10.4` (`engine-pin-moves-to-0-10-4`). Then upgrade the Prisma packages.
 3. Change the config and the scripts that call the control client: the renamed config type (`config-type-renamed-to-prisma-config`), the modules a hand-assembled config names (`hand-assembled-config-names-generated-file-modules`), `typesModule` and the removed `projectDir` (`control-api-takes-types-module`), the removed `publish-surface` entries (`toolchain-publish-surface-entrypoints-removed`), the arguments of `typescriptContractFromPath` (`typescript-contract-from-path-requires-target`), and the `migrate`, `dbUpdate` and `dbSign` options (`migrate-options-ref`, `db-sign-invocation`, `permit-policy-change`). Change the commands that run `prisma db migrate`, in scripts, deploys and docs, for the `db` ref it now advances (`db-migrate-advances-db-ref`).
-4. Change the contract sources. Make each TypeScript contract import `defineContract` from its config's target (`typescript-contract-for-another-target-refused`). Save every schema file as UTF-8 (`psl-schema-must-be-utf8`). Rewrite the renamed types and helpers: `sql.String` (`psl-renamed-sql-string`, `ts-renamed-sql-string`), the PostgreSQL and SQLite column helpers (`ts-renamed-postgres-json-column-helper`, `ts-renamed-sqlite-column-helpers`), SQLite's `BigIntNumber` (`sqlite-bigintnumber-deprecated`) and MongoDB's `Int64` (`psl-renamed-mongo-int64`, `ts-removed-mongo-int64-helper`, and optionally `psl-optional-mongo-convenience-names`). Fix each `hasOne` relation without a unique key (`has-one-key-must-be-unique`) and each attribute of a single-table variant that emit refuses (`sti-variant-unscoped-index-refused`). Rename anything named `__proto__` (`sql-proto-names-refused`, `mongo-proto-names-refused`).
+4. Change the contract sources. Make each TypeScript contract import `defineContract` from its config's target (`typescript-contract-for-another-target-refused`). Save every schema file as UTF-8 (`psl-schema-must-be-utf8`). Rewrite the renamed types and helpers: `sql.String` (`psl-renamed-sql-string`, `ts-renamed-sql-string`), the PostgreSQL and SQLite column helpers (`ts-renamed-postgres-json-column-helper`, `ts-renamed-sqlite-column-helpers`), SQLite's `BigIntNumber` (`sqlite-bigintnumber-deprecated`) and MongoDB's `Int64` (`psl-renamed-mongo-int64`, `ts-removed-mongo-int64-helper`, and optionally `psl-optional-mongo-convenience-names`). Fix each `hasOne` relation without a unique key (`has-one-key-must-be-unique`) and each attribute of a single-table variant that emit refuses (`sti-variant-unscoped-index-refused`). Rename anything named `__proto__` (`sql-proto-names-refused`, `mongo-proto-names-refused`), including a SQL `select` alias (`sql-select-alias-proto-refused`); on MongoDB, read that section first, because some renames need stored documents moved. On Postgres, rename a table or column named `__proto__` in the database before the next `prisma contract infer` (`postgres-infer-proto-name-refused`).
 5. Run `prisma contract emit` once for every contract and commit what it writes. One emit covers `contract-types-import-from-the-target-package`, `re-emit-for-include-capabilities`, `re-emit-mysql-contract-for-aggregates`, `mysql-reemit-contract`, `sqlite-decimal-codec`, `ts-sqlite-decimal-codec`, `sti-variant-foreign-keys-stored`, `json-default-proto-key-kept` and `contract-artifacts-restamp`. Leave the contract copies under `migrations/` as they are.
 6. Before you plan any migration, read what the planner now does: on PostgreSQL and SQLite a changed stored name is a rename (`sql-stored-name-change-is-a-rename`, `sql-stored-name-delete-is-unused`, `sql-stored-name-empty-table`, `sql-stored-name-swaps-refused`, `sql-lowered-table-names-renamed`), and on MongoDB changes inside documents are asked about and planned (`mongo-nested-removals-are-asked`, `mongo-nested-statements-are-planned`, `mongo-nested-required-field-gets-temporary-value`). A migration planned in the next step can hold such renames. If you add `@@map` to keep a table's old name, run `prisma contract emit` again first.
-7. Bring each database up to date. Plan and apply a migration for a new unique key (`has-one-key-must-be-unique`), for a JSON default that has a `__proto__` key (`json-default-proto-key-kept`) and for the indexes and foreign keys of single-table variants (`sti-variant-unscoped-index-refused`, `sti-variant-foreign-keys-stored`). On SQLite, fix stored values the stricter codecs refuse (`sqlite-decimal-codec`, `sqlite-integer-safe-range`), then sign the database with the new contract as the SQLite section describes. One migration can cover all of these. In a project that applied its earlier migrations with `db migrate` and no `--advance-ref`, there is no `db` ref for `migration plan` to start from: pass `--from <latest migration>`, as the SQLite section shows.
+7. Bring each database up to date. Plan and apply a migration for a new unique key (`has-one-key-must-be-unique`), for a JSON default that has a `__proto__` key (`json-default-proto-key-kept`; on MySQL its section has you write that change by hand, and on SQLite there is none) and for the indexes and foreign keys of single-table variants (`sti-variant-unscoped-index-refused`, `sti-variant-foreign-keys-stored`). On SQLite, fix stored values the stricter codecs refuse (`sqlite-decimal-codec`, `sqlite-integer-safe-range`), then sign the database with the new contract as the SQLite section describes. One migration can cover all of these. In a project that applied its earlier migrations with `db migrate` and no `--advance-ref`, there is no `db` ref for `migration plan` to start from: pass `--from <latest migration>`, as the SQLite section shows.
 8. Change the application code: work sent on a transaction while an ORM write runs on it (`orm-write-inside-transaction-suspends-tx`), update data that sets a discriminator (`update-data-refuses-discriminator`), `update()` data that sets a foreign key and also has a callback on its relation (`foreign-key-with-relation-callback-refused`), tables whose only unique key has a nullable column (`nullable-unique-key-is-no-row-identity`), the ORM error codes of nested relation mutations (`relation-mutation-error-codes-merged`), nested creates on a polymorphic model (`nested-create-on-polymorphic-target-needs-variant`, `variant-create-without-returning-names-create`), `disconnect` (`disconnect-on-required-relation-refused`, `to-one-disconnect-criteria-applied`, `disconnect-empty-criteria-disconnects-nothing`), `onConflict: 'skip'` (`create-all-skip-refuses-rows-without-conflict-key`, `create-all-skip-refuses-tables-without-keys`), SQL builder comparisons (`sql-builder-enum-comparison-values-are-checked`), code that reads `meta.target` from a MySQL error (`mysql-errors-drop-meta-target`), scripts that read the `--json` result of `prisma orm init` (`init-target-takes-a-package-name`) and code that matches the first line of `CLI.CONSENT_REQUIRED` (`consent-required-summary-is-one-fixed-sentence`). Three of these fixes change the contract: giving a table a primary key or required key fields (`nullable-unique-key-is-no-row-identity`), giving a table a key for `onConflict: 'skip'` (`create-all-skip-refuses-tables-without-keys`), and making a foreign key optional (`disconnect-on-required-relation-refused`). After any of them, emit the contract and plan and apply a migration again.
 
 
@@ -1118,7 +1134,7 @@ To write your own value instead, plan the change with `migration plan --backfill
 
 ## Names and keys that JavaScript objects inherit
 
-Names such as `constructor` and `toString` now work everywhere as model, table, column and field names, and need no action. Three cases with `__proto__` do.
+Names such as `constructor` and `toString` now work everywhere as model, table, column and field names, and need no action. Five cases with `__proto__` do, one section each below.
 
 ### `json-default-proto-key-kept`
 
@@ -1129,37 +1145,97 @@ model User {
 }
 ```
 
-`prisma contract emit` used to leave the `__proto__` key out of `contract.json` and out of the storage hash, so the database got the default `{"a": 2}`. It now keeps the key. For each file the detection matches:
+A Prisma 7 schema writes the same default as a string, `meta Json @default("{\"__proto__\": {\"x\": 1}, \"a\": 2}")`, and is affected in the same way.
 
-1. Run `prisma contract emit`. The storage hash changes.
-2. Run `prisma migration plan` and apply the migration, or run `prisma db update`. Either plans one operation per such column, `Set default on "<table>"."<column>"`.
+`prisma contract emit` used to leave the `__proto__` key out of `contract.json`. On Postgres and MySQL it also left it out of the storage hash, so the database got the default `{"a": 2}`. It now keeps the key. What to do for each file the detection matches depends on the database:
 
-Until the operation is applied, the SQL runtime logs `CONTRACT.MARKER_MISMATCH` as a warning and still runs queries. If you do not want the key in the default, remove it from the contract source instead.
+- **Postgres.** Run `prisma contract emit`; the storage hash changes. Then run `prisma migration plan` and apply the migration, or run `prisma db update`. Either plans one operation per such column, `Set default on "<table>"."<column>"`.
+- **MySQL.** Run `prisma contract emit`; the storage hash changes. The migration planner does not plan a change of a column's default, so create a migration with `prisma migration new` and write a raw SQL operation in it that sets the column's default.
+- **SQLite.** No action. SQLite stores the default as JSON text that already kept the key, so nothing changes.
+
+Until the default is applied, the SQL runtime logs `CONTRACT.MARKER_MISMATCH` as a warning and still runs queries. If you do not want the key in the default, remove it from the contract source instead.
 
 ### `mongo-proto-names-refused`
 
-JavaScript reads `__proto__` as the prototype of an object rather than as a key, so a contract could not hold such a name: the client lost the model or collection. A MongoDB contract now refuses it. The TypeScript builder raises `CONTRACT.NAME_UNUSABLE_AS_KEY`; a PSL contract reports `PSL_STORED_NAME_UNSUPPORTED` at the declaration:
+JavaScript reads `__proto__` as the prototype of an object rather than as a key, so a contract could not hold such a name: the client lost the model, field, relation or collection. A MongoDB contract now refuses it. The TypeScript builder raises `CONTRACT.NAME_UNUSABLE_AS_KEY`; a PSL contract reports `PSL_STORED_NAME_UNSUPPORTED`:
 
 ```text
 A model is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-In a PSL contract, an enum named `__proto__` is not refused: it is left out of the contract without an error, together with every field typed by it.
+Rename the model, field, relation, composite type, enum or root. What a rename does to stored documents is listed below. Two rules hold for every update and copy in this section. Stop every process that writes to the collections involved, the old and the new, before you start, and restart one only when the move has finished, including any run you repeat, and the process uses the new names. And where an update moves a value to `<new name>`, choose a name that no document already uses as a key in that place; otherwise one of the two values is lost.
 
-Rename the model, composite type, enum or root. For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there, so rename that collection in the database to the new name (`renameCollection`) in the same deployment. The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
+- **A model's field.** Keep its stored name with `@map("…")`, or `.mongo({ field })` in TypeScript, and no document changes. A field stored as `__proto__` cannot keep that stored name; give it another one. The TypeScript builder and Mongo PSL already refused such a field. A Prisma 6 schema with a field named `__proto__` and no `@map` lost the field from the contract without an error; documents may hold its values under a top-level `__proto__` key, so move them with the top-level update in the relation bullet below.
+- **A member of a composite type or value object.** It is always stored under its own name, so renaming it changes the key in the embedded documents. Documents may already hold values under `__proto__`, and a rename leaves them under the old key. Move them to the new key. For a member of an embedded document:
+
+  ```js
+  db.getCollection("<collection>").updateMany(
+    { "<field>.__proto__": { $exists: true } },
+    [{ $set: { "<field>.<new name>": "$<field>.__proto__" } }, { $unset: "<field>.__proto__" }],
+  )
+  ```
+
+  For a list of composite values, rename the key in each element:
+
+  ```js
+  db.getCollection("<collection>").updateMany(
+    { "<field>.__proto__": { $exists: true } },
+    [{ $set: { "<field>": { $map: { input: "$<field>", as: "e", in: { $arrayToObject: { $map: {
+      input: { $objectToArray: "$$e" }, as: "kv",
+      in: { k: { $cond: [{ $eq: ["$$kv.k", "__proto__"] }, "<new name>", "$$kv.k"] }, v: "$$kv.v" },
+    } } } } } } }],
+  )
+  ```
+- **A relation.** A reference relation's name is not stored, so no document changes. An embed relation is stored under its name, or under the name the TypeScript contract gives it with `storageRelations`. The client never read or wrote an embed relation named `__proto__`, and a create dropped the value of one stored as `__proto__`; that stored name is now refused with `CONTRACT.ARGUMENT_INVALID`. Give the relation another name or stored name. An embed relation is stored at the top level of the document, so to move embedded documents that another writer stored under `__proto__`, use this update:
+
+  ```js
+  db.getCollection("<collection>").updateMany(
+    { ["__proto__"]: { $exists: true } },
+    [{ $set: { "<new name>": "$__proto__" } }, { $unset: "__proto__" }],
+  )
+  ```
+
+  Write the filter key as `["__proto__"]`. Written as `"__proto__":` it sets the filter's prototype, the filter matches every document, and the update removes `<new name>` from documents that have no `__proto__`.
+
+The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
+
+For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there. In `mongosh`, `db.__proto__` is not the collection, so name it with `db.getCollection("__proto__")`. A write that reaches `__proto__` after the move is lost, because `db update` drops that collection, or you drop it after the copy; and a repeated copy overwrites what a writer changed in the new collection in the meantime. How to move the documents depends on the command you apply changes with:
+
+- **`prisma db update`.** Rename the collection in the database first, then emit the contract and run `db update`. If you run `db update` first, it plans to drop the collection named `__proto__`, with its documents.
+
+  ```js
+  db.getCollection("__proto__").renameCollection("<new name>")
+  ```
+
+- **`prisma migration plan`.** Emit the contract and apply the migration, which creates the new collection. Then copy the documents into it, and drop the old collection when the application reads the new one correctly. The copy checks each document against the new collection's validator and stops at one it rejects; fix that document and run the copy again.
+
+  ```js
+  db.getCollection("__proto__").aggregate([{ $merge: { into: "<new name>" } }])
+  db.getCollection("__proto__").drop()
+  ```
 
 ### `sql-proto-names-refused`
 
-A SQL contract refuses the same name. A namespace, table, column, model, field or enum named `__proto__`, including a stored name given with `@@map("__proto__")` or `@map("__proto__")`, fails `prisma contract emit` with:
+A SQL contract now refuses `__proto__` as the name of a table, column, model, field, relation, enum, namespace or any other name it keys an object by, with `CONTRACT.NAME_UNUSABLE_AS_KEY`:
 
 ```text
-CONTRACT.NAME_UNUSABLE_AS_KEY: A table in namespace "public" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
+The namespace of table "users" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-Choose another name. In a TypeScript contract, an object literal with a `__proto__:` key is refused too; it used to drop the entry without an error. Such a contract did not work before: the entry was dropped or the contract came out wrong.
+What happened before:
 
-A SQL query builder `select` that names a result column `__proto__` is refused with `RUNTIME.AST_INVALID`; choose another alias.
+- A table or column stored as `__proto__`, and a model named `__proto__`, already failed `prisma contract emit` with an unrelated error. They now fail with this one.
+- A field named `__proto__` and stored under another name, as in `__proto__ String @map("label")`, emitted, but the field was missing from the model. So was an entry written as a `__proto__:` key in a TypeScript object literal. Both are now refused; the object literal has its own message, which says the record is not a plain object.
 
+Rename the field in the contract source and keep its stored name with `@map`; no database change is needed. If the database has a table or column named `__proto__`, rename it in the database too.
+
+### `sql-select-alias-proto-refused`
+
+A SQL query builder `select` that names a result column `__proto__`, as in `select('__proto__', …)` or a `select` callback that returns a record with that key, is refused with `RUNTIME.AST_INVALID` while the query is built. Such a column could never come back as a key of the row. Choose another alias.
+
+### `postgres-infer-proto-name-refused`
+
+`prisma contract infer` now fails with `CONTRACT.INFER_UNSUPPORTED` when the database has a table or column named `__proto__`, and names it. It used to leave such a table out of the inferred contract without a word, so the next plan would have dropped it. No contract source accepts the name, so rename the table or column in the database before running `contract infer` again.
 
 ## Concurrent work on `tx` during an ORM write
 
