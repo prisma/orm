@@ -313,7 +313,7 @@ The inner adapter receives database field names and already-converted values fro
 - **Sorting on `Boolean` fields.** Prisma 8's boolean type has no ordering.
 - **Serialising SQLite transactions inside the adapter.** The wait belongs to the SQLite driver.
 - **`auth migrate`.** Better Auth's CLI refuses it for any adapter but its own Kysely one. Users migrate with Prisma.
-- **Where the package lives after it leaves this repository**, and offering the code to Better Auth's repository.
+- **Moving the package out of this repository.** It moves to its own repository when Prisma 8 reaches general availability, which the package README records. Offering the code to Better Auth's repository stays undecided.
 - **Changes to the framework, the SQL family, the targets or the ORM client.** The project adds a package, an example and tests, and touches repository tooling.
 
 ## Place in the larger world
