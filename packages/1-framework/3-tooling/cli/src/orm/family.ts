@@ -126,7 +126,7 @@ const redirects: readonly RedirectSpec[] = [
       '{bin} db migrate --advance-ref db',
     ],
     reason:
-      'Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration status`, which prints the `migration plan` that plans it from where the database is, and run that plan (for `--create-only`, stop here), then `db migrate --advance-ref db`.',
+      'Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration status`, which prints the `migration plan` that plans it from where the database is, and run that plan (for `--create-only`, stop here), then `db migrate --advance-ref db`. When migrations on disk already lead to the new contract, `migration status` prints no plan, and `db migrate --advance-ref db` applies them.',
     whileMigrationsStayOnPrisma7: true,
     help: 'contract emit',
   }),

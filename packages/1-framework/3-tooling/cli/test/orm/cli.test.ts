@@ -209,7 +209,7 @@ describe('a retired invocation', () => {
   it.each([
     {
       path: 'migrate dev',
-      why: "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration status`, which prints the `migration plan` that plans it from where the database is, and run that plan (for `--create-only`, stop here), then `db migrate --advance-ref db`. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate dev` instead.",
+      why: "Prisma 8 emits the contract, plans the migration and applies it in separate steps: run `contract emit`, then `migration status`, which prints the `migration plan` that plans it from where the database is, and run that plan (for `--create-only`, stop here), then `db migrate --advance-ref db`. When migrations on disk already lead to the new contract, `migration status` prints no plan, and `db migrate --advance-ref db` applies them. While Prisma 7 still owns this project's migrations, install its CLI with `npm install --save-dev @prisma/prisma7@7` and run `prisma7 migrate dev` instead.",
       nextActions: [
         step(1, 'prisma-test contract emit'),
         step(2, 'prisma-test migration status'),
