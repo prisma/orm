@@ -24,7 +24,8 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Query features | 10 of 11 (91%) | `█████████░` | 1 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
 | Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
-| **All streams** | **34 of 46 (74%)** | `███████░░░` | **5** | **7** |
+| Compatibility policy | 0 of 1 (0%) | `░░░░░░░░░░` | 0 | 1 |
+| **All streams** | **34 of 47 (72%)** | `███████░░░` | **5** | **8** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -137,6 +138,24 @@ Work found after the plan was made goes here, so the first five streams keep the
 | 11 | ⏳ | PostgreSQL `Json` fields refuse a value that is not JSON. Today the codecs store a changed value with no error: a `Date` becomes text, an `undefined` member is dropped, `NaN` becomes `null` | Not decided | Will | Not started. TML-3778, backlog. MongoDB, MySQL and MariaDB already refuse such a value, and the check they share is in `@internal/type-implementations/json`, so the change is small. It makes writes fail that succeed today, so it has to land before GA if it lands at all | Place it for GA |
 | 12 | ⏳ | Remove the deprecated type names before GA, or keep them through Prisma 8. The decision records keep a renamed name "for one release line" and do not say whether the release candidates are that line | Not decided | Will | Not started, no ticket. The names: PostgreSQL `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit`; `sql.String(n)` on every SQL database; MongoDB `Int64`; SQLite `BigIntNumber`. Each still works and warns `PSL_DEPRECATED_SCALAR_NAME`. Removing one is breaking, so names that ship in 8.0 stay until Prisma 9 | Decide: remove before GA or keep |
 | 13 | ⏳ | Querying other contract spaces: find out whether it needs a breaking change. An application's queries reach only its own contract space today; we want them to reach the models of another space, such as an extension pack's, in Prisma 8 | Must (research, and a spike if needed) | Will | Added 2026-11-20. Not started, no ticket. Building the feature can follow GA. What must happen before GA is the research, because a breaking change it needs cannot land after 8.0 | Research the design; spike if the answer is unclear |
+
+## Stream 7: Compatibility policy
+
+**GA readiness:** 0 of 1 Must projects done (0%). 0 in progress, 1 not started.
+
+What we promise a user who upgrades within Prisma 8, and the work that makes the promise true. Will asked for it as its own stream on 2026-11-23. The design was agreed with Will on 2026-11-23 and is in [ga-readiness/spec.md](ga-readiness/spec.md) (the policy) and [ga-readiness/maturity-levels.md](ga-readiness/maturity-levels.md) (Early Access, Preview and GA, for packages and for single APIs). The tasks are in [ga-readiness/plan.md](ga-readiness/plan.md); the rows below follow it. The rows are not in priority order yet, and only row 1 has a GA decision, because the policy says it happens before `8.0.0`.
+
+| # | Progress | Project | GA | Owner | Status | Next |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | ⏳ | Reduce what each published package exports to what we intend to support for the whole major, and rename every published import path that contains `internal` | Must | Will | Not started | |
+| 2 | ⏳ | Fix the Supabase extension's relationship to the PostgreSQL package. It imports the PostgreSQL package's `internal` paths, which row 1 renames | Not decided | Will | Not started. The target relationship is not decided | |
+| 3 | ⏳ | Define Early Access, Preview and GA in full, and publish them as a page in the Prisma 8 docs in place of the five labels used there today | Not decided | Will | Working definitions agreed. Not started | |
+| 4 | ⏳ | A check that compares each package's exported API with the last release: it fails on a removal or an incompatible change, and reports every addition | Not decided | Will | Research done. Not started | |
+| 5 | ⏳ | The ORM keeps its own tables (marker, ledger, contract) up to date in an existing database, so no upgrade fails because they are missing or in an older form | Can follow GA | Will | Requirement agreed. Needs a design document. Not started | |
+| 6 | ⏳ | State, for each runtime, database and driver, which event ends our support for a version, and publish it on the supported-versions page | Not decided | Will | Not started | |
+| 7 | ⏳ | The upgrade tool: where an upgrade needs a change to a user's project, a deterministic tool makes it | Not decided | Will | Principle agreed. Not started | |
+| 8 | ⏳ | Finish renaming "extension pack" to "extension" in the docs, the code and the docs site | Not decided | Will | Not started | |
+| 9 | ⏳ | Check every rule in the policy against the code and add a task for each one that is not yet true | Not decided | Will | In progress since 2026-11-23 | |
 
 ## Databases
 

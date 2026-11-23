@@ -6,7 +6,7 @@ It lives on the branch `planning/prisma-8-ga`. The branch is for reading and sha
 
 ## Where to start
 
-Read [plan.md](plan.md). It is one page. It lists every project in priority order, in five streams, and says which projects GA cannot ship without.
+Read [plan.md](plan.md). It is one page. It lists every project in priority order, in seven streams, and says which projects GA cannot ship without.
 
 | Stream | What it covers |
 | --- | --- |
@@ -15,6 +15,8 @@ Read [plan.md](plan.md). It is one page. It lists every project in priority orde
 | 3 | Editor and tools |
 | 4 | Query features |
 | 5 | Docs and the new user's first hour |
+| 6 | Work found along the way |
+| 7 | Compatibility policy: what we promise a user who upgrades within Prisma 8. The policy itself is in [ga-readiness/spec.md](ga-readiness/spec.md) |
 
 If you work on language tools or queries, streams 3 and 4 are yours to read first.
 

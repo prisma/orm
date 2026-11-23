@@ -9,6 +9,7 @@ This file is for an agent picking up the planning discussion with Will. People s
 | File | What it holds | How current |
 | --- | --- | --- |
 | [plan.md](plan.md) | The projects in priority order, by stream | Kept current. This is the source of truth for order. |
+| [ga-readiness/](ga-readiness/) | Stream 7. The compatibility policy (`spec.md`), the maturity levels (`maturity-levels.md`), its tasks (`plan.md`), and the analysis and research behind them | Agreed with Will 2026-11-23. `spec.md` holds only agreed decisions. |
 | [evidence.md](evidence.md) | The pull requests, tickets and dates behind each status in plan.md | Kept current with plan.md. |
 | [decisions.md](decisions.md) | Every decision Will has made, with reasons, and the principles | Kept current. |
 | [context.md](context.md) | Findings and reasoning behind the decisions, and the changes made in Linear and pull requests | Written 2026-09-29 |
