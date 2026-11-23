@@ -65,18 +65,26 @@ All three pull requests are merged, with the SQL contract builder fix that the S
 
 The project waits for the next regular release. No release is cut for this project alone. Reaching a user takes two releases: an ORM release, then a `prisma` CLI release, because the CLI pins `@prisma/orm-toolchain` to an exact version.
 
-After both releases:
+Both releases are published: ORM `8.0.0-rc.25` and the `prisma` CLI `8.0.0-rc.35`, which pins `@prisma/orm-toolchain` `8.0.0-rc.25`.
 
-- [ ] Repeat the run from published packages with no version forced: `prisma orm init --target @prisma/orm-sqlite`, `contract emit`, `migration plan`, typecheck and one query. A run on 2026-11-21 with the toolchain forced to the dev build `8.0.0-rc.24-dev.37` passed all but the direct `--target` form and the query, which it did not cover.
-- [ ] Check what `init --target` does for a package that has no `latest` tag.
-- [ ] Send the SQL Server team the versions and the note.
+- [x] Repeat the run from published packages with no version forced. Run on 2026-11-23 in a clean project: `prisma orm init --target @prisma/orm-sqlite --authoring psl --write-env --yes`, `prisma contract emit`, `prisma migration plan`, `prisma db migrate`, a typecheck, and one query that creates a user and reads it back. Every step exited 0.
+- [x] Check what `init --target` does for a package that has no `latest` tag. Read from the published CLI code, not run: `init` asks the registry for `<package>/latest`, and a 404 is reported as `CLI.INIT_TARGET_PACKAGE_NOT_VERIFIED`, "No package named … was found". The fix it prints works for this case: install the package yourself and run `init` again, and it reads the keyword from disk. The message is misleading for a package that exists under another tag; not fixed.
+- [x] Send the SQL Server team the versions and the note. Sent on 2026-11-24.
 - [ ] The SQL Server team confirms, in their repository, that their package works with `init` and `contract emit`.
 
 Riding with the close-out pull request:
 
 - [ ] The SQLite error for a refused table name says `A table in namespace "__unbound__"`, which shows an internal name to the user.
+- [ ] Update the status line of [sql-server-team.md](sql-server-team.md): both halves are released, with the two versions above.
 
-Not part of this project: the same unsafe reads and writes of name-keyed objects exist outside the SQL contract builder ([TML-3905](https://linear.app/prisma-company/issue/TML-3905)).
+Not part of this project, and open:
+
+- The published GitHub release text for `v8.0.0-rc.25` says a contract refuses a field named `__proto__`. For MongoDB that is false in that release. The corrected text is in `docs/releases/v8.0.0-rc.25.md`; editing the published release is a publishing step.
+- The MongoDB TypeScript contract builder accepts a wildcard index projection key `__proto__` written as a computed key, while Mongo PSL refuses that path. Nothing proves such a key survives every step from the contract to the database.
+- Whether to remove the short names `postgres` and `mongodb` from `init --target`, so every target is named by its package. Undecided.
+- The Drive skill change made during this project has no pull request in `prisma/ignite`. Undecided whether to open one.
+
+Done since: the same unsafe reads and writes of name-keyed objects outside the SQL contract builder ([prisma/orm#31173](https://github.com/prisma/orm/pull/31173), [prisma/orm#31185](https://github.com/prisma/orm/pull/31185)).
 
 ## Close-out
 
