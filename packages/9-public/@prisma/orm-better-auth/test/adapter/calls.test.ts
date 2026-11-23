@@ -59,11 +59,15 @@ model Legacy {
     adapterOver(client).create({ model: 'probe', data: { id, ...fields }, forceAllowId: true });
 
   describe('every call filters', () => {
-    it('delete removes every matching row', async () => {
+    it('delete removes every matching row and keeps the others', async () => {
       for (const id of ['d1', 'd2', 'd3']) await probe(id, { n: 90 });
+      await probe('d4', { n: 89 });
       const adapter = adapterOver(client);
       await adapter.delete({ model: 'probe', where: [{ field: 'n', value: 90 }] });
       expect(await adapter.count({ model: 'probe', where: [{ field: 'n', value: 90 }] })).toBe(0);
+      expect(await adapter.count({ model: 'probe', where: [{ field: 'id', value: 'd4' }] })).toBe(
+        1,
+      );
     });
 
     it('updateMany setting the values a row has returns the rows matched', async () => {
