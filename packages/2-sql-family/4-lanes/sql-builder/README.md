@@ -33,7 +33,7 @@ const rows = await db.users
   .innerJoin(db.users.as('inviter'), (f, fns) =>
     fns.eq(f.invitee.invited_by_id, f.inviter.id),
   )
-  .select('name')
+  .select((f) => ({ invitee: f.invitee.name, inviter: f.inviter.name }))
   .all();
 
 // Subquery as join source
@@ -51,6 +51,8 @@ const counts = await db.posts
   .having((_f, fns) => fns.gt(fns.count(), 1))
   .all();
 ```
+
+In a join, a column name that only one joined table has can be written by itself, as `'title'` or `f.title`. A name that two or more joined tables or aliases have must be written with its table, as `f.invitee.name`; written by itself it is a type error, and `select('name')` throws `ORM.COLUMN_UNKNOWN`.
 
 ### Row locking
 
