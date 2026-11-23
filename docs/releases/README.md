@@ -22,12 +22,13 @@ These files are drafted automatically by the [`draft-release-notes`](../../skill
   - User-facing migrations: `https://github.com/prisma/orm/blob/v<version>/skills/prisma-8/upgrading/app/upgrades/<transition-label>/`
   - Extension-author migrations: `https://github.com/prisma/orm/blob/v<version>/skills/prisma-8/upgrading/extension/upgrades/<transition-label>/`
 
-The section order is: **Breaking changes → Features → Fixes → New contributors**.
+The section order is: **Breaking changes → Features → Fixes → Known problems → New contributors**.
 
 1. **Breaking changes** — API removals or renames, semantic changes to existing APIs, contract-format changes. Say what the reader must *do*, not just what changed.
 2. **Features** — new capabilities.
 3. **Fixes** — bug fixes.
-4. **New contributors** — first-time contributors, with the PR that welcomed them.
+4. **Known problems** — defects the release is known to ship with and does not fix. Say what the reader sees and what to do, and whether the problem is new in the release. Most releases have none.
+5. **New contributors** — first-time contributors, with the PR that welcomed them.
 
 ## Template
 

@@ -228,7 +228,7 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*"target"\s*:\s*"mariadb")(?![\s\S]*"jsonAgg")'
   - id: mysql-reemit-contract
     summary: |
-      On MySQL and MariaDB, `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are now convenience types, and the target has new codecs for them. The emitted `contract.d.ts` gains aggregate result types for the new codecs. Re-emit the contract; `contract.json` and its hashes do not change, so the database needs no migration and no new signature.
+      On MySQL and MariaDB, `Int`, `BigInt`, `Float`, `Decimal`, `String`, `Boolean`, `Bytes` and `Json` are now convenience types, and the target has new codecs for them. The emitted `contract.d.ts` gains aggregate result types for the new codecs. Re-emit the contract; its hashes do not change, so the database needs no migration and no new signature. `contract.json` changes only by the capabilities `re-emit-for-include-capabilities` describes.
     detection:
       glob: "**/prisma.config.{ts,mts,cts,js,mjs}"
       matches:
@@ -257,7 +257,7 @@ changes:
         - '(?<![\w$])ActivityRoute(?![\w$])'
   - id: orm-write-inside-transaction-suspends-tx
     summary: |
-      An ORM write of more than one statement inside a transaction runs in a savepoint. While it runs, other work sent on the same transaction rejects with `RUNTIME.TRANSACTION_SUSPENDED`. The detection matches TypeScript sources that call `transaction` and `Promise.all` or `Promise.allSettled`.
+      An ORM write of more than one statement inside a transaction runs in a savepoint. While it runs, other work sent on the same transaction rejects with `RUNTIME.TRANSACTION_SUSPENDED`. On MySQL and MariaDB, when such a write fails with an error that ends the whole transaction, such as a deadlock, it rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. The detection matches TypeScript sources that call `transaction` and `Promise.all` or `Promise.allSettled`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -321,7 +321,7 @@ changes:
         - '(?<![\w$])(?:Mysql|Sqlite)TransactionContext(?![\w$])'
   - id: relation-mutator-writes-parameter
     summary: |
-      The boolean type parameter `FilteredWritesDisabled` of `RelationMutator` (its sixth) and `VariantRelationMutator` (its seventh), exported from `@prisma/orm-family-sql`, is replaced by `Writes extends 'many' | 'one' | 'none'`, which also decides whether the mutator offers the new `update(data)` and `delete()` members. Both types also take a new last type parameter, `DeleteDisabled extends boolean = false` (the tenth of `RelationMutator`, the eleventh of `VariantRelationMutator`), which makes `delete` unavailable. Code that passes the `Writes` argument replaces `false` with `'many'`, and `true` with `'one'` for a to-one relation in `update()` data or `'none'` in `create()` data. Code that leaves the argument out gets the default `'many'` and is unaffected. The types may be imported under another name; follow the local name.
+      The boolean type parameter `FilteredWritesDisabled` of `RelationMutator` (its sixth), exported from `@prisma/orm-family-sql/orm-client`, is replaced by `Writes extends 'many' | 'one' | 'none'`, which also decides whether the mutator offers the new `update(data)` and `delete()` members. The type also gains three parameters after `ParentLinkFields`: `NsId`, `ConflictActions` and `DeleteDisabled extends boolean = false`, which makes `delete` unavailable. `VariantRelationMutator` is new in this release and takes the same parameters after `VariantValue`. Code that passes the `Writes` argument replaces `false` with `'many'`, and `true` with `'one'` for a to-one relation in `update()` data or `'none'` in `create()` data. Code that leaves the argument out gets the default `'many'` and is unaffected. The types may be imported under another name; follow the local name.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -618,6 +618,9 @@ The value is unchanged. Its type is now a template string type, because the modu
 
 Remove every import of `@prisma/orm-toolchain/publish-surface` and its two subpaths. They held the table and the functions that translated module names when files were generated. That translation no longer happens, so there is nothing to call in their place.
 
+
+## A TypeScript contract must be built for the config's target
+
 ### `typescript-contract-from-path-requires-target`
 
 In every file the detection matches, give each call of `typescriptContractFromPath` from `@prisma/orm-family-sql/contract-ts/config-types`, under whatever name the file imports it, all three arguments. Pass the output path second, or `undefined` to keep the default beside the contract. Pass as the third an object with `target`, the pack ref of the target the config is for, and `contractBuilderModule`, that target's `contract-builder` entry, such as `@prisma/orm-postgres/contract-builder`. Keep any `defaultControlPolicy` and `createNamespace` the call already passed beside them. The option types are exported from the same entry as `TypeScriptContractFromPathOptions` and `ConfigTarget`, though an object literal is enough. The loader then refuses a contract built for another target with `CONTRACT.TARGET_MISMATCH`.
@@ -637,6 +640,9 @@ typescriptContractFromPath('prisma/contract.ts', 'prisma/contract.json', {
   createNamespace: postgresCreateNamespace,
 });
 ```
+
+
+## `prisma orm init` sets up a project from the target package
 
 ### `target-package-exports-an-init-contribution`
 
@@ -1034,7 +1040,7 @@ In each matched project, emit the contract again:
 pnpm prisma contract emit
 ```
 
-The generated `contract.d.ts` gains entries under `AggregateTypes` for the new codecs, such as `sum` over `mysql/decimal@1` and `avg` over `mysql/double@1`. `contract.json` does not change, so its hashes and the database's signature stay as they are, and no migration is needed. Leave the `contract.d.ts` copy inside each migration snapshot under `migrations/snapshots/` as it is.
+The generated `contract.d.ts` gains entries under `AggregateTypes` for the new codecs, such as `sum` over `mysql/decimal@1` and `avg` over `mysql/double@1`. The hashes in `contract.json` do not change, so the database's signature stays as it is and no migration is needed; `contract.json` changes only by the capabilities `re-emit-for-include-capabilities` describes. Leave the `contract.d.ts` copy inside each migration snapshot under `migrations/snapshots/` as it is.
 
 A SQL contract on MySQL or MariaDB is emitted once for this entry and `re-emit-for-include-capabilities`.
 
@@ -1064,10 +1070,12 @@ if (tx) {
 After:
 
 ```ts
-return handle.transaction((tx) => work(tx), options);
+return handle.inTransaction()
+  ? handle.transaction((tx) => work(tx))
+  : handle.transaction((tx) => work(tx), options);
 ```
 
-The member is always there (`activity-handle-transaction-and-in-transaction-required`), so the test for it goes too.
+The member is always there (`activity-handle-transaction-and-in-transaction-required`), so the test for it goes too. On a handle opened inside a transaction the callback runs in a savepoint, and passing options there rejects with `RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED`, so pass them only outside a transaction.
 
 A handle opened on a connection the caller holds runs the transaction on that connection and leaves it held after a commit or a rollback. After a failed `BEGIN`, a failed `ROLLBACK` or a timeout the connection is destroyed, and a later `release()` by its holder rejects.
 
@@ -1096,9 +1104,11 @@ A `SqlRuntimeBase` subclass that builds an `ActivityRoute` sets `transaction` to
 Where code runs an ORM write of several statements, such as a create with a nested relation, at the same time as other work on the same transaction, for example in `Promise.all`, await the write before sending the other work:
 
 ```ts
-await tx.orm.Post.create({ title, author: (author) => author.create(user) });
+await tx.orm.public.Post.create({ title, author: (author) => author.create(user) });
 await tx.execute(plan);
 ```
+
+On MySQL and MariaDB, when such a write fails with an error that ends the whole transaction, such as a deadlock, the rollback to the savepoint fails too. The write then rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. Before, it rejected with the database's error itself. Code that retries on the database's deadlock error reads that error from `error.cause`.
 
 ### `sql-runtime-base-own-transaction-removed`
 
@@ -1218,7 +1228,7 @@ Code that only receives `tx` from `db.transaction(...)` needs no change: the cal
 
 ### `relation-mutator-writes-parameter`
 
-`RelationMutator<TContract, ModelName, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, ConflictActions, DeleteDisabled>` and `VariantRelationMutator<TContract, ModelName, VariantValue, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, ConflictActions, DeleteDisabled>` used to take a boolean, `FilteredWritesDisabled`, in the place of `Writes`, and had no `DeleteDisabled`. Nested `update(data)` and `delete()` of one related row are new, and `Writes` says which row writes the mutator offers:
+`RelationMutator<TContract, ModelName, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, ConflictActions, DeleteDisabled>` and `VariantRelationMutator<TContract, ModelName, VariantValue, LinkWritesDisabled, BareDisconnectDisabled, DisconnectDisabled, Writes, ParentLinkFields, NsId, ConflictActions, DeleteDisabled>` are the types of the mutator a relation callback receives. `RelationMutator` used to take a boolean, `FilteredWritesDisabled`, in the place of `Writes`, and had no `NsId`, `ConflictActions` or `DeleteDisabled`; `VariantRelationMutator` is new in this release. Nested `update(data)` and `delete()` of one related row are new, and `Writes` says which row writes the mutator offers:
 
 | `Writes` | Relation | `where()` returns | `updateAll`, `deleteAll` | `update`, `delete` |
 | --- | --- | --- | --- | --- |
@@ -1230,7 +1240,7 @@ An unavailable member takes a `never` parameter, so a call is a type error.
 
 `DeleteDisabled` is `false` by default. It applies with `Writes = 'one'`: when it is `true`, `delete`, bare and after `where()`, takes a `never` parameter. With `Writes = 'many'` it has no effect. The ORM sets it on a relation whose foreign key, held by the record, is required.
 
-In every file the detection matches, find each use of `RelationMutator<...>` or `VariantRelationMutator<...>`. A file may import them under another name, as in `import type { RelationMutator as RM } from '@prisma/orm-family-sql'`; follow the local name. Where a use passes the `Writes` argument (the sixth for `RelationMutator`, the seventh for `VariantRelationMutator`):
+In every file the detection matches, find each use of `RelationMutator<...>` or `VariantRelationMutator<...>`. A file may import them under another name, as in `import type { RelationMutator as RM } from '@prisma/orm-family-sql/orm-client'`; follow the local name. Where a use of `RelationMutator` passes its sixth argument:
 
 - `false` becomes `'many'`.
 - `true` becomes `'none'` in `create()` data. In `update()` data it becomes `'one'` for a to-one relation, which offers `update` and `delete`; when the record holds the relation's foreign key and that key is required, also pass `DeleteDisabled = true`, because the ORM refuses `delete` there.
@@ -1253,13 +1263,13 @@ For each such call, keep one of the two. To point the record at another row, set
 
 ```ts
 // before
-await db.Post.where({ id: 10 }).update({
+await db.orm.public.Post.where({ id: 10 }).update({
   authorId: 2,
   author: (author) => author.connect({ id: 2 }),
 });
 
 // after
-await db.Post.where({ id: 10 }).update({
+await db.orm.public.Post.where({ id: 10 }).update({
   author: (author) => author.connect({ id: 2 }),
 });
 ```
@@ -1268,16 +1278,16 @@ To change or delete the row the record points at and also point the record at an
 
 ```ts
 // before
-await db.Post.where({ id: 10 }).update({
+await db.orm.public.Post.where({ id: 10 }).update({
   authorId: 2,
   author: (author) => author.update({ name: 'Ada' }),
 });
 
 // after
-await db.Post.where({ id: 10 }).update({
+await db.orm.public.Post.where({ id: 10 }).update({
   author: (author) => author.update({ name: 'Ada' }),
 });
-await db.Post.where({ id: 10 }).update({ authorId: 2 });
+await db.orm.public.Post.where({ id: 10 }).update({ authorId: 2 });
 ```
 
 
@@ -1352,7 +1362,25 @@ const nothingToRecord =
 
 In the control adapter, write `meta.policies` when `destination.databasePolicies` is set, and never reset `meta` otherwise: an upsert that used to set `meta` to `{}` on conflict leaves `meta` alone unless it records policies.
 
-Before the runner applies its first space, check that the policies the caller checked still hold, as the summary describes: a SQL target calls `checkDatabasePoliciesHeld(family, driver, expectedDatabasePolicies)`; a MongoDB runner calls `compareMarkerDatabasePolicies` and, after a failed marker write, `markerSwapFailure`.
+Before the runner applies its first space, check that the policies the caller checked still hold: a SQL target calls `checkDatabasePoliciesHeld(family, driver, expectedDatabasePolicies)`; a MongoDB runner calls `compareMarkerDatabasePolicies` and, after a failed marker write, `markerSwapFailure`.
+
+The other required changes, for every target:
+
+- `MigrationRunner.execute` takes an optional `expectedDatabasePolicies` beside `perSpaceOptions`. Once the runner holds its marker lock, and before it applies the first space, it reads the application space's marker and calls `compareMarkerDatabasePolicies(marker, expectedDatabasePolicies)`. On `moved` it returns `databasePoliciesMovedFailure(expectedDatabasePolicies, comparison.found)` (`MIGRATION.MARKER_CAS_FAILURE` with `meta.reason: 'databasePolicies'`) without running any operation. On `unreadable` it throws `errorMarkerPoliciesCorrupt` from `@prisma/orm-framework/errors/execution`.
+- The `MIGRATION.MARKER_CAS_FAILURE` a runner returns when the marker's storage hash moved under it carries `meta.reason: 'storageHash'`.
+- `ControlFamilyInstance.signSpaces` takes the same `expectedDatabasePolicies` beside `spaces` and compares them before it writes any marker, whether or not the application space is among `spaces`. When they no longer hold, it returns only a conflict for the application space with `reason: 'databasePolicies'`, `checked` and the `comparison`, and no `contract`. Every other conflict carries `reason: 'storageHash'`.
+- A ledger entry is written only when the run applied a migration edge, as before.
+
+For a SQL target:
+
+- The `destination` that `initMarker` and `updateMarker` of `SqlControlAdapter` take is the framework's `MarkerDestination`, which carries the optional `databasePolicies`. Store it with `storedDatabasePolicies` under `DATABASE_POLICIES_META_KEY`.
+- `insertMarker` takes `MarkerInsert`, a `MarkerDestination` without `databasePolicies`.
+
+For a MongoDB target:
+
+- `MongoControlAdapter.updateMarker` and `MarkerOperations.updateMarker` take an optional fifth argument, `checkedPolicies` (`DatabasePolicies`): the policies the run checked. The update then matches only a marker whose `meta.policies` reads as them.
+- `MarkerOperations` has a required `markerLocation`, the collection that holds the markers, which the runner names in errors.
+- When the marker update fails, `markerSwapFailure(found, expectedStorageHash, checkedPolicies)` from `@prisma/orm-family-mongo/family/control` reports a moved storage hash, moved policies, unreadable policies, or a marker changed and changed back. Map them to the storage-hash failure, `databasePoliciesMovedFailure`, `errorMarkerPoliciesCorrupt`, and a `MIGRATION.MARKER_CAS_FAILURE` with `meta.reason: 'markerChanged'`. Do not retry the update.
 
 ### `control-family-access-changes-of`
 
