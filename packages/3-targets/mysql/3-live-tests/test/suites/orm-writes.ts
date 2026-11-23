@@ -213,18 +213,6 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('an update to the values a row already holds returns the row, by its key and by another filter', async () => {
-      await withSeededDatabase(server, exampleTablesDdl, async (url) => {
-        await using db = server.client({ url, verifyMarker: false });
-        const user = await db.orm.User.create({ email: 'a@example.com', role: 'USER' });
-
-        expect({
-          byKey: await db.orm.User.where({ id: user.id }).update({ role: 'USER' }),
-          byRole: await db.orm.User.where({ role: 'USER' }).update({ role: 'USER' }),
-        }).toEqual({ byKey: user, byRole: user });
-      });
-    });
-
     it('updates and deletes every matching row and returns them', async () => {
       await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });

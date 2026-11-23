@@ -132,7 +132,6 @@ describe('deleteAll() that reads its rows first returns only the rows its DELETE
         { id: 2, name: 'Ada' },
       ],
     ]);
-    runtime.setNextStats([{ affectedRows: 2 }]);
 
     const rows = await collection.where({ name: 'Ada' }).select('id', 'name').deleteAll().toArray();
 

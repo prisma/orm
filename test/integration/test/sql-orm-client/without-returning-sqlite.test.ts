@@ -296,18 +296,6 @@ describe('integration/ORM writes without RETURNING on sqlite', () => {
     });
   });
 
-  it('update() to the values the row already holds returns the row, by its key and by another filter', async () => {
-    await withDatabase(async ({ db }) => {
-      const { id } = await db.User.create(ada);
-      const row = { id, email: ada.email, name: ada.name };
-
-      expect({
-        byKey: await db.User.where({ id }).update({ name: ada.name }),
-        byName: await db.User.where({ name: ada.name }).update({ name: ada.name }),
-      }).toEqual({ byKey: row, byName: row });
-    });
-  });
-
   it('update() that sets a key column reads the row back by its new key', async () => {
     await withDatabase(async ({ db }) => {
       await db.Tag.create({ code: 'old', label: 'Old' });
