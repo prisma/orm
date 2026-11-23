@@ -9,20 +9,27 @@ import { failureMessage } from '../../src/lib/failure-message';
 export default function SignIn() {
   const router = useRouter();
   const [error, setError] = useState<string>();
+  const [pending, setPending] = useState(false);
 
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return;
     const form = new FormData(event.currentTarget);
-    const { error } = await authClient.signIn.email({
-      email: String(form.get('email')),
-      password: String(form.get('password')),
-    });
-    if (error) {
-      setError(failureMessage(error, 'Sign in'));
-      return;
+    setPending(true);
+    try {
+      const { error } = await authClient.signIn.email({
+        email: String(form.get('email')),
+        password: String(form.get('password')),
+      });
+      if (error) {
+        setError(failureMessage(error, 'Sign in'));
+        return;
+      }
+      router.push('/');
+      router.refresh();
+    } finally {
+      setPending(false);
     }
-    router.push('/');
-    router.refresh();
   }
 
   return (
@@ -40,7 +47,9 @@ export default function SignIn() {
           </label>
         </p>
         {error && <p role="alert">{error}</p>}
-        <button type="submit">Sign in</button>
+        <button type="submit" disabled={pending}>
+          {pending ? 'Signing in…' : 'Sign in'}
+        </button>
       </form>
       <p>
         No account yet? <Link href="/sign-up">Sign up</Link>
