@@ -82,7 +82,7 @@ Then run \`prisma contract emit\` and update your database.`);
       ],
     };
     expect(contractMessage(compare(emptyContract, options))).toBe(
-      `Better Auth's models "user" and "User" have names that differ only in the case of the first letter. Prisma matches both to the model "User", and SQLite cannot hold both tables. Set a different "modelName" on one of them in your Better Auth configuration.`,
+      `Better Auth's models "user" and "User" have names that differ only in the case of the first letter, which this adapter does not support. Set a different "modelName" on all but one of them in your Better Auth configuration.`,
     );
   });
 

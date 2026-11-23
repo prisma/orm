@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { assertFieldName, assertModelName, isPslIdentifier } from '../../src/models/identifiers';
+import {
+  assertFieldName,
+  assertModelName,
+  caseOnlyNameCollisionMessage,
+  isPslIdentifier,
+} from '../../src/models/identifiers';
 
 describe('isPslIdentifier', () => {
   it.each(['user', 'User', 'two_factor', '_hidden', 'a1'])('accepts %s', (name) => {
@@ -33,5 +38,13 @@ describe('name assertions', () => {
   it('valid names pass', () => {
     expect(() => assertModelName('user')).not.toThrow();
     expect(() => assertFieldName('user', 'email')).not.toThrow();
+  });
+});
+
+describe('caseOnlyNameCollisionMessage', () => {
+  it('lists every name it is given', () => {
+    expect(caseOnlyNameCollisionMessage(['user', 'User', 'uSER'])).toBe(
+      `Better Auth's models "user", "User" and "uSER" have names that differ only in the case of the first letter, which this adapter does not support. Set a different "modelName" on all but one of them in your Better Auth configuration.`,
+    );
   });
 });

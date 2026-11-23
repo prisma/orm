@@ -121,7 +121,7 @@ export function betterAuthModels(
   }));
 }
 
-/** Groups of physical model names that differ only in the case of the first letter. The lookup and the printed PSL would give each group one model name, and SQLite cannot hold both tables. */
+/** Groups of physical model names that differ only in the case of the first letter, which the adapter refuses. */
 export function caseOnlyNameCollisions(models: readonly BetterAuthModel[]): string[][] {
   const byModelName = new Map<string, string[]>();
   for (const { physicalName } of models) {

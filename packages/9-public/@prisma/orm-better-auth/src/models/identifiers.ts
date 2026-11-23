@@ -22,7 +22,7 @@ export function invalidFieldNameMessage(model: string, field: string): string | 
 export function caseOnlyNameCollisionMessage(names: readonly string[]): string {
   const quoted = names.map((name) => `"${name}"`);
   const listed = `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`;
-  return `Better Auth's models ${listed} have names that differ only in the case of the first letter. Prisma matches ${names.length === 2 ? 'both' : 'all of them'} to the model "${upperFirst(names[0] ?? '')}", and SQLite cannot hold both tables. Set a different "modelName" on ${names.length === 2 ? 'one of them' : 'all but one'} in your Better Auth configuration.`;
+  return `Better Auth's models ${listed} have names that differ only in the case of the first letter, which this adapter does not support. Set a different "modelName" on all but one of them in your Better Auth configuration.`;
 }
 
 export function assertModelName(name: string): void {
