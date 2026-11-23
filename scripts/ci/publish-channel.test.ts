@@ -8,6 +8,7 @@ import {
   getPackageDistTag,
   getPublishChannel,
   parseCustomDistTag,
+  PRISMA_CLI_OWNED_DIST_TAGS,
   type PublishChannel,
   type PublishChannelInput,
 } from './publish-channel'
@@ -76,9 +77,16 @@ describe('getPackageDistTag', () => {
     assert.throws(() => getPackageDistTag('prisma', 'next'), /prisma\/prisma-cli owns it/)
   })
 
-  test('never maps prisma onto a tag prisma/prisma-cli owns', () => {
-    for (const tag of ['latest', 'dev']) {
-      assert.ok(!['latest', 'dev', 'next'].includes(getPackageDistTag('prisma', tag)))
+  test('never publishes prisma under a tag prisma/prisma-cli owns', () => {
+    const runTags = [...new Set([...cases.map(([, tag]) => tag), ...PRISMA_CLI_OWNED_DIST_TAGS])]
+    for (const runTag of runTags) {
+      let prismaTag: string
+      try {
+        prismaTag = getPackageDistTag('prisma', runTag)
+      } catch {
+        continue
+      }
+      assert.ok(!PRISMA_CLI_OWNED_DIST_TAGS.has(prismaTag), `${runTag} put prisma on ${prismaTag}`)
     }
   })
 })

@@ -4,7 +4,9 @@
  * `prev-dev` where other packages get `dev`. The `@prisma/*` packages have no Prisma 8 version, so their tags are
  * unchanged. Revisit these names when Prisma 9 ships and 8.x needs `prev`.
  */
-const PRISMA_DIST_TAGS: ReadonlyMap<string, string> = new Map([
+export const PRISMA_CLI_OWNED_DIST_TAGS: ReadonlySet<string> = new Set(['latest', 'dev', 'next'])
+
+const PRISMA_TAG_FOR_RUN_TAG: ReadonlyMap<string, string> = new Map([
   ['latest', 'prev'],
   ['dev', 'prev-dev'],
 ])
@@ -50,10 +52,10 @@ export function getPublishChannel({
  */
 export function getPackageDistTag(pkgName: string, tag: string): string {
   if (pkgName !== 'prisma') return tag
-  const prismaTag = PRISMA_DIST_TAGS.get(tag) ?? tag
-  if (prismaTag === 'next') {
+  const prismaTag = PRISMA_TAG_FOR_RUN_TAG.get(tag) ?? tag
+  if (PRISMA_CLI_OWNED_DIST_TAGS.has(prismaTag)) {
     throw new Error(
-      `Refusing to publish prisma under the "next" dist-tag: prisma/prisma-cli owns it for Prisma 8. Prisma 7 uses "prev" and "prev-dev".`,
+      `Refusing to publish prisma under the "${prismaTag}" dist-tag: prisma/prisma-cli owns it for Prisma 8. Prisma 7 uses "prev" and "prev-dev".`,
     )
   }
   return prismaTag
