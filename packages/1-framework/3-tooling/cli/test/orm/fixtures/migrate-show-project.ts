@@ -5,6 +5,7 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeRef } from '@internal/migration-tools/refs';
+import { ok } from '@internal/utils/result';
 import type { Block } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import { type Mock, vi } from 'vitest';
@@ -31,6 +32,7 @@ const commands = createBinCommands(
       readAllMarkers: mocks.readAllMarkers,
       readLedger: mocks.readLedger,
       migrate: mocks.migrate,
+      renderContractDts: async () => ok({ contractDts: '' }),
       close: mocks.close,
     }) as unknown as ControlClient,
 );
@@ -194,6 +196,7 @@ export function ormConfig(
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(cwd, 'contract.json'),
+      typesModule: '@acme/orm-db/contract-types',
     },
     migrations: { dir: 'migrations' },
     ...overrides,

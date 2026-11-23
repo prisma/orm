@@ -386,7 +386,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           retryCommandFor({
             commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
             rerunArgs: [
-              ...rerunFlags(args.flags),
+              ...rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
               ...[...planned, ...previewConsents, ...unansweredConsents(ctx.statements)].map(
                 statementFlag,
               ),
@@ -442,7 +442,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           answerQuestions: promptPlanQuestions(ctx.prompt, ctx.statements),
           invocation: {
             ...cliInvocation(ctx, args.flags.db),
-            rerunArgs: rerunFlags(args.flags),
+            rerunArgs: rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
             statementArgs,
           },
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
@@ -525,7 +525,10 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           { data: document },
           updatePresentations({
             document,
-            invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs: rerunFlags(args.flags) },
+            invocation: {
+              ...cliInvocation(ctx, args.flags.db),
+              rerunArgs: rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
+            },
             databaseStorageHash,
             contractPath: prepared.value.contractDisplayPath,
             database: prepared.value.database,

@@ -43,6 +43,11 @@ export function contractSnapshotDir(migrationsDir: string, storageHash: string):
   return join(migrationsDir, CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex(storageHash));
 }
 
+/** Whether the store holds a snapshot for `storageHash`, so `writeContractSnapshot` would write nothing. */
+export function hasContractSnapshot(migrationsDir: string, storageHash: string): Promise<boolean> {
+  return directoryExists(contractSnapshotDir(migrationsDir, storageHash));
+}
+
 /**
  * Recompute-and-compare integrity check for loaded contract snapshots,
  * mirroring `verifyMigrationHash` for migration packages and
@@ -190,7 +195,7 @@ export async function writeContractSnapshot(
     );
   }
 
-  if (await directoryExists(dir)) {
+  if (await hasContractSnapshot(migrationsDir, storageHash)) {
     return { written: false, dir };
   }
 

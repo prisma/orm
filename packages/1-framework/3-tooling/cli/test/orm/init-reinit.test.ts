@@ -261,7 +261,7 @@ describe('re-scaffolding over an existing project', () => {
         });
 
         expect(envelopeOf(run)).toMatchObject({
-          error: { code: 'CLI.CONSENT_REQUIRED', summary: expect.stringContaining(SCHEMA_PATH) },
+          error: { code: 'CLI.CONSENT_REQUIRED', why: expect.stringContaining(SCHEMA_PATH) },
         });
       },
       timeouts.coldTransformImport,
@@ -283,7 +283,7 @@ describe('re-scaffolding over an existing project', () => {
         expect(envelopeOf(run)).toMatchObject({
           error: {
             code: 'CLI.CONSENT_REQUIRED',
-            summary: expect.stringContaining('src/prisma/db.ts'),
+            why: expect.stringContaining('src/prisma/db.ts'),
           },
         });
         expect(readProjectFile(SCHEMA_PATH)).toBe(HAND_WRITTEN_SCHEMA);

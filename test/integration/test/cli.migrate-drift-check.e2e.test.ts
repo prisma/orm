@@ -91,7 +91,7 @@ async function incidentDatabase(ctx: JourneyContext): Promise<Incident> {
   expect((await planMigrationAndSelfEmit(ctx, ['--name', 'add-name'])).exitCode).toBe(0);
   const deleted = getLatestMigrationDir(ctx)!;
   const markerHash = migrationTo(ctx, deleted);
-  expect((await runMigrate(ctx)).exitCode).toBe(0);
+  expect((await runMigrate(ctx, ['--no-advance-ref'])).exitCode).toBe(0);
 
   rmSync(join(appMigrationsDir(ctx), deleted), { recursive: true, force: true });
   swapContract(ctx, 'contract-phone');
@@ -127,7 +127,7 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
             expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
-            const firstApply = await runMigrate(ctx, ['--json']);
+            const firstApply = await runMigrate(ctx, ['--no-advance-ref', '--json']);
             expect(firstApply.exitCode).toBe(0);
             const firstJson = parseJsonOutput<{ markerHash: string }>(firstApply);
             const staleMarker = firstJson.markerHash;
@@ -289,7 +289,7 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
             expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
-            expect((await runMigrate(ctx)).exitCode).toBe(0);
+            expect((await runMigrate(ctx, ['--no-advance-ref'])).exitCode).toBe(0);
 
             removeAppMigrationBundles(ctx);
             swapContract(ctx, 'contract-additive');
