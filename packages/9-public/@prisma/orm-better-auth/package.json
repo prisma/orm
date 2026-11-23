@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Better Auth database adapter for Prisma 8",
+  "description": "Better Auth database adapter for Prisma 8 (release candidate)",
   "keywords": [
     "better-auth",
     "prisma",

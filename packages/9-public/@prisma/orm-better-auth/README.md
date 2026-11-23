@@ -2,6 +2,8 @@
 
 Use [Better Auth](https://www.better-auth.com) with Prisma 8. The adapter stores Better Auth's users, sessions, accounts and verification tokens through your application's Prisma 8 client, on Postgres or SQLite.
 
+> **This package is a release candidate, as Prisma 8 itself is.** Its versions are `8.0.0-rc.N`, in step with the Prisma 8 packages. Until `8.0.0` is released, any release may contain breaking changes, and only the latest release candidate is maintained. See [Prisma 8's release candidates](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#release-candidates).
+
 ```ts
 // src/lib/auth.ts
 import { betterAuth } from 'better-auth';
