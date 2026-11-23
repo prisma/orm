@@ -95,10 +95,9 @@ const columnKindsDdl = `CREATE TABLE \`Kinds\` (
 describe('introspecting a MariaDB database made by hand', {
   timeout: timeouts.databaseOperation,
 }, () => {
-  it('verifies the example contract against tables MariaDB reports as int(11), with a current_timestamp(3) default MariaDB does not mark as generated', async (test) => {
+  it('verifies the example contract against tables MariaDB reports as int(11), with a current_timestamp(3) default MariaDB does not mark as generated', async () => {
     const { contract } = await emitFixture('example');
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withTables(url, exampleTablesDdl, async (driver) => {
           const actual = await introspect(driver, contract);
@@ -116,9 +115,8 @@ describe('introspecting a MariaDB database made by hand', {
     );
   });
 
-  it('reads each column type and default as MySQL 8.4 reports it, though MariaDB keeps display widths, quotes literals and reports no default as the text NULL', async (test) => {
+  it('reads each column type and default as MySQL 8.4 reports it, though MariaDB keeps display widths, quotes literals and reports no default as the text NULL', async () => {
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withTables(url, [columnKindsDdl], async (driver) => {
           const columns = (await introspect(driver)).tables['Kinds']?.columns ?? {};
@@ -169,7 +167,7 @@ describe('introspecting a MariaDB database made by hand', {
     );
   });
 
-  it('verifies a table made by hand with a column of each scalar convenience type and its default', async (test) => {
+  it('verifies a table made by hand with a column of each scalar convenience type and its default', async () => {
     const { contract } = await emitFixture('scalar-types');
     const measureDdl = `CREATE TABLE \`Measure\` (
       \`id\` int(11) NOT NULL,
@@ -186,7 +184,6 @@ describe('introspecting a MariaDB database made by hand', {
       PRIMARY KEY (\`id\`)
     )`;
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withTables(url, [measureDdl], async (driver) => {
           const actual = await introspect(driver, contract);
@@ -225,7 +222,7 @@ describe('introspecting a MariaDB database made by hand', {
     ["_binary'ab'", '6162'],
   ])(
     'reads the default %s on a longblob column as the bytes a row of it holds',
-    async ([written, rowHex], test) => {
+    async ([written, rowHex]) => {
       const { contract } = await emitFixture('scalar-types');
       const ddl = `CREATE TABLE \`Measure\` (
       \`id\` int NOT NULL,
@@ -233,7 +230,6 @@ describe('introspecting a MariaDB database made by hand', {
       PRIMARY KEY (\`id\`)
     )`;
       await withMysqlDatabase(
-        test,
         ({ url }) =>
           withTables(url, [ddl], async (driver) => {
             const data = (await introspect(driver, contract)).tables['Measure']?.columns['data'];
@@ -256,7 +252,7 @@ describe('introspecting a MariaDB database made by hand', {
     },
   );
 
-  it('keeps a binary and varbinary default as MariaDB reports it, since it shows a byte that is not UTF-8 as a question mark', async (test) => {
+  it('keeps a binary and varbinary default as MariaDB reports it, since it shows a byte that is not UTF-8 as a question mark', async () => {
     const ddl = `CREATE TABLE \`Fixed\` (
       \`id\` int NOT NULL,
       \`b\` binary(4) NOT NULL DEFAULT 0x61,
@@ -264,7 +260,6 @@ describe('introspecting a MariaDB database made by hand', {
       PRIMARY KEY (\`id\`)
     )`;
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withTables(url, [ddl], async (driver) => {
           const columns = (await introspect(driver)).tables['Fixed']?.columns ?? {};
@@ -286,7 +281,7 @@ describe('introspecting a MariaDB database made by hand', {
     );
   });
 
-  it('reads a longtext column as json only when MariaDB gave it the column check json_valid makes', async (test) => {
+  it('reads a longtext column as json only when MariaDB gave it the column check json_valid makes', async () => {
     const ddl = `CREATE TABLE \`Docs\` (
       \`id\` int NOT NULL,
       \`doc\` json,
@@ -298,7 +293,6 @@ describe('introspecting a MariaDB database made by hand', {
       CONSTRAINT \`docs_json\` CHECK (json_valid(\`tableChecked\`))
     )`;
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withTables(url, [ddl], async (driver) => {
           const columns = (await introspect(driver)).tables['Docs']?.columns ?? {};
@@ -322,7 +316,7 @@ describe('introspecting a MariaDB database made by hand', {
     );
   });
 
-  it('reads literal defaults through the codecs of the columns a contract declares', async (test) => {
+  it('reads literal defaults through the codecs of the columns a contract declares', async () => {
     const { contract } = await emitFixture('defaults');
     const itemDdl = `CREATE TABLE \`Item\` (
       \`id\` int(11) NOT NULL,
@@ -336,7 +330,6 @@ describe('introspecting a MariaDB database made by hand', {
       PRIMARY KEY (\`id\`)
     )`;
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withTables(url, [itemDdl], async (driver) => {
           const actual = await introspect(driver, contract);

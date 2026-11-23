@@ -567,7 +567,11 @@ describe('Journeys (MongoDB): variant statements', {
       code: 'MIGRATION.PRECHECK_FAILED',
       summary: expect.stringContaining('not fit the new validator'),
       text: expect.stringContaining('--backfill Task.type'),
-      advice: [expect.stringMatching(/^Plan it with `[^`]*migration plan --backfill Task\.type`/)],
+      advice: [
+        expect.stringMatching(
+          /^Plan it with `[^`]*migration plan (--from \S+ )?--backfill Task\.type`/,
+        ),
+      ],
       documents: [{ title: 'a' }],
     });
   });

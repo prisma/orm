@@ -19,4 +19,4 @@ MariaDB runs MySQL's runtime under its own target id, so every ORM read and writ
 
 ## Testing
 
-The live tests need `MYSQL_URL` and `MARIADB_URL` and skip a server whose URL is not set, except in CI, where `test/live-server.test.ts` fails without both. `docker compose up mysql mariadb` starts both servers.
+The live tests need both servers and fail when `MYSQL_URL` or `MARIADB_URL` is not set. `docker compose up -d --wait mysql mariadb` at the repository root starts both servers.

@@ -49,6 +49,11 @@ import {
   statusForMigrationHash,
 } from '../../control-api/operations/migration-status-overlay';
 import {
+  databasePositionOf,
+  migrationPlanArguments,
+  type PlanEnd,
+} from '../../control-api/operations/plan-arguments';
+import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
   resolveContractRef,
@@ -68,6 +73,12 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import {
+  cliCommand,
+  cliInvocation,
+  type PrintedPlan,
+  printedPlan,
+} from '../../utils/printed-command';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
@@ -151,14 +162,52 @@ function describeOrigin(origin: StatusOrigin): string {
     : 'the database state';
 }
 
-/** What a status path aims at: the app space's target, which `--to` may name, or an extension space's head. */
+/**
+ * What a status path aims at: the app space's target, which `--to` may name, with the
+ * `migration plan` that authors the missing path, or an extension space's head.
+ */
 export type StatusTarget =
   | {
       readonly kind: 'app';
       readonly explicitTarget: boolean;
       readonly refName: string | undefined;
+      readonly plan: PrintedPlan;
+      readonly listCommand: string;
     }
   | { readonly kind: 'extension'; readonly spaceId: string };
+
+/** Where `migration status` aims, as `migration plan` would end there: a ref, or a contract by its hash. */
+function statusPlanEnd(refName: string | undefined, targetHash: string): PlanEnd {
+  return refName === undefined
+    ? { kind: 'contract', hash: targetHash }
+    : { kind: 'ref', name: refName };
+}
+
+/** The summary with no migrations: the `migration plan` that writes the first, or why none can. */
+function firstPlanText(plan: PrintedPlan | undefined): string {
+  if (plan === undefined) return 'No migrations found';
+  switch (plan.kind) {
+    case 'runs':
+      return `No migrations found. Run \`${plan.command}\` to author the first.`;
+    case 'fill':
+      return `No migrations found. Run \`${plan.command}\` to author the first. ${plan.fill}.`;
+    case 'none':
+      return `No migrations found, and no migration plan can author the first. ${plan.reason}.`;
+  }
+}
+
+/** How the summary says to author the missing path, or why no `migration plan` can. */
+function authorText(target: { readonly plan: PrintedPlan; readonly listCommand: string }): string {
+  const { plan } = target;
+  switch (plan.kind) {
+    case 'runs':
+      return `Run \`${plan.command}\` to author one`;
+    case 'fill':
+      return `Run \`${plan.command}\` to author one. ${plan.fill}`;
+    case 'none':
+      return `No migration plan can author one. ${plan.reason}. Inspect the graph with \`${target.listCommand}\``;
+  }
+}
 
 export function buildNoPathSummary(args: {
   readonly origin: StatusOrigin;
@@ -172,13 +221,13 @@ export function buildNoPathSummary(args: {
     return `No migration path from ${markerPart} to the head of extension space \`${target.spaceId}\` (${targetShort}).`;
   }
   if (!target.explicitTarget) {
-    return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`;
+    return `No migration path from ${markerPart} to the application's contract (${targetShort}). ${authorText(target)}.`;
   }
   const targetLabel =
     target.refName !== undefined
       ? `the target (${targetShort} via \`${target.refName}\`)`
       : `the target (${targetShort})`;
-  return `No migration path from ${markerPart} to ${targetLabel}. Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
+  return `No migration path from ${markerPart} to ${targetLabel}. ${authorText(target)}, or pass \`--to <contract>\` to pick a reachable target.`;
 }
 
 export function buildStatusHeadline(args: {
@@ -379,6 +428,7 @@ export const migrationStatusCommand = defineOrmCommand({
     }
 
     const appGraph = aggregate.app.graph();
+    const invocation = cliInvocation(ctx, undefined);
     const refContext = { graph: appGraph, refs, contractHash };
 
     let toRef: ContractRef | undefined;
@@ -462,6 +512,7 @@ export const migrationStatusCommand = defineOrmCommand({
           readonly target: StatusTarget;
         }
       | undefined;
+    let firstPlan: PrintedPlan | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
 
@@ -490,6 +541,7 @@ export const migrationStatusCommand = defineOrmCommand({
         continue;
       }
       const graph = space.graph();
+      const planSpace = { graph, refs: space.refs, emittedHash: contractHash };
       const spaceContractHash = space.contract().storage.storageHash;
       const isAppSpace = entry.space === aggregate.app.spaceId;
       const targetHash = isAppSpace ? (activeRefHash ?? spaceContractHash) : spaceContractHash;
@@ -503,6 +555,23 @@ export const migrationStatusCommand = defineOrmCommand({
           ? { kind: 'offline', hash: fromOverrideHash }
           : undefined;
       const originHash = originHashOf(origin);
+      const appPlan = () =>
+        printedPlan(
+          invocation,
+          migrationPlanArguments(
+            planSpace,
+            origin === undefined
+              ? { kind: 'unknown', reason: 'migration status read no database to find where it is' }
+              : databasePositionOf(
+                  origin.kind === 'offline' ? origin.hash : origin.marker?.storageHash,
+                ),
+            statusPlanEnd(activeRefName, targetHash),
+          ),
+          ['--name', '<name>'],
+        );
+      if (isAppSpace && originHash !== targetHash && graph.nodes.size === 0) {
+        firstPlan = appPlan();
+      }
       const markerRead = origin?.kind === 'database' || (isAppSpace && liveTarget);
       const readMarker =
         origin?.kind === 'database' ? origin.marker : markerRead ? appMarker : undefined;
@@ -525,7 +594,13 @@ export const migrationStatusCommand = defineOrmCommand({
           origin,
           targetHash,
           target: isAppSpace
-            ? { kind: 'app', explicitTarget: to !== undefined, refName: activeRefName }
+            ? {
+                kind: 'app',
+                explicitTarget: to !== undefined,
+                refName: activeRefName,
+                plan: appPlan(),
+                listCommand: cliCommand(invocation, 'migration list'),
+              }
             : { kind: 'extension', spaceId: entry.space },
         };
       }
@@ -615,7 +690,7 @@ export const migrationStatusCommand = defineOrmCommand({
 
     const everySpaceEmpty = scopedSpaces.every((entry) => entry.migrations.length === 0);
     const pathSummary = everySpaceEmpty
-      ? 'No migrations found'
+      ? firstPlanText(firstPlan)
       : noPath !== undefined
         ? buildNoPathSummary(noPath)
         : buildStatusHeadline({

@@ -31,9 +31,9 @@ import {
   planSpaces,
   refuseForbiddenMigrations,
   type SpacePathOutcome,
-  toArgumentFor,
   unreachableSpaceFailure,
 } from './migrate';
+import { appSpaceOf, databasePositionOf } from './plan-arguments';
 import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
@@ -253,7 +253,8 @@ export async function executeMigrateShowPlan(
       // The preview refuses a run the database's policies would refuse, with the same envelope.
       const permitted = checkRunPolicies({
         command: 'db migrate',
-        appSpaceId: aggregate.app.spaceId,
+        app: appSpaceOf(aggregate),
+        markers: allMarkers,
         inForce,
         ref: namedRef,
         permitPolicyChange: options.permitPolicyChange ?? false,
@@ -314,7 +315,9 @@ export async function executeMigrateShowPlan(
       return notOk(
         neverPlannedSpaceFailure(outcome, {
           appSpaceId: aggregate.app.spaceId,
+          appSpace: appSpaceOf(aggregate),
           migrationsDir,
+          target: requestedTarget,
           invocation: options.invocation,
         }),
       );
@@ -329,10 +332,16 @@ export async function executeMigrateShowPlan(
                 ? outcome.markerHash
                 : contractHashAtMarker(outcome.liveMarker),
             targetHash: outcome.targetHash,
+            position: databasePositionOf(
+              outcome.kind === 'marker-outside-graph'
+                ? outcome.markerHash
+                : outcome.liveMarker?.storageHash,
+            ),
           },
           {
             appSpaceId: aggregate.app.spaceId,
-            toArgument: toArgumentFor(requestedTarget, appGraph),
+            appSpace: appSpaceOf(aggregate),
+            target: requestedTarget,
             invocation: options.invocation,
           },
         ),

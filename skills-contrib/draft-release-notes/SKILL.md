@@ -119,7 +119,8 @@ Write the entries under the fixed section order from [`docs/releases/README.md`]
 1. **Breaking changes** — API removals/renames, semantic changes to existing APIs, contract-format changes. Say what the reader must *do*, not just what changed.
 2. **Features** — new capabilities.
 3. **Fixes** — bug fixes.
-4. **New contributors** — first-time contributors, with the PR that welcomed them.
+4. **Known problems** — defects the release is known to ship with and does not fix; most releases have none.
+5. **New contributors** — first-time contributors, with the PR that welcomed them.
 
 Breaking changes lead because they are what a reader scanning the notes most needs to see. Every line links its PR as an **absolute markdown link** — `[#NNN](https://github.com/prisma/orm/pull/NNN)`, never bare `#NNN`. Bare references only autolink inside the GitHub Release body; they render as plain text when the committed `docs/releases/v<version>.md` is read as a repo file or in PR review, so the explicit link form is what makes every reference work in every context.
 
@@ -208,6 +209,10 @@ Fill the [`docs/releases/README.md`](../../docs/releases/README.md) template int
 ## Fixes
 
 - <bug fix>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>))
+
+## Known problems
+
+- <a defect this release ships with: what the reader sees, and what to do>.
 
 ## New contributors
 

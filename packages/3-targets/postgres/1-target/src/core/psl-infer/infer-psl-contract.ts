@@ -534,7 +534,7 @@ function refuseNameNoContractHolds(
   if (name !== NAME_THE_PSL_SOURCE_LOSES) return;
   throw postgresError(
     'CONTRACT.INFER_UNSUPPORTED',
-    `contract infer: ${kind} ${qualifiedName} has a name no contract can hold, because JavaScript reads it as the prototype of an object rather than as a key. Rename the ${kind} before re-running contract infer.`,
+    `contract infer: ${kind} ${qualifiedName} has a name no contract source accepts, because JavaScript reads it as the prototype of an object rather than as a key. Rename the ${kind} before re-running contract infer.`,
     { meta },
   );
 }

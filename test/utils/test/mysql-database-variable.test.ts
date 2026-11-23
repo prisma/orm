@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mysqlServerUrl, withMysqlDatabase } from '../src/mysql-database';
+import { requireMysqlServerUrl, withMysqlDatabase } from '../src/mysql-database';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -9,21 +9,24 @@ describe('the server variable of withMysqlDatabase', () => {
   it('is MYSQL_URL unless the caller names another', () => {
     vi.stubEnv('MYSQL_URL', 'mysql://root@mysql-host/');
     vi.stubEnv('MARIADB_URL', 'mysql://root@mariadb-host/');
-    expect([mysqlServerUrl(), mysqlServerUrl('MARIADB_URL')]).toEqual([
+    expect([requireMysqlServerUrl(), requireMysqlServerUrl('MARIADB_URL')]).toEqual([
       'mysql://root@mysql-host/',
       'mysql://root@mariadb-host/',
     ]);
   });
 
-  it('skips the test, naming the variable, when the variable the caller names is not set', async () => {
+  it('fails the test, saying how to start MySQL, when MYSQL_URL is not set', async () => {
+    vi.stubEnv('MYSQL_URL', '');
+    await expect(withMysqlDatabase(async () => 'ran')).rejects.toThrow(
+      'MYSQL_URL is not set. These tests need a MySQL server: run `docker compose up -d --wait mysql` at the repository root and set MYSQL_URL="mysql://root:root@127.0.0.1:3307/?allowPublicKeyRetrieval=true".',
+    );
+  });
+
+  it('fails the test, saying how to start MariaDB, when MARIADB_URL is not set', async () => {
     vi.stubEnv('MYSQL_URL', 'mysql://root@mysql-host/');
     vi.stubEnv('MARIADB_URL', '');
-    const skipped: (string | undefined)[] = [];
-    const ran = await withMysqlDatabase(
-      { skip: (note) => skipped.push(note) },
-      async () => 'ran',
-      'MARIADB_URL',
+    await expect(withMysqlDatabase(async () => 'ran', 'MARIADB_URL')).rejects.toThrow(
+      'MARIADB_URL is not set. These tests need a MariaDB server: run `docker compose up -d --wait mariadb` at the repository root and set MARIADB_URL="mysql://root@127.0.0.1:3308/".',
     );
-    expect({ ran, skipped }).toEqual({ ran: undefined, skipped: ['MARIADB_URL is not set'] });
   });
 });

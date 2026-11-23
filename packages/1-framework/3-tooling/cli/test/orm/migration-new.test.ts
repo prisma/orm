@@ -226,7 +226,13 @@ describe('migration new', () => {
         code: 'MIGRATION.HASH_NOT_IN_GRAPH',
         meta: { refName: 'db', resolvedHash: HASH_FROM },
       },
-      nextActions: [{ kind: 'user-choice', label: expect.stringContaining('migration plan') }],
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Run `prisma-test migration plan` first: on an empty graph it writes the baseline migration for the db ref, and a delta to the emitted contract when the contract changed. Then run `migration new` with `--from` the contract the new migration starts at, which `prisma-test migration list` shows: without it, `migration new` starts from the db ref, where a contract that did not change leaves nothing to scaffold.',
+        },
+      ],
     });
     expect(await scaffoldedDirs(project)).toEqual([]);
   });

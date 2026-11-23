@@ -2,12 +2,14 @@ import { asNamespaceId, type ContractWithDomain } from '@internal/contract/types
 import type { MigrationSubject } from '@internal/framework-components/control';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import type { QuestionMigrationPlan } from '../../../src/control-api/statements/plan-questions';
 import {
   askPlanQuestions,
   consentDescription,
   type PlannedQuestions,
   type PlanQuestion,
 } from '../../../src/control-api/statements/plan-questions';
+import { NOT_RECORDED, NOT_RECORDED_REASON, reference } from '../../utils/plan-origins';
 import { contractOf } from './statement-fixtures';
 
 const app = asNamespaceId('app');
@@ -31,6 +33,7 @@ async function questionsOf(input: {
   readonly preAnswers?: readonly { readonly verb: 'delete'; readonly text: string }[];
   /** The fields the plan gives a temporary value; none when left out. */
   readonly temporaryValues?: readonly MigrationSubject[];
+  readonly migrationPlan?: QuestionMigrationPlan;
 }) {
   const asked: PlanQuestion[] = [];
   const result = await askPlanQuestions<PlannedQuestions, never>({
@@ -62,6 +65,7 @@ async function questionsOf(input: {
       return batch.map(({ subject }) => ({ verb: 'delete', text: subject }));
     },
     replan: async () => ok({ dataLoss: [], accessChanges: [], temporaryValues: [] }),
+    ...(input.migrationPlan === undefined ? {} : { migrationPlan: input.migrationPlan }),
   });
   return { asked, consented: result.ok ? result.value.consented : undefined };
 }
@@ -110,18 +114,43 @@ describe('a question about a value object field', () => {
     const asked = await Promise.all(
       [
         { canConvert: true, temporaryValues: [geoPointField('latitude')] },
-        { canConvert: false, temporaryValues: [] },
-      ].map(async ({ canConvert, temporaryValues }) => {
+        {
+          canConvert: false,
+          temporaryValues: [],
+          migrationPlan: {
+            from: reference('db'),
+            to: { kind: 'default' as const },
+            invocation: undefined,
+          },
+        },
+        {
+          canConvert: false,
+          temporaryValues: [],
+          migrationPlan: {
+            from: NOT_RECORDED,
+            to: { kind: 'default' as const },
+            invocation: undefined,
+          },
+        },
+      ].map(async ({ canConvert, temporaryValues, migrationPlan }) => {
         const {
           asked: [question],
-        } = await questionsOf({ origin, destination, subject: lat, canConvert, temporaryValues });
+        } = await questionsOf({
+          origin,
+          destination,
+          subject: lat,
+          canConvert,
+          temporaryValues,
+          ...(migrationPlan === undefined ? {} : { migrationPlan }),
+        });
         return question?.question;
       }),
     );
 
     expect(asked).toEqual([
       'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the existing objects get a temporary value in the new required field "GeoPoint.latitude".',
-      'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required field "GeoPoint.latitude" gets no temporary value: plan the change with migration plan --backfill GeoPoint.latitude to write its value in migration.ts.',
+      'Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required field "GeoPoint.latitude" gets no temporary value: plan the change with `{bin} migration plan --from db --backfill GeoPoint.latitude` to write its value in migration.ts, run `node <migration directory>/migration.ts` for the directory it writes, and apply it with `{bin} db migrate`.',
+      `Remove key would lose the values of value object field "GeoPoint.lat". If you answer delete, the new required field "GeoPoint.latitude" gets no temporary value: no migration can be planned to write its value either. ${NOT_RECORDED_REASON}.`,
     ]);
   });
 

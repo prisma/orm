@@ -4,6 +4,8 @@
 
 > **Partially superseded by [ADR 324](ADR%20324%20-%20Generated%20files%20import%20from%20the%20module%20the%20target%20package%20names.md) (2026-11).** The emitter no longer picks an import root by reading the application's manifest, and a decomposed install is no longer read from it. The config names the modules generated files import from, and the target package (the facade) puts them there. The statement under "Who each package is for" that "nothing configures this", and the sentence under "Decomposing a facade" that "the emitter reads that from the manifest", describe the earlier mechanism. The rule that generated code imports only from packages the application depends on directly stands.
 
+> **Amended (2026-11): library integrations.** Prisma also publishes packages that connect an outside library to an application's Prisma 8 client. Such a package is named `@prisma/orm-<library>`, after the library and with no word for the kind of package: `@prisma/orm-better-auth`. An application installs one beside its facade, as it does an extension pack. A package of this kind that someone else publishes follows [ADR 308](ADR%20308%20-%20Community%20packages%20are%20named%20prisma-orm-name.md).
+
 ## Decision
 
 An application that uses Prisma Next against Postgres installs **one** package:
@@ -33,6 +35,7 @@ Every published package lives under the single `@prisma` scope. Every other work
 |---|---|
 | `@prisma/orm-postgres`, `orm-sqlite`, `orm-mysql`, `orm-mariadb`, `orm-mongo` | database facades — an app installs exactly one |
 | `@prisma/orm-extension-postgis`, `-pgvector`, `-paradedb`, `-supabase`, `-arktype-json`, `-middleware-cache`, `@prisma/orm-postgres-contrib` | optional capability packs, additive installs |
+| `@prisma/orm-better-auth` | library integration, an additive install, named `@prisma/orm-<library>` |
 | `@prisma/orm-framework` | target-agnostic runtime: contract, components, authoring surface |
 | `@prisma/orm-toolchain` | dev/build tooling: CLI (carries the bin), emitter, config-loader, language server, telemetry, vite plugin |
 | `@prisma/orm-family-sql`, `@prisma/orm-family-mongo` | family domains |
@@ -40,7 +43,7 @@ Every published package lives under the single `@prisma` scope. Every other work
 
 ## What an application depends on
 
-One facade, plus whatever extension packs it installs. Nothing else — not `@prisma/orm-family-sql`, not `@prisma/orm-toolchain`, even though the facade brings both in. Those arrive as the facade's own dependencies, and an application that names one directly is claiming a version contract it does not have.
+One facade, plus whatever extension packs and library integrations it installs. Nothing else — not `@prisma/orm-family-sql`, not `@prisma/orm-toolchain`, even though the facade brings both in. Those arrive as the facade's own dependencies, and an application that names one directly is claiming a version contract it does not have.
 
 That holds only if the facade has a name for everything an application reaches, so it republishes each of them as one of its own entrypoints:
 

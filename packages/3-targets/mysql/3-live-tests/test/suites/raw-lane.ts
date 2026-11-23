@@ -7,8 +7,8 @@ export function describeRawLane(server: LiveServer): void {
   describe(`${server.displayName} raw SQL with integer values`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('compares and builds JSON from int values as integers, and adds bigint values, sent as decimal text, as integers once one is cast, as on Postgres', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('compares and builds JSON from int values as integers, and adds bigint values, sent as decimal text, as integers once one is cast, as on Postgres', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const [row] = await db.query(
           db.raw
@@ -25,9 +25,8 @@ export function describeRawLane(server: LiveServer): void {
       });
     });
 
-    it('compares a varchar column with an integer value as a number', async (test) => {
+    it('compares a varchar column with an integer value as a number', async () => {
       await withSeededDatabase(
-        test,
         server,
         [...exampleDatabase, 'UPDATE `Post` SET `title` = CAST(`id` * 5 AS CHAR)'],
         async (url) => {
@@ -42,8 +41,8 @@ export function describeRawLane(server: LiveServer): void {
       );
     });
 
-    it('takes integer values as the operands of LIMIT and OFFSET', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('takes integer values as the operands of LIMIT and OFFSET', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const ids = (plan: Parameters<typeof db.query>[0]) => db.query(plan);
         expect({
@@ -70,8 +69,8 @@ export function describeRawLane(server: LiveServer): void {
       });
     });
 
-    it('runs a query awaited inside the loop over a large result in a transaction, because a query reads its whole result first, as on Postgres', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('runs a query awaited inside the loop over a large result in a transaction, because a query reads its whole result first, as on Postgres', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const seen = await db.transaction(async (tx) => {
           let total = 0;
@@ -96,8 +95,8 @@ export function describeRawLane(server: LiveServer): void {
   describe(`${server.displayName} raw SQL with an embedded builder query`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('inserts the rows of an embedded select, with params before, inside and after it', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('inserts the rows of an embedded select, with params before, inside and after it', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const copies = db.sql.Post.innerJoin(db.sql.User, (f, fns) =>
           fns.eq(f.User.id, f.Post.authorId),
@@ -135,9 +134,8 @@ export function describeRawLane(server: LiveServer): void {
   describe(`${server.displayName} constraint violations`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('reports a failed CHECK constraint with the SQLSTATE Postgres sends, 23514', async (test) => {
+    it('reports a failed CHECK constraint with the SQLSTATE Postgres sends, 23514', async () => {
       await withSeededDatabase(
-        test,
         server,
         [...exampleDatabase, 'CREATE TABLE `Checked` (`n` INT NOT NULL, CHECK (`n` > 0))'],
         async (url) => {

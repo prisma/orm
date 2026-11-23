@@ -248,6 +248,22 @@ function unsupportedNameDiagnostic(
         span: site.block.span,
       };
     }
+    case 'field':
+      return atField(
+        fieldSiteOf(sites, key),
+        code,
+        `A field of ${key.owner.kind === 'model' ? 'model' : 'composite type'} "${key.owner.name}" is named "${name}", ${UNSUPPORTED_NAME_REASON}`,
+      );
+    case 'relation':
+      return atField(
+        fieldSiteOf(sites, {
+          kind: 'field',
+          owner: { kind: 'model', name: key.model },
+          field: key.relation,
+        }),
+        code,
+        `A relation of model "${key.model}" is named "${name}", ${UNSUPPORTED_NAME_REASON}`,
+      );
   }
 }
 
@@ -262,11 +278,14 @@ export function refusalDiagnostic(
     case 'nameUnsupported':
       return unsupportedNameDiagnostic(refusal, sites);
     case 'storedNameUnsupported': {
-      const field = fieldSiteOf(sites, refusal.key);
+      const { key } = refusal;
+      if (key.kind === 'relation') {
+        throw new InternalError('A PSL schema writes no embed relations.');
+      }
       return atField(
-        field,
+        fieldSiteOf(sites, key),
         'PSL_STORED_NAME_UNSUPPORTED',
-        `Field "${refusal.key.owner.name}.${refusal.key.field}" ${refusal.reason}. Give the field another stored name with @map.`,
+        `Field "${key.owner.name}.${key.field}" ${refusal.reason}. Give the field another stored name with @map.`,
       );
     }
     case 'storedNameDuplicate': {

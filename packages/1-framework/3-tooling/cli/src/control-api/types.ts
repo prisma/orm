@@ -41,6 +41,7 @@ import type { CliInvocation } from '../utils/printed-command';
 import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
+import type { MigrationPlanArguments } from './operations/plan-arguments';
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
 import type { AnswerPlanQuestions } from './statements/plan-questions';
 import type { AppliedStatementReport } from './statements/report-applied-statements';
@@ -251,6 +252,12 @@ export interface DbUpdateOptions extends PlannerWarningsListener {
   readonly ref?: NamedRef;
   /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
   readonly permitPolicyChange?: boolean;
+  /**
+   * The storage hash of the emitted contract, the one at the config's contract path that
+   * `migration new` writes to. It differs from `contract` when `ref` names another contract. When
+   * absent, failure advice takes `contract` as the emitted one without `ref`, and as unknown with it.
+   */
+  readonly emittedContractHash?: string;
   /**
    * On-disk migrations directory. Always required — every `db update`
    * routes through the per-space flow, which reads on-disk
@@ -509,10 +516,20 @@ export interface DbUpdateSuccess
   /** The statements the application space's plan applied, in order; empty when none were given. */
   readonly appliedStatements: readonly AppliedStatementReport[];
   /**
-   * The storage hash of the contract the database was at before the run, when a migration of the
-   * graph ends at it: the origin a `migration plan` for this database starts from.
+   * The storage hash of the contract the database was at before the run, when a migration records
+   * it.
+   *
+   * @deprecated Use `migrationPlan.from`, which says what `migration plan --from` takes in every
+   * case this field leaves out.
    */
   readonly databaseStorageHash?: string;
+  /**
+   * The `--from` and `--to` of a `migration plan` that takes this database, as it was before the
+   * run, where the run went. Each is a contract reference, the default, or why no `migration plan`
+   * can start or end there; `--from` can also be a choice for the user. Its `migrationsToTarget`
+   * exists for the CLI's own advice only, and its shape may change in any release without notice.
+   */
+  readonly migrationPlan?: MigrationPlanArguments;
   /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;

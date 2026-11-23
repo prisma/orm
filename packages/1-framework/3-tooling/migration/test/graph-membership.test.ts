@@ -100,7 +100,7 @@ describe('assertHashIsGraphNode', () => {
       const err = error as MigrationToolsError;
       expect(err.code).toBe('MIGRATION.HASH_NOT_IN_GRAPH');
       expect(err.why).toContain('missing');
-      expect(err.fix).toMatch(/migration plan/i);
+      expect(err.fix).toMatch(/plan a migration that ends at it/i);
       expect(err.fix).toMatch(/--from/i);
       expect(err.meta?.['hash']).toBe('missing');
       expect(err.meta?.['reachableHashes']).toEqual(['aaa', 'bbb', 'zzz']);

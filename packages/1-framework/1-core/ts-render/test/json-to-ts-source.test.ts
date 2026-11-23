@@ -36,11 +36,13 @@ describe('jsonToTsSource', () => {
       );
     });
 
-    it('quotes the reserved key "__proto__"', () => {
-      // A computed key is required because `{ __proto__: 1 }` in an object literal
-      // is a special syntactic form that assigns the prototype rather than creating
-      // an own property. This is the only way to produce an own `__proto__` key.
-      expect(jsonToTsSource({ ['__proto__']: 1 })).toBe('{ "__proto__": 1 }');
+    it('writes the key "__proto__" as a computed key, which evaluates to an own key', () => {
+      const source = jsonToTsSource({ ['__proto__']: 1, a: 2 });
+      expect(source).toBe('{ ["__proto__"]: 1, a: 2 }');
+      expect(Object.entries(new Function(`return ${source}`)())).toEqual([
+        ['__proto__', 1],
+        ['a', 2],
+      ]);
     });
 
     it('drops object entries whose value is undefined', () => {

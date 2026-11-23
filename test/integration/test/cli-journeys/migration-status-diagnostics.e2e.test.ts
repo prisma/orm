@@ -266,8 +266,9 @@ withTempDir(({ createTempDir }) => {
 
           const emit0 = await runContractEmit(ctx);
           expect(emit0.exitCode, 'emit').toBe(0);
-          const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init']);
+          const plan0 = await planMigrationAndSelfEmit(ctx, ['--name', 'init', '--json']);
           expect(plan0.exitCode, 'plan').toBe(0);
+          const baseHash = parseJsonOutput<{ to: string }>(plan0).to;
           const apply0 = await runMigrate(ctx);
           expect(apply0.exitCode, 'apply').toBe(0);
 
@@ -281,7 +282,9 @@ withTempDir(({ createTempDir }) => {
           expect(status.exitCode).toBe(0);
           expect(out).toContain('@contract');
           expect(out).toContain("to the application's contract");
-          expect(out).toContain('prisma-test migration plan --name');
+          expect(out).toContain(
+            `Run \`prisma-test migration plan --from ${baseHash} --name <name>\` to author one.`,
+          );
         },
         timeouts.spinUpPpgDev,
       );
@@ -478,6 +481,7 @@ withTempDir(({ createTempDir }) => {
             'add-phone',
             '--from',
             baseHash,
+            '--json',
           ]);
           expect(planA.exitCode, 'plan branch A').toBe(0);
 
@@ -489,8 +493,10 @@ withTempDir(({ createTempDir }) => {
             'add-bio',
             '--from',
             baseHash,
+            '--json',
           ]);
           expect(planB.exitCode, 'plan branch B').toBe(0);
+          const ends = [planA, planB].map((plan) => parseJsonOutput<{ to: string }>(plan).to);
 
           // Swap to a contract that doesn't match either leaf so the
           // status command can't auto-resolve to one branch.
@@ -502,7 +508,12 @@ withTempDir(({ createTempDir }) => {
           expect(status.exitCode).toBe(0);
           const json = parseMigrationStatusJson(status);
           expect(json.summary).toContain("to the application's contract");
-          expect(json.summary).toContain('{bin} migration plan --name');
+          expect(json.summary).toContain(
+            `Run \`{bin} migration plan --from <contract> --name <name>\` to author one. The migration history that continues from where the database is has more than one end, so replace <contract> with one of ${ends
+              .sort()
+              .map((end) => `\`${end}\``)
+              .join(', ')}.`,
+          );
         },
         timeouts.spinUpPpgDev,
       );
