@@ -4,6 +4,7 @@ import {
   type AnyExpression,
   ColumnRef,
   checkLimitOffset,
+  collectTableSources,
   type ProjectionItem,
   SelectAst,
 } from '@internal/sql-relational-core/ast';
@@ -612,8 +613,25 @@ function addFindOfFirstRow(
   }
   return {
     find: findRows(b, select(collection, { ...state, limit: 1 }), noInputs),
-    where,
+    where: readsTableItWrites(context.contract, state.tables.root, where) ? undefined : where,
   };
+}
+
+/** Whether `where` reads the table `root` names, through a subquery. A database may refuse to write a table under such a condition, so a first-row write then keeps to the key of the row it found, without checking the filter again. */
+function readsTableItWrites(
+  contract: Contract<SqlStorage>,
+  root: AliasedTable,
+  where: AnyExpression | undefined,
+): boolean {
+  if (where === undefined) {
+    return false;
+  }
+  const { namespaceId, tableName } = root.storage;
+  const reads = collectTableSources(SelectAst.from(root.tableSource(contract)).withWhere(where));
+  return (
+    reads.filter((source) => source.name === tableName && source.namespaceId === namespaceId)
+      .length > 1
+  );
 }
 
 function requireIdentityColumns(collection: DescribeCollectionRowsOptions, method: string): void {
