@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
 const GUIDES = [
-  'upgrade-instructions/pending/mongodb-scalar-convenience-types/app/instructions.md',
-  'upgrade-instructions/pending/mongodb-scalar-convenience-types/extension/instructions.md',
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
 ];
 
 describe.each(GUIDES)('the renamed MongoDB Int64 detections in %s', (guidePath) => {
@@ -85,7 +85,7 @@ describe.each(GUIDES)('the renamed MongoDB Int64 detections in %s', (guidePath) 
 describe('the optional MongoDB convenience name detection in the app guide', () => {
   const optional = (content: string) =>
     detectionPatterns(
-      'upgrade-instructions/pending/mongodb-scalar-convenience-types/app/instructions.md',
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
       'psl-optional-mongo-convenience-names',
     ).some((pattern) => pattern.test(content));
   const mongoModel = (type: string) =>
