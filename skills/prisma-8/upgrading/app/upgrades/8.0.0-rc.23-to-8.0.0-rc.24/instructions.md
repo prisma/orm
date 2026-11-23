@@ -8,8 +8,8 @@ changes:
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine"))|(?!\s*\{))[\s\S]*"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.\d(?!\d)'
-        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine"))|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine[''"]?:\s*[''"]?[\^~]?0\.\d(?![\d])'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine(?:@[^"\s]*)?"))|(?!\s*\{))[\s\S]*"@prisma/cli-engine(?:@[^"\s]*)?"\s*:\s*(?:\{[^{}]*"\."\s*:\s*)?"[^"]*(?<![\d.])0\.\d(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine(?:@[^"\s]*)?"))|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine(?:@[^''"\s:]*)?[''"]?\s*:\s*(?:\{[^{}]*[''"]\.[''"]\s*:\s*)?[''"]?[\^~]?0\.\d(?![\d])'
   - id: prisma-7-commands-answer-v7-command
     summary: |
       A Prisma 7 command the ORM answers, such as `prisma migrate dev`, now fails with `CLI.V7_COMMAND` instead of `CLI.COMMAND_MOVED`, still with exit code 2.
@@ -120,7 +120,7 @@ Do the steps in this order, and skip a step that does not apply to the project:
 
 ### `engine-pin-moves-to-0-10-0`
 
-For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.9.0`, `^0.9.0` or any other 0.x below 0.10) to `0.10.0` and reinstall. A package that uses `@prisma/cli-engine` without any `@prisma/orm-*` package keeps its own pin. An `overrides` or `resolutions` entry for `@prisma/cli-engine` (npm, pnpm or Yarn) pins the engine for every package of the workspace, so change it even in a root `package.json` that lists no `@prisma/orm-*` package. A `pnpm-workspace.yaml` matches whatever its packages are, so change its pin only when a package that takes the engine from it also lists an `@prisma/orm-*` package. Projects assembled by the `prisma` CLI resolve the engine automatically.
+For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.9.0`, `^0.9.0` or any other 0.x below 0.10) to `0.10.0` and reinstall. A package that uses `@prisma/cli-engine` without any `@prisma/orm-*` package keeps its own pin. An `overrides` or `resolutions` entry for `@prisma/cli-engine` at the top level, such as npm's `"@prisma/cli-engine": "0.9.0"` or `"@prisma/cli-engine": { ".": "0.9.0" }`, or Yarn's `"**/@prisma/cli-engine"`, pins the engine for every package of the workspace, so change it even in a root `package.json` that lists no `@prisma/orm-*` package. An entry scoped under another package, such as npm's `"some-package": { "@prisma/cli-engine": "0.9.0" }` or pnpm's `"some-package>@prisma/cli-engine"`, applies only below that package: change it when that package is an `@prisma/orm-*` package, such as `@prisma/orm-toolchain`, and leave it otherwise. A `pnpm-workspace.yaml` matches whatever its packages are, so change its pin only when a package that takes the engine from it also lists an `@prisma/orm-*` package. Projects assembled by the `prisma` CLI resolve the engine automatically.
 
 ### `prisma-7-commands-answer-v7-command`
 

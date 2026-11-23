@@ -393,8 +393,8 @@ changes:
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine"))|(?!\s*\{))[\s\S]*"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.(?:\d|10\.[0123xX*])(?!\d)'
-        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine"))|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine[''"]?:\s*[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[0123xX*])(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine(?:@[^"\s]*)?"))|(?!\s*\{))[\s\S]*"@prisma/cli-engine(?:@[^"\s]*)?"\s*:\s*(?:\{[^{}]*"\."\s*:\s*)?"[^"]*(?<![\d.])0\.(?:\d|10\.[0123xX*])(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine(?:@[^"\s]*)?"))|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine(?:@[^''"\s:]*)?[''"]?\s*:\s*(?:\{[^{}]*[''"]\.[''"]\s*:\s*)?[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[0123xX*])(?!\d)'
   - id: consent-required-summary-is-one-fixed-sentence
     summary: |
       The first line of `CLI.CONSENT_REQUIRED` is now one fixed sentence. It no longer names the subject of a statement question, and it no longer quotes the question of a consent that `--confirm` answers. Code that matched the old first line must read the error's `code`, `why` and `meta` instead.
@@ -1541,7 +1541,7 @@ A ref that `db migrate` cannot write, for example on a read-only filesystem, is 
 
 ### `engine-pin-moves-to-0-10-4`
 
-For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.10.3`, `0.10.2`, `0.10.1`, `0.10.0` or any earlier 0.x) to `0.10.4` and reinstall. Projects assembled by the `prisma` CLI resolve the engine automatically. A package that uses `@prisma/cli-engine` without any `@prisma/orm-*` package keeps its own pin. An `overrides` or `resolutions` entry for `@prisma/cli-engine` (npm, pnpm or Yarn) pins the engine for every package of the workspace, so change it even in a root `package.json` that lists no `@prisma/orm-*` package. A `pnpm-workspace.yaml` matches whatever its packages are, so change its pin only when a package that takes the engine from it also lists an `@prisma/orm-*` package.
+For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.10.3`, `0.10.2`, `0.10.1`, `0.10.0` or any earlier 0.x) to `0.10.4` and reinstall. Projects assembled by the `prisma` CLI resolve the engine automatically. A package that uses `@prisma/cli-engine` without any `@prisma/orm-*` package keeps its own pin. An `overrides` or `resolutions` entry for `@prisma/cli-engine` at the top level, such as npm's `"@prisma/cli-engine": "0.9.0"` or `"@prisma/cli-engine": { ".": "0.9.0" }`, or Yarn's `"**/@prisma/cli-engine"`, pins the engine for every package of the workspace, so change it even in a root `package.json` that lists no `@prisma/orm-*` package. An entry scoped under another package, such as npm's `"some-package": { "@prisma/cli-engine": "0.9.0" }` or pnpm's `"some-package>@prisma/cli-engine"`, applies only below that package: change it when that package is an `@prisma/orm-*` package, such as `@prisma/orm-toolchain`, and leave it otherwise. A `pnpm-workspace.yaml` matches whatever its packages are, so change its pin only when a package that takes the engine from it also lists an `@prisma/orm-*` package.
 
 ### `consent-required-summary-is-one-fixed-sentence`
 
