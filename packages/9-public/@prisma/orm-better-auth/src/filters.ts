@@ -179,11 +179,12 @@ function clauseCondition(
     case 'starts_with':
     case 'ends_with':
     case 'contains': {
+      const context = pattern();
       const text = String(value);
       if (text === '') return method('isNotNull');
       return insensitive
-        ? insensitivePattern(pattern(), operator, text)
-        : sensitivePattern(pattern(), operator, text);
+        ? insensitivePattern(context, operator, text)
+        : sensitivePattern(context, operator, text);
     }
     default:
       throw new BetterAuthError(

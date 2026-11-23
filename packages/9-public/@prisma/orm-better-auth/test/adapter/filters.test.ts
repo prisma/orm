@@ -79,6 +79,15 @@ describe.each(targets)('filters on %s', (target) => {
       }
     });
 
+    it('refuse the empty pattern on a field that is not text, as any other pattern', async () => {
+      const codec = target === 'sqlite' ? 'sqlite/integer@1' : 'pg/int4@1';
+      for (const operator of ['contains', 'starts_with', 'ends_with'] as const) {
+        await expect(ids([{ field: 'n', operator, value: '' }])).rejects.toThrow(
+          `Field "Probe.n" (${codec}) does not support ${operator}.`,
+        );
+      }
+    });
+
     it('do not match a value longer than the field', async () => {
       expect(await ids([text('starts_with', 'abc')])).toEqual([]);
       expect(await ids([text('ends_with', 'xab')])).toEqual([]);
