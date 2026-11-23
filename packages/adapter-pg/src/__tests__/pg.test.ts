@@ -3,7 +3,7 @@ import type { SqlQuery } from '@prisma/driver-adapter-utils'
 import pg, { DatabaseError } from 'pg'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { PrismaPgAdapterFactory } from '../pg'
+import { PrismaPgAdapterFactory, type PrismaPgOptions } from '../pg'
 
 describe('PrismaPgAdapterFactory', () => {
   it('should subscribe to pool error events', async () => {
@@ -135,65 +135,115 @@ describe('PrismaPgAdapterFactory', () => {
   })
 
   describe('search path', () => {
-    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const config: pg.PoolConfig = {
+      connectionString: 'postgresql://user:pass@localhost:5432/db',
+      options: '-c statement_timeout=1000',
+    }
+    const queries: { text: string; values: unknown[] | undefined }[] = []
+    const adapters: { dispose(): Promise<void> }[] = []
 
-    it('should set search_path at connection startup when a schema is provided', async () => {
-      const factory = new PrismaPgAdapterFactory(config, { schema: 'my_schema' })
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBe('-c search_path=my_schema,public')
-      await adapter.dispose()
+    afterEach(async () => {
+      await Promise.all(adapters.map((adapter) => adapter.dispose()))
+      adapters.length = 0
+      queries.length = 0
+      vi.restoreAllMocks()
     })
 
-    it('should not set the options startup parameter when no schema is provided', async () => {
-      const factory = new PrismaPgAdapterFactory(config)
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBeUndefined()
-      await adapter.dispose()
+    function stubClient(queryImpl?: (text: string) => Promise<unknown> | undefined) {
+      vi.spyOn(pg.Client.prototype, 'connect').mockImplementation(function (cb?: (err?: Error) => void) {
+        process.nextTick(() => cb?.())
+      } as never)
+      vi.spyOn(pg.Client.prototype, 'end').mockImplementation((() => Promise.resolve()) as never)
+      vi.spyOn(pg.Client.prototype, 'query').mockImplementation(((
+        query: string | { text: string; values?: unknown[] },
+        values?: unknown,
+        callback?: (err: Error | undefined, result?: unknown) => void,
+      ) => {
+        const text = typeof query === 'string' ? query : query.text
+        queries.push({ text, values: typeof query === 'string' ? undefined : query.values })
+        const result = queryImpl?.(text) ?? Promise.resolve({ rowCount: 0, rows: [], fields: [] })
+        if (typeof callback === 'function') {
+          result.then(
+            (res) => callback(undefined, res),
+            (err: Error) => callback(err),
+          )
+          return undefined
+        }
+        return result
+      }) as never)
+    }
+
+    async function connect(poolOrConfig: pg.Pool | pg.PoolConfig, options?: PrismaPgOptions) {
+      const adapter = await new PrismaPgAdapterFactory(poolOrConfig, options).connect()
+      adapters.push(adapter)
+      return adapter
+    }
+
+    const selectOne: SqlQuery = { sql: 'SELECT 1', args: [], argTypes: [] }
+
+    it('passes the pool config to the pool unchanged', async () => {
+      stubClient()
+      const adapter = await connect(config, { schema: 'my_schema' })
+
+      expect(adapter.underlyingDriver().options).toMatchObject(config)
     })
 
-    it('should quote schema names that require quoting', async () => {
-      const factory = new PrismaPgAdapterFactory(config, { schema: 'MySchema' })
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBe('-c search_path="MySchema",public')
-      await adapter.dispose()
+    it('puts the schema on the search path of a new connection before the first query', async () => {
+      stubClient()
+      const adapter = await connect(config, { schema: 'my_schema' })
+
+      await adapter.queryRaw(selectOne)
+
+      expect(queries).toEqual([
+        { text: expect.stringContaining("set_config('search_path'"), values: ['my_schema'] },
+        { text: 'SELECT 1', values: [] },
+      ])
     })
 
-    it('should escape quotes, whitespace and backslashes in schema names', async () => {
-      const factory = new PrismaPgAdapterFactory(config, { schema: 'my "weird"\\schema' })
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBe('-c search_path="my\\ ""weird""\\\\schema",public')
-      await adapter.dispose()
+    it('sets the search path once per connection, not once per query', async () => {
+      stubClient()
+      const adapter = await connect({ ...config, max: 1 }, { schema: 'my_schema' })
+
+      await adapter.queryRaw(selectOne)
+      await adapter.queryRaw(selectOne)
+
+      expect(queries.map((query) => query.text)).toEqual([
+        expect.stringContaining('set_config'),
+        'SELECT 1',
+        'SELECT 1',
+      ])
     })
 
-    it('should append search_path to user-provided options', async () => {
-      const factory = new PrismaPgAdapterFactory(
-        { ...config, options: '-c statement_timeout=1000' },
-        { schema: 'my_schema' },
-      )
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBe(
-        '-c statement_timeout=1000 -c search_path=my_schema,public',
-      )
-      await adapter.dispose()
+    it('does not touch the search path when no schema is given', async () => {
+      stubClient()
+      const adapter = await connect(config)
+
+      await adapter.queryRaw(selectOne)
+
+      expect(queries).toEqual([{ text: 'SELECT 1', values: [] }])
     })
 
-    it.each(['-c search_path=a,b', '--search_path=a,b', '-c statement_timeout=1000 -csearch_path=a'])(
-      'should not override a search_path set in user-provided options (%s)',
-      async (options) => {
-        const factory = new PrismaPgAdapterFactory({ ...config, options }, { schema: 'my_schema' })
-        const adapter = await factory.connect()
-        expect(adapter.underlyingDriver().options.options).toBe(options)
-        await adapter.dispose()
-      },
-    )
-
-    it('should leave externally provided pools untouched', async () => {
+    it('does not touch the search path of an externally provided pool', async () => {
+      stubClient()
       const pool = new pg.Pool(config)
-      const factory = new PrismaPgAdapterFactory(pool, { schema: 'my_schema' })
-      const adapter = await factory.connect()
-      expect(adapter.underlyingDriver().options.options).toBeUndefined()
-      await adapter.dispose()
+      const adapter = await connect(pool, { schema: 'my_schema' })
+
+      await adapter.queryRaw(selectOne)
+
+      expect(queries).toEqual([{ text: 'SELECT 1', values: [] }])
+      expect(pool.listenerCount('connect')).toBe(0)
       await pool.end()
+    })
+
+    it('reports a failure to set the search path to onPoolError and still runs the query', async () => {
+      const failure = new Error('function current_schemas(boolean) does not exist')
+      stubClient((text) => (text.includes('set_config') ? Promise.reject(failure) : undefined))
+      const onPoolError = vi.fn()
+      const adapter = await connect(config, { schema: 'my_schema', onPoolError })
+
+      await expect(adapter.queryRaw(selectOne)).resolves.toMatchObject({ rows: [] })
+
+      expect(onPoolError).toHaveBeenCalledWith(failure)
     })
   })
 
