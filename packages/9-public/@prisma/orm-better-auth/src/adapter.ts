@@ -293,11 +293,25 @@ export function prismaAdapter(
 ): (betterAuthOptions: BetterAuthOptions) => DBAdapter<BetterAuthOptions> {
   assertClient(db, adapterOptions);
   return (betterAuthOptions) => {
+    let modelNames: ReadonlySet<string> | undefined;
+    const betterAuthModelNames = () => {
+      modelNames ??= new Set(
+        betterAuthModels(getAuthTables(betterAuthOptions), {
+          betterAuthOptions,
+          usePlural: adapterOptions.usePlural ?? false,
+        }).map((model) => model.physicalName),
+      );
+      return modelNames;
+    };
     const context: AdapterContext = {
       orm: db.orm,
       contract: db.contract,
       instance: {
-        collections: createModelCollections(db.contract, adapterOptions.namespace),
+        collections: createModelCollections(
+          db.contract,
+          adapterOptions.namespace,
+          betterAuthModelNames,
+        ),
         defaultSelections: undefined,
       },
       adapterOptions,

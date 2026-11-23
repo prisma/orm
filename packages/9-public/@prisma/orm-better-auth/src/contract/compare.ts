@@ -263,10 +263,11 @@ export function compareContract(input: ComparisonInput): ContractComparison {
       defaultNamespace,
     };
   }
+  const expectedNames = new Set(expectedModelList.map((model) => model.physicalName));
   const problems: ContractProblem[] = [];
   const models: ComparedModel[] = [];
   for (const expected of expectedModelList) {
-    const lookup = findModel(contract, expected.physicalName, namespace);
+    const lookup = findModel(contract, expected.physicalName, namespace, expectedNames);
     switch (lookup.kind) {
       case 'missing':
         problems.push({ kind: 'missing-model', model: expected.physicalName });
@@ -287,12 +288,11 @@ export function compareContract(input: ComparisonInput): ContractComparison {
       }
     }
   }
-  const expectedNames = new Set(expectedModelList.map((model) => model.physicalName));
   const referencedModels = new Map<string, FoundModel>();
   for (const model of expectedModelList) {
     for (const { reference } of model.fields) {
       if (reference === undefined || expectedNames.has(reference.model)) continue;
-      const lookup = findModel(contract, reference.model, namespace);
+      const lookup = findModel(contract, reference.model, namespace, expectedNames);
       if (lookup.kind === 'found') referencedModels.set(reference.model, lookup);
     }
   }
