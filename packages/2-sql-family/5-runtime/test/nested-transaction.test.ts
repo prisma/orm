@@ -237,6 +237,53 @@ describe('TransactionContext.transaction', () => {
     { enclosing: 'the outer transaction', depth: 0 },
     { enclosing: 'a savepoint', depth: 1 },
   ])(
+    'rejects with RUNTIME.TRANSACTION_ROLLBACK_FAILED and closes the transaction when $enclosing throws while a nested call it did not await is running',
+    async ({ depth }) => {
+      const { runtime, events } = createSetup();
+      const proceed = deferred();
+      const error = new Error('nope');
+      const contexts: TransactionContext[] = [];
+      let nested: Promise<unknown> = Promise.resolve();
+      const enclosingCall = deferred<{ call: Promise<unknown> }>();
+      const leave = (ctx: TransactionContext) => {
+        contexts.push(ctx);
+        nested = ctx.transaction(async (inner) => {
+          contexts.push(inner);
+          await proceed.promise;
+        });
+        throw error;
+      };
+
+      const run = withTransaction(runtime, async (tx) => {
+        if (depth === 0) return leave(tx);
+        contexts.push(tx);
+        const call = tx.transaction(async (middle) => leave(middle));
+        enclosingCall.resolve({ call });
+        await call.catch(() => undefined);
+      });
+
+      await expect(depth === 0 ? run : (await enclosingCall.promise).call).rejects.toMatchObject({
+        code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
+        cause: error,
+        details: { rollbackError: { code: 'RUNTIME.TRANSACTION_SUSPENDED' } },
+      });
+      await run.catch(() => undefined);
+      const before = events.length;
+      for (const ctx of contexts) {
+        await rejectsWith(ctx.execute(statementC), 'TRANSACTION_CLOSED');
+      }
+      proceed.resolve();
+      await nested.catch(() => undefined);
+
+      expect(trace(events.slice(before))).toBe('');
+      expect(trace(events).endsWith('destroy')).toBe(true);
+    },
+  );
+
+  it.each([
+    { enclosing: 'the outer transaction', depth: 0 },
+    { enclosing: 'a savepoint', depth: 1 },
+  ])(
     'closes the context of a nested call still running when $enclosing returned, and its open stream',
     async ({ depth }) => {
       const { runtime } = createSetup();

@@ -194,4 +194,22 @@ describe('tx.transaction on postgres', () => {
       ],
     });
   });
+
+  it('rejects with RUNTIME.TRANSACTION_ROLLBACK_FAILED when the callback throws while an ORM write it did not await holds a savepoint, and leaves no rows', async () => {
+    const run = db.transaction(async (tx) => {
+      await Promise.all([createWithAuthor(tx, 1, 'A', 1), tx.orm.public.User.select('id').all()]);
+    });
+
+    await expect(run).rejects.toMatchObject({
+      code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
+      cause: { code: 'RUNTIME.TRANSACTION_SUSPENDED' },
+      details: { rollbackError: { code: 'RUNTIME.TRANSACTION_SUSPENDED' } },
+    });
+    await db.transaction(async (tx) => insert(tx, 'next'));
+    expect({
+      names: await names(db),
+      posts: await db.orm.public.Post.select('id').all(),
+      users: await db.orm.public.User.select('id').all(),
+    }).toEqual({ names: ['next'], posts: [], users: [] });
+  });
 });
