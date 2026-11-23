@@ -88,6 +88,14 @@ Stopping point for the open upgrade issues: every urgent and high issue is close
 
 Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgent and start immediately. They were already required for GA; what changed is the order. They move to the top of the editor and tools stream. The VS Code extension work that depends on them (items 2 and 3 of that stream) waits on them. Background from 2026-09-28: several emulators of each type can run, so status is a list; the eval found that stopping `prisma dev` leaves the emulator processes running and no stop or cleanup command exists.
 
+## Changes of 2026-11-23
+
+- Migrations that are safe on a large production table become a project that completes before GA (stream 6, row 14) (Will, 2026-11-23). It began with prisma/orm#31182, where the PostgreSQL runner waits for a table lock with no time limit, and with a public account of two outages in which generated Prisma migrations locked a 300-million-row table at peak traffic. What Will decided:
+  - **Rollback of a failed migration stops being the general promise.** The design principles and docs say a failed migration is rolled back, which assumes its operations run in one transaction. MySQL, MariaDB and MongoDB cannot do that, and on PostgreSQL the statements that avoid long locks, such as `CREATE INDEX CONCURRENTLY`, cannot run in a transaction. Those statements matter more than the transaction.
+  - **No global switch that turns transactions off.** Transaction control belongs to a migration, and better to groups of operations inside it. There is no representation for that today; designing one is part of the project.
+  - **Table size is given statically at plan time**, as estimates the user provides, in the way the budgets middleware takes order-of-magnitude table sizes. Rejected: a warning at plan time, because warnings are ignored, most of all by people who do not know what they mean. Rejected: a check of the table's size when the migration runs that refuses a large table, because the migration then passes in development and staging and fails in production with an error that could have been predicted. Not decided: whether size also chooses if a group of operations runs in a transaction.
+  - **A time limit on each wait for a table lock** is part of the project and its first slice. The reviewed design: 5 seconds by default, set in the PostgreSQL target's config, no automatic retry, its own error code, and the marker lock keeps its own wait.
+
 ## Changes of 2026-11-20
 
 - The Prisma Studio command (stream 3, row 1b) stays Must, no longer marked urgent. Will expects it to be a small piece of work (Will, 2026-11-20). Until it ships, the docs tell Prisma 8 users to run `npx prisma@prev studio`.

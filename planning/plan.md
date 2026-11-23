@@ -23,9 +23,9 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Editor and tools | 3 of 6 (50%) | `█████░░░░░` | 1 | 2 |
 | Query features | 10 of 11 (91%) | `█████████░` | 1 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
-| Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
+| Work found along the way | 4 of 10 (40%) | `████░░░░░░` | 1 | 5 |
 | Compatibility policy | 0 of 1 (0%) | `░░░░░░░░░░` | 0 | 1 |
-| **All streams** | **34 of 47 (72%)** | `███████░░░` | **5** | **8** |
+| **All streams** | **34 of 48 (71%)** | `███████░░░` | **5** | **9** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -118,7 +118,7 @@ Test: the getting-started eval passes, in few steps and with no workarounds.
 
 ## Stream 6: Work found along the way
 
-**GA readiness:** 4 of 9 Must projects done (44%). 1 in progress, 4 not started.
+**GA readiness:** 4 of 10 Must projects done (40%). 1 in progress, 5 not started.
 
 Work found after the plan was made goes here, so the first five streams keep the scope they started with (Will, 2026-10-21).
 
@@ -138,6 +138,7 @@ Work found after the plan was made goes here, so the first five streams keep the
 | 11 | ⏳ | PostgreSQL `Json` fields refuse a value that is not JSON. Today the codecs store a changed value with no error: a `Date` becomes text, an `undefined` member is dropped, `NaN` becomes `null` | Not decided | Will | Not started. TML-3778, backlog. MongoDB, MySQL and MariaDB already refuse such a value, and the check they share is in `@internal/type-implementations/json`, so the change is small. It makes writes fail that succeed today, so it has to land before GA if it lands at all | Place it for GA |
 | 12 | ⏳ | Remove the deprecated type names before GA, or keep them through Prisma 8. The decision records keep a renamed name "for one release line" and do not say whether the release candidates are that line | Not decided | Will | Not started, no ticket. The names: PostgreSQL `SmallInt`, `BigIntNumber`, `Numeric`, `UnboundedInt`, `Real`, `VarChar` and `VarBit`; `sql.String(n)` on every SQL database; MongoDB `Int64`; SQLite `BigIntNumber`. Each still works and warns `PSL_DEPRECATED_SCALAR_NAME`. Removing one is breaking, so names that ship in 8.0 stay until Prisma 9 | Decide: remove before GA or keep |
 | 13 | ⏳ | Querying other contract spaces: find out whether it needs a breaking change. An application's queries reach only its own contract space today; we want them to reach the models of another space, such as an extension pack's, in Prisma 8 | Must (research, and a spike if needed) | Will | Added 2026-11-20. Not started, no ticket. Building the feature can follow GA. What must happen before GA is the research, because a breaking change it needs cannot land after 8.0 | Research the design; spike if the answer is unclear |
+| 14 | ⏳ | Migrations that are safe on a large production table. Today the PostgreSQL runner applies every pending migration in one transaction, waits for a table lock with no time limit, and has no operation that avoids a long exclusive lock; a statement that scans or rewrites a large table blocks every query on it. Four parts: a time limit on each wait for a table lock; a migration states which groups of its operations run in a transaction, so an operation that cannot run in one, such as `CREATE INDEX CONCURRENTLY`, is possible; operations that take the low-lock form of a change; and table size estimates the user gives at plan time, so the planner knows which tables are large when it chooses how to make a change | Must | Will | Added 2026-11-23. Not started; no code. Design work comes first. The lock wait limit has a reviewed design (prisma/orm#31182). It changes what a migration file can say and what a failed run promises, so it lands before GA | Start as a Drive project: settle the design with Will, the lock wait limit as the first slice |
 
 ## Stream 7: Compatibility policy
 
