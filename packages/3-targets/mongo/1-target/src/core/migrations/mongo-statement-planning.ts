@@ -231,6 +231,8 @@ export interface StatementPlan {
   readonly fieldRenames: readonly FieldRename[];
   /** For each statement, in order, the call that carries it out, or `undefined` when storage does not change. */
   readonly callOfStatement: readonly (OpFactoryCall | undefined)[];
+  /** The model renames of the plan: its model statements, and the models both contracts name alike. */
+  readonly models: readonly ModelRename[];
   /** The collections the model renames move. */
   readonly collections: CollectionRenames;
   /** The collection each origin collection is in once the plan's renames are made, including those the database already has. */
@@ -367,6 +369,7 @@ export function planStatements(input: {
     conflicts.push(
       ...embedRelationRefusals({
         statements: input.statements,
+        models,
         fieldRenames: [],
         fromContract: input.fromContract,
         contract: input.contract,
@@ -375,6 +378,7 @@ export function planStatements(input: {
     );
     const unstated = unstatedFieldRenamesOf({
       statements: input.statements,
+      models,
       fieldRenames: [],
       fromContract: input.fromContract,
       contract: input.contract,
@@ -409,6 +413,7 @@ export function planStatements(input: {
         fieldRenameCalls,
         fieldRenames,
         callOfStatement,
+        models,
         collections,
         renamedCollections,
       });
@@ -932,45 +937,29 @@ export interface FieldRemoval {
 }
 
 /**
- * The destination model an origin model became: the one a statement renamed it to, else the one of
- * the same name, else the only new model stored the same way (same collection, same variant value)
- * that no statement names and that no other origin model is stored like, so no two origin models
- * become one.
+ * The destination model an origin model became: its pair in the plan's model renames (a statement,
+ * else the same name, as the collection renames pair them), else the only new model stored the same
+ * way (same collection, same variant value) that no rename pairs and that no other unpaired origin
+ * model is stored like, so no two origin models become one.
  */
 export function destinationModelOf(
   origin: ModelCoordinate,
   input: ModelMatchInput,
 ): ModelCoordinate | undefined {
-  const renames = input.statements.filter(
-    (statement): statement is ResolvedModelRenameStatement => statement.entity === 'model',
-  );
-  const renamed = renames.find((statement) => sameModel(statement.from, origin));
-  if (renamed !== undefined) return renamed.to;
-  if (!unmatchedByName(origin, renames, input)) return origin;
-  const unmatched = modelCoordinates(input.fromContract).filter((other) =>
-    unmatchedByName(other, renames, input),
+  const paired = input.models.find((rename) => sameModel(rename.from, origin));
+  if (paired !== undefined) return paired.to;
+  const unpaired = modelCoordinates(input.fromContract).filter(
+    (other) => !input.models.some((rename) => sameModel(rename.from, other)),
   );
   const stored = modelCoordinates(input.contract).filter(
     (candidate) =>
       modelAt(input.fromContract, candidate) === undefined &&
-      !renames.some((statement) => sameModel(statement.to, candidate)) &&
+      !input.models.some((rename) => sameModel(rename.to, candidate)) &&
       storedAlike(origin, candidate, input) &&
-      unmatched.filter((other) => storedAlike(other, candidate, input)).length === 1,
+      unpaired.filter((other) => storedAlike(other, candidate, input)).length === 1,
   );
   const [only] = stored;
   return stored.length === 1 ? only : undefined;
-}
-
-/** Whether an origin model has no destination by statement or by name. */
-function unmatchedByName(
-  origin: ModelCoordinate,
-  renames: readonly ResolvedModelRenameStatement[],
-  input: ModelMatchInput,
-): boolean {
-  return (
-    modelAt(input.contract, origin) === undefined &&
-    !renames.some((statement) => sameModel(statement.from, origin))
-  );
 }
 
 /** Whether an origin model and a destination model are stored the same way: neither embedded, the same collection after renames, the same variant value. */
@@ -1000,6 +989,8 @@ function sameVariant(a: SelectedVariant | undefined, b: SelectedVariant | undefi
 /** What finding a model or field of one contract in the other reads: the renames, both contracts, and the collection each origin collection becomes. */
 export interface ModelMatchInput {
   readonly statements: readonly ResolvedRenameStatement[];
+  /** The model renames of the plan, which pair origin models with destination models before pairing by storage. */
+  readonly models: readonly ModelRename[];
   /** The field renames the plan makes, those of its statements and those no statement asks for. */
   readonly fieldRenames: readonly FieldRename[];
   readonly fromContract: ContractWithDomain;

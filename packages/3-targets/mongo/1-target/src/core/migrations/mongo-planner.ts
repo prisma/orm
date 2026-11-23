@@ -656,6 +656,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       fieldRenameCalls,
       fieldRenames,
       callOfStatement,
+      models,
       collections,
       renamedCollections,
     } = statementPlan.value;
@@ -684,6 +685,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         ? undefined
         : {
             statements: renames,
+            models,
             fieldRenames,
             fromContract,
             contract,
@@ -709,6 +711,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         schema.collectionNames.filter((name) => destinationIR.collection(name) !== undefined),
       ),
       collectionAfterRenames: (collection) => renamedTo.get(collection) ?? collection,
+      models,
       enumReplacements: valueReplacements.flatMap(({ call }) =>
         call instanceof ReplaceStoredValueCall ? [call] : [],
       ),
@@ -723,6 +726,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         ? planValidatorFieldRemovals({ origin: schema, destination: destinationIR, contract })
         : planFieldRemovals({
             statements: renames,
+            models,
             fieldRenames,
             fromContract,
             contract,
@@ -737,6 +741,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
         : planFieldTypeChanges(
             {
               statements: renames,
+              models,
               fieldRenames,
               fromContract,
               contract,

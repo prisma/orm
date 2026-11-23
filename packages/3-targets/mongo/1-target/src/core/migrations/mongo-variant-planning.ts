@@ -31,7 +31,7 @@ import {
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
 import { collectionControlPolicy, destinationModelOf, modelAt } from './mongo-statement-planning';
-import { type FieldRename, renameRefused } from './mongo-storage-renames';
+import { type FieldRename, type ModelRename, renameRefused } from './mongo-storage-renames';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
 type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertStatement;
@@ -72,6 +72,8 @@ export interface VariantInput {
   /** The collections the destination keeps. */
   readonly keptCollections: ReadonlySet<string>;
   readonly collectionAfterRenames: (collection: string) => string;
+  /** The plan's model renames, which pair origin models with destination models. */
+  readonly models: readonly ModelRename[];
   /** The plan's replacements of enum values, one of which may already move a variant's discriminator value. */
   readonly enumReplacements: readonly ReplaceStoredValueCall[];
   /** The plan's field renames, those of its statements and those no statement asks for. */
@@ -118,6 +120,7 @@ function destinationOf(
     ),
     fromContract,
     contract: input.contract,
+    models: input.models,
     fieldRenames: input.fieldRenames,
     collectionAfterRenames: input.collectionAfterRenames,
   });

@@ -4,7 +4,16 @@ import {
   type ModelMatchInput,
   originModelOf,
 } from '../src/core/migrations/mongo-statement-planning';
-import { contract, type ModelSpec, NS } from './mongo-statement-fixtures';
+import { modelRenamesOf } from '../src/core/migrations/mongo-storage-renames';
+import {
+  contract,
+  type ModelSpec,
+  NS,
+  plan,
+  planned,
+  renameModel,
+  schemaCollection,
+} from './mongo-statement-fixtures';
 
 const at = (model: string) => ({ namespaceId: NS, model });
 
@@ -13,11 +22,14 @@ function match(
   to: Readonly<Record<string, ModelSpec>>,
   statements: ModelMatchInput['statements'] = [],
 ): ModelMatchInput {
+  const fromContract = contract('from', from, { items: {} });
+  const toContract = contract('to', to, { items: {} });
   return {
     statements,
+    models: modelRenamesOf(statements, fromContract, toContract),
     fieldRenames: [],
-    fromContract: contract('from', from, { items: {} }),
-    contract: contract('to', to, { items: {} }),
+    fromContract,
+    contract: toContract,
     collectionAfterRenames: (collection) => collection,
   };
 }
@@ -59,5 +71,55 @@ describe('destinationModelOf', () => {
       at('Issue'),
       at('Bug'),
     ]);
+  });
+
+  it('pairs an origin model that a statement renames another model to with nothing, as the collection renames do', () => {
+    const statements = [renameModel('Note', 'Task')];
+    const input = match({ Note: plain, Task: plain }, { Task: plain }, statements);
+    expect({
+      note: destinationModelOf(at('Note'), input),
+      task: destinationModelOf(at('Task'), input),
+      originOfTask: originModelOf(at('Task'), input),
+    }).toEqual({ note: at('Task'), task: undefined, originOfTask: at('Note') });
+  });
+});
+
+describe('a model rename statement onto the name of another origin model', () => {
+  it('renames the collection of the renamed model and drops the other, asking about it', () => {
+    const from = contract(
+      'from',
+      {
+        User: { collection: 'users', fields: ['_id', 'email'] },
+        Account: { collection: 'accounts', fields: ['_id', 'name'] },
+      },
+      { users: {}, accounts: {} },
+    );
+    const to = contract(
+      'to',
+      { Account: { collection: 'people', fields: ['_id', 'email'] } },
+      { people: {} },
+    );
+    expect(
+      planned(
+        plan({
+          from,
+          to,
+          schema: [schemaCollection('users'), schemaCollection('accounts')],
+          statements: [renameModel('User', 'Account')],
+        }),
+      ),
+    ).toEqual({
+      labels: ['Rename collection users to people', 'Drop collection accounts'],
+      classes: ['widening', 'destructive'],
+      applied: [[0]],
+      dataLoss: [
+        {
+          operationIndex: 1,
+          subject: { kind: 'model', namespaceId: NS, model: 'Account' },
+          loss: 'drop',
+          label: 'Drop collection accounts',
+        },
+      ],
+    });
   });
 });
