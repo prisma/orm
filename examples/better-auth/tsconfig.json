@@ -19,6 +19,7 @@
     "app/**/*.tsx",
     "src/**/*.ts",
     "test/**/*.ts",
+    "test/**/*.tsx",
     "prisma.config.ts",
     "vitest.config.ts",
     ".next/types/**/*.ts"
