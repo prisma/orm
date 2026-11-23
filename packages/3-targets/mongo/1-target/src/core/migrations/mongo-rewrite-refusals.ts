@@ -113,7 +113,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
   },
   renameStoredKey: {
     keyVerb: 'rename',
-    conflictKind: 'statementRefused',
+    conflictKind: 'unsupportedOperation',
     verb: 'rename a key inside',
     preposition: 'in',
     reaches: 'holding',
@@ -135,7 +135,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
   },
   replaceStoredValue: {
     keyVerb: 'replace',
-    conflictKind: 'statementRefused',
+    conflictKind: 'unsupportedOperation',
     verb: 'replace a value inside',
     preposition: 'in',
     reaches: 'holding',

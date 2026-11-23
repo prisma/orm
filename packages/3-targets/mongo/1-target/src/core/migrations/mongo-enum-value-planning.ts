@@ -691,7 +691,7 @@ function placeRefusals(
         push(
           change.statement === undefined
             ? conflict
-            : { ...conflict, refusedStatement: change.statement },
+            : { ...conflict, kind: 'statementRefused', refusedStatement: change.statement },
         );
       }
     }

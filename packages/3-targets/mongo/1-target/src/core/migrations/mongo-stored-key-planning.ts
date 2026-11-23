@@ -35,6 +35,7 @@ import {
   rewriteRefusals,
 } from './mongo-rewrite-refusals';
 import { collectionControlPolicy, modelAt } from './mongo-statement-planning';
+import { renameRefused } from './mongo-storage-renames';
 import {
   type StoredPlace,
   type StoredType,
@@ -161,6 +162,18 @@ function embeddedModelChanges(
         return to === undefined || to === from ? [] : [to];
       }),
     );
+    const named = (field: string) =>
+      statements.some(
+        (each) =>
+          each.entity === 'field' &&
+          sameModel(each.from, coordinate) &&
+          (each.from.field === field || each.to.field === field),
+      );
+    for (const field of Object.keys(origin.fields)) {
+      if (!Object.hasOwn(destination.fields, field) || named(field)) continue;
+      const to = ownStoredNameOf(destination, field);
+      if (to !== ownStoredNameOf(origin, field)) takenByRename.add(to);
+    }
     return Object.entries(ownStoredNamesOf(origin)).flatMap(([field, from]): KeyChange[] => {
       const subject = { kind: 'field' as const, ...coordinate, field };
       const statement = statements.find(
@@ -172,6 +185,13 @@ function embeddedModelChanges(
           ? ownStoredNameOf(destination, statement.to.field)
           : undefined;
         return to === undefined || to === from ? [] : [{ type, subject, from, to, statement }];
+      }
+      const to =
+        Object.hasOwn(destination.fields, field) && !named(field)
+          ? ownStoredNameOf(destination, field)
+          : undefined;
+      if (to !== undefined && to !== from) {
+        return [{ type, subject, from, to, statement: undefined }];
       }
       return kept.has(from) && !takenByRename.has(from)
         ? []
@@ -198,6 +218,13 @@ function refused(
   reason: string,
   why: (advice: string) => string,
 ): MigrationPlannerConflict {
+  if (change.statement === undefined && change.to !== undefined) {
+    return renameRefused(
+      undefined,
+      `Cannot rename key "${change.from}" to "${change.to}" of ${fieldText(change, contracts)}: ${reason}`,
+      `The stored name of ${fieldText(change, contracts)} changes from "${change.from}" to "${change.to}". ${why(`keep the stored name "${change.from}" in the contract`)}`,
+    );
+  }
   if (change.statement === undefined) {
     return {
       kind: 'fieldRemovalRefused',
@@ -211,6 +238,16 @@ function refused(
     why: why('leave out this statement'),
     refusedStatement: change.statement,
   };
+}
+
+/** A rewrite refusal of a key change, carrying the statement that asks for the change, if one does. */
+function withStatement(
+  conflict: MigrationPlannerConflict,
+  statement: KeyChange['statement'],
+): MigrationPlannerConflict {
+  return statement === undefined || conflict.kind !== 'unsupportedOperation'
+    ? conflict
+    : { ...conflict, kind: 'statementRefused', refusedStatement: statement };
 }
 
 function placeText(place: Pick<StoredPlace, 'collection' | 'field'>): string {
@@ -316,8 +353,10 @@ function policyRefusal(
     change,
     contracts,
     `collection "${place.collection}" has control policy "${policy}"`,
-    () =>
-      'Statements rename only collections, and fields of collections, whose control policy is "managed". Make the change in the database yourself and leave out this statement.',
+    (advice) =>
+      change.statement === undefined
+        ? `The plan rewrites keys only in collections whose control policy is "managed". Make the change in the database yourself, or ${advice}.`
+        : 'Statements rename only collections, and fields of collections, whose control policy is "managed". Make the change in the database yourself and leave out this statement.',
   );
 }
 
@@ -373,7 +412,7 @@ export function planStoredKeyRewrites(
     for (const place of places.value) {
       if (input.schema.collection(place.collection) === undefined) continue;
       const policy = collectionControlPolicy(contract, place.collection);
-      if (policy !== 'managed' && change.statement === undefined) continue;
+      if (policy !== 'managed' && change.to === undefined) continue;
       const refusal =
         policy !== 'managed'
           ? policyRefusal(change, place, policy, contracts)
@@ -406,7 +445,7 @@ export function planStoredKeyRewrites(
         plannedRewriteOf(each, contracts),
         contract,
         rewriteCollectionOf(input.schema, each.place.collection),
-      ),
+      ).map((conflict) => withStatement(conflict, each.change.statement)),
     );
   }
   if (conflicts.length > 0) return notOk(dedupe(conflicts));
