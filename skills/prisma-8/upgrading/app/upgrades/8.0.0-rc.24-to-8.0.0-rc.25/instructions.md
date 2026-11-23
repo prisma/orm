@@ -1200,7 +1200,7 @@ await db.orm.public.Post.where({ id: 10 }).update({
 });
 ```
 
-To change or delete the row the record points at and also point the record at another row, make two calls: first the callback, then the foreign key. Run them in one transaction, because the single call was atomic.
+To change or delete the row the record points at and also point the record at another row, make two calls: first the callback, then the foreign key. Run them in one transaction, because the single call was atomic. Where the foreign key is required, the callback's `delete` is refused: set the foreign key first, then delete the old row through its own collection.
 
 ```ts
 // before
