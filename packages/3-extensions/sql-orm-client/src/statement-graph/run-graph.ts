@@ -16,6 +16,7 @@ import { returningProjection } from '../mutation-statements';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
 import type { CallContext } from '../types';
+import { DeletedRows } from './deleted-rows';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
 import { hiddenColumnsOf } from './include-nodes';
@@ -168,18 +169,19 @@ function shapeRows<Row>(
 ): AsyncIterableResult<Row> {
   const { context, namespaceId, modelName, state } = callerRows;
   const { contract } = context;
+  const read = rowsReadAt(graph, id);
   if (loadsIncludesPerRelation(contract, state.includes)) {
     return consumeRowsWithAttachedIncludes<Row>(
       callerRows,
       storageRows,
-      hiddenColumnsOf(graph, id, state),
+      hiddenColumnsOf(graph, read, state),
     );
   }
   const { tableName } = state.tables.root.storage;
   const selected =
     state.selectedFields ?? getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
   const hiddenColumns = graph
-    .columnsReadFrom(id)
+    .columnsReadFrom(read)
     .map((column) => column.alias)
     .filter((column) => !selected.includes(column));
 
@@ -187,6 +189,14 @@ function shapeRows<Row>(
     stripHiddenMappedFields(contract, namespaceId, modelName, row, hiddenColumns);
     return blindCast<Row, 'the row the read code shaped is the row the caller selected'>(row);
   });
+}
+
+/** The node whose rows the result passes on: the read a `DeletedRows` keeps rows of, else the result itself. */
+function rowsReadAt(graph: Graph, id: NodeId): NodeId {
+  const { found } = graph.inputsOf(id);
+  return graph.nodeAt(id) instanceof DeletedRows && found !== undefined && !Array.isArray(found)
+    ? found.from
+    : id;
 }
 
 function statementNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {

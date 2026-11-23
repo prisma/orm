@@ -43,6 +43,20 @@ describe('deleteAll() that reads its rows first returns only the rows its DELETE
     );
   });
 
+  it('leaves out the key it read only to match the deleted rows, when the caller did not select it', async () => {
+    const { collection, runtime } = createCollectionFor('User');
+    runtime.setNextResults([[{ id: 1, name: 'Ada', posts: [] }], [{ id: 1, name: 'Ada' }]]);
+
+    const rows = await collection
+      .where({ name: 'Ada' })
+      .select('name')
+      .include('posts')
+      .deleteAll()
+      .toArray();
+
+    expect(rows).toEqual([{ name: 'Ada', posts: [] }]);
+  });
+
   it('on a variant stored in its own table', async () => {
     const { tasks: rows, runtime } = tasks();
     runtime.setNextResults([[{ id: 1 }, { id: 2 }], [{ id: 2 }]]);
