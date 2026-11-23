@@ -8,6 +8,7 @@ import {
   SelectAst,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
+import { InternalError } from '@internal/utils/internal-error';
 import {
   hasContractCapability,
   isAutoIncrementColumn,
@@ -321,7 +322,7 @@ function keepRowsTheDeleteRemoved(
   }
   const found = graph.nodeAt(find);
   if (!(found instanceof Find)) {
-    return;
+    throw new InternalError(`node ${find} read the rows a Delete removes, and is not a Find`);
   }
   const { alias } = collection.state.tables.root;
   const identity = sameRowColumns(collection);

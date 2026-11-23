@@ -4,6 +4,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 import { getColumnsReadOnTable } from '../collection-contract';
 import {
   consumeCollectionRows,
@@ -16,7 +17,6 @@ import { returningProjection } from '../mutation-statements';
 import { buildOrmQueryPlan, deriveParamsFromAst } from '../query-plan-meta';
 import { queryPlanRows } from '../query-plan-rows';
 import type { CallContext } from '../types';
-import { DeletedRows } from './deleted-rows';
 import type { Edge, NodeId, StorageRow } from './edge';
 import type { Graph } from './graph';
 import { hiddenColumnsOf } from './include-nodes';
@@ -191,12 +191,19 @@ function shapeRows<Row>(
   });
 }
 
-/** The node whose rows the result passes on: the read a `DeletedRows` keeps rows of, else the result itself. */
+/** The node whose rows reach `id`: followed through every node that passes on the rows of one input. */
 function rowsReadAt(graph: Graph, id: NodeId): NodeId {
-  const { found } = graph.inputsOf(id);
-  return graph.nodeAt(id) instanceof DeletedRows && found !== undefined && !Array.isArray(found)
-    ? found.from
-    : id;
+  const slot = graph.nodeAt(id)?.passesRowsOf;
+  if (slot === undefined) {
+    return id;
+  }
+  const [edge, ...others] = [graph.inputsOf(id)[slot] ?? []].flat();
+  if (edge === undefined || others.length > 0) {
+    throw new InternalError(
+      `node ${id} passes on the rows of slot "${slot}", which holds no single edge`,
+    );
+  }
+  return rowsReadAt(graph, edge.from);
 }
 
 function statementNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {

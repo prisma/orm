@@ -49,6 +49,9 @@ export type SlotLayout<Inputs extends Slots> = {
 export abstract class Node<Inputs extends Slots = Slots> {
   abstract readonly slots: SlotLayout<Inputs>;
 
+  /** The input slot whose rows this node passes on as its own, so the columns other nodes read from them are those rows' hidden columns. */
+  readonly passesRowsOf: (keyof Inputs & string) | undefined = undefined;
+
   abstract execute(inputs: OutputsOf<Inputs>, run: Run): Executed;
 
   checkIfCanRun(_graph: Graph, _id: NodeId, _context: ExecutionContext): void {}

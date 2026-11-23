@@ -10,6 +10,7 @@ type Inputs = { found: WholeRows; deleted: Rows };
 /** The found rows that the delete removed, matched by `identity`, with the values the delete returned. */
 export class DeletedRows extends Node<Inputs> {
   readonly slots = { found: 'one', deleted: 'one' } as const;
+  override readonly passesRowsOf = 'found';
   readonly identity: readonly string[];
 
   constructor(identity: readonly string[]) {
