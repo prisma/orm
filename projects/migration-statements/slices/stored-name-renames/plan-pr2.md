@@ -1,6 +1,6 @@
 # Slice plan — stored-name renames, PR 2: MongoDB
 
-**Spec:** [`spec.md`](./spec.md) (the MongoDB column of each table is the scope) · **Decision:** `docs/architecture docs/adrs/ADR 324 - The same coordinate is the same object.md` · **Linear:** [TML-3840](https://linear.app/prisma-company/issue/TML-3840) · **Branch:** `gandhi-65/tml-3840-mongo-stored-name-renames`, from `origin/main` · **Worktree:** `.claude/worktrees/migration-statements-handover-494725` · **Code map:** [`../../handover-notes/mongo-code-map.md`](../../handover-notes/mongo-code-map.md) (made at 540820453c; a lead, not a source of truth)
+**Spec:** [`spec.md`](./spec.md) (the MongoDB column of each table is the scope) · **Decision:** `docs/architecture docs/adrs/ADR 324 - The same coordinate is the same object.md` · **Linear:** [TML-3840](https://linear.app/prisma-company/issue/TML-3840) · **Branch:** `gandhi-65/tml-3840-mongo-stored-name-renames`, from `origin/main` · **Worktree:** `.claude/worktrees/migration-statements-handover-494725`
 
 PR 2 makes the MongoDB target pair origin and destination objects by coordinate and rename their storage: a collection for a changed `@@map`, a document key for a changed `@map` (also inside embedded models), and a replaced value for a changed enum stored value.
 
