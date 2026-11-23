@@ -25,7 +25,7 @@ changes:
         - '(?<![\w$])PrismaNextConfig(?![\w$])'
   - id: target-package-names-generated-file-modules
     summary: |
-      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan` and `prisma migration new` always, and `prisma db migrate`, `prisma db init`, `prisma db update` and `prisma db sign` when they advance a ref, which `prisma db migrate` now does by default when it reads its connection from the config outside CI. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
+      A package that adds a target must name, in the config its `defineConfig` returns, the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`), and must hand the config target and adapter descriptors whose type declarations state its own types module. Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan` and `prisma migration new` always, `prisma db init`, `prisma db update` and `prisma db sign` when they advance a ref, and `prisma db migrate` when it advances a ref to a contract that has no snapshot under `migrations/snapshots/`. `prisma migration plan` and `prisma migration new` write that snapshot for every migration they create, so `prisma db migrate` rarely needs the module. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -1297,16 +1297,9 @@ await db.orm.public.Post.where({ id: 10 }).update({
 });
 ```
 
-To change or delete the row the record points at and also point the record at another row, make two calls: first the callback, then the foreign key. Run them in one transaction, because the single call was atomic. Where the foreign key is required, the callback's `delete` is refused: set the foreign key first, then delete the old row through its own collection.
+The relation callback's `update` and `delete` are new in this release. To use one of them on the row the record points at and also point the record at another row, make two calls: first the callback, then the foreign key. Run them in one transaction, so that both changes apply or neither does. Where the foreign key is required, the callback's `delete` is refused: set the foreign key first, then delete the old row through its own collection.
 
 ```ts
-// before
-await db.orm.public.Post.where({ id: 10 }).update({
-  authorId: 2,
-  author: (author) => author.update({ name: 'Ada' }),
-});
-
-// after
 await db.transaction(async (tx) => {
   await tx.orm.public.Post.where({ id: 10 }).update({
     author: (author) => author.update({ name: 'Ada' }),

@@ -34,7 +34,7 @@ changes:
         - '(?<![\w$])PrismaNextConfig(?![\w$])'
   - id: hand-assembled-config-names-generated-file-modules
     summary: |
-      A config built with the framework's own `defineConfig`, and not a target package's, must name the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`). Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan` and `prisma migration new` always, and `prisma db migrate`, `prisma db init`, `prisma db update` and `prisma db sign` when they advance a ref, which `prisma db migrate` now does by default when it reads its connection from the config outside CI. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
+      A config built with the framework's own `defineConfig`, and not a target package's, must name the module generated contract types import from (`contract.typesModule`) and the module migration files import from (`migrations.module`). Without `contract.typesModule`, every command that writes contract types fails with `CONFIG.CONTRACT_TYPES_MODULE_MISSING`: `prisma contract emit`, `prisma migration plan` and `prisma migration new` always, `prisma db init`, `prisma db update` and `prisma db sign` when they advance a ref, and `prisma db migrate` when it advances a ref to a contract that has no snapshot under `migrations/snapshots/`. `prisma migration plan` and `prisma migration new` write that snapshot for every migration they create, so `prisma db migrate` rarely needs the module. Without `migrations.module`, `prisma migration plan` and `prisma migration new` fail with `CONFIG.MIGRATION_MODULE_MISSING`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -270,14 +270,14 @@ changes:
         - 'json`[^`]*__proto__'
   - id: mongo-proto-names-refused
     summary: |
-      A MongoDB contract now refuses a model, composite type or value object, enum, collection or root named `__proto__`. Choose another name.
+      A MongoDB contract now refuses a model, composite type or value object, collection or root named `__proto__`, and the TypeScript builder refuses an enum with that name too. In a PSL contract, an enum named `__proto__` is not refused: it is left out of the contract without an error, together with every field typed by it. Choose another name.
     detection:
       glob: "**/*.{prisma,ts}"
       matches:
         - '__proto__'
   - id: sql-proto-names-refused
     summary: |
-      A SQL contract now refuses a namespace, table, column, model or field named `__proto__` with `CONTRACT.NAME_UNUSABLE_AS_KEY`, and a `__proto__` key in an object literal of a TypeScript contract. Before, the entry was dropped or the contract came out wrong. Choose another name.
+      A SQL contract now refuses a namespace, table, column, model, field or enum named `__proto__` with `CONTRACT.NAME_UNUSABLE_AS_KEY`, and a `__proto__` key in an object literal of a TypeScript contract. Before, the entry was dropped or the contract came out wrong. Choose another name.
     detection:
       glob: "**/*.{prisma,ts}"
       matches:
@@ -405,7 +405,7 @@ Do the steps in this order, and skip a step that does not apply to the project:
 5. Run `prisma contract emit` once for every contract and commit what it writes. One emit covers `contract-types-import-from-the-target-package`, `re-emit-for-include-capabilities`, `re-emit-mysql-contract-for-aggregates`, `mysql-reemit-contract`, `sqlite-decimal-codec`, `ts-sqlite-decimal-codec`, `sti-variant-foreign-keys-stored`, `json-default-proto-key-kept` and `contract-artifacts-restamp`. Leave the contract copies under `migrations/` as they are.
 6. Before you plan any migration, read what the planner now does: on PostgreSQL and SQLite a changed stored name is a rename (`sql-stored-name-change-is-a-rename`, `sql-stored-name-delete-is-unused`, `sql-stored-name-empty-table`, `sql-stored-name-swaps-refused`, `sql-lowered-table-names-renamed`), and on MongoDB changes inside documents are asked about and planned (`mongo-nested-removals-are-asked`, `mongo-nested-statements-are-planned`, `mongo-nested-required-field-gets-temporary-value`). A migration planned in the next step can hold such renames. If you add `@@map` to keep a table's old name, run `prisma contract emit` again first.
 7. Bring each database up to date. Plan and apply a migration for a new unique key (`has-one-key-must-be-unique`), for a JSON default that has a `__proto__` key (`json-default-proto-key-kept`) and for the indexes and foreign keys of single-table variants (`sti-variant-unscoped-index-refused`, `sti-variant-foreign-keys-stored`). On SQLite, fix stored values the stricter codecs refuse (`sqlite-decimal-codec`, `sqlite-integer-safe-range`), then sign the database with the new contract as the SQLite section describes. One migration can cover all of these. In a project that applied its earlier migrations with `db migrate` and no `--advance-ref`, there is no `db` ref for `migration plan` to start from: pass `--from <latest migration>`, as the SQLite section shows.
-8. Change the application code: work sent on a transaction while an ORM write runs on it (`orm-write-inside-transaction-suspends-tx`), update data that sets a discriminator (`update-data-refuses-discriminator`), `update()` data that sets a foreign key and also has a callback on its relation (`foreign-key-with-relation-callback-refused`), tables whose only unique key has a nullable column (`nullable-unique-key-is-no-row-identity`), the ORM error codes of nested relation mutations (`relation-mutation-error-codes-merged`), nested creates on a polymorphic model (`nested-create-on-polymorphic-target-needs-variant`, `variant-create-without-returning-names-create`), `disconnect` (`disconnect-on-required-relation-refused`, `to-one-disconnect-criteria-applied`, `disconnect-empty-criteria-disconnects-nothing`), `onConflict: 'skip'` (`create-all-skip-refuses-rows-without-conflict-key`, `create-all-skip-refuses-tables-without-keys`), SQL builder comparisons (`sql-builder-enum-comparison-values-are-checked`), code that reads `meta.target` from a MySQL error (`mysql-errors-drop-meta-target`), scripts that read the `--json` result of `prisma orm init` (`init-target-takes-a-package-name`) and code that matches the first line of `CLI.CONSENT_REQUIRED` (`consent-required-summary-is-one-fixed-sentence`). Two of these fixes change the contract: giving a table a primary key or required key fields (`nullable-unique-key-is-no-row-identity`), and making a foreign key optional (`disconnect-on-required-relation-refused`). After either, emit the contract and plan and apply a migration again.
+8. Change the application code: work sent on a transaction while an ORM write runs on it (`orm-write-inside-transaction-suspends-tx`), update data that sets a discriminator (`update-data-refuses-discriminator`), `update()` data that sets a foreign key and also has a callback on its relation (`foreign-key-with-relation-callback-refused`), tables whose only unique key has a nullable column (`nullable-unique-key-is-no-row-identity`), the ORM error codes of nested relation mutations (`relation-mutation-error-codes-merged`), nested creates on a polymorphic model (`nested-create-on-polymorphic-target-needs-variant`, `variant-create-without-returning-names-create`), `disconnect` (`disconnect-on-required-relation-refused`, `to-one-disconnect-criteria-applied`, `disconnect-empty-criteria-disconnects-nothing`), `onConflict: 'skip'` (`create-all-skip-refuses-rows-without-conflict-key`, `create-all-skip-refuses-tables-without-keys`), SQL builder comparisons (`sql-builder-enum-comparison-values-are-checked`), code that reads `meta.target` from a MySQL error (`mysql-errors-drop-meta-target`), scripts that read the `--json` result of `prisma orm init` (`init-target-takes-a-package-name`) and code that matches the first line of `CLI.CONSENT_REQUIRED` (`consent-required-summary-is-one-fixed-sentence`). Three of these fixes change the contract: giving a table a primary key or required key fields (`nullable-unique-key-is-no-row-identity`), giving a table a key for `onConflict: 'skip'` (`create-all-skip-refuses-tables-without-keys`), and making a foreign key optional (`disconnect-on-required-relation-refused`). After any of them, emit the contract and plan and apply a migration again.
 
 
 ## PostgreSQL: `money` needs the database's `lc_monetary` to print the `C` form
@@ -720,7 +720,7 @@ The column helpers of the TypeScript contract builder are renamed after the expl
 
 The `Decimal` and `BigIntNumber` changes below change the contract's storage hash, so `db verify` reports `CONTRACT.MARKER_MISMATCH` until the database is signed with the new contract. After re-emitting the contract:
 
-- In a project with migrations, run `migration plan --from <latest migration>`, where `<latest migration>` is the name of the newest folder under `migrations/`. It writes a migration that names the changed table, and `db migrate` applies it and signs the database. The migration has no operations, unless the project's tables still have lowered names: then it also holds the renames `sql-lowered-table-names-renamed` describes. No table is rebuilt. Without `--from`, `migration plan` starts from the `db` ref. A project that applied its migrations with `db migrate` before this release, without `--advance-ref`, has none, so the command refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN`.
+- In a project with migrations, run `migration plan --from <latest migration>`, where `<latest migration>` is the name of the newest folder under `migrations/`. It writes a migration that names the changed table, and `db migrate` applies it and signs the database. When signing is the only change, the migration has no operations. It holds operations only for the other changes of this upgrade that you plan in it, as step 7 allows, such as the renames `sql-lowered-table-names-renamed` describes. No table is rebuilt for the `Decimal` and `BigIntNumber` changes. Without `--from`, `migration plan` starts from the `db` ref. A project that applied its migrations with `db migrate` before this release, without `--advance-ref`, has none, so the command refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN`.
 - In a project without migrations, run `db update`. It runs no operation and signs the database.
 
 `db verify --schema-only` passes before and after: the columns are the same.
@@ -1142,17 +1142,19 @@ JavaScript reads `__proto__` as the prototype of an object rather than as a key,
 A model is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
+In a PSL contract, an enum named `__proto__` is not refused: it is left out of the contract without an error, together with every field typed by it.
+
 Rename the model, composite type, enum or root. For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there, so rename that collection in the database to the new name (`renameCollection`) in the same deployment. The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
 ### `sql-proto-names-refused`
 
-A SQL contract refuses the same name. A namespace, table, column, model or field named `__proto__`, including a stored name given with `@@map("__proto__")` or `@map("__proto__")`, fails `prisma contract emit` with:
+A SQL contract refuses the same name. A namespace, table, column, model, field or enum named `__proto__`, including a stored name given with `@@map("__proto__")` or `@map("__proto__")`, fails `prisma contract emit` with:
 
 ```text
 CONTRACT.NAME_UNUSABLE_AS_KEY: A table in namespace "public" is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-Choose another name. A PSL enum named `__proto__` is not refused: it is left out of the contract without an error, so rename it too. In a TypeScript contract, an object literal with a `__proto__:` key is refused too; it used to drop the entry without an error. Such a contract did not work before: the entry was dropped or the contract came out wrong.
+Choose another name. In a TypeScript contract, an object literal with a `__proto__:` key is refused too; it used to drop the entry without an error. Such a contract did not work before: the entry was dropped or the contract came out wrong.
 
 A SQL query builder `select` that names a result column `__proto__` is refused with `RUNTIME.AST_INVALID`; choose another alias.
 
@@ -1200,16 +1202,9 @@ await db.orm.public.Post.where({ id: 10 }).update({
 });
 ```
 
-To change or delete the row the record points at and also point the record at another row, make two calls: first the callback, then the foreign key. Run them in one transaction, because the single call was atomic. Where the foreign key is required, the callback's `delete` is refused: set the foreign key first, then delete the old row through its own collection.
+The relation callback's `update` and `delete` are new in this release. To use one of them on the row the record points at and also point the record at another row, make two calls: first the callback, then the foreign key. Run them in one transaction, so that both changes apply or neither does. Where the foreign key is required, the callback's `delete` is refused: set the foreign key first, then delete the old row through its own collection.
 
 ```ts
-// before
-await db.orm.public.Post.where({ id: 10 }).update({
-  authorId: 2,
-  author: (author) => author.update({ name: 'Ada' }),
-});
-
-// after
 await db.transaction(async (tx) => {
   await tx.orm.public.Post.where({ id: 10 }).update({
     author: (author) => author.update({ name: 'Ada' }),

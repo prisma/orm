@@ -210,6 +210,10 @@ Fill the [`docs/releases/README.md`](../../docs/releases/README.md) template int
 
 - <bug fix>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>))
 
+## Known problems
+
+- <a defect this release ships with: what the reader sees, and what to do>.
+
 ## New contributors
 
 - [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/orm/pull/<pr>)
