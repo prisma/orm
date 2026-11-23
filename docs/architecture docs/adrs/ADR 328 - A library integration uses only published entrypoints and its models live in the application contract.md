@@ -62,7 +62,7 @@ When the library's configuration needs a model or field the contract lacks, the 
 - **It proves the public interface is enough.** A community author who integrates another library has only the published packages. If Prisma's own integration needed a private import, theirs could not be written. Each gap found this way is a gap in the public interface, to be fixed there or recorded as a limit, not bridged with a private import.
 - **One copy of Prisma's code.** The package holds `@prisma/orm-framework` and `@prisma/orm-family-sql` as peers at the exact version of the application's database package, which always installs them. The package manager reports a mismatch, where a regular dependency would silently load a second copy of the ORM client's filter functions.
 
-Two checks keep the rule: the lint for consumer imports (`pnpm lint:consumer-internal-imports`) treats the package as a consumer and reads its imports and its manifest, which refuses `@internal/*` names, and a test in the package refuses any `@repo/*` name other than the shared build and TypeScript configuration.
+Two checks keep the rule: the lint for consumer imports (`pnpm lint:consumer-internal-imports`) treats the package as a consumer and refuses `@internal/*` names in its imports and its manifest, and a test in the package refuses any `@repo/*` name other than the shared build and TypeScript configuration.
 
 ## Why the models live in the application's contract
 

@@ -4,7 +4,7 @@ Notes for people who change this package. For how to use it, see the [README](RE
 
 ## Rules the package keeps
 
-- `src/` imports only `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@better-auth/core`. It imports no private package of the Prisma repository and no database package. `pnpm lint:consumer-internal-imports` and `test/repository-packages.test.ts` check this.
+- `src/` imports only `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@better-auth/core`. It imports no private package of the Prisma repository and no database package. `pnpm lint:consumer-internal-imports` refuses `@internal/*` names and `test/repository-packages.test.ts` refuses `@repo/*` names. Nothing checks for a database package.
 - Errors the package raises are `BetterAuthError`s, because Better Auth and its command-line program recognise that class. Errors from the Prisma client pass through unchanged.
 - No classes and no Node-only API in `src/`, which Better Auth's own repository requires of its adapters.
 
@@ -15,7 +15,7 @@ Notes for people who change this package. For how to use it, see the [README](RE
 - **MySQL and MariaDB are refused.** Those filters would be wrong there: `length()` counts bytes, and the default collation ignores case. Adding the targets to the accepted list is not enough; the filters must be made right and Better Auth's suites run on those databases first.
 - **`consumeOne` and `incrementOne` are not implemented.** Better Auth then uses its own fallback, a read followed by a guarded delete or update. The Prisma client cannot delete one row and return it in one statement, or update a column with an expression such as `count = count + 1`.
 - **JSON and list fields are stored as text.** The adapter tells Better Auth it supports neither, so Better Auth serialises them.
-- **Every call applies a filter, even an empty one.** Without `where`, the Prisma client's `update()` and `delete()` act on one arbitrary row.
+- **Every read, update and delete applies a filter, even an empty one (`all()`).** The Prisma client's `update`, `updateAndCount` and `deleteAndCount` require an earlier `where(...)`. Its types enforce this, and the adapter's loose types would not show that it was missing.
 - **The peer range for `@better-auth/core` stops below the next minor version.** The contract check is registered through `registerSchemaCheck` from `@better-auth/core/db/internal`, which Better Auth labels internal. The module is imported as a namespace and the function is used only when it exists, so a release that removes it leaves the adapter working without the check. Widen the range only after running the conformance suites against the new minor version.
 - **The inside is loosely typed.** No published type says "a client whose contract contains these models". Correctness comes from the contract at run time, the contract check and the tests.
 
