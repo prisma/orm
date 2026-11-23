@@ -68,10 +68,7 @@ export function planJoins(
 export function moveJoinedRows(row: Row, included: readonly IncludedJoin[]): Row {
   if (included.length === 0) return row;
   const moved: Row = { ...row };
-  for (const { relation, key } of included) {
-    const value = moved[relation];
-    delete moved[relation];
-    moved[key] = value;
-  }
+  for (const { relation } of included) delete moved[relation];
+  for (const { relation, key } of included) moved[key] = row[relation];
   return moved;
 }
