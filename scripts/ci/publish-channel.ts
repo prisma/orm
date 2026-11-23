@@ -1,17 +1,15 @@
 /**
  * Two publishers share the npm package `prisma`. prisma/prisma-cli (Prisma 8) owns its `latest`, `dev` and `next`
- * tags. This branch (Prisma 7) owns `prev`, `prev-dev`, `patch-dev` and `integration`.
- *
- * The `@prisma/*` packages still get stable releases on `latest` from this branch, so for them `prev-dev` means
- * "Prisma 7 dev build", not "dev line of `prev`". Revisit these names when Prisma 9 ships and 8.x needs `prev`.
+ * tags, so this branch (Prisma 7) publishes `prisma` under `prev` where other packages get `latest`, and under
+ * `prev-dev` where other packages get `dev`. The `@prisma/*` packages have no Prisma 8 version, so their tags are
+ * unchanged. Revisit these names when Prisma 9 ships and 8.x needs `prev`.
  */
-export const DEV_DIST_TAG = 'prev-dev'
-
-export const PRISMA_STABLE_DIST_TAG = 'prev'
+const PRISMA_DIST_TAGS: ReadonlyMap<string, string> = new Map([
+  ['latest', 'prev'],
+  ['dev', 'prev-dev'],
+])
 
 const PRISMA_MAJOR = 7
-
-const PRISMA_CLI_OWNED_DIST_TAGS: ReadonlySet<string> = new Set(['latest', 'dev', 'next'])
 
 export type PublishChannelInput = {
   branch: string | undefined
@@ -43,7 +41,7 @@ export function getPublishChannel({
   if (releaseVersion) {
     return { kind: 'release', tag: 'latest', ecosystemTestsBranch: 'dev' }
   }
-  return { kind: 'dev', tag: DEV_DIST_TAG }
+  return { kind: 'dev', tag: 'dev' }
 }
 
 /**
@@ -52,13 +50,13 @@ export function getPublishChannel({
  */
 export function getPackageDistTag(pkgName: string, tag: string): string {
   if (pkgName !== 'prisma') return tag
-  if (tag === 'latest') return PRISMA_STABLE_DIST_TAG
-  if (PRISMA_CLI_OWNED_DIST_TAGS.has(tag)) {
+  const prismaTag = PRISMA_DIST_TAGS.get(tag) ?? tag
+  if (prismaTag === 'next') {
     throw new Error(
-      `Refusing to publish prisma under the "${tag}" dist-tag: prisma/prisma-cli owns it for Prisma 8. Prisma 7 dev builds use "${DEV_DIST_TAG}".`,
+      `Refusing to publish prisma under the "next" dist-tag: prisma/prisma-cli owns it for Prisma 8. Prisma 7 uses "prev" and "prev-dev".`,
     )
   }
-  return tag
+  return prismaTag
 }
 
 /**
