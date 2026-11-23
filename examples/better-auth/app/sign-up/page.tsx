@@ -22,15 +22,16 @@ export default function SignUp() {
         email: String(form.get('email')),
         password: String(form.get('password')),
       });
-      if (error) {
-        setError(failureMessage(error, 'Sign up'));
+      if (!error) {
+        router.push('/');
+        router.refresh();
         return;
       }
-      router.push('/');
-      router.refresh();
-    } finally {
-      setPending(false);
+      setError(failureMessage(error, 'Sign up'));
+    } catch {
+      setError(failureMessage({}, 'Sign up'));
     }
+    setPending(false);
   }
 
   return (

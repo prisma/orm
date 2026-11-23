@@ -15,14 +15,15 @@ export function SignOutButton() {
     setPending(true);
     try {
       const { error } = await authClient.signOut();
-      if (error) {
-        setError(failureMessage(error, 'Sign out'));
+      if (!error) {
+        router.refresh();
         return;
       }
-      router.refresh();
-    } finally {
-      setPending(false);
+      setError(failureMessage(error, 'Sign out'));
+    } catch {
+      setError(failureMessage({}, 'Sign out'));
     }
+    setPending(false);
   }
 
   return (

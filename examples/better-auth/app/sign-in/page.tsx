@@ -21,15 +21,16 @@ export default function SignIn() {
         email: String(form.get('email')),
         password: String(form.get('password')),
       });
-      if (error) {
-        setError(failureMessage(error, 'Sign in'));
+      if (!error) {
+        router.push('/');
+        router.refresh();
         return;
       }
-      router.push('/');
-      router.refresh();
-    } finally {
-      setPending(false);
+      setError(failureMessage(error, 'Sign in'));
+    } catch {
+      setError(failureMessage({}, 'Sign in'));
     }
+    setPending(false);
   }
 
   return (
