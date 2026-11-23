@@ -380,6 +380,19 @@ describe('self-join via as()', () => {
     expect(ast.joins).toHaveLength(1);
     expect((ast.joins![0]!.source as TableSource).alias).toBe('u2');
   });
+
+  it('a column name three aliases share is not a top-level field', () => {
+    const d = db();
+    const joined = d.public.users
+      .as('u1')
+      .innerJoin(d.public.users.as('u2'), (f, fns) => fns.eq(f.u1.id, f.u2.id))
+      .innerJoin(d.public.users.as('u3'), (f, fns) => fns.eq(f.u1.id, f.u3.id));
+    expect(() => joined.select('email' as never)).toThrow(
+      expect.objectContaining({ code: 'ORM.COLUMN_UNKNOWN' }),
+    );
+    const ast = getAst(joined.select((f) => ({ email: f.u3.email })));
+    expect(ast.projection.map((item) => item.expr)).toEqual([ColumnRef.of('u3', 'email')]);
+  });
 });
 
 describe('orderBy', () => {

@@ -46,3 +46,20 @@ test('a column name shared by aliased copies of a table is reached only through 
     SqlQueryPlan<{ email: string }>
   >();
 });
+
+test('inside a lateral subquery, a column name the parent tables also have is reached only through a table', () => {
+  db.public.users
+    .innerJoin(db.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+    .lateralJoin('profile', (lateral) =>
+      lateral
+        .from(db.public.profiles)
+        .select('bio')
+        .where((f, fns) => {
+          // @ts-expect-error users, posts and profiles all have id
+          f.id;
+          expectTypeOf(f.bio).not.toBeAny();
+          expectTypeOf(f.profiles.id).not.toBeAny();
+          return fns.eq(f.profiles.user_id, f.users.id);
+        }),
+    );
+});
