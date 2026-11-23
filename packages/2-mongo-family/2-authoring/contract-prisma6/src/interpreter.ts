@@ -123,8 +123,8 @@ interface ModelBuild {
   readonly storedNames: Map<string, string>;
   readonly ignoredFields: Set<string>;
   readonly rejectedFields: Set<string>;
-  readonly fields: Record<string, ContractField>;
-  readonly relations: Record<string, ContractReferenceRelation>;
+  readonly fields: Map<string, ContractField>;
+  readonly relations: Map<string, ContractReferenceRelation>;
   /** The generators `@default(now())` and `@updatedAt` resolve to, by field name. */
   readonly generatedValues: Map<string, ExecutionMutationDefaultPhases>;
   readonly uniqueFields: IndexAttribute[];
@@ -355,7 +355,7 @@ export function interpretPrisma6Documents(
 
   const valueObjects: ValueObjectNode[] = compositeTypes.map((located) => ({
     name: located.symbol.name,
-    fields: Object.entries(readCompositeFields(located, typeContext)).map(([fieldName, field]) =>
+    fields: [...readCompositeFields(located, typeContext)].map(([fieldName, field]) =>
       fieldNodeOf(fieldName, field),
     ),
   }));
@@ -386,16 +386,25 @@ export function interpretPrisma6Documents(
   diagnostics.push(...mapPslDiagnostics(paired.diagnostics, mergedSources(input.documents)));
   for (const { modelName, fieldName, relation } of paired.relations) {
     const build = builds.get(modelName);
-    if (build !== undefined) build.relations[fieldName] = relation;
+    build?.relations.set(fieldName, relation);
   }
 
   const modelNodes: ModelNode[] = [];
   const sites: Prisma6Sites = { fields: new Map(), indexes: new Map(), enums: enumSites };
+  for (const { symbol, sourceId } of compositeTypes) {
+    for (const field of Object.values(symbol.fields)) {
+      sites.fields.set(fieldSiteKey(symbol.name, field.name), {
+        sourceId,
+        span: field.span,
+        storedName: field.name,
+      });
+    }
+  }
   for (const [modelName, build] of builds) {
     const { sourceId } = build.located;
     const indexes = buildIndexes(build, diagnostics);
     sites.indexes.set(modelName, indexes);
-    for (const fieldName of Object.keys(build.fields)) {
+    for (const fieldName of [...build.fields.keys(), ...build.relations.keys()]) {
       const symbol = build.located.symbol.fields[fieldName];
       if (symbol === undefined) continue;
       sites.fields.set(fieldSiteKey(modelName, fieldName), {
@@ -407,12 +416,12 @@ export function interpretPrisma6Documents(
     modelNodes.push({
       modelName,
       collection: build.collection,
-      fields: Object.entries(build.fields).map(([fieldName, field]) => ({
+      fields: [...build.fields].map(([fieldName, field]) => ({
         ...fieldNodeOf(fieldName, field),
         ...storedNameOf(fieldName, build.storedNames),
         ...ifDefined('generatedValues', build.generatedValues.get(fieldName)),
       })),
-      relations: Object.entries(build.relations).map(([fieldName, relation]) =>
+      relations: [...build.relations].map(([fieldName, relation]) =>
         relationNodeOf(fieldName, relation),
       ),
       indexes: indexes.map(({ index }) => index),
@@ -863,12 +872,12 @@ function resolveFieldType(
 function readCompositeFields(
   located: Located<CompositeTypeSymbol>,
   ctx: TypeContext,
-): Record<string, ContractField> {
+): Map<string, ContractField> {
   const { symbol, sourceId } = located;
   for (const attribute of symbol.attributes) {
     ctx.diagnostics.push(unknownAttribute(`Type "${symbol.name}"`, attribute, '@@', sourceId));
   }
-  const fields: Record<string, ContractField> = {};
+  const fields = new Map<string, ContractField>();
   for (const field of Object.values(symbol.fields)) {
     if (field.malformedType) continue;
     const label = `Field "${symbol.name}.${field.name}"`;
@@ -911,7 +920,7 @@ function readCompositeFields(
       sourceId,
       ctx,
     );
-    if (resolved !== undefined) fields[field.name] = resolved;
+    if (resolved !== undefined) fields.set(field.name, resolved);
   }
   return fields;
 }
@@ -959,8 +968,8 @@ function readModel(
     storedNames: new Map(),
     ignoredFields: new Set(),
     rejectedFields: new Set(),
-    fields: {},
-    relations: {},
+    fields: new Map(),
+    relations: new Map(),
     generatedValues: new Map(),
     uniqueFields: [],
     modelIndexes: [],
@@ -1131,7 +1140,7 @@ function readModelField(
       diagnostics.push(defaultUnsupported(label, defaultAttribute, owner, field, sourceId));
       return;
     }
-    build.fields[field.name] = resolved;
+    build.fields.set(field.name, resolved);
     return;
   }
 
@@ -1177,7 +1186,7 @@ function readModelField(
     );
     return;
   }
-  build.fields[field.name] = resolved;
+  build.fields.set(field.name, resolved);
   if (phases !== undefined) build.generatedValues.set(field.name, phases);
 }
 
@@ -1478,12 +1487,12 @@ function readRelationFields(
       reject();
       continue;
     }
-    build.relations[field.name] = {
+    build.relations.set(field.name, {
       to: crossRef(field.typeName, namespaceId),
       cardinality: 'N:1',
       nullable: field.optional,
       on: { localFields: localNames, targetFields: targetNames },
-    };
+    });
     out.foreignKeys.push({
       declaringModel: symbol.name,
       targetModel: field.typeName,

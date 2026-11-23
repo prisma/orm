@@ -204,6 +204,27 @@ describe('the Prisma 6 reader on the contract builder', () => {
     ]);
   });
 
+  it.each([
+    ['a field', 'field-named-proto', 'A field of model "User"', 'field', 8],
+    [
+      'a composite type member',
+      'composite-member-named-proto',
+      'A field of composite type "Address"',
+      'field',
+      7,
+    ],
+    ['a relation', 'relation-named-proto', 'A relation of model "User"', 'relation', 9],
+    ['a back relation', 'back-relation-named-proto', 'A relation of model "User"', 'relation', 8],
+  ])('refuses %s named __proto__, at its declaration', async (_, caseName, subject, kind, line) => {
+    expect(await diagnosticsOf(caseName)).toEqual([
+      {
+        code: 'PSL_STORED_NAME_UNSUPPORTED',
+        message: `${subject} is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Prisma 8 cannot read or write a ${kind} of that name.`,
+        line,
+      },
+    ]);
+  });
+
   it('reports a relation on a refused field once, at the field', async () => {
     const result = await loadPrisma6Schema(
       join(casesDir, 'relation-on-rejected-field', 'schema.prisma'),
