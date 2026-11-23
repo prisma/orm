@@ -5,6 +5,9 @@ import {
   migrationSubjectJson,
 } from '@internal/framework-components/control';
 import { readMigrationsDir } from '@internal/migration-tools/io';
+import { reconstructGraph } from '@internal/migration-tools/migration-graph';
+import { readRefs } from '@internal/migration-tools/refs';
+import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -14,13 +17,23 @@ import {
   notOk,
   ok,
 } from '@prisma/cli-engine/protocol';
-import { join } from 'pathe';
 import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   type ResolveContractRefToSnapshotSuccess,
   resolveContractRefToSnapshot,
 } from '../../control-api/operations/contract-snapshot-resolution';
+import {
+  type DatabasePosition,
+  databasePositionOf,
+  type MigrationPlanArguments,
+  migrationPlanArguments,
+  migrationPlanChoice,
+  migrationPlanForDatabase,
+  migrationPlanTo,
+  type PlanEnd,
+  type PlanSpace,
+} from '../../control-api/operations/plan-arguments';
 import {
   buildRefAdvancementFields,
   type ContractIR,
@@ -73,8 +86,8 @@ function updatePresentations(inputs: {
   readonly document: MigrationCommandResult;
   /** Where the CLI ran and the `--config`, `--db` and other flags it was given, which printed commands repeat. */
   readonly invocation: CliInvocation;
-  /** The contract the database was at before the run, when a migration on disk ends at it. */
-  readonly databaseStorageHash: string | undefined;
+  /** The `migration plan` that takes the database, as it was before the run, where the run went. */
+  readonly migrationPlan: MigrationPlanArguments | undefined;
   readonly contractPath: string;
   readonly database: string | undefined;
   readonly to: string | undefined;
@@ -97,7 +110,7 @@ function updatePresentations(inputs: {
           ...(dryRun ? [{ label: 'mode', value: 'dry run' }] : []),
         ],
       },
-      ...migrationResultBlocks(document, inputs.invocation, inputs.databaseStorageHash),
+      ...migrationResultBlocks(document, inputs.invocation, inputs.migrationPlan),
     ],
     json: () => document,
     next: () =>
@@ -323,21 +336,41 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       const cannotBeVariantConverts = fieldStatements.filter(
         ({ verb, text }) => verb === 'backfill' || text.split('.').length === 3,
       );
-      if (cannotBeVariantConverts.length > 0) {
-        const databaseStorageHash = await databaseContractIfReachable({
+      let destination: ResolveContractRefToSnapshotSuccess | undefined;
+      if (args.flags.to !== undefined) {
+        const resolved = await resolveContractRefToSnapshot({
           config: ctx.config,
-          cwd: ctx.cwd,
-          db: args.flags.db,
-          commandName: 'db update',
-          createClient,
+          migrationsDir: migrationsDirFor(ctx.config),
+          refInput: args.flags.to,
+          argument: '--to',
+          fallbackToEmitted: false,
         });
+        if (!resolved.ok) {
+          return notOk(normalizeError(resolved.failure));
+        }
+        destination = resolved.value;
+      }
+      if (cannotBeVariantConverts.length > 0) {
+        const migrationPlan = await migrationPlanIfReachable(
+          {
+            config: ctx.config,
+            cwd: ctx.cwd,
+            db: args.flags.db,
+            commandName: 'db update',
+            createClient,
+          },
+          destination,
+        );
         return notOk(
           normalizeError(
             errorStatementNeedsMigrationFile(
               given,
               cannotBeVariantConverts,
-              cliInvocation(ctx, args.flags.db),
-              databaseStorageHash,
+              {
+                ...cliInvocation(ctx, args.flags.db),
+                rerunArgs: rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
+              },
+              migrationPlan,
             ),
           ),
         );
@@ -354,20 +387,6 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             ...ctx.statements.take('allow').map(({ text }) => ({ verb: 'allow' as const, text })),
           ]
         : [];
-      let destination: ResolveContractRefToSnapshotSuccess | undefined;
-      if (args.flags.to !== undefined) {
-        const resolved = await resolveContractRefToSnapshot({
-          config: ctx.config,
-          migrationsDir: migrationsDirFor(ctx.config),
-          refInput: args.flags.to,
-          argument: '--to',
-          fallbackToEmitted: false,
-        });
-        if (!resolved.ok) {
-          return notOk(normalizeError(resolved.failure));
-        }
-        destination = resolved.value;
-      }
       if (args.flags.permitPolicyChange === true && destination?.ref === undefined) {
         return notOk(
           normalizeError(
@@ -422,7 +441,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
 
       const mode = args.flags.dryRun ? 'plan' : 'apply';
       let document: MigrationCommandResult;
-      let databaseStorageHash: string | undefined;
+      let migrationPlan: MigrationPlanArguments | undefined;
       try {
         await client.connect(dbConnection);
 
@@ -445,6 +464,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             rerunArgs: rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
             statementArgs,
           },
+          ...ifDefined('emittedContractHash', storageHashOf(prepared.value.contractJson)),
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
           onProgress: controlProgressReporter(ctx.report),
         });
@@ -472,7 +492,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           return notOk(normalizeError(advanced.failure));
         }
 
-        databaseStorageHash = result.value.databaseStorageHash;
+        migrationPlan = result.value.migrationPlan;
         document = updateDocument({
           value: result.value,
           targetId: ctx.config.target.targetId,
@@ -529,7 +549,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
               ...cliInvocation(ctx, args.flags.db),
               rerunArgs: rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
             },
-            databaseStorageHash,
+            migrationPlan,
             contractPath: prepared.value.contractDisplayPath,
             database: prepared.value.database,
             to: args.flags.to,
@@ -545,38 +565,95 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
 export const dbUpdateCommand = createDbUpdateCommand(createControlClient);
 
 /**
- * The storage hash of the contract the database is at, when the database already exists and can be
- * reached and a migration of the application space ends at that contract, so that `migration plan
- * --from` resolves it. Anything else gives undefined: this only adds `--from` to a refusal, and it
- * never creates a database to read the marker.
+ * The `migration plan` that takes the database where `db update` goes: to `destination`, the
+ * contract `--to` named, or else the emitted contract. The migrations and refs are read offline;
+ * when the database cannot be read, the user chooses where the plan starts, told why.
  */
-async function databaseContractIfReachable(
+async function migrationPlanIfReachable(
   inputs: Parameters<typeof prepareMigrationRun>[0],
-): Promise<string | undefined> {
+  destination: ResolveContractRefToSnapshotSuccess | undefined,
+): Promise<MigrationPlanArguments> {
+  const end: PlanEnd =
+    destination === undefined
+      ? { kind: 'emitted' }
+      : destination.ref !== undefined
+        ? { kind: 'ref', name: destination.ref.name }
+        : { kind: 'contract', hash: destination.hash };
   const prepared = await prepareMigrationRun(inputs);
-  if (!prepared.ok) return undefined;
+  if (!prepared.ok) {
+    return {
+      from: migrationPlanChoice(
+        undefined,
+        'The CLI could not prepare a connection to the database from the config',
+      ),
+      to: migrationPlanTo(NO_MIGRATIONS, end),
+    };
+  }
   const { client, dbConnection, migrationsDir } = prepared.value;
-  const read = async (): Promise<string | undefined> => {
+  const emittedHash = storageHashOf(prepared.value.contractJson);
+  const space = await readPlanSpace(migrationsDir, emittedHash).catch(() => undefined);
+  const readMarker = async () => {
     await client.connect(dbConnection, {
       existingDatabaseOnly: true,
       connectTimeoutMs: MARKER_READ_TIMEOUT_MS,
     });
-    const marker = await client.readMarker();
-    if (marker === null) return undefined;
-    const { packages } = await readMigrationsDir(join(migrationsDir, APP_SPACE_ID), {
-      migrationsDir,
-    });
-    return packages.some(({ metadata }) => metadata.to === marker.storageHash)
-      ? marker.storageHash
-      : undefined;
+    return { kind: 'read', marker: await client.readMarker() } as const;
   };
-  const settled = read()
-    .catch(() => undefined)
+  const settled = readMarker()
+    .catch((error: unknown) => ({ kind: 'failed', cause: causeText(error) }) as const)
     .finally(() => closeQuietly(client));
-  return settledWithin(settled, MARKER_READ_TIMEOUT_MS);
+  const read = await settledWithin(settled, MARKER_READ_TIMEOUT_MS);
+  const position: DatabasePosition =
+    read === undefined
+      ? {
+          kind: 'unknown',
+          reason: `The CLI could not read the database within ${MARKER_READ_TIMEOUT_MS / 1000} seconds to find the contract it is at`,
+        }
+      : read.kind === 'failed'
+        ? { kind: 'unknown', reason: `The CLI could not read the database: ${read.cause}` }
+        : databasePositionOf(read.marker?.storageHash);
+  if (space !== undefined) {
+    return read?.kind === 'read'
+      ? migrationPlanForDatabase(space, read.marker, end)
+      : migrationPlanArguments(space, position, end);
+  }
+  return {
+    from: migrationPlanChoice(
+      undefined,
+      position.kind === 'unknown' ? position.reason : 'The CLI could not read the migrations',
+    ),
+    to: migrationPlanTo({ ...NO_MIGRATIONS, ...ifDefined('emittedHash', emittedHash) }, end),
+  };
 }
 
-/** How long the refusal waits for the marker before it refuses without `--from`. */
+/** A space read as having no migrations and no refs, for when the migrations cannot be read. */
+const NO_MIGRATIONS: PlanSpace = { graph: reconstructGraph([]), refs: {} };
+
+function storageHashOf(contractJson: Record<string, unknown>): string | undefined {
+  const storage = contractJson['storage'];
+  if (typeof storage !== 'object' || storage === null) return undefined;
+  const hash = 'storageHash' in storage ? storage.storageHash : undefined;
+  return typeof hash === 'string' ? hash : undefined;
+}
+
+function causeText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function readPlanSpace(
+  migrationsDir: string,
+  emittedHash: string | undefined,
+): Promise<PlanSpace> {
+  const appDir = spaceMigrationDirectory(migrationsDir, APP_SPACE_ID);
+  const { packages } = await readMigrationsDir(appDir, { migrationsDir });
+  return {
+    graph: reconstructGraph(packages),
+    refs: await readRefs(spaceRefsDirectory(appDir)),
+    ...ifDefined('emittedHash', emittedHash),
+  };
+}
+
+/** How long the refusal waits for the database before it leaves the plan's origin to the user. */
 const MARKER_READ_TIMEOUT_MS = 3000;
 
 function settledWithin<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {

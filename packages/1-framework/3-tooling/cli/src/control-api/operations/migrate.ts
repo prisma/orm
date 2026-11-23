@@ -31,7 +31,6 @@ import {
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
-import type { MigrationGraph } from '@internal/migration-tools/graph';
 import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
@@ -44,6 +43,7 @@ import {
   type CliStructuredError,
   errorMigrationHasUnfilledPlaceholders,
   errorPathUnreachable,
+  type PathUnreachable,
   type PathUnreachableMeta,
   planThenApply,
 } from '../../utils/cli-errors';
@@ -56,6 +56,7 @@ import { migrateRunnerFailureError } from '../../utils/migrate-failure';
 import type { DataProtectionRefusedOperation } from '../../utils/policy-errors';
 import { declaredSettingsText, errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
+import type { FailedMigrationOnDisk } from '../../utils/runner-failure-advice';
 import { subjectText } from '../statements/plan-questions';
 import type {
   MigratePathDecision,
@@ -78,6 +79,16 @@ import {
   refuseForbiddenChanges,
 } from './database-policies';
 import { noInvariantPathError } from './no-invariant-path';
+import {
+  appSpaceOf,
+  type DatabasePosition,
+  databasePositionOf,
+  type MigrationPlanArguments,
+  migrationPlanArguments,
+  migrationPlanReplacing,
+  type PlanEnd,
+  type PlanSpace,
+} from './plan-arguments';
 import {
   buildPerSpaceBreakdown,
   collectOrdered,
@@ -223,7 +234,8 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   // recovery the change policy permits.
   const checkedPolicies = checkRunPolicies({
     command: 'db migrate',
-    appSpaceId: aggregate.app.spaceId,
+    app: appSpaceOf(aggregate),
+    markers: markerRows,
     inForce,
     ref,
     permitPolicyChange: options.permitPolicyChange ?? false,
@@ -264,7 +276,9 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       return notOk(
         neverPlannedSpaceFailure(outcome, {
           appSpaceId: aggregate.app.spaceId,
+          appSpace: appSpaceOf(aggregate),
           migrationsDir,
+          target,
           invocation: options.invocation,
         }),
       );
@@ -276,10 +290,12 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
             spaceId: outcome.spaceId,
             fromHash: contractHashAtMarker(outcome.liveMarker),
             targetHash: outcome.targetHash,
+            position: databasePositionOf(outcome.liveMarker?.storageHash),
           },
           {
             appSpaceId: aggregate.app.spaceId,
-            toArgument: toArgumentFor(target, aggregate.app.graph()),
+            appSpace: appSpaceOf(aggregate),
+            target,
             invocation: options.invocation,
           },
         ),
@@ -398,7 +414,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
         facts,
         facts.failedMigration === undefined
           ? undefined
-          : failedMigrationOnDisk(facts.failedMigration, migrationsDir),
+          : failedMigrationOnDisk(facts.failedMigration, migrationsDir, aggregate.app),
         options.invocation,
       ),
     );
@@ -588,7 +604,12 @@ async function runPolicyOnly<TFamilyId extends string, TTargetId extends string>
 export type SpacePathOutcome =
   | { readonly kind: 'ok'; readonly plan: PerSpacePlan }
   | { readonly kind: 'at-head'; readonly plan: PerSpacePlan }
-  | { readonly kind: 'never-planned'; readonly spaceId: string; readonly targetHash: string }
+  | {
+      readonly kind: 'never-planned';
+      readonly spaceId: string;
+      readonly liveMarker: ContractMarkerRecordLike | null;
+      readonly targetHash: string;
+    }
   | MarkerOutsideGraphOutcome
   | {
       readonly kind: 'unreachable';
@@ -709,7 +730,7 @@ export function planSpacePath({
         }),
       };
     }
-    return { kind: 'never-planned', spaceId: space.spaceId, targetHash };
+    return { kind: 'never-planned', spaceId: space.spaceId, liveMarker, targetHash };
   }
 
   const targetInvariants =
@@ -979,10 +1000,16 @@ function buildSuccess(args: BuildSuccessArgs): MigrateSuccess {
  * of the extension that ships them.
  */
 export function neverPlannedSpaceFailure(
-  space: { readonly spaceId: string; readonly targetHash: string },
+  space: {
+    readonly spaceId: string;
+    readonly liveMarker: ContractMarkerRecordLike | null;
+    readonly targetHash: string;
+  },
   run: {
     readonly appSpaceId: string;
+    readonly appSpace: PlanSpace;
     readonly migrationsDir: string;
+    readonly target: MigrateTarget | undefined;
     readonly invocation: CliInvocation;
   },
 ): CliStructuredError {
@@ -991,6 +1018,11 @@ export function neverPlannedSpaceFailure(
       space.spaceId,
       space.targetHash,
       run.migrationsDir,
+      migrationPlanArguments(
+        run.appSpace,
+        databasePositionOf(space.liveMarker?.storageHash),
+        planEndOf(run.target),
+      ),
       run.invocation,
     );
   }
@@ -1009,10 +1041,16 @@ export function neverPlannedSpaceFailure(
  * contract the path would start from: the one the marker names, or an offline `--from`.
  */
 export function unreachableSpaceFailure(
-  space: { readonly spaceId: string; readonly fromHash: string; readonly targetHash: string },
+  space: {
+    readonly spaceId: string;
+    readonly fromHash: string;
+    readonly targetHash: string;
+    readonly position?: DatabasePosition;
+  },
   run: {
     readonly appSpaceId: string;
-    readonly toArgument: string | undefined;
+    readonly appSpace: PlanSpace;
+    readonly target: MigrateTarget | undefined;
     readonly invocation: CliInvocation;
   },
 ): CliStructuredError {
@@ -1021,7 +1059,11 @@ export function unreachableSpaceFailure(
       space.spaceId,
       space.fromHash,
       space.targetHash,
-      run.toArgument,
+      migrationPlanArguments(
+        run.appSpace,
+        space.position ?? databasePositionOf(space.fromHash),
+        planEndOf(run.target),
+      ),
       run.invocation,
     );
   }
@@ -1034,18 +1076,12 @@ export function unreachableSpaceFailure(
   });
 }
 
-/**
- * What `--to` takes to name the application space's target: a ref's name, or the hash of a contract
- * a migration names. `undefined` for the emitted contract, and for a hash no migration names, which
- * `--to` cannot resolve and which only the emitted contract can be.
- */
-export function toArgumentFor(
-  target: MigrateTarget | undefined,
-  appGraph: MigrationGraph,
-): string | undefined {
-  if (target === undefined) return undefined;
-  if (target.kind === 'ref') return target.ref.name;
-  return isGraphNode(target.hash, appGraph) ? target.hash : undefined;
+/** Where `db migrate` goes, as `migration plan` would end there: the emitted contract when it was given no other target. */
+export function planEndOf(target: MigrateTarget | undefined): PlanEnd {
+  if (target === undefined) return { kind: 'emitted' };
+  return target.kind === 'ref'
+    ? { kind: 'ref', name: target.ref.name }
+    : { kind: 'contract', hash: target.hash };
 }
 
 /**
@@ -1062,6 +1098,7 @@ export function buildNeverPlannedFailure(
   spaceId: string,
   targetHash: string,
   migrationsDir: string,
+  plan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): CliStructuredError {
   const meta: PathUnreachableMeta = { spaceId, targetHash, kind: 'neverPlanned' };
@@ -1071,7 +1108,7 @@ export function buildNeverPlannedFailure(
       why: `migrate is replay-only: a contract space that declares managed storage elements must have an authored migration graph on disk. Space "${spaceId}" has no migrations under \`${migrationsDir}/${spaceId}/\` but its head ref targets "${targetHash}".`,
       meta,
     },
-    planThenApply(meta, undefined, invocation),
+    planThenApply(plan, invocation),
   );
 }
 
@@ -1089,27 +1126,33 @@ export function buildPathNotFoundFailure(
   spaceId: string,
   fromHash: string,
   targetHash: string,
-  toArgument: string | undefined,
+  plan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): CliStructuredError {
+  const failure = pathNotFound(spaceId, fromHash, targetHash);
+  return errorPathUnreachable(failure, planThenApply(plan, invocation));
+}
+
+function pathNotFound(spaceId: string, fromHash: string, targetHash: string): PathUnreachable {
   const fromText = fromHash === EMPTY_CONTRACT_HASH ? 'the empty contract' : `"${fromHash}"`;
-  const meta: PathUnreachableMeta = { spaceId, fromHash, targetHash, kind: 'pathUnreachable' };
-  return errorPathUnreachable(
-    {
-      summary: 'Current contract has no planned migration path',
-      why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
-      meta,
-    },
-    planThenApply(meta, toArgument, invocation),
-  );
+  return {
+    summary: 'Current contract has no planned migration path',
+    why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
+    meta: { spaceId, fromHash, targetHash, kind: 'pathUnreachable' },
+  };
 }
 
 function failedMigrationOnDisk(
   failed: { readonly spaceId: string; readonly edge: AggregateMigrationEdgeRef },
   migrationsDir: string,
-): { readonly directory: string; readonly from: string } {
+  app: AggregateContractSpace,
+): FailedMigrationOnDisk {
   return {
     directory: join(migrationsDir, failed.spaceId, failed.edge.dirName),
-    from: failed.edge.from,
+    replanFrom: migrationPlanReplacing(
+      { graph: app.graph(), refs: app.refs, packages: app.packages },
+      failed.edge,
+    ),
+    ...(failed.spaceId === app.spaceId ? {} : { extensionSpaceId: failed.spaceId }),
   };
 }

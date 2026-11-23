@@ -1,5 +1,6 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { asNamespaceId } from '@internal/contract/types';
+import { writeRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
 import type { StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
@@ -329,6 +330,10 @@ describe('db update questions', () => {
 
   it('refuses --backfill before it plans anything, naming migration plan and keeping a two-name --convert for the control API to resolve', async () => {
     mocks.readMarker.mockResolvedValueOnce({ storageHash: 'c'.repeat(64) });
+    await writeRef(join(projectDir, 'migrations', 'app', 'refs'), 'db', {
+      hash: 'c'.repeat(64),
+      invariants: [],
+    });
     const run = await harness().run(
       [
         'db',
@@ -353,7 +358,7 @@ describe('db update questions', () => {
         nextActions: [
           expect.objectContaining({
             command:
-              'prisma-test migration plan --rename User.years:User.age --convert User.age --backfill User.email',
+              'prisma-test migration plan --from db --rename User.years:User.age --convert User.age --backfill User.email',
           }),
           expect.anything(),
         ],
@@ -374,10 +379,10 @@ describe('db update questions', () => {
     expect(envelopeOf(run.json)).toMatchObject({
       error: {
         code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
-        nextActions: [
-          expect.objectContaining({ command: 'prisma-test migration plan --backfill User.email' }),
-          expect.anything(),
-        ],
+        why: expect.stringContaining(
+          'The CLI could not read the database within 3 seconds to find the contract it is at. A plan from `@empty` creates every model, so its statements name nothing it can resolve.',
+        ),
+        nextActions: [{ kind: 'user-choice', label: 'Run db update without these statements' }],
       },
     });
   }, 10_000);
@@ -391,10 +396,10 @@ describe('db update questions', () => {
     expect(envelopeOf(run.json)).toMatchObject({
       error: {
         code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
-        nextActions: [
-          expect.objectContaining({ command: 'prisma-test migration plan --backfill User.email' }),
-          expect.anything(),
-        ],
+        why: expect.stringContaining(
+          'The CLI could not read the database: connect ECONNREFUSED 127.0.0.1:1. A plan from `@empty` creates every model, so its statements name nothing it can resolve.',
+        ),
+        nextActions: [{ kind: 'user-choice', label: 'Run db update without these statements' }],
       },
     });
     expect(mocks.connect).toHaveBeenCalledWith(expect.anything(), {

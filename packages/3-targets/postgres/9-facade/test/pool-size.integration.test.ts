@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ifDefined } from '@internal/utils/defined';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
-import { inCi } from '@repo/test-utils/mysql-database';
+import { inCi } from '@repo/test-utils/ci';
 import pg from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { PostgresPoolOptions } from '../src/exports/runtime';

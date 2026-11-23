@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NOT_RECORDED_REASON } from './plan-origins';
 import { dbUpdateError, migrateError } from './runner-failure-errors';
 
 const runnerFailed = {
@@ -18,12 +19,12 @@ describe('the advice for a type change whose cast failed', () => {
           ...runnerFailed,
           conflicts: undefined,
           failedTypeChange: { field: 'User.age', by: 'cast', reason: 'value' },
-          databaseStorageHash: FROM,
+          planFrom: FROM,
         },
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      `A value of field "User.age" cannot be converted to its new type by the database's cast. Plan the change with \`{bin} migration plan --from ${FROM} --convert User.age\`, write the conversion in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with \`{bin} db migrate\`. Or: Change the value the failure names so the database's cast accepts it, then re-run \`{bin} db update\`.`,
+      `A value of field "User.age" cannot be converted to its new type by the database's cast. Plan the change with \`{bin} migration plan --from ${FROM} --convert User.age\`, write the conversion in the migration.ts it writes, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`{bin} db migrate\`. Or: Change the value the failure names so the database's cast accepts it, then re-run \`{bin} db update\`.`,
     );
   });
 
@@ -61,7 +62,23 @@ describe('the advice for a type change whose cast failed', () => {
   });
 
   it('says the database has no cast between the types when it has none', () => {
-    expect([
+    expect(
+      dbUpdateError(
+        {
+          ...runnerFailed,
+          conflicts: undefined,
+          failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' },
+          planFrom: FROM,
+        },
+        FROM_PROJECT,
+      ).fix,
+    ).toMatch(
+      /^The database has no cast from the old type of field "T\.d" to its new type\. Plan the change with `\{bin\} migration plan --from [0-9a-f]+ --convert T\.d`/,
+    );
+  });
+
+  it('prints no migration plan for db update when no migration records the contract the database is at', () => {
+    expect(
       dbUpdateError(
         {
           ...runnerFailed,
@@ -70,18 +87,9 @@ describe('the advice for a type change whose cast failed', () => {
         },
         FROM_PROJECT,
       ).fix,
-      migrateError(
-        { ...runnerFailed, failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' } },
-        FROM_PROJECT,
-      ).fix,
-    ]).toEqual([
-      expect.stringMatching(
-        /^The database has no cast from the old type of field "T\.d" to its new type\. Plan the change with `\{bin\} migration plan --convert T\.d`/,
-      ),
-      expect.stringMatching(
-        /^The database has no cast from the old type of field "T\.d" to its new type\. Plan the type change again with `\{bin\} migration plan --convert T\.d`/,
-      ),
-    ]);
+    ).toBe(
+      `The database has no cast from the old type of field "T.d" to its new type. No migration can be planned for the change. ${NOT_RECORDED_REASON}.`,
+    );
   });
 
   it('points db migrate to the conversion in the failed migration when the conversion left a value the new type cannot hold', () => {
@@ -102,14 +110,14 @@ describe('the advice for a type change whose cast failed', () => {
     );
   });
 
-  it('says to run the migration.ts with node before db migrate when the failed migration is unknown', () => {
+  it('names no migration plan without an origin when the failed migration is unknown', () => {
     expect(
       migrateError(
         { ...runnerFailed, failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' } },
         FROM_PROJECT,
       ).fix,
     ).toBe(
-      'The database has no cast from the old type of field "T.d" to its new type. Plan the type change again with `{bin} migration plan --convert T.d`, write the conversion in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate`.',
+      'The database has no cast from the old type of field "T.d" to its new type. Find the migration that changes field "T.d" with `{bin} migration list`, delete its directory (copy any code you wrote in its migration.ts first), plan it again from the contract it starts from with `--convert T.d`, write the conversion in the migration.ts it writes, run that migration.ts with the `node` command `migration plan` prints, and apply it with `{bin} db migrate`.',
     );
   });
 
@@ -165,5 +173,28 @@ describe('the advice for a type change whose cast failed', () => {
     expect(migrateError(runnerFailed, invocation).fix).toBe(
       'Resolve the cause the failure names, then re-run `{bin} db migrate --to production`.',
     );
+  });
+});
+
+describe('the advice for a failed migration an extension ships', () => {
+  it('names no migration plan, which plans only the application space, and points at the extension', () => {
+    const error = migrateError(
+      {
+        ...runnerFailed,
+        failedTypeChange: { field: 'T.d', by: 'cast', reason: 'noCast' },
+        failedMigration: {
+          directory: `${PROJECT}/migrations/pgvector/20261012T1041_install`,
+          from: FROM,
+          extensionSpaceId: 'pgvector',
+        },
+      },
+      FROM_PROJECT,
+    );
+
+    expect(error.fix).not.toContain('migration plan --');
+    expect(error.nextActions?.map(({ label }) => label)).toEqual([
+      'Resolve the cause the failure names, then re-run `{bin} db migrate`',
+      'The failed migration belongs to extension space "pgvector", whose migrations come with the extension and `migration plan` does not plan, so do not edit or plan it again; ask the extension\'s author for a version whose migrations apply to this database',
+    ]);
   });
 });

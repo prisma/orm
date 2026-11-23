@@ -10,14 +10,12 @@ import { createDb, type Db } from '../src/prisma/db';
 import { copyProject, prisma } from './cli';
 import { createTestDatabase, type TestDatabase } from './database';
 
-const serverUrl = process.env['MYSQL_URL'];
-
-describe.skipIf(serverUrl === undefined)('ORM writes against a migrated MySQL database', () => {
+describe('ORM writes against a migrated MySQL database', () => {
   let database: TestDatabase;
   let db: Db;
 
   beforeAll(async () => {
-    database = await createTestDatabase(serverUrl ?? '');
+    database = await createTestDatabase();
     const project = await copyProject();
     try {
       const migrate = await prisma(project.dir, database.url, ['db', 'migrate']);

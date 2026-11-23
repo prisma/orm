@@ -33,6 +33,6 @@ These hold on MariaDB 10.11 as on MySQL 8.4; each was checked on a live MariaDB 
 
 ## Testing
 
-The live tests need `MARIADB_URL` and are skipped without it, except in CI, where `test/live-server.test.ts` fails without it: `MARIADB_URL='mysql://root@127.0.0.1:3368/' pnpm test` against `docker run -p 3368:3306 -e MARIADB_ALLOW_EMPTY_ROOT_PASSWORD=1 mariadb:10.11`. `test/fixtures/` holds PSL contracts the tests emit in memory, and `test/fixtures/generated/` the example contract emitted by `pnpm emit`.
+The live tests need a MariaDB server and fail when `MARIADB_URL` is not set. `docker compose up -d --wait mariadb` at the repository root starts MariaDB 10.11 for them: `MARIADB_URL='mysql://root@127.0.0.1:3308/' pnpm test`. `test/fixtures/` holds PSL contracts the tests emit in memory, and `test/fixtures/generated/` the example contract emitted by `pnpm emit`.
 
 MySQL's ORM live suites run against MariaDB from [`@internal/mysql-live-tests`](../../3-live-tests/README.md).

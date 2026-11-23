@@ -95,8 +95,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
   describe(`${server.displayName} reads and writes the scalar convenience types through the ORM`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('writes and reads each type at its boundaries, a decimal as the server prints it and a double -0 as 0', async (test) => {
-      await withSeededDatabase(test, server, measuresDatabase, async (url) => {
+    it('writes and reads each type at its boundaries, a decimal as the server prints it and a double -0 as 0', async () => {
+      await withSeededDatabase(server, measuresDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Measure.createAll([measure, lowest]);
         await db.orm.Measure.create({ ...lowest, id: 3, amount: '1.5', price: '-0.0', ratio: 0.1 });
@@ -120,8 +120,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('refuses to write a value its column would not read back unchanged', async (test) => {
-      await withSeededDatabase(test, server, measuresDatabase, async (url) => {
+    it('refuses to write a value its column would not read back unchanged', async () => {
+      await withSeededDatabase(server, measuresDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const write = (changes: Partial<typeof measure>) =>
           db.orm.Measure.create({ ...measure, ...changes });
@@ -147,9 +147,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('refuses to read a bigint past the safe integer range as a number, naming the column', async (test) => {
+    it('refuses to read a bigint past the safe integer range as a number, naming the column', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...measuresDatabase,
@@ -167,8 +166,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       );
     });
 
-    it('filters a decimal by equality, by a list and by order exactly, where both servers would compare the text of a parameter as a double', async (test) => {
-      await withSeededDatabase(test, server, nearTenthDatabase, async (url) => {
+    it('filters a decimal by equality, by a list and by order exactly, where both servers would compare the text of a parameter as a double', async () => {
+      await withSeededDatabase(server, nearTenthDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
           (await rows).map((row) => row.id);
@@ -195,8 +194,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('writes, reads and finds every value of a decimal column with more than 35 digits before the point', async (test) => {
-      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+    it('writes, reads and finds every value of a decimal column with more than 35 digits before the point', async () => {
+      await withSeededDatabase(server, ledgerDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Ledger.createAll([
           { id: 1, wide: WIDEST, cents: '1.01' },
@@ -227,8 +226,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('compares a filter value with more digits after the point than its column holds without rounding it to the column', async (test) => {
-      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+    it('compares a filter value with more digits after the point than its column holds without rounding it to the column', async () => {
+      await withSeededDatabase(server, ledgerDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Ledger.create({ id: 1, wide: '1', cents: '1.01' });
         const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
@@ -253,9 +252,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('says what to do for a sum, a max and a raw query past the safe integer range, which no column reads', async (test) => {
+    it('says what to do for a sum, a max and a raw query past the safe integer range, which no column reads', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...measuresDatabase,
@@ -287,8 +285,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       );
     });
 
-    it('sums a decimal column with more than 35 digits before the point exactly, at the width of the column', async (test) => {
-      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+    it('sums a decimal column with more than 35 digits before the point exactly, at the width of the column', async () => {
+      await withSeededDatabase(server, ledgerDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Ledger.createAll([
           { id: 1, wide: WIDEST, cents: '0.01' },
@@ -300,9 +298,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('sums a decimal past the widest decimal exactly without grouping, and as the largest value of its type, with no error, grouped by a column without an index and on MariaDB included for several parents', async (test) => {
+    it('sums a decimal past the widest decimal exactly without grouping, and as the largest value of its type, with no error, grouped by a column without an index and on MariaDB included for several parents', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...measuresDatabase,
@@ -344,9 +341,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       );
     });
 
-    it('sums a decimal past the widest decimal exactly when the server reads the groups from an index', async (test) => {
+    it('sums a decimal past the widest decimal exactly when the server reads the groups from an index', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...measuresDatabase,
@@ -368,8 +364,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       );
     });
 
-    it('compares a prepared decimal parameter with a decimal(65,0) column at full width only when it is declared with the precision and scale', async (test) => {
-      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+    it('compares a prepared decimal parameter with a decimal(65,0) column at full width only when it is declared with the precision and scale', async () => {
+      await withSeededDatabase(server, ledgerDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const forty = '9'.repeat(40);
         await db.orm.Ledger.create({ id: 1, wide: forty, cents: '0.00' });
@@ -397,8 +393,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('compares a raw decimal parameter with a decimal(65,0) column at full width only when it is sent as text and cast in the SQL', async (test) => {
-      await withSeededDatabase(test, server, ledgerDatabase, async (url) => {
+    it('compares a raw decimal parameter with a decimal(65,0) column at full width only when it is sent as text and cast in the SQL', async () => {
+      await withSeededDatabase(server, ledgerDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const forty = '9'.repeat(40);
         await db.orm.Ledger.create({ id: 1, wide: forty, cents: '0.00' });
@@ -425,8 +421,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('reads each type through an include as it reads it from a row', async (test) => {
-      await withSeededDatabase(test, server, measuresDatabase, async (url) => {
+    it('reads each type through an include as it reads it from a row', async () => {
+      await withSeededDatabase(server, measuresDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Measure.createAll([measure, lowest]);
         const shelf = await db.orm.Shelf.include('measures', (m) =>
@@ -436,8 +432,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('sums a decimal exactly and a double as a double, and takes the extremes of each', async (test) => {
-      await withSeededDatabase(test, server, nearTenthDatabase, async (url) => {
+    it('sums a decimal exactly and a double as a double, and takes the extremes of each', async () => {
+      await withSeededDatabase(server, nearTenthDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const totals = await db.orm.Measure.aggregate((a) => ({
           amount: a.sum('amount'),
@@ -456,8 +452,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('reads a decimal zero as the server prints it in its column', async (test) => {
-      await withSeededDatabase(test, server, measuresDatabase, async (url) => {
+    it('reads a decimal zero as the server prints it in its column', async () => {
+      await withSeededDatabase(server, measuresDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Measure.create({ ...measure, amount: '-0' });
         expect(await db.orm.Measure.select('amount').all()).toEqual([{ amount: PADDED_ZERO }]);
@@ -468,8 +464,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
   describe(`${server.displayName} reads and writes Boolean, Bytes and Json through the ORM`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('writes and reads each type at its edges', async (test) => {
-      await withSeededDatabase(test, server, itemsDatabase, async (url) => {
+    it('writes and reads each type at its edges', async () => {
+      await withSeededDatabase(server, itemsDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Item.createAll([...items]);
         const rows = await db.orm.Item.orderBy((item) => item.id.asc()).all();
@@ -482,9 +478,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('reads JSON null as null, as it reads SQL NULL, though only SQL NULL is NULL to the server', async (test) => {
+    it('reads JSON null as null, as it reads SQL NULL, though only SQL NULL is NULL to the server', async () => {
       await withSeededDatabase(
-        test,
         server,
         [
           ...itemsDatabase,
@@ -508,8 +503,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       );
     });
 
-    it('refuses to write a value its column does not hold', async (test) => {
-      await withSeededDatabase(test, server, itemsDatabase, async (url) => {
+    it('refuses to write a value its column does not hold', async () => {
+      await withSeededDatabase(server, itemsDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const [item] = items;
         const write = (changes: Record<string, unknown>) =>
@@ -532,9 +527,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('refuses to read a tinyint(1) holding a value other than 0 or 1, from a row and through an include, naming the column', async (test) => {
+    it('refuses to read a tinyint(1) holding a value other than 0 or 1, from a row and through an include, naming the column', async () => {
       await withSeededDatabase(
-        test,
         server,
         [...itemsDatabase, "INSERT INTO `Item` VALUES (1, 2, '', '{}', NULL, 1)"],
         async (url) => {
@@ -551,8 +545,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       );
     });
 
-    it('filters a boolean and bytes by equality, and orders bytes bytewise', async (test) => {
-      await withSeededDatabase(test, server, itemsDatabase, async (url) => {
+    it('filters a boolean and bytes by equality, and orders bytes bytewise', async () => {
+      await withSeededDatabase(server, itemsDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Item.createAll([...items]);
         const ids = async (rows: PromiseLike<readonly { readonly id: number }[]>) =>
@@ -584,8 +578,8 @@ export function describeOrmScalarTypes(server: LiveServer): void {
       });
     });
 
-    it('reads each type through an include as it reads it from a row', async (test) => {
-      await withSeededDatabase(test, server, itemsDatabase, async (url) => {
+    it('reads each type through an include as it reads it from a row', async () => {
+      await withSeededDatabase(server, itemsDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await db.orm.Item.createAll([...items]);
         const drawer = await db.orm.Drawer.include('items', (item) =>

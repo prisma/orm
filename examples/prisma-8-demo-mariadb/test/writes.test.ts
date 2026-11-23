@@ -8,16 +8,14 @@ import {
 } from '../src/orm-client/user-writes';
 import { createDb, type Db } from '../src/prisma/db';
 import { copyProject, prisma } from './cli';
-import { createTestDatabase, mariadbServerUrl, type TestDatabase } from './database';
+import { createTestDatabase, type TestDatabase } from './database';
 
-const serverUrl = mariadbServerUrl();
-
-describe.skipIf(serverUrl === undefined)('ORM writes against a migrated MariaDB database', () => {
+describe('ORM writes against a migrated MariaDB database', () => {
   let database: TestDatabase;
   let db: Db;
 
   beforeAll(async () => {
-    database = await createTestDatabase(serverUrl ?? '');
+    database = await createTestDatabase();
     const project = await copyProject();
     try {
       const migrate = await prisma(project.dir, database.url, ['db', 'migrate']);

@@ -2,6 +2,7 @@ import type { ControlDriverDescriptor } from '@internal/framework-components/con
 import type { RuntimeDriverDescriptor } from '@internal/framework-components/execution';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { mysqlTargetDescriptorMetaRuntime } from '@internal/target-mysql/descriptor-meta-runtime';
+import type { MysqlServerVariable } from '@repo/test-utils/mysql-database';
 import { createMysqlControlDriverDescriptor } from '../src/core/migrations/control-driver';
 import { MYSQL_CHECK_VIOLATION_ERRORS } from '../src/core/normalize-error';
 import type {
@@ -13,7 +14,7 @@ import { createMysqlRuntimeDriverDescriptor } from '../src/core/runtime/runtime-
 /** A server the driver's live tests run against, with the drivers MySQL's driver package builds for its target. */
 export interface DriverServer {
   readonly displayName: string;
-  readonly urlVariable: string;
+  readonly urlVariable: MysqlServerVariable;
   readonly runtime: RuntimeDriverDescriptor<
     'sql',
     string,
