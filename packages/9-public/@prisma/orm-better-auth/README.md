@@ -106,7 +106,7 @@ model Verification {
 }
 ```
 
-Plugins and `additionalFields` add models and fields. You do not have to work them out: `auth generate` prints what to add (see below).
+Plugins and `additionalFields` add models and fields. You do not have to work them out: `auth generate` adds them to your contract (see below).
 
 Then emit the contract and update your database:
 
@@ -153,16 +153,31 @@ Pass the client itself, not a transaction, to `prismaAdapter`, as in the example
 
 ## When the contract is missing something
 
-The adapter compares your contract with what your Better Auth configuration needs. When something is missing, it tells you what to add. You see the same text in three places:
+The adapter compares your contract with what your Better Auth configuration needs. When your contract is written in PSL and lacks only models or fields, `auth generate` adds them. For example, after adding Better Auth's two-factor plugin to the configuration above:
 
-- `auth generate` prints it and exits with code 1. It never writes a file.
+```console
+$ npx auth@latest generate
+Adding 2 fields to User and the model TwoFactor to prisma/contract.prisma. After the file is written, run `prisma contract emit` and update your database.
+✔ The file prisma/contract.prisma already exists. Do you want to overwrite the schema to the file? … yes
+🚀 Schema was overwritten successfully!
+```
+
+Better Auth asks before it writes the file, and `--yes` answers for you. The new fields go at the end of the models they belong to, indented like the model's last field, and the new models go at the end of the file, inside `namespace <name> { ... }` when you set the adapter's `namespace` option. Every line you wrote stays as it was. Then run `prisma contract emit` and `prisma db update`. After that, `auth generate` prints `Your schema is already up to date.` and `auth check` prints `Schema check passed against adapter "prisma-8".`, both with exit code 0.
+
+`auth generate` finds the contract file through `prisma.config.ts` in the directory you run it in. To name the file yourself, pass it with `--output`, for example `npx auth@latest generate --output prisma/contract.prisma`. A contract split over several files works when everything to add belongs in one of them.
+
+### When nothing is written
+
+In every other case the adapter tells you what to add or change, and writes nothing. You see the same text in three places:
+
+- `auth generate` prints it and exits with code 1.
 - `auth check` prints it and exits with code 1.
 - Every request your application serves, and every server-side Better Auth call it makes, fails with it until the contract is fixed.
 
-For example, after adding Better Auth's two-factor plugin to the configuration above:
+For example, `auth check` with the two-factor plugin, before `auth generate` has added its models:
 
 ```text
-$ npx auth@latest generate
+$ npx auth@latest check
 Your Prisma contract is missing models or fields that Better Auth needs.
 
 Add to your contract:
@@ -190,14 +205,22 @@ model TwoFactor {
 Then run `prisma contract emit` and update your database.
 ```
 
-Add the printed fields to your existing `User` model, add the new model, then run `prisma contract emit` and `prisma db update`. After that, `auth generate` prints `Your schema is already up to date.` and `auth check` prints `Schema check passed against adapter "prisma-8".`, both with exit code 0.
+The message can also list fields whose type is wrong; optional Better Auth fields that your contract makes required, which you make optional; and fields your contract requires that Better Auth never writes, which you make optional or give a default. `auth generate` does not make these changes. Make them, run `prisma contract emit`, and run `auth generate` again for what is left to add.
 
-The message can also list fields whose type is wrong; optional Better Auth fields that your contract makes required, which you make optional; and fields your contract requires that Better Auth never writes, which you make optional or give a default.
+`auth generate` also writes nothing, and adds a line to the message that says why, when:
+
+- the contract is written in TypeScript. The message is in PSL: add the equivalent models and fields in TypeScript.
+- there is neither `--output` nor a `prisma.config.ts` that names the contract, or the file `--output` names does not exist.
+- a contract file does not parse, or does not start with `// use prisma-8`.
+- a model it would add fields to is declared in none of the contract files, or in more than one.
+- the additions belong in more than one file, because Better Auth writes one file.
+- a model has no field named `id` (see [Limits](#limits)).
+- a model it would add fields to is written on one line, with its `}` on the line of its last field.
+- the contract file already declares something it would add. This happens when you edit the contract and do not run `prisma contract emit`: run it, then `auth generate` again.
 
 Some things to know:
 
-- The commands read the contract through your application's client, so they compare against the contract you last emitted with `prisma contract emit`.
-- A contract written in TypeScript gets the same message, in PSL. Add the equivalent models and fields in TypeScript.
+- The commands read the contract through your application's client, so they compare against the contract you last emitted with `prisma contract emit`. `auth generate` then edits the contract's source file.
 - Setting Better Auth's `advanced.database.validateSchema` to `false` turns off the check on requests. It does not make an incomplete contract work: a call that uses a field your contract lacks then fails with Prisma's own error, `ORM.FIELD_UNKNOWN`.
 
 ## Options
@@ -206,7 +229,7 @@ Some things to know:
 
 | Option | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `namespace` | `string` | none | The Postgres schema that holds Better Auth's models, for example `auth`. You need it only when a model name exists in more than one schema. Models `auth generate` prints then go inside `namespace <name> { ... }`. |
+| `namespace` | `string` | none | The Postgres schema that holds Better Auth's models, for example `auth`. You need it only when a model name exists in more than one schema. Models `auth generate` adds or prints then go inside `namespace <name> { ... }`. |
 | `usePlural` | `boolean` | `false` | Better Auth's model names get an `s`: `users`, `sessions`, and so on. |
 | `transaction` | `boolean` | `false` | When `true`, Better Auth's multi-step operations run in a database transaction. |
 | `debugLogs` | Better Auth's debug log option | none | Logs each call the adapter makes. |
@@ -231,17 +254,17 @@ Model and field names: the adapter matches Better Auth's model names to your con
 - **Numbers.** The printed PSL declares Better Auth's number fields as `Int`, which on Postgres holds whole numbers up to about two billion. A number field that holds fractions or larger values, such as an interval in milliseconds, should be declared `Float` or `BigInt(as: number)` instead; both are accepted.
 - **Optional fields must be optional.** Every field Better Auth declares optional must be optional (`?`) in your contract, as the printed PSL writes it, because Better Auth can write `null` to it. A default does not help, whether it is a database default or Better Auth's own, since a default replaces only a missing value and never an explicit `null`. The contract check reports an optional field that is not optional.
 - **Ids.** With `generateId: false`, declare the id with a default, as the printed PSL does (`id String @id @onCreate(uuid())`). A `generateId` function that returns `false` for some models needs the same for those models' ids.
-- **A primary key that is not named `id`.** Better Auth needs a field named `id`. When a model's primary key has another name and the model has no `id` field, the printed PSL adds `id String @id`, which gives the model two `@id` fields and does not emit. Write `@unique` in place of `@id` on the added line.
+- **A primary key that is not named `id`.** Better Auth needs a field named `id`. When a model's primary key has another name and the model has no `id` field, the printed PSL adds `id String @id`, which would give the model two `@id` fields and does not emit, so `auth generate` does not write it. Add the line yourself, with `@unique` in place of `@id`.
 
 ## Responsibilities
 
 - Translate Better Auth's database calls into calls on your Prisma 8 client.
 - Compare your contract with the models and fields Better Auth needs, and say what to add or change, through `auth generate`, `auth check` and the check on requests.
-- Print the PSL to add for missing models and fields.
+- Add missing models and fields to a PSL contract through `auth generate`, and print the PSL to add when it cannot.
 
 ## Dependencies
 
-- `@prisma/orm-framework` and `@prisma/orm-family-sql`, as peers at the same version as your database package.
+- `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, as peers at the same version as your database package, which already depends on all three. The adapter loads `@prisma/orm-toolchain` only while `auth generate` runs, to read `prisma.config.ts`.
 - `@better-auth/core` 1.7.6 or a later 1.7 release, below 1.8, as a peer.
 
 The package imports only published entrypoints, so it works outside the Prisma repository. [DEVELOPING.md](DEVELOPING.md) has notes for people who change it.

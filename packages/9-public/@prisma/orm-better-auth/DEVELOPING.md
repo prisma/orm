@@ -4,9 +4,13 @@ Notes for people who change this package. For how to use it, see the [README](RE
 
 ## Rules the package keeps
 
-- `src/` imports only `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@better-auth/core`. It imports no private package of the Prisma repository and no database package. `pnpm lint:consumer-internal-imports` refuses `@internal/*` names and `test/repository-packages.test.ts` refuses `@repo/*` names. Nothing checks for a database package.
+- `src/` imports only `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@better-auth/core`, plus `@prisma/orm-toolchain/config-loader`, `node:fs/promises` and `node:path`, which only `createSchema` imports, with a dynamic `import()`. It imports no private package of the Prisma repository and no database package. `pnpm lint:consumer-internal-imports` refuses `@internal/*` names and `test/repository-packages.test.ts` refuses `@repo/*` names. Nothing checks for a database package or for where the dynamic imports are.
 - Errors the package raises are `BetterAuthError`s, because Better Auth and its command-line program recognise that class. Errors from the Prisma client pass through unchanged.
-- No classes and no Node-only API in `src/`, which Better Auth's own repository requires of its adapters.
+- No classes in `src/`, and nothing in `src/` imports a Node-only module or Prisma's tooling when the module loads. Better Auth's own repository requires this of its adapters, and it keeps an application that loads the adapter from loading Prisma's tooling. `createSchema` runs only under `auth generate`, so it may load both.
+
+## How `auth generate` edits the contract
+
+`createSchema` (`src/generate/`) reads the contract's PSL source files, from `--output` or from the contract inputs in `prisma.config.ts`, and parses them with the published syntax tree (`@prisma/orm-framework/psl-parser/syntax`). It inserts the lines `printPsl` prints at positions from that tree: fields after the line of the model's last field, new models at the end of the file. It never reformats or reprints the file. It returns the whole file with `overwrite: true`, and Better Auth asks and writes it; the adapter writes no file. Whenever the edit is anything but additions it can place in one file, it throws the contract message instead, with a line that says why.
 
 ## Choices that look wrong but are deliberate
 
@@ -22,4 +26,5 @@ Notes for people who change this package. For how to use it, see the [README](RE
 ## Tests
 
 - `test/conformance/` runs Better Auth's own adapter suites on Postgres and SQLite. No test in them is disabled, and none may be.
-- `test/integration/test/packaging/orm-better-auth-tarball.test.ts`, in the Prisma repository, installs the packed package outside the workspace and runs the real `auth generate` and `auth check` against it. It runs in the merge queue, not on pull requests, so run that file locally when you change the contract check or the manifest.
+- `test/generate/` checks the edit: the whole edited text for each layout, that every edited contract emits and then has nothing missing, and each case where nothing is written.
+- `test/integration/test/packaging/orm-better-auth-tarball.test.ts`, in the Prisma repository, installs the packed package outside the workspace and runs the real `auth generate` and `auth check` against it. It runs in the merge queue, not on pull requests, so run that file locally when you change the contract check, `auth generate` or the manifest.
