@@ -10,7 +10,6 @@ import {
   fieldStatementText,
   type MigrationPlannerConflict,
   type MigrationSubject,
-  type ModelCoordinate,
   type ResolvedFieldRenameStatement,
   type ResolvedRenameStatement,
   type ResolvedValueObjectFieldRenameStatement,
@@ -29,12 +28,13 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableKeyReason } from './migration-factories';
+import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import {
   type PlannedRewrite,
   type RewriteCollection,
   rewriteRefusals,
 } from './mongo-rewrite-refusals';
-import { collectionControlPolicy, modelAt, modelCoordinates } from './mongo-statement-planning';
+import { collectionControlPolicy, modelAt } from './mongo-statement-planning';
 import {
   type StoredPlace,
   type StoredType,
@@ -129,12 +129,8 @@ function valueObjectChanges(
   );
 }
 
-function sameModelAs(a: ModelCoordinate, b: ModelCoordinate): boolean {
-  return a.namespaceId === b.namespaceId && a.model === b.model;
-}
-
 function sameField(a: FieldCoordinate, b: FieldCoordinate): boolean {
-  return sameModelAs(a, b) && a.field === b.field;
+  return sameModel(a, b) && a.field === b.field;
 }
 
 function embeddedModelChanges(
@@ -155,7 +151,7 @@ function embeddedModelChanges(
     const type: StoredType = { kind: 'embeddedModel', model: coordinate };
     const takenByRename = new Set(
       statements.flatMap((each) => {
-        if (each.entity !== 'field' || !sameModelAs(each.from, coordinate)) return [];
+        if (each.entity !== 'field' || !sameModel(each.from, coordinate)) return [];
         const from = Object.hasOwn(origin.fields, each.from.field)
           ? ownStoredNameOf(origin, each.from.field)
           : undefined;

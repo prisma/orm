@@ -14,8 +14,9 @@ import {
   collectionControlPolicyOf,
   collectionOfModel,
   embeddingModelOf,
+  mongoModelsOf,
 } from '@internal/mongo-contract';
-import { modelCoordinates } from './mongo-statement-planning';
+import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 
 /**
  * An origin model planned as a destination model: by a statement, or, when `statement` is
@@ -46,16 +47,14 @@ export interface CollectionChange {
 }
 
 /**
- * Why a collection cannot be renamed whole: the origin models stored in it that move elsewhere, or
- * the origin models of destination models stored in the new name that come from elsewhere.
+ * Why a collection cannot be renamed whole: the origin models stored in it that move elsewhere
+ * (`split`), the root models stored in it that the destination removes, whose documents no
+ * discriminator selects (`removed`), or the origin models of destination models stored in the new
+ * name that come from elsewhere (`merged`).
  */
 export interface SharedCollection {
-  readonly kind: 'split' | 'merged';
+  readonly kind: 'split' | 'removed' | 'merged';
   readonly models: readonly ModelCoordinate[];
-}
-
-function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
-  return a.namespaceId === b.namespaceId && a.model === b.model;
 }
 
 function hasModel(contract: ContractWithDomain, model: ModelCoordinate): boolean {
@@ -158,8 +157,10 @@ export class CollectionRenames {
    * Why the documents of collection `from` cannot move whole to collection `to`: an origin model
    * stored in it that the destination keeps in another collection, or a destination model stored in
    * the new collection whose origin model is stored elsewhere. Models pair through the renames.
-   * `undefined` when the whole collection moves and nothing else moves there. A model the
-   * destination removes, or a new model, blocks nothing.
+   * `undefined` when the whole collection moves and nothing else moves there. A root model the
+   * destination removes blocks the rename, since no discriminator selects its documents to ask
+   * about them; a removed variant, whose documents are selected and asked about, and a new model
+   * block nothing.
    */
   sharedCollection(change: Pick<CollectionChange, 'from' | 'to'>): SharedCollection | undefined {
     const split = modelsStoredIn(this.#fromContract, change.from).filter((model) => {
@@ -169,6 +170,13 @@ export class CollectionRenames {
       return destination !== undefined && destination !== change.to;
     });
     if (split.length > 0) return { kind: 'split', models: split };
+    const removed = modelsStoredIn(this.#fromContract, change.from).filter(
+      (model) =>
+        !this.#models.some((each) => sameModel(each.from, model)) &&
+        mongoModelsOf(this.#fromContract.domain, model.namespaceId)[model.model]?.base ===
+          undefined,
+    );
+    if (removed.length > 0) return { kind: 'removed', models: removed };
     const merged = modelsStoredIn(this.#contract, change.to).flatMap((model) => {
       const rename = this.#models.find((each) => sameModel(each.to, model));
       const origin =

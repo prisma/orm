@@ -8,11 +8,11 @@ import {
   fieldStatementText,
   type MigrationPlannerConflict,
 } from '@internal/framework-components/control';
+import { modelCoordinates } from './mongo-model-coordinates';
 import {
   embeddedModelReason,
   type ModelMatchInput,
   modelAt,
-  modelCoordinates,
   originFieldOf,
   originModelOf,
 } from './mongo-statement-planning';

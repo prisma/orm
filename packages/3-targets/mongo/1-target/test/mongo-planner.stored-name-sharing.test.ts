@@ -109,6 +109,36 @@ describe('MongoMigrationPlanner, a collection that variants share with their bas
     });
   });
 
+  it('renames the collection when the destination removes a variant, and deletes and asks about its documents', () => {
+    const to = contract(
+      'to',
+      {
+        Task: {
+          collection: 'work_items',
+          fields: ['_id', 'type'],
+          discriminator: 'type',
+          variants: { Epic: 'epic' },
+        },
+        Epic: { fields: ['scope'], base: 'Task' },
+      },
+      { work_items: {} },
+    );
+    const deleted = 'Delete the documents of collection work_items whose type is "bug"';
+    expect(planned(plan({ from: tasks('from'), to, schema: liveTasks }))).toEqual({
+      labels: ['Rename collection tasks to work_items', deleted],
+      classes: ['widening', 'destructive'],
+      applied: [],
+      dataLoss: [
+        {
+          operationIndex: 1,
+          subject: { kind: 'model', namespaceId: NS, model: 'Bug' },
+          loss: 'drop',
+          label: deleted,
+        },
+      ],
+    });
+  });
+
   it('renames nothing when a variant gains a collection of its own', () => {
     const result = plan({
       from: tasks('from'),
@@ -259,6 +289,60 @@ describe('MongoMigrationPlanner, a collection that several root models share', (
           subject: { kind: 'model', namespaceId: NS, model: 'User' },
           loss: 'drop',
           label: 'Drop collection users',
+        },
+      ],
+    });
+  });
+
+  const userAlone = (seed: string, collection: string, user = 'User') =>
+    contract(
+      seed,
+      { [user]: { collection, fields: ['_id', 'level'] } },
+      { [collection]: { required: ['level'] } },
+    );
+
+  it('renames nothing when the destination removes one root model and moves the other, and asks about the drop', () => {
+    expect(
+      planned(
+        plan({
+          from: shared('from', { admin: 'users', user: 'users' }),
+          to: userAlone('to', 'members'),
+          schema: liveUsers,
+        }),
+      ),
+    ).toEqual({
+      labels: ['Create collection members', 'Drop collection users'],
+      classes: ['additive', 'destructive'],
+      applied: [],
+      dataLoss: [
+        {
+          operationIndex: 1,
+          subject: { kind: 'model', namespaceId: NS, model: 'Admin' },
+          loss: 'drop',
+          label: 'Drop collection users',
+        },
+      ],
+    });
+  });
+
+  it('refuses a model rename statement on a collection whose other root model the destination removes', () => {
+    const statement = renameModel('User', 'Member');
+    expect(
+      plan({
+        from: shared('from', { admin: 'users', user: 'users' }),
+        to: userAlone('to', 'members', 'Member'),
+        schema: liveUsers,
+        statements: [statement],
+      }),
+    ).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary:
+            'Cannot rename model "User" to "Member": collection "users" also stores model "Admin", which the destination removes',
+          why: 'A collection rename moves every document of the collection, and no discriminator tells the documents of model "Admin" apart from those of model "User", so they would move to collection "members" as documents of model "User". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then drops collection "users" and asks about it, and --delete answers that question and deletes the data. To keep the data with migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "members" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.',
+          refusedStatement: statement,
         },
       ],
     });

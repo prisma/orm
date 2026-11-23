@@ -1,5 +1,4 @@
 import {
-  asNamespaceId,
   type Contract,
   type ContractModel,
   type ContractRelation,
@@ -44,6 +43,7 @@ import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir'
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
+import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import {
   type DiscriminatorFilter,
   type RewriteCall,
@@ -533,15 +533,27 @@ function sharedCollectionRefusal(
   const { from, to } = change;
   const moving = modelsText(change.renames.map((renamed) => renamed.from));
   const others = modelsText(shared.models);
-  return refusedOutcome(
-    statement,
-    shared.kind === 'split'
-      ? `${label}: collection "${from}" also stores ${others}`
-      : `${label}: collection "${to}" also stores ${others}, whose documents are not in collection "${from}"`,
-    shared.kind === 'split'
-      ? `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leaveOutShared(moving)} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the documents of ${moving} into collection "${to}"`)}`
-      : `A collection rename moves the documents of one collection, and collection "${to}" would also store the documents of ${others}. Moving the documents of two collections into one is a data migration, which a plan does not write. ${leaveOutShared(moving)} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the documents of ${moving}, and those of ${others} that collection "${to}" does not already hold, into collection "${to}"`)}`,
-  );
+  const moveSteps = `${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the documents of ${moving} into collection "${to}"`)}`;
+  switch (shared.kind) {
+    case 'split':
+      return refusedOutcome(
+        statement,
+        `${label}: collection "${from}" also stores ${others}`,
+        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leaveOutShared(moving)} ${moveSteps}`,
+      );
+    case 'removed':
+      return refusedOutcome(
+        statement,
+        `${label}: collection "${from}" also stores ${others}, which the destination removes`,
+        `A collection rename moves every document of the collection, and no discriminator tells the documents of ${others} apart from those of ${moving}, so they would move to collection "${to}" as documents of ${moving}. Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. Leave out this statement to plan the change without moving them: the plan then drops collection "${from}" and asks about it, and --delete answers that question and deletes the data. ${moveSteps}`,
+      );
+    case 'merged':
+      return refusedOutcome(
+        statement,
+        `${label}: collection "${to}" also stores ${others}, whose documents are not in collection "${from}"`,
+        `A collection rename moves the documents of one collection, and collection "${to}" would also store the documents of ${others}. Moving the documents of two collections into one is a data migration, which a plan does not write. ${leaveOutShared(moving)} ${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the documents of ${moving}, and those of ${others} that collection "${to}" does not already hold, into collection "${to}"`)}`,
+      );
+  }
 }
 
 function planModelStatement(
@@ -812,19 +824,6 @@ export interface FieldRemoval {
   /** The variant whose documents lose the field; `undefined` for a root model's documents. */
   readonly variant: SelectedVariant | undefined;
   readonly discriminatorFilter: DiscriminatorFilter | undefined;
-}
-
-export function modelCoordinates(contract: ContractWithDomain): readonly ModelCoordinate[] {
-  return Object.entries(contract.domain?.namespaces ?? {}).flatMap(([namespaceId, namespace]) =>
-    Object.keys(namespace.models).map((model) => ({
-      namespaceId: asNamespaceId(namespaceId),
-      model,
-    })),
-  );
-}
-
-function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
-  return a.namespaceId === b.namespaceId && a.model === b.model;
 }
 
 /**

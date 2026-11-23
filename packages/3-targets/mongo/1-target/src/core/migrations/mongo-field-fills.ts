@@ -26,12 +26,12 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
+import { modelCoordinates } from './mongo-model-coordinates';
 import {
   collectionControlPolicy,
   destinationFieldOf,
   type ModelMatchInput,
   modelAt,
-  modelCoordinates,
   originFieldOf,
   originModelOf,
   storedFieldsKeptOf,

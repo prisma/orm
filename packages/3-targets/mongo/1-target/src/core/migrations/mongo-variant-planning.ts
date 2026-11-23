@@ -23,18 +23,14 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
+import { modelCoordinates, sameModel } from './mongo-model-coordinates';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import {
   SEPARATE_THE_MODELS,
   sharedCollectionWhy,
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
-import {
-  collectionControlPolicy,
-  destinationModelOf,
-  modelAt,
-  modelCoordinates,
-} from './mongo-statement-planning';
+import { collectionControlPolicy, destinationModelOf, modelAt } from './mongo-statement-planning';
 import { type FieldRename, renameRefused } from './mongo-storage-renames';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
@@ -95,10 +91,6 @@ interface VariantChange extends Omit<VariantDocumentRewrite, 'call'> {
   readonly originField: string;
   /** The enum value replacement that already moves the value, when the discriminator is an enum. */
   readonly byEnum: ReplaceStoredValueCall | undefined;
-}
-
-function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
-  return a.namespaceId === b.namespaceId && a.model === b.model;
 }
 
 function statementOf(

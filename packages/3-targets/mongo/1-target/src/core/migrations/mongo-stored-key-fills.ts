@@ -34,8 +34,9 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableKeyReason } from './migration-factories';
 import { temporaryValueOf } from './mongo-field-fills';
+import { modelCoordinates } from './mongo-model-coordinates';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
-import { collectionControlPolicy, modelAt, modelCoordinates } from './mongo-statement-planning';
+import { collectionControlPolicy, modelAt } from './mongo-statement-planning';
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
   type StoredPlace,
