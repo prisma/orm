@@ -1,98 +1,74 @@
 # Handover: Database change policies
 
-Written 2026-11-11 by the agent eratosthenes-31, ahead of a rate limit. It replaces the 2026-10-30 handover by oedipus-17. Delete this file at project close-out.
+Written 2026-11-24 by the agent aslan-59, ahead of a rate limit. It replaces the 2026-11-11 handover by eratosthenes-31. Delete this file at project close-out.
 
-## Where things stand, in one paragraph
+## The project in one paragraph
 
-Slice 1 is merged. Slice 3 is finished and waits only for Will's review: [prisma/orm#30926](https://github.com/prisma/orm/pull/30926), branch `tml-3727-policies`. On 2026-11-17 the agent aslan-59 merged main three times, ran two more rounds of `/drive-code-review` and a full manual QA through the real CLI on Postgres and SQLite (`wip/qa/transcript.md` in its worktree), and fixed what they found: advice that repeats a command now repeats the flags the user gave, a refusal that comes from the ref names the ref and prints the command that works, `--permit-policy-change` without a ref is refused with `CLI.INVALID_ARGUMENTS`, and the ADR became 320. The review records are in `slices/3-policies/reviews/`. Slices 4 (orm), 2 and 5 (composer) have not started. Will wants to talk the whole project through with Serhii next; the documents to give Serhii are listed under "Read these first".
+On 2026-10-15 an agent proposed resetting a shared development database, because nothing in the system said which databases may be moved directly with `db update` and which may change only through reviewed migrations. This project (Linear project P-TML-1165) makes every database record two policies in its marker: a **change policy** (may it be changed by migrations, by `db update`/`db sign`, or both) and a **data protection policy** (are data loss and access changes forbidden, allowed with consent, or permitted). A ref file declares the policies its database should have. Every command that changes a database obeys them, and a database's policy changes only through a deploy given `--permit-policy-change`. Composer (`prisma deploy`) must show the ORM's errors and apply the policies too.
+
+## Where things stand
+
+| Piece | Repo | State |
+| --- | --- | --- |
+| The off-graph migration error explains its cause and gives working recoveries (TML-3725) | prisma/orm | Merged, [#30866](https://github.com/prisma/orm/pull/30866). Released in 8.0.0-rc.24. |
+| Policies are recorded, compared and enforced for the change policy (TML-3727) | prisma/orm | Merged, [#30926](https://github.com/prisma/orm/pull/30926). Released in 8.0.0-rc.25. |
+| Data protection is enforced in `db update`, `db migrate` and `migration plan --to <ref>` (TML-3728) | prisma/orm | Merged, [#31087](https://github.com/prisma/orm/pull/31087), plus the advice fix [#31131](https://github.com/prisma/orm/pull/31131). Released in 8.0.0-rc.25. |
+| A failed Composer deploy shows the ORM's own migrate error (TML-3726) | prisma/composer | **In progress.** Branch `tml-3726-show-orm-migrate-errors`, pushed, 11 commits, no pull request. Design still being settled with Will; see below. |
+| Composer applies and compares policies during a deploy (TML-3729) | prisma/composer | **Not started. Now unblocked:** 8.0.0-rc.25 was released on 2026-11-23 and Composer's main uses it. |
+| A CLI command writes a ref's policies (no ticket yet) | prisma/orm | **Not started, not designed.** Added to `plan.md` as slice 6 on 2026-11-23. Bring the proposed command syntax to Will before building. |
+| Close-out | prisma/orm | Not started. |
 
 ## Read these first
 
-1. **This session's transcript** (eratosthenes-31, 2026-10-30 to 2026-11-11: checking the old handover, the framework exemption, finishing slice 3, seven review rounds, manual QA, the PR, the ADR rewrite, CodeRabbit fixes, three merges of main):
-   `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-database-change-policies-59f270/92b3ef91-3ae3-42f6-b183-fdb935e8a31c.jsonl`
-   Its subagents are in the folder of the same name, under `subagents/`. Will's own messages are the rulings: `jq -r 'select(.type=="user" and (.message.content|type)=="string") | .message.content' <file>`. This file is outside your worktree. If your worktree rules stop you reading it, ask Will to copy it in. Do not skip it.
-2. **Earlier transcripts**, under the macOS user `will` (ask Will to copy them if you cannot read them):
-   - slice 1 and the start of slice 3 (oedipus-17): `/Users/will/.claude/projects/-Users-will-Projects-prisma-orm--claude-worktrees-databases-declare-changes-bee530/84504d2f-5615-458d-9d22-3ab8a0eee97e.jsonl`
-   - the design session where Will settled the design (2026-10-15 to 2026-10-23): `/Users/will/.claude/projects/-Users-will-Projects-prisma-orm--claude-worktrees-agents-db-reset-design-2a94d6/a02116db-9e86-47d5-848d-e0501dfe2e70.jsonl`
-3. **Design documents.** Read the copies on branch `tml-3727-policies`, because main has older ones. These are also the documents to give Serhii, in this order:
-   1. [`design.md`](design.md): the incident, why there are two policies, scenarios, prior art, rejected alternatives.
-   2. [ADR 320 — Databases record a change policy and a data protection policy](../../docs/architecture%20docs/adrs/ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md). It was numbered 314, then 319, and is now 320: main took 314 for another ADR on 2026-11-11, and approved PR #30483 takes 319.
-   3. [`spec.md`](spec.md): the project requirements, with a table of decisions the agents made rather than Will.
-   4. [`plan.md`](plan.md): the five slices.
-   5. [`slices/3-policies/spec.md`](slices/3-policies/spec.md) and the review files in `slices/3-policies/reviews/` (force-added; the folder is normally gitignored).
-   6. [ADR 307 — No recovery resets or drops a database](../../docs/architecture%20docs/adrs/ADR%20307%20-%20No%20recovery%20resets%20or%20drops%20a%20database.md), and section "Database policies" of the [Migration System doc](../../docs/architecture%20docs/subsystems/7.%20Migration%20System.md).
+1. **This session's transcript** (aslan-59, 2026-11-11 to 2026-11-24): `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-database-change-policies-handover-c36337/c895892d-37fa-4593-b23b-46261481329a.jsonl`. The last part, from "what's next for this project?", holds the whole Composer design discussion. Read Will's messages in it in full.
+2. The previous session's transcript (eratosthenes-31): `/Users/wmadden/.claude/projects/-Users-wmadden-Projects-prisma-orm--claude-worktrees-database-change-policies-59f270/92b3ef91-3ae3-42f6-b183-fdb935e8a31c.jsonl`.
+3. `projects/database-change-policies/spec.md`, `design.md` and `plan.md`, and the decision record `docs/architecture docs/adrs/ADR 320 - Databases record a change policy and a data protection policy.md`.
+4. In prisma/composer: `CLAUDE.md`, `docs/design/01-principles/`, `docs/design/90-decisions/ADR-0022-data-deps-carry-a-prisma-orm-contract.md` and `ADR-0044-errors-are-structural-envelopes-with-dotted-namespace-codes.md`. Composer requires you to read its design docs before any design reply.
+5. For the Composer error work: `slices/2-composer-shows-orm-errors/spec.md` and the two reviews in `slices/2-composer-shows-orm-errors/reviews/` (copied from the Composer clone; the reviews cover an earlier commit than the branch tip).
+6. The memory file `project-database-change-policies.md` and the feedback memories it links.
 
-## What the project is
+## The work in flight: a failed Composer deploy shows the ORM's migrate error
 
-On 2026-10-15 an agent deploying `prisma/asks` to a shared development database with Prisma Composer got "no migration path": a branch's migration had been applied there and then planned again, so the database's marker named a contract no migration on disk starts from. The agent decided `db update` was only for local databases and proposed resetting the database. Will's rule: **never reset a database; it can always be moved with migrations or `db update`.**
+**What is built.** In prisma/composer, branch `tml-3726-show-orm-migrate-errors` (tip `4903db89`, 5 commits behind Composer's main on 2026-11-24). `packages/1-prisma-cloud/1-extensions/target/src/orm-migrate.ts` calls the ORM control client's `migrate`. When it fails, Composer now raises `PrismaOrmError` (a subclass of Composer's `CliStructuredError`) carrying the ORM's code, message, why, recovery steps and docs link. `OrmMigrationError` remains only for the four checks Composer makes itself before the ORM runs. The deploy summary's cause limit went from 1000 to 4000 characters. Docs, the skill, ADR-0022 and ADR-0044 are amended. Last full verification, before the final design change below: target package 726 tests pass, framework CLI 546 pass, typecheck and lint pass.
 
-The project makes each database record how it may change, and makes every command obey it:
+**The design question Will and I were settling.** The ORM writes its recovery steps for a person who ran `prisma db migrate`. A Composer user ran `prisma deploy`. What Will decided, in order:
 
-- **Change policy:** which strategies may move the database. `migrate` walks the migration graph (`db migrate`, a Composer deploy). `reconcile` plans and applies the difference to a contract (`db update`, `db sign`). Production records `["migrate"]`.
-- **Data protection policy:** `dataLoss` and `accessWidening`, each `…-forbidden`, `…-with-consent` (the default, which is the old behaviour) or `…-permitted`.
-- **A ref declares** the policies its database should have: `migrations/<space>/refs/<name>.json` gains an optional `policies`. **The application space's marker records** the policies in force, under `meta.policies`. They govern every contract space. A marker with none takes the defaults, so existing databases behave as before.
-- `db migrate --to <ref>` and `db update --to <ref>` refuse a difference with `MIGRATION.POLICY_MISMATCH`. With `--permit-policy-change` (control API: `permitPolicyChange`) they check the run against the ref's policies and write them into the marker when the run succeeds: inside the run's transaction on Postgres, SQLite and MySQL; in the application marker's guarded write on MongoDB. A run whose only difference is the policies writes them and nothing else. No error or advice offers the flag unless the user gave it in the command being repeated. The flag needs a ref: without one the command fails with `CLI.INVALID_ARGUMENTS`; a ref that declares nothing is accepted and changes nothing. The ledger gets nothing for a policy change.
-- `db update` and `db sign` need `reconcile`; `db migrate` needs `migrate`. The refusal is `MIGRATION.CHANGE_POLICY_FORBIDS`. A database with no marker has no policy, so `db init` and adopting a database with `db sign` are never refused.
-- The off-graph error `MIGRATION.MARKER_MISMATCH` and the `migration status` warning give the one recovery the change policy permits.
-- Concurrency: the runner compares the policies the command checked with the marker before the first space, under its lock (SQLite: inside its exclusive transaction). MongoDB has no lock, so its application marker write matches each policy setting with `$expr`/`$setEquals`. A concurrent change fails with `MIGRATION.MARKER_CAS_FAILURE`, whose `reason` is `storageHash`, `databasePolicies` or `markerChanged`.
-- Unreadable `meta.policies` is `CONTRACT.MARKER_ROW_CORRUPT` (advice: ask the database's owner to correct it; never delete the marker). An invalid `policies` in a ref file is `MIGRATION.INVALID_REF_FILE`.
-- **Data protection is stored, compared and changed, but not enforced yet.** That is slice 4. The docs and the skill say so.
+- He rejected a table in Composer that maps ORM error codes to Composer's own advice. "I don't want this mapping table. I want a generic method that lets us pass ORM errors through and have users address them themselves. They know better than Composer does, how to deal with ORM failures."
+- "But for this to work, Composer needs a very simple policy for how it manages the ORM on your behalf." I proposed the policy ADR-0022 already records: for each database, a deploy compares the marker with the target (the ref named by `targetRef`, else the emitted contract); if they differ it runs the equivalent of `prisma db migrate --to <target>`; it never plans, and never runs `db update`, `db init` or `db sign`. Will: "That's the policy idea I had in mind. I think the specifics need some more polish though."
+- He found a line printed on every error cumbersome, and the phrase "It runs nothing else" pointless. So: at most one short line naming the command Composer ran, and consider putting it on the failed deploy step instead of in every error. Show Will the exact output before opening the pull request.
 
-## Slices
+**Unanswered when the session ended.** The ORM's advice contains `--db <url>`. Will asked why, since the command asks for the flag when the config has no connection. My answer, which he has not replied to: my branch tells the ORM to print it (`dbGiven: true` in the invocation), because in a Composer app `prisma.config.ts` usually names the local development database. Without the flag, a copied `prisma db update` runs against the local database, reports success, and leaves the deployed database untouched. I suggested keeping the flag and having the one Composer line say which database was migrated, for example "(not the one in prisma.config.ts)". Wait for his answer; do not assume it.
 
-Linear project P-TML-1165. Every ticket is written to stand alone.
+**Known gap.** For a deployed database Composer has no command that prints the connection string (the deploy output never prints it, because it is a secret); the user copies it from the Console. Locally, `prisma dev url <address>` prints it. I told Will I would add one sentence to the deploy guide saying where to find it.
 
-| Slice | Ticket | Repo | State |
-|---|---|---|---|
-| 1. The off-graph error explains itself; nothing recommends a reset | TML-3725 | orm | Merged (orm#30866, 2026-10-27). |
-| 2. Composer shows the control API's migrate errors | TML-3726 | composer | Not started. Needs an ORM `8.0.0-rc` that contains slice 1 (already released). Composer passes `invocation: { dbGiven: true }`. |
-| 3. Refs declare policies, the marker records them, the change policy is enforced | TML-3727 | orm | PR #30926, awaiting Will's review. |
-| 4. Data protection enforced | TML-3728 | orm | Not started. Needs each target to say which operations widen access, judged from their structure. |
-| 5. Composer applies and compares policies | TML-3729 | composer | Not started. Needs an ORM release containing slice 3. |
+**Left to do on this branch.** Settle the output with Will; implement it; merge Composer's main in; run `/drive-code-review` without the walkthrough on the tip and fix findings; manual QA; open the pull request as a draft until review and QA cover the pushed tip; turn on Auto-fix; start a background watch; turn on auto-merge when approved. The earlier system-design review also suggested moving the error renderer into Composer's framework CLI; that is undecided.
 
-Follow-ups filed: TML-3743 (a one-step command to bring an off-graph database back onto the graph; `migration plan --to` accepting snapshot-store hashes), TML-3744 (`db update` names the data transforms it skips), TML-3779 (the MongoDB runner reports a failed schema command as `CLI.UNEXPECTED`).
+**Test obstacle.** On 2026-11-23 the migrate integration tests could not start Postgres: 32 Postgres servers from other sessions had used up shared memory. Do not kill other sessions' servers. Retry, and tell Will if it persists.
 
-## Slice 3 (PR #30926): what to do with it
+## Decisions by Will to respect
 
-- **Branch:** `tml-3727-policies` on the `bot` remote (`git@github-wmadden-electric:prisma/prisma.git`, which GitHub redirects to prisma/orm). Everything is committed and pushed. Never rebase or force-push; merge `main` in (`git fetch origin main && git merge FETCH_HEAD`).
-- **Auto-fix is on.** The desktop app sends CI failures, conflicts and review comments as events. Fix them, run the checks for the touched packages, commit and push.
-- **When Will approves:** turn on auto-merge (squash) at once. The merge queue runs the integration tests; if the entry drops, find the failure in the queue run, fix it, and turn auto-merge back on. After the merge, TML-3727 closes by itself.
-- **Not checked locally:** MySQL and MariaDB live tests (no server on this machine). CI ran them and they passed at `51aebff741`, including the merged marker write that keeps `meta` and sets `meta.policies` with `JSON_SET(meta, '$.policies', JSON_EXTRACT(?, '$'))`, which binds its values twice because MariaDB rejects a row alias.
-- **Side effect reported to Will, not changed:** a policy-only run with `--permit-policy-change` on a database with no marker creates the marker at the empty contract.
-- **Known flaky test on main, not ours:** `packages/3-targets/postgres/2-adapter/test/migrations/json-wildcard.integration.test.ts` times out at 500 ms under load. Rerun the job; do not change it.
-- **CodeRabbit "Docstring Coverage"** asks for docstrings everywhere. The repo forbids that; ignore it.
+- `migration plan --to <ref>` keeps refusing a plan the ref's policy forbids ("no keep it"). Do not raise it again.
+- Never start a release unasked. I opened release pull requests on 2026-11-20 without being asked and Will had me close them ([prisma/orm#31140](https://github.com/prisma/orm/pull/31140), prisma/web#8877). The branch `release/8.0.0-rc.25` on the bot remote is now obsolete; the real release was [prisma/orm#31180](https://github.com/prisma/orm/pull/31180).
+- The policy concept is exempt from the rule against changing the framework domain (Will, 2026-10-30). Text-building code still stays out of the framework.
+- A `db policy set` command that changes a database directly stays rejected. The planned ref command only writes the ref file, which does not reverse that.
+- A pull request with review, QA or fixes still in progress is a draft. A known defect that missed a merge gets its own pull request at once.
 
-## Next steps
+## Known gaps in the released ORM work
 
-1. Fresh worktree from `bot/tml-3727-policies` (or from `origin/main` once #30926 merges). Run `pnpm install` and `pnpm build` through `mise exec --`.
-2. Keep #30926 green until Will approves, then land it as above.
-3. Will's discussion with Serhii may change the design. If it does, update ADR 320, the spec and the plan before building more.
-4. **Slice 4 (TML-3728)**, after #30926 merges, through the Drive process (`/drive-process`): slice spec, plan, Opus implementer, `/drive-code-review` without the walkthrough, fixes, manual QA, then the PR. Content: `db update` applies the three levels of each data protection setting to its questions; `db migrate` refuses, with `MIGRATION.DATA_PROTECTION_FORBIDS`, a run containing a destructive operation under `data-loss-forbidden` or an access-widening one under `access-widening-forbidden`; each target supplies the function that finds access-widening operations in a recorded `ops.json`; `migration plan --to <ref>` checks the plan against the ref's declared data protection. Then remove the "not yet enforced" notes from the docs and the skill.
-5. **Composer slices 2 and 5**, after the ORM releases that contain slices 1 and 3. Clone `git@github-wmadden-electric:prisma/composer.git` into `wip/`. The deploy step is `packages/1-prisma-cloud/1-extensions/target/src/orm-migrate.ts`.
-6. **Close-out** per `close-project.md`: verify the project's definition of done in `spec.md`, move anything long-lived to `docs/`, file the follow-ups in `design.md` that have no ticket yet, then delete `projects/database-change-policies/`.
+Filed as tickets on 2026-11-18; I have not rechecked their state:
 
-## Checks before every push
+- Adding or changing a row-level security policy is not counted as an access change (TML-3843).
+- `db update --to <ref>` can fail with an unexpected-error code (TML-3844).
+- The advice for `--allow` is printed twice (TML-3845).
 
-Per-package `pnpm lint`, `pnpm typecheck` and `pnpm test --coverage` in each touched package (some coverage thresholds are 100%); `pnpm build` (full, never one package); `pnpm lint:deps`; `pnpm check:error-reference` when error codes change; `pnpm lint:ratchets` and `pnpm check:upgrade-coverage --mode pr` (CI-only checks). Run integration files one at a time (`cd test/integration && pnpm test test/<file>`), never a whole suite. The policies journeys are in `test/integration/test/utils/database-policies-journey.ts` and the per-target files that use it. Run node, pnpm and git commits through `mise exec --`. Commit as the bot with `git commit -s --trailer "Signed-off-by: Will Madden <madden@prisma.io>"`.
+## Where the code is
 
-## Rulings from Will to keep
+- prisma/orm: everything is on `main`. The only unmerged branch is `aslan-59/policy-ref-command-plan` on the bot remote (`git@github-wmadden-electric:prisma/orm.git`), which holds the slice 6 plan entry, this handover and the Composer slice's spec and reviews. It has no pull request; it rides along with the next real ORM pull request of the project.
+- prisma/composer: branch `tml-3726-show-orm-migrate-errors` on `git@github-wmadden-electric:prisma/composer.git`. The old clone is at `wip/composer` inside the worktree `database-change-policies-handover-c36337`; a fresh worktree should clone again under its own `wip/`.
 
-- **Framework exemption (2026-10-30):** database policies are a new framework concept and are exempt from the "never change the framework domain" rule: the module `packages/1-framework/1-core/framework-components/src/control/database-policies.ts`, the runner options, the marker conflict kind and `RefEntry.policies`. Do not raise the rule again for this concept. Still keep code that builds error text out of the framework.
-- **Execution mode:** design with Will at the start, then execute through Drive without interrupting him; his input is only the design and final verification. Make engineering decisions yourself and explain any that truly need him once, with a recommendation.
-- Never propose or document resetting or dropping a database.
-- `db update` is for any database whose migration history need not be kept (local, development, staging, preview, shared or not). Never call it "dev-only", "solo" or "local".
-- Policies live in the marker as well as on the ref, so the database can be read on its own. The Rails model (the marker names its ref) was rejected.
-- `db migrate` and `db update` never change a policy without explicit consent (`--permit-policy-change`). No error or advice offers that flag unless the user gave it in the command being repeated.
-- A CI/CD pipeline can only deploy what is committed; do not design steps a pipeline would have to run separately.
-- The ledger records applied migrations only; never write policy changes to it.
-- Do not present your own choices as Will's rulings. The project spec's table of agent decisions keeps that distinction.
-- ADRs (2026-11-02): a grounding example first (code or CLI output), then the decision, a narrative, alternatives last; no Linear tickets, milestones or temporary states.
-- Linear tickets must stand alone: explain every command, file and error, no slice shorthand.
-- Write to Will briefly, in plain English, leading with the decision. Never use the question UI.
+## Next steps, in order
 
-## Calls the agents made that Will may overturn
-
-- Public codes are `MIGRATION.POLICY_MISMATCH` and `MIGRATION.CHANGE_POLICY_FORBIDS`; internal names say "database policies".
-- Re-run advice repeats `--permit-policy-change` when the user gave it.
-- An in-sync `db update` without the flag still writes the zero-operation ledger row it wrote before.
-- The framework's control entry point exports a parser, `parseDeclaredDatabasePolicies`, not an arktype schema (exporting the schema crashed a language-server test that mocks the module).
+1. Get Will's answer on `--db <url>` and the exact deploy output, then finish and open the Composer error pull request.
+2. Build the Composer policy piece (TML-3729): the deployment resource accepts `permitPolicyChange` (default `false`) and passes it to the control API, and the "already at target" check also compares the ref's declared policies. Settle any open design with Will first.
+3. Propose the syntax of the CLI command that writes a ref's policies, then build it.
+4. Close out the project, following Drive's `close-project.md` and the repo's `drive/` overlays.
