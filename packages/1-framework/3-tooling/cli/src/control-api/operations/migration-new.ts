@@ -44,6 +44,8 @@ export interface MigrationNewOptions {
   readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
+  /** The `--config` the command was given, which the commands its errors print repeat. */
+  readonly configPath?: string;
   readonly name?: string;
   readonly from?: string;
   /** Renders the declarations of the destination snapshot from its `contract.json`. */
@@ -177,7 +179,11 @@ export async function executeMigrationNewCommand(
     }
     fromHash = matchedHashes[0] ?? null;
   } else {
-    const origin = resolveDefaultOriginHash(aggregate.app);
+    const origin = resolveDefaultOriginHash(aggregate.app, {
+      cwd,
+      configPath: options.configPath,
+      dbGiven: false,
+    });
     if (!origin.ok) {
       return notOk(origin.failure);
     }

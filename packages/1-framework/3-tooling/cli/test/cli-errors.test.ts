@@ -67,9 +67,7 @@ describe('errorPathUnreachable', () => {
       planThenApply({ from: reference(fromHash), to: reference(targetHash) }, INVOCATION),
     ).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.PATH_UNREACHABLE');
-    expect(envelope.fix).toContain(
-      `{bin} migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
-    );
+    expect(envelope.fix).toContain(`{bin} migration plan --from ${fromHash} --to ${targetHash}`);
     expect(envelope.fix).toContain(`{bin} db migrate --to ${targetHash}`);
     expect(envelope.fix).toContain('{bin} migration list');
     expect(envelope.fix).toContain('{bin} migration show');
@@ -98,9 +96,7 @@ describe('errorPathUnreachable', () => {
     expect(envelope.why).not.toContain('migration plan');
 
     // fix: the plan-then-apply sequence pointing at the now-working command.
-    expect(envelope.fix).toContain(
-      `{bin} migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
-    );
+    expect(envelope.fix).toContain(`{bin} migration plan --from ${fromHash} --to ${targetHash}`);
     expect(envelope.fix).toContain(`{bin} db migrate --to ${targetHash}`);
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
     expect(envelope.fix ?? '').toContain('Plan a rename with --rename old:new');
@@ -117,9 +113,7 @@ describe('errorPathUnreachable', () => {
 
     expect(envelope.why).toContain('No migration edge connects the empty contract to the target');
     expect(envelope.meta?.['fromHash']).toBe(EMPTY_CONTRACT_HASH);
-    expect(envelope.fix).toContain(
-      `{bin} migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
-    );
+    expect(envelope.fix).toContain(`{bin} migration plan --from ${fromHash} --to ${targetHash}`);
   });
 
   it('leaves --to out of both steps when the target is the emitted contract, which no migration or ref names yet', () => {
@@ -135,14 +129,14 @@ describe('errorPathUnreachable', () => {
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: `{bin} migration plan --from ${fromHash} --name <slug>`,
+        command: `{bin} migration plan --from ${fromHash}`,
       },
       { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
     ]);
     expect(error.toEnvelope().fix).toContain(
       [
         'Plan the missing edge, then apply it:',
-        `  1. {bin} migration plan --from ${fromHash} --name <slug>`,
+        `  1. {bin} migration plan --from ${fromHash}`,
         '  2. {bin} db migrate',
       ].join('\n'),
     );
@@ -167,7 +161,7 @@ describe('errorPathUnreachable', () => {
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: `{bin} migration plan --from ${fromHash} --to production --name <slug>`,
+        command: `{bin} migration plan --from ${fromHash} --to production`,
       },
       { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate --to production' },
     ]);
@@ -186,7 +180,7 @@ describe('errorPathUnreachable', () => {
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: '{bin} migration plan --name <slug>',
+        command: '{bin} migration plan',
       },
       { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate' },
     ]);
@@ -208,7 +202,7 @@ describe('errorPathUnreachable', () => {
     expect(
       error.nextActions?.map((action) => (action.kind === 'run-command' ? action.command : null)),
     ).toEqual([
-      `{bin} migration plan --from ${fromHash} --name <slug> --config apps/api/prisma.config.ts`,
+      `{bin} migration plan --from ${fromHash} --config apps/api/prisma.config.ts`,
       '{bin} db migrate --config apps/api/prisma.config.ts --db <url>',
       null,
       null,
@@ -233,7 +227,7 @@ describe('errorPathUnreachable', () => {
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: `{bin} migration plan --from ${fromHash} --to production --name <slug>`,
+        command: `{bin} migration plan --from ${fromHash} --to production`,
       },
       {
         kind: 'run-command',
@@ -256,7 +250,7 @@ describe('errorPathUnreachable', () => {
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: '{bin} migration plan --from @empty --to production --name <slug>',
+        command: '{bin} migration plan --from @empty --to production',
       },
       { kind: 'run-command', label: 'Apply it', command: '{bin} db migrate --to production' },
     ]);
@@ -278,7 +272,7 @@ describe('errorPathUnreachable', () => {
 
     // A never-planned space has an empty graph; the fix must not
     // prescribe a `--to <hash>` the empty graph cannot resolve.
-    expect(envelope.fix).toContain('{bin} migration plan --from @empty --name <slug>');
+    expect(envelope.fix).toContain('{bin} migration plan --from @empty');
     expect(envelope.fix).toContain('{bin} db migrate');
     expect(envelope.fix).not.toContain('--to');
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
@@ -331,6 +325,83 @@ describe('errorPlanOriginUnknown and errorPlanForgotTheFlag with no ref to plan 
     expect(action).toMatchObject({
       kind: 'user-choice',
       label: expect.stringContaining(`with \`{bin} migration plan --from ${END}\`. `),
+    });
+  });
+});
+
+describe('errorPlanOriginUnknown and errorPlanForgotTheFlag under --config', () => {
+  const END = 'b'.repeat(64);
+  const CONFIG = 'apps/api/prisma.config.ts';
+  const invocation = { cwd: '/work', configPath: CONFIG, dbGiven: false };
+  const STAGING = [{ name: 'staging', hash: END }];
+
+  it('repeat the --config in every command they print', () => {
+    const unknown = errorPlanOriginUnknown([], ONE_END_SPACE, invocation);
+    const forgot = errorPlanForgotTheFlag('c'.repeat(64), [], ONE_END_SPACE, { invocation });
+    const withRef = errorPlanOriginUnknown(STAGING, ONE_END_SPACE, invocation);
+    const forgotWithRef = errorPlanForgotTheFlag('c'.repeat(64), STAGING, ONE_END_SPACE, {
+      invocation,
+    });
+    expect({
+      unknown: unknown.nextActions,
+      forgot: forgot.nextActions,
+      withRef: withRef.fix?.split('\n')[1],
+      withRefActions: withRef.nextActions?.filter(({ kind }) => kind === 'run-command'),
+      forgotWithRef: forgotWithRef.nextActions,
+    }).toEqual({
+      unknown: [
+        {
+          kind: 'user-choice',
+          label: `Point the db ref at the contract your database is at with \`{bin} migration ref set db <contract> --config ${CONFIG}\`, replacing <contract> with one of \`${END}\``,
+        },
+        {
+          kind: 'user-choice',
+          label: `Plan from an explicit origin with \`{bin} migration plan --from ${END} --config ${CONFIG}\`. No \`db\` ref and no --from say where the plan starts.`,
+        },
+        {
+          kind: 'run-command',
+          label: 'Plan from an empty database deliberately',
+          command: `{bin} migration plan --from @empty --config ${CONFIG}`,
+        },
+      ],
+      forgot: [
+        {
+          kind: 'user-choice',
+          label: `Plan from an explicit origin with \`{bin} migration plan --from ${END} --config ${CONFIG}\`. No migration records contract ${'c'.repeat(64)}.`,
+        },
+        {
+          kind: 'user-choice',
+          label: `Point the db ref at the contract your database is at with \`{bin} migration ref set db <contract> --config ${CONFIG}\`, replacing <contract> with one of \`${END}\``,
+        },
+      ],
+      withRef: `Or pass the origin explicitly: \`{bin} migration plan --from staging --config ${CONFIG}\`.`,
+      withRefActions: [
+        {
+          kind: 'run-command',
+          label: 'Plan from staging',
+          command: `{bin} migration plan --from staging --config ${CONFIG}`,
+        },
+        {
+          kind: 'run-command',
+          label: 'Plan from an empty database deliberately',
+          command: `{bin} migration plan --from @empty --config ${CONFIG}`,
+        },
+      ],
+      forgotWithRef: [
+        {
+          kind: 'run-command',
+          label: 'Plan from staging',
+          command: `{bin} migration plan --from staging --config ${CONFIG}`,
+        },
+      ],
+    });
+  });
+
+  it('names a contract migration list shows with the --config when the history has no end to name', () => {
+    const unread = { graph: buildGraph([]), refs: {} };
+    expect(errorPlanOriginUnknown([], unread, invocation).nextActions?.[0]).toEqual({
+      kind: 'user-choice',
+      label: `Point the db ref at the contract your database is at with \`{bin} migration ref set db <contract> --config ${CONFIG}\`, replacing <contract> with a contract \`{bin} migration list --config ${CONFIG}\` shows`,
     });
   });
 });
@@ -388,7 +459,7 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: `{bin} migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
+        command: `{bin} migration plan --from ${fromHash} --to ${targetHash}`,
       },
       {
         kind: 'run-command',

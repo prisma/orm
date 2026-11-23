@@ -280,29 +280,39 @@ function noMarkerText(
 /**
  * Why advice that carries a statement prints no plan from `from`, past migrations on disk the
  * database has not applied: one of them may already make the change. It says to apply them first,
- * after `adoptFirst` for a database with no marker, then run the command again.
+ * after `adoptFirst` for a database with no marker, then run the command again. It never offers
+ * `@empty` as where to apply them to, since that empties the database.
  */
 function applyUnappliedFirst(
   invocation: CliInvocation | undefined,
   from: Exclude<MigrationPlanArgument, { readonly kind: 'none' }>,
   adoptFirst: string | undefined,
 ): Extract<PrintedWayToTarget, { readonly kind: 'none' }> {
-  const end = from.kind === 'reference' ? from.reference : CONTRACT_PLACEHOLDER;
-  const command = cliCommand(invocation, 'db migrate', ['--to', shellQuoted(end)]);
-  const migrate = `\`${command}\``;
-  const choose =
-    from.kind === 'ambiguous' && from.candidates.length > 0
-      ? `, replacing ${CONTRACT_PLACEHOLDER} with one of ${from.candidates.map((each) => `\`${each}\``).join(', ')}`
-      : '';
-  const apply = `Apply them first with ${migrate}${choose}, which names the migration.ts to change if one of them fails, then run the command again`;
   const lead =
     'Migrations on disk that the database has not applied come before where a plan for this change would start, and one of them may already make the change, so the plan could not carry it';
+  const candidates =
+    from.kind === 'ambiguous' ? from.candidates.filter((each) => each !== '@empty') : [];
+  const [onlyCandidate] = candidates;
+  const end =
+    from.kind === 'reference'
+      ? from.reference
+      : candidates.length === 1 && onlyCandidate !== undefined
+        ? onlyCandidate
+        : CONTRACT_PLACEHOLDER;
+  const runs = end !== CONTRACT_PLACEHOLDER;
+  const command = cliCommand(invocation, 'db migrate', ['--to', runs ? shellQuoted(end) : end]);
+  const migrate = `\`${command}\``;
+  const choose =
+    !runs && candidates.length > 0
+      ? `, replacing ${CONTRACT_PLACEHOLDER} with one of ${candidates.map((each) => `\`${each}\``).join(', ')}`
+      : '';
+  const apply = `Apply them first with ${migrate}${choose}, which names the migration.ts to change if one of them fails, then run the command again`;
   return {
     kind: 'none',
     reason: adoptFirst === undefined ? `${lead}. ${apply}` : `${lead}. ${adoptFirst}. ${apply}`,
     applyFirst: {
       command,
-      runs: from.kind === 'reference',
+      runs,
       text: apply,
       ...ifDefined('adoptFirst', adoptFirst),
     },

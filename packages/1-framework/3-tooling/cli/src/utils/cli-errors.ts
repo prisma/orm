@@ -39,6 +39,7 @@ import type { StatementText } from '../control-api/statements/statement-text';
 import { chooseAction, editFileAction, runCommandAction } from './next-actions';
 import {
   type CliInvocation,
+  CONTRACT_PLACEHOLDER,
   cliCommand,
   dbMigrateRerun,
   planAction,
@@ -509,24 +510,29 @@ export function errorRefSetBundleNotFound(hash: string): ActionableCliError {
  * `migration plan` can start from, and the `db` ref pointed at one, which `migration ref set` takes only for a
  * contract a migration records.
  */
-function originChoices(space: PlanSpace, reason: string) {
+function originChoices(space: PlanSpace, reason: string, invocation: CliInvocation | undefined) {
   const choice = migrationPlanChoice(space, reason);
   const refTargets = choice.candidates.filter((candidate) => candidate !== '@empty');
-  const refSet = '{bin} migration ref set db <contract>';
-  const refChoice = `Point the db ref at the contract your database is at with \`${refSet}\`, replacing <contract> with ${
+  const refSet = cliCommand(invocation, 'migration ref set', ['db', CONTRACT_PLACEHOLDER]);
+  const refChoice = `Point the db ref at the contract your database is at with \`${refSet}\`, replacing ${CONTRACT_PLACEHOLDER} with ${
     refTargets.length > 0
       ? `one of ${refTargets.map((target) => `\`${target}\``).join(', ')}`
-      : 'a contract `{bin} migration list` shows'
+      : `a contract \`${cliCommand(invocation, 'migration list')}\` shows`
   }`;
-  return { plan: printedChoicePlan(undefined, choice, []), refChoice };
+  return { plan: printedChoicePlan(invocation, choice, []), refChoice };
+}
+
+function planFromCommand(invocation: CliInvocation | undefined, from: string): string {
+  return cliCommand(invocation, 'migration plan', ['--from', shellQuoted(from)]);
 }
 
 export function errorPlanForgotTheFlag(
   resolvedHash: string,
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
   space: PlanSpace,
-  options?: { readonly cause?: unknown },
+  options?: { readonly cause?: unknown; readonly invocation?: CliInvocation | undefined },
 ): ActionableCliError {
+  const invocation = options?.invocation;
   const reachableList =
     reachableRefs.length > 0
       ? reachableRefs.map((r) => `${r.name} (${r.hash})`).join(', ')
@@ -534,6 +540,7 @@ export function errorPlanForgotTheFlag(
   const { plan: explicit, refChoice } = originChoices(
     space,
     `No migration records contract ${resolvedHash}`,
+    invocation,
   );
   const refFix =
     reachableRefs.length > 0
@@ -542,7 +549,7 @@ export function errorPlanForgotTheFlag(
   const nextActions =
     reachableRefs.length > 0
       ? reachableRefs.map((ref) =>
-          runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
+          runCommandAction(`Plan from ${ref.name}`, planFromCommand(invocation, ref.name)),
         )
       : [planAction('Plan from an explicit origin', explicit), chooseAction(refChoice)];
   return new ActionableCliError(
@@ -622,24 +629,23 @@ export function errorSnapshotMissing(
 export function errorPlanOriginUnknown(
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
   space: PlanSpace,
+  invocation?: CliInvocation,
 ): ActionableCliError {
   const { plan: explicit, refChoice } = originChoices(
     space,
     'No `db` ref and no --from say where the plan starts',
+    invocation,
   );
-  const fromSuggestion =
-    reachableRefs.length > 0
-      ? reachableRefs.map((r) => `--from ${r.name}`).join(' or ')
-      : '--from <contract>';
+  const fromEmpty = planFromCommand(invocation, '@empty');
   return new ActionableCliError(
     'MIGRATION.PLAN_ORIGIN_UNKNOWN',
     'Cannot determine the plan origin: migrations exist but no origin is named',
     {
       why: 'Migrations exist on disk, but there is no `db` ref and no --from was given, so the plan origin would silently fall back to an empty database and the resulting migration would recreate everything the existing migrations already create.',
       fix: [
-        `${refChoice}, or, on a database whose migration history does not need to be kept, advance it via \`{bin} db update\`.`,
+        `${refChoice}, or, on a database whose migration history does not need to be kept, advance it via \`${cliCommand(invocation, 'db update')}\`.`,
         reachableRefs.length > 0
-          ? `Or pass the origin explicitly: \`{bin} migration plan ${fromSuggestion}\`.`
+          ? `Or pass the origin explicitly: ${reachableRefs.map((r) => `\`${planFromCommand(invocation, r.name)}\``).join(' or ')}.`
           : `Or pass the origin explicitly: \`${explicit.command}\`. ${explicit.fill}.`,
         'Or pass --from @empty to deliberately plan from an empty database.',
       ].join('\n'),
@@ -647,13 +653,10 @@ export function errorPlanOriginUnknown(
         chooseAction(refChoice),
         ...(reachableRefs.length > 0
           ? reachableRefs.map((ref) =>
-              runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
+              runCommandAction(`Plan from ${ref.name}`, planFromCommand(invocation, ref.name)),
             )
           : [planAction('Plan from an explicit origin', explicit)]),
-        runCommandAction(
-          'Plan from an empty database deliberately',
-          '{bin} migration plan --from @empty',
-        ),
+        runCommandAction('Plan from an empty database deliberately', fromEmpty),
       ],
       meta: {
         reachableRefs: reachableRefs.map((r) => r.name),
@@ -789,7 +792,10 @@ export function errorStatementNeedsMigrationFile(
       `db update cannot carry out ${listed}`,
       {
         why: `${why} ${plan.reason}.`,
-        fix: `${edit}, then apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`,
+        fix:
+          plan.adoptFirst === undefined
+            ? `${edit}, then apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`
+            : `${edit}. ${plan.adoptFirst}. Then apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`,
         nextActions: [
           chooseAction(edit),
           ...(plan.adoptFirst === undefined ? [] : [chooseAction(plan.adoptFirst)]),
@@ -1089,7 +1095,7 @@ export function planThenApply(
   plan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): PathUnreachableAdvice {
-  const printed = printedPlan(invocation, plan, ['--name', '<slug>']);
+  const printed = printedPlan(invocation, plan, []);
   if (printed.kind === 'none') return noPlanReaches(printed.reason, invocation);
   const to = plan.to.kind === 'reference' ? ['--to', shellQuoted(plan.to.reference)] : [];
   const planStep =

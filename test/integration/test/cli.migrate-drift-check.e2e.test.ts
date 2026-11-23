@@ -24,7 +24,7 @@ function remediation(error: MigrateErrorJson): string {
     .join('\n');
 }
 
-/** The arguments a next action's command gives `command`, as a shell would pass them, with `<slug>` filled in. */
+/** The arguments a next action's command gives `command`, as a shell would pass them. */
 function printedArgs(error: MigrateErrorJson, label: string, command: string): string[] {
   const printed = error.nextActions?.find((action) => action.label === label)?.command ?? '';
   const start = printed.indexOf(command);
@@ -33,7 +33,7 @@ function printedArgs(error: MigrateErrorJson, label: string, command: string): s
     .slice(start + command.length)
     .split(/\s+/)
     .filter((arg) => arg !== '')
-    .map((arg) => (arg === '<slug>' ? 'planned-as-advised' : arg.replace(/^'(.*)'$/, '$1')));
+    .map((arg) => arg.replace(/^'(.*)'$/, '$1'));
 }
 
 /** The error advises no `migration plan`, says why, and each command it prints runs. */

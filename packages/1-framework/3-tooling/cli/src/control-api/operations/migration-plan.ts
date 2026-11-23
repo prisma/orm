@@ -639,6 +639,7 @@ async function executeMigrationPlanCommandInner(
   const resolutionResult = await resolveFromForPlan({
     optionsFrom: options.from,
     space: resolutionSpace,
+    invocation: invocationOf(options),
   });
 
   if (!resolutionResult.ok) {

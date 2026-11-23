@@ -402,7 +402,7 @@ describe('executeMigrate with no path to the target', () => {
         expect.objectContaining({
           kind: 'user-choice',
           label: expect.stringContaining(
-            'Plan the missing edge with `{bin} migration plan --from @empty --name <slug>`. The database has no marker',
+            'Plan the missing edge with `{bin} migration plan --from @empty`. The database has no marker',
           ),
         }),
       ]),
@@ -423,7 +423,7 @@ describe('executeMigrate with no path to the target', () => {
     );
 
     expect(JSON.stringify(failure.toEnvelope().nextActions)).toContain(
-      '{bin} migration plan --from @empty --to production --name <slug>',
+      '{bin} migration plan --from @empty --to production',
     );
     expect(failure.toEnvelope().nextActions).toContainEqual(
       expect.objectContaining({

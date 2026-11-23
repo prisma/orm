@@ -15,6 +15,7 @@ import {
   errorSnapshotMissing,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
+import type { CliInvocation } from '../../utils/printed-command';
 import { mapContractAtError } from './contract-at-errors';
 
 const FULL_HASH_PATTERN = /^([0-9a-f]{64}|empty)$/;
@@ -53,6 +54,8 @@ export type FromResolution =
 export interface ResolveFromForPlanInput {
   readonly optionsFrom?: string | undefined;
   readonly space: AggregateContractSpace;
+  /** Where `migration plan` ran and the `--config` it was given, which the commands its errors print repeat. */
+  readonly invocation?: CliInvocation;
 }
 
 function graphIsEmpty(space: AggregateContractSpace): boolean {
@@ -74,7 +77,12 @@ function getReachableRefs(
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function assertFromIsGraphNode(fromHash: string, graph: MigrationGraph, refs: Refs): void {
+export function assertFromIsGraphNode(
+  fromHash: string,
+  graph: MigrationGraph,
+  refs: Refs,
+  invocation?: CliInvocation,
+): void {
   try {
     assertHashIsGraphNode(fromHash, graph);
   } catch (error) {
@@ -83,9 +91,7 @@ export function assertFromIsGraphNode(fromHash: string, graph: MigrationGraph, r
         fromHash,
         getReachableRefs(refs, graph),
         { graph, refs },
-        {
-          cause: error,
-        },
+        { cause: error, invocation },
       );
     }
     throw error;
@@ -108,6 +114,7 @@ export type DefaultOriginHash =
  */
 export function resolveDefaultOriginHash(
   space: AggregateContractSpace,
+  invocation?: CliInvocation,
 ): Result<DefaultOriginHash, CliStructuredError> {
   const refs = space.refs;
   const dbRef = refs['db'];
@@ -120,10 +127,12 @@ export function resolveDefaultOriginHash(
   }
   const graph = space.graph();
   if (!dbRef) {
-    return notOk(errorPlanOriginUnknown(getReachableRefs(refs, graph), { graph, refs }));
+    return notOk(
+      errorPlanOriginUnknown(getReachableRefs(refs, graph), { graph, refs }, invocation),
+    );
   }
   try {
-    assertFromIsGraphNode(dbRef.hash, graph, refs);
+    assertFromIsGraphNode(dbRef.hash, graph, refs, invocation);
   } catch (error) {
     if (CliStructuredError.is(error)) {
       return notOk(error);
@@ -202,7 +211,7 @@ async function resolveFromPolicy(
 
   const graph = input.space.graph();
   try {
-    assertFromIsGraphNode(hash, graph, refs);
+    assertFromIsGraphNode(hash, graph, refs, input.invocation);
   } catch (error) {
     if (CliStructuredError.is(error)) {
       return notOk(error);
@@ -229,7 +238,9 @@ export async function resolveFromForPlan(
       if (graphIsEmpty(space)) {
         return ok({ kind: 'greenfield', fromHash: null, fromContract: null, defaulted: true });
       }
-      return notOk(errorPlanOriginUnknown(getReachableRefs(refs, graph), { graph, refs }));
+      return notOk(
+        errorPlanOriginUnknown(getReachableRefs(refs, graph), { graph, refs }, input.invocation),
+      );
     }
     const resolved = await resolveFromPolicy(
       { hash: dbRef.hash, provenance: { kind: 'ref', refName: 'db' } },
@@ -259,7 +270,12 @@ export async function resolveFromForPlan(
         return notOk(errorSnapshotMissing(optionsFrom, { viaRef: false }));
       }
       return notOk(
-        errorPlanForgotTheFlag(optionsFrom, getReachableRefs(refs, graph), { graph, refs }),
+        errorPlanForgotTheFlag(
+          optionsFrom,
+          getReachableRefs(refs, graph),
+          { graph, refs },
+          { invocation: input.invocation },
+        ),
       );
     }
     return notOk(mapRefResolutionError(refResult.failure));

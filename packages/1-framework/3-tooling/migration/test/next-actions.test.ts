@@ -88,7 +88,7 @@ describe('errors.ts — converted factories carry typed nextActions', () => {
       {
         kind: 'user-choice',
         label:
-          'For an app-space migration planned to the emitted contract, emit that contract again and re-run the migration plan that authored it, with the same --from and no --to, to re-emit the snapshot. Then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with --to reads the snapshot, so it cannot re-emit it',
+          'For an app-space migration planned to the emitted contract, emit that contract again and re-run the migration plan that wrote the migration ending at that contract, with its --from and no --to, to re-emit the snapshot. Then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with --to reads the snapshot, so it cannot re-emit it',
       },
       {
         kind: 'user-choice',

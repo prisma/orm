@@ -68,12 +68,13 @@ const withoutIssues = schemaCheckFailure(undefined);
 function migrateError(
   failure: MigrationRunnerFailure,
   failedMigration: WrittenMigration | undefined = undefined,
+  rerunArgs: readonly string[] = [],
 ) {
   return migrateRunnerFailureError(
     failure,
     runnerFailureFacts(failure, []),
     failedMigration === undefined ? undefined : onDisk(failedMigration),
-    invocation,
+    { ...invocation, rerunArgs },
   );
 }
 
@@ -129,6 +130,47 @@ describe('a failed schema check after apply', () => {
       ).toEqual([
         'If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run `{bin} contract emit`, and run `{bin} migration status`. If it prints a `migration plan`, run it, run that migration.ts with the `node` command `migration plan` prints, and run `{bin} db migrate`; otherwise run the command it prints',
         'If a migration you edited by hand does not reach its destination contract, find it with `{bin} migration list`, change its operations to resolve the issues listed, run its migration.ts with `node`, and run `{bin} db migrate`',
+      ]);
+    });
+
+    it('with --to, names no migration directory and says only how to fix a migration edited by hand, since a change of the contract source cannot move a fixed target', () => {
+      expect(
+        (
+          migrateError(schemaCheckFailure([explained]), undefined, ['--to', 'production'])
+            .nextActions ?? []
+        ).map(({ label }) => label),
+      ).toEqual([
+        'If a migration you edited by hand does not reach its destination contract, find it with `{bin} migration list`, change its operations to resolve the issues listed, run its migration.ts with `node`, and run `{bin} db migrate --to production`',
+      ]);
+    });
+
+    it('applies the migration planned again with the db migrate the user ran, flags included', () => {
+      const failed = { directory: `${PROJECT}/${INITIAL}`, from: FROM };
+      const given =
+        '`{bin} db migrate --to production --advance-ref staging --permit-policy-change`';
+      expect(
+        migrateError(schemaCheckFailure([plain]), failed, [
+          '--to',
+          'production',
+          '--advance-ref',
+          'staging',
+          '--permit-policy-change',
+        ]).nextActions,
+      ).toEqual([
+        {
+          kind: 'edit-file',
+          label: CONTRACT_CAUSE(
+            `\`${INITIAL}\``,
+            `{bin} migration plan --from ${FROM} --name initial`,
+          ).replace(/`\{bin\} db migrate`$/, given),
+        },
+        {
+          kind: 'edit-file',
+          label: MIGRATION_CAUSE(
+            `\`${INITIAL}/migration.ts\``,
+            `run \`node ${INITIAL}/migration.ts\``,
+          ).replace(/`\{bin\} db migrate`$/, given),
+        },
       ]);
     });
 

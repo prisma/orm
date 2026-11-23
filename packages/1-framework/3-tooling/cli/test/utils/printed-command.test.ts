@@ -202,6 +202,43 @@ describe('printedWayToTarget', () => {
     ]);
   });
 
+  it('never offers the empty contract as where to apply unapplied migrations to, and prints the one other end as a command', () => {
+    const D = 'd'.repeat(64);
+    const E = 'e'.repeat(64);
+    const wayFrom = (entries: Parameters<typeof buildGraph>[0]) =>
+      printedWayToTarget(
+        PROJECT,
+        migrationPlanForDatabase({ graph: buildGraph(entries), refs: {}, emittedHash: E }, at(A), {
+          kind: 'emitted',
+        }),
+        ['--convert', 'User.age'],
+      );
+    const teardown = entry(A, EMPTY_CONTRACT_HASH, 'teardown');
+    expect([
+      wayFrom([entry(A, B, 'm2'), teardown]),
+      wayFrom([entry(A, B, 'm2'), entry(A, D, 'm3'), teardown]),
+    ]).toEqual([
+      {
+        kind: 'none',
+        reason: `${UNAPPLIED}. ${APPLY_FIRST}`,
+        applyFirst: {
+          command: `{bin} db migrate --to ${B} --db <url>`,
+          runs: true,
+          text: APPLY_FIRST,
+        },
+      },
+      {
+        kind: 'none',
+        reason: `${UNAPPLIED}. Apply them first with \`{bin} db migrate --to <contract> --db <url>\`, replacing <contract> with one of \`${B}\`, \`${D}\`, which names the migration.ts to change if one of them fails, then run the command again`,
+        applyFirst: {
+          command: '{bin} db migrate --to <contract> --db <url>',
+          runs: false,
+          text: `Apply them first with \`{bin} db migrate --to <contract> --db <url>\`, replacing <contract> with one of \`${B}\`, \`${D}\`, which names the migration.ts to change if one of them fails, then run the command again`,
+        },
+      },
+    ]);
+  });
+
   it('plans a statement from the database when it has applied every migration, and a plan with none past them as before', () => {
     const RUN = 'run `node <migration directory>/migration.ts` for the directory it writes';
     expect([

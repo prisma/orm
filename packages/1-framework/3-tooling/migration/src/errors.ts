@@ -607,12 +607,12 @@ export function errorContractSnapshotMissing(
     'Contract snapshot is missing',
     {
       why: `Expected a contract snapshot for ${storageHash} at "${expectedPath}" but the file does not exist.`,
-      fix: "Re-emit the contract snapshot, or restore migrations/snapshots/ from version control. For an app-space migration planned to the emitted contract, emit that contract again and re-run its `migration plan` with the same `--from` and no `--to`, then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with `--to` reads the snapshot, so it cannot re-emit it. For an extension space, re-run the extension's contract-space build.",
+      fix: `Re-emit the contract snapshot, or restore migrations/snapshots/ from version control. For an app-space migration planned to the emitted contract, emit that contract again and re-run the \`migration plan\` that wrote the migration ending at ${storageHash}, with its \`--from\` and no \`--to\`, then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with \`--to\` reads the snapshot, so it cannot re-emit it. For an extension space, re-run the extension's contract-space build.`,
       nextActions: [
         {
           kind: 'user-choice',
           label:
-            'For an app-space migration planned to the emitted contract, emit that contract again and re-run the migration plan that authored it, with the same --from and no --to, to re-emit the snapshot. Then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with --to reads the snapshot, so it cannot re-emit it',
+            'For an app-space migration planned to the emitted contract, emit that contract again and re-run the migration plan that wrote the migration ending at that contract, with its --from and no --to, to re-emit the snapshot. Then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with --to reads the snapshot, so it cannot re-emit it',
         },
         {
           kind: 'user-choice',

@@ -130,18 +130,20 @@ describe('errorStatementNeedsMigrationFile', () => {
       ),
     ).toEnvelope();
 
+    const adopt =
+      'The database has no marker, so `db migrate` applies every migration on disk from the first, which fits only an empty database. A database that is not empty needs adopting first: record the contract it is at with `{bin} db sign <contract>`, naming the migration whose result it matches (`{bin} migration list` shows them), and `db migrate` then applies only the migrations after it';
     expect((envelope.nextActions ?? []).map(({ kind, label }) => [kind, label])).toEqual([
       [
         'user-choice',
         'Write what these statements ask for in the migration.ts of the migration on disk that changes the field, and run that migration.ts with `node`',
       ],
-      [
-        'user-choice',
-        'The database has no marker, so `db migrate` applies every migration on disk from the first, which fits only an empty database. A database that is not empty needs adopting first: record the contract it is at with `{bin} db sign <contract>`, naming the migration whose result it matches (`{bin} migration list` shows them), and `db migrate` then applies only the migrations after it',
-      ],
+      ['user-choice', adopt],
       ['run-command', 'Then apply the migrations on disk'],
       ['user-choice', 'Or run db update without these statements'],
     ]);
+    expect(envelope.fix).toBe(
+      `Write what these statements ask for in the migration.ts of the migration on disk that changes the field, and run that migration.ts with \`node\`. ${adopt}. Then apply the migrations with \`{bin} db migrate\`. Or leave out these statements: db update then asks before it loses any data.`,
+    );
   });
 
   it('for a database behind its migrations, gives applying them first as the fix and the first next action', () => {

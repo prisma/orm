@@ -721,6 +721,58 @@ describe('resolveDefaultOriginHash', () => {
   });
 });
 
+describe('origin refusals under --config', () => {
+  const CONFIG = 'apps/api/prisma.config.ts';
+  const invocation = { cwd: '/work', configPath: CONFIG, dbGiven: false };
+  const commandsOf = (error: CliStructuredError) =>
+    (error.nextActions ?? []).flatMap((action) =>
+      action.kind === 'run-command' && action.command !== undefined ? [action.command] : [],
+    );
+
+  beforeEach(() => {
+    migrationCounter = 0;
+  });
+
+  it('print every command with the --config migration plan and migration new were given', async () => {
+    const staging = { staging: { hash: HASH_A, invariants: [] } };
+    const orphanDb = { db: { hash: HASH_ORPHAN, invariants: [] }, ...staging };
+    const failures = [
+      await resolveFromForPlan({
+        space: makeSpace([makePkg(E, HASH_A, 'm1')], staging),
+        invocation,
+      }),
+      await resolveFromForPlan({
+        space: makeSpace([makePkg(E, HASH_A, 'm1')], staging),
+        optionsFrom: HASH_ORPHAN,
+        invocation,
+      }),
+      await resolveFromForPlan({
+        space: makeSpace(
+          [makePkg(E, HASH_A, 'm1')],
+          orphanDb,
+          vi.fn().mockResolvedValue(contractAtResult(HASH_ORPHAN)),
+        ),
+        invocation,
+      }),
+      resolveDefaultOriginHash(makeSpace([makePkg(E, HASH_A, 'm1')], staging), invocation),
+      resolveDefaultOriginHash(makeSpace([makePkg(E, HASH_A, 'm1')], orphanDb), invocation),
+    ].map((result) => (result.ok ? undefined : result.failure));
+
+    expect(failures.map((failure) => failure?.code)).toEqual([
+      'MIGRATION.PLAN_ORIGIN_UNKNOWN',
+      'MIGRATION.HASH_NOT_IN_GRAPH',
+      'MIGRATION.HASH_NOT_IN_GRAPH',
+      'MIGRATION.PLAN_ORIGIN_UNKNOWN',
+      'MIGRATION.HASH_NOT_IN_GRAPH',
+    ]);
+    for (const failure of failures) {
+      const commands = failure === undefined ? [] : commandsOf(failure);
+      expect(commands.length).toBeGreaterThan(0);
+      expect(commands.filter((command) => !command.endsWith(` --config ${CONFIG}`))).toEqual([]);
+    }
+  });
+});
+
 describe('assertFromIsGraphNode', () => {
   it('throws forgot-the-flag CliStructuredError for a non-graph-node hash', () => {
     const bundles = [makePkg(E, HASH_A, 'm1')];

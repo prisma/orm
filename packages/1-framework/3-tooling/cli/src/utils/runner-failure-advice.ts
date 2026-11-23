@@ -66,11 +66,6 @@ function quoted(command: string): string {
   return `\`${command}\``;
 }
 
-/** A `db migrate` command as advice prints it, for a migration that is not the one the user ran. */
-function dbMigrateCommand(invocation: CliInvocation): string {
-  return quoted(cliCommand(invocation, 'db migrate'));
-}
-
 /** The `db migrate` the user ran, as advice that repeats it prints it. */
 function dbMigrateAgain(invocation: CliInvocation): string {
   return quoted(dbMigrateRerun(invocation));
@@ -78,10 +73,10 @@ function dbMigrateAgain(invocation: CliInvocation): string {
 
 /**
  * The steps after filling the migration.ts a `migration plan` wrote with no placeholders: run it,
- * which writes its operations, and apply it with a plain `db migrate`.
+ * which writes its operations, and apply it with the `db migrate` the user ran, or a plain one.
  */
 export function runWrittenFile(invocation: CliInvocation): string {
-  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${dbMigrateCommand(invocation)}`;
+  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${dbMigrateAgain(invocation)}`;
 }
 
 /** The step between filling a planned migration.ts and applying it, which writes its operations. */
@@ -691,7 +686,7 @@ function keepOptional(
   const plan = replacingPlan(failedMigration, []);
   if (plan.kind === 'none') return undefined;
   return editFileAction(
-    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and plan it again with ${quotedPlan(plan)}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and plan it again with ${quotedPlan(plan)}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateAgain(invocation)}`,
   );
 }
 
@@ -712,13 +707,15 @@ function migrateSchemaCheckAdvice(
 ): RunnerAdvice {
   const emit = quoted(cliCommand(invocation, 'contract emit'));
   if (failedMigration === undefined) {
+    const editedByHand = editFileAction(
+      `If a migration you edited by hand does not reach its destination contract, find it with ${quoted(cliCommand(invocation, 'migration list'))}, change its operations to resolve the issues listed, run its migration.ts with \`node\`, and run ${dbMigrateAgain(invocation)}`,
+    );
+    if (invocation.rerunArgs?.includes('--to') === true) return [editedByHand];
     return [
       editFileAction(
         `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, and run ${quoted(cliCommand(invocation, 'migration status'))}. If it prints a \`migration plan\`, run it, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(invocation)}; otherwise run the command it prints`,
       ),
-      editFileAction(
-        `If a migration you edited by hand does not reach its destination contract, find it with ${quoted(cliCommand(invocation, 'migration list'))}, change its operations to resolve the issues listed, run its migration.ts with \`node\`, and run ${dbMigrateAgain(invocation)}`,
-      ),
+      editedByHand,
     ];
   }
   const { file, run } = failedMigrationFile(failedMigration);
@@ -730,7 +727,7 @@ function migrateSchemaCheckAdvice(
     return [keepFailedMigration(failedMigration, plan.reason), fixMigration];
   return [
     editFileAction(
-      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quotedPlan(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}`,
+      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quotedPlan(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(invocation)}`,
     ),
     fixMigration,
   ];
