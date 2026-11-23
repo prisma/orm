@@ -3,7 +3,7 @@
  *
  * A variant cannot gain its own `@@map`: MongoDB variants share their base model's collection, and the contract refuses a different one.
  *
- * - C1: one of two root models that share a collection moves to its own collection (both commands).
+ * - C1: one of two root models that share a collection moves to its own collection: its documents stay behind and are asked about, and the `--delete` route is followed with them deleted (both commands).
  * - C2: two models in their own collections merge into one new collection: no rename, and the question about both old collections (both commands).
  * - C3: `db update` after a collection renamed by hand, with a field `@map` change, a removed field answered by `--delete`, and a field rename statement.
  * - C4: `db update` when the database has both the old and the new collection, its advice followed to the end.
@@ -64,14 +64,26 @@ describe('Journeys (MongoDB): shared collections and collections renamed by hand
   const project = useMongoJourneys('mongo-shared-collections');
 
   it.each(COMMANDS)(
-    'C1: one of two root models that share a collection moves to its own, and no document of the other moves (%s)',
+    'C1: one of two root models that share a collection moves to its own: no document moves, and the documents left behind are asked about (%s)',
     async (command) => {
       const journey = project(`c1_${id(command)}`);
       await begin(journey, command, rootsPsl('people', 'people'), 'C1.01');
-      await journey.db.collection('people').insertMany([{ admin: 'Root' }]);
+      await journey.db.collection('people').insertMany([{ admin: 'Root' }, { user: 'Ada' }]);
       await useSchema(journey, rootsPsl('people', 'users'), 'C1.02');
+      const question = await refused(journey, command, [], 'C1.03');
       expect({
-        labels: await apply(journey, command, [], 'C1.03'),
+        code: question.code,
+        unanswered: question.meta?.['unanswered'],
+        why: question.why,
+      }).toEqual({
+        code: 'CLI.CONSENT_REQUIRED',
+        unanswered: [{ subject: 'User', verbs: ['delete'] }],
+        why: 'Update validator on people (removed: user) would lose the data of model "User". The origin stores models "Admin" and "User" in collection "people", and no discriminator tells their documents apart, so the plan cannot move to collection "users" the documents of model "User": they stay in collection "people", where they are read as documents of model "Admin". Keeping their documents is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: run prisma migration new, and in the operations of the migration.ts it writes, rewrite the documents of model "User" into collection "users" yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json. Answered with --delete, the plan leaves them where they are; if the new validator of collection "people" does not accept them, its change stops the apply until you delete or move them in the database.',
+      });
+
+      await journey.db.collection('people').deleteMany({ user: { $exists: true } });
+      expect({
+        labels: await apply(journey, command, ['--delete', 'User'], 'C1.04'),
         collections: await collections(journey.db),
         people: await documents(journey.db, 'people'),
       }).toEqual({
@@ -79,7 +91,7 @@ describe('Journeys (MongoDB): shared collections and collections renamed by hand
         collections: ['people', 'users'],
         people: [{ admin: 'Root' }],
       });
-      await expectSettled(journey, 'C1.04');
+      await expectSettled(journey, 'C1.05');
     },
   );
 

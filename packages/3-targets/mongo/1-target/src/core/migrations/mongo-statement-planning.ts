@@ -604,6 +604,11 @@ function leaveOutShared(moving: string): string {
   return `Leave out this statement to plan the change without moving them: the plan then asks about the data it drops. A question about ${moving} offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change and deletes the data.`;
 }
 
+/** The leave-out route for root models whose documents no discriminator tells apart from those of the models that stay. */
+function leaveOutLeftBehind(moving: string, others: string, from: string): string {
+  return `Leave out this statement to plan the change without moving them: the plan then asks about ${moving}, whose documents it can neither move nor remove, since no discriminator tells them apart from those of ${others}. The question offers this same rename again, which is refused again for the same reason. Answer it with --delete, which it also offers: that plans the change, and the documents of ${moving} stay in collection "${from}", where they are read as documents of ${others}; if the new validator of collection "${from}" does not accept them, its change stops the apply until you delete or move them in the database.`;
+}
+
 const HAND_WRITTEN_WITH_MIGRATION_PLAN =
   'To keep the data with migration plan, write this change as a hand-written migration instead: ';
 
@@ -621,13 +626,16 @@ function sharedCollectionRefusal(
   const { from, to } = change;
   const moving = modelsText(change.renames.map((renamed) => renamed.from));
   const others = modelsText(shared.models);
+  const leavesBehind = collections
+    .leftBehind()
+    .some((left) => change.renames.some((renamed) => sameModel(renamed.from, left.model)));
   const moveSteps = `${HAND_WRITTEN_WITH_MIGRATION_PLAN}${handWrittenMigrationSteps(`the documents of ${moving} into collection "${to}"`)}`;
   switch (shared.kind) {
     case 'split':
       return refusedOutcome(
         statement,
         `${label}: collection "${from}" also stores ${others}`,
-        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leaveOutShared(moving)} ${moveSteps}`,
+        `A collection rename moves every document of the collection, and the documents of ${others} do not move to collection "${to}". Moving the documents of one model out of a collection it shares with others is a data migration, which a plan does not write. ${leavesBehind ? leaveOutLeftBehind(moving, others, from) : leaveOutShared(moving)} ${moveSteps}`,
       );
     case 'removed':
       return refusedOutcome(

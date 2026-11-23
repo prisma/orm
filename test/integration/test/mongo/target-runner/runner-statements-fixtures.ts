@@ -194,6 +194,14 @@ export function useStatementsDatabase(dbName: string) {
       .insertMany(documents.map((document) => ({ ...document })));
   }
 
+  /** Signs the database as being at `contract`. */
+  async function initMarker(contract: MongoContract) {
+    await controlAdapter.initMarker(new MongoControlDriver(live(), connected()), 'app', {
+      storageHash: contract.storage.storageHash,
+      profileHash: 'p1',
+    });
+  }
+
   async function planAndRun(
     from: MongoContract,
     to: MongoContract,
@@ -201,12 +209,7 @@ export function useStatementsDatabase(dbName: string) {
     frameworkComponents: Parameters<MongoMigrationPlanner['plan']>[0]['frameworkComponents'] = [],
     options: { readonly initMarker: boolean } = { initMarker: true },
   ) {
-    if (options.initMarker) {
-      await controlAdapter.initMarker(new MongoControlDriver(live(), connected()), 'app', {
-        storageHash: from.storage.storageHash,
-        profileHash: 'p1',
-      });
-    }
+    if (options.initMarker) await initMarker(from);
     const planned = new MongoMigrationPlanner().plan({
       contract: to,
       schema: await introspectSchema(live()),
@@ -219,13 +222,23 @@ export function useStatementsDatabase(dbName: string) {
     });
     if (planned.kind !== 'success') throw new Error(JSON.stringify(planned.conflicts, null, 2));
     const operations = planned.plan.operations as readonly AnyMongoMigrationOperation[];
+    return { planned, result: await runOperations(operations, from, to) };
+  }
+
+  /** Runs `operations`, serialized as `ops.json` holds them, as the migration from `from` to `to`, under `operationPolicy`. */
+  async function runOperations(
+    operations: readonly AnyMongoMigrationOperation[],
+    from: MongoContract,
+    to: MongoContract,
+    operationPolicy: MigrationOperationPolicy = policy,
+  ) {
     const plan: MigrationPlan = {
       targetId: 'mongo',
       operations: JSON.parse(serializeMongoOps(operations)),
       origin: { storageHash: from.storage.storageHash },
       destination: { storageHash: to.storage.storageHash },
     };
-    const result = await new MongoMigrationRunner(
+    return new MongoMigrationRunner(
       controlAdapter.createRunnerDependencies(new MongoControlDriver(live(), connected())),
     ).execute({
       plan,
@@ -237,10 +250,9 @@ export function useStatementsDatabase(dbName: string) {
         }),
       ],
       destinationContract: to,
-      policy,
+      policy: operationPolicy,
       frameworkComponents: [],
     });
-    return { planned, result };
   }
 
   async function furtherPlanLabels(to: MongoContract): Promise<readonly string[]> {
@@ -267,5 +279,13 @@ export function useStatementsDatabase(dbName: string) {
       .toArray();
   }
 
-  return { db: live, createClosed, planAndRun, furtherPlanLabels, documents };
+  return {
+    db: live,
+    createClosed,
+    planAndRun,
+    initMarker,
+    runOperations,
+    furtherPlanLabels,
+    documents,
+  };
 }

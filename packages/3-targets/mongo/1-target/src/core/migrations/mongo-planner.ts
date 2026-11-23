@@ -334,6 +334,37 @@ function collectionDrops(
   });
 }
 
+/**
+ * A question about each origin root model whose documents stay behind in a collection it shared
+ * with a root model that stays, on the operation that changes that collection's validator, else on
+ * the create of the model's new collection, else on the plan's first operation.
+ */
+function leftBehindLosses(
+  calls: readonly OpFactoryCall[],
+  renames: CollectionRenames,
+): readonly MigrationDataLoss[] {
+  return renames.leftBehind().flatMap((left): readonly MigrationDataLoss[] => {
+    const operationIndex = [
+      calls.findIndex((call) => call instanceof CollModCall && call.collection === left.collection),
+      calls.findIndex(
+        (call) => call instanceof CreateCollectionCall && call.collection === left.to,
+      ),
+      calls.length > 0 ? 0 : -1,
+    ].find((index) => index !== -1);
+    const call = operationIndex === undefined ? undefined : calls[operationIndex];
+    if (operationIndex === undefined || call === undefined) return [];
+    return [
+      {
+        operationIndex,
+        subject: { kind: 'model', ...left.model },
+        loss: 'drop',
+        label: call.label,
+        keepDataAdvice: renames.leftBehindAdvice(left),
+      },
+    ];
+  });
+}
+
 /** The collection the destination stores `model` in, when the destination still has that model. */
 function modelStoredInDestination(
   contract: ContractWithDomain,
@@ -1056,6 +1087,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           origin: schema,
           destination: destinationIR,
         }),
+        ...leftBehindLosses(calls, collections),
         ...fieldLoss,
       ].sort((a, b) => a.operationIndex - b.operationIndex),
       accessChanges: [],

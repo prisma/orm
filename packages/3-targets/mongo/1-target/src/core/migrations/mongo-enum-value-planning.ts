@@ -282,9 +282,11 @@ function negationUpdate(enumPlace: EnumPlace): string {
 }
 
 /**
- * The route for a boolean enum whose stored values trade places, which works on both commands: no
- * third value exists to move through, so the enum leaves the fields, their values are swapped in
- * the database, touching only boolean values, and the enum comes back with its new values.
+ * The route for a boolean enum whose stored values trade places: no third value exists to move
+ * through, so the enum leaves the fields, their values are swapped, touching only boolean values,
+ * and the enum comes back with its new values. With `migration plan` the swap is a hand-written
+ * migration, so every database that applies the migrations gets it; with `db update` it is run in
+ * mongosh against the one database.
  */
 function booleanSwapRoute(places: readonly EnumPlace[], withStatements: boolean): string {
   const nested = places.find(({ path }) => path !== undefined);
@@ -292,7 +294,7 @@ function booleanSwapRoute(places: readonly EnumPlace[], withStatements: boolean)
     return `${NO_THIRD_BOOLEAN} The enum is stored at path ${nested.path} of field ${JSON.stringify(nested.place.field)} of collection ${JSON.stringify(nested.place.collection)}, inside objects the plan cannot swap the values of, so keep the stored values of this enum in the contract.`;
   }
   const updates = places.map(negationUpdate).join('; ');
-  return `${NO_THIRD_BOOLEAN} Make it in three steps instead, with migration plan or db update${withStatements ? ', and without the statements that rename values of this enum' : ''}: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values in the database yourself, touching only boolean values so that missing and null values stay as they are, in mongosh: ${updates}; then add the enum back with its new stored values, type the fields by it again, and apply that.`;
+  return `${NO_THIRD_BOOLEAN} Make it in three steps instead${withStatements ? ', without the statements that rename values of this enum' : ''}: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values, touching only boolean values so that missing and null values stay as they are, with these updates: ${updates}; then add the enum back with its new stored values, type the fields by it again, and apply that. With migration plan, make the second step a migration of its own, so that every database that applies the migrations swaps the values: run prisma migration new, and in the operations of the migration.ts it writes, add a dataTransform whose run makes each of these updates; then run that migration.ts to emit its ops.json, and apply it with db migrate. With db update, run the updates in mongosh.`;
 }
 
 /** The expression that writes a stored value with the BSON type the enum's codec stores. */

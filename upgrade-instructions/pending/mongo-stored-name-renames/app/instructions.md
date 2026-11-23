@@ -74,4 +74,4 @@ Before, `--rename User:Member`, where `User` shares collection `users` with anot
 Cannot rename model "User" to "Member": collection "users" also stores model "Admin"
 ```
 
-A plan cannot tell the two models' documents apart, since nothing in a document names its root model. Leave out the statement, or move the documents of `User` in a hand-written migration, as the message describes.
+A plan cannot tell the two models' documents apart, since nothing in a document names its root model. Without the statement the plan does not move them either: it asks about `User`, whose documents stay in `users` and are read as `Admin` documents. Answer with `--delete User` after deleting or moving those documents yourself, or move them in a hand-written migration, as the message describes. The same question now comes when a root model that shares a collection changes its `@@map` to a collection of its own, which used to plan with no question and leave its documents behind.
