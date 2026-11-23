@@ -802,7 +802,8 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           variant,
           model: destination,
           storedKey: undefined,
-          keep: 'keep the field in the contract',
+          keepAdvice: 'keep the field in the contract',
+          statement: undefined,
         }),
       ),
       ...casts.map(
@@ -813,7 +814,8 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           variant: change.variant,
           model: change.destination,
           storedKey: undefined,
-          keep: "keep the field's type in the contract",
+          keepAdvice: "keep the field's type in the contract",
+          statement: undefined,
         }),
       ),
       ...transforms.flatMap(({ outcome }) =>
@@ -827,7 +829,8 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           variant,
           model: subject.kind === 'field' ? subject : undefined,
           storedKey: undefined,
-          keep: 'make the field optional in the contract',
+          keepAdvice: 'make the field optional in the contract',
+          statement: undefined,
         }),
       ),
     ];

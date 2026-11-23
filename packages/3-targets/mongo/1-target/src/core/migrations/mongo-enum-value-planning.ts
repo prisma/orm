@@ -859,16 +859,13 @@ function placeRefusals(
           variant: place.variant,
           model: place.model,
           storedKey: { key: enumValueText(enums.fromContract, change.enumValue), together },
-          keep: change.statement === undefined ? keepAdvice(enums, change) : undefined,
+          keepAdvice: change.statement === undefined ? keepAdvice(enums, change) : undefined,
+          statement: change.statement,
         },
         input.contract,
         rewriteCollectionOf(input.schema, place.collection),
       )) {
-        push(
-          change.statement === undefined
-            ? conflict
-            : { ...conflict, kind: 'statementRefused', refusedStatement: change.statement },
-        );
+        push(conflict);
       }
     }
   }

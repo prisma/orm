@@ -163,7 +163,7 @@ describe('MongoMigrationPlanner, enum value refusals', () => {
     });
     expect(refusal(result).map(({ why }) => why)).toEqual([
       OVERLAP_WHY(
-        `${NO_THIRD_BOOLEAN} Make it in three steps instead, with migration plan or db update, and without the statements that rename values of this enum: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values in the database yourself, touching only boolean values so that missing and null values stay as they are, in mongosh: ${SWAP_FLAG}; then add the enum back with its new stored values, type the fields by it again, and apply that.`,
+        `${NO_THIRD_BOOLEAN} Make it in three steps instead, without the statements that rename values of this enum: first remove the enum and type the fields that hold it as plain booleans, and apply that; then swap their values, touching only boolean values so that missing and null values stay as they are, with these updates: ${SWAP_FLAG}; then add the enum back with its new stored values, type the fields by it again, and apply that. With migration plan, make the second step a migration of its own, so that every database that applies the migrations swaps the values: run prisma migration new, and in the operations of the migration.ts it writes, add a dataTransform whose run makes each of these updates; then run that migration.ts to emit its ops.json, and apply it with db migrate. With db update, run the updates in mongosh.`,
       ),
     ]);
   });

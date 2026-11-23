@@ -246,16 +246,6 @@ function refused(
   };
 }
 
-/** A rewrite refusal of a key change, carrying the statement that asks for the change, if one does. */
-function withStatement(
-  conflict: MigrationPlannerConflict,
-  statement: KeyChange['statement'],
-): MigrationPlannerConflict {
-  return statement === undefined || conflict.kind !== 'unsupportedOperation'
-    ? conflict
-    : { ...conflict, kind: 'statementRefused', refusedStatement: statement };
-}
-
 function placeText(place: Pick<StoredPlace, 'collection' | 'field'>): string {
   return `field "${place.field}" of collection "${place.collection}"`;
 }
@@ -348,7 +338,8 @@ function plannedRewriteOf(
     variant: planned.place.variant,
     model: planned.place.model,
     storedKey: { key: fieldText(planned.change, contracts), together: planned.models },
-    keep:
+    statement: planned.change.statement,
+    keepAdvice:
       planned.change.statement !== undefined
         ? undefined
         : planned.change.to === undefined
@@ -400,7 +391,8 @@ export function planStoredKeyRewrites(
           variant: undefined,
           model: undefined,
           storedKey: { key: `key ${JSON.stringify(key)}`, together: [] },
-          keep: 'keep the field in the contract',
+          keepAdvice: 'keep the field in the contract',
+          statement: undefined,
         },
         contract,
         rewriteCollectionOf(input.schema, call.options.collection),
@@ -519,7 +511,7 @@ export function planStoredKeyRewrites(
         plannedRewriteOf(each, contracts),
         contract,
         rewriteCollectionOf(input.schema, each.place.collection),
-      ).map((conflict) => withStatement(conflict, each.change.statement)),
+      ),
     );
   }
   if (conflicts.length > 0) return notOk(dedupe(conflicts));

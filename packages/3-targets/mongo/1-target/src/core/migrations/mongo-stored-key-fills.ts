@@ -393,7 +393,8 @@ function plannedRewriteOf(fill: PlannedFill, contract: MongoContract): PlannedRe
     variant: fill.place.variant,
     model: fill.place.model,
     storedKey: { key: fieldText(fill.required, contract), together: fill.models },
-    keep:
+    statement: undefined,
+    keepAdvice:
       fill.required.statement === undefined ? 'make the field optional in the contract' : undefined,
   };
 }
