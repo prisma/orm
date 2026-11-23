@@ -762,14 +762,17 @@ export function errorStatementNeedsMigrationFile(
     statements.filter(({ verb }) => MIGRATION_PLAN_VERBS.includes(verb)).map(statementFlag),
   );
   if (plan.kind === 'on-disk') {
+    const edit =
+      'Write what these statements ask for in the migration.ts of the migration on disk that changes the field, and run that migration.ts with `node`';
     return new ActionableCliError(
       'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
       `db update cannot carry out ${listed}`,
       {
         why: `${why} ${plan.reason}.`,
-        fix: `Write what these statements ask for in the migration.ts of the migration on disk that changes the field, run that migration.ts with \`node\`, and apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`,
+        fix: `${edit}, then apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`,
         nextActions: [
-          runCommandAction('Apply the migrations on disk', plan.apply),
+          chooseAction(edit),
+          runCommandAction('Then apply the migrations on disk', plan.apply),
           chooseAction('Or run db update without these statements'),
         ],
         meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },

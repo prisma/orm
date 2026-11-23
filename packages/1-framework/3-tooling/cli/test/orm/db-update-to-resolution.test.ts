@@ -535,7 +535,7 @@ describe('db update --to <ref> --backfill', () => {
     const output = stripAnsi(run.stderr);
     expect(output).not.toContain('prisma-test migration plan');
     expect(output).toContain(
-      'Apply the migrations on disk: prisma-test db migrate --to production --permit-policy-change',
+      'Then apply the migrations on disk: prisma-test db migrate --to production --permit-policy-change',
     );
   });
 });

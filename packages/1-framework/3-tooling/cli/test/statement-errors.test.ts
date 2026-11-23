@@ -91,6 +91,29 @@ describe('errorStatementNeedsMigrationFile', () => {
     expect(envelope.fix).toContain('apply it with `{bin} db migrate --to production`');
   });
 
+  it('lists the edit of the migration on disk before the command that applies it', () => {
+    const envelope = errorStatementNeedsMigrationFile(
+      [{ verb: 'convert', text: 'User.years' }],
+      [{ verb: 'convert', text: 'User.years' }],
+      undefined,
+      { ...toEmitted(reference('db')), migrationsToTarget: { kind: 'on-disk' } },
+    ).toEnvelope();
+
+    expect(envelope.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label:
+          'Write what these statements ask for in the migration.ts of the migration on disk that changes the field, and run that migration.ts with `node`',
+      },
+      {
+        kind: 'run-command',
+        label: 'Then apply the migrations on disk',
+        command: '{bin} db migrate',
+      },
+      { kind: 'user-choice', label: 'Or run db update without these statements' },
+    ]);
+  });
+
   it('names the refused statements, and gives migration plan every statement it accepts, in the order given', () => {
     const envelope = errorStatementNeedsMigrationFile(
       [
