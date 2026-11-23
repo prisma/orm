@@ -30,11 +30,13 @@
     "@better-auth/scim": "1.7.27",
     "@better-auth/sso": "1.7.27",
     "@better-auth/test-utils": "1.7.27",
+    "@prisma/cli-engine": "0.10.4",
     "@prisma/dev": "catalog:",
     "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
     "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
     "@prisma/orm-sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@repo/tsdown": "workspace:8.0.0-rc.25",
     "@types/node": "catalog:",
@@ -51,6 +53,7 @@
     "@better-auth/core": ">=1.7.6 <1.8.0",
     "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
     "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

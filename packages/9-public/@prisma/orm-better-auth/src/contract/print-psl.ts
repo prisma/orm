@@ -14,7 +14,9 @@ type FieldLine = readonly [name: string, type: string, attributes?: string | und
 export interface PrintedBlock {
   /** The model's name: as printed for a missing model, as in the contract for an existing one. */
   readonly modelName: string;
+  readonly namespaceId: string;
   readonly existing: boolean;
+  readonly fieldNames: readonly string[];
   readonly fieldLines: readonly string[];
   readonly attributeLines: readonly string[];
 }
@@ -150,7 +152,10 @@ function blockText(block: PrintedBlock, indent: string): string {
 }
 
 /** PSL text for printed blocks; blocks of missing models go inside a `namespace` block when the adapter's `namespace` option is set. */
-function renderBlocks(blocks: readonly PrintedBlock[], namespace: string | undefined): string {
+export function renderBlocks(
+  blocks: readonly PrintedBlock[],
+  namespace: string | undefined,
+): string {
   const chunks: string[] = [];
   let run: PrintedBlock[] = [];
   const flush = () => {
@@ -258,7 +263,9 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
     if (lines.length === 0) continue;
     blocks.push({
       modelName: printed.name,
+      namespaceId: printed.namespaceId,
       existing: printed.existing,
+      fieldNames: lines.map(([name]) => name),
       fieldLines: alignedLines(lines),
       attributeLines: printed.attributes,
     });

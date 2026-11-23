@@ -179,11 +179,14 @@ describe.each(targets)('printed PSL on %s', (target) => {
     const base = pslForConfiguration(emptyContract(target), {});
     const baseContract = await fixture().contractOf(target, base);
     const options: BetterAuthOptions = { plugins: [twoFactor()] };
-    const printed = printPsl(compare(baseContract, options));
+    const comparison = compare(baseContract, options);
+    const printed = printPsl(comparison);
 
     expect(printed.blocks.find((block) => block.modelName === 'User')).toEqual({
       modelName: 'User',
+      namespaceId: comparison.defaultNamespace,
       existing: true,
+      fieldNames: ['twoFactorEnabled', 'twoFactors'],
       fieldLines: ['twoFactorEnabled Boolean?', 'twoFactors       TwoFactor[]'],
       attributeLines: [],
     });
@@ -212,10 +215,13 @@ model Project {
         }),
       ],
     };
-    const printed = printPsl(compare(baseContract, options));
+    const comparison = compare(baseContract, options);
+    const printed = printPsl(comparison);
     expect(printed.blocks.find((block) => block.modelName === 'Project')).toEqual({
       modelName: 'Project',
+      namespaceId: comparison.defaultNamespace,
       existing: true,
+      fieldNames: ['notes'],
       fieldLines: ['notes Note[]'],
       attributeLines: [],
     });

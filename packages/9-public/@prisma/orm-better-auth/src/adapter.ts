@@ -13,13 +13,14 @@ import {
 import { BetterAuthError } from '@better-auth/core/error';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
 import { createModelCollections, type ModelCollections } from './collections';
+import { compareContract } from './contract/compare';
 import {
-  contractMismatch,
   contractMismatchError,
   createContractCheck,
   registerContractCheck,
 } from './contract/contract-check';
 import { fieldOf, unsupportedError, whereFilter } from './filters';
+import { contractSchemaCreation } from './generate/create-schema';
 import { moveJoinedRows, planJoins } from './joins';
 import { betterAuthModels, caseOnlyNameCollisions } from './models/better-auth-models';
 import { assertFieldName, caseOnlyNameCollisionMessage } from './models/identifiers';
@@ -264,15 +265,17 @@ function customAdapter({
         return collection.where(filterFor(model, found, where)).deleteAndCount();
       },
       async createSchema({ file, tables }) {
-        const error = contractMismatch({
+        const comparison = compareContract({
           contract,
           tables,
           betterAuthOptions,
           namespace: adapterOptions.namespace,
           usePlural,
         });
-        if (error !== undefined) throw error;
-        return { code: '', path: file ?? 'prisma/contract.prisma' };
+        if (comparison.problems.length === 0) {
+          return { code: '', path: file ?? 'prisma/contract.prisma' };
+        }
+        return contractSchemaCreation(file, comparison);
       },
     };
     return asCustomAdapter(adapter);
