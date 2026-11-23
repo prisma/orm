@@ -11,7 +11,7 @@ An application on Prisma 8 can use Better Auth. Today it cannot: Better Auth's o
 ```ts
 // src/lib/auth.ts
 import { betterAuth } from 'better-auth';
-import { prismaAdapter } from '@prisma/better-auth-adapter';
+import { prismaAdapter } from '@prisma/orm-better-auth';
 import { db } from './db'; // the application's ordinary Prisma 8 client
 
 export const auth = betterAuth({
@@ -62,14 +62,14 @@ Each decision gives its reason. The implementation follows these exactly. Where 
 
 ### Package
 
-1. **One published package, `@prisma/better-auth-adapter`, at `packages/9-public/@prisma/better-auth-adapter/`.** It is versioned in lockstep with the other published packages, with `"license": "Apache-2.0"` and the `repository` field the other published packages have (`directory` set to its own path). It is developed in this repository for now and is built to be moved out: it holds its own source and tests, no package under `packages/` depends on it, and it is not a framework extension (no pack, no contract space, no entry in any extension list or in the published-shells table).
+1. **One published package, `@prisma/orm-better-auth`, at `packages/9-public/@prisma/orm-better-auth/`.** It is versioned in lockstep with the other published packages, with `"license": "Apache-2.0"` and the `repository` field the other published packages have (`directory` set to its own path). It is developed in this repository for now and is built to be moved out: it holds its own source and tests, no package under `packages/` depends on it, and it is not a framework extension (no pack, no contract space, no entry in any extension list or in the published-shells table).
 2. **It imports only published entrypoints.** No `@internal/*` import or manifest entry. No `@repo/*` name except `@repo/tsconfig` and `@repo/tsdown` in `devDependencies`. Two checks enforce this:
-   - `scripts/lint-consumer-internal-imports.mjs` gains `packages/9-public/@prisma/better-auth-adapter` in `CONSUMER_SCOPES`, with a comment saying the adapter is held to the consumer rule because it must work outside this repository. `scripts/lint-consumer-internal-imports.test.mjs` is updated. That lint covers `@internal/*`.
+   - `scripts/lint-consumer-internal-imports.mjs` gains `packages/9-public/@prisma/orm-better-auth` in `CONSUMER_SCOPES`, with a comment saying the adapter is held to the consumer rule because it must work outside this repository. `scripts/lint-consumer-internal-imports.test.mjs` is updated. That lint covers `@internal/*`.
    - A test in the package reads its own `package.json` and every file under `src/` and `test/` except the test's own file, and fails on any other `@repo/*` name.
 
    Reason: the package must keep working when it leaves this repository, and it shows that an outside library can be integrated through the public interface alone.
 3. **Hand-written source in `src/`, unlike the other published packages**, which are generated shells over private packages. Consequences, each part of this project:
-   - `architecture.config.json` gains the glob `packages/9-public/@prisma/better-auth-adapter/**` with domain `extensions`, layer `integrations`, plane `runtime`.
+   - `architecture.config.json` gains the glob `packages/9-public/@prisma/orm-better-auth/**` with domain `extensions`, layer `integrations`, plane `runtime`.
    - `tsdown.config.ts` uses the base `defineConfig` from `@repo/tsdown`, not `defineShellConfig`.
    - The package has a `README.md` with a `## Responsibilities` heading, a `coverage.config.json` covering `src/**/*.ts` with thresholds of 90 for lines, branches, functions and statements, a `vitest.config.ts`, `biome.jsonc`, `tsconfig.json` and `tsconfig.prod.json`, and the `build`, `test`, `typecheck` and `lint` scripts a private package such as `packages/3-extensions/middleware-cache` has.
    - `docs/reference/Package Naming Conventions.md` gains a kind for library integrations, and its count of `@prisma` packages changes.
@@ -89,7 +89,7 @@ Each decision gives its reason. The implementation follows these exactly. Where 
 8. **Signature.** `prismaAdapter(db, options?)` returns the function Better Auth expects, `(betterAuthOptions) => DBAdapter`. It is built with `createAdapterFactory` from `@better-auth/core/db/adapter`. Better Auth's options are captured on each call of the returned function, not once per `prismaAdapter` call.
 9. **`db` is a Prisma 8 Postgres or SQLite client.** The parameter type is structural: an object with `contract` (a SQL contract), `orm` and `transaction(fn)`. No database-specific type is named, because no shared client type is published. There is no `provider` option. `prismaAdapter` throws a `BetterAuthError` when:
    - `db` has no `contract`: ``prismaAdapter needs the Prisma client, not a transaction.``
-   - `db.contract.target` is neither `"postgres"` nor `"sqlite"`: ``@prisma/better-auth-adapter supports Postgres and SQLite. This client's database is "<target>".``
+   - `db.contract.target` is neither `"postgres"` nor `"sqlite"`: ``@prisma/orm-better-auth supports Postgres and SQLite. This client's database is "<target>".``
 
    - the `namespace` option names a namespace that `db.contract.domain.namespaces` does not have: ``Namespace "<name>" is not in your Prisma contract.`` This covers SQLite, whose contract has no named namespaces.
 
@@ -315,7 +315,7 @@ The inner adapter receives database field names and already-converted values fro
 
 - **Better Auth's maintainers** have said on better-auth/better-auth#9636 that Prisma 8 support is planned for their 1.8. No such code is in their repository yet. They are told about this package when its pull request is open; that message is the operator's to send.
 - **A community adapter** (`better-auth-prisma-orm`) exists for Postgres. It was read for this design. It deletes at most one row in `delete`, has no schema generation or contract check, and does not run Better Auth's test suite.
-- **Publishing needs one manual step before the pull request merges.** The release workflow publishes every non-private package on each push to `main`, authenticates per package through npm trusted publishing, and fails as a whole when one package fails. npm configures a trusted publisher on a package that already exists. So before the pull request merges, someone with rights on the `@prisma` npm scope creates `@prisma/better-auth-adapter` and configures the trusted publisher for this repository's publish workflow. The pull request stays a draft until the operator confirms that is done.
+- **Publishing needs one manual step before the pull request merges.** The release workflow publishes every non-private package on each push to `main`, authenticates per package through npm trusted publishing, and fails as a whole when one package fails. npm configures a trusted publisher on a package that already exists. So before the pull request merges, someone with rights on the `@prisma` npm scope creates `@prisma/orm-better-auth` and configures the trusted publisher for this repository's publish workflow. The pull request stays a draft until the operator confirms that is done.
 - **Better Auth 1.8.** The peer range excludes it. When it is released, the conformance suites are run against it and the range is widened.
 - **vitest.** The workspace pins a vitest 5 release candidate, which `@better-auth/test-utils` does not list as a supported peer. The suites run on it. The mismatch ends when the workspace moves to vitest 5.0.0.
 - **Two limits of Prisma 8 found by this work** are recorded as tickets, outside this project: the SQLite driver blocks the process while it waits for a locked database, and a `Boolean` field cannot be ordered on.

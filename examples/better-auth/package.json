@@ -18,7 +18,7 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/better-auth-adapter": "workspace:8.0.0-rc.24",
+    "@prisma/orm-better-auth": "workspace:8.0.0-rc.24",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
     "better-auth": "1.7.27",
     "dotenv": "^17.4.2",

@@ -301,7 +301,7 @@
       "plane": "runtime"
     },
     {
-      "glob": "packages/9-public/@prisma/better-auth-adapter/**",
+      "glob": "packages/9-public/@prisma/orm-better-auth/**",
       "domain": "extensions",
       "layer": "integrations",
       "plane": "runtime"

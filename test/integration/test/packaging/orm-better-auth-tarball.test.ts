@@ -19,8 +19,8 @@ const workspaceVersion = (
   JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as { version: string }
 ).version;
 const skewedVersion = workspaceVersion.replace(/\d+$/, (patch) => String(Number(patch) + 1));
-const adapter = '@prisma/better-auth-adapter';
-const adapterDir = join(repoRoot, 'packages/9-public/@prisma/better-auth-adapter');
+const adapter = '@prisma/orm-better-auth';
+const adapterDir = join(repoRoot, 'packages/9-public/@prisma/orm-better-auth');
 const facade = '@prisma/orm-sqlite';
 const familySql = '@prisma/orm-family-sql';
 const platform: ShellName[] = [
@@ -125,7 +125,7 @@ describe('the Better Auth adapter installed next to the SQLite database package'
   let scratch: string;
 
   beforeAll(() => {
-    scratch = mkdtempSync(join(tmpdir(), 'better-auth-adapter-'));
+    scratch = mkdtempSync(join(tmpdir(), 'orm-better-auth-'));
     installShells(
       scratch,
       [packShell(adapterDir, scratch), ...pack(scratch, [facade, ...platform])],
@@ -256,7 +256,7 @@ describe('the Better Auth adapter next to an ORM client of a different version',
   let scratch: string;
 
   beforeAll(() => {
-    scratch = mkdtempSync(join(tmpdir(), 'better-auth-adapter-skew-'));
+    scratch = mkdtempSync(join(tmpdir(), 'orm-better-auth-skew-'));
   });
 
   afterAll(() => {

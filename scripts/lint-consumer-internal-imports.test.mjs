@@ -71,7 +71,7 @@ describe('CONSUMER_SCOPES', () => {
       'apps',
       'test/e2e/framework',
       'test/integration/test/cli-journeys',
-      'packages/9-public/@prisma/better-auth-adapter',
+      'packages/9-public/@prisma/orm-better-auth',
     ]);
   });
 });

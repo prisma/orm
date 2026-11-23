@@ -40,7 +40,7 @@ describe('prismaAdapter refuses', () => {
     expect(() => prismaAdapter(other)).toThrow(
       expect.objectContaining({
         name: 'BetterAuthError',
-        message: `@prisma/better-auth-adapter supports Postgres and SQLite. This client's database is "${target}".`,
+        message: `@prisma/orm-better-auth supports Postgres and SQLite. This client's database is "${target}".`,
       }),
     );
   });

@@ -81,7 +81,7 @@ const INTERNAL_SCOPE = '@internal/';
  * `package.json`; its dependencies come from `test/integration`, which is out
  * of scope for the reason above.
  *
- * `@prisma/better-auth-adapter` is a library, not an application, but it is
+ * `@prisma/orm-better-auth` is a library, not an application, but it is
  * held to the same rule: it must keep working when it moves out of this
  * repository, so it may build only on the published packages.
  */
@@ -90,7 +90,7 @@ export const CONSUMER_SCOPES = [
   'apps',
   'test/e2e/framework',
   'test/integration/test/cli-journeys',
-  'packages/9-public/@prisma/better-auth-adapter',
+  'packages/9-public/@prisma/orm-better-auth',
 ];
 
 /**

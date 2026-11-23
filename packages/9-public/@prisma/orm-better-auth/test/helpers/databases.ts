@@ -24,7 +24,7 @@ export interface WorkDir {
 }
 
 export async function createWorkDir(): Promise<WorkDir> {
-  const path = await mkdtemp(join(tmpdir(), 'prisma-better-auth-adapter-'));
+  const path = await mkdtemp(join(tmpdir(), 'prisma-orm-better-auth-'));
   let counter = 0;
   return {
     path,

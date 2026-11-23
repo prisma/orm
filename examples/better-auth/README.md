@@ -1,6 +1,6 @@
 # Better Auth with Prisma 8 and Next.js
 
-A small Next.js application (App Router) that signs users up and in with [Better Auth](https://www.better-auth.com) email and password. Better Auth stores its users, sessions, accounts and verification tokens in Postgres through a Prisma 8 client and [`@prisma/better-auth-adapter`](../../packages/9-public/@prisma/better-auth-adapter/README.md).
+A small Next.js application (App Router) that signs users up and in with [Better Auth](https://www.better-auth.com) email and password. Better Auth stores its users, sessions, accounts and verification tokens in Postgres through a Prisma 8 client and [`@prisma/orm-better-auth`](../../packages/9-public/@prisma/orm-better-auth/README.md).
 
 | File | What it holds |
 | --- | --- |
@@ -29,7 +29,7 @@ Without `DATABASE_URL`, the application builds and starts, and the first request
 
 The application code names only published packages. `package.json` and `tsconfig.json` use this repository's workspace, so in a copy:
 
-- Replace each `workspace:` version (`@prisma/orm-postgres`, `@prisma/better-auth-adapter`) with one published version, the same for both.
+- Replace each `workspace:` version (`@prisma/orm-postgres`, `@prisma/orm-better-auth`) with one published version, the same for both.
 - Replace each `catalog:` version with a version from the registry.
 - Replace `@repo/prisma-bin`, which provides the `prisma` command here, with the `prisma` package. Keep `@prisma/cli-engine`, at the version `prisma` names. These two are what `prisma orm init` installs.
 - Replace `"extends": ["@repo/tsconfig/base"]` in `tsconfig.json` with your own compiler options, for example the ones `create-next-app` writes, and remove the `@repo/tsconfig` dependency.
@@ -39,7 +39,7 @@ The application code names only published packages. `package.json` and `tsconfig
 
 ## Add a Better Auth plugin
 
-Plugins add models and fields to Better Auth. After you add a plugin to `src/lib/auth.ts`, run `pnpm auth generate`: it prints the models and fields your contract lacks and writes nothing. Add them to `prisma/contract.prisma`, run `pnpm emit` and `pnpm prisma db update`, and `pnpm auth generate` then prints `Your schema is already up to date.`. The [adapter's README](../../packages/9-public/@prisma/better-auth-adapter/README.md#when-the-contract-is-missing-something) explains the message and the options.
+Plugins add models and fields to Better Auth. After you add a plugin to `src/lib/auth.ts`, run `pnpm auth generate`: it prints the models and fields your contract lacks and writes nothing. Add them to `prisma/contract.prisma`, run `pnpm emit` and `pnpm prisma db update`, and `pnpm auth generate` then prints `Your schema is already up to date.`. The [adapter's README](../../packages/9-public/@prisma/orm-better-auth/README.md#when-the-contract-is-missing-something) explains the message and the options.
 
 ## Test
 

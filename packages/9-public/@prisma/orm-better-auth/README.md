@@ -1,11 +1,11 @@
-# @prisma/better-auth-adapter
+# @prisma/orm-better-auth
 
 Use [Better Auth](https://www.better-auth.com) with Prisma 8. The adapter stores Better Auth's users, sessions, accounts and verification tokens through your application's Prisma 8 client, on Postgres or SQLite.
 
 ```ts
 // src/lib/auth.ts
 import { betterAuth } from 'better-auth';
-import { prismaAdapter } from '@prisma/better-auth-adapter';
+import { prismaAdapter } from '@prisma/orm-better-auth';
 import { db } from './db';
 
 export const auth = betterAuth({
@@ -19,7 +19,7 @@ export const auth = betterAuth({
 Install the adapter at the same version as your Prisma 8 database package, together with Better Auth 1.7:
 
 ```sh
-pnpm add @prisma/better-auth-adapter@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@1.7
+pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@1.7
 ```
 
 The adapter uses the Prisma packages your database package already installs. If the versions differ, your package manager warns you, or refuses to install when it checks peer dependencies strictly. Keep them the same, or the adapter loads a second copy of Prisma's code.

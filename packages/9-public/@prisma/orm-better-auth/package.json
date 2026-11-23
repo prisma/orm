@@ -1,5 +1,5 @@
 {
-  "name": "@prisma/better-auth-adapter",
+  "name": "@prisma/orm-better-auth",
   "version": "8.0.0-rc.24",
   "license": "Apache-2.0",
   "type": "module",
@@ -7,7 +7,8 @@
   "description": "Better Auth database adapter for Prisma 8",
   "keywords": [
     "better-auth",
-    "prisma"
+    "prisma",
+    "prisma-orm-extension"
   ],
   "files": [
     "dist"
@@ -68,6 +69,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/prisma/orm.git",
-    "directory": "packages/9-public/@prisma/better-auth-adapter"
+    "directory": "packages/9-public/@prisma/orm-better-auth"
   }
 }

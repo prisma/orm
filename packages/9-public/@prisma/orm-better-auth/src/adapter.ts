@@ -44,7 +44,7 @@ function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions
   }
   if (!supportedTargets.includes(contract.target)) {
     throw new BetterAuthError(
-      `@prisma/better-auth-adapter supports Postgres and SQLite. This client's database is "${contract.target}".`,
+      `@prisma/orm-better-auth supports Postgres and SQLite. This client's database is "${contract.target}".`,
     );
   }
   const namespace = adapterOptions.namespace;

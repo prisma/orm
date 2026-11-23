@@ -1,4 +1,4 @@
-import { prismaAdapter } from '@prisma/better-auth-adapter';
+import { prismaAdapter } from '@prisma/orm-better-auth';
 import { betterAuth } from 'better-auth';
 import { db } from './db';
 

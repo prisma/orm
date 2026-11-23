@@ -9,7 +9,7 @@ One pull request. Its first merge publishes the package, so a partial first step
 
 [TML-3912](https://linear.app/prisma-company/issue/TML-3912). Branch `tml-3912-better-auth-adapter`.
 
-- **Outcome:** `@prisma/better-auth-adapter` exists, passes Better Auth's conformance suites on Postgres and SQLite, reports an incomplete contract through the contract check and `auth generate`, and has an example application and a README.
+- **Outcome:** `@prisma/orm-better-auth` exists, passes Better Auth's conformance suites on Postgres and SQLite, reports an incomplete contract through the contract check and `auth generate`, and has an example application and a README.
 - **Builds on:** `main`.
 - **Hands on:** the project's definition of done, less the ADR, which is written at close-out.
 
@@ -34,7 +34,7 @@ After step 5: a full review of the branch tip by two reviewers (system design an
 
 ## Dependencies
 
-- **npm.** `@prisma/better-auth-adapter` must exist on npm with a trusted publisher for this repository's publish workflow before the pull request merges. Owner: the operator, or whoever they name with rights on the `@prisma` scope. Users can install the package from the first release after the merge.
+- **npm.** `@prisma/orm-better-auth` must exist on npm with a trusted publisher for this repository's publish workflow before the pull request merges. Owner: the operator, or whoever they name with rights on the `@prisma` scope. Users can install the package from the first release after the merge.
 - **Better Auth.** Tested against 1.7.27. The peer range excludes 1.8 until the suites pass against it.
 
 ## Follow-ups filed outside this project
