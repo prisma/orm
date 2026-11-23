@@ -24,7 +24,7 @@ export class DeletedRows extends Node<Inputs> {
     return rowsResult(
       inputs.found.flatMap((row) => {
         const removed = deleted.get(this.#keyOf(row));
-        return removed === undefined ? [] : [{ ...row, ...reported(removed) }];
+        return removed === undefined ? [] : [{ ...row, ...removed }];
       }),
     );
   }
@@ -32,9 +32,4 @@ export class DeletedRows extends Node<Inputs> {
   #keyOf(row: StorageRow): string {
     return stitchKey(this.identity.map((column) => row[column]));
   }
-}
-
-/** A delete without `RETURNING` reports only the keys it was given; the other columns are absent, not null. */
-function reported(row: StorageRow): StorageRow {
-  return Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
 }

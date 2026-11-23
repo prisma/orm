@@ -305,7 +305,7 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
   return b.graph;
 }
 
-/** Unless the delete took the place of the read, keeps only the rows read that the delete removed, with the values it returned. */
+/** On a database with `RETURNING`, unless the delete took the place of the read, keeps only the rows read that the delete removed, with the values it returned. */
 function keepRowsTheDeleteRemoved(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
@@ -316,7 +316,10 @@ function keepRowsTheDeleteRemoved(
   }: { readonly find: NodeId; readonly read: NodeId; readonly deleted: NodeId },
 ): void {
   const { graph } = b;
-  if (graph.result === deleted) {
+  if (
+    graph.result === deleted ||
+    !hasContractCapability(collection.context.contract, 'returning')
+  ) {
     return;
   }
   const found = graph.nodeAt(find);

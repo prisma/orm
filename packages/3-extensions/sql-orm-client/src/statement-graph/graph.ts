@@ -118,12 +118,8 @@ export class Graph {
     ]).map((table) => new StateEdge(this.#stateOf(table), table));
   }
 
-  nodeAt(id: NodeId): Node {
-    const node = this.#nodes[id];
-    if (node === undefined) {
-      throw new InternalError(`node ${id} is not in the graph`);
-    }
-    return node;
+  nodeAt(id: NodeId): Node | undefined {
+    return this.#nodes[this.#present(id)];
   }
 
   columnsReadFrom(id: NodeId): readonly ProjectionItem[] {

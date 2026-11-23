@@ -429,16 +429,14 @@ describe('write graphs as they run, on a contract without returning', () => {
         "n3 Find users where name = 'Ada' <- state n1, state n2",
         "n4 Delete users where name = 'Ada' <- FilterData n3 (id->id), state n1",
         'n5 State users <- state n4',
-        'n6 DeletedRows <- WholeRows n3, Rows n4',
-        'result: n6',
+        'result: n3',
       ),
       first: lines(
         'n1 State users',
         "n2 Find users where name = 'Ada' limit 1 <- state n1",
         'n3 Delete users <- FilterData n2 (id->id), state n1',
         'n4 State users <- state n3',
-        'n5 DeletedRows <- WholeRows n2, Rows n3',
-        'result: n5',
+        'result: n2',
       ),
       count: lines("n1 Delete users where name = 'Ada'", 'result: n1'),
     });

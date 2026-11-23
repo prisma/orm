@@ -112,7 +112,7 @@ describe('writes that return rows with includes, one query per relation', () => 
         "n1 Find users where name = 'Ada'
         n2 FindRelated posts by (id) <- Rows n1
         n3 NestJoin posts <- WholeRows n1, WholeRows n2
-        n4 Delete users <- FilterData n1 (id->id)
+        n4 Delete users where name = 'Ada' <- FilterData n1 (id->id)
         n5 DeletedRows <- WholeRows n3, Rows n4
         result: n5"
       `);

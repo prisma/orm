@@ -46,16 +46,11 @@ export type SlotLayout<Inputs extends Slots> = {
       : 'list' | 'one';
 };
 
-type SingleEdgeSlot<Inputs extends Slots> = {
-  [Name in keyof Inputs]: Inputs[Name] extends Edge<unknown>[] ? never : Name;
-}[keyof Inputs] &
-  string;
-
 export abstract class Node<Inputs extends Slots = Slots> {
   abstract readonly slots: SlotLayout<Inputs>;
 
   /** The input slot whose rows this node passes on as its own, so the columns other nodes read from them are those rows' hidden columns. */
-  readonly passesRowsOf: SingleEdgeSlot<Inputs> | undefined = undefined;
+  readonly passesRowsOf: (keyof Inputs & string) | undefined = undefined;
 
   abstract execute(inputs: OutputsOf<Inputs>, run: Run): Executed;
 

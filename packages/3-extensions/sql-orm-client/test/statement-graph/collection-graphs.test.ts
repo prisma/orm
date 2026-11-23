@@ -121,7 +121,7 @@ describe('deleteAllGraph', () => {
     expect(printGraph(graph)).toBe(
       [
         "n1 Find users where name = 'Ada' order by id asc",
-        'n2 Delete users <- FilterData n1 (id->id)',
+        "n2 Delete users where name = 'Ada' <- FilterData n1 (id->id)",
         'n3 DeletedRows <- WholeRows n1, Rows n2',
         'result: n3',
       ].join('\n'),
