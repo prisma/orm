@@ -161,4 +161,14 @@ export default definePrismaConfig({ orm: { ...orm, contract: { ...orm.contract, 
     );
     await expect(generate(join(dir, 'prisma/contract.ts'))).rejects.toThrow(expected);
   });
+
+  it('says --output must name the contract file when the TypeScript file it names does not exist, as Better Auth passes for a directory', async () => {
+    const dir = await projectWith({ 'prisma/contract.prisma': appPsl });
+    const file = join(dir, 'prisma/auth-schema.ts');
+    const expected = await refusalFor(
+      `\`auth generate\` did not change your contract, because ${relative(process.cwd(), file)} was not found. Pass your contract's PSL file itself with \`--output\`, not a directory.`,
+    );
+    await expect(generate(file)).rejects.toThrow(expected);
+    await expect(readFile(file)).rejects.toThrow('ENOENT');
+  });
 });

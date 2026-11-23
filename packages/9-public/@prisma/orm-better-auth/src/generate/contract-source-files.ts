@@ -93,15 +93,24 @@ export async function contractSourceFiles(
   file: string | undefined,
   comparison: ContractComparison,
 ): Promise<readonly ReadContractSourceFile[]> {
-  if (file !== undefined && typeScriptFile.test(file)) {
-    throw notChanged(comparison, typeScriptContract);
-  }
-  const { readFile } = await import('node:fs/promises');
+  const { access, readFile } = await import('node:fs/promises');
   const { isAbsolute, relative, resolve } = await import('node:path');
   const shown = (path: string): string => {
     const fromCwd = relative(process.cwd(), path);
     return fromCwd.startsWith('..') || isAbsolute(fromCwd) ? path : fromCwd;
   };
+  if (file !== undefined && typeScriptFile.test(file)) {
+    const exists = await access(file).then(
+      () => true,
+      (error: unknown) => !isMissingFile(error),
+    );
+    throw notChanged(
+      comparison,
+      exists
+        ? typeScriptContract
+        : `${shown(resolve(file))} was not found. Pass your contract's PSL file itself with \`--output\`, not a directory.`,
+    );
+  }
   const paths = file === undefined ? await contractInputs(comparison, shown) : [resolve(file)];
   const files: ReadContractSourceFile[] = [];
   for (const absolutePath of paths) {
