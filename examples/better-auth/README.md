@@ -15,7 +15,7 @@ A small Next.js application (App Router) that signs users up and in with [Better
 
 ## Run it
 
-You need Node.js 24 or later and a Postgres database. These steps run the example inside this repository; to use it in your own project, see the next section first.
+You need Node.js 24 or later and a Postgres database that holds only this application's tables, such as a new, empty database. These steps run the example inside this repository; to use it in your own project, see the next section first.
 
 1. At the root of the repository, install the dependencies and build the packages: `pnpm install`, then `pnpm build`.
 2. In `examples/better-auth`, copy `.env.example` to `.env`. Set `DATABASE_URL` to your database's connection string and `BETTER_AUTH_SECRET` to at least 32 random characters, for example the output of `pnpm auth secret`.
@@ -39,7 +39,7 @@ The application code names only published packages. `package.json` and `tsconfig
 
 ## Add a Better Auth plugin
 
-Plugins add models and fields to Better Auth. After you add a plugin to `src/lib/auth.ts`, run `pnpm auth generate`: it prints the models and fields your contract lacks and writes nothing. Add them to `prisma/contract.prisma`, run `pnpm emit` and `pnpm prisma db update`, and `pnpm auth generate` then prints `Your schema is already up to date.`. The [adapter's README](../../packages/9-public/@prisma/orm-better-auth/README.md#when-the-contract-is-missing-something) explains the message and the options.
+Plugins add models and fields to Better Auth. After you add a plugin to `src/lib/auth.ts`, run `pnpm auth generate`: it prints the models and fields your contract lacks and writes nothing. Add them to `prisma/contract.prisma`, run `pnpm emit` and `pnpm prisma db update`, and `pnpm auth generate` then prints `Your schema is already up to date.`. `prisma db update` makes the database match the contract, so it plans to drop any table the contract has no model for and asks you to confirm each one; in a database that holds only this application's tables there is none to drop. The [adapter's README](../../packages/9-public/@prisma/orm-better-auth/README.md#when-the-contract-is-missing-something) explains the message and the options.
 
 ## Test
 
