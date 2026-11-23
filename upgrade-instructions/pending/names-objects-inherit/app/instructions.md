@@ -104,6 +104,8 @@ Rename the model, field, relation, composite type, enum or root. What a rename d
 
   Write the filter key as `["__proto__"]`. Written as `"__proto__":` it sets the filter's prototype, the filter matches every document, and the update removes `<new name>` from documents that have no `__proto__`.
 
+  In each of these updates, choose a `<new name>` that no document already uses as a key in that place: the update replaces a value already stored under it.
+
 The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
 For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there. In `mongosh`, `db.__proto__` is not the collection, so name it with `db.getCollection("__proto__")`. Stop every writer to the collection named `__proto__` before you rename or copy it. Restart a writer only once it uses the new name and, on the `migration plan` path, the copy has finished, including any run you repeat. A write that reaches `__proto__` afterwards is lost, because `db update` drops that collection, or you drop it after the copy; and a repeated copy overwrites a document the writer changed in the new collection in the meantime. How to move the documents depends on the command you apply changes with:
