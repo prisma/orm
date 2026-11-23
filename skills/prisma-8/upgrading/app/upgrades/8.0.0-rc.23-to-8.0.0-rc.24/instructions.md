@@ -4,12 +4,12 @@ to: "8.0.0-rc.24"
 changes:
   - id: engine-pin-moves-to-0-10-0
     summary: |
-      The toolchain now requires `@prisma/cli-engine@0.10.0` (up from 0.9.0). A project that depends on `@prisma/cli-engine` itself must move to `0.10.0`.
+      The toolchain now requires `@prisma/cli-engine@0.10.0` (up from 0.9.0). A project that depends on `@prisma/cli-engine` itself must move to `0.10.0`. The detection matches a `package.json` that pins an older engine and lists an `@prisma/orm-*` package, and a `pnpm-workspace.yaml` that pins an older engine.
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.\d(?!\d)'
-        - '[''"]?@prisma/cli-engine[''"]?:\s*[''"]?[\^~]?0\.\d(?![\d])'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*"@prisma/orm-[a-z-]+"\s*:)|(?!\s*\{))[\s\S]*"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.\d(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*"@prisma/orm-[a-z-]+"\s*:)|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine[''"]?:\s*[''"]?[\^~]?0\.\d(?![\d])'
   - id: prisma-7-commands-answer-v7-command
     summary: |
       A Prisma 7 command the ORM answers, such as `prisma migrate dev`, now fails with `CLI.V7_COMMAND` instead of `CLI.COMMAND_MOVED`, still with exit code 2.
@@ -86,6 +86,13 @@ changes:
         - '(?<![\s\S])(?=[\s\S]*@prisma/orm-family-sql/relational-core/(?:ast|expression)[\x27"])(?=[\s\S]*(?<![\w$])(?:RawExpr|RawQueryAst|RawPart)(?![\w$]))[\s\S]*\.parts(?![\w$])'
   - id: mysql-explicit-isolation-default
     summary: Configure ReadCommitted explicitly if MySQL callbacks relied on the previous session-wide override.
+  - id: postgres-statement-on-lost-client-refused
+    summary: |
+      The PostgreSQL driver now refuses every statement it would send on a `pg` client that lost its connection, with `DRIVER.NOT_CONNECTED` and the message `Postgres connection is no longer usable.` A client has lost its connection once it emitted `error` or `end` after the driver first used it, once a driver gave up on it, or when `pg` marks it ended or broken. The refusal covers a query on a pooled connection or a `pg.Client`, each step of a cursor, and `BEGIN`, `COMMIT`, `ROLLBACK` and savepoint statements of a transaction. Before, the statement was sent to the client. The driver keeps this state for the client object, so code that recovers by patching the same object, for example by replacing its `query` method, now fails on the next statement: release the client and take a new one from the pool, or create a new `pg.Client`. The detection matches TypeScript and JavaScript sources that import `pg` and assign or define a `query` property.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
+      matches:
+        - '(?<![\s\S])(?=[\s\S]*(?:from\s*|require\s*\(\s*|import\s*\(\s*)[''"]pg[''"])[\s\S]*(?:\.query\s*=(?![=>])|defineProperty\s*\([^,]*,\s*[''"]query[''"])'
   - id: contract-artifacts-restamp
     summary: |
       An extension that writes its own package version into the contracts it emits, such as the Supabase extension, now writes 8.0.0-rc.24. Run `contract emit` once after upgrading so the emitted `contract.json` and `contract.d.ts` match the installed extension.
@@ -105,7 +112,7 @@ Do the steps in this order, and skip a step that does not apply to the project:
 2. Change the MongoDB contract sources. Run the field-types script first (`mongo-fields-take-a-type`), then the date-types script (`mongo-date-is-a-calendar-date`). The first script writes `field.date()` as `field.scalar(type.DateTime())`, so the second has nothing left to do for it; the second rewrites `Date` to `DateTime` in MongoDB schemas.
 3. Run `prisma contract emit` and commit what it writes. The MongoDB contracts must not change; the only change to expect is the extension version stamp (`contract-artifacts-restamp`).
 4. In PostgreSQL `migration.ts` files, call `this.createExtension(...)` and `this.dataTransform(...)` instead of the free functions (`create-extension-not-exported`, `data-transform-not-exported`). Existing `ops.json` files do not change.
-5. Change the remaining code: MySQL callback transactions that relied on READ COMMITTED (`mysql-explicit-isolation-default`), code that walks the `parts` of a raw SQL node (`raw-parts-hold-statement-asts`), and scripts that read the CLI's `--json` planner warnings or check for `CLI.COMMAND_MOVED` (`planner-warnings-json-field`, `prisma-7-commands-answer-v7-command`).
+5. Change the remaining code: MySQL callback transactions that relied on READ COMMITTED (`mysql-explicit-isolation-default`), PostgreSQL code that reuses a `pg` client after it lost its connection (`postgres-statement-on-lost-client-refused`), code that walks the `parts` of a raw SQL node (`raw-parts-hold-statement-asts`), and scripts that read the CLI's `--json` planner warnings or check for `CLI.COMMAND_MOVED` (`planner-warnings-json-field`, `prisma-7-commands-answer-v7-command`).
 6. On MongoDB, the next `migration plan` or `db update` checks documents against a changed validator, asks about field type changes that can lose values, and fills new required fields with a temporary value. Read those three entries before planning the next schema change (`mongo-validator-change-checks-documents`, `mongo-type-change-is-asked`, `mongo-new-required-field-gets-temporary-value`).
 
 
@@ -113,7 +120,7 @@ Do the steps in this order, and skip a step that does not apply to the project:
 
 ### `engine-pin-moves-to-0-10-0`
 
-For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.9.0`, `^0.9.0` or any other 0.x below 0.10) to `0.10.0` and reinstall. Projects assembled by the `prisma` CLI resolve the engine automatically.
+For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.9.0`, `^0.9.0` or any other 0.x below 0.10) to `0.10.0` and reinstall. A package that uses `@prisma/cli-engine` without any `@prisma/orm-*` package keeps its own pin. A `pnpm-workspace.yaml` matches whatever its packages are, so change its pin only when a package that takes the engine from it also lists an `@prisma/orm-*` package. Projects assembled by the `prisma` CLI resolve the engine automatically.
 
 ### `prisma-7-commands-answer-v7-command`
 
@@ -312,6 +319,17 @@ You can also import `{ IsolationLevel }` from `@prisma/orm-mysql/runtime` and us
 A defined per-call level overrides the factory level. An omitted or undefined level inherits it; null does not reset defaults and is rejected. ORM-owned implicit transactions continue to use ReadCommitted, independently of callback options. Manual lower-level transactions do not inherit factory defaults.
 
 Verify behavior against the deployment's configured database default and concurrent transactions. Do not assume the server default is RepeatableRead. This change does not introduce batch transactions, timeout/maxWait options, P2028 handling or retry behavior.
+
+
+## PostgreSQL: a statement on a `pg` client that lost its connection is refused
+
+### `postgres-statement-on-lost-client-refused`
+
+Before each statement it sends on a `pg` client, the PostgreSQL driver now checks whether the client has lost its connection, and refuses the statement with `DRIVER.NOT_CONNECTED` and the message `Postgres connection is no longer usable.` if so. A client has lost its connection once it emitted `error` or `end` after the driver first used it, once a driver gave up on it (for example after a transaction ran out of time), or when `pg`'s own state shows it ended or broken. The check covers a query or execute on a pooled connection or on a `pg.Client` passed to the client, each step of a cursor, and the `BEGIN`, `COMMIT`, `ROLLBACK` and savepoint statements of a transaction. Before this release, a statement on a pooled connection or inside a transaction was sent to the client whatever its state.
+
+The driver records the loss against the client object, and nothing clears it. Code that recovers from a lost connection by patching the same client object stops working. For example, a pool wrapper that retries a failed first statement on a new connection by replacing `client.query` on the checked-out client: the retried statement succeeds inside the replaced `query`, and the next statement the driver sends on that client rejects with `DRIVER.NOT_CONNECTED`.
+
+In each file the detection matches, check whether the code changes a `pg` client it gave to Prisma 8, or a client of a pool it gave to Prisma 8, to recover from a lost connection. If it does, release the lost client and take a new one from the pool instead (`client.release(error)`, then `pool.connect()`), or create a new `pg.Client`, and let the work run on the new client. A file that patches a client without importing `pg` is not found; check pool wrappers by hand. Code that does not reuse a lost client needs no change.
 
 
 ## `contract-artifacts-restamp`

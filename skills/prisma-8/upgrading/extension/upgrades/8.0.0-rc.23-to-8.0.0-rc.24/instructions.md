@@ -4,12 +4,12 @@ to: "8.0.0-rc.24"
 changes:
   - id: engine-pin-moves-to-0-10-0
     summary: |
-      The toolchain now peers `@prisma/cli-engine@0.10.0` (up from 0.9.0). An extension package that depends on `@prisma/cli-engine` for its tests or tooling must move to `0.10.0`.
+      The toolchain now peers `@prisma/cli-engine@0.10.0` (up from 0.9.0). An extension package that depends on `@prisma/cli-engine` for its tests or tooling must move to `0.10.0`. The detection matches a `package.json` that pins an older engine and lists an `@prisma/orm-*` package, and a `pnpm-workspace.yaml` that pins an older engine.
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.\d(?!\d)'
-        - '[''"]?@prisma/cli-engine[''"]?:\s*[''"]?[\^~]?0\.\d(?![\d])'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*"@prisma/orm-[a-z-]+"\s*:)|(?!\s*\{))[\s\S]*"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.\d(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*"@prisma/orm-[a-z-]+"\s*:)|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine[''"]?:\s*[''"]?[\^~]?0\.\d(?![\d])'
   - id: mongo-fields-take-a-type
     summary: |
       The MongoDB TypeScript builder writes a field as `field.scalar(type.X())`, where `type` holds the type constructors the target and extension packs contribute, as PSL names them: `field.objectId()` is now `field.scalar(type.ObjectId())`, `field.date()` is `field.scalar(type.DateTime())` (on MongoDB `Date` is now a calendar date), `field.vector({ typeParams: { length: 3 } })` is `field.scalar(type.Vector(3))`, and `field.scalar('mongo/string@1')` is `field.scalar(type.String())`. `field.objectId()`, `field.string()`, `field.double()`, `field.int32()`, `field.bool()`, `field.date()`, `field.int64()`, `field.int64Number()`, `field.decimal128()`, `field.binary()`, `field.json()`, `field.bson()`, `field.vector()` and `field.scalar(codecId)` are removed. `type` comes from the `defineContract` callback, or from `@prisma/orm-mongo/contract-builder`. The MongoDB target now contributes these constructors in its descriptor's `authoring.type`, which the adapter contributed before; `Vector` is new. Run `scripts/mongo-type-helpers/rewrite-mongo-field-types.ts` to rewrite them. The contract does not change. The detection matches MongoDB contract sources that call a removed helper.
@@ -106,7 +106,7 @@ Make the changes below in any order, with three exceptions:
 
 ### `engine-pin-moves-to-0-10-0`
 
-For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.9.0`, `^0.9.0` or any other 0.x below 0.10) to `0.10.0` and reinstall. In engine 0.10.0 a normalized redirect's `replacement` is a list of steps rather than one string, so code that reads `CommandRedirect.replacement` from a command family reads an array.
+For every file matched by `detection`, change the `@prisma/cli-engine` version (`0.9.0`, `^0.9.0` or any other 0.x below 0.10) to `0.10.0` and reinstall. A package that uses `@prisma/cli-engine` without any `@prisma/orm-*` package keeps its own pin. A `pnpm-workspace.yaml` matches whatever its packages are, so change its pin only when a package that takes the engine from it also lists an `@prisma/orm-*` package. In engine 0.10.0 a normalized redirect's `replacement` is a list of steps rather than one string, so code that reads `CommandRedirect.replacement` from a command family reads an array.
 
 
 ## MongoDB fields take a type from `type`
