@@ -1,9 +1,7 @@
 import { twoFactor } from 'better-auth/plugins';
 import { describe, expect, it } from 'vitest';
-import { editContractSource } from '../../src/generate/edit-contract-source';
 import { useContractFixture } from '../helpers/contract-fixture';
 import { targets } from '../helpers/databases';
-import { compare } from '../helpers/printed-psl';
 import {
   afterEdit,
   appPsl,
@@ -43,7 +41,7 @@ describe('auth generate in a Postgres namespace', () => {
       edit: {
         path: contractPath,
         code,
-        summary: `Adding 2 fields to User and the model TwoFactor to ${contractPath}. ${afterEdit}`,
+        summary: twoFactorSummary(contractPath),
       },
       problemsAfter: [],
     });
@@ -59,7 +57,7 @@ describe.each(targets)('auth generate on %s', (target) => {
       edit: {
         path: users.path,
         code: `${insertAfter(users.text, userLastField, twoFactorFields)}${twoFactorModel}\n`,
-        summary: `Adding 2 fields to User and the model TwoFactor to ${users.path}. ${afterEdit}`,
+        summary: twoFactorSummary(users.path),
       },
       problemsAfter: [],
     });
@@ -89,34 +87,40 @@ describe.each(targets)('auth generate on %s', (target) => {
     });
   });
 
-  it('indents added fields as the last field is indented, with a tab', async () => {
+  it('indents added fields and models with tabs in a file indented with tabs', async () => {
     const text = appPsl.replace(/^ {2}/gm, '\t');
-    const code = `${insertAfter(text, userLastField.replace('  ', '\t'), twoFactorFields.replaceAll('\n  ', '\n\t'))}\n${twoFactorModel}\n`;
+    const code = `${insertAfter(text, userLastField.replace('  ', '\t'), twoFactorFields.replaceAll('\n  ', '\n\t'))}\n${twoFactorModel.replace(/^ {2}/gm, '\t')}\n`;
     expect(await editAndEmit(fixture(), target, [{ path: contractPath, text }], options)).toEqual({
       edit: {
         path: contractPath,
         code,
-        summary: `Adding 2 fields to User and the model TwoFactor to ${contractPath}. ${afterEdit}`,
+        summary: twoFactorSummary(contractPath),
       },
       problemsAfter: [],
     });
   });
 });
 
-describe('auth generate on a model with no fields in the source', () => {
+describe.each(targets)('auth generate on a model with no fields of its own on %s', (target) => {
   it('adds the fields after the line of the opening brace', async () => {
-    const contract = await fixture().contractOf('sqlite', appPsl);
-    const comparison = compare(contract, {
-      verification: { additionalFields: { note: { type: 'string', required: false } } },
-    });
+    const verification =
+      /model Verification \{\n([\s\S]*)\n\n {2}@@index\(\[identifier\]\)\n {2}@@map\("verification"\)\n\}\n$/;
+    const fields = verification.exec(appPsl)?.[1];
+    if (fields === undefined) throw new Error('appPsl has no Verification model');
     const text = appPsl.replace(
-      /model Verification \{[\s\S]*\}\n$/,
-      'model Verification {\n  @@map("verification")\n}\n',
+      verification,
+      `model mixin VerificationFields {\n${fields}\n}\n\nmodel Verification {\n  +VerificationFields\n\n  @@index([identifier])\n  @@map("verification")\n}\n`,
     );
-    expect(editContractSource([{ path: contractPath, text }], comparison)).toEqual({
-      path: contractPath,
-      code: insertAfter(text, 'model Verification {', '\n  note String?'),
-      summary: `Adding 1 field to Verification to ${contractPath}. ${afterEdit}`,
+    const options = {
+      verification: { additionalFields: { note: { type: 'string' as const, required: false } } },
+    };
+    expect(await editAndEmit(fixture(), target, [{ path: contractPath, text }], options)).toEqual({
+      edit: {
+        path: contractPath,
+        code: insertAfter(text, 'model Verification {', '\n  note String?'),
+        summary: `Changes to ${contractPath}: 1 field added to Verification. ${afterEdit}`,
+      },
+      problemsAfter: [],
     });
   });
 });

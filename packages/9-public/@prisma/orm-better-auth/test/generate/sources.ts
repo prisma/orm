@@ -119,7 +119,7 @@ export const afterEdit =
 export const twoFactorCode = `${insertAfter(appPsl, userLastField, '\n  twoFactorEnabled Boolean?\n  twoFactors       TwoFactor[]')}\n${twoFactorModel}\n`;
 
 export function twoFactorSummary(path: string): string {
-  return `Adding 2 fields to User and the model TwoFactor to ${path}. ${afterEdit}`;
+  return `Changes to ${path}: 2 fields added to User, model TwoFactor added. ${afterEdit}`;
 }
 
 export interface EditRun {

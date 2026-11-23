@@ -1,92 +1,30 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import type { BetterAuthOptions } from '@better-auth/core';
-import { twoFactor } from 'better-auth/plugins';
-import { join, relative } from 'pathe';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { PrismaClientLike } from '../../src/adapter';
-import { prismaAdapter } from '../../src/exports/index';
-import type { SqlContract } from '../../src/models/model-lookup';
-import { useContractFixture } from '../helpers/contract-fixture';
-import { compare } from '../helpers/printed-psl';
-import { appPsl, refusal, twoFactorCode, twoFactorSummary } from './sources';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { isAbsolute, join, relative } from 'pathe';
+import { describe, expect, it } from 'vitest';
+import { configWithContract, inDirectory, passOutput, useGenerateProjects } from './projects';
+import { appPsl, twoFactorCode, twoFactorSummary } from './sources';
 
-const fixture = useContractFixture();
-const options: BetterAuthOptions = { plugins: [twoFactor()] };
-const testDir = fileURLToPath(new URL('.', import.meta.url));
-const passOutput = 'Pass your contract file with `--output`.';
-
-/** A project folder inside the package, so that its `prisma.config.ts` resolves the package's own dependencies. */
-let project: string;
-
-beforeAll(async () => {
-  project = await mkdtemp(join(testDir, '.project-'));
-});
-
-afterAll(() => rm(project, { recursive: true, force: true }));
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-function clientOver(contract: SqlContract): PrismaClientLike {
-  return {
-    contract,
-    orm: {},
-    transaction: () => Promise.reject(new Error('createSchema opens no transaction')),
-  };
-}
-
-async function projectWith(files: Readonly<Record<string, string>>): Promise<string> {
-  const dir = await mkdtemp(join(project, 'app-'));
-  for (const [path, text] of Object.entries(files)) {
-    await mkdir(join(dir, path, '..'), { recursive: true });
-    await writeFile(join(dir, path), text);
-  }
-  return dir;
-}
-
-async function inDirectory<T>(dir: string, run: () => Promise<T>): Promise<T> {
-  const previous = process.cwd();
-  process.chdir(dir);
-  try {
-    return await run();
-  } finally {
-    process.chdir(previous);
-  }
-}
-
-/** What `createSchema` returns and what it prints, for the core contract and the two-factor plugin. */
-async function generate(file?: string) {
-  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  const contract = await fixture().contractOf('sqlite', appPsl);
-  const schema = await prismaAdapter(clientOver(contract))(options).createSchema?.(options, file);
-  return { schema, printed: log.mock.calls };
-}
-
-async function refusalFor(reason: string) {
-  return refusal(compare(await fixture().contractOf('sqlite', appPsl), options), reason);
-}
-
-const config = (contract: string) => `import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig } from '@prisma/orm-sqlite/config';
-
-export default definePrismaConfig({ orm: defineConfig(${contract}) });
-`;
+const { fixture, projectWith, generate, refusalFor } = useGenerateProjects();
 
 describe('createSchema for auth generate', () => {
-  it('returns the edited file that --output names, relative to the working directory, for Better Auth to overwrite', async () => {
+  it('returns the absolute path of the file --output names, which Better Auth writes whatever its --cwd', async () => {
     const dir = await projectWith({ 'prisma/contract.prisma': appPsl });
     const file = join(dir, 'prisma/contract.prisma');
-    const path = relative(process.cwd(), file);
-    expect({ ...(await generate(file)), onDisk: await readFile(file, 'utf8') }).toEqual({
-      schema: { code: twoFactorCode, path, overwrite: true },
-      printed: [[twoFactorSummary(path)]],
-      onDisk: appPsl,
+    const generated = await generate(file);
+    const fileName = generated.schema?.path ?? '';
+    const betterAuthCwd = fixture().workDir.nextPath('cwd');
+    await writeFile(
+      isAbsolute(fileName) ? fileName : join(betterAuthCwd, fileName),
+      generated.schema?.code ?? '',
+    );
+    expect({ ...generated, written: await readFile(file, 'utf8') }).toEqual({
+      schema: { code: twoFactorCode, path: file, overwrite: true },
+      printed: [[twoFactorSummary(relative(process.cwd(), file))]],
+      written: twoFactorCode,
     });
   });
 
-  it('returns an absolute path for a file outside the working directory', async () => {
+  it('shows the absolute path for a file outside the working directory', async () => {
     const dir = fixture().workDir.nextPath('outside');
     await mkdir(dir, { recursive: true });
     const file = join(dir, 'contract.prisma');
@@ -99,13 +37,43 @@ describe('createSchema for auth generate', () => {
 
   it('finds the contract through prisma.config.ts in the working directory', async () => {
     const dir = await projectWith({
-      'prisma.config.ts': config("{ contract: './prisma/contract.prisma' }"),
+      'prisma.config.ts': configWithContract("{ contract: './prisma/contract.prisma' }"),
       'prisma/contract.prisma': appPsl,
     });
     expect(await inDirectory(dir, () => generate())).toEqual({
-      schema: { code: twoFactorCode, path: 'prisma/contract.prisma', overwrite: true },
+      schema: { code: twoFactorCode, path: join(dir, 'prisma/contract.prisma'), overwrite: true },
       printed: [[twoFactorSummary('prisma/contract.prisma')]],
     });
+  });
+
+  it('skips a file the config matches that is not a Prisma 8 contract, as emitting does', async () => {
+    const dir = await projectWith({
+      'prisma.config.ts': configWithContract("{ contract: './prisma/*.prisma' }"),
+      'prisma/contract.prisma': appPsl,
+      'prisma/schema.prisma': 'model Old {\n  id Int @id\n}\n',
+    });
+    expect(await inDirectory(dir, () => generate())).toEqual({
+      schema: { code: twoFactorCode, path: join(dir, 'prisma/contract.prisma'), overwrite: true },
+      printed: [[twoFactorSummary('prisma/contract.prisma')]],
+    });
+  });
+
+  it('prints the message for a contract read from a Prisma 7 schema', async () => {
+    const dir = await projectWith({
+      'prisma.config.ts': `import { definePrismaConfig } from '@prisma/cli-engine';
+import { defineConfig } from '@prisma/orm-sqlite/config';
+
+const orm = defineConfig({ contract: './prisma/schema.prisma' });
+const source = { ...orm.contract.source, parserOptions: { grammar: 'prisma-7' } };
+
+export default definePrismaConfig({ orm: { ...orm, contract: { ...orm.contract, source } } });
+`,
+      'prisma/schema.prisma': 'model User {\n  id String @id\n}\n',
+    });
+    const expected = await refusalFor(
+      '`auth generate` did not change your contract, because it is a Prisma 7 schema, and the lines above are Prisma 8 syntax. Add the equivalent lines by hand.',
+    );
+    await expect(inDirectory(dir, () => generate())).rejects.toThrow(expected);
   });
 
   it('prints the message when there is neither --output nor prisma.config.ts', async () => {
@@ -137,7 +105,7 @@ describe('createSchema for auth generate', () => {
 
   it('prints the message when prisma.config.ts names a contract written in TypeScript', async () => {
     const dir = await projectWith({
-      'prisma.config.ts': config("{ contract: './prisma/contract.ts' }"),
+      'prisma.config.ts': configWithContract("{ contract: './prisma/contract.ts' }"),
       'prisma/contract.ts': 'export {};\n',
     });
     const expected = await refusalFor(
@@ -154,6 +122,15 @@ describe('createSchema for auth generate', () => {
     );
     await expect(generate(file)).rejects.toThrow(expected);
     await expect(readFile(file)).rejects.toThrow('ENOENT');
+  });
+
+  it('prints the message when the file --output names cannot be read', async () => {
+    const dir = await projectWith({ 'prisma/contract.prisma/keep': '' });
+    const file = join(dir, 'prisma/contract.prisma');
+    const expected = await refusalFor(
+      `\`auth generate\` did not change your contract, because ${relative(process.cwd(), file)} could not be read: EISDIR: illegal operation on a directory, read '${file}'. ${passOutput}`,
+    );
+    await expect(generate(file)).rejects.toThrow(expected);
   });
 
   it('prints the message for a contract written in TypeScript', async () => {

@@ -20,7 +20,6 @@ import {
   registerContractCheck,
 } from './contract/contract-check';
 import { fieldOf, unsupportedError, whereFilter } from './filters';
-import { contractSchemaCreation } from './generate/create-schema';
 import { moveJoinedRows, planJoins } from './joins';
 import { betterAuthModels, caseOnlyNameCollisions } from './models/better-auth-models';
 import { assertFieldName, caseOnlyNameCollisionMessage } from './models/identifiers';
@@ -275,7 +274,8 @@ function customAdapter({
         if (comparison.problems.length === 0) {
           return { code: '', path: file ?? 'prisma/contract.prisma' };
         }
-        return contractSchemaCreation(file, comparison);
+        const { editedContractSource } = await import('./generate/edited-contract-source');
+        return editedContractSource(file, comparison);
       },
     };
     return asCustomAdapter(adapter);

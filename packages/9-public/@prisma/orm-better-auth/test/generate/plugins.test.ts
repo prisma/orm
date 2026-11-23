@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from '@better-auth/core';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { describe, expect, it } from 'vitest';
 import { useContractFixture } from '../helpers/contract-fixture';
@@ -36,7 +37,7 @@ describe.each(targets)('auth generate adds what a plugin needs to the contract o
       edit: {
         path: contractPath,
         code: insertAfter(withUserFields, sessionLastField, '\n  impersonatedBy String?'),
-        summary: `Adding 4 fields to User and 1 field to Session to ${contractPath}. ${afterEdit}`,
+        summary: `Changes to ${contractPath}: 4 fields added to User, 1 field added to Session. ${afterEdit}`,
       },
       problemsAfter: [],
     });
@@ -101,7 +102,40 @@ model Invitation {
   @@map("invitation")
 }
 `,
-        summary: `Adding 2 fields to User, 1 field to Session and the models Organization, Member and Invitation to ${contractPath}. ${afterEdit}`,
+        summary: `Changes to ${contractPath}: 2 fields added to User, 1 field added to Session, models Organization, Member and Invitation added. ${afterEdit}`,
+      },
+      problemsAfter: [],
+    });
+  });
+
+  it('prints after the summary a foreign-key action it had to change', async () => {
+    const grants: BetterAuthPlugin = {
+      id: 'grants',
+      schema: {
+        grant: {
+          fields: {
+            ownerId: {
+              type: 'string',
+              required: true,
+              references: { model: 'user', field: 'id', onDelete: 'set null' },
+            },
+          },
+        },
+      },
+    };
+    expect(await editAndEmit(fixture(), target, files, { plugins: [grants] })).toEqual({
+      edit: {
+        path: contractPath,
+        code: `${insertAfter(appPsl, userLastField, '\n  grants Grant[]')}
+model Grant {
+  id      String @id
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: NoAction)
+
+  @@map("grant")
+}
+`,
+        summary: `Changes to ${contractPath}: 1 field added to User, model Grant added. ${afterEdit}\nNote: Grant.ownerId: Better Auth asks for onDelete set null, which needs an optional field; NoAction is printed instead`,
       },
       problemsAfter: [],
     });

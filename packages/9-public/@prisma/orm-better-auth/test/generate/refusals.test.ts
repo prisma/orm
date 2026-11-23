@@ -3,6 +3,7 @@ import { admin, twoFactor } from 'better-auth/plugins';
 import { describe, expect, it } from 'vitest';
 import { editContractSource } from '../../src/generate/edit-contract-source';
 import { useContractFixture } from '../helpers/contract-fixture';
+import type { TargetName } from '../helpers/databases';
 import { compare } from '../helpers/printed-psl';
 import { appPsl, contractPath, refusal } from './sources';
 
@@ -10,8 +11,12 @@ const fixture = useContractFixture();
 const options = { plugins: [twoFactor()] };
 const userModel = /\/\/ The application's own comment[\s\S]*?\n}\n\n/;
 
-async function comparisonOver(psl: string, betterAuthOptions: BetterAuthOptions = options) {
-  return compare(await fixture().contractOf('sqlite', psl), betterAuthOptions);
+async function comparisonOver(
+  psl: string,
+  betterAuthOptions: BetterAuthOptions = options,
+  target: TargetName = 'sqlite',
+) {
+  return compare(await fixture().contractOf(target, psl), betterAuthOptions);
 }
 
 describe('auth generate writes nothing and reports why', () => {
@@ -50,12 +55,46 @@ describe('auth generate writes nothing and reports why', () => {
         "  posts   Post[] // the application's relation\n  nickname String",
       ),
     },
-  ])('when the contract has $name, with only the message', async ({ psl }) => {
-    const comparison = await comparisonOver(psl);
-    expect(() => editContractSource([{ path: contractPath, text: psl }], comparison)).toThrow(
-      refusal(comparison),
-    );
-  });
+    {
+      name: 'an id without a default while Better Auth sends no id',
+      psl: appPsl,
+      betterAuthOptions: { ...options, advanced: { database: { generateId: false as const } } },
+    },
+    {
+      name: 'a model in two Postgres namespaces',
+      psl: `${appPsl}\nnamespace auth {\n  model User {\n    id String @id\n\n    @@map("user")\n  }\n}\n`,
+      target: 'postgres' as const,
+    },
+    {
+      name: 'a Better Auth field name that is not an identifier',
+      psl: appPsl,
+      betterAuthOptions: { ...options, user: { fields: { email: 'e-mail' } } },
+    },
+    {
+      name: 'Better Auth model names that differ only in the case of the first letter',
+      psl: appPsl,
+      betterAuthOptions: { ...options, session: { modelName: 'User' } },
+    },
+  ])(
+    'when the contract has $name, with only the message',
+    async ({
+      psl,
+      betterAuthOptions,
+      target,
+    }: {
+      psl: string;
+      betterAuthOptions?: BetterAuthOptions;
+      target?: TargetName;
+    }) => {
+      const comparison = await comparisonOver(psl, betterAuthOptions, target);
+      expect(comparison.problems.every((problem) => problem.kind.startsWith('missing-'))).toBe(
+        false,
+      );
+      expect(() => editContractSource([{ path: contractPath, text: psl }], comparison)).toThrow(
+        refusal(comparison),
+      );
+    },
+  );
 
   it('when a model to extend is not in the source files', async () => {
     const comparison = await comparisonOver(appPsl);

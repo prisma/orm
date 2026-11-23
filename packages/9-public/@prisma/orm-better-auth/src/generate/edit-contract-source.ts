@@ -19,7 +19,7 @@ export interface ContractEdit {
   readonly path: string;
   /** The whole edited file. */
   readonly code: string;
-  /** What is added where, and what to do after the file is written. */
+  /** What is added where and what to do after the file is written, then a line for each note the printed PSL carries. */
   readonly summary: string;
 }
 
@@ -100,12 +100,34 @@ function indentationAt(text: string, offset: number): string {
   return /^[ \t]*/.exec(text.slice(lineStart(text, offset)))?.[0] ?? '';
 }
 
+/** The indentation of a field relative to its model, from the first model of the file that has a field; two spaces when none has. */
+function indentUnit(text: string, models: readonly DeclaredModel[]): string {
+  for (const { declaration } of [...models].sort(
+    (a, b) => a.declaration.syntax.offset - b.declaration.syntax.offset,
+  )) {
+    const [field] = declaration.fields();
+    if (field === undefined) continue;
+    const modelIndent = indentationAt(text, declaration.syntax.offset);
+    const fieldIndent = indentationAt(text, field.syntax.offset);
+    if (fieldIndent.length > modelIndent.length && fieldIndent.startsWith(modelIndent)) {
+      return fieldIndent.slice(modelIndent.length);
+    }
+  }
+  return '  ';
+}
+
+/** Printed PSL, indented two spaces a level, with each level indented by `unit` instead. */
+function reindented(printed: string, unit: string): string {
+  return printed.replace(/^(?: {2})+/gm, (spaces) => unit.repeat(spaces.length / 2));
+}
+
 /** Where the block's fields go: after the line of the model's last field, or after the `{` line of a model without fields. `undefined` when the model's `}` is on that line. */
 function fieldInsertion(
   text: string,
   declaration: ModelDeclarationAst,
   block: PrintedBlock,
   eol: string,
+  unit: string,
 ): Insertion | undefined {
   const last = [...declaration.fields()].at(-1);
   const anchorEnd = last?.syntax.endOffset ?? declaration.lbrace()?.endOffset;
@@ -115,7 +137,7 @@ function fieldInsertion(
   if (rbrace.offset < offset) return undefined;
   const indent =
     last === undefined
-      ? `${indentationAt(text, declaration.syntax.offset)}  `
+      ? `${indentationAt(text, declaration.syntax.offset)}${unit}`
       : indentationAt(text, last.syntax.offset);
   return { offset, text: block.fieldLines.map((line) => `${eol}${indent}${line}`).join('') };
 }
@@ -133,16 +155,20 @@ function summaryOf(
   path: string,
   extended: readonly PrintedBlock[],
   added: readonly PrintedBlock[],
+  notes: readonly string[],
 ): string {
   const parts = extended.map(
-    (block) => `${countOf(block.fieldNames.length, 'field')} to ${block.modelName}`,
+    (block) => `${countOf(block.fieldNames.length, 'field')} added to ${block.modelName}`,
   );
   if (added.length > 0) {
     parts.push(
-      `the model${added.length === 1 ? '' : 's'} ${listOf(added.map((block) => block.modelName))}`,
+      `model${added.length === 1 ? '' : 's'} ${listOf(added.map((block) => block.modelName))} added`,
     );
   }
-  return `Adding ${listOf(parts)} to ${path}. After the file is written, run \`prisma contract emit\` and update your database.`;
+  return [
+    `Changes to ${path}: ${parts.join(', ')}. After the file is written, run \`prisma contract emit\` and update your database.`,
+    ...notes.map((note) => `Note: ${note}`),
+  ].join('\n');
 }
 
 /**
@@ -218,9 +244,13 @@ export function editContractSource(
   const file = targets[0]?.file ?? files[0];
   if (file === undefined) throw notChanged(comparison, 'no contract file was found.');
   const eol = file.text.includes('\r\n') ? '\r\n' : '\n';
+  const unit = indentUnit(
+    file.text,
+    [...declared.values()].flat().filter((model) => model.file === file),
+  );
 
   const insertions = targets.map(({ block, declaration }) => {
-    const insertion = fieldInsertion(file.text, declaration, block, eol);
+    const insertion = fieldInsertion(file.text, declaration, block, eol, unit);
     if (insertion === undefined) {
       throw notChanged(
         comparison,
@@ -230,7 +260,9 @@ export function editContractSource(
     return insertion;
   });
   if (added.length > 0) {
-    const models = renderBlocks(added, comparison.namespace).split('\n').join(eol);
+    const models = reindented(renderBlocks(added, comparison.namespace), unit)
+      .split('\n')
+      .join(eol);
     insertions.push({
       offset: file.text.length,
       text: `${separatorBefore(file.text, eol)}${models}${eol}`,
@@ -241,5 +273,5 @@ export function editContractSource(
   for (const { offset, text } of [...insertions].sort((a, b) => b.offset - a.offset)) {
     code = `${code.slice(0, offset)}${text}${code.slice(offset)}`;
   }
-  return { path: file.path, code, summary: summaryOf(file.path, extended, added) };
+  return { path: file.path, code, summary: summaryOf(file.path, extended, added, printed.notes) };
 }
