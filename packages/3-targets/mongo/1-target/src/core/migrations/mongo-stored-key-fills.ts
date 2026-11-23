@@ -36,7 +36,9 @@ import { unrewritableKeyReason } from './migration-factories';
 import { temporaryValueOf } from './mongo-field-fills';
 import { modelCoordinates } from './mongo-model-coordinates';
 import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
-import { collectionControlPolicy, modelAt } from './mongo-statement-planning';
+import { modelAt } from './mongo-statement-planning';
+import { collectionControlPolicy } from './mongo-storage-renames';
+
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
   type StoredPlace,

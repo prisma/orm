@@ -30,8 +30,13 @@ import {
   sharedCollectionWhy,
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
-import { collectionControlPolicy, destinationModelOf, modelAt } from './mongo-statement-planning';
-import { type FieldRename, type ModelRename, renameRefused } from './mongo-storage-renames';
+import { destinationModelOf, modelAt } from './mongo-statement-planning';
+import {
+  collectionControlPolicy,
+  type FieldRename,
+  type ModelRename,
+  renameRefused,
+} from './mongo-storage-renames';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
 type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertStatement;

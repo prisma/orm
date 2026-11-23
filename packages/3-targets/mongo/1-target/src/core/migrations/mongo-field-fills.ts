@@ -28,7 +28,6 @@ import { unrewritableFieldNameReason } from './migration-factories';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
 import { modelCoordinates } from './mongo-model-coordinates';
 import {
-  collectionControlPolicy,
   destinationFieldOf,
   type ModelMatchInput,
   modelAt,
@@ -36,6 +35,8 @@ import {
   originModelOf,
   storedFieldsKeptOf,
 } from './mongo-statement-planning';
+import { collectionControlPolicy } from './mongo-storage-renames';
+
 import { FillFieldCall } from './op-factory-call';
 
 const EMPTY_LIST: MongoTemporaryValue = { expression: [], text: '[]' };

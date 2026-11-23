@@ -37,8 +37,8 @@ import {
   type RewriteCollection,
   rewriteRefusals,
 } from './mongo-rewrite-refusals';
-import { collectionControlOf, collectionControlPolicy, modelAt } from './mongo-statement-planning';
-import { renameRefused } from './mongo-storage-renames';
+import { collectionControlOf, modelAt } from './mongo-statement-planning';
+import { collectionControlPolicy, renameRefused } from './mongo-storage-renames';
 import {
   type StoredPlace,
   type StoredType,

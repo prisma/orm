@@ -24,7 +24,6 @@ import {
 } from './migration-factories';
 import type { PlannedRewrite } from './mongo-rewrite-refusals';
 import {
-  collectionControlPolicy,
   embeddedModelReason,
   type ModelMatchInput,
   modelAt,
@@ -32,6 +31,8 @@ import {
   originFieldOf,
   originModelOf,
 } from './mongo-statement-planning';
+import { collectionControlPolicy } from './mongo-storage-renames';
+
 import type { TypeChange } from './mongo-type-changes';
 import { DataTransformCall } from './op-factory-call';
 

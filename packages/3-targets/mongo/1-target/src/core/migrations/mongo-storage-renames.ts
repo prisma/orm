@@ -17,6 +17,7 @@ import {
   mongoModelsOf,
 } from '@internal/mongo-contract';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
+import { handWrittenMigrationSteps, modelsText } from './mongo-plan-text';
 
 /**
  * An origin model planned as a destination model: by a statement, or, when `statement` is
@@ -105,11 +106,23 @@ export function modelRenamesOf(
 }
 
 /** The control policy of `collection` as `contract` declares it. */
-export function declaredControlPolicy(
+export function collectionControlPolicy(
   contract: ContractWithDomain,
   collection: string,
 ): ControlPolicy {
   return collectionControlPolicyOf(collection, collectionControlPoliciesOf(contract));
+}
+
+/** Whether the control policy is `managed` for collection `from` in the origin contract and collection `to` in the destination contract, as a rename between them needs. */
+export function managedOnBothSides(
+  fromContract: ContractWithDomain,
+  contract: ContractWithDomain,
+  change: { readonly from: string; readonly to: string },
+): boolean {
+  return (
+    collectionControlPolicy(fromContract, change.from) === 'managed' &&
+    collectionControlPolicy(contract, change.to) === 'managed'
+  );
 }
 
 /**
@@ -162,10 +175,7 @@ export class CollectionRenames {
 
   /** Whether the control policy is `managed` for the old collection in the origin contract and the new one in the destination contract. */
   managedOnBothSides(change: Pick<CollectionChange, 'from' | 'to'>): boolean {
-    return (
-      declaredControlPolicy(this.#fromContract, change.from) === 'managed' &&
-      declaredControlPolicy(this.#contract, change.to) === 'managed'
-    );
+    return managedOnBothSides(this.#fromContract, this.#contract, change);
   }
 
   /**
@@ -305,37 +315,12 @@ function dataMigration(moves: string): string {
   return `Keeping their documents is a data migration, which a plan does not write. With migration plan, write this change as a hand-written migration instead: ${handWrittenMigrationSteps(moves)}`;
 }
 
-/** Joins items into text: "a", "a and b", "a, b and c". */
-export function joinedList(items: readonly string[]): string {
-  return items.length === 1
-    ? (items[0] ?? '')
-    : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
-}
-
-function namedList(noun: string, names: readonly string[]): string {
-  return `${noun}${names.length === 1 ? '' : 's'} ${joinedList(names.map((name) => `"${name}"`))}`;
-}
-
-export function modelsText(models: readonly ModelCoordinate[]): string {
-  return namedList('model', models.map(modelDisplayName));
-}
-
-export function fieldDisplayName(field: FieldCoordinate): string {
-  return `${modelDisplayName(field)}.${field.field}`;
-}
-
-export function capitalized(text: string): string {
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
-}
-
-/** What a collection change no statement asks for does, in words. */
+/** What a collection change does, in words: the statement that asks for it, or the contract change. */
 export function collectionChangeText(change: CollectionChange): string {
-  return `the collection of ${modelsText(change.renames.map((rename) => rename.from))} changes from "${change.from}" to "${change.to}"`;
-}
-
-/** What a field rename no statement asks for does, in words. */
-export function storedNameChangeText(field: FieldCoordinate, from: string, to: string): string {
-  return `the stored name of field "${fieldDisplayName(field)}" changes from "${from}" to "${to}"`;
+  const stated = change.renames.find((rename) => rename.statement !== undefined);
+  return stated === undefined
+    ? `the collection of ${modelsText(change.renames.map((rename) => rename.from))} changes from "${change.from}" to "${change.to}"`
+    : `model "${modelDisplayName(stated.from)}" is renamed to "${modelDisplayName(stated.to)}", which renames collection "${change.from}" to "${change.to}"`;
 }
 
 /**
@@ -351,9 +336,4 @@ export function renameRefused(
   return statement === undefined
     ? { kind: 'unsupportedOperation', summary, why }
     : { kind: 'statementRefused', summary, why, refusedStatement: statement };
-}
-
-/** The steps of a migration the user writes by hand, which rewrites `what` with the other operations of the change. */
-export function handWrittenMigrationSteps(what: string): string {
-  return `run prisma migration new, and in the operations of the migration.ts it writes, rewrite ${what} yourself, with the other operations of the change. Then run that migration.ts to emit its ops.json.`;
 }

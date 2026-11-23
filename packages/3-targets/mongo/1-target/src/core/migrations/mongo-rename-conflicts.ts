@@ -1,10 +1,9 @@
 import type { ContractWithDomain } from '@internal/contract/types';
-import {
-  type FieldCoordinate,
-  type MigrationPlannerConflict,
-  type ModelCoordinate,
-  modelDisplayName,
-  type ResolvedModelRenameStatement,
+import type {
+  FieldCoordinate,
+  MigrationPlannerConflict,
+  ModelCoordinate,
+  ResolvedModelRenameStatement,
 } from '@internal/framework-components/control';
 import {
   collectionOfModel,
@@ -18,16 +17,12 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { modelCoordinates } from './mongo-model-coordinates';
+import { capitalized, fieldDisplayName, joinedList, modelsText } from './mongo-plan-text';
 import {
   type CollectionChange,
-  capitalized,
   collectionChangeText,
   type FieldRename,
-  fieldDisplayName,
-  joinedList,
-  modelsText,
   renameRefused,
-  storedNameChangeText,
 } from './mongo-storage-renames';
 
 /** Where a renamed name is stored: a field of a collection's documents, or a key of an embedded model's objects. */
@@ -73,17 +68,10 @@ function fieldsText(fields: readonly FieldCoordinate[]): string {
   return `field${names.length === 1 ? '' : 's'} ${joinedList(names)}`;
 }
 
-/** What a collection change does, in words: the statement that asks for it, or the contract change. */
-function changeText(change: CollectionChange): string {
-  const stated = change.renames.find((rename) => rename.statement !== undefined);
-  return stated === undefined
-    ? collectionChangeText(change)
-    : `model "${modelDisplayName(stated.from)}" is renamed to "${modelDisplayName(stated.to)}", which renames collection "${change.from}" to "${change.to}"`;
-}
-
-function fieldChangeText(change: FieldChange): string {
+/** What a field's stored-name change does, in words: the statement that asks for it, or the contract change. */
+export function fieldChangeText(change: FieldChange): string {
   return change.rename.statement === undefined
-    ? storedNameChangeText(change.rename.from, change.from, change.to)
+    ? `the stored name of field "${fieldDisplayName(change.rename.from)}" changes from "${change.from}" to "${change.to}"`
     : `field "${fieldDisplayName(change.rename.from)}" is renamed to "${fieldDisplayName(change.rename.to)}", which renames ${nounOf(change.place)} "${change.from}" to "${change.to}" ${whereText(change)}`;
 }
 
@@ -246,8 +234,8 @@ function mergedText(
 
 /**
  * Refuses a collection rename no statement asks for when it swaps or chains with another rename,
- * moves onto a collection the schema being planned from already has, or moves out of a name a
- * statement rename takes. `held` is the schema before any rename is applied, so the outcome does
+ * moves onto a collection the schema being planned from already has, moves out of a name a
+ * statement rename takes, or frees a name the destination uses again. `held` is the schema before any rename is applied, so the outcome does
  * not depend on the order of the renames. `undefined` when the rename can be planned.
  */
 function collectionRenameConflict(
@@ -258,7 +246,7 @@ function collectionRenameConflict(
 ): MigrationPlannerConflict | undefined {
   const { from, to } = change;
   const label = `Cannot rename collection "${from}" to "${to}"`;
-  const text = capitalized(changeText(change));
+  const text = capitalized(collectionChangeText(change));
   const moving = modelsText(change.renames.map((rename) => rename.from));
   const misread = (collection: string) =>
     `documents of collection "${collection}" as documents of ${moving}`;
@@ -269,7 +257,7 @@ function collectionRenameConflict(
       return renameRefused(
         undefined,
         `${label}: collection "${to}" is renamed in the same plan`,
-        `${text}, and ${changeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(to)}. ${collectionRoute([change, moved], others, contracts)}`,
+        `${text}, and ${collectionChangeText(moved)}. ${ORDER}, and without the renames the plan would read the ${misread(to)}. ${collectionRoute([change, moved], others, contracts)}`,
       );
     }
     const holders = originModelsIn(contracts.fromContract, to);
@@ -285,10 +273,12 @@ function collectionRenameConflict(
     return renameRefused(
       undefined,
       `${label}: another rename in the same plan takes collection name "${from}"`,
-      `${text}, and ${changeText(takes)}. ${ORDER}. ${collectionRoute([change, takes], others, contracts)}`,
+      `${text}, and ${collectionChangeText(takes)}. ${ORDER}. ${collectionRoute([change, takes], others, contracts)}`,
     );
   }
-  return freedNameReusedConflict(change, undefined, label, text, contracts.contract);
+  return others.some((other) => other.to === from)
+    ? undefined
+    : freedNameReusedConflict(change, undefined, label, text, contracts.contract);
 }
 
 /** The models the destination stores in `collection`, the collection itself when it stores none, as text. */
@@ -336,7 +326,7 @@ function bothCollectionsRefusal(change: CollectionChange): MigrationPlannerConfl
   return renameRefused(
     undefined,
     `Cannot rename collection "${from}" to "${to}": the database has both collections`,
-    `${capitalized(changeText(change))}, and the database has both collection "${from}" and collection "${to}". One of two things happened, and each has its own fix. If the rename was half done by hand, or the application wrote to collection "${to}" before db update ran, collection "${from}" holds the documents of ${moving}: move into collection "${from}" the documents of collection "${to}" that it does not already hold, and where both collections hold a document with the same _id, keep the version you want in collection "${from}"; then drop collection "${to}", and run again. If collection "${from}" was renamed to "${to}" by hand and the name "${from}" then used for another collection, collection "${to}" holds the documents of ${moving}: drop collection "${from}", and run again; to keep the documents of that other collection, first move them into a collection the contract has, since db update drops every collection the contract does not have.`,
+    `${capitalized(collectionChangeText(change))}, and the database has both collection "${from}" and collection "${to}". One of two things happened, and each has its own fix. If the rename was half done by hand, or the application wrote to collection "${to}" before db update ran, collection "${from}" holds the documents of ${moving}: move into collection "${from}" the documents of collection "${to}" that it does not already hold, and where both collections hold a document with the same _id, keep the version you want in collection "${from}"; then drop collection "${to}", and run again. If collection "${from}" was renamed to "${to}" by hand and the name "${from}" then used for another collection, collection "${to}" holds the documents of ${moving}: drop collection "${from}", and run again; to keep the documents of that other collection, first move them into a collection the contract has, since db update drops every collection the contract does not have.`,
   );
 }
 

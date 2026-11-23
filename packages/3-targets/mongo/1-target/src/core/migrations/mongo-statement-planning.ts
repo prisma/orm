@@ -44,8 +44,10 @@ import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
 import { modelCoordinates, sameModel } from './mongo-model-coordinates';
+import { capitalized, handWrittenMigrationSteps, modelsText } from './mongo-plan-text';
 import {
   type FieldChange,
+  fieldChangeText,
   fieldRenamesConflict,
   freedNameReusedConflict,
   plannedCollectionChanges,
@@ -63,16 +65,13 @@ import {
 import {
   type CollectionChange,
   CollectionRenames,
-  capitalized,
   collectionChangeText,
-  declaredControlPolicy,
+  collectionControlPolicy,
   type FieldRename,
-  handWrittenMigrationSteps,
   type ModelRename,
+  managedOnBothSides,
   modelRenamesOf,
-  modelsText,
   renameRefused,
-  storedNameChangeText,
 } from './mongo-storage-renames';
 import {
   type OpFactoryCall,
@@ -166,10 +165,6 @@ export function collectionControlOf(
     policy: originalPolicy === 'managed' ? policy : originalPolicy,
     declared: original.control,
   };
-}
-
-export function collectionControlPolicy(contract: MongoContract, collection: string) {
-  return collectionControlOf(contract, null, collection).policy;
 }
 
 /** Why MongoDB would refuse a collection name, if it would. */
@@ -453,8 +448,10 @@ function embedRelationRefusals(match: ModelMatchInput): readonly MigrationPlanne
     }
     const collection = match.collectionAfterRenames(originCollection);
     if (
-      declaredControlPolicy(match.fromContract, originCollection) !== 'managed' ||
-      declaredControlPolicy(match.contract, collection) !== 'managed'
+      !managedOnBothSides(match.fromContract, match.contract, {
+        from: originCollection,
+        to: collection,
+      })
     ) {
       return [];
     }
@@ -702,7 +699,7 @@ function planModelStatement(
     change,
     statement,
     label,
-    `Model "${modelDisplayName(statement.from)}" is renamed to "${modelDisplayName(statement.to)}", which renames collection "${from}" to "${to}"`,
+    capitalized(collectionChangeText(change)),
     input.contract,
   );
   if (reused !== undefined) return { kind: 'refused', conflict: reused };
@@ -807,8 +804,10 @@ function planFieldRename(
     statement === undefined &&
     (collection !== destinationCollection ||
       schema.collection(collection) === undefined ||
-      declaredControlPolicy(input.fromContract, originCollection) !== 'managed' ||
-      declaredControlPolicy(input.contract, destinationCollection) !== 'managed')
+      !managedOnBothSides(input.fromContract, input.contract, {
+        from: originCollection,
+        to: destinationCollection,
+      }))
   ) {
     return UNCHANGED;
   }
@@ -817,7 +816,15 @@ function planFieldRename(
     `Cannot rename field "${fromStored}" to "${toStored}" in collection "${collection}"`;
   const changed =
     statement === undefined
-      ? capitalized(storedNameChangeText(rename.from, fromStored, toStored))
+      ? capitalized(
+          fieldChangeText({
+            rename,
+            collection,
+            place: { kind: 'document' },
+            from: fromStored,
+            to: toStored,
+          }),
+        )
       : undefined;
   const refuse = (reason: string, why: string) =>
     refusedOutcome(statement, `${label}: ${reason}`, why);
