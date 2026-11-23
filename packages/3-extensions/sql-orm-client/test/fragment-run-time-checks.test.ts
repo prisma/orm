@@ -323,7 +323,15 @@ describe('update and delete change the row first() returns', () => {
     expect(deleted).toEqual({ id: 7, title: 'x', user: null });
     expect(runtime.executions.map((execution) => execution.plan.ast)).toMatchObject([
       { kind: 'select', limit: 1, offset: 2 },
-      { kind: 'delete', where: { exprs: [expect.anything(), { right: { value: 7 } }] } },
+      {
+        kind: 'delete',
+        where: {
+          exprs: [
+            { op: 'gte', left: { table: 'posts', column: 'views' }, right: { value: 1 } },
+            { op: 'eq', left: { table: 'posts', column: 'id' }, right: { value: 7 } },
+          ],
+        },
+      },
     ]);
   });
 

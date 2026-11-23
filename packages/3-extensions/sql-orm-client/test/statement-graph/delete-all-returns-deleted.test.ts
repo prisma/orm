@@ -1,11 +1,19 @@
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { describe, expect, it } from 'vitest';
+import { Collection } from '../../src/collection';
 import {
   baseContract,
   createCollectionFor,
   withoutCapabilityKeys,
   withReturningCapability,
 } from '../collection-fixtures';
-import { buildMixedPolyContract } from '../helpers';
+import {
+  buildMixedPolyContract,
+  buildTestContextFromContract,
+  createMockRuntime,
+  getTestContract,
+  perRelationPostgresAdapter,
+} from '../helpers';
 import { sent } from './sent-statements';
 
 const featureCondition =
@@ -19,44 +27,68 @@ function tasks() {
   return { tasks: collection.where({ title: 'Crash' } as never), runtime };
 }
 
-describe('deleteAll() that reads its rows first returns only the rows its DELETE removed', () => {
-  it('with includes', async () => {
-    const { collection, runtime } = createCollectionFor('User');
-    runtime.setNextResults([
-      [
-        { id: 1, name: 'Ada', posts: [] },
-        { id: 2, name: 'Ada', posts: [] },
-      ],
-      [{ id: 2, name: 'Ada' }],
-    ]);
+function usersWith(adapter: typeof postgresAdapter) {
+  const runtime = createMockRuntime();
+  const context = buildTestContextFromContract(getTestContract(), { adapter });
+  const collection = new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
+  return { users: collection.where({ name: 'Ada' }), runtime };
+}
 
-    const rows = await collection
-      .where({ name: 'Ada' })
+const strategies = [
+  {
+    strategy: 'the include read in the same query',
+    adapter: postgresAdapter,
+    results: (users: readonly { id: number; name: string; title: string }[]) => [
+      users.map(({ id, name, title }) => ({ id, name, posts: JSON.stringify([{ title }]) })),
+    ],
+  },
+  {
+    strategy: 'one query per relation',
+    adapter: perRelationPostgresAdapter,
+    results: (users: readonly { id: number; name: string; title: string }[]) => [
+      users.map(({ id, name }) => ({ id, name })),
+      users.map(({ id, title }) => ({ __prisma_parent_key_0: id, title })),
+    ],
+  },
+] as const;
+
+const found = [
+  { id: 1, name: 'Ada', title: 'A' },
+  { id: 2, name: 'Ada', title: 'B' },
+];
+
+describe.each(strategies)('deleteAll() with includes, under $strategy', ({ adapter, results }) => {
+  it('returns only the rows read that its DELETE removed', async () => {
+    const { users, runtime } = usersWith(adapter);
+    runtime.setNextResults([...results(found), [{ id: 2, name: 'Ada' }]]);
+
+    const rows = await users
       .select('id', 'name')
-      .include('posts')
+      .include('posts', (posts) => posts.select('title'))
       .deleteAll()
       .toArray();
 
-    expect(rows).toEqual([{ id: 2, name: 'Ada', posts: [] }]);
+    expect(rows).toEqual([{ id: 2, name: 'Ada', posts: [{ title: 'B' }] }]);
     expect(sent(runtime).at(-1)).toBe(
       "delete users where (name = 'Ada' and id in (1, 2)) returning id, name",
     );
   });
 
   it('leaves out the key it read only to match the deleted rows, when the caller did not select it', async () => {
-    const { collection, runtime } = createCollectionFor('User');
-    runtime.setNextResults([[{ id: 1, name: 'Ada', posts: [] }], [{ id: 1, name: 'Ada' }]]);
+    const { users, runtime } = usersWith(adapter);
+    runtime.setNextResults([...results(found.slice(0, 1)), [{ id: 1, name: 'Ada' }]]);
 
-    const rows = await collection
-      .where({ name: 'Ada' })
+    const rows = await users
       .select('name')
-      .include('posts')
+      .include('posts', (posts) => posts.select('title'))
       .deleteAll()
       .toArray();
 
-    expect(rows).toEqual([{ name: 'Ada', posts: [] }]);
+    expect(rows).toEqual([{ name: 'Ada', posts: [{ title: 'A' }] }]);
   });
+});
 
+describe('deleteAll() that reads its rows first returns only the rows its DELETE removed', () => {
   it('on a variant stored in its own table', async () => {
     const { tasks: rows, runtime } = tasks();
     runtime.setNextResults([[{ id: 1 }, { id: 2 }], [{ id: 2 }]]);
