@@ -190,7 +190,7 @@ Then run `prisma contract emit` and update your database.
 
 Add the printed fields to your existing `User` model, add the new model, then run `prisma contract emit` and `prisma db update`. After that, `auth generate` prints `Your schema is already up to date.` and `auth check` prints `Schema check passed against adapter "prisma-8".`, both with exit code 0.
 
-The message can also list fields whose type is wrong, and fields your contract requires that Better Auth never writes: make those optional or give them a default.
+The message can also list fields whose type is wrong, and fields your contract requires that Better Auth does not always write, including fields Better Auth treats as optional: make those optional or give them a default.
 
 Some things to know:
 

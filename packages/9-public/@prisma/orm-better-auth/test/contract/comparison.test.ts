@@ -202,6 +202,35 @@ describe.each(targets)('the comparison on %s', (target) => {
         expect(await problemsWith('seenAt DateTime @onCreate(now())')).toEqual([]);
       });
 
+      describe('an optional Better Auth field the contract makes required', () => {
+        async function imageProblems(image: string, options: BetterAuthOptions = {}) {
+          const contract = await contractOf(
+            target,
+            editedPsl(target, options, [[/image(\s+)String\?/, `image$1${image}`]]),
+          );
+          return problemsOf(compare(contract, options));
+        }
+
+        it('is reported', async () => {
+          expect(await imageProblems('String')).toEqual([
+            { kind: 'required-field-not-written', model: 'User', field: 'image' },
+          ]);
+        });
+
+        it('is not reported when it has a database default', async () => {
+          expect(await imageProblems('String @default("")')).toEqual([]);
+        });
+
+        it('is not reported when Better Auth gives it a default value', async () => {
+          const options: BetterAuthOptions = {
+            user: {
+              additionalFields: { image: { type: 'string', required: false, defaultValue: '' } },
+            },
+          };
+          expect(await imageProblems('String', options)).toEqual([]);
+        });
+      });
+
       it('is reported when a generator fills it only on update', async () => {
         expect(await problemsWith('seenAt DateTime @onUpdate(now())')).toEqual([
           { kind: 'required-field-not-written', model: 'User', field: 'seenAt' },

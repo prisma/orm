@@ -135,6 +135,11 @@ function columnFacts(contract: SqlContract, found: FoundModel, field: string): C
   };
 }
 
+/** Better Auth leaves an optional field without a default value out of the row it creates. */
+function alwaysWritten(field: BetterAuthField): boolean {
+  return field.attribute.required !== false || field.attribute.defaultValue !== undefined;
+}
+
 function compareFoundModel(
   contract: SqlContract,
   expected: BetterAuthModel,
@@ -190,7 +195,10 @@ function compareFoundModel(
     problems.push({ kind: 'missing-field', model, field });
   }
 
-  const written = new Set(['id', ...expected.fields.map((field: BetterAuthField) => field.name)]);
+  const written = new Set([
+    'id',
+    ...expected.fields.filter(alwaysWritten).map((field) => field.name),
+  ]);
   for (const [name, field] of Object.entries(fields)) {
     if (written.has(name) || field.nullable) continue;
     const facts = columnFacts(contract, found, name);
