@@ -199,7 +199,7 @@ export function printedWayToTarget(
       const onDisk = `Migrations on disk already lead from the database to ${target}, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them`;
       const reason =
         migrations.unmarked === true
-          ? `${onDisk}. The database has no marker, so \`db migrate\` applies them from the first migration, which fits only an empty database. If it already has tables, adopt it first with \`${cliCommand(invocation, 'db sign')}\``
+          ? `${onDisk}. The database has no marker, so \`db migrate\` applies them from the first migration, which fits only an empty database. If it is not empty, adopt it first with \`${cliCommand(invocation, 'db sign')}\``
           : onDisk;
       return {
         kind: 'on-disk',

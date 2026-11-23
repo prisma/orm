@@ -128,7 +128,7 @@ describe('printedWayToTarget', () => {
       );
     expect([way(false), way(true)].map((each) => each.kind === 'on-disk' && each.reason)).toEqual([
       ON_DISK,
-      `${ON_DISK}. The database has no marker, so \`db migrate\` applies them from the first migration, which fits only an empty database. If it already has tables, adopt it first with \`{bin} db sign --db <url>\``,
+      `${ON_DISK}. The database has no marker, so \`db migrate\` applies them from the first migration, which fits only an empty database. If it is not empty, adopt it first with \`{bin} db sign --db <url>\``,
     ]);
   });
 });
