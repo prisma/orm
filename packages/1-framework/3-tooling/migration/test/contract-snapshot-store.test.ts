@@ -4,6 +4,7 @@ import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   contractSnapshotDir,
+  hasContractSnapshot,
   readContractSnapshotJson,
   readContractSnapshotJsonTolerant,
   writeContractSnapshot,
@@ -113,6 +114,16 @@ describe('writeContractSnapshot', () => {
 
     expect(afterJson).toBe(beforeJson);
     expect(afterDts).toBe(beforeDts);
+  });
+
+  it('says whether the store holds a snapshot for a hash', async () => {
+    expect(await hasContractSnapshot(migrationsDir, STORAGE_HASH)).toBe(false);
+    await writeContractSnapshot(migrationsDir, STORAGE_HASH, {
+      contractJson: contractFixture(STORAGE_HASH),
+      contractDts: 'export {};',
+    });
+    expect(await hasContractSnapshot(migrationsDir, STORAGE_HASH)).toBe(true);
+    expect(await hasContractSnapshot(migrationsDir, OTHER_HASH)).toBe(false);
   });
 
   it('throws MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH when the contract inner hash disagrees', async () => {

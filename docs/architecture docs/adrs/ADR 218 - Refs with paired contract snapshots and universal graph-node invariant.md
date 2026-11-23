@@ -2,9 +2,9 @@
 
 ## Status
 
-**Accepted** — closes the dev → ship transition trap tracked in [TML-2629](https://linear.app/prisma-company/issue/TML-2629/dev-ship-transition-broken-first-migration-plan-after-db-update). [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds an optional `policies` field to the ref pointer and requires every ref writer to keep the fields it does not change.
+**Accepted** — closes the dev → ship transition trap tracked in [TML-2629](https://linear.app/prisma-company/issue/TML-2629/dev-ship-transition-broken-first-migration-plan-after-db-update). [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds an optional `policies` field to the ref pointer and requires every ref writer to keep the fields it does not change. Partly superseded by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md): `db migrate` now advances the `db` ref by default.
 
-The **paired contract snapshot** part of this decision (a ref carrying its own `<name>.contract.json` / `<name>.contract.d.ts` copy) was folded into the shared content-addressed store introduced by [ADR 240](ADR%20240%20-%20Contract%20snapshots%20live%20in%20a%20content-addressed%20store.md) (TML-3072). A ref is now only its pointer file (`{hash, invariants}`); the contract bytes it names resolve through `migrations/snapshots/<hex>/contract.{json,d.ts}` by that hash, the same store every graph node resolves through. The **universal graph-node invariant** and **asymmetric ref-advancement** decisions below are unaffected and remain current. `db sign` was later added to the implicit-advancement set (see the row in the table under *Asymmetric ref-advancement*); unlike `db init` / `db update`, its `--db` flag does not suppress the advancement; `--no-advance-ref` skips it.
+The **paired contract snapshot** part of this decision (a ref carrying its own `<name>.contract.json` / `<name>.contract.d.ts` copy) was folded into the shared content-addressed store introduced by [ADR 240](ADR%20240%20-%20Contract%20snapshots%20live%20in%20a%20content-addressed%20store.md) (TML-3072). A ref is now only its pointer file (`{hash, invariants}`); the contract bytes it names resolve through `migrations/snapshots/<hex>/contract.{json,d.ts}` by that hash, the same store every graph node resolves through. The **universal graph-node invariant** and **asymmetric ref-advancement** decisions below are unaffected and remain current. `db sign` was later added to the implicit-advancement set (see the row in the table under *Asymmetric ref-advancement*); unlike `db init` / `db update`, its `--db` flag does not suppress the advancement; `--no-advance-ref` skips it. The `migrate` row of that table, and the rejected alternative "Implicit `db` ref advancement on `migrate`", are **superseded** by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md): `db migrate` now advances `db` when the connection comes from the config and the run is not in CI.
 
 ## Context
 
@@ -128,7 +128,7 @@ Ref advancement is **implicit** for dev-shaped reconciliation commands and **opt
 |---|---|---|
 | `db init` | Advances `db` when `--db` is omitted (project default URL) | `--advance-ref <name>` |
 | `db update` | Same | `--advance-ref <name>`; **no** implicit advance with any explicit `--db` (even one naming the default URL) unless `--advance-ref` is explicit |
-| `migrate` | **None** | `--advance-ref <name>` only |
+| `migrate` (superseded by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md)) | **None** | `--advance-ref <name>` only |
 | `ref set` | Sets `<name>` (always explicit) | N/A — user names the ref |
 | `db sign` (added after this ADR) | Advances `db` whether or not `--db` is given — sign never mutates the schema, and adoption normally names the database with `--db`; `--no-advance-ref` skips it | `--advance-ref <name>`; `--no-advance-ref` |
 
@@ -149,7 +149,7 @@ export function computeRefAdvancementName(options: {
 }
 ```
 
-**Rationale:** `db init` and `db update` exist to reconcile the **project dev database** with the emitted contract. Advancing a local ref (default `db`) is part of what those commands *mean*. `migrate` is generic — deploy, CI apply, rollback rehearsal — and must not infer dev-state intent. A plain `migrate` leaves the `db` ref unchanged; the live marker advances while the ref may lag until the developer runs `db update` (no-op on DB when already current) or `migrate --advance-ref db`.
+**Rationale:** (The part about `migrate` is superseded by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md).) `db init` and `db update` exist to reconcile the **project dev database** with the emitted contract. Advancing a local ref (default `db`) is part of what those commands *mean*. `migrate` is generic — deploy, CI apply, rollback rehearsal — and must not infer dev-state intent. A plain `migrate` leaves the `db` ref unchanged; the live marker advances while the ref may lag until the developer runs `db update` (no-op on DB when already current) or `migrate --advance-ref db`.
 
 `db` is a **default name**, not a reserved or magic ref. The framework overwrites `db` on the next dev cycle; users may `ref set db <hash>` and accept that a subsequent `db update` replaces it. No ref names are protected.
 
@@ -166,7 +166,7 @@ export function computeRefAdvancementName(options: {
 ### Negative
 
 - **Extra on-disk files** per ref (two snapshot siblings). Acceptable for the safety of atomic paired writes and offline planning.
-- **`db` ref staleness after plain `migrate`.** Accepted; apply-time drift checks and an explicit `db update` or `migrate --advance-ref db` are the remediation.
+- **`db` ref staleness after plain `migrate`.** (Superseded by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md).) Accepted; apply-time drift checks and an explicit `db update` or `migrate --advance-ref db` are the remediation.
 - **Two-bundle visibility.** Auto-baseline shows two directories in `git status` before commit — intentional transparency, not silent graph extension.
 
 ### Neutral
@@ -177,7 +177,7 @@ export function computeRefAdvancementName(options: {
 
 ## Alternatives considered
 
-### Implicit `db` ref advancement on `migrate`
+### Implicit `db` ref advancement on `migrate` (superseded by [ADR 327](ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md))
 
 **Rejected.** Would make `db` behave like a magic reserved ref and blur the boundary between "apply migrations" and "record dev iteration state." Production-shaped commands must be explicit; dev-shaped commands own the implicit default.
 

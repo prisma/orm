@@ -101,7 +101,7 @@ Raised by the CLI engine; the engine's entry is the reference: [CLI.CONSENT_UNUS
 
 ### CLI.ADVANCE_REF_ARG_CONFLICT
 
-`prisma db sign` was told both which ref to advance (`--advance-ref <name>`) and not to advance any ref (`--no-advance-ref`), and there is no rule for which one wins. Pass one of them. Payload: `advanceRef`.
+`prisma db sign` or `prisma db migrate` was told both which ref to advance (`--advance-ref <name>`) and not to advance any ref (`--no-advance-ref`), and there is no rule for which one wins. Pass one of them. Payload: `advanceRef`.
 
 ### CLI.FILE_NOT_FOUND
 
@@ -703,7 +703,7 @@ A single-table-inheritance variant declares a unique constraint, or an index wit
 
 ### CONTRACT.TYPES_RENDER_FAILED
 
-A command advancing a ref (`db sign`, `db init`, `db update`, `db migrate --advance-ref`) could not render the `contract.d.ts` of the contract it is about to snapshot: the family accepted the JSON but the emitter refused it (for example a to-one relation with no declared nullability). Raised before the command touches the database, so nothing is migrated and no ref or snapshot is written; run `prisma contract emit` to see the emitter's own diagnosis. The emitter's error is attached as `cause`. Payload: none (`where.path` names the contract JSON).
+A command advancing a ref (`db sign`, `db init`, `db update`, `db migrate`) could not render the `contract.d.ts` of the contract it is about to snapshot: the family accepted the JSON but the emitter refused it (for example a to-one relation with no declared nullability). Raised before the command touches the database, so nothing is migrated and no ref or snapshot is written; run `prisma contract emit` to see the emitter's own diagnosis. The emitter's error is attached as `cause`. Payload: none (`where.path` names the contract JSON).
 
 ### CONTRACT.VALIDATION_FAILED
 
@@ -1937,6 +1937,14 @@ A contract or migration reference prefix matches more than one candidate (raised
 
 A contract or migration reference is syntactically invalid: it is not a hash, ref name, or migration directory name in any accepted form (raised by the shared ref-resolution mapper). Payload: `input`.
 
+### MIGRATION.REF_NOT_ADVANCED_IN_CI
+
+An `info` diagnostic on a successful `db migrate` that took its connection from `prisma.config.ts`, was given neither `--advance-ref` nor `--no-advance-ref`, and did not bring the database to the empty contract: the `db` ref was not advanced only because the CLI detected that it runs in CI. Unless the `CI` environment variable is `false`, which turns detection off whatever else is set, the CLI detects CI when `CI` is set or when a variable that CI services set is present, such as `BUILD_NUMBER`, `BUILD_ID` or `GITHUB_ACTIONS`; the diagnostic cannot name which one, because the CLI engine does not report it. In a pipeline the notice is expected, and `--no-advance-ref` silences it. On a developer's machine, a variable in their shell, or in a `.env` file that `prisma.config.ts` loads (for example with `import 'dotenv/config'`, which `prisma orm init` writes), can set one of these, and this notice is how that shows. Its next actions are for that developer: unset the variable or set `CI=false`, or advance the ref now with the same `db migrate` and `--advance-ref db`; the last says to pass `--no-advance-ref` in a pipeline. Payload: none.
+
+### MIGRATION.REF_NOT_ADVANCED_TO_EMPTY
+
+A warning diagnostic on a successful `db migrate` that took its connection from `prisma.config.ts` and was given neither `--advance-ref` nor `--no-advance-ref`, when the run brought the database to the empty contract, for example `db migrate --to @empty`, and a `db` ref exists. The empty contract is where the planner starts, not a contract a ref can name, so `db migrate` neither moved the `db` ref nor deleted it. The summary names the hash `db` still holds, which the next `migration plan` would start from although the database is not at it. The next action is `migration ref delete db`, for a development database: with no `db` ref, the next `migration plan` asks where to start. With no `db` ref nothing is stale, and nothing is reported. The diagnostic is reported in CI too, instead of `MIGRATION.REF_NOT_ADVANCED_IN_CI`. Payload: none.
+
 ### MIGRATION.REF_NOT_FOUND
 
 A contract or migration reference does not resolve: no matching hash, ref name, or migration directory name exists in the migration graph or refs index (raised by the shared ref-resolution mapper used across CLI commands). Payload: `input`, `grammar`.
@@ -1945,6 +1953,10 @@ A contract or migration reference does not resolve: no matching hash, ref name, 
 
 A ref name resolves to nothing: no pointer file with that name exists, and the fallback hash is not a node in the migration graph either, so there is no contract to materialize. Create the ref with `migration ref set`, advance it via `db update --advance-ref`, or pass a graph-node hash. Payload: `refName`, `identifier`.
 
+### MIGRATION.REF_NOT_WRITTEN
+
+A warning diagnostic on a successful `db migrate`: the migrations applied, but the ref the command advances afterwards (`db`, or the name given with `--advance-ref`) or its contract snapshot could not be written, for example because the refs directory is on a read-only filesystem, or because the snapshot store holds no contract for the hash the database ended at. The command exits 0, because the database has already moved and failing would tell a pipeline to retry an apply that happened. The JSON document's `advancedRef` is `null`. The next action depends on whether the store holds the snapshot for the hash the database ended at, including one this run wrote before the pointer failed. If it does, it is `migration ref set <name> <hash>`. If it does not, `migration ref set` would refuse for lack of it, so the next action is the same `db migrate` with `--advance-ref <name>`: the database is already at the target, so it applies nothing and writes both. Either runs once the directory is writable. When reading the store itself failed, the next action is to repair that store entry before running the same `db migrate` again. Payload: `name`, `hash`, `reason`, and `causeCode`, the code of the error that stopped the write when it had one: a Prisma code such as `MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH`, or a system error code such as `EACCES`.
+
 ### MIGRATION.REF_SET_BUNDLE_NOT_FOUND
 
 `migration ref set` resolved the given hash to a graph node, but no on-disk migration bundle has that hash as its destination, so the ref would point at a node with no backing package. Re-emit the migration that produces this hash. Payload: `hash`.
@@ -1952,6 +1964,10 @@ A ref name resolves to nothing: no pointer file with that name exists, and the f
 ### MIGRATION.REF_SET_EMPTY_SENTINEL
 
 `migration ref set` was asked to point a ref at the empty-database sentinel hash, which is a planner internal and not a valid ref target. Use a real contract hash from the migration graph. Payload: `hash`.
+
+### MIGRATION.REF_TARGET_EMPTY
+
+`db migrate --advance-ref <name>` would bring the database to the empty contract, for example with `--to @empty`. The empty contract is where the planner starts, not a contract a ref can name, the same rule `MIGRATION.REF_SET_EMPTY_SENTINEL` enforces for `migration ref set`. The command refuses before it applies anything, since the ref could never be written. The next action is the same `db migrate` with `--no-advance-ref` in place of `--advance-ref`. Payload: `name`.
 
 ### MIGRATION.REF_WRONG_GRAMMAR
 
@@ -2015,7 +2031,7 @@ A `--rename <old>:<new>` statement is well formed, but its names do not resolve 
 
 ### MIGRATION.TABLE_NAME_CASE_CHANGED
 
-The planner would drop table `X` and create table `Y` in the same namespace, where `X` is `Y` with its first letter lowered; the columns are not compared. That is the shape of a schema upgraded across the release in which a model with no `@@map` stopped lowering the first letter of its table name (`model UserProfile` now names `"UserProfile"`, previously `"userProfile"`); planning it would recreate the table empty. Reported as a conflict inside `MIGRATION.PLANNING_FAILED`. With a snapshot of the contract the database is at, a model that keeps its name is renamed to its new table instead of dropped and created, so this check is in practice reached only without one. The message gives three ways out. Add `@@map("X")` to the model (or run the `add-model-map` codemod) to keep the existing table. In a project with migration history, make the rename its own schema change, create its migration with `prisma migration new --from <hash of the migration the database is at>`, and add `...this.renameTable({ table: "X", to: "Y" })` to its operations; the call renames the table and the constraints and indexes named after it, and on Postgres the message adds `schema: "<namespace>"` when the table is outside the default schema or another schema declares `X`. `migration new` defaults its origin to the `db` ref, so a project whose migrations are applied with `db migrate` has no origin to default to and must name one: pass the newest applied migration's `to` hash, which `prisma migration list` shows, or the command refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN`. In a project that uses `db update`, rename the table by hand with the statements the message gives, then run `db update` again: on Postgres `ALTER TABLE "<schema>"."X" RENAME TO "Y"`, and on SQLite, which refuses in one statement a rename that only changes the case of ASCII letters, `ALTER TABLE "X" RENAME TO "_prisma_rename_Y"; ALTER TABLE "_prisma_rename_Y" RENAME TO "Y"`. Payload: `droppedTable`, `createdTable`.
+The planner would drop table `X` and create table `Y` in the same namespace, where `X` is `Y` with its first letter lowered; the columns are not compared. That is the shape of a schema upgraded across the release in which a model with no `@@map` stopped lowering the first letter of its table name (`model UserProfile` now names `"UserProfile"`, previously `"userProfile"`); planning it would recreate the table empty. Reported as a conflict inside `MIGRATION.PLANNING_FAILED`. With a snapshot of the contract the database is at, a model that keeps its name is renamed to its new table instead of dropped and created, so this check is in practice reached only without one. The message gives three ways out. Add `@@map("X")` to the model (or run the `add-model-map` codemod) to keep the existing table. In a project with migration history, make the rename its own schema change, create its migration with `prisma migration new --from <hash of the migration the database is at>`, and add `...this.renameTable({ table: "X", to: "Y" })` to its operations; the call renames the table and the constraints and indexes named after it, and on Postgres the message adds `schema: "<namespace>"` when the table is outside the default schema or another schema declares `X`. The message names the origin with `--from` because `migration new` otherwise defaults it to the `db` ref, which need not name the database being migrated: a project whose migrations are applied only in CI or with `--db` has no `db` ref, and the command refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN`. Pass the newest applied migration's `to` hash, which `prisma migration list` shows. In a project that uses `db update`, rename the table by hand with the statements the message gives, then run `db update` again: on Postgres `ALTER TABLE "<schema>"."X" RENAME TO "Y"`, and on SQLite, which refuses in one statement a rename that only changes the case of ASCII letters, `ALTER TABLE "X" RENAME TO "_prisma_rename_Y"; ALTER TABLE "_prisma_rename_Y" RENAME TO "Y"`. Payload: `droppedTable`, `createdTable`.
 
 ### MIGRATION.TABLE_RENAME_UNMATCHED
 
