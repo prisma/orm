@@ -35,8 +35,10 @@ import type { CollectionState } from '../types';
 import { rowIdentity } from '../written-keys';
 import { requireRowsThatCanConflict } from './conflict-keys';
 import { CrossJoin } from './cross-join';
+import { DeletedRows } from './deleted-rows';
 import type { ColumnMapping, NodeId } from './edge';
 import { FilterData } from './filter-data';
+import { Find } from './find';
 import { Graph } from './graph';
 import { addIncludeNodes, identityMissing } from './include-nodes';
 import { Insert } from './insert';
@@ -76,6 +78,7 @@ import {
 } from './storage-rows';
 import { UnionAll } from './union-all';
 import { pinsUniqueKey } from './unique-condition';
+import { WholeRows } from './whole-rows';
 
 export function updateAllGraph(
   collection: DescribeCollectionRowsOptions,
@@ -290,13 +293,51 @@ export function deleteFirstGraph(collection: DescribeCollectionRowsOptions): Gra
     return b.graph;
   }
   const { find, where } = first;
-  b.graph.setResult(withIncludeNodes(b, collection, find));
-  deleteRows(b, state.tables, {
+  const read = withIncludeNodes(b, collection, find);
+  b.graph.setResult(read);
+  const deleted = deleteRows(b, state.tables, {
     where,
     filters: [{ from: find, columns: sameRowColumns(collection) }],
     links: [],
   });
+  keepRowsTheDeleteRemoved(b, collection, { find, read, deleted });
   return b.graph;
+}
+
+/** Unless the delete took the place of the read, keeps only the rows read that the delete removed, with the values it returned. */
+function keepRowsTheDeleteRemoved(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  {
+    find,
+    read,
+    deleted,
+  }: { readonly find: NodeId; readonly read: NodeId; readonly deleted: NodeId },
+): void {
+  const { graph } = b;
+  if (graph.result === deleted) {
+    return;
+  }
+  const found = graph.nodeAt(find);
+  if (!(found instanceof Find)) {
+    return;
+  }
+  const { alias } = collection.state.tables.root;
+  const identity = sameRowColumns(collection);
+  const columns = new Map<string, ColumnMapping>(
+    identity.map((mapping) => [mapping[0].alias, mapping]),
+  );
+  for (const item of found.ast.projection) {
+    if (item.expr.kind === 'column-ref' && item.expr.table === alias && !columns.has(item.alias)) {
+      columns.set(item.alias, [item, item]);
+    }
+  }
+  graph.setResult(
+    graph.add(new DeletedRows(identity.map(([column]) => column.alias)), {
+      found: new WholeRows(read),
+      deleted: new Rows(deleted, [...columns.values()]),
+    }),
+  );
 }
 
 export function createAllGraph(

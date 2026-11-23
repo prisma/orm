@@ -316,7 +316,7 @@ describe('update and delete change the row first() returns', () => {
 
   it('delete with an include reads the row first() returns with its include, then deletes it', async () => {
     const { plain, runtime } = createFragmentsOrm();
-    runtime.setNextResults([[{ id: 7, title: 'x', user: null }]]);
+    runtime.setNextResults([[{ id: 7, title: 'x', user: null }], [{ id: 7, title: 'x' }]]);
 
     const deleted = await thirdByViews(plain).select('id', 'title').include('user').delete();
 

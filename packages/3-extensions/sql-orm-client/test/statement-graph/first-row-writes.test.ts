@@ -20,7 +20,9 @@ describe('delete() and update() whose filter names no unique key', () => {
 
     await rows.delete();
 
-    expect(sent(runtime)[1]).toBe("delete users where (name = 'Ada' and id = 1)");
+    expect(sent(runtime)[1]).toBe(
+      "delete users where (name = 'Ada' and id = 1) returning id, name",
+    );
   });
 
   it('update() updates the row it found only if the row still matches the filter, with RETURNING', async () => {
@@ -49,5 +51,41 @@ describe('delete() and update() whose filter names no unique key', () => {
       "update users where (name = 'Ada' and id = 1)",
       'select users where id = 1',
     ]);
+  });
+});
+
+describe('what delete() returns when its filter names no unique key', () => {
+  it('returns the row the DELETE removed, with the values it returned, on a database with RETURNING', async () => {
+    const { users: rows, runtime } = users('with RETURNING');
+    runtime.setNextResults([[ada], [{ id: 1, name: 'Ada L.' }]]);
+
+    expect(await rows.delete()).toEqual({ id: 1, name: 'Ada L.' });
+  });
+
+  it('returns null when the row it found no longer matches at the DELETE, on a database with RETURNING', async () => {
+    const { users: rows, runtime } = users('with RETURNING');
+    runtime.setNextResults([[ada], []]);
+
+    expect(await rows.delete()).toBeNull();
+  });
+
+  it('returns the row it found on a database without RETURNING', async () => {
+    const { users: rows, runtime } = users('without RETURNING');
+    runtime.setNextResults([[ada]]);
+
+    expect(await rows.delete()).toEqual(ada);
+    expect(sent(runtime)).toEqual([
+      "select users where name = 'Ada' limit 1",
+      "delete users where (name = 'Ada' and id = 1)",
+    ]);
+  });
+});
+
+describe('what update() returns when its filter names no unique key', () => {
+  it('returns null when the row it found no longer matches at the UPDATE, on a database with RETURNING', async () => {
+    const { users: rows, runtime } = users('with RETURNING');
+    runtime.setNextResults([[{ id: 1 }], []]);
+
+    expect(await rows.update({ name: 'Grace' })).toBeNull();
   });
 });

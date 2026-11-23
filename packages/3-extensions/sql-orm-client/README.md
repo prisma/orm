@@ -346,7 +346,7 @@ On a polymorphic target, `variant(value).create(rows, options)` takes either opt
 
 ## Writes without `RETURNING`
 
-A write that returns rows is built the same way on every database: the write, then a `SELECT` that reads the written rows back by their key. When the contract reports `returning`, the ORM merges that `SELECT` into the write, so it is one statement with `RETURNING`, except when the read-back loads includes or the variant tables of a polymorphic base model. When it does not, as on MySQL, the write runs without `RETURNING` inside a transaction, and the ORM reads the rows back by their key with a `SELECT`. The rows come back in no particular order. A write the ORM cannot read back is refused before any statement runs, as a rejection of the call:
+A write that returns rows is built the same way on every database: the write, then a `SELECT` that reads the written rows back by their key. When the contract reports `returning`, the ORM merges that `SELECT` into the write, so it is one statement with `RETURNING`, except when the read-back loads includes or the variant tables of a polymorphic base model. `delete()` whose filter names no unique key still finds its row with a `SELECT` first; its `DELETE` then returns the row it removed, and `delete()` returns that row, or `null` when the row no longer matched the filter at the `DELETE`. When it does not, as on MySQL, the write runs without `RETURNING` inside a transaction, and the ORM reads the rows back by their key with a `SELECT`. The rows come back in no particular order. A write the ORM cannot read back is refused before any statement runs, as a rejection of the call:
 
 ```ts
 const user = await db.User.create({ email: 'a@example.com', role: 'USER' });
