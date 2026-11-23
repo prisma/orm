@@ -210,11 +210,10 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
 
 export type PrismaPgOptions = {
   /**
-   * The name of the schema to use in generated queries. When the adapter creates the pool itself
-   * (i.e. it is given a config object or a connection string), it also sets the `search_path` of
-   * every connection to this schema, so that raw queries resolve unqualified table names in this
-   * schema, unless the config's `options` already set a `search_path`. Externally provided pools are left untouched; configure the search path on the pool
-   * itself in that case, e.g. via `options: '-c search_path="mySchema"'`.
+   * The name of the schema to use in generated queries. Raw queries are not affected: they resolve
+   * unqualified names through the connection's `search_path`. To change that, set it on the
+   * database role (`ALTER ROLE ... SET search_path = ...`) or in the connection's `options`
+   * (`-c search_path=...`).
    */
   schema?: string
   /**
@@ -344,14 +343,7 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
   }
 
   async connect(): Promise<PrismaPgAdapter> {
-    const client = this.externalPool ?? new pg.Pool(withSearchPath(this.config, this.options?.schema))
-
-    if (this.externalPool !== null && this.options?.schema !== undefined) {
-      debug(
-        `The search path is not set on externally provided pools, schema "${this.options.schema}" is only used ` +
-          `for generated queries. Set the search path on the pool itself if raw queries need it.`,
-      )
-    }
+    const client = this.externalPool ?? new pg.Pool(this.config)
 
     const onIdleClientError = (err: Error) => {
       debug(`Error from idle pool client: ${err.message} %O`, err)
@@ -384,54 +376,4 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
       await client.end()
     })
   }
-}
-
-/**
- * Extends a pool config with an `options` startup parameter that sets the `search_path` to the
- * given schema, so that raw queries resolve unqualified table names in that schema, consistently
- * with generated queries which qualify table names explicitly. `public` stays on the path after it,
- * because extensions such as citext or PostGIS are usually installed there and their types and
- * operators must keep resolving. Setting the search path at
- * connection startup saves a round trip per connection and guarantees that no query can run
- * before the search path is in effect.
- * See https://github.com/prisma/prisma/issues/24660.
- */
-function withSearchPath(config: pg.PoolConfig, schema: string | undefined): pg.PoolConfig {
-  if (schema === undefined || setsSearchPath(config.options)) {
-    return config
-  }
-  const searchPath = `-c search_path=${escapeOptionValue(quoteIdentifierIfNeeded(schema))},public`
-  return {
-    ...config,
-    options: config.options ? `${config.options} ${searchPath}` : searchPath,
-  }
-}
-
-/**
- * Whether the `options` startup parameter already sets the `search_path`, either as `-c search_path=...`
- * or as `--search_path=...`. A search path the user configured explicitly takes precedence over the schema.
- */
-function setsSearchPath(options: string | undefined): boolean {
-  return options !== undefined && /(?:^|\s)(?:-c\s*|--)search[_-]path=/i.test(options)
-}
-
-/**
- * Quotes a PostgreSQL identifier, doubling any embedded double quotes. Identifiers that don't
- * require quoting are left as is, because CockroachDB (which is also served by this adapter)
- * treats quotes in the `search_path` startup parameter literally instead of stripping them
- * (https://github.com/cockroachdb/cockroach/issues/101328).
- */
-function quoteIdentifierIfNeeded(name: string): string {
-  if (/^[a-z_][a-z0-9_$]*$/.test(name)) {
-    return name
-  }
-  return `"${name.replaceAll('"', '""')}"`
-}
-
-/**
- * Escapes a value for use in the `options` startup parameter, which the server splits on
- * whitespace, treating a backslash as an escape character.
- */
-function escapeOptionValue(value: string): string {
-  return value.replace(/[\\\s]/g, (char) => `\\${char}`)
 }
