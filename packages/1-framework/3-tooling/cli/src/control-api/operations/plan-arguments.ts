@@ -54,6 +54,18 @@ export interface MigrationPlanArguments {
   readonly from: MigrationPlanArgument;
   readonly to: MigrationPlanTargetArgument;
   /**
+   * Where the database is, when its marker was read.
+   *
+   * @internal
+   */
+  readonly position?: DatabasePosition;
+  /**
+   * Present when `from` lies past migrations on disk the database has not applied, by its marker.
+   *
+   * @internal
+   */
+  readonly startsAfterUnapplied?: true;
+  /**
    * How the database reaches `to` through migrations, when its marker was read, which decides what
    * the CLI's advice prints. It is in the published types, but it exists for that advice only, and
    * its shape may change in any release without notice.
@@ -133,9 +145,20 @@ export function migrationPlanChoice(space: PlanSpace | undefined, reason: string
   return { kind: 'ambiguous', reason, candidates };
 }
 
+const NO_MARKER = 'The database has no marker';
+const ADOPT_FIRST = 'A database that is not empty needs adopting first';
+
 /** Why a database with no marker in a space with no migrations gets a plan from `@empty` only as a choice. */
-const NO_MARKER_REASON =
-  'The database has no marker, so a plan from `@empty` fits only an empty database. A database that is not empty needs adopting first: emit the contract that describes it as it is, before your change, and record it with `{bin} db sign`, then plan from there';
+const NO_MARKER_REASON = `${NO_MARKER}, so a plan from \`@empty\` fits only an empty database. ${ADOPT_FIRST}: emit the contract that describes it as it is, before your change, and record it with \`{bin} db sign\`, then plan from there`;
+
+/**
+ * Why `db migrate` on a database with no marker, in a space with migrations, fits only an empty
+ * database, and how to adopt one that is not: `sign` is the `db sign <contract>` and `list` the
+ * `migration list` advice prints.
+ */
+export function noMarkerReplayText(sign: string, list: string): string {
+  return `${NO_MARKER}, so \`db migrate\` applies every migration on disk from the first, which fits only an empty database. ${ADOPT_FIRST}: record the contract it is at with \`${sign}\`, naming the migration whose result it matches (\`${list}\` shows them), and \`db migrate\` then applies only the migrations after it`;
+}
 
 /**
  * The `--from` that makes `migration plan` start where a database at `position` is. A contract a
@@ -283,11 +306,38 @@ export function migrationPlanForDatabase(
   marker: ContractMarkerRecordLike | null | undefined,
   end: PlanEnd,
 ): MigrationPlanArguments {
-  const plan = migrationPlanArguments(space, databasePositionOf(marker?.storageHash), end);
+  const position = databasePositionOf(marker?.storageHash);
+  const plan = migrationPlanArguments(space, position, end);
   const target = planEndContract(space, end);
-  return target === undefined
-    ? plan
-    : { ...plan, migrationsToTarget: migrationsToTarget(space, marker, target) };
+  return {
+    ...plan,
+    position,
+    ...ifDefined(
+      'startsAfterUnapplied',
+      startsAfterUnapplied(space.graph, position, plan.from) ? true : undefined,
+    ),
+    ...ifDefined(
+      'migrationsToTarget',
+      target === undefined ? undefined : migrationsToTarget(space, marker, target),
+    ),
+  };
+}
+
+/**
+ * Whether `from` lies past migrations on disk a database at `position` has not applied: it starts
+ * anywhere but the database's own contract, in a space with migrations.
+ */
+function startsAfterUnapplied(
+  graph: MigrationGraph,
+  position: DatabasePosition,
+  from: MigrationPlanArgument,
+): boolean {
+  if (graph.nodes.size === 0 || position.kind === 'unknown' || from.kind === 'none') return false;
+  return !(
+    position.kind === 'contract' &&
+    from.kind === 'reference' &&
+    from.reference === position.hash
+  );
 }
 
 /** The contract `end` names, with the invariants a ref requires; undefined when it is not known. */

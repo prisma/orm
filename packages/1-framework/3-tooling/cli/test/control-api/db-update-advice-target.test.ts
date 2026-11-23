@@ -257,6 +257,7 @@ const PLAN_TO_PRODUCTION_END = {
 const PLAN_TO_PRODUCTION = {
   from: { kind: 'reference', reference: 'db' },
   to: { kind: 'reference', reference: 'production' },
+  position: { kind: 'contract', hash: ORIGIN_HASH },
   migrationsToTarget: { kind: 'plan-needed', missingInvariants: [] },
 };
 
@@ -359,11 +360,13 @@ describe('db update --to <ref> when migrations on disk already lead there', () =
       {
         from: { kind: 'reference', reference: ORIGIN_HASH },
         ...PLAN_TO_PRODUCTION_END,
+        position: { kind: 'contract', hash: ORIGIN_HASH },
         migrationsToTarget: { kind: 'on-disk' },
       },
       {
         from: { kind: 'reference', reference: ORIGIN_HASH },
         ...PLAN_TO_PRODUCTION_END,
+        position: { kind: 'contract', hash: ORIGIN_HASH },
         migrationsToTarget: { kind: 'on-disk' },
       },
     ]);

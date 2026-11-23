@@ -1,3 +1,4 @@
+import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
 import {
@@ -5,6 +6,7 @@ import {
   type MigrationPlanArguments,
   type MigrationPlanTargetArgument,
   migrationPlanFromForStatements,
+  noMarkerReplayText,
   type RunnablePlanArgument,
 } from '../control-api/operations/plan-arguments';
 import { shellQuoted } from '../control-api/statements/statement-flag';
@@ -162,7 +164,8 @@ export function printedPlan(
  *   with `apply`;
  * - `at-target`: the database is already there, as `reason` says, and there is nothing to move;
  * - `on-disk`: migrations on disk lead there; `reason` says why no plan is printed, `text` says to
- *   apply them with `apply`;
+ *   apply them with `apply`, and `adoptFirst`, for a database with no marker, how to adopt one that
+ *   is not empty before that;
  * - `none`: no `migration plan` moves it, for `reason`, which says what does where something can.
  */
 export type PrintedWayToTarget =
@@ -174,6 +177,7 @@ export type PrintedWayToTarget =
       readonly reason: string;
       readonly apply: string;
       readonly text: string;
+      readonly adoptFirst?: string;
     };
 
 /**
@@ -197,15 +201,14 @@ export function printedWayToTarget(
       };
     case 'on-disk': {
       const onDisk = `Migrations on disk already lead from the database to ${target}, so a migration planned now would be a second path between the same two contracts, and \`db migrate\` applies only one of them`;
-      const reason =
-        migrations.unmarked === true
-          ? `${onDisk}. The database has no marker, so \`db migrate\` applies them from the first migration, which fits only an empty database. If it is not empty, adopt it first with \`${cliCommand(invocation, 'db sign')}\``
-          : onDisk;
+      const adoptFirst = noMarkerText(invocation, plan);
+      const reason = adoptFirst === undefined ? onDisk : `${onDisk}. ${adoptFirst}`;
       return {
         kind: 'on-disk',
         reason,
         apply,
         text: `${reason}. Apply them with \`${apply}\`, which names the migration.ts to change if one of them fails`,
+        ...ifDefined('adoptFirst', adoptFirst),
       };
     }
     case 'at-target-missing-invariants': {
@@ -218,17 +221,63 @@ export function printedWayToTarget(
       };
     }
     case 'plan-needed': {
+      const adoptFirst = noMarkerText(invocation, plan);
+      if (
+        plan.startsAfterUnapplied === true &&
+        carriesStatement(flags) &&
+        plan.from.kind !== 'none'
+      ) {
+        return { kind: 'none', reason: applyUnappliedFirst(invocation, plan.from, adoptFirst) };
+      }
       const printed = printedPlan(invocation, plan, flags);
       if (printed.kind === 'none') return printed;
       const { missingInvariants } = migrations;
       const provide =
         missingInvariants.length === 0 ? '' : `add to it ${transformsText(missingInvariants)}, `;
+      const applied = `${provide}run \`${writtenMigrationRunCommand(invocation)}\` for the directory it writes, and apply it with \`${apply}\``;
       return {
         ...printed,
-        afterPlan: `${provide}run \`${writtenMigrationRunCommand(invocation)}\` for the directory it writes, and apply it with \`${apply}\``,
+        afterPlan: adoptFirst === undefined ? applied : `${applied}. ${adoptFirst}`,
       };
     }
   }
+}
+
+/**
+ * For a database with no marker in a space with migrations, why `db migrate` fits it only when it
+ * is empty, and how to adopt it when it is not.
+ */
+function noMarkerText(
+  invocation: CliInvocation | undefined,
+  plan: MigrationPlanArguments,
+): string | undefined {
+  if (plan.position?.kind !== 'unmarked' || plan.startsAfterUnapplied !== true) return undefined;
+  return noMarkerReplayText(
+    cliCommand(invocation, 'db sign', [CONTRACT_PLACEHOLDER]),
+    cliCommand(invocation, 'migration list'),
+  );
+}
+
+/**
+ * Why advice that carries a statement prints no plan from `from`, past migrations on disk the
+ * database has not applied: one of them may already make the change. It says to apply them first,
+ * after `adoptFirst` for a database with no marker, then run the command again.
+ */
+function applyUnappliedFirst(
+  invocation: CliInvocation | undefined,
+  from: Exclude<MigrationPlanArgument, { readonly kind: 'none' }>,
+  adoptFirst: string | undefined,
+): string {
+  const end = from.kind === 'reference' ? from.reference : CONTRACT_PLACEHOLDER;
+  const migrate = `\`${cliCommand(invocation, 'db migrate', ['--to', shellQuoted(end)])}\``;
+  const choose =
+    from.kind === 'ambiguous' && from.candidates.length > 0
+      ? `, replacing ${CONTRACT_PLACEHOLDER} with one of ${from.candidates.map((each) => `\`${each}\``).join(', ')}`
+      : '';
+  const apply = `Apply them first with ${migrate}${choose}, which names the migration.ts to change if one of them fails, then run the command again`;
+  const lead =
+    'Migrations on disk that the database has not applied come before where a plan for this change would start, and one of them may already make the change, so the plan could not carry it';
+  return adoptFirst === undefined ? `${lead}. ${apply}` : `${lead}. ${adoptFirst}. ${apply}`;
 }
 
 /**

@@ -409,6 +409,7 @@ describe('migrationPlanForDatabase', () => {
       {
         from: { kind: 'reference', reference: A },
         to: { kind: 'reference', reference: 'production' },
+        position: { kind: 'contract', hash: A },
         migrationsToTarget: { kind: 'on-disk' },
       },
     );
@@ -462,8 +463,37 @@ describe('migrationPlanForDatabase', () => {
       {
         from: { kind: 'reference', reference: A },
         to: { kind: 'reference', reference: 'constructor' },
+        position: { kind: 'contract', hash: A },
       },
       { kind: 'on-disk' },
     ]);
+  });
+
+  it('says when the plan starts past migrations the database has not applied', () => {
+    expect(
+      [at(A), at(B), null, at(E)].map(
+        (marker) =>
+          migrationPlanForDatabase({ graph, refs, emittedHash: C }, marker, { kind: 'emitted' })
+            .startsAfterUnapplied,
+      ),
+    ).toEqual([true, undefined, true, true]);
+    expect(
+      migrationPlanForDatabase({ graph, refs, emittedHash: C }, at(A), {
+        kind: 'ref',
+        name: 'production',
+      }),
+    ).not.toHaveProperty('startsAfterUnapplied');
+    expect(
+      migrationPlanForDatabase(
+        { graph: buildGraph([]), refs: { production: ref(A) }, emittedHash: C },
+        at(A),
+        { kind: 'emitted' },
+      ),
+    ).toEqual({
+      from: { kind: 'reference', reference: 'production' },
+      to: { kind: 'default' },
+      position: { kind: 'contract', hash: A },
+      migrationsToTarget: { kind: 'plan-needed', missingInvariants: [] },
+    });
   });
 });

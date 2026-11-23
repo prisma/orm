@@ -1,8 +1,11 @@
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { describe, expect, it } from 'vitest';
+import { migrationPlanForDatabase } from '../src/control-api/operations/plan-arguments';
 import {
   errorStatementNeedsMigrationFile,
   errorStatementOriginUnknown,
 } from '../src/utils/cli-errors';
+import { buildGraph, entry } from './utils/graph-helpers';
 import { NOT_RECORDED, reference, toEmitted } from './utils/plan-origins';
 
 const HASH = 'sha256:abc';
@@ -111,6 +114,33 @@ describe('errorStatementNeedsMigrationFile', () => {
         command: '{bin} db migrate',
       },
       { kind: 'user-choice', label: 'Or run db update without these statements' },
+    ]);
+  });
+
+  it('for a database with no marker, lists how to adopt it before the command that applies the migrations on disk', () => {
+    const A = 'a'.repeat(64);
+    const envelope = errorStatementNeedsMigrationFile(
+      [{ verb: 'convert', text: 'User.years' }],
+      [{ verb: 'convert', text: 'User.years' }],
+      undefined,
+      migrationPlanForDatabase(
+        { graph: buildGraph([entry(EMPTY_CONTRACT_HASH, A, 'm1')]), refs: {}, emittedHash: A },
+        null,
+        { kind: 'emitted' },
+      ),
+    ).toEnvelope();
+
+    expect((envelope.nextActions ?? []).map(({ kind, label }) => [kind, label])).toEqual([
+      [
+        'user-choice',
+        'Write what these statements ask for in the migration.ts of the migration on disk that changes the field, and run that migration.ts with `node`',
+      ],
+      [
+        'user-choice',
+        'The database has no marker, so `db migrate` applies every migration on disk from the first, which fits only an empty database. A database that is not empty needs adopting first: record the contract it is at with `{bin} db sign <contract>`, naming the migration whose result it matches (`{bin} migration list` shows them), and `db migrate` then applies only the migrations after it',
+      ],
+      ['run-command', 'Then apply the migrations on disk'],
+      ['user-choice', 'Or run db update without these statements'],
     ]);
   });
 

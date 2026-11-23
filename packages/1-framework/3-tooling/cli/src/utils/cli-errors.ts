@@ -772,6 +772,7 @@ export function errorStatementNeedsMigrationFile(
         fix: `${edit}, then apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`,
         nextActions: [
           chooseAction(edit),
+          ...(plan.adoptFirst === undefined ? [] : [chooseAction(plan.adoptFirst)]),
           runCommandAction('Then apply the migrations on disk', plan.apply),
           chooseAction('Or run db update without these statements'),
         ],

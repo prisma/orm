@@ -37,15 +37,10 @@ describe('migrationsToTarget', () => {
     );
   });
 
-  it('starts a database with no marker at the empty contract, and says it has none', () => {
-    expect(
-      [undefined, null].map((none) =>
-        migrationsToTarget({ graph }, none, { hash: HASH_B, invariants: [] }),
-      ),
-    ).toEqual([
-      { kind: 'on-disk', unmarked: true },
-      { kind: 'on-disk', unmarked: true },
-    ]);
+  it('starts a database with no marker at the empty contract', () => {
+    expect(migrationsToTarget({ graph }, undefined, { hash: HASH_B, invariants: [] })).toEqual({
+      kind: 'on-disk',
+    });
   });
 
   it('needs none when the database is already at the target, where db migrate does nothing', () => {
