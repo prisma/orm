@@ -6,5 +6,6 @@ export {
   findPath,
   findPathWithDecision,
   findPathWithInvariants,
+  historyEndsFrom,
   reconstructGraph,
 } from '../migration-graph';

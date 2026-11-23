@@ -25,20 +25,29 @@ import {
   errorTargetMigrationNotSupported,
   errorUnexpected,
 } from '@internal/errors/control';
-import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { RefResolutionError } from '@internal/migration-tools/ref-resolution';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
-import { statementFlag } from '../control-api/statements/statement-flag';
+import {
+  type MigrationPlanArguments,
+  migrationPlanChoice,
+  type PlanSpace,
+} from '../control-api/operations/plan-arguments';
+import { shellQuoted, statementFlag } from '../control-api/statements/statement-flag';
 import type { StatementText } from '../control-api/statements/statement-text';
 import { chooseAction, editFileAction, runCommandAction } from './next-actions';
 import {
   type CliInvocation,
+  CONTRACT_PLACEHOLDER,
   cliCommand,
   dbMigrateRerun,
+  planAction,
+  printedChoicePlan,
   printedPath,
-  printedPlanCommand,
+  printedPlan,
+  printedWayToTarget,
+  quotedPlan,
   selfEmitCommand,
 } from './printed-command';
 
@@ -496,34 +505,53 @@ export function errorRefSetBundleNotFound(hash: string): ActionableCliError {
   );
 }
 
+/**
+ * The choices a refusal of `migration plan`'s origin gives, for `reason`: a plan from a contract
+ * `migration plan` can start from, and the `db` ref pointed at one, which `migration ref set` takes only for a
+ * contract a migration records.
+ */
+function originChoices(space: PlanSpace, reason: string, invocation: CliInvocation | undefined) {
+  const choice = migrationPlanChoice(space, reason);
+  const refTargets = choice.candidates.filter((candidate) => candidate !== '@empty');
+  const refSet = cliCommand(invocation, 'migration ref set', ['db', CONTRACT_PLACEHOLDER]);
+  const refChoice = `Point the db ref at the contract your database is at with \`${refSet}\`, replacing ${CONTRACT_PLACEHOLDER} with ${
+    refTargets.length > 0
+      ? `one of ${refTargets.map((target) => `\`${target}\``).join(', ')}`
+      : `a contract \`${cliCommand(invocation, 'migration list')}\` shows`
+  }`;
+  return { plan: printedChoicePlan(invocation, choice, []), refChoice };
+}
+
+function planFromCommand(invocation: CliInvocation | undefined, from: string): string {
+  return cliCommand(invocation, 'migration plan', ['--from', shellQuoted(from)]);
+}
+
 export function errorPlanForgotTheFlag(
   resolvedHash: string,
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
-  options?: { readonly cause?: unknown },
+  space: PlanSpace,
+  options?: { readonly cause?: unknown; readonly invocation?: CliInvocation | undefined },
 ): ActionableCliError {
+  const invocation = options?.invocation;
   const reachableList =
     reachableRefs.length > 0
       ? reachableRefs.map((r) => `${r.name} (${r.hash})`).join(', ')
       : '(none)';
+  const { plan: explicit, refChoice } = originChoices(
+    space,
+    `No migration records contract ${resolvedHash}`,
+    invocation,
+  );
   const refFix =
     reachableRefs.length > 0
       ? `Run migration plan with ${reachableRefs.map((r) => `--from ${r.name}`).join(' or ')}.`
-      : 'Pass --from <contract> naming the `to` hash of an on-disk migration (`{bin} migration list` shows them), or point the db ref at one with `{bin} migration ref set db <contract>`.';
+      : `Plan from a contract a migration records with \`${explicit.command}\`: ${explicit.fill}. Or ${refChoice.charAt(0).toLowerCase()}${refChoice.slice(1)}.`;
   const nextActions =
     reachableRefs.length > 0
       ? reachableRefs.map((ref) =>
-          runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
+          runCommandAction(`Plan from ${ref.name}`, planFromCommand(invocation, ref.name)),
         )
-      : [
-          runCommandAction(
-            'Plan from an explicit origin',
-            '{bin} migration plan --from <contract>',
-          ),
-          runCommandAction(
-            'Point the db ref at a graph node',
-            '{bin} migration ref set db <contract>',
-          ),
-        ];
+      : [planAction('Plan from an explicit origin', explicit), chooseAction(refChoice)];
   return new ActionableCliError(
     'MIGRATION.HASH_NOT_IN_GRAPH',
     `Resolved from-hash is not in the migration graph: ${resolvedHash}`,
@@ -600,38 +628,35 @@ export function errorSnapshotMissing(
  */
 export function errorPlanOriginUnknown(
   reachableRefs: ReadonlyArray<{ readonly name: string; readonly hash: string }>,
+  space: PlanSpace,
+  invocation?: CliInvocation,
 ): ActionableCliError {
-  const fromSuggestion =
-    reachableRefs.length > 0
-      ? reachableRefs.map((r) => `--from ${r.name}`).join(' or ')
-      : '--from <contract>';
-  const refSetCommand = '{bin} migration ref set db <contract>';
+  const { plan: explicit, refChoice } = originChoices(
+    space,
+    'No `db` ref and no --from say where the plan starts',
+    invocation,
+  );
+  const fromEmpty = planFromCommand(invocation, '@empty');
   return new ActionableCliError(
     'MIGRATION.PLAN_ORIGIN_UNKNOWN',
     'Cannot determine the plan origin: migrations exist but no origin is named',
     {
       why: 'Migrations exist on disk, but there is no `db` ref and no --from was given, so the plan origin would silently fall back to an empty database and the resulting migration would recreate everything the existing migrations already create.',
       fix: [
-        `Set the \`db\` ref to the contract your database is at (\`${refSetCommand}\`), or, on a database whose migration history does not need to be kept, advance it via \`{bin} db update\`.`,
-        `Or pass the origin explicitly: \`{bin} migration plan ${fromSuggestion}\`.`,
+        `${refChoice}, or, on a database whose migration history does not need to be kept, advance it via \`${cliCommand(invocation, 'db update')}\`.`,
+        reachableRefs.length > 0
+          ? `Or pass the origin explicitly: ${reachableRefs.map((r) => `\`${planFromCommand(invocation, r.name)}\``).join(' or ')}.`
+          : `Or pass the origin explicitly: \`${explicit.command}\`. ${explicit.fill}.`,
         'Or pass --from @empty to deliberately plan from an empty database.',
       ].join('\n'),
       nextActions: [
-        runCommandAction('Point the db ref at the origin contract', refSetCommand),
+        chooseAction(refChoice),
         ...(reachableRefs.length > 0
           ? reachableRefs.map((ref) =>
-              runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
+              runCommandAction(`Plan from ${ref.name}`, planFromCommand(invocation, ref.name)),
             )
-          : [
-              runCommandAction(
-                'Plan from an explicit origin',
-                `{bin} migration plan ${fromSuggestion}`,
-              ),
-            ]),
-        runCommandAction(
-          'Plan from an empty database deliberately',
-          '{bin} migration plan --from @empty',
-        ),
+          : [planAction('Plan from an explicit origin', explicit)]),
+        runCommandAction('Plan from an empty database deliberately', fromEmpty),
       ],
       meta: {
         reachableRefs: reachableRefs.map((r) => r.name),
@@ -730,9 +755,8 @@ const MIGRATION_PLAN_VERBS: readonly string[] = ['rename', 'delete', 'convert', 
  * `refused`, `--convert` or `--backfill` statements that ask for code the user writes, were given
  * to `db update`, which applies its plan directly and so has no migration file whose slot the user
  * could fill. `statements` are every statement the user gave, in the order given: the `migration
- * plan` command the error suggests carries each one that command accepts, and starts from
- * `databaseStorageHash`, the contract the database is at, when it is known. Its commands repeat the
- * `--config` of `invocation`.
+ * plan` command the error suggests carries each one that command accepts, from `origin`; when no plan
+ * can start there, the error says why and suggests none. Its commands repeat the `--config` of `invocation`.
  */
 function needsMigrationFileReason(refused: readonly StatementText[]): string {
   const converts = refused.some(({ verb }) => verb === 'convert');
@@ -749,24 +773,81 @@ export function errorStatementNeedsMigrationFile(
   statements: readonly StatementText[],
   refused: readonly StatementText[],
   invocation: CliInvocation | undefined,
-  databaseStorageHash?: string,
+  migrationPlan: MigrationPlanArguments,
 ): ActionableCliError {
   const written = refused.map(({ verb, text }) => `"--${verb} ${text}"`);
   const listed =
     written.length === 1 ? written[0] : `${written.slice(0, -1).join(', ')} and ${written.at(-1)}`;
-  const plan = printedPlanCommand(
+  const why = `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`;
+  const plan = printedWayToTarget(
     invocation,
-    databaseStorageHash,
+    migrationPlan,
     statements.filter(({ verb }) => MIGRATION_PLAN_VERBS.includes(verb)).map(statementFlag),
   );
+  if (plan.kind === 'on-disk') {
+    const edit =
+      'Write what these statements ask for in the migration.ts of the migration on disk that changes the field, and run that migration.ts with `node`';
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+      `db update cannot carry out ${listed}`,
+      {
+        why: `${why} ${plan.reason}.`,
+        fix:
+          plan.adoptFirst === undefined
+            ? `${edit}, then apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`
+            : `${edit}. ${plan.adoptFirst}. Then apply the migrations with \`${plan.apply}\`. Or leave out these statements: db update then asks before it loses any data.`,
+        nextActions: [
+          chooseAction(edit),
+          ...(plan.adoptFirst === undefined ? [] : [chooseAction(plan.adoptFirst)]),
+          runCommandAction('Then apply the migrations on disk', plan.apply),
+          chooseAction('Or run db update without these statements'),
+        ],
+        meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
+      },
+    );
+  }
+  if (plan.kind === 'none' && plan.applyFirst !== undefined) {
+    const { command, runs, text: applyText, adoptFirst } = plan.applyFirst;
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+      `db update cannot carry out ${listed}`,
+      {
+        why: `${why} ${plan.reason}.`,
+        fix: `${plan.reason}. Or leave out these statements: db update then asks before it loses any data.`,
+        nextActions: [
+          ...(adoptFirst === undefined ? [] : [chooseAction(adoptFirst)]),
+          runs
+            ? runCommandAction(
+                'Apply the migrations on disk the database has not applied, then run the command again',
+                command,
+              )
+            : chooseAction(applyText),
+          chooseAction('Or run db update without these statements'),
+        ],
+        meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
+      },
+    );
+  }
+  if (plan.kind === 'none' || plan.kind === 'at-target') {
+    return new ActionableCliError(
+      'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
+      `db update cannot carry out ${listed}`,
+      {
+        why: `${why} No migration can be planned for them either. ${plan.reason}.`,
+        fix: 'Leave out these statements: db update then asks before it loses any data.',
+        nextActions: [chooseAction('Run db update without these statements')],
+        meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
+      },
+    );
+  }
   return new ActionableCliError(
     'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
     `db update cannot carry out ${listed}`,
     {
-      why: `${needsMigrationFileReason(refused)}, and db update has no migration file to fill: it applies its plan directly.`,
-      fix: `Plan the change with ${plan}, fill in the migration.ts it writes, run that migration.ts with the \`node\` command \`migration plan\` prints, and apply it with ${cliCommand(invocation, 'db migrate')}. Or leave out these statements: db update then asks before it loses any data.`,
+      why,
+      fix: `Plan the change with ${quotedPlan(plan)}, fill in the migration.ts it writes, ${plan.afterPlan}. Or leave out these statements: db update then asks before it loses any data.`,
       nextActions: [
-        runCommandAction('Plan the change into a migration file to fill in', plan),
+        planAction('Plan the change into a migration file to fill in', plan),
         chooseAction('Or run db update without these statements'),
       ],
       meta: { statements: refused.map(({ verb, text }) => ({ verb, text })) },
@@ -1006,47 +1087,53 @@ export interface PathUnreachableAdvice {
 }
 
 /**
- * The advice to plan the missing migration in the app space and apply it. `toArgument` is what
- * `--to` takes to name the target, or `undefined` for the emitted contract: `migration plan` and
- * `db migrate` target it without `--to`, and `migration plan --to` resolves only a contract that a
- * migration or a ref names. A space with no migrations has no such contract, so neither of its
- * commands carries `--to`. Otherwise the apply step is the `db migrate` the user ran, when its flags
- * are known.
+ * The advice to plan the missing migration in the app space and apply it, or, when no `migration
+ * plan` can author it, why not. The apply step is the `db migrate` the user ran, when its flags are
+ * known.
  */
 export function planThenApply(
-  meta: PathUnreachableMeta,
-  toArgument: string | undefined,
+  plan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): PathUnreachableAdvice {
-  const from =
-    meta.kind === 'neverPlanned' || meta.fromHash === EMPTY_CONTRACT_HASH
-      ? undefined
-      : meta.fromHash;
-  const to = meta.kind === 'neverPlanned' || toArgument === undefined ? [] : ['--to', toArgument];
-  const planCommand = printedPlanCommand(invocation, from, [...to, '--name', '<slug>']);
-  const applyCommand =
-    meta.kind === 'neverPlanned'
-      ? cliCommand(invocation, 'db migrate')
-      : cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? to);
+  const printed = printedPlan(invocation, plan, []);
+  if (printed.kind === 'none') return noPlanReaches(printed.reason, invocation);
+  const to = plan.to.kind === 'reference' ? ['--to', shellQuoted(plan.to.reference)] : [];
+  const planStep =
+    printed.kind === 'runs' ? printed.command : `${printed.command}\n     ${printed.fill}.`;
+  const applyCommand = cliCommand(invocation, 'db migrate', invocation.rerunArgs ?? to);
   const listCommand = cliCommand(invocation, 'migration list');
   const showCommand = cliCommand(invocation, 'migration show', ['<bundle>']);
   return {
     fix: [
       'Plan the missing edge, then apply it:',
-      `  1. ${planCommand}`,
+      `  1. ${planStep}`,
       `  2. ${applyCommand}`,
       `${ROLLBACK_IS_DESTRUCTIVE}.`,
       `${RENAMES_AND_DATA_NEED_MORE}.`,
       `Inspect the on-disk graph with \`${listCommand}\`, or \`${showCommand}\` for any bundle in the path you expected.`,
     ].join('\n'),
     nextActions: [
-      runCommandAction('Plan the missing edge', planCommand),
-      runCommandAction('Apply it', applyCommand),
+      planAction('Plan the missing edge', printed),
+      printed.kind === 'runs'
+        ? runCommandAction('Apply it', applyCommand)
+        : chooseAction(`Then apply it with \`${applyCommand}\``),
       chooseAction(ROLLBACK_IS_DESTRUCTIVE),
       chooseAction(RENAMES_AND_DATA_NEED_MORE),
       runCommandAction('Inspect the on-disk graph', listCommand),
       runCommandAction('Inspect a bundle in the path you expected', showCommand),
     ],
+  };
+}
+
+/**
+ * The advice when no `migration plan` can author the missing path: `reason` says why, and the
+ * advice points at the graph.
+ */
+function noPlanReaches(reason: string, invocation: CliInvocation): PathUnreachableAdvice {
+  const listCommand = cliCommand(invocation, 'migration list');
+  return {
+    fix: [`${reason}.`, `Inspect the on-disk graph with \`${listCommand}\`.`].join('\n'),
+    nextActions: [chooseAction(reason), runCommandAction('Inspect the on-disk graph', listCommand)],
   };
 }
 

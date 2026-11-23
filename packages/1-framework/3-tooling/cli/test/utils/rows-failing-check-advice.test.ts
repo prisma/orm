@@ -2,6 +2,8 @@ import { migrationRunnerFailure } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
+import { NOT_RECORDED_REASON, originOf, reference, toEmitted } from './plan-origins';
+import { onDisk } from './runner-failure-errors';
 
 const PROJECT = { cwd: '/work/app', configPath: undefined, dbGiven: false };
 const FROM = 'sha256:0123';
@@ -29,7 +31,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = migrateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { directory: '/work/app/migrations/app/20260101T0000_country', from: FROM },
+      onDisk({ directory: '/work/app/migrations/app/20260101T0000_country', from: FROM }),
       PROJECT,
     );
 
@@ -43,7 +45,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = migrateRunnerFailureError(
       failure,
       { rowsFailingCheck: adding },
-      { directory: '/work/app/migrations/app/20260101T0000_country', from: FROM },
+      onDisk({ directory: '/work/app/migrations/app/20260101T0000_country', from: FROM }),
       { ...PROJECT, rerunArgs: ['--advance-ref', 'db'] },
     );
 
@@ -56,7 +58,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { databaseStorageHash: FROM, invocation: PROJECT },
+      { migrationPlan: toEmitted(originOf(FROM)), invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([
@@ -65,15 +67,52 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     expect(JSON.stringify(error.nextActions)).not.toContain('drift');
   });
 
+  it('on db update --to a ref, plans the change to that ref and applies to it', () => {
+    const error = dbUpdateRunnerFailureError(
+      failure,
+      { rowsFailingCheck: replacing },
+      { migrationPlan: { from: originOf(FROM), to: reference('production') }, invocation: PROJECT },
+    );
+
+    expect(labels(error)).toEqual([
+      expect.stringContaining(
+        'Plan the change with `{bin} migration plan --from sha256:0123 --to production`',
+      ),
+    ]);
+    expect(labels(error)).toEqual([
+      expect.stringContaining('apply it with `{bin} db migrate --to production`'),
+    ]);
+  });
+
   it('on db update with no migration at the database contract, says to drop the old check and fix the rows in the database', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: replacing },
-      { databaseStorageHash: undefined, invocation: PROJECT },
+      { migrationPlan: toEmitted(originOf(undefined)), invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([
-      '`{bin} db update` cannot keep this data, and no migration ends at the contract the database is at, so `{bin} migration plan` cannot plan from it. Drop check "user_address_shape_9a7e984c" in the database yourself, update those rows to fit check "user_address_shape_5c02601b", then re-run `{bin} db update`',
+      `\`{bin} db update\` cannot keep this data, and no migration can be planned for it. ${NOT_RECORDED_REASON}.` +
+        ' Drop check "user_address_shape_9a7e984c" in the database yourself, update those rows to fit check "user_address_shape_5c02601b", then re-run `{bin} db update`',
+    ]);
+  });
+
+  it('on db update with the database already at the target, says to drop the old check and fix the rows in the database', () => {
+    const error = dbUpdateRunnerFailureError(
+      failure,
+      { rowsFailingCheck: replacing },
+      {
+        migrationPlan: {
+          ...toEmitted(originOf(FROM)),
+          migrationsToTarget: { kind: 'none-needed' },
+        },
+        invocation: PROJECT,
+      },
+    );
+
+    expect(labels(error)).toEqual([
+      '`{bin} db update` cannot keep this data, and no migration can be planned for it. The database is already at the emitted contract and records every invariant it requires, so there is no migration to apply.' +
+        ' Drop check "user_address_shape_9a7e984c" in the database yourself, update those rows to fit check "user_address_shape_5c02601b", then re-run `{bin} db update`',
     ]);
   });
 
@@ -81,7 +120,7 @@ describe('the advice when existing rows fail a check the apply adds', () => {
     const error = dbUpdateRunnerFailureError(
       failure,
       { rowsFailingCheck: adding },
-      { databaseStorageHash: FROM, invocation: PROJECT },
+      { migrationPlan: toEmitted(originOf(FROM)), invocation: PROJECT },
     );
 
     expect(labels(error)).toEqual([

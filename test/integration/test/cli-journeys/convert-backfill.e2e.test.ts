@@ -496,7 +496,7 @@ withTempDir(({ createTempDir }) => {
         const added = await runDbUpdate(ctx);
         expect(added.exitCode, `db update name: ${added.stderr}`).toBe(0);
         expect(`${added.stdout}${added.stderr}`).toContain(
-          `Field "User.name" got the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.name instead.`,
+          `Field "User.name" got the temporary value '' where existing data has none. To choose another value, update those rows.`,
         );
         expect(
           (await sql(db.connectionString, `SELECT id, name FROM "user" ORDER BY id`)).rows,

@@ -30,7 +30,11 @@ import { createMigrateCommand } from '../../src/orm/migrate';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import { stdoutErrorMeta } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
+import { reference } from '../utils/plan-origins';
+import { onDisk } from '../utils/runner-failure-errors';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
+
+const DEFAULT = { kind: 'default' } as const;
 
 const MISSING_COLUMN: SchemaDiffIssue = {
   path: ['public', 'event', 'id'],
@@ -912,11 +916,17 @@ describe('migrate', () => {
     const cwd = await buildProject();
     mocks.migrate.mockResolvedValue(
       notOk(
-        buildPathNotFoundFailure('app', EMPTY_CONTRACT_HASH, C2, C2, {
-          cwd,
-          configPath: undefined,
-          dbGiven: false,
-        }),
+        buildPathNotFoundFailure(
+          'app',
+          EMPTY_CONTRACT_HASH,
+          C2,
+          { from: DEFAULT, to: reference(C2) },
+          {
+            cwd,
+            configPath: undefined,
+            dbGiven: false,
+          },
+        ),
       ),
     );
 
@@ -945,7 +955,7 @@ describe('migrate', () => {
         migrateRunnerFailureError(
           runnerFailure,
           runnerFailureFacts(runnerFailure, []),
-          { directory: join(cwd, 'migrations', 'app', '20261015T1200_initial'), from: C1 },
+          onDisk({ directory: join(cwd, 'migrations', 'app', '20261015T1200_initial'), from: C1 }),
           invocation,
         ),
       ),
