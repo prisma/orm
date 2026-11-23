@@ -33,14 +33,32 @@ async function statusSummary(ctx: JourneyContext, args: readonly string[] = []):
 }
 
 /**
- * The arguments the summary's `migration plan` command gives the command, with `<name>` filled in
+ * The summary and the next actions that follow it, as one text: commands in backticks, the way a
+ * reader sees them. The summary says where things stand; the commands live in the next actions.
+ */
+async function statusAdvice(ctx: JourneyContext, args: readonly string[] = []): Promise<string> {
+  const status = await runMigrationStatus(ctx, [...args, '--json']);
+  expect(status.exitCode, status.stderr).toBe(0);
+  const next = status.presented?.presentation.next ?? [];
+  return [
+    parseJsonOutput<StatusJson>(status).summary,
+    ...next.map((action) =>
+      'command' in action && action.command !== undefined
+        ? `${action.label}: \`${action.command}\``
+        : action.label,
+    ),
+  ].join('\n');
+}
+
+/**
+ * The arguments the advised `migration plan` command gives the command, with `<name>` filled in
  * and `<contract>` replaced by `from`.
  */
-function advisedPlanArgs(summary: string, from?: string): string[] {
-  const command = [...summary.matchAll(/`([^`]*)`/g)]
+function advisedPlanArgs(advice: string, from?: string): string[] {
+  const command = [...advice.matchAll(/`([^`]*)`/g)]
     .map((match) => match[1] ?? '')
     .find((quoted) => quoted.startsWith('{bin} migration plan '));
-  expect(command, `the summary names a \`migration plan\` command: ${summary}`).toBeDefined();
+  expect(command, `the advice names a \`migration plan\` command: ${advice}`).toBeDefined();
   return command!
     .slice('{bin} migration plan '.length)
     .split(/\s+/)
@@ -51,11 +69,11 @@ function advisedPlanArgs(summary: string, from?: string): string[] {
 
 async function planAsAdvised(
   ctx: JourneyContext,
-  summary: string,
+  advice: string,
   extra: readonly string[] = [],
   from?: string,
 ) {
-  const plan = await planMigrationAndSelfEmit(ctx, [...advisedPlanArgs(summary, from), ...extra]);
+  const plan = await planMigrationAndSelfEmit(ctx, [...advisedPlanArgs(advice, from), ...extra]);
   expect(plan.exitCode, plan.stderr).toBe(0);
 }
 
@@ -70,10 +88,10 @@ async function emit(ctx: JourneyContext, variant: Parameters<typeof swapContract
   expect((await runContractEmit(ctx)).exitCode).toBe(0);
 }
 
-/** The summary prints no `migration plan`, says why, and each command it prints runs. */
-async function expectNoPlanAndRunnableCommands(ctx: JourneyContext, summary: string) {
-  expect(summary).toContain('No migration plan can author one.');
-  const commands = [...summary.matchAll(/`\{bin\} ([^`]*)`/g)].map((match) =>
+/** The advice prints no `migration plan`, says why, and each command it prints runs. */
+async function expectNoPlanAndRunnableCommands(ctx: JourneyContext, advice: string) {
+  expect(advice).toContain('Inspect the graph');
+  const commands = [...advice.matchAll(/`\{bin\} ([^`]*)`/g)].map((match) =>
     (match[1] ?? '').split(/\s+/),
   );
   expect(commands.map((words) => words.slice(0, 2).join(' '))).toEqual(['migration list']);
@@ -98,7 +116,7 @@ withTempDir(({ createTempDir }) => {
         expect((await runMigrate(ctx)).exitCode).toBe(0);
         await emit(ctx, 'contract-additive');
 
-        await planAsAdvised(ctx, await statusSummary(ctx));
+        await planAsAdvised(ctx, await statusAdvice(ctx));
 
         expect((await runMigrate(ctx)).exitCode).toBe(0);
         expect(await statusSummary(ctx)).toBe('Up to date');
@@ -118,7 +136,7 @@ withTempDir(({ createTempDir }) => {
         const bio = await planned(ctx, ['--from', initial, '--name', 'add-bio']);
         await emit(ctx, 'contract-additive');
 
-        const summary = await statusSummary(ctx);
+        const summary = await statusAdvice(ctx);
         expect(summary).toContain(
           `has more than one end, so replace <contract> with one of \`${phone}\`, \`${bio}\``,
         );
@@ -140,7 +158,7 @@ withTempDir(({ createTempDir }) => {
         const addName = await planned(ctx, ['--from', initial, '--name', 'add-name']);
         await emit(ctx, 'contract-v3');
 
-        const summary = await statusSummary(ctx);
+        const summary = await statusAdvice(ctx);
         expect(advisedPlanArgs(summary)).toEqual([
           '--from',
           addName,
@@ -186,7 +204,7 @@ withTempDir(({ createTempDir }) => {
         expect((await runMigrate(ctx, ['--to', initial])).exitCode).toBe(0);
         await emit(ctx, 'contract-phone');
 
-        const summary = await statusSummary(ctx);
+        const summary = await statusAdvice(ctx);
         expect(advisedPlanArgs(summary)).toEqual([
           '--from',
           initial,
@@ -208,7 +226,7 @@ withTempDir(({ createTempDir }) => {
         await planned(ctx, ['--name', 'initial']);
         await emit(ctx, 'contract-additive');
 
-        await planAsAdvised(ctx, await statusSummary(ctx));
+        await planAsAdvised(ctx, await statusAdvice(ctx));
 
         expect((await runMigrate(ctx)).exitCode).toBe(0);
         expect(await statusSummary(ctx)).toBe('Up to date');
@@ -226,7 +244,7 @@ withTempDir(({ createTempDir }) => {
         expect((await runMigrate(ctx)).exitCode).toBe(0);
         expect((await runRef(ctx, ['set', 'production', initial])).exitCode).toBe(0);
 
-        const summary = await statusSummary(ctx, ['--to', 'production']);
+        const summary = await statusAdvice(ctx, ['--to', 'production']);
         await planAsAdvised(ctx, summary, ['--delete', 'User.name']);
 
         expect((await runMigrate(ctx, ['--to', 'production'])).exitCode).toBe(0);
@@ -244,7 +262,7 @@ withTempDir(({ createTempDir }) => {
         await emit(ctx, 'contract-additive');
         expect((await runDbUpdate(ctx)).exitCode).toBe(0);
 
-        const summary = await statusSummary(ctx, ['--from', 'db', '--to', initial]);
+        const summary = await statusAdvice(ctx, ['--from', 'db', '--to', initial]);
         await expectNoPlanAndRunnableCommands(ctx, summary);
       }),
       timeouts.spinUpPpgDev,
@@ -257,7 +275,7 @@ withTempDir(({ createTempDir }) => {
         await planned(ctx, ['--name', 'initial']);
         expect((await runMigrate(ctx)).exitCode).toBe(0);
 
-        await expectNoPlanAndRunnableCommands(ctx, await statusSummary(ctx, ['--to', '@empty']));
+        await expectNoPlanAndRunnableCommands(ctx, await statusAdvice(ctx, ['--to', '@empty']));
       }),
       timeouts.spinUpPpgDev,
     );
@@ -266,9 +284,10 @@ withTempDir(({ createTempDir }) => {
       'with no migrations, prints the plan that authors the first, which runs',
       inJourney(async (ctx) => {
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
-        const summary = await statusSummary(ctx);
-        expect(summary).toBe(
-          'No migrations found. Run `{bin} migration plan --from @empty --name <name>` to author the first. The database has no marker, so a plan from `@empty` fits only an empty database. A database that is not empty needs adopting first: emit the contract that describes it as it is, before your change, and record it with `{bin} db sign`, then plan from there.',
+        expect(await statusSummary(ctx)).toBe('No migrations found');
+        const summary = await statusAdvice(ctx);
+        expect(summary).toContain(
+          'Plan the first migration with `{bin} migration plan --from @empty --name <name>`. The database has no marker, so a plan from `@empty` fits only an empty database. A database that is not empty needs adopting first: emit the contract that describes it as it is, before your change, and record it with `{bin} db sign`, then plan from there.',
         );
         await planAsAdvised(ctx, summary);
         expect((await runMigrate(ctx)).exitCode).toBe(0);
@@ -288,7 +307,7 @@ withTempDir(({ createTempDir }) => {
             'create table "user" (id int4 primary key, email text not null)',
           );
 
-          const summary = await statusSummary(ctx);
+          const summary = await statusAdvice(ctx);
           expect(summary).toContain(
             'A database that is not empty needs adopting first: emit the contract that describes it as it is, before your change, and record it with `{bin} db sign`',
           );
@@ -296,8 +315,8 @@ withTempDir(({ createTempDir }) => {
           expect(sign.exitCode, sign.stderr).toBe(0);
           await emit(ctx, 'contract-additive');
 
-          const afterSign = await statusSummary(ctx);
-          expect(afterSign).toContain('No migrations found. Run `{bin} migration plan --from db');
+          const afterSign = await statusAdvice(ctx);
+          expect(afterSign).toContain('`{bin} migration plan --from db');
           await planAsAdvised(ctx, afterSign);
           expect((await runMigrate(ctx)).exitCode).toBe(0);
           expect(await statusSummary(ctx)).toBe('Up to date');
@@ -316,7 +335,7 @@ withTempDir(({ createTempDir }) => {
         expect((await runDbUpdate(ctx)).exitCode).toBe(0);
         await emit(ctx, 'contract-v3');
 
-        const summary = await statusSummary(ctx, ['--to', 'production']);
+        const summary = await statusAdvice(ctx, ['--to', 'production']);
         expect(advisedPlanArgs(summary)).toEqual([
           '--from',
           'db',
@@ -339,8 +358,8 @@ withTempDir(({ createTempDir }) => {
         expect((await runContractEmit(ctx)).exitCode).toBe(0);
         expect((await runDbUpdate(ctx)).exitCode).toBe(0);
         await emit(ctx, 'contract-additive');
-        const summary = await statusSummary(ctx);
-        expect(summary).toContain('No migrations found. Run `{bin} migration plan --from db');
+        const summary = await statusAdvice(ctx);
+        expect(summary).toContain('`{bin} migration plan --from db');
         await planAsAdvised(ctx, summary);
       }),
       timeouts.spinUpPpgDev,

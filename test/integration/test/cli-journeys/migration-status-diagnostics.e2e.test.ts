@@ -282,7 +282,7 @@ withTempDir(({ createTempDir }) => {
           expect(status.exitCode).toBe(0);
           expect(out).toContain('@contract');
           expect(out).toContain("to the application's contract");
-          expect(out).toContain('prisma-test migration plan --from');
+          expect(out).toContain(`prisma-test migration plan --from ${baseHash} --name <name>`);
         },
         timeouts.spinUpPpgDev,
       );
@@ -507,6 +507,12 @@ withTempDir(({ createTempDir }) => {
           const json = parseMigrationStatusJson(status);
           expect(json.summary).toContain("to the application's contract");
           expect(JSON.stringify(json)).not.toContain('{bin}');
+          expect(JSON.stringify(status.presented?.presentation.next)).toContain(
+            `replace <contract> with one of ${ends
+              .sort()
+              .map((end) => `\`${end}\``)
+              .join(', ')}`,
+          );
         },
         timeouts.spinUpPpgDev,
       );
