@@ -15,7 +15,7 @@ changes:
       glob: "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,snap,sh,bash,yml,yaml}"
       matches:
         - 'needs? a statement'
-        - 'which --yes cannot give'
+        - '--yes cannot give'
 ---
 
 ## `engine-pin-moves-to-0-10-2`
