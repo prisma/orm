@@ -162,13 +162,35 @@ export default definePrismaConfig({ orm: { ...orm, contract: { ...orm.contract, 
     await expect(generate(join(dir, 'prisma/contract.ts'))).rejects.toThrow(expected);
   });
 
-  it('says --output must name the contract file when the TypeScript file it names does not exist, as Better Auth passes for a directory', async () => {
+  it('says --output names a directory when Better Auth passes auth-schema.ts in it', async () => {
     const dir = await projectWith({ 'prisma/contract.prisma': appPsl });
     const file = join(dir, 'prisma/auth-schema.ts');
     const expected = await refusalFor(
-      `\`auth generate\` did not change your contract, because ${relative(process.cwd(), file)} was not found. Pass your contract's PSL file itself with \`--output\`, not a directory.`,
+      `\`auth generate\` did not change your contract, because \`--output\` names a directory, so Better Auth passed ${relative(process.cwd(), file)}. Pass your contract's PSL file itself with \`--output\`.`,
     );
     await expect(generate(file)).rejects.toThrow(expected);
     await expect(readFile(file)).rejects.toThrow('ENOENT');
+  });
+
+  it('says --output names a directory when the directory holds a leftover auth-schema.ts', async () => {
+    const leftover = 'export const user = {};\n';
+    const dir = await projectWith({
+      'prisma/contract.prisma': appPsl,
+      'prisma/auth-schema.ts': leftover,
+    });
+    const file = join(dir, 'prisma/auth-schema.ts');
+    const expected = await refusalFor(
+      `\`auth generate\` did not change your contract, because \`--output\` names a directory, so Better Auth passed ${relative(process.cwd(), file)}. Pass your contract's PSL file itself with \`--output\`.`,
+    );
+    await expect(generate(file)).rejects.toThrow(expected);
+    expect(await readFile(file, 'utf8')).toBe(leftover);
+  });
+
+  it('prints the TypeScript message for a TypeScript contract path that does not exist', async () => {
+    const dir = await projectWith({ 'prisma/contract.prisma': appPsl });
+    const expected = await refusalFor(
+      '`auth generate` did not change your contract, because it is written in TypeScript. Add the equivalent models and fields in TypeScript.',
+    );
+    await expect(generate(join(dir, 'prisma/contract.ts'))).rejects.toThrow(expected);
   });
 });

@@ -418,7 +418,7 @@ ${notChanged} the additions belong in prisma/users.prisma and prisma/sessions.pr
     const { before, run } = generate(project.projectDir, ['--yes', '--output', 'prisma']);
     expect(run.status).toBe(1);
     expect(printedMessage(run)).toBe(
-      `${twoFactorMissing}\n\n${notChanged} prisma/auth-schema.ts was not found. Pass your contract's PSL file itself with \`--output\`, not a directory.`,
+      `${twoFactorMissing}\n\n${notChanged} \`--output\` names a directory, so Better Auth passed prisma/auth-schema.ts. Pass your contract's PSL file itself with \`--output\`.`,
     );
     expect(projectFiles(project.projectDir)).toEqual(before);
   });

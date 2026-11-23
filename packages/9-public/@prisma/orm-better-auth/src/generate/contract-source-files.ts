@@ -12,6 +12,7 @@ const passOutput = 'Pass your contract file with `--output`.';
 const typeScriptContract =
   'it is written in TypeScript. Add the equivalent models and fields in TypeScript.';
 const typeScriptFile = /\.[cm]?tsx?$/;
+const betterAuthDirectoryFile = 'auth-schema.ts';
 
 /** A caught error's code, as the operating system and the module loader give one, in parentheses; nothing when it has none. Their messages are left out: they differ between systems and hold absolute paths. */
 function errorCode(error: unknown): string {
@@ -93,22 +94,18 @@ export async function contractSourceFiles(
   file: string | undefined,
   comparison: ContractComparison,
 ): Promise<readonly ReadContractSourceFile[]> {
-  const { access, readFile } = await import('node:fs/promises');
-  const { isAbsolute, relative, resolve } = await import('node:path');
+  const { readFile } = await import('node:fs/promises');
+  const { basename, isAbsolute, relative, resolve } = await import('node:path');
   const shown = (path: string): string => {
     const fromCwd = relative(process.cwd(), path);
     return fromCwd.startsWith('..') || isAbsolute(fromCwd) ? path : fromCwd;
   };
   if (file !== undefined && typeScriptFile.test(file)) {
-    const exists = await access(file).then(
-      () => true,
-      (error: unknown) => !isMissingFile(error),
-    );
     throw notChanged(
       comparison,
-      exists
-        ? typeScriptContract
-        : `${shown(resolve(file))} was not found. Pass your contract's PSL file itself with \`--output\`, not a directory.`,
+      basename(file) === betterAuthDirectoryFile
+        ? `\`--output\` names a directory, so Better Auth passed ${shown(resolve(file))}. Pass your contract's PSL file itself with \`--output\`.`
+        : typeScriptContract,
     );
   }
   const paths = file === undefined ? await contractInputs(comparison, shown) : [resolve(file)];

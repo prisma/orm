@@ -212,7 +212,8 @@ The message can also list fields whose type is wrong; optional Better Auth field
 - the contract is written in TypeScript. The message is in PSL: add the equivalent models and fields in TypeScript.
 - the contract is read from a Prisma 7 schema. The message is in Prisma 8 syntax: add the equivalent lines by hand.
 - there is neither `--output` nor a `prisma.config.ts` that names the contract, `prisma.config.ts` does not load, or Prisma's config loader is not installed.
-- the file `--output` names does not exist or cannot be read. `--output` must name the contract file itself: when it names a directory, Better Auth passes the adapter a file named `auth-schema.ts` in it, which does not exist.
+- the file `--output` names does not exist or cannot be read.
+- `--output` names a directory. Better Auth then passes the adapter a file named `auth-schema.ts` in that directory, so `--output` must name the contract file itself. The adapter treats any `--output` file named `auth-schema.ts` this way, whether or not it exists.
 - a contract file does not parse, the file `--output` names does not start with `// use prisma-8`, or none of the files `prisma.config.ts` names does.
 - the contract inputs `prisma.config.ts` names match no file.
 - a model it would add fields to is declared in none of the contract files, or in more than one.
