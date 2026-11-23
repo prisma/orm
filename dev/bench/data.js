@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1795390902584,
+  "lastUpdate": 1795431787750,
   "repoUrl": "https://github.com/prisma/orm",
   "entries": {
     "Benchmark.js Benchmark": [
@@ -461760,6 +461760,401 @@ window.BENCHMARK_DATA = {
             "range": "±1.81%",
             "unit": "ops/sec",
             "extra": "82 samples"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "w.a.madden+machine@gmail.com",
+            "name": "willbot",
+            "username": "wmadden-electric"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "62856054f5d8f07417e35ba4ec3309e58fc14844",
+          "message": "fix(ci): keep v7 dev builds of @prisma/* on dev; only prisma uses prev-dev (#31181)\n\nAfter this change, a push to `v7` publishes:\n\n| Package | Tag | Before this change |\n| --- | --- | --- |\n| `prisma` | `prev-dev` | `prev-dev` |\n| the 43 `@prisma/*` packages | `dev` | `prev-dev` |\n\nA dry run of `scripts/ci/publish.ts` on this branch against live npm\n(nothing published) chose version `7.11.0-dev.2`, ran `pnpm publish\n--tag dev` for the 43 `@prisma/*` packages and `pnpm publish --tag\nprev-dev` for `prisma`.\n\n## Why\n\n#31055 moved Prisma 7 dev builds of every package from `dev` to\n`prev-dev`. That was only needed for `prisma`, the one package\nprisma/prisma-cli also publishes (it owns `latest`, `dev` and `next`\nthere). No `@prisma/*` package has a Prisma 8 version: on npm each has\n`latest` at 7.10.1, and only this branch publishes them. So their `dev`\ntag was never contested, and moving them left `dev` stuck on the stale\n`8.1.0-dev.12`.\n\nDev builds now follow the same split stable releases already use:\n`prisma` on `prev` / `prev-dev`, everything else on `latest` / `dev`.\nThe first push to `v7` after this merges moves `dev` on every\n`@prisma/*` package to `7.11.0-dev.2`, with no manual step.\n\n## How\n\n- `getPublishChannel` returns `dev` for a push to `v7` again.\n- `getPackageDistTag` maps the run's tag for `prisma` only (`latest` to\n`prev`, `dev` to `prev-dev`), then refuses any result that is a tag\nprisma-cli owns. `next` is therefore still refused, and removing a\nmapping later fails loudly instead of publishing Prisma 7 over Prisma 8.\n- Version selection is unchanged.\n\n## Clean-up on npm, needs npm rights\n\nThe one publish between #31055 and this change put a `prev-dev` tag on\nthe 43 `@prisma/*` packages, at `7.11.0-dev.1`. Nothing will move it\nagain, so it should be removed. Do not remove it from `prisma`.\n\n```bash\nfor p in @prisma/adapter-better-sqlite3 @prisma/adapter-d1 @prisma/adapter-libsql @prisma/adapter-mariadb @prisma/adapter-mssql @prisma/adapter-neon @prisma/adapter-pg @prisma/adapter-planetscale @prisma/adapter-ppg @prisma/client @prisma/client-common @prisma/client-engine-runtime @prisma/client-generator-js @prisma/client-generator-registry @prisma/client-generator-ts @prisma/client-runtime-utils @prisma/config @prisma/credentials-store @prisma/debug @prisma/dmmf @prisma/driver-adapter-utils @prisma/engines @prisma/fetch-engine @prisma/generator @prisma/generator-helper @prisma/get-dmmf @prisma/get-platform @prisma/instrumentation @prisma/instrumentation-contract @prisma/internals @prisma/json-protocol @prisma/migrate @prisma/nextjs-monorepo-workaround-plugin @prisma/param-graph @prisma/param-graph-builder @prisma/prisma7 @prisma/query-plan-executor @prisma/schema-files-loader @prisma/sqlcommenter @prisma/sqlcommenter-query-insights @prisma/sqlcommenter-query-tags @prisma/sqlcommenter-trace-context @prisma/ts-builders; do npm dist-tag rm \"$p\" prev-dev; done\n```\n\nDo not use the `v7-manage-dist-tag.yml` workflow for this: it covers\nthree packages only, and it would also remove `prisma@prev-dev`.\n\nTo install a Prisma 7 dev build: `npm i prisma@prev-dev\n@prisma/client@dev`.\n\n## Not changed\n\n- A manual run with `customDistTag` still applies the tag to every\npackage. The workflow's example value, `prev`, would move\n`@prisma/*@prev` off 6.19.3. This predates #31055.\n- The Prisma 7 code already published as `8.1.0-dev.1` to `.12` stays on\nnpm.\n\nAgent: taliesin-31\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\n\n<!-- This is an auto-generated comment: release notes by coderabbit.ai\n-->\n\n<!-- coderabbit-ai-generated:v1 -->\n\n## Summary by CodeRabbit\n\n* **Release Management**\n* Stable releases of the `prisma` package are published under `prev`,\nand development builds under `prev-dev`.\n* The `@prisma/*` packages continue to use `latest` for stable releases\nand `dev` for development builds.\n* Development builds from `v7` now use the `dev` channel. The `prisma`\npackage does not use `next`; that tag remains available for `@prisma/*`\npackages.\n\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->\n\n---------\n\nSigned-off-by: willbot <w.a.madden+machine@gmail.com>\nSigned-off-by: Will Madden <madden@prisma.io>\nCo-authored-by: Claude Fable 5.2 <noreply@anthropic.com>",
+          "timestamp": "2026-11-23T11:52:48+01:00",
+          "tree_id": "fa9f19eccf15e88bb1c059549a14ce7e46161955",
+          "url": "https://github.com/prisma/orm/commit/62856054f5d8f07417e35ba4ec3309e58fc14844"
+        },
+        "date": 1795431745679,
+        "tool": "benchmarkjs",
+        "benches": [
+          {
+            "name": "interpreter: simple select",
+            "value": 131907,
+            "range": "±1.16%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "interpreter: findUnique",
+            "value": 111946,
+            "range": "±1.14%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "interpreter: join (1:N)",
+            "value": 61290,
+            "range": "±1.62%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "interpreter: sequence",
+            "value": 63949,
+            "range": "±3.16%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "interpreter: deep nested join",
+            "value": 21528,
+            "range": "±0.71%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "serializer: 10 rows x 3 cols",
+            "value": 1580020,
+            "range": "±0.63%",
+            "unit": "ops/sec",
+            "extra": "90 samples"
+          },
+          {
+            "name": "serializer: 50 rows x 8 cols",
+            "value": 137578,
+            "range": "±0.29%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "serializer: 100 rows x 8 cols",
+            "value": 69139,
+            "range": "±0.18%",
+            "unit": "ops/sec",
+            "extra": "96 samples"
+          },
+          {
+            "name": "getBinaryTargetForCurrentPlatform",
+            "value": 1007,
+            "range": "±0.74%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "client generation ~50 Models",
+            "value": 2.34,
+            "range": "±17.40%",
+            "unit": "ops/sec",
+            "extra": "17 samples"
+          },
+          {
+            "name": "typescript compilation ~50 Models",
+            "value": 0.94,
+            "range": "±18.02%",
+            "unit": "ops/sec",
+            "extra": "10 samples"
+          },
+          {
+            "name": "@prisma/client size",
+            "value": 71.06571006774902,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client size",
+            "value": 10.426462173461914,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.d.ts size",
+            "value": 2.372147560119629,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": ".prisma/client/index.js size",
+            "value": 0.17815494537353516,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "dotPlusAtPrismaClientFolder.zip size",
+            "value": 28.726604461669922,
+            "range": "±0.00%",
+            "unit": "MB",
+            "extra": "1 samples"
+          },
+          {
+            "name": "client generation 100 models with relations",
+            "value": 0.47,
+            "range": "±14.35%",
+            "unit": "ops/sec",
+            "extra": "7 samples"
+          },
+          {
+            "name": "compile findUnique (uncached baseline)",
+            "value": 7758,
+            "range": "±10.33%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "compile findMany filtered (uncached baseline)",
+            "value": 6243,
+            "range": "±0.43%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "compile blog post page (uncached baseline)",
+            "value": 1683,
+            "range": "±0.78%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "parameterize findUnique",
+            "value": 470547,
+            "range": "±0.63%",
+            "unit": "ops/sec",
+            "extra": "94 samples"
+          },
+          {
+            "name": "parameterize findMany",
+            "value": 218858,
+            "range": "±1.43%",
+            "unit": "ops/sec",
+            "extra": "92 samples"
+          },
+          {
+            "name": "parameterize blog post page query",
+            "value": 157347,
+            "range": "±0.44%",
+            "unit": "ops/sec",
+            "extra": "95 samples"
+          },
+          {
+            "name": "findUnique by id",
+            "value": 4780,
+            "range": "±2.38%",
+            "unit": "ops/sec",
+            "extra": "77 samples"
+          },
+          {
+            "name": "findFirst with simple where",
+            "value": 5409,
+            "range": "±1.64%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany 10 records",
+            "value": 5098,
+            "range": "±1.50%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "findMany with orderBy",
+            "value": 4991,
+            "range": "±1.12%",
+            "unit": "ops/sec",
+            "extra": "89 samples"
+          },
+          {
+            "name": "findMany with filter",
+            "value": 5007,
+            "range": "±1.51%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "findMany with pagination",
+            "value": 5591,
+            "range": "±1.09%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findUnique with 1:1 include",
+            "value": 2894,
+            "range": "±1.95%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "findUnique with 1:N include",
+            "value": 2519,
+            "range": "±1.41%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findUnique with nested includes",
+            "value": 1336,
+            "range": "±2.11%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "findMany with includes",
+            "value": 1340,
+            "range": "±1.28%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findMany with select",
+            "value": 7525,
+            "range": "±1.40%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "findMany with nested select",
+            "value": 3928,
+            "range": "±1.20%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "findMany with OR filter",
+            "value": 4287,
+            "range": "±1.02%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "findMany with complex filters",
+            "value": 3371,
+            "range": "±1.22%",
+            "unit": "ops/sec",
+            "extra": "87 samples"
+          },
+          {
+            "name": "findMany with contains filter",
+            "value": 3857,
+            "range": "±1.55%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "count all",
+            "value": 8203,
+            "range": "±1.20%",
+            "unit": "ops/sec",
+            "extra": "83 samples"
+          },
+          {
+            "name": "count with filter",
+            "value": 6896,
+            "range": "±0.98%",
+            "unit": "ops/sec",
+            "extra": "84 samples"
+          },
+          {
+            "name": "aggregate sum/avg",
+            "value": 6672,
+            "range": "±0.99%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "groupBy with count",
+            "value": 6675,
+            "range": "±1.49%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "create single record",
+            "value": 3730,
+            "range": "±1.55%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "create with nested",
+            "value": 1884,
+            "range": "±1.50%",
+            "unit": "ops/sec",
+            "extra": "80 samples"
+          },
+          {
+            "name": "update single record",
+            "value": 4703,
+            "range": "±1.17%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "updateMany",
+            "value": 5935,
+            "range": "±1.06%",
+            "unit": "ops/sec",
+            "extra": "82 samples"
+          },
+          {
+            "name": "transaction sequential",
+            "value": 1731,
+            "range": "±2.01%",
+            "unit": "ops/sec",
+            "extra": "80 samples"
+          },
+          {
+            "name": "transaction batch",
+            "value": 1674,
+            "range": "±1.74%",
+            "unit": "ops/sec",
+            "extra": "80 samples"
+          },
+          {
+            "name": "blog post page query",
+            "value": 1072,
+            "range": "±1.19%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "blog listing page query",
+            "value": 1386,
+            "range": "±1.16%",
+            "unit": "ops/sec",
+            "extra": "85 samples"
+          },
+          {
+            "name": "user profile page query",
+            "value": 1387,
+            "range": "±1.00%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
+          },
+          {
+            "name": "order history query",
+            "value": 2118,
+            "range": "±1.22%",
+            "unit": "ops/sec",
+            "extra": "88 samples"
+          },
+          {
+            "name": "product search query",
+            "value": 3888,
+            "range": "±1.13%",
+            "unit": "ops/sec",
+            "extra": "86 samples"
           }
         ]
       }
