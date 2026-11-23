@@ -71,44 +71,51 @@ flowchart LR
 
 The integration package sits between the library and the client. It owns nothing in the database and nothing in the contract. It reads the contract to find the library's models and to check that everything the library needs is there.
 
-When they are not, it says so and changes nothing. After the application turns on Better Auth's two-factor plugin, Better Auth's `auth generate` command prints:
+When something is missing, the integration adds it to the contract on the developer's request. After the application turns on Better Auth's two-factor plugin, the developer runs Better Auth's `auth generate` command. It asks before it writes, and then the contract has these lines more, and no line less:
 
-```text
-Your Prisma contract is missing models or fields that Better Auth needs.
+```diff
+ model User {
+   id            String    @id
+   name          String
+   email         String    @unique
+   emailVerified Boolean
+   image         String?
+   createdAt     DateTime
+   updatedAt     DateTime
+   sessions      Session[]
+   accounts      Account[]
+   posts         Post[]
++  twoFactorEnabled Boolean?
++  twoFactors       TwoFactor[]
 
-Add to your contract:
-
-model User {
-  twoFactorEnabled Boolean?
-  twoFactors       TwoFactor[]
-}
-
-model TwoFactor {
-  id                      String    @id
-  secret                  String
-  backupCodes             String
-  userId                  String
-  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  verified                Boolean?
-  failedVerificationCount Int?
-  lockedUntil             DateTime?
-
-  @@index([secret])
-  @@index([userId])
-  @@map("twoFactor")
-}
-
-Then run `prisma contract emit` and update your database.
+   @@map("user")
+ }
+@@ at the end of the file @@
++
++model TwoFactor {
++  id                      String    @id
++  secret                  String
++  backupCodes             String
++  userId                  String
++  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
++  verified                Boolean?
++  failedVerificationCount Int?
++  lockedUntil             DateTime?
++
++  @@index([secret])
++  @@index([userId])
++  @@map("twoFactor")
++}
 ```
 
-The application's developer copies that into the contract and changes the database the way they change it for their own models.
+The developer then emits the contract and changes the database the way they change it for their own models. The integration never touches the database's tables.
 
 ## Decision
 
 A **library integration** is a package that connects a library from outside Prisma, such as Better Auth, to an application's Prisma 8 client. Every library integration follows two rules.
 
-1. **It imports only what Prisma publishes.** Its code builds on the published packages `@prisma/orm-framework` and `@prisma/orm-family-sql`, and on the client the application passes in. It imports none of this repository's private packages.
-2. **The tables the library needs are models in the application's contract.** The integration ships no models and no migrations of its own. It checks the application's contract against what the library needs, reports what is missing, and leaves every change to the contract and to the database's tables to the application.
+1. **It imports only what Prisma publishes.** Its code builds on the published packages `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, and on the client the application passes in. It imports none of this repository's private packages.
+2. **The tables the library needs are models in the application's contract.** The integration ships no models and no migrations of its own. It checks the application's contract against what the library needs and reports what is missing. On the developer's request it adds the missing models and fields to the contract's source. It never changes the database's tables.
 
 The next two sections take the rules one at a time: what each means, why it holds, and what it costs.
 
@@ -128,9 +135,11 @@ A library integration is written against that published set only, the same set a
 
 ### How the integration depends on Prisma's packages
 
-The integration declares `@prisma/orm-framework` and `@prisma/orm-family-sql` as peer dependencies, at the exact version of the application's database package. The database package always installs both, so the application ends up with one copy of each, shared by its client and the integration.
+The integration declares `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain` as peer dependencies, at the exact version of the application's database package. The database package always installs all three, so the application ends up with one copy of each, shared by its client and the integration.
 
 One copy matters, because the integration builds query filters with functions from `@prisma/orm-family-sql` and hands them to the client. Because they are peers, the package manager reports a version mismatch at install time. If they were regular dependencies, it would silently install a second copy of those functions beside the client's.
+
+The third package, `@prisma/orm-toolchain`, is Prisma's tooling. The integration uses it for one thing, to find the contract's source files through the project's `prisma.config.ts`, and loads it only when the developer runs the library's generate command. An application that serves requests through the integration never loads Prisma's tooling.
 
 ### How the rule is kept
 
@@ -162,23 +171,34 @@ Prisma 8 also lets a package own tables. Such a package ships a **contract space
 
 ### What the integration does instead of owning the models
 
-It compares and reports. The integration takes the list of models and fields the library needs under the application's configuration and checks each against the contract. It reports a missing model or field, a field of the wrong type, and a field whose optionality the library cannot work with. For what is missing it prints the PSL to add, as in the example at the top.
+**It compares.** The integration takes the list of models and fields the library needs under the application's configuration and checks each against the contract. It finds a missing model or field, a field of the wrong type, and a field whose optionality the library cannot work with.
 
-It never writes. The integration edits no file and changes no table; it only reads and writes rows, as the library asks. A check that writes nothing cannot leave a project half-changed, and it works the same for a contract written in PSL and one written in TypeScript.
+**It reports.** Wherever the library gives the integration a place to run that check, a problem stops the library with a message that says what to add or change, with the PSL to add. Better Auth runs the check before it serves requests and from its `auth check` command.
 
-The check runs wherever the library gives the integration a place for it. Better Auth gives two: a check it runs before serving requests and from its `auth check` command, and its `auth generate` command.
+**It adds what is missing, when the developer asks.** A library usually has a command that generates the tables it needs; Better Auth's is `auth generate`. Under that command the integration adds the missing models and fields to the contract's source, as in the example at the top. The edit reuses what Prisma already publishes:
+
+- The project's `prisma.config.ts`, read with Prisma's own config loader, names the contract's source files.
+- Prisma's PSL parser returns a syntax tree that keeps every comment and space and gives the position of each model and field.
+- The integration inserts the new lines as text at those positions: new fields after a model's last field, new models at the end of the file. It does not reformat or reprint the file, so every line the developer wrote stays as it was.
+- The library's command asks the developer and writes the file. The integration hands it the edited text and writes nothing itself.
+
+The edit is all or nothing. When the contract needs anything other than additions, or the additions cannot all be placed in one PSL file, the command writes nothing and prints the same message the check gives. That covers a contract written in TypeScript, a file that does not parse, and a field that must change type.
+
+**It never changes the database.** The integration reads and writes rows, as the library asks. Creating and altering tables stays with Prisma, driven by the application's contract.
 
 ### What it costs
 
-Adding the library's models is a manual step: the developer copies the printed PSL into the contract, emits the contract with `prisma contract emit`, and updates the database with `prisma db update` or a migration. The step could be automated only if Prisma published a way to add models and fields to an existing contract source.
+After the library's generate command has added the models, two steps remain with the developer: emitting the contract with `prisma contract emit`, and updating the database with `prisma db update` or a migration. The integration does not run them, because both belong to the application's own way of changing its database.
+
+The integration compares against the emitted contract but edits the contract's source. Between an edit and the next emit the two disagree, so a second run of the generate command refuses and tells the developer to emit first.
 
 ## Who does what
 
 | Who | Does what |
 | --- | --- |
 | The library | Decides which models and fields it needs, and makes its storage calls through the integration |
-| The integration package | Translates those calls into calls on the application's client; checks the contract against what the library needs; prints the PSL to add |
-| The application | Declares the library's models in its contract, emits the contract, and changes the database with Prisma |
+| The integration package | Translates those calls into calls on the application's client; checks the contract against what the library needs; reports what is missing; adds missing models and fields to the contract's source when the developer asks |
+| The application | Owns the contract that holds the library's models, emits it, and changes the database with Prisma |
 | Prisma 8 | Runs the queries and checks them against the contract; plans and applies changes to the database |
 
 ## Consequences
@@ -193,9 +213,17 @@ Adding the library's models is a manual step: the developer copies the printed P
 
 The package would own the library's models and their migrations, as a package that adds a database extension owns the tables it adds. Rejected for the reasons under rule 2. The first reason is enough on its own: the integration runs every call through the application's client, and that client cannot query another contract space.
 
-### The integration writes the models into the contract file
+### The integration only prints what to add
 
-The library's generate command would edit the application's contract source in place. Rejected because Prisma publishes a PSL parser, formatter and printer, but nothing that adds models and fields to an existing contract source while keeping the rest of the file as the developer wrote it, and nothing that can edit a contract written in TypeScript. Printing what to add works for every contract source.
+The generate command would print the PSL and leave the developer to copy it into the contract. Rejected because a library's users expect its generate command to write the models, and because the edit can be made safely with what Prisma publishes: it adds lines at positions from the syntax tree and changes nothing else. Printing remains what the command does whenever it cannot make the whole edit.
+
+### The integration reprints the contract file
+
+It would parse the contract into a structure, add the models and fields to it, and print the whole file again with Prisma's PSL printer. Rejected because the printer keeps no comments and rewrites every line, so the developer would lose what they wrote.
+
+### Prisma publishes an operation that adds models to a contract
+
+The integration would call a new framework operation. Rejected because the published config loader and syntax tree are already enough, and a new framework operation for one kind of package is surface that nothing else needs. Revisit it if integrations start to repeat the same editing code.
 
 ### The integration imports this repository's private packages
 
