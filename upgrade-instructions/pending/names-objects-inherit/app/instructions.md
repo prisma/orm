@@ -10,7 +10,7 @@ changes:
         - '@default\("(?:[^"\\\n]|\\.)*\\"__proto__\\"'
   - id: mongo-proto-names-refused
     summary: |
-      A MongoDB contract now refuses a model, field, composite type or value object, enum, collection or root named `__proto__`. Choose another name.
+      A MongoDB contract now refuses a model, field, relation, composite type or value object, enum, collection or root named `__proto__`. Choose another name.
     detection:
       glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
@@ -22,11 +22,19 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - 'select\(\s*[''"`]__proto__[''"`]'
+        - '\[\s*[''"`]__proto__[''"`]\s*[\],]'
+  - id: postgres-infer-proto-name-refused
+    summary: |
+      On Postgres, `prisma contract infer` now fails with `CONTRACT.INFER_UNSUPPORTED` when the database has a table or column named `__proto__`. Rename it in the database first.
+    detection:
+      glob: "**/{package.json,*.sh,*.yml,*.yaml,Makefile,justfile}"
+      contains:
+        - 'contract infer'
 ---
 
 # Names and keys that JavaScript objects inherit
 
-Names such as `constructor` and `toString` now work everywhere as model, table, column and field names, and need no action. Four cases with `__proto__` do.
+Names such as `constructor` and `toString` now work everywhere as model, table, column and field names, and need no action. Four cases with `__proto__` do, one section each below.
 
 ## A JSON default with a `__proto__` key
 
@@ -39,34 +47,44 @@ model User {
 
 A Prisma 7 schema writes the same default as a string, `meta Json @default("{\"__proto__\": {\"x\": 1}, \"a\": 2}")`, and is affected in the same way.
 
-`prisma contract emit` used to leave the `__proto__` key out of `contract.json` and out of the storage hash, so the database got the default `{"a": 2}`. It now keeps the key. What to do for each file the detection matches depends on the database:
+`prisma contract emit` used to leave the `__proto__` key out of `contract.json`. On Postgres and MySQL it also left it out of the storage hash, so the database got the default `{"a": 2}`. It now keeps the key. What to do for each file the detection matches depends on the database:
 
 - **Postgres.** Run `prisma contract emit`; the storage hash changes. Then run `prisma migration plan` and apply the migration, or run `prisma db update`. Either plans one operation per such column, `Set default on "<table>"."<column>"`.
-- **MySQL.** Run `prisma contract emit`; the storage hash changes. The migration planner does not plan a change of a column's default, so write it by hand in a migration created with `prisma migration new`.
+- **MySQL.** Run `prisma contract emit`; the storage hash changes. The migration planner does not plan a change of a column's default, so create a migration with `prisma migration new` and write a raw SQL operation in it that sets the column's default.
 - **SQLite.** No action. SQLite stores the default as JSON text that already kept the key, so nothing changes.
 
 Until the default is applied, the SQL runtime logs `CONTRACT.MARKER_MISMATCH` as a warning and still runs queries. If you do not want the key in the default, remove it from the contract source instead.
 
 ## A MongoDB name `__proto__`
 
-JavaScript reads `__proto__` as the prototype of an object rather than as a key, so a contract could not hold such a name: the client lost the model, field or collection. A MongoDB contract now refuses it. The TypeScript builder raises `CONTRACT.NAME_UNUSABLE_AS_KEY`; a PSL contract reports `PSL_STORED_NAME_UNSUPPORTED` at the declaration:
+JavaScript reads `__proto__` as the prototype of an object rather than as a key, so a contract could not hold such a name: the client lost the model, field, relation or collection. A MongoDB contract now refuses it. The TypeScript builder raises `CONTRACT.NAME_UNUSABLE_AS_KEY`; a PSL contract reports `PSL_STORED_NAME_UNSUPPORTED` at the declaration:
 
 ```text
 A model is named "__proto__", which JavaScript reads as the prototype of an object rather than as a key. Choose another name.
 ```
 
-Rename the model, field, composite type, enum or root. A renamed field can keep its stored name with `@map("…")`, or `.mongo({ field })` in TypeScript, unless the stored name is itself `__proto__`, which was already refused. The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
+Rename the model, field, relation, composite type, enum or root. What a rename does to stored documents:
 
-For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there. To move them, in this order:
+- **A model's field.** Keep its stored name with `@map("…")`, or `.mongo({ field })` in TypeScript, and no document changes. A field stored as `__proto__` cannot be kept under that name; give it another stored name.
+- **A member of a composite type or value object.** It is always stored under its own name, so renaming it changes the key in the embedded documents. The client never read a value stored under `__proto__`; if documents hold one and you need it, move it to the new key with an update of your own.
+- **A relation.** Its name is not stored for a reference relation. An embed relation is stored under its name unless the TypeScript contract gives it another one, so treat it like a composite type member.
 
-1. Emit the contract with the new collection name and apply the migration, which creates the new collection.
-2. Copy the documents into it. In `mongosh`, `db.__proto__` is not the collection, so name it with `getCollection`:
+The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
-   ```js
-   db.getCollection("__proto__").aggregate([{ $merge: { into: "<new name>" } }])
-   ```
+For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there. In `mongosh`, `db.__proto__` is not the collection, so name it with `db.getCollection("__proto__")`. How to move the documents depends on the command you apply changes with:
 
-3. When the application reads the new collection correctly, drop the old one with `db.getCollection("__proto__").drop()`.
+- **`prisma db update`.** Rename the collection in the database first, then emit the contract and run `db update`. If you run `db update` first, it plans to drop the collection named `__proto__`, with its documents.
+
+  ```js
+  db.getCollection("__proto__").renameCollection("<new name>")
+  ```
+
+- **`prisma migration plan`.** Emit the contract and apply the migration, which creates the new collection. Then copy the documents into it, and drop the old collection when the application reads the new one correctly. The copy checks each document against the new collection's validator and stops at one it rejects; fix that document and run the copy again.
+
+  ```js
+  db.getCollection("__proto__").aggregate([{ $merge: { into: "<new name>" } }])
+  db.getCollection("__proto__").drop()
+  ```
 
 ## A SQL `select` alias `__proto__`
 
