@@ -74,8 +74,14 @@ describe('destinationModelOf', () => {
   });
 
   it('pairs an origin model that a statement renames another model to with nothing, as the collection renames do', () => {
-    const statements = [renameModel('Note', 'Task')];
-    const input = match({ Note: plain, Task: plain }, { Task: plain }, statements);
+    const input = match({ Note: plain, Task: plain }, { Task: plain }, [
+      {
+        kind: 'rename',
+        entity: 'model',
+        from: at('Note'),
+        to: at('Task'),
+      },
+    ]);
     expect({
       note: destinationModelOf(at('Note'), input),
       task: destinationModelOf(at('Task'), input),
