@@ -193,7 +193,7 @@ function shapeRows<Row>(
 
 /** The node whose rows reach `id`: followed through every node that passes on the rows of one input. */
 function rowsReadAt(graph: Graph, id: NodeId): NodeId {
-  const slot = graph.nodeAt(id)?.passesRowsOf;
+  const slot = graph.nodeAt(id).passesRowsOf;
   if (slot === undefined) {
     return id;
   }
