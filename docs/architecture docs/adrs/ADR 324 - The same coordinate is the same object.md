@@ -1,6 +1,6 @@
 # ADR 324 — The same coordinate is the same object
 
-**Status:** Accepted. Built on PostgreSQL and SQLite. The MongoDB target does not implement it yet.
+**Status:** Accepted. Built on PostgreSQL, SQLite and MongoDB.
 **Builds on:** [ADR 264 — A model names its storage verbatim, and a rename is an operation](ADR%20264%20-%20A%20model%20names%20its%20storage%20verbatim%2C%20and%20a%20rename%20is%20an%20operation.md), [ADR 224 — Control policy](ADR%20224%20-%20Control%20Policy%20%E2%80%94%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md), [ADR 188 — MongoDB migration operation model](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md)
 
 ## At a glance
@@ -66,7 +66,7 @@ A namespace has no stored name apart from its id, so it has no change of stored 
 
 A table, collection or column can be shared. SQL variants stored in their base's table share it, and may share a column. MongoDB variants share their base's collection, and several MongoDB root models may share one collection. A rename moves everything stored there. So a table or column is renamed only when both of these hold:
 
-1. Every origin object stored in the old name that the destination keeps is stored in the new name in the destination. An object the destination removes does not block the rename. Its rows move with the table, and the plan asks about them as usual.
+1. Every origin object stored in the old name that the destination keeps is stored in the new name in the destination. An object the destination removes does not block the rename. Its rows move with the table, and the plan asks about them as usual. On MongoDB a removed root model does block it, as [What MongoDB does differently](#what-mongodb-does-differently) says.
 2. Every destination object stored in the new name is new, or comes from the old name.
 
 One rename is planned for the storage, not one per model or field. A name the rename frees may be used by a new object in the same plan.
@@ -129,12 +129,21 @@ For `db update`, the planner's working copy is the live database, which can diff
 | Both absent | Plans nothing for it. The diff creates the table, as for any new table. |
 | Both present | Refused, unless the origin contract has the new name too, when the swap and takeover refusals above apply. The text gives the two possible causes apart, each with its fix, and says which table holds the model's rows in each. If the rename was half done by hand, or something created the new table, the old table holds them: move into it the rows of the new table that it does not already hold, keep the version you want of a row both tables hold, drop the new table, and run again. If the old table was renamed by hand and its name then used for another table, the new table holds them: drop the old table, after moving the rows of that other table into a table the contract has, since `db update` drops every table the contract does not have, and run again. The text for columns is the same: it copies a value of the new column only into a row whose old column holds none, and where both hold a value, the user keeps the one they want. |
 
-The second row cannot lose data even when the new table is not the old one renamed: nothing is planned for it, and the diff does what it does for any table.
+In the second row the planner takes the new table to be the old one renamed. Nothing is planned for the table itself, but the rest of the plan acts on it: field renames, stored value replacements and the answers to `--delete` questions rewrite or remove data in it. So if a table or collection with the new name exists that was never the old one renamed, the plan rewrites it as if it were. This holds on every target.
+
+## What MongoDB does differently
+
+MongoDB takes the same rule: a collection rename for a model, a `$rename` of the stored key for a field, a rename of the key in every place an embedded model is stored for its field, and a value replacement for an enum member. It differs where its storage differs.
+
+- **Enum chains are refused.** MongoDB applies a migration's operations one at a time, with no transaction, and knows that an operation already ran only from the documents. A rewrite of a value that another rewrite of the same migration writes would act on what that one wrote if the migration runs again after a later operation stopped. So values that shift along a chain, which SQL rewrites last value first, are refused on MongoDB, with the two-plan route through a value no member stores ([ADR 188](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md)).
+- **Root models may share a collection with no discriminator.** Nothing in a document says which root model it belongs to. So a collection rename is refused when the collection also stores a root model the destination removes: unlike a SQL table, where the removed model's rows are asked about, its documents would move with the collection as documents of the model that stays. The route is to remove the model in one plan and rename in the next, or to write the move as a hand-written migration.
+- **A dropped shared collection asks about every model whose documents it loses**, so `--delete` names each one.
+- **A boolean enum has no third value.** Two members of a boolean enum that swap `true` and `false` cannot pass through a value no member stores. The refusal gives a three-step route: remove the enum and type the fields as plain booleans; swap the values in the database with the `mongosh` updates the text prints, which touch only boolean values; then add the enum back. The updates are printed only for fields at the top level of a document. Where the enum is stored inside an embedded object, the route is to keep its stored values in the contract.
 
 ## Where the rule does not apply
 
 - **No origin contract.** With no snapshot of the contract the database is at, there is no coordinate to compare, and nothing is paired. A dropped table is named by its storage name. `MIGRATION.TABLE_NAME_CASE_CHANGED` still refuses a plan that drops one table and creates another whose name differs only in the case of the first letter. With an origin contract, a model that keeps its name is renamed instead, so that check is in practice reached only without one.
-- **Storage the contract does not manage.** When the control policy is not `managed` on both sides, no pair is made, and the plan is what the storage diff makes of the change under that policy. Where it drops the old table, the question carries `keepDataAdvice`, which says how to rename the table by hand.
+- **Storage the contract does not manage.** When the control policy is not `managed` on both sides, no pair is made, and the plan is what the storage diff makes of the change under that policy. Where it drops the old table, the question carries `keepDataAdvice`, which says how to rename the table by hand. On MongoDB, a key of an embedded model stored in a collection the contract does not manage is not renamed, and a swap of such keys plans nothing.
 - **Targets with no rename planning.** The MySQL target has no rename operation and refuses every statement. A stored-name change there is planned as a drop and a create, with the same by-hand advice. This is an exception to the rule, not a consequence of it, and it lasts until MySQL plans renames.
 - **A native PostgreSQL enum type whose `@@map` changes.** No operation renames an enum type, and a native enum is not fully managed ([ADR 286](ADR%20286%20-%20Prisma%208%20does%20not%20fully%20manage%20native%20Postgres%20enums.md)).
 - **A discriminator value.** It is not the stored name of a coordinate. A changed value stays a question answered by `--convert`.
@@ -150,13 +159,13 @@ The second row cannot lose data even when the new table is not the old one renam
 
 ## Consequences
 
-- Changing `@@map`, `@map` or an enum member's stored value on PostgreSQL and SQLite no longer asks a question, and the by-hand advice for it is gone. A script that passed `--delete User` to allow the old drop and create now fails with `CLI.CONSENT_UNUSED`, since nothing asks about `User`.
+- Changing `@@map`, `@map` or an enum member's stored value on PostgreSQL, SQLite and MongoDB no longer asks a question, and the by-hand advice for it is gone. A script that passed `--delete User` to allow the old drop and create now fails with `CLI.CONSENT_UNUSED`, since nothing asks about `User`.
 - A `--rename User:User` statement is still `MIGRATION.STATEMENT_INVALID`. Its text says that a model or field that keeps its name needs no statement when only its stored name changes.
 - A project with an origin snapshot that still has the table names an earlier release gave models with no `@@map` (the first letter lowered) gets its tables renamed to the model names, with no question. To keep the old names, add `@@map` before planning.
 - Swaps, chains and takeovers that used to plan with no question are refused.
-- The SQL family no longer produces a `KeepDataEdit` for an enum member that keeps its name. The MongoDB target still does until it implements this rule, and the type stays in the framework.
-- `migration plan` writes nothing when the origin and destination storage hashes are equal. A swap of two tables or columns of identical shape leaves the storage section unchanged, so `migration plan` reports no change and the rows are read as the other model's, while `db update` refuses it. This is not solved yet.
-- MongoDB takes the same rule: a collection rename for a model, a `$rename` of the stored key for a field, in every place the type is stored for an embedded model's field, and a value replacement for an enum member. MongoDB applies operations one at a time with no transaction, so its overlap check ([ADR 188](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md)) refuses chains of enum values that SQL plans. Until the target implements the rule, a stored-name change on MongoDB is planned as a removal and asked about.
+- No target produces a `KeepDataEdit` for an enum member that keeps its name, and the CLI no longer gives its own route for one. `KeepDataEdit.swapsValues` stays in the framework, unset.
+- `migration plan` writes nothing when the origin and destination storage hashes are equal. A swap of two tables, columns, collections or fields of identical shape leaves the storage section unchanged, so `migration plan` reports no change and the rows are read as the other model's, while `db update` refuses it. This is not solved yet.
+- On MongoDB, `--rename` of a model whose collection another model shares is refused, where it used to move the other models' documents with it. Enum stored values that swap or chain, which used to be asked about with advice to use two migrations, are refused with a two-plan route.
 
 ## Alternatives considered
 

@@ -158,7 +158,7 @@ For `db update` the working schema is the live database, which may differ from t
 | Old absent, new absent | No operation and nothing recorded. The storage diff creates the object, as today. |
 | Old present, new present | Refused, with its own text. It says the likely cause, which on MongoDB is that the application wrote to the new collection before `db update` ran, and the fix: move those rows or documents into the old storage, or drop the new one, then run again. |
 
-"Old absent, new present" cannot lose data even when the new table is not the old one renamed: no operation is planned for it, and the storage diff then does what it does today.
+In "Old absent, new present" the planner takes the new table to be the old one renamed. No operation is planned for the table itself, but field renames, stored value replacements and the answers to `--delete` questions then act on it. So if a table or collection with the new name exists that was never the old one renamed, the plan rewrites it as if it were. This holds on every target.
 
 MongoDB document keys, keys inside subdocuments and stored values are not in the schema the planner reads. For them the protection is at apply time: `$rename` has the precheck "no document holds both keys" and touches only documents that hold the old key, and a replacement touches only the values that match. Running a stopped migration again finishes it.
 
