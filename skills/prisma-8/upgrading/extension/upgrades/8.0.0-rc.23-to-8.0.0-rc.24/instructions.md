@@ -4,7 +4,7 @@ to: "8.0.0-rc.24"
 changes:
   - id: engine-pin-moves-to-0-10-0
     summary: |
-      The toolchain now peers `@prisma/cli-engine@0.10.0` (up from 0.9.0). An extension package that depends on `@prisma/cli-engine` for its tests or tooling must move to `0.10.0`. The detection matches every declaration of `@prisma/cli-engine` in a `pnpm-workspace.yaml`, and in a `package.json` that lists an `@prisma/orm-*` package or names the engine in `overrides` or `resolutions`, unless it is exactly `0.10.0`, the version the toolchain peers.
+      The toolchain now peers `@prisma/cli-engine@0.10.0` (up from 0.9.0). An extension package that depends on `@prisma/cli-engine` for its tests or tooling must move to `0.10.0`. The detection matches every declaration of `@prisma/cli-engine` in a `pnpm-workspace.yaml`, and in a `package.json` that lists an `@prisma/orm-*` package or names the engine in `overrides` or `resolutions`, unless its value is the plain version `0.10.0`, the version the toolchain peers. An exact pin in npm's object form, `{ ".": "0.10.0" }`, is matched too and needs no change.
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
