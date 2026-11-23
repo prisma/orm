@@ -182,6 +182,15 @@ function unsupportedNameSubject(
       return refusal.key.kind === 'collectionSettings'
         ? `The collection of model "${refusal.key.model}"`
         : 'A collection';
+    case 'field':
+    case 'valueObjectField':
+      return refusal.key.kind === 'field'
+        ? `A field of ${refusal.key.owner.kind === 'model' ? 'model' : 'value object'} "${refusal.key.owner.name}"`
+        : 'A field';
+    case 'relation':
+      return refusal.key.kind === 'relation'
+        ? `A relation of model "${refusal.key.model}"`
+        : 'A relation';
   }
 }
 
@@ -200,18 +209,24 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
         `Duplicate value object name "${refusal.key.valueObject}" in defineContract().`,
         { meta: { kind: 'valueObject', name: refusal.key.valueObject } },
       );
-    case 'storedNameUnsupported':
+    case 'storedNameUnsupported': {
+      const { key } = refusal;
+      const [subject, meta] =
+        key.kind === 'field'
+          ? [
+              `Model "${key.owner.name}" field "${key.field}"`,
+              { modelName: key.owner.name, fieldName: key.field },
+            ]
+          : [
+              `Model "${key.model}" relation "${key.relation}"`,
+              { modelName: key.model, relationName: key.relation },
+            ];
       return contractError(
         'CONTRACT.ARGUMENT_INVALID',
-        `Model "${refusal.key.owner.name}" field "${refusal.key.field}" ${refusal.reason}. Give it another stored name.`,
-        {
-          meta: {
-            modelName: refusal.key.owner.name,
-            fieldName: refusal.key.field,
-            reason: 'stored-name-unsupported',
-          },
-        },
+        `${subject} ${refusal.reason}. Give it another stored name.`,
+        { meta: { ...meta, reason: 'stored-name-unsupported' } },
       );
+    }
     case 'nameUnsupported':
       return contractError(
         'CONTRACT.NAME_UNUSABLE_AS_KEY',
@@ -222,6 +237,11 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
             kind: refusal.subject,
             ...(refusal.subject !== 'model' && 'model' in refusal.key
               ? { modelName: refusal.key.model }
+              : {}),
+            ...(refusal.key.kind === 'field'
+              ? refusal.key.owner.kind === 'model'
+                ? { modelName: refusal.key.owner.name }
+                : { valueObjectName: refusal.key.owner.name }
               : {}),
             reason: 'name-not-a-key',
           },

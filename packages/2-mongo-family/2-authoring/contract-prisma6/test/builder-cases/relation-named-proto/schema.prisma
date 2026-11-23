@@ -1,0 +1,15 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String @db.ObjectId
+  __proto__ Post   @relation(fields: [postId], references: [id])
+}
+
+model Post {
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
+  users User[]
+}

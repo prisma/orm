@@ -121,6 +121,19 @@ function buildStorageFields(
   return storageFields;
 }
 
+function refuseUnsupportedStorageRelations(model: ModelNode, refusals: BuildRefusal[]): void {
+  for (const [relation, { field }] of Object.entries(model.storageRelations ?? {})) {
+    const reason = unsupportedStoredNameReason(field);
+    if (reason !== undefined) {
+      refusals.push({
+        kind: 'storedNameUnsupported',
+        key: { kind: 'relation', model: model.modelName, relation },
+        reason,
+      });
+    }
+  }
+}
+
 function toOneRelationNullable(
   key: RelationKey,
   relation: ReferenceRelationNode,
@@ -286,6 +299,7 @@ export function buildModels(input: {
     }
 
     checkFieldsAgainstBase(model, models, refusals);
+    refuseUnsupportedStorageRelations(model, refusals);
     const storage = {
       ...(model.collection ? { collection: model.collection } : {}),
       fields: buildStorageFields(modelName, model.fields, refusals),
@@ -342,7 +356,7 @@ export function buildRoots(
   return roots;
 }
 
-/** Refuses each name of the definition that cannot be an object's own key: the name of a model, value object, enum, collection or root. */
+/** Refuses each name of the definition that cannot be an object's own key: the name of a model, value object, field, relation, enum, collection or root. */
 export function refuseUnsupportedNames(
   definition: ContractDefinition,
   refusals: BuildRefusal[],
@@ -356,6 +370,26 @@ export function refuseUnsupportedNames(
         subject: 'model',
         name: model.modelName,
       });
+    }
+    for (const field of model.fields) {
+      if (unsupported(field.fieldName)) {
+        refusals.push({
+          kind: 'nameUnsupported',
+          key: modelFieldKey(model.modelName, field.fieldName),
+          subject: 'field',
+          name: field.fieldName,
+        });
+      }
+    }
+    for (const relation of model.relations ?? []) {
+      if (unsupported(relation.relationName)) {
+        refusals.push({
+          kind: 'nameUnsupported',
+          key: { kind: 'relation', model: model.modelName, relation: relation.relationName },
+          subject: 'relation',
+          name: relation.relationName,
+        });
+      }
     }
     if (model.collection !== undefined && unsupported(model.collection)) {
       refusals.push({
@@ -374,6 +408,16 @@ export function refuseUnsupportedNames(
         subject: 'valueObject',
         name: valueObject.name,
       });
+    }
+    for (const field of valueObject.fields) {
+      if (unsupported(field.fieldName)) {
+        refusals.push({
+          kind: 'nameUnsupported',
+          key: valueObjectFieldKey(valueObject.name, field.fieldName),
+          subject: 'valueObjectField',
+          name: field.fieldName,
+        });
+      }
     }
   }
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {

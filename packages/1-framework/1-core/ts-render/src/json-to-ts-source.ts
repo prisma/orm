@@ -71,6 +71,6 @@ export function tsArraySource(items: readonly string[]): string {
 }
 
 function renderKey(key: string): string {
-  if (key === '__proto__') return tsStringLiteral(key);
+  if (key === '__proto__') return `[${tsStringLiteral(key)}]`;
   return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : tsStringLiteral(key);
 }
