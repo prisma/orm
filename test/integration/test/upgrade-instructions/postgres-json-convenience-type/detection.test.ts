@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
 const GUIDES = [
-  'upgrade-instructions/pending/postgres-json-convenience-type/app/instructions.md',
-  'upgrade-instructions/pending/postgres-json-convenience-type/extension/instructions.md',
+  'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md',
 ];
 
 describe.each(GUIDES)('the renamed PostgreSQL JSON column helper detection in %s', (guidePath) => {

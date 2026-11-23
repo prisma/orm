@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { detectionPatterns } from '../guide-detections';
 
-const APP = 'upgrade-instructions/pending/mysql-scalar-convenience-types/app/instructions.md';
+const APP = 'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md';
 const EXTENSION =
-  'upgrade-instructions/pending/mysql-scalar-convenience-types/extension/instructions.md';
+  'skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.24-to-8.0.0-rc.25/instructions.md';
 
 const matcher = (guidePath: string, id: string) => (content: string) =>
   detectionPatterns(guidePath, id).some((pattern) => pattern.test(content));
