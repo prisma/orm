@@ -267,10 +267,27 @@ function collectionRenameConflict(
 }
 
 /**
+ * The refusal of a collection rename whose old and new collections the database both has, while
+ * the origin contract has only the old one: the rename was half done, the application wrote to the
+ * new collection first, or the old collection was renamed by hand and its name used again.
+ */
+function bothCollectionsRefusal(change: CollectionChange): MigrationPlannerConflict {
+  const { from, to } = change;
+  const moving = modelsText(change.renames.map((rename) => rename.from));
+  return renameRefused(
+    undefined,
+    `Cannot rename collection "${from}" to "${to}": the database has both collections`,
+    `${capitalized(changeText(change))}, and the database has both collection "${from}" and collection "${to}". One of two things happened, and each has its own fix. If the rename was half done by hand, or the application wrote to collection "${to}" before db update ran, collection "${from}" holds the documents of ${moving}: move into collection "${from}" the documents of collection "${to}" that it does not already hold, and where both collections hold a document with the same _id, keep the version you want in collection "${from}"; then drop collection "${to}", and run again. If collection "${from}" was renamed to "${to}" by hand and the name "${from}" then used for another collection, collection "${to}" holds the documents of ${moving}: drop collection "${from}", and run again; to keep the documents of that other collection, first move them into a collection the contract has, since db update drops every collection the contract does not have.`,
+  );
+}
+
+/**
  * The collection renames no statement asks for that the plan makes, checked against every rename
- * of the plan before any is applied, or the first that cannot be planned. A rename whose new name
- * the schema being planned from has, and the origin contract does not, is left out: the database
- * may already hold it renamed.
+ * of the plan before any is applied, against the schema being planned from, or the first that
+ * cannot be planned. A rename whose old collection the schema lacks and whose new one it has is
+ * already done: it is found, so the plan records where the documents are and plans no operation
+ * for it. One whose old and new collections the schema both has, while the origin contract does
+ * not have the new one, is refused. One whose collections the schema lacks plans nothing.
  */
 export function plannedCollectionChanges(
   candidates: readonly CollectionChange[],
@@ -278,16 +295,26 @@ export function plannedCollectionChanges(
   schema: MongoSchemaIR,
   contracts: Contracts,
 ):
-  | { readonly kind: 'planned'; readonly changes: readonly CollectionChange[] }
+  | {
+      readonly kind: 'planned';
+      readonly changes: readonly CollectionChange[];
+      readonly found: readonly CollectionChange[];
+    }
   | { readonly kind: 'refused'; readonly conflict: MigrationPlannerConflict } {
   const changes = [...stated, ...candidates];
   const planned: CollectionChange[] = [];
+  const found: CollectionChange[] = [];
   for (const change of [...candidates].sort((a, b) => a.from.localeCompare(b.from))) {
-    if (
-      schema.collection(change.to) !== undefined &&
-      !originHasCollection(contracts.fromContract, change.to)
-    ) {
+    const hasOld = schema.collection(change.from) !== undefined;
+    const hasNew = schema.collection(change.to) !== undefined;
+    const originHasNew = originHasCollection(contracts.fromContract, change.to);
+    if (!hasOld && !hasNew) continue;
+    if (!hasOld && !originHasNew) {
+      found.push(change);
       continue;
+    }
+    if (hasOld && hasNew && !originHasNew) {
+      return { kind: 'refused', conflict: bothCollectionsRefusal(change) };
     }
     const conflict = collectionRenameConflict(change, changes, schema, contracts);
     if (conflict !== undefined) return { kind: 'refused', conflict };
@@ -296,6 +323,7 @@ export function plannedCollectionChanges(
   return {
     kind: 'planned',
     changes: candidates.filter((change) => planned.includes(change)),
+    found: candidates.filter((change) => found.includes(change)),
   };
 }
 

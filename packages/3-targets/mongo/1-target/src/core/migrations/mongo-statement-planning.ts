@@ -232,6 +232,8 @@ export interface StatementPlan {
   readonly callOfStatement: readonly (OpFactoryCall | undefined)[];
   /** The collections the model renames move. */
   readonly collections: CollectionRenames;
+  /** The collection each origin collection is in once the plan's renames are made, including those the database already has. */
+  readonly renamedCollections: ReadonlyMap<string, string>;
 }
 
 const LEAVE_OUT = 'Leave out this statement.';
@@ -294,14 +296,14 @@ export function planStatements(input: {
       (change) =>
         !stated(change) &&
         collections.managedOnBothSides(change) &&
-        collections.sharedCollection(change) === undefined &&
-        input.schema.collection(change.from) !== undefined,
+        collections.sharedCollection(change) === undefined,
     ),
     collections.changes.filter(stated),
     input.schema,
     planning,
   );
   if (plannedChanges.kind === 'refused') return notOk([plannedChanges.conflict]);
+  for (const change of plannedChanges.found) renamedCollections.set(change.from, change.to);
   for (const change of plannedChanges.changes) {
     const outcome = planCollectionChange(change, schema);
     if (outcome.kind === 'refused') conflicts.push(outcome.conflict);
@@ -407,6 +409,7 @@ export function planStatements(input: {
         fieldRenames,
         callOfStatement,
         collections,
+        renamedCollections,
       });
 }
 

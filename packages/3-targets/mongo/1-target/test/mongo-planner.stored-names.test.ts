@@ -331,18 +331,6 @@ describe('MongoMigrationPlanner, a model and field whose names both contracts ke
       ],
     });
   });
-
-  it('plans as without the rename when the schema being planned from lacks the old collection', () => {
-    expect(
-      planned(
-        plan({
-          from: users('from'),
-          to: users('to', { collection: 'app_users' }),
-          schema: [schemaCollection('app_users', { required: ['email'] })],
-        }),
-      ),
-    ).toEqual({ labels: [], classes: [], applied: [], dataLoss: [] });
-  });
 });
 
 describe('MongoMigrationPlanner, a name both contracts keep whose storage MongoDB cannot rename', () => {

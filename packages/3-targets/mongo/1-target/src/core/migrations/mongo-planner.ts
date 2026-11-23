@@ -626,6 +626,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
       fieldRenames,
       callOfStatement,
       collections,
+      renamedCollections,
     } = statementPlan.value;
     const destinationIR = contractToMongoSchemaIR(contract);
     const storedKeys = planStoredKeyRewrites({
@@ -646,7 +647,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     });
     if (!enumValues.ok) return { kind: 'failure', conflicts: [...enumValues.failure] };
     const { replacements: valueReplacements, removals: valueRemovals } = enumValues.value;
-    const renamedTo = new Map(collectionRenames.map((call) => [call.from, call.to]));
+    const renamedTo = renamedCollections;
     const match: ModelMatchInput | undefined =
       fromContract === null
         ? undefined
