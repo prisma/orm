@@ -1,9 +1,10 @@
-const codecKinds = ['string', 'uuid', 'date', 'number', 'boolean', 'other'] as const;
+const codecKinds = ['string', 'enum', 'uuid', 'date', 'number', 'boolean', 'other'] as const;
 
 export type CodecKind = (typeof codecKinds)[number];
 
 const codecIdsByKind: Readonly<Record<CodecKind, readonly string[]>> = {
   string: ['pg/text@1', 'sql/varchar@1', 'sql/char@1', 'sqlite/text@1'],
+  enum: ['pg/enum@1'],
   uuid: ['pg/uuid@1'],
   date: ['pg/timestamptz-date@1', 'pg/timestamp-date@1', 'sqlite/datetime@1'],
   number: [

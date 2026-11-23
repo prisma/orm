@@ -95,8 +95,10 @@ function acceptedKinds(attribute: DBFieldAttribute, idStrategy: IdStrategy): rea
       return ['boolean'];
     case 'date':
       return ['date'];
+    case 'string':
+      return ['string', 'enum'];
     default:
-      return ['string'];
+      return Array.isArray(attribute.type) ? ['string', 'enum'] : ['string'];
   }
 }
 

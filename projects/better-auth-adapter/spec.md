@@ -208,17 +208,18 @@ The inner adapter receives database field names and already-converted values fro
     | Kind | Codec ids |
     | --- | --- |
     | `string` | `pg/text@1`, `sql/varchar@1`, `sql/char@1`, `sqlite/text@1` |
+    | `enum` | `pg/enum@1` |
     | `uuid` | `pg/uuid@1` |
     | `date` | `pg/timestamptz-date@1`, `pg/timestamp-date@1`, `sqlite/datetime@1` |
     | `number` | `pg/int2@1`, `pg/int4@1`, `pg/int8number@1`, `pg/float4@1`, `pg/float8@1`, `sqlite/integer@1`, `sqlite/real@1` |
     | `boolean` | `pg/bool@1`, `sqlite/boolean@1` |
-    | `other` | every other codec id that `docs/reference/scalar-types.md` lists for Postgres and SQLite, except `pg/enum@1`, which is left out of the table so that a native enum column passes |
+    | `other` | every other codec id that `docs/reference/scalar-types.md` lists for Postgres and SQLite |
 
     The implementer copies the `other` ids from that page, and confirms each id above against it; an id above that the page does not list under that JavaScript type is a stop-and-report.
 
     | Better Auth field | Accepted kinds |
     | --- | --- |
-    | `string`, a list of allowed strings | `string` |
+    | `string`, a list of allowed strings | `string` or `enum` |
     | `number`, with or without `bigint: true` | `number` |
     | `boolean` | `boolean` |
     | `date` | `date` |

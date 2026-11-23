@@ -161,6 +161,24 @@ describe('field types on postgres only', () => {
     ).toEqual([]);
   });
 
+  it('a native enum is wrong for a boolean, a number, a date and JSON', async () => {
+    const fields: readonly [DBFieldAttribute, string][] = [
+      [{ type: 'boolean' }, 'Boolean'],
+      [{ type: 'number' }, 'Int'],
+      [{ type: 'date' }, 'DateTime'],
+      [{ type: 'json' }, 'String'],
+    ];
+    for (const [field, expectedType] of fields) {
+      expect(await problemsFor('postgres', field, 'pg.enum(NativeStatus)')).toEqual(
+        wrongType(expectedType, 'pg/enum@1'),
+      );
+    }
+  });
+
+  it('a string accepts a native enum', async () => {
+    expect(await problemsFor('postgres', { type: 'string' }, 'pg.enum(NativeStatus)')).toEqual([]);
+  });
+
   it('a list field is wrong', async () => {
     expect(await problemsFor('postgres', { type: 'string[]' }, 'String[]')).toEqual(
       wrongType('String', 'pg/text@1 list'),
