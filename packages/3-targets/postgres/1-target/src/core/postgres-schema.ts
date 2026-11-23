@@ -109,7 +109,12 @@ export class PostgresSchema extends SqlNamespaceBase {
           !Object.hasOwn(rekeyed, physicalName),
           `PostgresSchema "${input.id}": two native_enum entities resolve to the same physical type name "${physicalName}". Give them distinct @@map type names.`,
         );
-        rekeyed[physicalName] = entity;
+        Object.defineProperty(rekeyed, physicalName, {
+          value: entity,
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
       }
       dispatched['native_enum'] = Object.freeze(rekeyed);
     }

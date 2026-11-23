@@ -83,13 +83,14 @@ function fakeFamily(
 ): ControlFamilyInstance<'sql', unknown> {
   const used: Pick<
     ControlFamilyInstance<'sql', unknown>,
-    'familyId' | 'deserializeContract' | 'readAllMarkers' | 'markerLocation'
+    'familyId' | 'deserializeContract' | 'readAllMarkers' | 'markerLocation' | 'accessChangesOf'
   > = {
     familyId: 'sql',
     markerLocation: 'prisma_contract.marker',
     deserializeContract: (json) =>
       blindCast<Contract, 'the snapshots in this test are written from Contract values'>(json),
     readAllMarkers: async () => markers,
+    accessChangesOf: () => [],
   };
   return blindCast<
     ControlFamilyInstance<'sql', unknown>,

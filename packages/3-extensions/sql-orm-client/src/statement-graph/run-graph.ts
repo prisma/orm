@@ -84,7 +84,7 @@ async function runAllNodes<Row>(
   if (statementCount(graph) > 1 && graph.writesAnyTable && runtime.transaction !== undefined) {
     return runtime.transaction(
       (tx) => runNodesInOrder<Row>(graph, ctx, tx, callerRows),
-      ctx.implicitTransactionOptions,
+      runtime.inTransaction?.() === true ? undefined : ctx.implicitTransactionOptions,
     );
   }
   return runNodesInOrder<Row>(graph, ctx, runtime, callerRows);

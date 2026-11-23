@@ -112,6 +112,7 @@ import type {
 import {
   type OpenTransaction,
   OuterTransaction,
+  savepointOptionsUnsupportedError,
   type TransactionRuntime,
   transactionClosedError,
 } from './runtime-transaction';
@@ -207,6 +208,7 @@ export interface RuntimeQueryable extends RuntimeScope {}
 
 export interface TransactionContext extends RuntimeQueryable {
   readonly invalidated: boolean;
+  transaction<R>(fn: (tx: TransactionContext) => PromiseLike<R>): Promise<R>;
 }
 
 export type { RuntimeTelemetryEvent, TelemetryOutcome, VerifyMarkerOption };
@@ -247,13 +249,11 @@ export interface ActivityRoute {
     params: Params,
     options: ActivityExecuteOptions,
   ): Promise<SqlStatementStats>;
-  readonly transaction:
-    | (<R>(
-        parent: ActivityParent,
-        fn: (tx: TransactionContext) => PromiseLike<R>,
-        options?: RuntimeTransactionOptions,
-      ) => Promise<R>)
-    | undefined;
+  readonly transaction: <R>(
+    parent: ActivityParent,
+    fn: (tx: TransactionContext) => PromiseLike<R>,
+    options?: RuntimeTransactionOptions,
+  ) => Promise<R>;
   /** Whether an open activity on the route is runtime work that `close()` waits for. */
   readonly runtimeWork: boolean;
 }
@@ -302,7 +302,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   private readonly codecDescriptors: CodecDescriptorRegistry;
   private readonly sqlCtx: ActivityContextFields<SqlMiddlewareContext>;
   private readonly verifyMarkerOption: VerifyMarkerOption;
-  // Memoises the first verifyMarker() call so concurrent first queries share one read and one log line, and is cleared when that read fails so the next query retries it. `null` until the first query; pre-resolved when `verifyMarkerOption === false`.
+  // Memoises the first verifyMarker() call so concurrent first calls share one read and one log line, and is cleared when that read fails so the next call retries it. `null` until the first call; pre-resolved when `verifyMarkerOption === false`.
   private verifyMarkerPromise: Promise<void> | null;
   private closePromise: Promise<void> | null;
   private readonly ownsDriver: boolean;
@@ -314,8 +314,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #transactionWorkOn = new WeakMap<SqlQueryable, () => void | Promise<void>>();
   #openActivityHandles = 0;
   #refusing = false;
-  // Connections and transactions this runtime handed out. When the first query of the runtime runs on one of them, the runtime-wide marker read runs on it too, so it works while close() waits for their release, and concurrent first queries share its result. Other queryables, such as a subclass's raw connection, read the marker through the driver.
-  readonly #heldQueryables = new WeakSet<SqlQueryable>();
   readonly #preparedStatementHandles = new WeakMap<object, unknown>();
   // Decided once when the runtime is created: a transaction keeps its finished statements to finalize them only when some middleware implements activityFinalized.
   readonly #holdFinishedChildren: boolean;
@@ -323,9 +321,9 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   readonly #transactions = new WeakMap<SqlQueryable, OpenTransaction>();
   readonly #startingTransactions = new WeakSet<SqlConnection>();
   readonly #transactionRuntime: TransactionRuntime = {
-    route: (driverTx, activity) =>
-      this.queryableRoute(driverTx, 'transaction', () => activity, {
-        transaction: undefined,
+    route: (driverTx, transaction) =>
+      this.queryableRoute(driverTx, 'transaction', () => transaction.activity, {
+        transaction: savepointOn(transaction),
         runtimeWork: false,
       }),
     startActivity: (route, activity) => this.startActivityOnRoute(route, activity, undefined),
@@ -343,9 +341,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     },
     unregister: (queryable, transaction) => {
       if (this.#transactions.get(queryable) === transaction) this.#transactions.delete(queryable);
-    },
-    markHeld: (driverTx, driverSavepoint) => {
-      if (this.#heldQueryables.has(driverTx)) this.#heldQueryables.add(driverSavepoint);
     },
     onConnectionReleased: (connection, teardown) => {
       this.#transactionWorkOn.set(connection, teardown);
@@ -654,18 +649,18 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     };
   }
 
-  /** The activity route of a held connection that `owner` wraps: its statements run on `connection`, and its transactions begin there. */
+  /** The activity route of a held connection that `owner` wraps: its statements run on `connection`, and its transactions begin there. A held connection must come from {@link acquireRawConnection}. */
   protected connectionRoute(
     connection: SqlConnection,
     owner: TransactionStartTarget,
   ): ActivityRoute {
-    const openTransaction = this.#transactions.get(connection)?.activity;
-    return this.queryableRoute(connection, 'connection', () => openTransaction, {
+    const openTransaction = this.#transactions.get(connection);
+    return this.queryableRoute(connection, 'connection', () => openTransaction?.activity, {
       transaction:
         openTransaction === undefined
           ? (parent, fn, options) =>
               this.transactionOnHeldConnection(connection, owner, parent, fn, options)
-          : undefined,
+          : savepointOn(openTransaction),
       runtimeWork: false,
     });
   }
@@ -698,7 +693,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
   }
 
-  /** The `activitySource` member of a held connection that `owner()` wraps. */
+  /** The `activitySource` member of a held connection that `owner()` wraps. A held connection must come from {@link acquireRawConnection}. */
   protected connectionActivitySource(
     connection: SqlConnection,
     owner: () => TransactionStartTarget,
@@ -791,6 +786,14 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           beneath(options),
         );
       },
+      inTransaction: () => run.ctx.inTransaction(),
+      async transaction<R>(
+        fn: (tx: TransactionContext) => PromiseLike<R>,
+        options?: RuntimeTransactionOptions,
+      ): Promise<R> {
+        run.assertAcceptsChildren();
+        return route.transaction(run, fn, options);
+      },
       end(end: ClientActivityEnd<K>): Promise<void> {
         let ending: Promise<void>;
         try {
@@ -805,21 +808,11 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         });
       },
     };
-    const transaction = route.transaction;
-    if (transaction === undefined) return handle;
-    return Object.assign(handle, {
-      transaction: async <R>(
-        fn: (tx: TransactionContext) => PromiseLike<R>,
-        options?: RuntimeTransactionOptions,
-      ): Promise<R> => {
-        run.assertAcceptsChildren();
-        return transaction(run, fn, options);
-      },
-    });
+    return handle;
   }
 
   /**
-   * Returns a raw driver connection. SQL issued on it runs below the middleware/codec/telemetry pipeline. It carries its own lifecycle (`release`/`destroy`/`beginTransaction`); the caller owns disposal. It follows the runtime's close rule for connections: see {@link Runtime.close}. Pass the `activityParent` of the activity it is acquired for, so it is admitted after `close()` while that activity is open.
+   * Returns a raw driver connection, after the contract marker check has finished through the driver; it rejects with the marker read's error, such as `CONTRACT.MARKER_READ_FAILED`, and takes no connection when that read fails. Every connection the runtime or a subclass holds must come from here, so the check never waits for a connection its caller holds. SQL issued on it runs below the middleware/codec/telemetry pipeline. It carries its own lifecycle (`release`/`destroy`/`beginTransaction`); the caller owns disposal. It follows the runtime's close rule for connections: see {@link Runtime.close}. Pass the `activityParent` of the activity it is acquired for, so it is admitted after `close()` while that activity is open.
    */
   protected async acquireRawConnection(
     options?: Pick<ActivityExecuteOptions, 'activityParent'>,
@@ -827,6 +820,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const endOperation = this.beginOperation(this.driver, options);
     let connection: SqlConnection;
     try {
+      await this.ensureMarkerChecked();
       connection = await this.driver.acquireConnection();
     } finally {
       endOperation();
@@ -865,21 +859,19 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
   }
 
-  private async setupDriverExecution(
-    exec: SqlExecutionPlan,
-    queryable: SqlQueryable,
-  ): Promise<void> {
+  private async setupDriverExecution(exec: SqlExecutionPlan): Promise<void> {
     this.familyAdapter.validatePlan(exec, this.contract);
     this._pendingTelemetry = null;
     this._telemetryCache = null;
-    if (this.verifyMarkerPromise === null) {
-      const markerQueryable = this.#heldQueryables.has(queryable) ? queryable : this.driver;
-      this.verifyMarkerPromise = this.verifyMarker(markerQueryable).catch((error: unknown) => {
-        this.verifyMarkerPromise = null;
-        throw error;
-      });
-    }
-    await this.verifyMarkerPromise;
+    await this.ensureMarkerChecked();
+  }
+
+  private ensureMarkerChecked(): Promise<void> {
+    this.verifyMarkerPromise ??= this.verifyMarker().catch((error: unknown) => {
+      this.verifyMarkerPromise = null;
+      throw error;
+    });
+    return this.verifyMarkerPromise;
   }
 
   // An open activity handle on the runtime is runtime work in flight until its end().
@@ -945,13 +937,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     createDecodeContext: () => DecodeContext,
     driverCall: () => AsyncIterable<Record<string, unknown>>,
     codecCtx: SqlCodecCallContext,
-    queryable: SqlQueryable,
     transaction: OpenTransaction | undefined,
     onDriverAnswered: () => void,
   ): AsyncGenerator<Row, void, unknown> {
     const rowDecodeContext = createDecodeContext();
     transaction?.assertOpen();
-    await this.setupDriverExecution(exec, queryable);
+    await this.setupDriverExecution(exec);
 
     const startedAt = Date.now();
     let telemetryOutcome: TelemetryOutcome | null = null;
@@ -1049,7 +1040,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return this.encodeDraftParams(draftWithMutations, codecCtx);
   }
 
-  /** Query rows against a caller-supplied queryable through the shared preparation pipeline. */
+  /** Query rows against a caller-supplied queryable through the shared preparation pipeline. A held connection must come from {@link acquireRawConnection}. */
   protected queryAgainstQueryable<Row>(
     plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
     queryable: SqlQueryable,
@@ -1079,7 +1070,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
               () =>
                 queryable.query<Record<string, unknown>>({ sql: exec.sql, params: exec.params }),
               codecCtx,
-              queryable,
               transaction,
               endOperation,
             );
@@ -1093,7 +1083,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return new AsyncIterableResult(generator());
   }
 
-  /** Execute statistics against a caller-supplied queryable through the shared preparation pipeline. */
+  /** Execute statistics against a caller-supplied queryable through the shared preparation pipeline. A held connection must come from {@link acquireRawConnection}. */
   protected async executeStatisticsAgainstQueryable(
     plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
     queryable: SqlQueryable,
@@ -1117,7 +1107,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const { codecCtx, contextFields } = this.createQueryContexts(options);
     return this.executeOn(queryable, options, plan, contextFields, async (run, transaction) => {
       const exec = await this.prepareOperation(plan, codecCtx, run);
-      return this.executeEncodedPlan(run, exec, queryable, transaction, codecCtx, () =>
+      return this.executeEncodedPlan(run, exec, transaction, codecCtx, () =>
         queryable.execute({ sql: exec.sql, params: exec.params }),
       );
     });
@@ -1143,13 +1133,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   private async executeEncodedPlan(
     run: SqlStatementActivityRun,
     exec: SqlExecutionPlan,
-    queryable: SqlQueryable,
     transaction: OpenTransaction | undefined,
     codecCtx: SqlCodecCallContext,
     driverCall: () => Promise<SqlStatementStats>,
   ): Promise<SqlStatementStats> {
     transaction?.assertOpen();
-    await this.setupDriverExecution(exec, queryable);
+    await this.setupDriverExecution(exec);
     checkAborted(codecCtx, 'stream');
 
     const startedAt = Date.now();
@@ -1229,7 +1218,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     >(prepared);
   }
 
-  /** Query prepared rows against a caller-supplied queryable through the full pipeline. */
+  /** Query prepared rows against a caller-supplied queryable through the full pipeline. A held connection must come from {@link acquireRawConnection}. */
   protected runPreparedQueryAgainstQueryable<P, Row>(
     ps: PreparedStatementImpl<P, Row>,
     userParams: unknown,
@@ -1327,13 +1316,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       () => ps.decodeContext,
       () => queryable.query<Record<string, unknown>>(request),
       codecCtx,
-      queryable,
       transaction,
       onDriverAnswered,
     );
   }
 
-  /** Execute a prepared statement's statistics against a caller-supplied queryable through the full pipeline. */
+  /** Execute a prepared statement's statistics against a caller-supplied queryable through the full pipeline. A held connection must come from {@link acquireRawConnection}. */
   protected async runPreparedExecuteAgainstQueryable<P>(
     ps: PreparedExecutionImpl<P>,
     userParams: unknown,
@@ -1409,7 +1397,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       },
     };
 
-    return this.executeEncodedPlan(run, exec, queryable, transaction, codecCtx, () =>
+    return this.executeEncodedPlan(run, exec, transaction, codecCtx, () =>
       queryable.execute(request),
     );
   }
@@ -1425,7 +1413,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   ): Promise<RuntimeConnection & TransactionStartTarget> {
     const parent = options?.activityParent;
     const driverConn = await this.acquireRawConnection(options);
-    this.#heldQueryables.add(driverConn);
     const self = this;
 
     const wrappedConnection: RuntimeConnection &
@@ -1494,7 +1481,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   /**
-   * Begins a transaction on `connection`, which `owner` wraps, as a transaction activity. When the transaction's `activityStarted` hooks refuse the start, no `BEGIN` is sent, `owner` is recorded as clean, and `withTransaction` releases it; after any other start failure it destroys it. The transaction's `activityStarted` hooks run before `BEGIN`. Every statement sent on the transaction, or on `connection`, from the end of `BEGIN` until `commit()` or `rollback()` is called is the transaction's child, and is finalized when the transaction ends, with its outcome. Once `commit()` or `rollback()` is called, a statement sent on the transaction is refused when it starts, and one started earlier that has not reached the driver yet is refused with `RUNTIME.TRANSACTION_CLOSED`, so neither runs after the `COMMIT` or `ROLLBACK`. `commit()` and `rollback()` resolve after every finalization hook has run. A subclass that holds its own connection begins its transactions here.
+   * Begins a transaction on `connection`, which `owner` wraps, as a transaction activity. When the transaction's `activityStarted` hooks refuse the start, no `BEGIN` is sent, `owner` is recorded as clean, and `withTransaction` releases it; after any other start failure it destroys it. The transaction's `activityStarted` hooks run before `BEGIN`. Every statement sent on the transaction, or on `connection`, from the end of `BEGIN` until `commit()` or `rollback()` is called is the transaction's child, and is finalized when the transaction ends, with its outcome. Once `commit()` or `rollback()` is called, a statement sent on the transaction is refused when it starts, and one started earlier that has not reached the driver yet is refused with `RUNTIME.TRANSACTION_CLOSED`, so neither runs after the `COMMIT` or `ROLLBACK`. `commit()` and `rollback()` resolve after every finalization hook has run. A subclass begins its transactions here, on a connection from {@link acquireRawConnection}.
    */
   protected async beginTransactionOn(
     connection: SqlConnection,
@@ -1534,7 +1521,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
       throw error;
     }
-    if (this.#heldQueryables.has(connection)) this.#heldQueryables.add(driverTx);
     const transaction = new OuterTransaction(
       this.#transactionRuntime,
       connection,
@@ -1607,8 +1593,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
   }
 
-  private async verifyMarker(queryable: SqlQueryable): Promise<void> {
-    const readResult = await this.familyAdapter.markerReader.readMarker(queryable);
+  private async verifyMarker(): Promise<void> {
+    const readResult = await this.familyAdapter.markerReader.readMarker(this.driver);
 
     const expectedStorageHash = this.contract.storage.storageHash;
     const expectedProfileHash = this.contract.profileHash ?? null;
@@ -1809,7 +1795,6 @@ async function runTransactionOn<R>(
   state: ConnectionState,
 ): Promise<R> {
   validateTransactionTimeout(options?.timeout);
-  let invalidated = false;
   let transaction: RuntimeTransaction;
   try {
     transaction = await connection.transaction(options);
@@ -1821,31 +1806,59 @@ async function runTransactionOn<R>(
     throw error;
   }
 
-  const signal = transaction.signal;
-  let rejectAbort = (_reason: unknown) => {};
-  const aborted = new Promise<never>((_, reject) => {
-    rejectAbort = reject;
-  });
-  void aborted.catch(() => undefined);
-  const onAbort = () => {
-    invalidated = true;
-    rejectAbort(signal.reason);
-  };
-  signal.addEventListener('abort', onAbort, { once: true });
-  if (signal.aborted) onAbort();
+  try {
+    return await runAndSettleTransaction(transaction, fn);
+  } catch (error) {
+    const settlement = settlementOf(transaction);
+    if (settlement?.committed !== true && settlement?.rolledBack !== true) {
+      state.clean = false;
+      state.reason = error;
+    }
+    throw error;
+  }
+}
 
+function savepointOn(transaction: OpenTransaction): ActivityRoute['transaction'] {
+  return async (parent, fn, options) => {
+    if (options !== undefined) throw savepointOptionsUnsupportedError(options);
+    return runInSavepoint(() => transaction.transactionBeneath(parent), fn);
+  };
+}
+
+async function runInSavepoint<R>(
+  open: () => Promise<RuntimeTransaction>,
+  fn: (tx: TransactionContext) => PromiseLike<R>,
+): Promise<R> {
+  const savepoint = await open();
+  try {
+    return await runAndSettleTransaction(savepoint, fn);
+  } catch (error) {
+    if (savepoint.signal.aborted && error === savepoint.signal.reason) {
+      await savepoint.rollback().catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
+function guardedTransactionContext(
+  transaction: RuntimeTransaction,
+  isClosed: () => boolean,
+): TransactionContext &
+  PreparedStatementQueryTarget &
+  PreparedStatementExecuteTarget &
+  ActivitySourceTarget {
   async function* guardedStream<Row>(
     open: () => AsyncIterable<Row>,
   ): AsyncGenerator<Row, void, unknown> {
-    if (invalidated) {
+    if (isClosed()) {
       throw transactionClosedError();
     }
     for await (const row of open()) {
-      if (invalidated) {
+      if (isClosed()) {
         throw transactionClosedError();
       }
       yield row;
-      if (invalidated) {
+      if (isClosed()) {
         throw transactionClosedError();
       }
     }
@@ -1865,7 +1878,7 @@ async function runTransactionOn<R>(
         plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        if (invalidated) throw transactionClosedError();
+        if (isClosed()) throw transactionClosedError();
         return target.execute(plan, options);
       },
       [preparedStatementQuery]<Params, Row>(
@@ -1882,7 +1895,7 @@ async function runTransactionOn<R>(
         params: Params,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        if (invalidated) throw transactionClosedError();
+        if (isClosed()) throw transactionClosedError();
         return runPreparedExecute(target, ps, params, options);
       },
     };
@@ -1893,7 +1906,7 @@ async function runTransactionOn<R>(
       async startActivity<K extends ClientActivityKind>(
         activity: StartActivity<K>,
       ): Promise<ActivityHandle<K>> {
-        if (invalidated) throw transactionClosedError();
+        if (isClosed()) throw transactionClosedError();
         return guardedHandle(await startActivityOn(target, activity));
       },
       planContentHash(plan: HashablePlan): Promise<string> {
@@ -1914,26 +1927,51 @@ async function runTransactionOn<R>(
       get intercepted() {
         return handle.intercepted;
       },
+      inTransaction: () => handle.inTransaction(),
+      async transaction(fn, options) {
+        if (isClosed()) throw transactionClosedError();
+        return handle.transaction(fn, options);
+      },
       end: (end) => handle.end(end),
     };
   }
 
-  const txContext: TransactionContext &
-    PreparedStatementQueryTarget &
-    PreparedStatementExecuteTarget &
-    ActivitySourceTarget = {
+  return {
     ...guardedQueryable(transaction),
     get invalidated() {
-      return invalidated;
+      return isClosed();
     },
     [activitySource]: guardedSource(transaction),
+    async transaction<R>(fn: (tx: TransactionContext) => PromiseLike<R>): Promise<R> {
+      if (isClosed()) throw transactionClosedError();
+      return runInSavepoint(() => transaction.transaction(), fn);
+    },
   };
+}
 
-  const markUnclean = (reason: unknown): void => {
-    if (!state.clean) return;
-    state.clean = false;
-    state.reason = reason;
+async function runAndSettleTransaction<R>(
+  transaction: RuntimeTransaction,
+  fn: (tx: TransactionContext) => PromiseLike<R>,
+): Promise<R> {
+  let invalidated = false;
+  const signal = transaction.signal;
+  let rejectAbort = (_reason: unknown) => {};
+  const aborted = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  void aborted.catch(() => undefined);
+  const onAbort = () => {
+    invalidated = true;
+    rejectAbort(signal.reason);
   };
+  signal.addEventListener('abort', onAbort, { once: true });
+  if (signal.aborted) onAbort();
+
+  const settlement = settlementOf(transaction);
+  const txContext = guardedTransactionContext(
+    transaction,
+    () => invalidated || settlement?.closed === true,
+  );
 
   let commitRequested = false;
   try {
@@ -1944,22 +1982,18 @@ async function runTransactionOn<R>(
     await transaction.commit();
     return result;
   } catch (error) {
-    if (signal.aborted) {
-      markUnclean(signal.reason);
-      throw signal.reason;
-    }
+    if (signal.aborted) throw signal.reason;
     if (!commitRequested) {
       const selected = error;
       invalidated = true;
       try {
         await transaction.rollback();
       } catch (rollbackError) {
-        const settlement = settlementOf(transaction);
         if (settlement?.rolledBack === true) {
           settlement.logDroppedError(rollbackError);
           throw selected;
         }
-        markUnclean(rollbackError);
+        await settlement?.abandon();
         const wrapped = runtimeError(
           'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
           'Transaction rollback failed after callback error',
@@ -1970,13 +2004,12 @@ async function runTransactionOn<R>(
       }
       throw selected;
     }
-    if (settlementOf(transaction)?.committed === true) throw error;
+    if (settlement?.committed === true) throw error;
     try {
       await transaction.rollback();
     } catch (rollbackError) {
-      const settlement = settlementOf(transaction);
       if (settlement?.rolledBack === true) settlement.logDroppedError(rollbackError);
-      else markUnclean(error);
+      else await settlement?.abandon();
     }
     const wrapped = runtimeError('RUNTIME.TRANSACTION_COMMIT_FAILED', 'Transaction commit failed', {
       commitError: error,

@@ -11,7 +11,7 @@ This skill covers the **runtime entry point** — `db.ts` — and how to compose
 - User wants to add middleware (lints, budgets, cache, custom).
 - User wants per-environment config (dev vs prod, multi-region).
 - User wants to switch between the Postgres, SQLite, and Mongo façades.
-- User wants to wrap operations in `db.transaction(...)` (Postgres, SQLite and Supabase role-bound clients).
+- User wants to wrap operations in `db.transaction(...)` (Postgres, SQLite, MySQL, MariaDB and Supabase role-bound clients).
 - User is running a one-off script (`tsx my-script.ts`, Node CLI, CI task) and the process won't exit after queries finish, or they need script teardown (`db.close()`, `await using`).
 - User is deploying to a per-request runtime (Cloudflare Workers + Hyperdrive, AWS Lambda, Vercel Edge, Deno Deploy, Bun edge) and needs `postgresServerless()` with `postgres.connect({ url })` per request.
 - User mentions: *db.ts, postgres(), mongo(), middleware, lints, budgets, cache, query log, slow query, DATABASE_URL, .env, connection pool, poolOptions, dev vs prod, transactions, read replicas, multi-database, script won't exit, hangs, db.close, db.end, close connection, pool.end, await using, serverless, edge, Cloudflare Workers, Hyperdrive, postgresServerless, connect per request*.
@@ -309,7 +309,7 @@ Order matters: `beforeEncode` runs in registration order for every middleware be
 
 ## Workflow — Configure the connection
 
-The concept: the runtime takes one of three binding shapes — `url`, `pg` (a pre-constructed `pg.Pool` or `pg.Client`), or `binding` (an explicit kind tag). They're mutually exclusive. The `pg` form is for projects that already manage their own pool (e.g. a Lambda layer); `url` is the default. Pool tuning is `poolOptions.connectionTimeoutMillis` / `poolOptions.idleTimeoutMillis` — *not* `driverOptions`. Reads are buffered by default; setting `cursor` (`{ batchSize: 100 }`; `{}` or `{ batchSize: undefined }` for batches of 100; a `batchSize` that is not a positive integer fails the factory call) makes them stream through a server-side cursor, and there is no flag that turns cursors off (see `references/queries.md` § *Streaming*). `postgresServerless()` takes the same `cursor` option. Pass `log` (an object with `info`, `warn`, `error` and an optional `debug`; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the first query, the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Lints and budgets middleware*). Without `log`, the runtime drops these events. `postgresServerless()`, `sqlite()` and `supabase()` take the same option.
+The concept: the runtime takes one of three binding shapes — `url`, `pg` (a pre-constructed `pg.Pool` or `pg.Client`), or `binding` (an explicit kind tag). They're mutually exclusive. The `pg` form is for projects that already manage their own pool (e.g. a Lambda layer); `url` is the default. Pool tuning is `poolOptions.connectionTimeoutMillis` / `poolOptions.idleTimeoutMillis` / `poolOptions.max` (pool size, 10 by default) — *not* `driverOptions`. Behind a server-side connection pooler, `poolOptions: { max: 1 }` keeps one connection; queries then take turns on it, so a query waits while a transaction is open. Inside `db.transaction(async (tx) => …)` send every query through `tx`: with one connection, a query through `db` waits for the connection its own transaction holds and fails after `connectionTimeoutMillis`. Reads are buffered by default; setting `cursor` (`{ batchSize: 100 }`; `{}` or `{ batchSize: undefined }` for batches of 100; a `batchSize` that is not a positive integer fails the factory call) makes them stream through a server-side cursor, and there is no flag that turns cursors off (see `references/queries.md` § *Streaming*). `postgresServerless()` takes the same `cursor` option. Pass `log` (an object with `info`, `warn`, `error` and an optional `debug`; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the client's first use of the database (its first query, connection or transaction), the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Lints and budgets middleware*). Without `log`, the runtime drops these events. `postgresServerless()`, `sqlite()` and `supabase()` take the same option.
 
 ```typescript
 // Default — URL string, factory constructs the pool.
@@ -319,6 +319,7 @@ postgres({
   poolOptions: {
     connectionTimeoutMillis: 20_000,
     idleTimeoutMillis: 30_000,
+    // max: 10,                // optional: the most connections the pool opens
   },
   // cursor: { batchSize: 100 },  // optional — stream reads in batches instead of buffering
   // log: console,                // optional — receive marker and lints() warnings
@@ -357,7 +358,7 @@ export const db = postgres({
 
 ## Workflow — Transactions
 
-The concept applies to **Postgres, SQLite and Supabase**. `db.transaction(fn)` opens a transaction, passes the callback a `tx`, commits when the callback returns and rolls back when it throws. `tx` offers the client's query members with the same types: `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query` (rows), `execute` (affected count) and `toSql`. Postgres and serverless-connection transactions also have `enums` and `nativeEnums`; SQLite's has `enums`. `tx` has no `close`, `[Symbol.asyncDispose]`, `transaction` or `runtime()`. Inside the callback, send every query through `tx`, not `db`, so it runs inside the transaction. A Supabase role-bound client (`asUser`, `asAnon`, `asServiceRole`) has `transaction(fn)` too, and its `tx` runs every statement under the bound role. The Mongo façade does not expose `db.transaction(...)`.
+The concept applies to **Postgres, SQLite, MySQL, MariaDB and Supabase**. `db.transaction(fn)` opens a transaction, passes the callback a `tx`, commits when the callback returns and rolls back when it throws. `tx` offers the client's query members with the same types: `sql`, `orm` (with the client's custom collection classes), `raw`, `prepare`, `query` (rows), `execute` (affected count) and `toSql`. Postgres and serverless-connection transactions also have `enums` and `nativeEnums`; SQLite's, MySQL's and MariaDB's have `enums`. `tx` has no `close`, `[Symbol.asyncDispose]` or `runtime()`. `tx.transaction(async (inner) => ...)` runs a nested transaction in a savepoint on every one of them, and `inner` has the same members as `tx`; see *Workflow — Transactions* in `references/queries-postgres.md`. Inside the callback, send every query through `tx`, not `db`, so it runs inside the transaction. A Supabase role-bound client (`asUser`, `asAnon`, `asServiceRole`) has `transaction(fn)` too, and its `tx` runs every statement under the bound role. The Mongo façade does not expose `db.transaction(...)`.
 
 ```typescript
 await db.transaction(async (tx) => {
@@ -379,6 +380,8 @@ await db.transaction(async (tx) => {
   await byId.query(tx, { id: 1 });
 });
 ```
+
+An ORM write of more than one statement on `tx.orm` (or `inner.orm`), such as a create with a nested relation, runs in its own savepoint. When one of its statements fails, it rolls back to the savepoint and rejects with the database's error, so none of its rows stay, and the callback can catch the error and continue with `tx`. When the database ended the whole transaction with that error, as MySQL does on a deadlock, the rollback to the savepoint fails, the write rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED` whose `cause` is the database's error, and `tx` is closed. While such a write runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`, so await it before sending the next query instead of running both in `Promise.all`.
 
 `published()` is a method of a custom collection class. A prepared statement runs on what it is given: `ps.query(tx, params)` runs inside the transaction, even when `ps` came from `db.prepare(...)`. `tx.prepare` exists so code inside a transaction needs nothing from the outer client. Preparing sends nothing to the database.
 
@@ -440,7 +443,7 @@ The runtime side (this skill) is the same regardless: `db.ts` reads `contract.js
 
 - **A `/middleware` subpath or a telemetry package.** Neither exists. The middleware surface is `lints`, `budgets`, and the `SqlMiddleware` type on `@prisma/orm-postgres/family-runtime`, plus the separately installed `@prisma/orm-extension-middleware-cache`. Anything else (query log, tracing spans, metrics) is a custom middleware you write on the lifecycle events. File additional gaps you hit via `references/feedback.md`.
 - **Multi-database routing / read replicas.** Prisma 8 doesn't ship a built-in primary/replica router or shard-aware client. Workaround: configure separate `db.ts` instances per data store and call the right one in your application code. If you need first-class multi-database routing, file a feature request via the `references/feedback.md` skill.
-- **Connection pooling as a first-class config field.** `poolOptions.connectionTimeoutMillis` and `poolOptions.idleTimeoutMillis` are wired through, but the rest of `pg.Pool`'s tuning surface (max connections, `allowExitOnIdle`, ssl options, …) is not exposed by name. Workaround: construct the `pg.Pool` yourself and pass it via `pg:`. If you need more pool fields surfaced on the façade, file a feature request via the `references/feedback.md` skill.
+- **Connection pooling as a first-class config field.** `poolOptions.connectionTimeoutMillis`, `poolOptions.idleTimeoutMillis` and `poolOptions.max` are wired through, but the rest of `pg.Pool`'s tuning surface (`allowExitOnIdle`, ssl options, …) is not exposed by name. Workaround: construct the `pg.Pool` yourself and pass it via `pg:`. If you need more pool fields surfaced on the façade, file a feature request via the `references/feedback.md` skill.
 - **Query logger middleware as a built-in.** Prisma 8 doesn't ship a "log every query" middleware. Workaround: a custom `activityEnded` middleware (see *Workflow — Custom middleware*). If you need a built-in query log, file a feature request via the `references/feedback.md` skill.
 
 ## Reference Files
@@ -458,6 +461,6 @@ This skill is intentionally body-only; `prisma orm init --help`, the target `def
 - [ ] Per-env divergence (if any) gated by `NODE_ENV` or similar.
 - [ ] Did NOT hardcode credentials in any committed file.
 - [ ] Did NOT confabulate a `middleware` subpath on the Postgres package, a telemetry middleware package, an audit extension package, or a type argument or `contractJson` option on `postgres(...)`.
-- [ ] Did NOT claim `db.transaction(...)` exists on the Mongo façade — only Postgres, SQLite and Supabase role-bound clients expose it.
+- [ ] Did NOT claim `db.transaction(...)` exists on the Mongo façade — only Postgres, SQLite, MySQL, MariaDB and Supabase role-bound clients expose it.
 - [ ] Did NOT confabulate read-replica / multi-DB / extra pool config — pointed at *What Prisma 8 doesn't do yet* and routed to `references/feedback.md`.
 - [ ] For build-system / dev-server prompts (Vite plugin, Next.js plugin, …) routed to `references/build.md`.

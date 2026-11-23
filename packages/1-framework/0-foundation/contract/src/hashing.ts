@@ -24,15 +24,13 @@ function omitNamespaceKindsForHash(storage: unknown): unknown {
   if (!isPlainRecord(namespaces)) {
     return storage;
   }
-  const stripped: Record<string, unknown> = {};
-  for (const [nsId, ns] of Object.entries(namespaces)) {
-    if (isPlainRecord(ns)) {
+  const stripped = Object.fromEntries(
+    Object.entries(namespaces).map(([nsId, ns]) => {
+      if (!isPlainRecord(ns)) return [nsId, ns];
       const { kind: _kind, ...rest } = ns;
-      stripped[nsId] = rest;
-    } else {
-      stripped[nsId] = ns;
-    }
-  }
+      return [nsId, rest];
+    }),
+  );
   return { ...storage, namespaces: stripped };
 }
 

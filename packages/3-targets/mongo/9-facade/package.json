@@ -6,6 +6,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "One-package Mongo setup for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -52,11 +55,11 @@
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "temporal-polyfill": "^1.0.4"
+    "temporal-polyfill": "^1.0.8"
   },
   "peerDependencies": {
     "mongodb": "^7.0.0",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

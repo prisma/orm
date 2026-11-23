@@ -171,3 +171,8 @@ export function inlineLiteral(value: unknown, typeText: string): string {
   const text = literalText(value);
   return literalNeedsCast(value, typeText) ? `${text}::${typeText}` : text;
 }
+
+/**
+ * The `lc_monetary` the control plane runs under, set for its own transactions only. PostgreSQL reads a money literal's separators and fraction digits, and stores its units, by the session's monetary locale: under `de_DE` `'12.50'::money` is 1250.00, and under `ja_JP` it is stored in whole yen. Under C a literal is read and stored in cents exactly, and money prints in the form the `pg/money` codec reads.
+ */
+export const CONTROL_PLANE_LC_MONETARY = 'C';

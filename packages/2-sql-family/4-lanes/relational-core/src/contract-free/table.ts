@@ -549,6 +549,16 @@ function toSetExpression(value: unknown, desc: ColumnDescriptor): AnyExpression 
   return ParamRef.of(value, { codec: codecRefOf(desc) });
 }
 
+/** Stores `value` as an own key of `target`, so a column named `__proto__` is a key rather than the prototype. */
+function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 function buildInsertRow<Schema extends ColumnSchema>(
   schema: Schema,
   values: TableInsertRow<Schema>,
@@ -559,7 +569,11 @@ function buildInsertRow<Schema extends ColumnSchema>(
     'TableInsertRow<Schema> maps Schema keys to unknown; indexing by the same string keys is correct by construction'
   >(values);
   for (const [col, desc] of Object.entries(schema)) {
-    row[col] = toInsertValue(rawValues[col], desc);
+    defineOwn(
+      row,
+      col,
+      toInsertValue(Object.hasOwn(rawValues, col) ? rawValues[col] : undefined, desc),
+    );
   }
   return row;
 }
@@ -579,9 +593,9 @@ function buildSetMap<Schema extends ColumnSchema>(
     'TableSetValues<Schema> maps Schema keys to unknown; iterating with Object.entries is correct by construction'
   >(values);
   for (const [col, value] of Object.entries(rawValues)) {
-    const desc = rawSchema[col];
+    const desc = Object.hasOwn(rawSchema, col) ? rawSchema[col] : undefined;
     if (desc !== undefined) {
-      set[col] = toSetExpression(value, desc);
+      defineOwn(set, col, toSetExpression(value, desc));
     }
   }
   return set;

@@ -1,3 +1,5 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   ColumnRef,
@@ -5,6 +7,7 @@ import {
   type ProjectionItem,
   SelectAst,
 } from '@internal/sql-relational-core/ast';
+import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
   hasContractCapability,
   isAutoIncrementColumn,
@@ -33,6 +36,7 @@ import { rowIdentity } from '../written-keys';
 import { requireRowsThatCanConflict } from './conflict-keys';
 import { CrossJoin } from './cross-join';
 import type { ColumnMapping, NodeId } from './edge';
+import { FilterData } from './filter-data';
 import { Graph } from './graph';
 import { addIncludeNodes, identityMissing } from './include-nodes';
 import { Insert } from './insert';
@@ -41,11 +45,12 @@ import {
   deleteRows,
   findRows,
   insertRows,
-  type KeySource,
+  type KeyFilter,
+  type KeyFilters,
+  type Model,
   type Returns,
   readBack,
   type Shape,
-  type Sources,
   selectAstOf,
   updateRows,
 } from './model-statements';
@@ -53,7 +58,8 @@ import {
   addAfterWrite,
   addBeforeWrite,
   addCreateWithRelations,
-  type Translation,
+  type ParentRow,
+  rejectForeignKeyWithRelationMutation,
 } from './nested-mutations';
 import { PayloadData } from './payload-data';
 import type { Requires } from './requires';
@@ -111,7 +117,7 @@ export function addUpdateAll(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
   set: Readonly<Record<string, unknown>>,
-  { filters, links }: Sources,
+  { filters, links }: KeyFilters,
   returns: Returns,
 ): NodeId {
   return updateRows(b, modelOf(collection), set, {
@@ -152,9 +158,64 @@ export function deleteAllGraph(collection: DescribeCollectionRowsOptions, return
 export function addDeleteAll(
   b: Builder,
   collection: DescribeCollectionRowsOptions,
-  sources: Sources,
+  keyFilters: KeyFilters,
 ): NodeId {
-  return deleteRows(b, collection.state.tables, { where: whereOf(collection), ...sources });
+  return deleteRows(b, collection.state.tables, { where: whereOf(collection), ...keyFilters });
+}
+
+export function addUpdateFirst(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  set: Readonly<Record<string, unknown>>,
+  keyFilters: KeyFilters,
+): void {
+  const find = addFindOfFirstRelated(b, collection, 'update()', keyFilters);
+  updateRows(b, modelOf(collection), set, {
+    where: whereOf(collection),
+    filters: [{ from: find, columns: sameRowColumns(collection) }, ...keyFilters.filters],
+    links: keyFilters.links,
+    payloads: [],
+    owner: { operation: 'update', modelName: collection.modelName },
+    returns: 'count',
+    shape: shapeOf(collection),
+    afterWrite: undefined,
+  });
+}
+
+export function addDeleteFirst(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  keyFilters: KeyFilters,
+  unlinkFound?: (found: NodeId) => void,
+): void {
+  const find = addFindOfFirstRelated(b, collection, 'delete()', keyFilters);
+  unlinkFound?.(find);
+  const byFoundKey = [{ from: find, columns: sameRowColumns(collection) }];
+  deleteRows(
+    b,
+    collection.state.tables,
+    unlinkFound === undefined
+      ? {
+          where: whereOf(collection),
+          filters: [...byFoundKey, ...keyFilters.filters],
+          links: keyFilters.links,
+        }
+      : { where: undefined, filters: byFoundKey, links: [] },
+  );
+}
+
+function addFindOfFirstRelated(
+  b: Builder,
+  collection: DescribeCollectionRowsOptions,
+  method: string,
+  { filters, links }: KeyFilters,
+): NodeId {
+  requireIdentityColumns(collection, method);
+  return findRows(b, selectIdentityAst(collection, { ...collection.state, limit: 1 }), {
+    filter: filters.map(({ from, columns }) => new FilterData(from, columns)),
+    requires: [],
+    links,
+  });
 }
 
 export function updateFirstGraph(
@@ -162,6 +223,7 @@ export function updateFirstGraph(
   data: Readonly<Record<string, unknown>>,
   relationMutations: readonly ParsedRelationMutation[] = [],
 ): Graph {
+  rejectForeignKeyWithRelationMutation(data, relationMutations);
   const { state } = collection;
   const b = builderOf(collection);
   const set = mappedUpdateRow(collection, data);
@@ -181,14 +243,14 @@ export function updateFirstGraph(
   }
 
   const model = modelOf(collection);
-  const t: Translation = { ...b, parentRow: find };
-  const before = addBeforeWrite(t, model, relationMutations);
+  const parent: ParentRow = { rowBeforeWrite: find, setValues: set };
+  const before = addBeforeWrite(b, model, parent, relationMutations);
   const values = withUpdateDefaults(collection, set, before);
   const owner = { operation: 'update', modelName: collection.modelName };
   if (Object.keys(values).length === 0 && before.keys.length === 0) {
-    addAfterWrite(t, model, find, relationMutations);
+    addAfterWrite(b, model, { ...parent, node: find }, relationMutations);
     b.graph.setResult(
-      state.includes.length === 0
+      state.includes.length === 0 && !before.unlinksAfterWrite
         ? find
         : readBack(b, model, find, identityColumnsOf(collection), {
             shape: shapeOf(collection),
@@ -208,7 +270,8 @@ export function updateFirstGraph(
       owner,
       returns: 'rows',
       shape: shapeOf(collection),
-      afterWrite: (updated) => addAfterWrite(t, model, updated, relationMutations),
+      afterWrite: (updated) =>
+        addAfterWrite(b, model, { ...parent, node: updated }, relationMutations),
     }),
   );
   return b.graph;
@@ -250,7 +313,7 @@ export function createAllGraph(
       collection.context.contract,
       { action: method, modelName, meta: { method, model: modelName } },
       state.tables.root.storage,
-      { columns: conflict.columns },
+      { onConflict: 'skip', columns: conflict.columns },
       rows,
       () => [],
     );
@@ -282,19 +345,25 @@ export function createGraph(
   const b = builderOf(collection);
   requireIdentityColumnsForIncludes(collection);
   b.graph.setResult(
-    addCreateWithRelations({ ...b, parentRow: undefined }, modelOf(collection), parsed, {
-      keysFromParent: [],
-      returns: 'rows',
-      shape: shapeOf(collection),
-      variantValue: collection.state.variantValue,
-    }),
+    addCreateWithRelations(
+      b,
+      modelOf(collection),
+      { rowBeforeWrite: undefined, setValues: {} },
+      parsed,
+      {
+        keysFromParent: [],
+        returns: 'rows',
+        shape: shapeOf(collection),
+        variantValue: collection.state.variantValue,
+      },
+    ),
   );
   return b.graph;
 }
 
 export interface NestedVariantCreate {
   readonly graph: Graph;
-  readonly keys: readonly KeySource[];
+  readonly keys: readonly KeyFilter[];
   readonly requires: readonly Requires[];
   readonly added: (base: NodeId) => void;
 }
@@ -394,7 +463,7 @@ export function upsertGraph(
   requireIdentityColumnsForIncludes(collection);
   const targeted = hasContractCapability(contract, 'insertOnConflictTarget');
   if (!targeted) {
-    requireOnlyCollidingKey(collection, create, conflictColumns);
+    requireOnlyCollidingKey(context, modelOf(collection), create, conflictColumns, 'upsert()');
   }
   const updateSet =
     Object.keys(update).length > 0
@@ -435,30 +504,31 @@ function identityProjection(collection: DescribeCollectionRowsOptions): readonly
 }
 
 /**
- * Without capability `insertOnConflictTarget`, the database's conflict clause fires on any unique key, so the upsert is allowed only when the named columns are the only key the create values can collide on: every other primary key or unique constraint contains an auto-increment column the create values leave out.
+ * Without capability `insertOnConflictTarget`, the database's conflict clause fires on any unique key, so a write that updates on conflict is allowed only when the named columns are the only key the create values can collide on: every other primary key or unique constraint contains an auto-increment column the create values leave out.
  */
-function requireOnlyCollidingKey(
-  collection: DescribeCollectionRowsOptions,
+export function requireOnlyCollidingKey(
+  context: ExecutionContext,
+  { modelName, tables }: Model,
   create: Readonly<Record<string, unknown>>,
   conflictColumns: readonly string[],
+  action: string,
 ): void {
-  const { context, modelName, state } = collection;
-  const { namespaceId, tableName } = state.tables.root.storage;
+  const { namespaceId, tableName } = tables.root.storage;
   const named = new Set(conflictColumns);
   const colliding = resolveUniqueKeyColumnSets(context.contract, namespaceId, tableName).find(
     (columns) =>
       !(columns.length === named.size && columns.every((column) => named.has(column))) &&
       !columns.some(
         (column) =>
-          create[column] === undefined &&
+          (!Object.hasOwn(create, column) || create[column] === undefined) &&
           isAutoIncrementColumn(context.contract, namespaceId, tableName, column),
       ),
   );
   if (colliding === undefined) return;
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `upsert() on model "${modelName}" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (${colliding.join(', ')}), which would update a row other than the one conflictOn names.`,
-    { meta: { capability: 'insertOnConflictTarget', action: 'upsert()' } },
+    `${action} on model "${modelName}" requires contract capability "insertOnConflictTarget": without it the conflict clause applies to every unique key, and the create values can also collide on (${colliding.join(', ')}), which would update a row other than the one conflictOn names.`,
+    { meta: { capability: 'insertOnConflictTarget', action } },
   );
 }
 
@@ -540,7 +610,21 @@ function identityColumnsOf(collection: DescribeCollectionRowsOptions): readonly 
 }
 
 function sameRowColumns(collection: DescribeCollectionRowsOptions): ColumnMapping[] {
-  return sameColumns(identityProjection(collection));
+  return sameRowColumnsOf(collection.context.contract, collection.state.tables.root);
+}
+
+export function sameRowColumnsOf(
+  contract: Contract<SqlStorage>,
+  root: AliasedTable,
+): ColumnMapping[] {
+  const { namespaceId, tableName } = root.storage;
+  return sameColumns(
+    projectTableColumns(
+      contract,
+      root,
+      resolveRowIdentityColumns(contract, namespaceId, tableName),
+    ),
+  );
 }
 
 function whereOf(collection: DescribeCollectionRowsOptions): AnyExpression | undefined {

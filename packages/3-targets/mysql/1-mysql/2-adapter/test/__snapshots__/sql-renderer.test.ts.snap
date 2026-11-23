@@ -137,6 +137,30 @@ exports[`MySQL lowering of a select > binds each param to its own numbered place
 }
 `;
 
+exports[`MySQL lowering of a select > casts a decimal param to a DECIMAL that holds every value of its column, past 35 digits before the point included 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "1",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,0))",
+}
+`;
+
+exports[`MySQL lowering of a select > casts a decimal param to a DECIMAL that holds every value of its column, past 35 digits before the point included 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "1",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,25))",
+}
+`;
+
 exports[`MySQL lowering of a select > numbers params in the order the runtime encodes them 1`] = `
 {
   "params": [
@@ -187,6 +211,70 @@ exports[`MySQL lowering of a select > selects from a derived table 1`] = `
 {
   "params": [],
   "sql": "SELECT \`u\`.\`id\` AS \`id\` FROM (SELECT \`user\`.\`id\` AS \`id\` FROM \`user\`) AS \`u\`",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 1`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "0.1",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,30))",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 2`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "0.1",
+    },
+    {
+      "kind": "literal",
+      "value": "99",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` IN (CAST(?1 AS DECIMAL(65,30)), CAST(?2 AS DECIMAL(65,30)))",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 3`] = `
+{
+  "params": [
+    {
+      "kind": "bind",
+      "name": "a",
+    },
+  ],
+  "sql": "SELECT \`user\`.\`id\` AS \`id\` FROM \`user\` WHERE \`t\`.\`amount\` = CAST(?1 AS DECIMAL(65,30))",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 4`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "1.50",
+    },
+  ],
+  "sql": "INSERT INTO \`t\` (\`amount\`) VALUES (CAST(?1 AS DECIMAL(65,30)))",
+}
+`;
+
+exports[`MySQL lowering of a select > writes a decimal param cast to DECIMAL(65,30), so the server compares it as a decimal in every form, IN included 5`] = `
+{
+  "params": [
+    {
+      "kind": "literal",
+      "value": "2",
+    },
+  ],
+  "sql": "UPDATE \`t\` SET \`amount\` = CAST(?1 AS DECIMAL(65,30))",
 }
 `;
 

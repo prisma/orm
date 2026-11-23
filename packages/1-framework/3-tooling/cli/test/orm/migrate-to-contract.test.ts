@@ -38,6 +38,7 @@ const commands = createBinCommands(
       connect: mocks.connect,
       readAllMarkers: mocks.readAllMarkers,
       migrate: mocks.migrate,
+      renderContractDts: async () => ok({ contractDts: '' }),
       close: mocks.close,
     }) as unknown as ControlClient,
 );
@@ -128,7 +129,10 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
       familyId: FAMILY,
       version: '1.0.0',
       emission: {},
-      create: () => ({ deserializeContract: (json: unknown) => json }),
+      create: () => ({
+        deserializeContract: (json: unknown) => json,
+        accessChangesOf: () => [],
+      }),
     },
     target: {
       kind: 'target',
@@ -159,6 +163,7 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(cwd, 'contract.json'),
+      typesModule: '@acme/orm-db/contract-types',
     },
     migrations: { dir: 'migrations' },
     ...overrides,

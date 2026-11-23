@@ -29,7 +29,7 @@
     "@internal/target-postgres": "workspace:8.0.0-rc.24",
     "@internal/utils": "workspace:8.0.0-rc.24",
     "@standard-schema/spec": "^1.1.0",
-    "arktype": "^2.2.2"
+    "arktype": "^2.2.9"
   },
   "devDependencies": {
     "@internal/adapter-postgres": "workspace:8.0.0-rc.24",
@@ -37,7 +37,7 @@
     "@internal/operations": "workspace:8.0.0-rc.24",
     "@internal/postgres": "workspace:8.0.0-rc.24",
     "@internal/sql-contract-ts": "workspace:8.0.0-rc.24",
-    "@prisma/cli-engine": "0.10.0",
+    "@prisma/cli-engine": "0.10.4",
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",

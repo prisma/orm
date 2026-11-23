@@ -21,15 +21,15 @@
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
-    "@prisma/adapter-pg": "7.10.0",
-    "@prisma/client": "7.10.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
     "@prisma/orm-postgres-contrib": "workspace:8.0.0-rc.24",
     "dotenv": "^17.4.2",
     "pg": "catalog:"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.10.0",
+    "@prisma/cli-engine": "0.10.4",
     "@prisma/dev": "catalog:",
     "@prisma/prisma7": "7.10.0",
     "@repo/test-utils": "workspace:8.0.0-rc.24",

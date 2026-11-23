@@ -5,18 +5,22 @@ import { fileURLToPath } from 'node:url';
 import type { InitContribution } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import mongoContribution from '@internal/mongo/init';
+import mysqlContribution from '@internal/mysql/init';
 import postgresContribution from '@internal/postgres/init';
+import sqliteContribution from '@internal/sqlite/init';
 import { normalize as portablePath, relative as portableRelative } from 'pathe';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
 
-type TargetId = 'postgres' | 'mongo';
+type TargetId = 'postgres' | 'mongo' | 'sqlite' | 'mysql';
 type AuthoringId = ContractSourceFormat;
 
 const CONTRIBUTIONS: Record<TargetId, InitContribution> = {
   postgres: postgresContribution,
   mongo: mongoContribution,
+  sqlite: sqliteContribution,
+  mysql: mysqlContribution,
 };
 
 /**
@@ -54,6 +58,14 @@ const FACADE_FOR_TARGET: Record<TargetId, FacadeInfo> = {
     packageName: '@internal/mongo',
     packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/mongo/9-facade/package.json'),
   },
+  sqlite: {
+    packageName: '@internal/sqlite',
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/sqlite/9-facade/package.json'),
+  },
+  mysql: {
+    packageName: '@internal/mysql',
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/mysql/1-mysql/9-facade/package.json'),
+  },
 };
 
 const CELLS: ReadonlyArray<{ readonly target: TargetId; readonly authoring: AuthoringId }> = [
@@ -61,6 +73,10 @@ const CELLS: ReadonlyArray<{ readonly target: TargetId; readonly authoring: Auth
   { target: 'postgres', authoring: 'typescript' },
   { target: 'mongo', authoring: 'psl' },
   { target: 'mongo', authoring: 'typescript' },
+  { target: 'sqlite', authoring: 'psl' },
+  { target: 'sqlite', authoring: 'typescript' },
+  { target: 'mysql', authoring: 'psl' },
+  { target: 'mysql', authoring: 'typescript' },
 ];
 
 interface FacadeExports {
@@ -219,10 +235,46 @@ function workspaceModulesLoadedBy(entry: string): { files: string[]; specifiers:
 
 describe('the init entrypoints import no framework code that runs', () => {
   const entrypoints = [
-    { name: '@internal/postgres/init', dir: 'packages/3-targets/postgres/9-facade' },
-    { name: '@internal/mongo/init', dir: 'packages/3-targets/mongo/9-facade' },
-    { name: '@prisma/orm-postgres/init', dir: 'packages/9-public/@prisma/orm-postgres' },
-    { name: '@prisma/orm-mongo/init', dir: 'packages/9-public/@prisma/orm-mongo' },
+    {
+      name: '@internal/postgres/init',
+      dir: 'packages/3-targets/postgres/9-facade',
+      statesServerVersion: true,
+    },
+    {
+      name: '@internal/mongo/init',
+      dir: 'packages/3-targets/mongo/9-facade',
+      statesServerVersion: true,
+    },
+    {
+      name: '@internal/sqlite/init',
+      dir: 'packages/3-targets/sqlite/9-facade',
+      statesServerVersion: false,
+    },
+    {
+      name: '@internal/mysql/init',
+      dir: 'packages/3-targets/mysql/1-mysql/9-facade',
+      statesServerVersion: false,
+    },
+    {
+      name: '@prisma/orm-postgres/init',
+      dir: 'packages/9-public/@prisma/orm-postgres',
+      statesServerVersion: true,
+    },
+    {
+      name: '@prisma/orm-mongo/init',
+      dir: 'packages/9-public/@prisma/orm-mongo',
+      statesServerVersion: true,
+    },
+    {
+      name: '@prisma/orm-sqlite/init',
+      dir: 'packages/9-public/@prisma/orm-sqlite',
+      statesServerVersion: false,
+    },
+    {
+      name: '@prisma/orm-mysql/init',
+      dir: 'packages/9-public/@prisma/orm-mysql',
+      statesServerVersion: false,
+    },
   ];
 
   it('finds a framework module that a built file imports', () => {
@@ -244,14 +296,16 @@ describe('the init entrypoints import no framework code that runs', () => {
     }
   });
 
-  for (const { name, dir } of entrypoints) {
+  for (const { name, dir, statesServerVersion } of entrypoints) {
     it(`${name} loads only target and third-party modules`, () => {
       const { files, specifiers } = workspaceModulesLoadedBy(
         resolve(REPO_ROOT, dir, 'dist/init.mjs'),
       );
 
       expect(specifiers).toContain('pathe');
-      expect(specifiers.some((specifier) => specifier.endsWith('/server-version'))).toBe(true);
+      expect(specifiers.some((specifier) => specifier.endsWith('/server-version'))).toBe(
+        statesServerVersion,
+      );
       expect(
         files.filter((file) => FRAMEWORK_LOCATIONS.some((location) => file.startsWith(location))),
       ).toEqual([]);

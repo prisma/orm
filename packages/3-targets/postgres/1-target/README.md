@@ -258,7 +258,9 @@ See `@internal/family-sql/control` README for full error code documentation.
 
 ## Introspection session settings
 
-Postgres prints a `timestamptz` value in the session's time zone, and dates, intervals and `bytea` values in the session's styles, so the same stored default can read back as different text on two servers. The adapter therefore runs the whole introspection read with `TimeZone = UTC`, `DateStyle = ISO, MDY`, `IntervalStyle = postgres`, and `bytea_output = hex`, and restores the caller's settings when it finishes, including when the read fails. Inside a caller's transaction the settings are set and restored locally; outside one they are set and restored for the session. Column defaults, check constraint text, index predicates, and policy expressions are all read under those settings, so their text does not depend on the server, the role, or what the caller had set.
+Postgres prints a `timestamptz` value in the session's time zone, dates, intervals and `bytea` values in the session's styles, and `money` in the session's monetary locale, so the same stored default can read back as different text on two servers. The adapter therefore runs the whole introspection read with `TimeZone = UTC`, `DateStyle = ISO, MDY`, `IntervalStyle = postgres`, `bytea_output = hex` and `lc_monetary = C`. The settings are always local to a transaction, so they never reach a server connection that a connection pooler shares with other clients. Inside a caller's transaction they are set locally and the caller's values are restored locally afterwards; outside one, the read runs in a transaction of its own, which is rolled back. Column defaults, check constraint text, index predicates, and policy expressions are all read under those settings, so their text does not depend on the server, the role, or what the caller had set.
+
+The migration runner sets `lc_monetary = C` locally in its transaction for the same reason: PostgreSQL reads a `money` literal in DDL, such as `DEFAULT '12.34'::money`, by the monetary locale, and `C` stores it exactly.
 
 ## Exports
 

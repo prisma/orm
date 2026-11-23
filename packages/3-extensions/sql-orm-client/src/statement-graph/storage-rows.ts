@@ -36,7 +36,7 @@ export interface VariantCreateRow {
   readonly variant: Readonly<Record<string, unknown>>;
 }
 
-const nothingBefore: BeforeWrite = { keys: [], nullColumns: {} };
+const nothingBefore: BeforeWrite = { keys: [], nullColumns: {}, unlinksAfterWrite: false };
 
 export function modelOf(collection: DescribeCollectionRowsOptions): Model {
   const { modelName, namespaceId, state } = collection;
@@ -238,7 +238,11 @@ export function mappedUpdateRow(
     namespaceId,
     modelName,
   )?.discriminatorField;
-  if (discriminator !== undefined && data[discriminator] !== undefined) {
+  if (
+    discriminator !== undefined &&
+    Object.hasOwn(data, discriminator) &&
+    data[discriminator] !== undefined
+  ) {
     throw ormError(
       'ORM.FIELD_IMMUTABLE',
       `Update data for model "${modelName}" cannot set its discriminator "${discriminator}"`,
@@ -261,14 +265,23 @@ export function withUpdateDefaults(
   if (Object.keys(written).length === 0) {
     return values;
   }
-  const { namespaceId, tableName } = collection.state.tables.root.storage;
-  for (const applied of collection.context.applyMutationDefaults({
-    op: 'update',
-    entry: tableName,
-    namespace: namespaceId,
-    values: written,
-  })) {
-    values[applied.field] = applied.value;
-  }
-  return values;
+  return { ...values, ...updateDefaultsOf(collection.context, modelOf(collection), written) };
+}
+
+export function updateDefaultsOf(
+  context: ExecutionContext,
+  model: Model,
+  written: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const { namespaceId, tableName } = model.tables.root.storage;
+  return Object.fromEntries(
+    context
+      .applyMutationDefaults({
+        op: 'update',
+        entry: tableName,
+        namespace: namespaceId,
+        values: written,
+      })
+      .map((applied) => [applied.field, applied.value]),
+  );
 }

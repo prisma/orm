@@ -74,6 +74,45 @@ describe('mysqlCreateNamespace', () => {
     expect(columnsOf(database).id.typeParams).toBeUndefined();
   });
 
+  const decimalColumn = (typeParams?: Record<string, unknown>, defaultValue?: string) => ({
+    dataType: 'mysql/decimal',
+    codecId: 'mysql/decimal@1',
+    nullable: false,
+    ...(typeParams === undefined ? {} : { typeParams }),
+    ...(defaultValue === undefined ? {} : { default: { kind: 'literal', value: defaultValue } }),
+  });
+
+  it.each([
+    ['no type parameters', undefined, { precision: 10, scale: 0 }],
+    ['a precision alone', { precision: 12 }, { precision: 12, scale: 0 }],
+    ['a precision and a scale', { precision: 12, scale: 4 }, { precision: 12, scale: 4 }],
+  ])(
+    'writes the precision and scale MySQL gives a decimal column with %s',
+    (_written, typeParams, filled) => {
+      const database = mysqlCreateNamespace({
+        id: UNBOUND_NAMESPACE_ID,
+        entries: { table: { User: userTable(decimalColumn(typeParams)) } },
+      });
+      expect(columnsOf(database).role.typeParams).toEqual(filled);
+    },
+  );
+
+  it.each([
+    [undefined, '12.0', '12'],
+    [undefined, '0.0', '0'],
+    [undefined, '-12', '-12'],
+    [{ precision: 12 }, '12.000', '12'],
+  ])(
+    'writes the default of a decimal column with %j as the column it fills prints it: %s is %s',
+    (typeParams, written, printed) => {
+      const database = mysqlCreateNamespace({
+        id: UNBOUND_NAMESPACE_ID,
+        entries: { table: { User: userTable(decimalColumn(typeParams, written)) } },
+      });
+      expect(columnsOf(database).role.default).toEqual({ kind: 'literal', value: printed });
+    },
+  );
+
   it('writes an enum column’s members into its type parameters in declared order', () => {
     const database = mysqlCreateNamespace({
       id: UNBOUND_NAMESPACE_ID,

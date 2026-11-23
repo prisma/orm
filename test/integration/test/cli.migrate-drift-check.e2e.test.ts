@@ -23,6 +23,18 @@ function remediation(error: MigrateErrorJson): string {
     .join('\n');
 }
 
+/** The arguments a next action's command gives `command`, as a shell would pass them, with `<slug>` filled in. */
+function printedArgs(error: MigrateErrorJson, label: string, command: string): string[] {
+  const printed = error.nextActions?.find((action) => action.label === label)?.command ?? '';
+  const start = printed.indexOf(command);
+  expect(start, `"${label}" names \`${command}\`: ${printed}`).toBeGreaterThanOrEqual(0);
+  return printed
+    .slice(start + command.length)
+    .split(/\s+/)
+    .filter((arg) => arg !== '')
+    .map((arg) => (arg === '<slug>' ? 'planned-as-advised' : arg.replace(/^'(.*)'$/, '$1')));
+}
+
 interface MigrateErrorJson {
   readonly ok?: boolean;
   readonly code?: string;
@@ -79,7 +91,7 @@ async function incidentDatabase(ctx: JourneyContext): Promise<Incident> {
   expect((await planMigrationAndSelfEmit(ctx, ['--name', 'add-name'])).exitCode).toBe(0);
   const deleted = getLatestMigrationDir(ctx)!;
   const markerHash = migrationTo(ctx, deleted);
-  expect((await runMigrate(ctx)).exitCode).toBe(0);
+  expect((await runMigrate(ctx, ['--no-advance-ref'])).exitCode).toBe(0);
 
   rmSync(join(appMigrationsDir(ctx), deleted), { recursive: true, force: true });
   swapContract(ctx, 'contract-phone');
@@ -115,7 +127,7 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
             expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
-            const firstApply = await runMigrate(ctx, ['--json']);
+            const firstApply = await runMigrate(ctx, ['--no-advance-ref', '--json']);
             expect(firstApply.exitCode).toBe(0);
             const firstJson = parseJsonOutput<{ markerHash: string }>(firstApply);
             const staleMarker = firstJson.markerHash;
@@ -277,7 +289,7 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
             expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
-            expect((await runMigrate(ctx)).exitCode).toBe(0);
+            expect((await runMigrate(ctx, ['--no-advance-ref'])).exitCode).toBe(0);
 
             removeAppMigrationBundles(ctx);
             swapContract(ctx, 'contract-additive');
@@ -323,6 +335,47 @@ withTempDir(({ createTempDir }) => {
             expect(remediation(err)).toMatch(/migration list/);
             expect(remediation(err)).toMatch(/migration plan/);
             expect(remediation(err)).toMatch(/migration show/);
+
+            const plan = await planMigrationAndSelfEmit(
+              ctx,
+              printedArgs(err, 'Plan the missing edge', 'migration plan'),
+            );
+            expect(plan.exitCode, plan.stderr).toBe(0);
+            const apply = await runMigrate(ctx, printedArgs(err, 'Apply it', 'db migrate'));
+            expect(apply.exitCode, apply.stderr).toBe(0);
+          });
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'prints commands that run when the unreachable target is a contract a migration names',
+      async () => {
+        await withDevDatabase(async ({ connectionString }) => {
+          await withJourney(createTempDir, connectionString, async (ctx) => {
+            expect((await runContractEmit(ctx)).exitCode).toBe(0);
+            expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
+            const initialHash = migrationTo(ctx, getLatestMigrationDir(ctx)!);
+            swapContract(ctx, 'contract-additive');
+            expect((await runContractEmit(ctx)).exitCode).toBe(0);
+            const addNamePlan = ['--from', initialHash, '--name', 'add-name'];
+            expect((await planMigrationAndSelfEmit(ctx, addNamePlan)).exitCode).toBe(0);
+            const addName = getLatestMigrationDir(ctx)!;
+            expect((await runMigrate(ctx)).exitCode).toBe(0);
+
+            const unreachable = await runMigrate(ctx, ['--to', `${addName}^`, '--json']);
+            const err = parseJsonOutput<MigrateErrorJson>(unreachable);
+            expect(err.code).toBe('MIGRATION.PATH_UNREACHABLE');
+            expect(err.meta?.targetHash).toBe(initialHash);
+
+            const planArgs = printedArgs(err, 'Plan the missing edge', 'migration plan');
+            expect(planArgs).toContain('--to');
+            const dropNameColumn = ['--delete', 'User.name'];
+            const plan = await planMigrationAndSelfEmit(ctx, [...planArgs, ...dropNameColumn]);
+            expect(plan.exitCode, plan.stderr).toBe(0);
+            const apply = await runMigrate(ctx, printedArgs(err, 'Apply it', 'db migrate'));
+            expect(apply.exitCode, apply.stderr).toBe(0);
           });
         });
       },

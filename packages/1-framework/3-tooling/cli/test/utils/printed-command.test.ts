@@ -35,11 +35,41 @@ describe('cliCommand', () => {
 describe('rerunFlags', () => {
   it.each([
     {
-      flags: { to: 'production', advanceRef: 'my db', permitPolicyChange: true },
+      flags: {
+        to: 'production',
+        advanceRef: 'my db',
+        noAdvanceRef: undefined,
+        permitPolicyChange: true,
+      },
       args: ['--to', 'production', '--advance-ref', "'my db'", '--permit-policy-change'],
     },
-    { flags: { to: undefined, advanceRef: undefined, permitPolicyChange: false }, args: [] },
-    { flags: { to: undefined, advanceRef: undefined, permitPolicyChange: undefined }, args: [] },
+    {
+      flags: {
+        to: undefined,
+        advanceRef: undefined,
+        noAdvanceRef: true,
+        permitPolicyChange: false,
+      },
+      args: ['--no-advance-ref'],
+    },
+    {
+      flags: {
+        to: undefined,
+        advanceRef: undefined,
+        noAdvanceRef: false,
+        permitPolicyChange: false,
+      },
+      args: [],
+    },
+    {
+      flags: {
+        to: undefined,
+        advanceRef: undefined,
+        noAdvanceRef: undefined,
+        permitPolicyChange: undefined,
+      },
+      args: [],
+    },
   ])('repeats exactly the flags given: $args', ({ flags, args }) => {
     expect(rerunFlags(flags)).toEqual(args);
   });

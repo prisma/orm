@@ -2,6 +2,7 @@ import { ifDefined } from '@internal/utils/defined';
 import type { PromptSurface, StatementSurface } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import {
+  type AnsweredWithoutAsking,
   type AnswerPlanQuestions,
   matchConsents,
   type PlanAnswer,
@@ -176,10 +177,39 @@ export function promptPlanQuestions(
   statements: StatementSurface,
 ): AnswerPlanQuestions {
   const answer = answering(prompt, statements);
-  return (questions) =>
-    answer(questions).catch((error: unknown) => {
+  return async (questions, answeredWithoutAsking = []) => {
+    takeConsentsAnsweredWithoutAsking(questions, answeredWithoutAsking, statements);
+    return answer(questions).catch((error: unknown) => {
       throw ledByKeepDataWays(error, questions);
     });
+  };
+}
+
+/**
+ * Takes the `--delete` and `--allow` values of each verb no question asks about but the run
+ * answered without asking, as a database whose data protection policy permits it does: a value
+ * that names such a subject is used, and one that names nothing the run touched is unused.
+ */
+function takeConsentsAnsweredWithoutAsking(
+  questions: readonly PlanQuestion[],
+  answeredWithoutAsking: readonly AnsweredWithoutAsking[],
+  statements: StatementSurface,
+): void {
+  for (const verb of ['delete', 'allow'] as const) {
+    const answered = answeredWithoutAsking.filter((entry) => entry.verb === verb);
+    if (answered.length === 0 || questions.some(({ verbs }) => verbs.includes(verb))) continue;
+    const matched = matchConsents(
+      verb,
+      answered.map(({ subject, removedNamespace }) => ({ text: subject, removedNamespace })),
+      statements.take(verb).map(({ text }) => text),
+    );
+    if (matched.unused.length > 0) {
+      throw errorConsentUnused(
+        matched.unused,
+        questions.map(({ subject }) => subject),
+      );
+    }
+  }
 }
 
 function answering(prompt: PromptSurface, statements: StatementSurface): AnswerPlanQuestions {

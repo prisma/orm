@@ -1,7 +1,17 @@
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import { extname, normalize } from 'pathe';
-import { errorInitAuthoringSchemaPathMismatch, errorInitInvalidFlagValue } from './errors';
-import { findTargetByName, type KnownTarget, TARGET_SHORT_NAMES } from './target-packages';
+import validatePackageName from 'validate-npm-package-name';
+import {
+  errorInitAuthoringSchemaPathMismatch,
+  errorInitInvalidFlagValue,
+  errorInitInvalidTarget,
+} from './errors';
+import {
+  findTargetByName,
+  listedTargetPackage,
+  type TargetPackage,
+  unlistedTargetPackage,
+} from './target-packages';
 
 const AUTHORING_VALUES: ReadonlyMap<string, ContractSourceFormat> = new Map([
   ['psl', 'psl'],
@@ -9,17 +19,28 @@ const AUTHORING_VALUES: ReadonlyMap<string, ContractSourceFormat> = new Map([
   ['ts', 'typescript'],
 ]);
 
-export function resolveTarget(value: string | undefined): KnownTarget | undefined {
-  if (value === undefined) return undefined;
-  const mapped = findTargetByName(value);
-  if (mapped === undefined) {
-    throw errorInitInvalidFlagValue({
-      flag: 'target',
+export function resolveTarget(value: string | undefined): TargetPackage | undefined {
+  return value === undefined ? undefined : resolveTargetName(value, 'flag');
+}
+
+/**
+ * A short name or alias from the list, or the name of a target package that is in no list.
+ * `answeredIn` says where the value came from, for the wording of a refusal.
+ */
+export function resolveTargetName(value: string, answeredIn: 'flag' | 'prompt'): TargetPackage {
+  const listed = findTargetByName(value);
+  if (listed !== undefined) {
+    return listedTargetPackage(listed);
+  }
+  const validation = validatePackageName(value);
+  if (!validation.validForNewPackages) {
+    throw errorInitInvalidTarget({
       value,
-      allowed: TARGET_SHORT_NAMES,
+      problems: [...(validation.errors ?? []), ...(validation.warnings ?? [])],
+      answeredIn,
     });
   }
-  return mapped;
+  return unlistedTargetPackage(value);
 }
 
 export function resolveAuthoring(value: string | undefined): ContractSourceFormat | undefined {

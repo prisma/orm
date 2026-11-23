@@ -2,7 +2,7 @@
  * `prisma orm init` user-journey test (TML-2490) — seam verifier.
  *
  * Walks the full user inner loop from `prisma orm init` through to a working
- * query against a real DB, across all four `(target × authoring)` cells.
+ * query against a real DB, across every `(target × authoring)` cell.
  * Asserts the contract one subsystem hands to the next at every seam.
  *
  * The seams that were once tracked as known bugs are all fixed; each step
@@ -22,6 +22,7 @@ import {
   cellLabel,
   createJourneyProject,
   emitContract,
+  FACADE_FOR_TARGET,
   type JourneyProject,
   migrationApply,
   migrationPlan,
@@ -209,6 +210,37 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
       },
       timeouts.coldTransformImport,
     );
+
+    it(
+      'step 7 (user code: the scaffolded db.ts writes and reads a row of the SQLite file)',
+      async () => {
+        if (cell.target !== 'sqlite') return;
+        const run = await runUserCode(
+          ctx.project,
+          'check-sqlite-journey.ts',
+          [
+            "import { db } from './src/prisma/db.ts';",
+            '',
+            "const email = 'journey-' + Date.now() + '@example.com';",
+            'try {',
+            "  const created = await db.orm.User.create({ email, name: 'Journey User' });",
+            '  const found = await db.orm.User.where((u) => u.email.eq(email)).first();',
+            '  if (found === null || found.id !== created.id || found.email !== email) {',
+            "    console.error('runtime CRUD roundtrip failed', { created, found });",
+            '    process.exit(1);',
+            '  }',
+            '} finally {',
+            '  await db.close();',
+            '}',
+            "console.log('ok');",
+            '',
+          ].join('\n'),
+        );
+        expect(run.exitCode, formatStepDiagnostic('sqlite journey user-code', null, run)).toBe(0);
+        expect(run.stdout.trim()).toBe('ok');
+      },
+      timeouts.coldTransformImport,
+    );
   },
 );
 
@@ -335,7 +367,7 @@ function expectSchemaFile(project: JourneyProject, cell: CellId): void {
 
 function expectConfigFile(project: JourneyProject, cell: CellId): void {
   const contents = readFileSync(join(project.dir, 'prisma.config.ts'), 'utf-8');
-  expect(contents, 'config imports postgres/mongo facade only').toContain(
+  expect(contents, 'config imports the target package only').toContain(
     `from '${facadeFor(cell)}/config'`,
   );
   expect(contents, 'config references the schema file').toContain(schemaPath(cell));
@@ -345,9 +377,8 @@ function schemaPath(cell: CellId): string {
   return cell.authoring === 'typescript' ? 'src/prisma/contract.ts' : 'src/prisma/contract.prisma';
 }
 
-/** The one package name a project scaffolded for `cell` depends on. */
 function facadeFor(cell: CellId): string {
-  return cell.target === 'mongo' ? '@prisma/orm-mongo' : '@prisma/orm-postgres';
+  return FACADE_FOR_TARGET[cell.target];
 }
 
 function expectFacadeIsResolvable(project: JourneyProject): void {

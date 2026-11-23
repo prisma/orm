@@ -27,6 +27,8 @@ import { normalizeError } from './normalize-error';
  * to catch it outside the outermost boundary: it means an invariant broke, which is a bug in
  * Prisma ORM rather than something the user did. Re-throwing lets the engine settle it as a bug
  * at exit 1, where converting it would report the same number as a bad connection string.
+ *
+ * The reason of a cancelled run is not converted either, so the engine settles the run as cancelled.
  */
 
 export function defineOrmCommand<
@@ -56,7 +58,7 @@ export function defineOrmCommand<
       try {
         return await def.handler(args, ctx);
       } catch (error) {
-        if (isInternalError(error)) {
+        if (isInternalError(error) || (ctx.signal.aborted && error === ctx.signal.reason)) {
           throw error;
         }
         return notOk(normalizeError(error));

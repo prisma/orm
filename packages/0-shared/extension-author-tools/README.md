@@ -4,6 +4,8 @@ CLI tools that pair with the extension-upgrade branch of the [`prisma-8`](../../
 
 The agent-readable upgrade procedure itself (the flow in [`references/upgrade-extension.md`](../../../skills/prisma-8/references/upgrade-extension.md) and the `upgrades/<from>-to-<to>/instructions.md` set under [`upgrading/extension/`](../../../skills/prisma-8/upgrading/extension/)) ships inside the `@prisma/orm-*` tarballs. This package is the npm-published companion that supplies the CI bin the skill drives.
 
+A package that adds a database target follows [`references/build-a-target-package.md`](../../../skills/prisma-8/references/build-a-target-package.md) in the same skill: the modules its `defineConfig` names for generated files, and the `init` entrypoint `prisma orm init` loads.
+
 ## Installation
 
 ```bash

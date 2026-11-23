@@ -53,6 +53,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { ok, type Result } from '@internal/utils/result';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
+import { ownEntry } from '../own-entry';
 import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { postgresNodeStorageCoordinate } from '../schema-ir/node-storage-coordinate';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
@@ -69,6 +70,7 @@ import {
   resolvePostgresNodeIssueCreationFactoryName,
 } from './control-policy';
 import { buildPostgresPlanDiff } from './diff-database-schema';
+import { droppedRelationNames } from './dropped-relation-names';
 import { pairCheckRenames, pairIndexRenames } from './index-and-check-renames';
 import {
   coalesceSubtreeIssues,
@@ -89,6 +91,8 @@ import {
   DropTableCall,
   RawSqlCall,
   type RenameColumnCall,
+  RenameConstraintCall,
+  RenameIndexCall,
   RenamePostgresRlsPolicyCall,
   RenameSchemaCall,
   type RenameTableCall,
@@ -204,9 +208,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     readonly policy: MigrationOperationPolicy;
     /**
      * The "from" contract (state the planner assumes the database starts
-     * at), or `null` for reconciliation flows. Only `migration plan` ever
-     * supplies a non-null value; `db update` / `db init` reconcile against
-     * the live schema and pass `null`. When present alongside the
+     * at), or `null` when there is none. `migration plan` passes the
+     * contract of the migration it plans from; `db update` passes the
+     * contract the database's marker names when its snapshot can be read,
+     * and `null` otherwise; `db init` passes `null`. When present alongside the
      * `'data'` operation class, strategies that need from/to column-shape
      * comparisons (unsafe type change, nullability tightening) activate.
      *
@@ -443,10 +448,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     const result = planIssues({
       issues: issuePartition.plannable,
       toContract: options.contract,
-      // `fromContract` is only supplied by `migration plan`. It is `null` for
-      // `db update` / `db init`, which means data-safety strategies needing
-      // from/to comparisons (unsafe type change, nullable tightening) are
-      // inapplicable there — reconciliation falls through to
+      // `fromContract` is `null` for `db init`, and for `db update` when the
+      // database's marker names no readable contract. Then data-safety
+      // strategies needing from/to comparisons (unsafe type change, nullable
+      // tightening) are inapplicable, and reconciliation falls through to
       // `mapNodeIssueToCall`'s direct destructive handlers.
       fromContract: options.fromContract,
       schemaName,
@@ -535,22 +540,38 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       fieldEventPostgresCalls,
       options.contract,
     );
+    const ddlSchemaOf = (name: string) =>
+      name === UNBOUND_NAMESPACE_ID
+        ? resolveDdlSchemaForNamespaceStorage(options.contract.storage, UNBOUND_NAMESPACE_ID)
+        : name;
     const ordered = movePolicyDropsBeforeBlockedDdl(
       withChecksAroundTypeChanges({
         calls: result.value.calls,
         expected: expectedSchema,
         actual: schema,
-        ddlSchemaOf: (name) =>
-          name === UNBOUND_NAMESPACE_ID
-            ? resolveDdlSchemaForNamespaceStorage(options.contract.storage, UNBOUND_NAMESPACE_ID)
-            : name,
+        ddlSchemaOf,
       }),
       schemaDiffPartition.kept,
     );
+    const droppedByStructural = droppedRelationNames(ordered.structural, schema, ddlSchemaOf);
+    const beforeStructural = (call: PostgresOpFactoryCall) => {
+      if (!(call instanceof RenameConstraintCall || call instanceof RenameIndexCall)) return false;
+      const renamedTo =
+        call instanceof RenameConstraintCall ? call.newConstraintName : call.newIndexName;
+      return (
+        !droppedByStructural(call.schemaName, renamedTo) &&
+        statements.value.alreadyRenamedTables.some(
+          (table) =>
+            call.schemaName === emissionSchemaForNamespace(options.contract, table.namespaceId) &&
+            call.tableName === table.table,
+        )
+      );
+    };
     const calls = [
       ...statements.value.calls,
+      ...renamePartition.kept.filter(beforeStructural),
       ...ordered.structural,
-      ...renamePartition.kept,
+      ...renamePartition.kept.filter((call) => !beforeStructural(call)),
       ...ordered.policyCalls,
       ...fieldEventPartition.kept,
     ];
@@ -603,6 +624,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
+          storageRenames: statements.value.storageRenames,
           byHand: postgresTableRenameByHand(options.contract),
           removedVariants: storedRewrites.value.removedVariants,
         },
@@ -912,7 +934,6 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
             frameworkComponents: options.frameworkComponents,
           }),
         apply: (call) => working.apply(call),
-        ...postgresTableRenameByHand(options.contract),
       },
     });
     if (!planned.ok) return planned;
@@ -1006,7 +1027,7 @@ function removedNamespaceSchemas(
     (schemaName) =>
       schemaName !== DEFAULT_NAMESPACE_ID &&
       !destination.has(schemaName) &&
-      schema.namespaces[schemaName] !== undefined,
+      ownEntry(schema.namespaces, schemaName) !== undefined,
   );
 }
 

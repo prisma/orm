@@ -35,7 +35,7 @@
     "ws": "^8.21.2"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.10.0",
+    "@prisma/cli-engine": "0.10.4",
     "@repo/prisma-bin": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@types/node": "catalog:",
@@ -43,7 +43,7 @@
     "puppeteer-core": "^25.4.0",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vite": "^6.3.5"
+    "vite": "^6.4.6"
   },
   "engines": {
     "node": ">=24"

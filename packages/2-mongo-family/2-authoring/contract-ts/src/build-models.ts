@@ -27,6 +27,7 @@ import type {
   RelationNode,
   ValueObjectNode,
 } from './contract-definition';
+import { defineOwn } from './own-keys';
 
 export function storedNameOf(field: FieldNode): string {
   return field.storedName ?? field.fieldName;
@@ -115,7 +116,7 @@ function buildStorageFields(
       continue;
     }
     fieldsByStoredName.set(storedName, fieldName);
-    storageFields[fieldName] = { field: storedName };
+    defineOwn(storageFields, fieldName, { field: storedName });
   }
   return storageFields;
 }
@@ -183,7 +184,7 @@ export function buildValueObjects(
   const builtValueObjects: Record<string, ContractValueObject> = {};
 
   for (const valueObject of valueObjects ?? []) {
-    if (valueObject.name in builtValueObjects) {
+    if (Object.hasOwn(builtValueObjects, valueObject.name)) {
       refusals.push({
         kind: 'duplicateValueObject',
         key: { kind: 'valueObject', valueObject: valueObject.name },
@@ -198,9 +199,9 @@ export function buildValueObjects(
         });
       }
     }
-    builtValueObjects[valueObject.name] = {
+    defineOwn(builtValueObjects, valueObject.name, {
       fields: buildValueObjectMembers(valueObject.fields, namespaceId),
-    };
+    });
   }
 
   return builtValueObjects;
@@ -279,7 +280,7 @@ export function buildModels(input: {
 
   for (const model of models) {
     const { modelName } = model;
-    if (modelName in builtModels) {
+    if (Object.hasOwn(builtModels, modelName)) {
       refusals.push({ kind: 'duplicateModel', key: { kind: 'model', model: modelName } });
       continue;
     }
@@ -301,7 +302,7 @@ export function buildModels(input: {
               : [];
           });
 
-    builtModels[modelName] = {
+    defineOwn(builtModels, modelName, {
       fields: buildFields(model.fields, namespaceId),
       relations: Object.fromEntries(
         (model.relations ?? []).map((relation) => [
@@ -314,7 +315,7 @@ export function buildModels(input: {
       ...(model.base ? { base: crossRef(model.base.model, namespaceId) } : {}),
       ...(model.discriminator ? { discriminator: { field: model.discriminator.field } } : {}),
       ...(variants === undefined ? {} : { variants: Object.fromEntries(variants) }),
-    };
+    });
   }
 
   return builtModels;
@@ -336,7 +337,65 @@ export function buildRoots(
   const roots: Record<string, CrossReference> = {};
   for (const model of models) {
     if (!model.collection || model.owner || model.base) continue;
-    roots[model.collection] = crossRef(model.modelName, namespaceId);
+    defineOwn(roots, model.collection, crossRef(model.modelName, namespaceId));
   }
   return roots;
+}
+
+/** Refuses each name of the definition that cannot be an object's own key: the name of a model, value object, enum, collection or root. */
+export function refuseUnsupportedNames(
+  definition: ContractDefinition,
+  refusals: BuildRefusal[],
+): void {
+  const unsupported = (name: string) => unsupportedStoredNameReason(name) !== undefined;
+  for (const model of definition.models) {
+    if (unsupported(model.modelName)) {
+      refusals.push({
+        kind: 'nameUnsupported',
+        key: { kind: 'model', model: model.modelName },
+        subject: 'model',
+        name: model.modelName,
+      });
+    }
+    if (model.collection !== undefined && unsupported(model.collection)) {
+      refusals.push({
+        kind: 'nameUnsupported',
+        key: { kind: 'collectionSettings', model: model.modelName },
+        subject: 'collection',
+        name: model.collection,
+      });
+    }
+  }
+  for (const valueObject of definition.valueObjects ?? []) {
+    if (unsupported(valueObject.name)) {
+      refusals.push({
+        kind: 'nameUnsupported',
+        key: { kind: 'valueObject', valueObject: valueObject.name },
+        subject: 'valueObject',
+        name: valueObject.name,
+      });
+    }
+  }
+  for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {
+    for (const name of new Set([enumName, handle.enumName])) {
+      if (unsupported(name)) {
+        refusals.push({
+          kind: 'nameUnsupported',
+          key: { kind: 'enum', enumName },
+          subject: 'enum',
+          name,
+        });
+      }
+    }
+  }
+  for (const [rootName, modelName] of Object.entries(definition.roots ?? {})) {
+    if (unsupported(rootName)) {
+      refusals.push({
+        kind: 'nameUnsupported',
+        key: { kind: 'model', model: modelName },
+        subject: 'root',
+        name: rootName,
+      });
+    }
+  }
 }

@@ -20,12 +20,12 @@
   "dependencies": {
     "@prisma/orm-extension-paradedb": "workspace:8.0.0-rc.24",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
-    "arktype": "^2.2.2",
+    "arktype": "^2.2.9",
     "dotenv": "^17.4.2",
     "pg": "catalog:"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.10.0",
+    "@prisma/cli-engine": "0.10.4",
     "@repo/prisma-bin": "workspace:8.0.0-rc.24",
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",

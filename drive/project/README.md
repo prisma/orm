@@ -25,6 +25,8 @@ Project-scope calibration lives in [`drive/calibration/`](../calibration/):
 
 A stacked PR is justified only when its base PR is independently valuable to merge as-is. When a mid-flight scope addition rewrites an unmerged slice's internals, fold the two into one PR — the transient scaffolding then nets out of the diff entirely instead of costing two reviews. (Learned on lsp-interpreter-diagnostics: a stacked PR folded into its base after the operator flagged the review-time waste.)
 
+Order slices by what they wait on. A slice that needs another project's unmerged change, and every slice that depends on it, goes after the slices that wait on nothing, and when part of a slice waits on unmerged work, ship the rest and move that part to a later slice. Before building a slice, list the open pull requests and recent merges that touch the same code, so a redesign on `main` is seen before the slice is built on the old code.
+
 ## Status-update cadence
 
 - Linear Project status: update at slice-merge (`drive-deliver-workflow` does this implicitly via `drive-check-health`).
@@ -38,7 +40,11 @@ Projects that introduce durable architectural decisions (subsystems, patterns, c
 
 ## Close-out runs the close-out procedure
 
-A project's `plan.md` close-out checklist is a reminder, not the procedure. Close-out runs the close-out procedure of the `drive-process` skill (`references/close-project.md`, installed from [prisma/ignite](https://github.com/prisma/ignite/tree/main/skills/.pilot)) step by step: the final retro first, then the project DoD criterion by criterion with evidence, confirmation that every review thread on every slice PR is resolved by a fix or by a reply that says why not, the reference scan, file classification and prose audit, migration, and a close-out PR whose description carries the DoD block, the classification and the reference-strip summary. (Added 2026-10-27, mongo-authoring-structure: the first close-out PR filed tickets, linked them from an ADR and deleted the folder, and skipped the retro, the DoD block, the classification and two references; the operator sent it back.)
+A project's `plan.md` close-out checklist is a reminder, not the procedure. Before starting, read this file, [`drive/retro/README.md`](../retro/README.md) and [`drive/calibration/dod.md`](../calibration/dod.md): they hold this repository's additions to the procedure. Close-out runs the close-out procedure of the `drive-process` skill (`references/close-project.md`, installed from [prisma/ignite](https://github.com/prisma/ignite/tree/main/skills/.pilot)) step by step: the final retro first, then the project DoD criterion by criterion with evidence, confirmation that every review thread on every slice PR is resolved by a fix or by a reply that says why not, the reference scan, file classification and prose audit, migration, and a close-out PR whose description carries the DoD block, the classification and the reference-strip summary. (Added 2026-10-27, mongo-authoring-structure: the first close-out PR filed tickets, linked them from an ADR and deleted the folder, and skipped the retro, the DoD block, the classification and two references; the operator sent it back.)
+
+## Close-out moves reasons into docs, not notes
+
+When a project's working notes hold something the permanent docs lack, write the durable fact and its reason into the doc that owns the subject, in that doc's own voice. Do not copy the notes. Leave out measurements from one run, figures no test checks, surveys of other libraries, upstream bug ids for code paths we do not use, and anything that would need "measured once" or "observed on" in front of it. (Added 2026-11-19, MySQL proof of concept: one-run timings went into a driver README.)
 
 ## Close-out destinations
 

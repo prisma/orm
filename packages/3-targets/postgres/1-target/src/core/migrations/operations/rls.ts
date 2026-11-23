@@ -1,5 +1,9 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
-import { expectAbsent, expectPresent } from '@internal/framework-components/control';
+import {
+  expectAbsent,
+  expectPresent,
+  type MigrationOperationClass,
+} from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import {
   rlsEnabledAst,
@@ -37,6 +41,72 @@ function catalogPolicyRoles(roles: readonly string[]): readonly string[] {
   return named.includes('public') ? ['public'] : named;
 }
 
+/** What an RLS operation is about, as `ops.json` records it: its id, class and target. */
+export interface RlsOperationIdentity {
+  readonly id: string;
+  readonly operationClass: MigrationOperationClass;
+  readonly target: ReturnType<typeof targetDetails>;
+}
+
+export function createRlsPolicyIdentity(
+  schemaName: string,
+  tableName: string,
+  policyName: string,
+): RlsOperationIdentity {
+  return {
+    id: `rlsPolicy.${schemaName}.${tableName}.${policyName}`,
+    operationClass: 'additive',
+    target: targetDetails('rlsPolicy', policyName, schemaName, tableName),
+  };
+}
+
+export function dropRlsPolicyIdentity(
+  schemaName: string,
+  tableName: string,
+  policyName: string,
+): RlsOperationIdentity {
+  return {
+    id: `rlsPolicy.${schemaName}.${tableName}.${policyName}.drop`,
+    operationClass: 'widening',
+    target: targetDetails('rlsPolicy', policyName, schemaName, tableName),
+  };
+}
+
+export function renameRlsPolicyIdentity(
+  schemaName: string,
+  tableName: string,
+  oldPolicyName: string,
+  newPolicyName: string,
+): RlsOperationIdentity {
+  return {
+    id: `rlsPolicy.${schemaName}.${tableName}.${oldPolicyName}.rename`,
+    operationClass: 'widening',
+    target: targetDetails('rlsPolicy', newPolicyName, schemaName, tableName),
+  };
+}
+
+export function enableRowLevelSecurityIdentity(
+  schemaName: string,
+  tableName: string,
+): RlsOperationIdentity {
+  return {
+    id: `rowLevelSecurity.${schemaName}.${tableName}`,
+    operationClass: 'additive',
+    target: targetDetails('rowLevelSecurity', tableName, schemaName),
+  };
+}
+
+export function disableRowLevelSecurityIdentity(
+  schemaName: string,
+  tableName: string,
+): RlsOperationIdentity {
+  return {
+    id: `rowLevelSecurity.${schemaName}.${tableName}.disable`,
+    operationClass: 'widening',
+    target: targetDetails('rowLevelSecurity', tableName, schemaName),
+  };
+}
+
 export async function createRlsPolicy(
   schemaName: string,
   tableName: string,
@@ -71,11 +141,16 @@ export async function createRlsPolicy(
       roles: catalogPolicyRoles(validatedRoles),
     }),
   );
+  const { id, operationClass, target } = createRlsPolicyIdentity(
+    schemaName,
+    tableName,
+    policy.name,
+  );
   return {
-    id: `rlsPolicy.${schemaName}.${tableName}.${policy.name}`,
+    id,
     label: `Create RLS policy "${policy.name}" on "${tableName}"`,
-    operationClass: 'additive',
-    target: targetDetails('rlsPolicy', policy.name, schemaName, tableName),
+    operationClass,
+    target,
     precheck: [
       step(
         `ensure RLS policy "${policy.name}" does not exist`,
@@ -106,11 +181,12 @@ export async function dropRlsPolicy(
   const present = await lowerer.lowerToExecuteRequest(checks.policyPresent());
   const execute = await lowerer.lowerToExecuteRequest(ddlNode);
   const absent = await lowerer.lowerToExecuteRequest(checks.policyAbsent());
+  const { id, operationClass, target } = dropRlsPolicyIdentity(schemaName, tableName, policyName);
   return {
-    id: `rlsPolicy.${schemaName}.${tableName}.${policyName}.drop`,
+    id,
     label: `Drop RLS policy "${policyName}" on "${tableName}"`,
-    operationClass: 'widening',
-    target: targetDetails('rlsPolicy', policyName, schemaName, tableName),
+    operationClass,
+    target,
     precheck: [
       step(
         `ensure RLS policy "${policyName}" exists`,
@@ -139,11 +215,12 @@ export async function enableRowLevelSecurity(
   const checks = rlsEnabledAst(schemaName, tableName);
   const disabled = await lowerer.lowerToExecuteRequest(checks.rlsDisabled());
   const enabled = await lowerer.lowerToExecuteRequest(checks.rlsEnabled());
+  const { id, operationClass, target } = enableRowLevelSecurityIdentity(schemaName, tableName);
   return {
-    id: `rowLevelSecurity.${schemaName}.${tableName}`,
+    id,
     label: `Enable row-level security on "${tableName}"`,
-    operationClass: 'additive',
-    target: targetDetails('rowLevelSecurity', tableName, schemaName),
+    operationClass,
+    target,
     precheck: [
       step(`check RLS is not already enabled on "${tableName}"`, disabled.sql, disabled.params),
     ],
@@ -169,11 +246,12 @@ export async function disableRowLevelSecurity(
   const enabled = await lowerer.lowerToExecuteRequest(checks.rlsEnabled());
   const execute = await lowerer.lowerToExecuteRequest(ddlNode);
   const disabled = await lowerer.lowerToExecuteRequest(checks.rlsDisabled());
+  const { id, operationClass, target } = disableRowLevelSecurityIdentity(schemaName, tableName);
   return {
-    id: `rowLevelSecurity.${schemaName}.${tableName}.disable`,
+    id,
     label: `Disable row-level security on "${tableName}"`,
-    operationClass: 'widening',
-    target: targetDetails('rowLevelSecurity', tableName, schemaName),
+    operationClass,
+    target,
     precheck: [
       step(`check RLS is currently enabled on "${tableName}"`, enabled.sql, enabled.params),
     ],
@@ -216,11 +294,17 @@ export async function renameRlsPolicy(
   const newPresent = await lowerer.lowerToExecuteRequest(newChecks.policyPresent());
   const newAbsent = await lowerer.lowerToExecuteRequest(newChecks.policyAbsent());
   const oldAbsent = await lowerer.lowerToExecuteRequest(oldChecks.policyAbsent());
+  const { id, operationClass, target } = renameRlsPolicyIdentity(
+    schemaName,
+    tableName,
+    oldPolicyName,
+    newPolicyName,
+  );
   return {
-    id: `rlsPolicy.${schemaName}.${tableName}.${oldPolicyName}.rename`,
+    id,
     label: `Rename RLS policy "${oldPolicyName}" to "${newPolicyName}" on "${tableName}"`,
-    operationClass: 'widening',
-    target: targetDetails('rlsPolicy', newPolicyName, schemaName, tableName),
+    operationClass,
+    target,
     precheck: [
       step(
         `ensure RLS policy "${oldPolicyName}" exists`,

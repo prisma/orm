@@ -22,7 +22,7 @@ const user = await db.orm.public.User
   .first();
 
 // Your editor will show the type of user as
-// { id: number; email: string; username: string | null; name: string | null; createdAt: Date; posts: Post[] } | null
+// { id: {{idType}}; email: string; username: string | null; name: string | null; createdAt: Date; posts: Post[] } | null
 ```
 
 Your contract has two companion files in the same directory:

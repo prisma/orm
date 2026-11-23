@@ -21,7 +21,7 @@
   "devDependencies": {
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -43,6 +43,7 @@
     "./date": "./dist/date.mjs",
     "./decimal": "./dist/decimal.mjs",
     "./duration": "./dist/duration.mjs",
+    "./json": "./dist/json.mjs",
     "./now": "./dist/now.mjs",
     "./temporal": "./dist/temporal.mjs",
     "./temporal-text": "./dist/temporal-text.mjs",

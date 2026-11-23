@@ -6,6 +6,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "MySQL configuration, contract builder and control client for Prisma 8",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "scripts": {
     "build": "tsdown",
     "emit": "node ../../../../1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/fixtures/prisma.config.ts",
@@ -42,17 +45,17 @@
     "@internal/migration-tools": "workspace:8.0.0-rc.24",
     "@internal/psl-parser": "workspace:8.0.0-rc.24",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.24",
-    "@prisma/cli-engine": "0.10.0",
+    "@prisma/cli-engine": "0.10.4",
     "@repo/test-utils": "workspace:8.0.0-rc.24",
     "@repo/tsconfig": "workspace:8.0.0-rc.24",
     "@repo/tsdown": "workspace:8.0.0-rc.24",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -70,6 +73,7 @@
     "./contract-types": "./dist/contract-types.mjs",
     "./control": "./dist/control.mjs",
     "./define-contract": "./dist/define-contract.mjs",
+    "./init": "./dist/init.mjs",
     "./migration": "./dist/migration.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./static": "./dist/static.mjs",

@@ -8,6 +8,7 @@ import {
 } from '../collection-contract';
 import { ormError } from '../orm-errors';
 import { storageTableForContract } from '../storage-resolution';
+import type { NestedCreateConflictAction } from '../types';
 
 export type ConflictKeys = readonly (readonly string[])[];
 
@@ -15,13 +16,19 @@ export function conflictKeysOf(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
+  onConflict: NestedCreateConflictAction,
   conflictColumns: readonly string[],
 ): ConflictKeys {
   if (conflictColumns.length > 0) {
     return [conflictColumns];
   }
-  const uniqueIndexes = storageTableForContract(contract, namespaceId, tableName).indexes.flatMap(
-    (index) => (index.unique && index.columns !== undefined ? [index.columns] : []),
+  const table = storageTableForContract(contract, namespaceId, tableName);
+  if (onConflict === 'connect') {
+    const primaryKey = table.primaryKey?.columns;
+    return primaryKey === undefined || primaryKey.length === 0 ? [] : [primaryKey];
+  }
+  const uniqueIndexes = table.indexes.flatMap((index) =>
+    index.unique && index.columns !== undefined ? [index.columns] : [],
   );
   return [...resolveUniqueKeyColumnSets(contract, namespaceId, tableName), ...uniqueIndexes];
 }
@@ -36,7 +43,8 @@ export function rowThatCannotConflict(
       !keys.some((key) =>
         key.every(
           (column) =>
-            parentLinkColumns.has(column) || (row[column] !== undefined && row[column] !== null),
+            parentLinkColumns.has(column) ||
+            (Object.hasOwn(row, column) && row[column] !== undefined && row[column] !== null),
         ),
       ),
   );
@@ -60,6 +68,7 @@ export interface VariantInOwnTable {
 }
 
 export interface ResolvedConflict {
+  readonly onConflict: NestedCreateConflictAction;
   readonly columns: readonly string[];
 }
 
@@ -81,12 +90,14 @@ export function resolveConflict(
   call: ConflictCall,
   namespaceId: string,
   { onConflict, conflictOn }: ConflictOption,
+  accepted: readonly NestedCreateConflictAction[],
   variantInOwnTable: VariantInOwnTable | undefined,
 ): ResolvedConflict {
-  if (onConflict !== 'skip') {
+  const action = accepted.find((value) => value === onConflict);
+  if (action === undefined) {
     throw ormError(
       'ORM.ARGUMENT_INVALID',
-      `${call.action} takes onConflict "skip"; received ${JSON.stringify(onConflict)}`,
+      `${call.action} takes onConflict ${accepted.map((value) => `"${value}"`).join(' or ')}; received ${JSON.stringify(onConflict)}`,
       { meta: { ...call.meta, problem: 'invalid-on-conflict' } },
     );
   }
@@ -98,23 +109,30 @@ export function resolveConflict(
     );
   }
   const fields = conflictOn ?? [];
-  assertInsertConflictSkipCapability(contract, call.action, fields.length > 0);
-  return { columns: resolveInsertConflictColumns(contract, namespaceId, call.modelName, fields) };
+  if (action === 'skip') {
+    assertInsertConflictSkipCapability(contract, call.action, fields.length > 0);
+  }
+  return {
+    onConflict: action,
+    columns: resolveInsertConflictColumns(contract, namespaceId, call.modelName, fields),
+  };
 }
 
 export function requireRowsThatCanConflict(
   contract: Contract<SqlStorage>,
   call: ConflictCall,
   { namespaceId, tableName }: { readonly namespaceId: string; readonly tableName: string },
-  { columns }: ResolvedConflict,
+  { onConflict, columns }: ResolvedConflict,
   rows: readonly Readonly<Record<string, unknown>>[],
   filledColumns: (index: number) => Iterable<string>,
-): void {
-  const keys = conflictKeysOf(contract, namespaceId, tableName, columns);
+): ConflictKeys {
+  const keys = conflictKeysOf(contract, namespaceId, tableName, onConflict, columns);
   if (keys.length === 0) {
     throw ormError(
       'ORM.ARGUMENT_INVALID',
-      `${call.action} on model "${call.modelName}" has nothing to skip on: table "${tableName}" has no primary key, unique constraint or unique index over columns, so onConflict "skip" cannot skip any row`,
+      onConflict === 'skip'
+        ? `${call.action} on model "${call.modelName}" has nothing to skip on: table "${tableName}" has no primary key, unique constraint or unique index over columns, so onConflict "skip" cannot skip any row`
+        : `${call.action} on model "${call.modelName}" has nothing to connect on: table "${tableName}" has no primary key, so onConflict "connect" needs conflictOn`,
       { meta: { ...call.meta, problem: 'no-conflict-key' } },
     );
   }
@@ -128,4 +146,5 @@ export function requireRowsThatCanConflict(
       { meta: { ...call.meta, problem: 'row-cannot-conflict', index, conflictKeys: keys } },
     );
   }
+  return keys;
 }

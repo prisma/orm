@@ -5,6 +5,9 @@
   "type": "module",
   "sideEffects": false,
   "description": "Prisma 8 for MariaDB: the one package a MariaDB application installs",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist",
     "skills"
@@ -32,7 +35,7 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -149,6 +152,7 @@
     "./utils/canonical-stringify": "./dist/utils__canonical-stringify.mjs",
     "./utils/casts": "./dist/utils__casts.mjs",
     "./utils/defined": "./dist/utils__defined.mjs",
+    "./utils/guards": "./dist/utils__guards.mjs",
     "./utils/hash-content": "./dist/utils__hash-content.mjs",
     "./utils/internal-error": "./dist/utils__internal-error.mjs",
     "./utils/json": "./dist/utils__json.mjs",

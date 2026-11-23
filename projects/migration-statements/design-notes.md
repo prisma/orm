@@ -4,7 +4,7 @@ Record of the design discussion on 2026-10-05 between the operator and the orche
 
 ## Principles
 
-- The planner never guesses. It acts on a destructive-looking change only when the user has stated what it is.
+- The contract states identity by name: a model, field or enum member with the same name in the contract source on both sides is the same object. The planner never guesses identity from storage, and it acts on a destructive-looking change only when the user has stated what it is.
 - The user states intent in the vocabulary of their contract. Storage names, SQL and literal values never appear on the command line.
 - A statement is sugar over the hand-written route. Whatever it produces, a user could have written in `migration.ts`, and that route stays.
 - `migration plan` and `db update` share one planner. A statement means the same thing to both, and `db update` is a migration planned in memory and applied at once.

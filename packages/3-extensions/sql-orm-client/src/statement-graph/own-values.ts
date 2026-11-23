@@ -58,7 +58,7 @@ export function checkOwnValues(
     .flat()
     .flatMap((edge) => (edge instanceof DataEdge ? edge.columns.map(([, target]) => target) : []));
   for (const ast of asts) {
-    refuseUpsertOfColumnsReadBack(ast, returns, owner);
+    refuseUpsertOfColumnsReadBack(ast, returns, owner, given);
   }
   generatedKeyColumn(insertedRowsOf(context, first.table, asts, returns, owner, given));
 }
@@ -67,6 +67,7 @@ function refuseUpsertOfColumnsReadBack(
   ast: InsertAst,
   returns: readonly ProjectionItem[],
   owner: WrittenRowOwner,
+  given: readonly ProjectionItem[],
 ): void {
   const action = ast.onConflict?.action;
   if (action?.kind !== 'do-update-set') {
@@ -80,17 +81,22 @@ function refuseUpsertOfColumnsReadBack(
       { meta: { capability: 'returning', action: method } },
     );
   const read = returns.map((column) => column.alias);
+  const unchanged = new Set(['excluded', ast.table.alias ?? ast.table.name]);
   const updated = read.filter((column) => {
-    const value = action.set[column];
+    const value = Object.hasOwn(action.set, column) ? action.set[column] : undefined;
     return (
       value !== undefined &&
-      !(value.kind === 'column-ref' && value.table === 'excluded' && value.column === column)
+      !(value.kind === 'column-ref' && unchanged.has(value.table) && value.column === column)
     );
   });
   if (updated.length > 0) {
     throw refused(`updates conflict column "${updated.join('", "')}"`);
   }
-  const absent = read.filter((column) => ast.rows.some((row) => row[column]?.kind !== 'param-ref'));
+  const absent = read.filter(
+    (column) =>
+      !given.some(({ alias }) => alias === column) &&
+      ast.rows.some((row) => row[column]?.kind !== 'param-ref'),
+  );
   if (absent.length > 0) {
     throw refused(`gives conflict column "${absent.join('", "')}" no create value`);
   }

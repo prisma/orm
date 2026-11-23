@@ -27,7 +27,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // The real repo root (where the biome binary + config live) — always the
@@ -81,10 +81,15 @@ export function dedupeSites(diagnostics) {
   return [...new Set(filterVocabularyDiags(diagnostics).map(siteOf))].sort();
 }
 
+// Biome cannot apply ignore files to a directory outside its config's root. A directory out there is a fresh checkout that holds only tracked files, so it needs none.
+function vcsArgsFor(scanDir) {
+  return relative(REAL_REPO_ROOT, scanDir).startsWith('..') ? ['--vcs-enabled=false'] : [];
+}
+
 function lintWithBiome(scanDir) {
   const result = spawnSync(
     BIOME_BIN,
-    ['lint', '--config-path', BIOME_CONFIG, '--reporter=json', '.'],
+    ['lint', '--config-path', BIOME_CONFIG, ...vcsArgsFor(scanDir), '--reporter=json', '.'],
     { cwd: scanDir, encoding: 'utf-8', maxBuffer: 400 * 1024 * 1024 },
   );
 

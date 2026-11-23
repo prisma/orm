@@ -5,6 +5,7 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeRef } from '@internal/migration-tools/refs';
+import { ok } from '@internal/utils/result';
 import type { Block } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import { type Mock, vi } from 'vitest';
@@ -31,6 +32,7 @@ const commands = createBinCommands(
       readAllMarkers: mocks.readAllMarkers,
       readLedger: mocks.readLedger,
       migrate: mocks.migrate,
+      renderContractDts: async () => ok({ contractDts: '' }),
       close: mocks.close,
     }) as unknown as ControlClient,
 );
@@ -73,13 +75,14 @@ export function resetMigrateShowMocks(): void {
 export async function writePkg(
   dir: string,
   base: Omit<MigrationMetadata, 'migrationHash'>,
+  ops: readonly MigrationPlanOperation[] = OPS,
 ): Promise<string> {
   const dirName = `20260101_100000_${base.to.slice(7, 13)}`;
   const metadata: MigrationMetadata = {
     ...base,
-    migrationHash: computeMigrationHash(base, [...OPS]),
+    migrationHash: computeMigrationHash(base, [...ops]),
   };
-  await writeMigrationPackage(join(dir, dirName), metadata, [...OPS]);
+  await writeMigrationPackage(join(dir, dirName), metadata, [...ops]);
   return dirName;
 }
 
@@ -158,7 +161,11 @@ export function ormConfig(
       familyId: FAMILY,
       version: '1.0.0',
       emission: {},
-      create: () => ({ deserializeContract: (json: unknown) => json }),
+      create: () => ({
+        deserializeContract: (json: unknown) => json,
+        storageNameOf: (operation: MigrationPlanOperation) => operation.id,
+        accessChangesOf: () => [],
+      }),
     },
     target: {
       kind: 'target',
@@ -189,6 +196,7 @@ export function ormConfig(
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(cwd, 'contract.json'),
+      typesModule: '@acme/orm-db/contract-types',
     },
     migrations: { dir: 'migrations' },
     ...overrides,

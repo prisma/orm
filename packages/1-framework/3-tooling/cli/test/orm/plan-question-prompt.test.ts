@@ -178,10 +178,13 @@ describe('a namespace answer typed at the prompt', () => {
     const prompt = {
       statements: vi.fn(async (questions: readonly { readonly subject: string }[]) => {
         asked.push(questions.map(({ subject }) => subject));
-        throw Object.assign(new Error('needs a statement'), {
-          code: 'CLI.CONSENT_REQUIRED',
-          unanswered: questions.map(({ subject }) => subject),
-        });
+        throw Object.assign(
+          new Error('This command requires explicit consent, but it was not provided.'),
+          {
+            code: 'CLI.CONSENT_REQUIRED',
+            unanswered: questions.map(({ subject }) => subject),
+          },
+        );
       }),
     } as unknown as PromptSurface;
 
@@ -380,13 +383,17 @@ describe('a refusal to answer a question that names ways to keep the data', () =
     };
     const prompt = {
       statements: vi.fn(async () => {
-        throw new CliStructuredError('CLI.CONSENT_REQUIRED', '"Status.DONE" needs a statement.', {
-          why: kept.question,
-          nextActions: [
-            { kind: 'user-choice', label: 'Run the command again with --delete Status.DONE' },
-          ],
-          meta: { unanswered: [{ subject: 'Status.DONE', verbs: ['delete'] }] },
-        });
+        throw new CliStructuredError(
+          'CLI.CONSENT_REQUIRED',
+          'This command requires explicit consent, but it was not provided.',
+          {
+            why: kept.question,
+            nextActions: [
+              { kind: 'user-choice', label: 'Run the command again with --delete Status.DONE' },
+            ],
+            meta: { unanswered: [{ subject: 'Status.DONE', verbs: ['delete'] }] },
+          },
+        );
       }),
     } as unknown as PromptSurface;
     const statements: StatementSurface = {
@@ -396,13 +403,37 @@ describe('a refusal to answer a question that names ways to keep the data', () =
 
     await expect(promptPlanQuestions(prompt, statements)([kept])).rejects.toMatchObject({
       code: 'CLI.CONSENT_REQUIRED',
-      message: '"Status.DONE" needs a statement.',
+      message: 'This command requires explicit consent, but it was not provided.',
       why: 'Remove value "done" would lose enum value "Status.DONE".',
       nextActions: [
         { kind: 'user-choice', label: way },
         { kind: 'user-choice', label: 'Run the command again with --delete Status.DONE' },
       ],
       meta: { unanswered: [{ subject: 'Status.DONE', verbs: ['delete'] }] },
+    });
+  });
+});
+
+describe('a --delete for a subject answered without asking', () => {
+  it('is taken, so the run does not report it as unused', async () => {
+    const { statements, prompt } = surfaces(['app.User']);
+
+    const answers = await promptPlanQuestions(prompt, statements)(
+      [],
+      [{ verb: 'delete', subject: 'app.User' }],
+    );
+
+    expect({ answers, left: statements.values() }).toEqual({ answers: [], left: [] });
+  });
+
+  it('is reported as unused when it names no subject the run answered', async () => {
+    const { statements, prompt } = surfaces(['app.Other']);
+
+    await expect(
+      promptPlanQuestions(prompt, statements)([], [{ verb: 'delete', subject: 'app.User' }]),
+    ).rejects.toMatchObject({
+      code: 'CLI.CONSENT_UNUSED',
+      message: '--delete app.Other was given but nothing in this run asked about app.Other.',
     });
   });
 });

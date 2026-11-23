@@ -4,9 +4,13 @@
   "type": "module",
   "dependencies": {
     "@internal/mongo": "workspace:8.0.0-rc.24",
+    "@internal/mysql": "workspace:8.0.0-rc.24",
     "@internal/postgres": "workspace:8.0.0-rc.24",
+    "@internal/sqlite": "workspace:8.0.0-rc.24",
     "@prisma/orm-mongo": "workspace:@internal/mongo@8.0.0-rc.24",
+    "@prisma/orm-mysql": "workspace:@internal/mysql@8.0.0-rc.24",
     "@prisma/orm-postgres": "workspace:@internal/postgres@8.0.0-rc.24",
+    "@prisma/orm-sqlite": "workspace:@internal/sqlite@8.0.0-rc.24",
     "@types/node": "catalog:",
     "dotenv": "^17.4.2",
     "mongodb": "catalog:",

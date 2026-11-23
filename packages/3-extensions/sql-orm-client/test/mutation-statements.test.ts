@@ -5,7 +5,7 @@ import {
   countMutationWhere,
   deleteAst,
   groupRowsByColumnSignature,
-  type InsertConflictSkip,
+  type InsertConflict,
   insertAst,
   returningProjection,
   updateAst,
@@ -20,7 +20,7 @@ const usersTable = createStatementTables({ namespaceId: 'public', tableName: 'us
 function insertUsers(
   contract: ReturnType<typeof getTestContract>,
   rows: readonly Record<string, unknown>[],
-  conflict?: InsertConflictSkip,
+  conflict?: InsertConflict,
 ): InsertAst {
   return insertAst(contract, usersTable, rows, conflict);
 }
@@ -114,6 +114,39 @@ describe('mutation statements', () => {
     expect(plan.onConflict?.columns).toEqual([ColumnRef.of('users', 'email')]);
     expect(plan.onConflict?.action.kind).toBe('do-nothing');
     expect(plan.returning).toHaveLength(1);
+  });
+
+  it('sets the link columns from the proposed row when asked to link a conflicting row', () => {
+    const contract = getTestContract();
+    const plan = insertUsers(contract, [{ id: 10, name: 'Alice', invited_by_id: 1 }], {
+      columns: ['id'],
+      targeted: true,
+      link: ['invited_by_id'],
+      guard: undefined,
+    });
+
+    expect(plan.onConflict).toMatchObject({
+      columns: [ColumnRef.of('users', 'id')],
+      action: {
+        kind: 'do-update-set',
+        set: { invited_by_id: ColumnRef.of('excluded', 'invited_by_id') },
+      },
+    });
+  });
+
+  it('keeps the stored value of the first conflict column when a conflicting row has no link columns', () => {
+    const contract = getTestContract();
+    const plan = insertUsers(contract, [{ id: 10, name: 'Alice', email: 'alice@example.com' }], {
+      columns: ['email'],
+      targeted: false,
+      link: [],
+      guard: undefined,
+    });
+
+    expect(plan.onConflict).toMatchObject({
+      columns: [],
+      action: { kind: 'do-update-set', set: { email: ColumnRef.of('users', 'email') } },
+    });
   });
 
   it('rejects an insert with no rows', () => {
@@ -214,6 +247,17 @@ describe('mutation statements', () => {
       const missing = createStatementTables({ namespaceId: 'public', tableName: 'missing_table' });
       expect(() => insertAst(contract, missing.root, [{ id: 1 }], undefined)).toThrowError(
         /Unknown table "missing_table"/,
+      );
+    });
+
+    it('refuses a column named like a property every object has', () => {
+      const contract = getTestContract();
+      const users = tablesForTable(contract, 'users', 'public');
+      expect(() => updateAst(contract, users, { constructor: 'X' }, undefined)).toThrowError(
+        /Unknown column "constructor" in table "users"/,
+      );
+      expect(() => insertUsers(contract, [{ id: 1, toString: 'X' }])).toThrowError(
+        /Unknown column "toString" in table "users"/,
       );
     });
 

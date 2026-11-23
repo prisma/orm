@@ -156,7 +156,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [x] `should create a user and update that field on that user` — create then update user email [providers: all] → ports/prisma/functional/blog-update/blog-update.test.ts
 - [x] `should create a user and post and connect them together` — update user to connect an existing post [providers: all] → ports/prisma/functional/blog-update/blog-update.test.ts
 - [x] `should create a user and post and disconnect them` — update user to disconnect a created post [providers: all] → ports/prisma/functional/blog-update/blog-update.test.ts
-- [x] `should create a user with posts and a profile and update itself and nested connections setting fields to null` — nested update setting many fields/relations to null (skipTestIf: postgres+driverAdapter+relationJoins) [providers: all] → non-ported
+- [x] `should create a user with posts and a profile and update itself and nested connections setting fields to null` — nested update setting many fields/relations to null (skipTestIf: postgres+driverAdapter+relationJoins) [providers: all] → ports/prisma/functional/blog-update/blog-update.test.ts
 
 ### packages/client/tests/functional/bytes-upsert/tests.ts
 

@@ -16,20 +16,24 @@ import { readRefs } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import {
-  type CliStructuredError,
-  errorPathUnreachable,
-  errorRuntime,
-} from '../../utils/cli-errors';
+import { type CliStructuredError, errorRuntime } from '../../utils/cli-errors';
 import { closeQuietly, resolveMigrationPaths } from '../../utils/command-helpers';
 import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import { createControlClient } from '../client';
-import type { CreateControlClient } from '../types';
+import type { CreateControlClient, MigrateTarget } from '../types';
 import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 import { checkRunPolicies, databasePoliciesInForce } from './database-policies';
-import { planEverySpace, planSpaces, type SpacePathOutcome } from './migrate';
+import {
+  neverPlannedSpaceFailure,
+  planEverySpace,
+  planSpaces,
+  refuseForbiddenMigrations,
+  type SpacePathOutcome,
+  toArgumentFor,
+  unreachableSpaceFailure,
+} from './migrate';
 import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
@@ -134,7 +138,7 @@ export async function executeMigrateShowPlan(
   if (!loaded.ok) {
     return notOk(loaded.failure);
   }
-  const { aggregate, contractHash, storageNameOf, markerLocation } = loaded.value;
+  const { aggregate, contractHash, storageNameOf, accessChangesOf, markerLocation } = loaded.value;
   const appGraph = aggregate.app.graph();
 
   // Resolve the --to target (defaults to the on-disk contract, same as migrate).
@@ -143,6 +147,7 @@ export async function executeMigrateShowPlan(
   let targetHash: string = contractHash;
   let refInvariants: readonly string[] | undefined;
   let namedRef: NamedRef | undefined;
+  let targetsEmittedContract = !liveTarget;
   const refContext = { graph: appGraph, refs: allRefs, contractHash };
   if (options.to && !liveTarget) {
     const toResult = resolveContractRef(options.to, refContext);
@@ -150,6 +155,7 @@ export async function executeMigrateShowPlan(
       return notOk(toResult.failure);
     }
     targetHash = toResult.value.hash;
+    targetsEmittedContract = toResult.value.provenance.kind === 'reserved-contract';
     if (toResult.value.provenance.kind === 'ref') {
       const refName = toResult.value.provenance.refName;
       const refEntry = allRefs[refName];
@@ -188,6 +194,7 @@ export async function executeMigrateShowPlan(
     markers: markerBySpace,
     appTarget: { hash: targetHash, invariants: refInvariants, refName: undefined },
     storageNameOf,
+    accessChangesOf,
   });
   let outcomes: ReadonlyMap<string, SpacePathOutcome> | undefined;
 
@@ -256,6 +263,16 @@ export async function executeMigrateShowPlan(
       if (!permitted.ok) {
         return notOk(permitted.failure);
       }
+      const forbidden = refuseForbiddenMigrations({
+        appSpaceId: aggregate.app.spaceId,
+        checked: permitted.value,
+        ref: namedRef,
+        outcomes: checked.value,
+        invocation: options.invocation,
+      });
+      if (forbidden !== undefined) {
+        return notOk(forbidden);
+      }
       if (liveOrigin) {
         outcomes = checked.value;
       }
@@ -277,6 +294,11 @@ export async function executeMigrateShowPlan(
   // An offline --from is not a database marker, so a --from outside the graph is a path that does
   // not exist rather than MIGRATION.MARKER_MISMATCH.
   const planned = outcomes ?? planSpaces(planInputs());
+  const requestedTarget: MigrateTarget | undefined = targetsEmittedContract
+    ? undefined
+    : namedRef === undefined
+      ? { kind: 'hash', hash: targetHash }
+      : { kind: 'ref', ref: namedRef };
   const orderedMigrations: MigrateShowMigration[] = [];
   for (const space of spacesInApplyOrder(aggregate)) {
     const outcome = planned.get(space.spaceId);
@@ -290,29 +312,30 @@ export async function executeMigrateShowPlan(
     }
     if (outcome.kind === 'never-planned') {
       return notOk(
-        errorPathUnreachable({
-          summary: `No on-disk migrations for contract space "${outcome.spaceId}"`,
-          why: `migrate is replay-only: space "${outcome.spaceId}" has no on-disk migrations but its head ref targets "${outcome.targetHash}".`,
-          meta: { spaceId: outcome.spaceId, targetHash: outcome.targetHash, kind: 'neverPlanned' },
+        neverPlannedSpaceFailure(outcome, {
+          appSpaceId: aggregate.app.spaceId,
+          migrationsDir,
+          invocation: options.invocation,
         }),
       );
     }
     if (outcome.kind === 'unreachable' || outcome.kind === 'marker-outside-graph') {
-      const fromHash =
-        outcome.kind === 'marker-outside-graph'
-          ? outcome.markerHash
-          : (outcome.liveMarker?.storageHash ?? EMPTY_CONTRACT_HASH);
       return notOk(
-        errorPathUnreachable({
-          summary: `No migration path from ${fromHash.slice(0, 14)} to ${outcome.targetHash.slice(0, 14)} in space "${outcome.spaceId}".`,
-          why: `The migration graph has no path from the from-state to the target in space "${outcome.spaceId}".`,
-          meta: {
+        unreachableSpaceFailure(
+          {
             spaceId: outcome.spaceId,
-            fromHash,
+            fromHash:
+              outcome.kind === 'marker-outside-graph'
+                ? outcome.markerHash
+                : contractHashAtMarker(outcome.liveMarker),
             targetHash: outcome.targetHash,
-            kind: 'pathUnreachable',
           },
-        }),
+          {
+            appSpaceId: aggregate.app.spaceId,
+            toArgument: toArgumentFor(requestedTarget, appGraph),
+            invocation: options.invocation,
+          },
+        ),
       );
     }
     if (outcome.kind === 'unsatisfiable') {

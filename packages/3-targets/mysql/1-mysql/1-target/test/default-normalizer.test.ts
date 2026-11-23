@@ -48,10 +48,139 @@ describe('readMysqlDefault', () => {
     ['CURRENT_DATE', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_DATE' }],
     ['curtime(6)', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_TIME' }],
     ['curtime()', 'DEFAULT_GENERATED', { kind: 'function', expression: 'CURRENT_TIME' }],
+    [
+      '0x00ff',
+      'DEFAULT_GENERATED',
+      { kind: 'literal', literal: { kind: 'value', body: new Uint8Array([0, 255]) } },
+    ],
+    [
+      '0xC328',
+      'DEFAULT_GENERATED',
+      { kind: 'literal', literal: { kind: 'value', body: new Uint8Array([0xc3, 0x28]) } },
+    ],
+    ['0x0g', 'DEFAULT_GENERATED', { kind: 'function', expression: '0x0g' }],
+    ['0x0', 'DEFAULT_GENERATED', { kind: 'function', expression: '0x0' }],
     ['hello', '', { kind: 'literal', literal: { kind: 'value', body: 'hello' } }],
     ['42', '', { kind: 'literal', literal: { kind: 'value', body: '42' } }],
   ])('reads COLUMN_DEFAULT %j with EXTRA %j', (columnDefault, extra, expected) => {
-    expect(readMysqlDefault(columnDefault, extra)).toEqual(expected);
+    expect(readMysqlDefault(columnDefault, extra, 'text')).toEqual(expected);
+  });
+
+  const bytes = (...values: number[]) => ({
+    kind: 'literal',
+    literal: { kind: 'value', body: new Uint8Array(values) },
+  });
+  const text = (body: string) => ({ kind: 'literal', literal: { kind: 'value', body } });
+  const utf8 = (value: string) => [...Buffer.from(value, 'utf8')];
+  const shownByteByByte = (value: string) => Buffer.from(value, 'utf8').toString('latin1');
+
+  it.each<readonly [string, string, string, string, unknown]>([
+    ['an empty bytes default MySQL reports', "X\\'\\'", 'DEFAULT_GENERATED', 'longblob', bytes()],
+    ['a bytes default', '0x00ff', 'DEFAULT_GENERATED', 'longblob', bytes(0, 255)],
+    ['an empty hexadecimal literal', '0x', 'DEFAULT_GENERATED', 'longblob', bytes()],
+    [
+      'a text default on a longblob, as its UTF-8 bytes',
+      "_utf8mb4\\'abc\\'",
+      'DEFAULT_GENERATED',
+      'longblob',
+      bytes(...utf8('abc')),
+    ],
+    [
+      'a text default on a blob, with characters past ASCII, which MySQL reports byte by byte',
+      shownByteByByte("_utf8mb4\\'é€😀\\'"),
+      'DEFAULT_GENERATED',
+      'blob',
+      bytes(...utf8('é€😀')),
+    ],
+    [
+      'a binary string default whose bytes are not UTF-8',
+      `${shownByteByByte("_binary\\'")}\u00ff${shownByteByByte("\\'")}`,
+      'DEFAULT_GENERATED',
+      'longblob',
+      bytes(255),
+    ],
+    [
+      'a literal default on a varbinary, which MySQL cuts at its first zero byte, as reported',
+      '0x61',
+      '',
+      'varbinary(8)',
+      { kind: 'function', expression: '0x61' },
+    ],
+    [
+      'a literal default of no bytes on a varbinary, which MySQL reports for 0x00ff, as reported',
+      '0x',
+      '',
+      'varbinary(8)',
+      { kind: 'function', expression: '0x' },
+    ],
+    [
+      'a literal default on a binary(4), which may be cut at a zero byte, as reported',
+      '0x61',
+      '',
+      'binary(4)',
+      { kind: 'function', expression: '0x61' },
+    ],
+    [
+      'an expression default on a binary(4), which MySQL reports whole, padded as a row is',
+      '0x61',
+      'DEFAULT_GENERATED',
+      'binary(4)',
+      bytes(0x61, 0, 0, 0),
+    ],
+    [
+      'an expression default with a zero byte on a varbinary, which MySQL reports whole',
+      '0x00ff',
+      'DEFAULT_GENERATED',
+      'varbinary(8)',
+      bytes(0, 0xff),
+    ],
+    [
+      'an empty text default on a text column',
+      "_utf8mb4\\'\\'",
+      'DEFAULT_GENERATED',
+      'text',
+      text(''),
+    ],
+    [
+      'a text default with characters past ASCII, which MySQL reports byte by byte',
+      shownByteByByte("_utf8mb4\\'é€😀\\'"),
+      'DEFAULT_GENERATED',
+      'text',
+      text('é€😀'),
+    ],
+    [
+      'a text default that starts with a byte order mark, which is kept',
+      shownByteByByte("_utf8mb4\\'\uFEFFa\\'"),
+      'DEFAULT_GENERATED',
+      'text',
+      text('\uFEFFa'),
+    ],
+    [
+      'a JSON default with characters past ASCII',
+      shownByteByByte(`_utf8mb4\\'{"k":"é"}\\'`),
+      'DEFAULT_GENERATED',
+      'json',
+      text('{"k":"é"}'),
+    ],
+    ...['null', '""', '[]', '{}'].map(
+      (json) =>
+        [
+          `the JSON default ${json}`,
+          `_utf8mb4\\'${json}\\'`,
+          'DEFAULT_GENERATED',
+          'json',
+          text(json),
+        ] as const,
+    ),
+    [
+      'a text default in a character set the reader does not convert, as the expression it is',
+      "_latin1\\'\u00e9\\'",
+      'DEFAULT_GENERATED',
+      'longblob',
+      { kind: 'function', expression: "_latin1\\'\u00e9\\'" },
+    ],
+  ])('reads %s', (_case, columnDefault, extra, columnType, expected) => {
+    expect(readMysqlDefault(columnDefault, extra, columnType)).toEqual(expected);
   });
 });
 

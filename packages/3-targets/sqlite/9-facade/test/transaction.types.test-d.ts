@@ -24,11 +24,15 @@ test('SQLite accepts only Serializable and retains callback inference', () => {
   expectTypeOf(db.transaction).parameter(1).toEqualTypeOf<SqliteTransactionOptions | undefined>();
 });
 
-test('transaction context does not expose a transaction method', () => {
-  type HasTransaction = 'transaction' extends keyof SqliteTransactionContext<TestContract>
-    ? true
-    : false;
-  expectTypeOf<HasTransaction>().toEqualTypeOf<false>();
+test('tx.transaction takes one callback, passes a context of the same type and infers the result', () => {
+  type Tx = SqliteTransactionContext<TestContract>;
+  const tx = {} as Tx;
+  expectTypeOf(tx.transaction).parameters.toEqualTypeOf<[(tx: Tx) => PromiseLike<unknown>]>();
+  expectTypeOf(tx.transaction).parameter(0).parameter(0).toEqualTypeOf<Tx>();
+  expectTypeOf(tx.transaction(async () => 42)).toEqualTypeOf<Promise<number>>();
+  expectTypeOf(
+    tx.transaction(async (inner) => inner.transaction(async () => 'value' as const)),
+  ).toEqualTypeOf<Promise<'value'>>();
 });
 
 test('db.transaction infers the callback return type correctly', () => {

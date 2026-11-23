@@ -13,6 +13,7 @@ import {
   type ModelLookups,
   modelNamespaceId,
 } from './model-references';
+import { type NameSite, writeNamedEntry } from './named-entries';
 import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
 function toOneRelationNullable(semanticModel: ModelNode, relation: RelationNode): boolean {
@@ -172,6 +173,7 @@ export function lowerRelations(
 ): Record<string, ContractRelation> {
   const { defaultNamespaceId } = lookups;
   const modelRelations: Record<string, ContractRelation> = {};
+  const relationSite: NameSite = { kind: 'relation', modelName: semanticModel.modelName };
   for (const relation of semanticModel.relations ?? []) {
     // Cross-space relations have `spaceId` set — the target model lives in
     // a different contract space, so skip local model lookup and validation.
@@ -180,18 +182,23 @@ export function lowerRelations(
       const localFields = relation.on.parentColumns.map((col) =>
         joinFieldOf(semanticModel, relation, semanticModel, columnToField, col),
       );
-      modelRelations[relation.fieldName] = {
-        to: crossRef(relation.toModel, targetNamespaceId, relation.spaceId),
-        // Cross-space belongsTo relations are always N:1 (the FK-owning side).
-        cardinality: 'N:1',
-        nullable: toOneRelationNullable(semanticModel, relation),
-        on: {
-          localFields,
-          // For cross-space targets the lowering carries field names directly
-          // (no fieldToColumn map available for the remote model).
-          targetFields: relation.on.childColumns,
+      writeNamedEntry(
+        modelRelations,
+        relation.fieldName,
+        {
+          to: crossRef(relation.toModel, targetNamespaceId, relation.spaceId),
+          // Cross-space belongsTo relations are always N:1 (the FK-owning side).
+          cardinality: 'N:1',
+          nullable: toOneRelationNullable(semanticModel, relation),
+          on: {
+            localFields,
+            // For cross-space targets the lowering carries field names directly
+            // (no fieldToColumn map available for the remote model).
+            targetFields: relation.on.childColumns,
+          },
         },
-      };
+        relationSite,
+      );
       continue;
     }
 
@@ -248,31 +255,46 @@ export function lowerRelations(
           },
         );
       }
-      modelRelations[relation.fieldName] = {
-        to,
-        cardinality: 'N:M',
-        on,
-        through: buildThroughDescriptor(
-          relation.through,
-          lookups.tableNamespaceByName,
-          targetModel,
-          semanticModel.modelName,
-          relation.fieldName,
-          defaultNamespaceId,
-        ),
-      };
+      writeNamedEntry(
+        modelRelations,
+        relation.fieldName,
+        {
+          to,
+          cardinality: 'N:M',
+          on,
+          through: buildThroughDescriptor(
+            relation.through,
+            lookups.tableNamespaceByName,
+            targetModel,
+            semanticModel.modelName,
+            relation.fieldName,
+            defaultNamespaceId,
+          ),
+        },
+        relationSite,
+      );
     } else if (relation.cardinality === '1:N') {
-      modelRelations[relation.fieldName] = { to, cardinality: '1:N', on };
+      writeNamedEntry(
+        modelRelations,
+        relation.fieldName,
+        { to, cardinality: '1:N', on },
+        relationSite,
+      );
     } else {
       if (relation.cardinality === '1:1') {
         assertHasOneKeyUnique(semanticModel, relation, targetModel, on.targetFields);
       }
-      modelRelations[relation.fieldName] = {
-        to,
-        cardinality: relation.cardinality,
-        nullable: toOneRelationNullable(semanticModel, relation),
-        on,
-      };
+      writeNamedEntry(
+        modelRelations,
+        relation.fieldName,
+        {
+          to,
+          cardinality: relation.cardinality,
+          nullable: toOneRelationNullable(semanticModel, relation),
+          on,
+        },
+        relationSite,
+      );
     }
   }
   return modelRelations;

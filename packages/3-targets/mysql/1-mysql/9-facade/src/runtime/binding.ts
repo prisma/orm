@@ -28,9 +28,14 @@ export function validateMysqlUrl(
   try {
     parsed = new URL(trimmed);
   } catch {
-    throw invalidUrl(target, `${target.displayName} URL must be a valid URL`, {
-      reason: 'unparseable url',
-    });
+    const withHost = trimmed.replace('@/', '@localhost/');
+    try {
+      parsed = new URL(withHost);
+    } catch {
+      throw invalidUrl(target, `${target.displayName} URL must be a valid URL`, {
+        reason: 'unparseable url',
+      });
+    }
   }
   if (!urlSchemes.some((scheme) => parsed.protocol === `${scheme}:`)) {
     throw invalidUrl(

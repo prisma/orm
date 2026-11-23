@@ -29,10 +29,8 @@ test('the ORM offers fragment beside the models', () => {
   expectTypeOf<Client['orm']>().toHaveProperty('Post');
 });
 
-test('a transaction has no lifecycle members, transaction or runtime', () => {
-  expectTypeOf<
-    Extract<keyof Tx, 'close' | 'transaction' | 'runtime' | typeof Symbol.asyncDispose>
-  >().toBeNever();
+test('a transaction has no lifecycle members or runtime', () => {
+  expectTypeOf<Extract<keyof Tx, 'close' | 'runtime' | typeof Symbol.asyncDispose>>().toBeNever();
 });
 
 test('the client has every static member of the static entry', () => {

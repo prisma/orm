@@ -20,12 +20,11 @@ function makeSpace(
 }
 
 describe('resolveRecordedPath', () => {
-  it('names each destructive operation of the path by its storage name and label, says nothing of how it loses data, and widens no access', () => {
+  it('names each destructive operation of the path by its storage name and label, and says nothing of how it loses data', () => {
     const headHash = 'cipher-head';
     const pkg = createAttestedPackage('20260101T0000_init', { from: null, to: headHash }, [
       { id: 'table.events', label: 'Create table events', operationClass: 'additive' },
       { id: 'table.legacy', label: 'Drop table legacy', operationClass: 'destructive' },
-      { id: 'rls.events', label: 'Disable RLS on events', operationClass: 'widening' },
     ]);
 
     const outcome = resolveRecordedPath({
@@ -33,6 +32,7 @@ describe('resolveRecordedPath', () => {
       space: makeSpace([pkg], headHash),
       currentMarker: null,
       storageNameOf: (operation) => `storage of ${operation.id}`,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind === 'ok' && outcome.result).toMatchObject({
@@ -48,6 +48,52 @@ describe('resolveRecordedPath', () => {
     expect(outcome.kind === 'ok' && outcome.result.dataLoss[0]).not.toHaveProperty('loss');
   });
 
+  it("lists each migration's access changes, asked of each migration on its own, at their positions in the path", () => {
+    const middleHash = 'cipher-middle';
+    const headHash = 'cipher-head';
+    const first = createAttestedPackage('20260101T0000_init', { from: null, to: middleHash }, [
+      { id: 'table.events', label: 'Create table events', operationClass: 'additive' },
+      { id: 'policy.events.drop', label: 'Drop policy on events', operationClass: 'widening' },
+    ]);
+    const second = createAttestedPackage('20260102T0000_open', { from: middleHash, to: headHash }, [
+      { id: 'rls.events.disable', label: 'Disable RLS on events', operationClass: 'widening' },
+    ]);
+    const asked: string[][] = [];
+
+    const outcome = resolveRecordedPath({
+      aggregateTargetId: 'postgres',
+      space: makeSpace([first, second], headHash),
+      currentMarker: null,
+      storageNameOf: (operation) => operation.id,
+      accessChangesOf: (operations) => {
+        asked.push(operations.map(({ id }) => id));
+        return operations.flatMap((operation, operationIndex) =>
+          operation.operationClass === 'widening'
+            ? [{ operationIndex, subject: { kind: 'storage', name: operation.id }, widens: true }]
+            : [],
+        );
+      },
+    });
+
+    expect({ accessChanges: outcome.kind === 'ok' && outcome.result.accessChanges, asked }).toEqual(
+      {
+        accessChanges: [
+          {
+            operationIndex: 1,
+            subject: { kind: 'storage', name: 'policy.events.drop' },
+            widens: true,
+          },
+          {
+            operationIndex: 2,
+            subject: { kind: 'storage', name: 'rls.events.disable' },
+            widens: true,
+          },
+        ],
+        asked: [['table.events', 'policy.events.drop'], ['rls.events.disable']],
+      },
+    );
+  });
+
   it('walks the shortest path from the live marker to the on-disk head ref', () => {
     const headHash = 'cipher-head';
     const pkg = createAttestedPackage('20260101T0000_init', { from: null, to: headHash });
@@ -57,6 +103,7 @@ describe('resolveRecordedPath', () => {
       space: makeSpace([pkg], headHash),
       currentMarker: null,
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind).toBe('ok');
@@ -85,6 +132,7 @@ describe('resolveRecordedPath', () => {
       space: makeSpace([baseline, delta], headHash),
       currentMarker: null,
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind).toBe('ok');
@@ -105,6 +153,7 @@ describe('resolveRecordedPath', () => {
       space: makeSpace([pkg], headHash),
       currentMarker: null,
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind).toBe('ok');
@@ -125,6 +174,7 @@ describe('resolveRecordedPath', () => {
       space: makeSpace([pkg], headHash),
       currentMarker: null,
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind).toBe('unreachable');
@@ -141,6 +191,7 @@ describe('resolveRecordedPath', () => {
       space,
       currentMarker: null,
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind).toBe('unsatisfiable');
@@ -158,6 +209,7 @@ describe('resolveRecordedPath', () => {
       currentMarker: null,
       refName: 'prod',
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind).toBe('ok');
@@ -174,6 +226,7 @@ describe('resolveRecordedPath', () => {
       space: makeSpace([pkg], headHash),
       currentMarker: null,
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind).toBe('ok');
@@ -190,6 +243,7 @@ describe('resolveRecordedPath', () => {
       space: makeSpace([pkg], headHash),
       currentMarker: { storageHash: headHash, invariants: [] },
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind).toBe('ok');
@@ -207,6 +261,7 @@ describe('resolveRecordedPath', () => {
       space: makeSpace([], EMPTY_CONTRACT_HASH),
       currentMarker: null,
       storageNameOf: (operation) => operation.id,
+      accessChangesOf: () => [],
     });
 
     expect(outcome.kind).toBe('ok');

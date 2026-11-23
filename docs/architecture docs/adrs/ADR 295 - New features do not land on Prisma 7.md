@@ -1,12 +1,14 @@
 # ADR 295 — New features do not land on Prisma 7
 
-**Status:** Accepted; amended 2026-10-23
+**Status:** Accepted; amended 2026-10-23 and 2026-11-20
 **Date:** 2026-10-22
 **Builds on:** [ADR 252 — An earlier Prisma version's schema is a contract source](ADR%20252%20-%20An%20earlier%20Prisma%20version's%20schema%20is%20a%20contract%20source.md)
 
 ---
 
 > **Amended (2026-10-23).** The team does no new feature work on Prisma 7, but a feature contributed by the community may be accepted when it is in line with Prisma 7's design direction and meets the project's quality standards; a maintainer decides whether it does. Will Madden calls this a clarification of the policy, not a change. [Versioning](../../oss/versioning.md#supported-versions) states the policy as it stands. The rest of this document is the original decision, kept for the record.
+
+> **Amended (2026-11-20).** Prisma 7 also takes corrections to, improvements to, and maintenance of the tooling that builds, tests and releases it. The line has to stay buildable, testable and releasable for the whole support period, and this work changes nothing users run. Contributed test-runner and CI changes had been closed as "not a bug fix", which this decision never intended.
 
 ## Decision
 

@@ -19,8 +19,8 @@ import { invariant } from '@internal/utils/assertions';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { handWrittenMigrationAdvice } from './hand-written-migration';
 import { type JsonPathStep, jsonPathText } from './json-path';
+import { isSqlModelStorage, tableControlPolicy } from './model-storage';
 import type { SchemaTables } from './schema-tables';
-import { isSqlModelStorage, tableControlPolicy } from './statement-planning';
 import type { SqlPlannerConflict } from './types';
 
 /**
