@@ -314,13 +314,11 @@ changes:
         - 'orm init\b[^\n]*--json'
   - id: orm-write-inside-transaction-suspends-tx
     summary: |
-      An ORM write of more than one statement on `tx.orm`, such as a create with a nested relation, runs in a savepoint. While it runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`. In `Promise.all`, that rejection makes the callback throw while the write still runs, so `db.transaction` rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the `RUNTIME.TRANSACTION_SUSPENDED` error, keeps nothing the transaction wrote, and closes the connection. When such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the write itself rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. On PostgreSQL and SQLite many writes are one statement and open no savepoint; on MySQL and MariaDB every write that returns rows opens one. The detection matches TypeScript sources where `Promise.all` or `Promise.allSettled` follows the start of a `transaction` call, sources that pass `transaction` a callback by name and call `Promise.all`, and sources that call `transaction` and give `Promise.all` an ORM write.
+      An ORM write of more than one statement on `tx.orm`, such as a create with a nested relation, runs in a savepoint. While it runs, other work sent on the same `tx` rejects with `RUNTIME.TRANSACTION_SUSPENDED`. In `Promise.all`, that rejection makes the callback throw while the write still runs, so `db.transaction` rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the `RUNTIME.TRANSACTION_SUSPENDED` error, keeps nothing the transaction wrote, and closes the connection. When such a write fails with an error that ends the whole transaction, such as a deadlock on MySQL or MariaDB, the write itself rejects with `RUNTIME.TRANSACTION_ROLLBACK_FAILED`, whose `cause` is the database's error, and the transaction is closed. On PostgreSQL and SQLite many writes are one statement and open no savepoint; on MySQL and MariaDB every write that returns rows opens one. The detection matches TypeScript sources that call `transaction` and `Promise.all` or `Promise.allSettled`.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '\.transaction\s*\([\s\S]*?Promise\.all(?:Settled)?\s*\('
-        - '(?<![\s\S])(?=[\s\S]*\.transaction\s*\(\s*[\w$.]+\s*[,)])[\s\S]*Promise\.all(?:Settled)?\s*\('
-        - '(?<![\s\S])(?=[\s\S]*\.transaction\s*\()[\s\S]*Promise\.all(?:Settled)?\s*\([^;]*?\.orm\b[^;]*?\.(?:create|createAll|update|updateAll|upsert|delete|deleteAll)\s*\('
+        - '(?<![\s\S])(?=[\s\S]*\.transaction\s*\()[\s\S]*Promise\.all(?:Settled)?\s*\('
   - id: foreign-key-with-relation-callback-refused
     summary: |
       `update()` data that sets a field of the foreign key the record holds for a relation (many-to-one, such as `Post.authorId` for `Post.author`) and also has a callback on that relation is refused with `ORM.ARGUMENT_INVALID` (`meta.problem: 'foreign-key-with-relation-mutation'`, with `meta.relation` and `meta.fields`) before any statement runs. It used to run, and a `create`, `connect` or `disconnect` callback overwrote the foreign key the data set. Keep either the foreign key or the callback.
@@ -395,8 +393,8 @@ changes:
     detection:
       glob: "**/{package.json,pnpm-workspace.yaml}"
       matches:
-        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*"@prisma/cli-engine"))|(?!\s*\{))[\s\S]*"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.(?:\d|10\.[0123xX*])(?!\d)'
-        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*"@prisma/cli-engine"))|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine[''"]?:\s*[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[0123xX*])(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine"))|(?!\s*\{))[\s\S]*"@prisma/cli-engine":\s*"[^"]*(?<![\d.])0\.(?:\d|10\.[0123xX*])(?!\d)'
+        - '(?<![\s\S])(?:(?=\s*\{)(?=[\s\S]*(?:"@prisma/orm-[a-z-]+"\s*:|"(?:overrides|resolutions)"\s*:[\s\S]*@prisma/cli-engine"))|(?!\s*\{))[\s\S]*[''"]?@prisma/cli-engine[''"]?:\s*[''"]?(?:[\^~]|[<>]=?\s*)?0\.(?:\d|10\.[0123xX*])(?!\d)'
   - id: consent-required-summary-is-one-fixed-sentence
     summary: |
       The first line of `CLI.CONSENT_REQUIRED` is now one fixed sentence. It no longer names the subject of a statement question, and it no longer quotes the question of a consent that `--confirm` answers. Code that matched the old first line must read the error's `code`, `why` and `meta` instead.
@@ -488,7 +486,7 @@ In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` ma
 
 `arktype` and `bson` are dependencies of the Prisma 8 packages, not peers, so the package manager installs the version Prisma 8 asks for beside the project's own when the project's range or lockfile keeps an older one. A project that pins `arktype` at `2.2.3`, for example, then has two copies, and code such as `if (result instanceof type.errors)` on a value from the other copy no longer narrows `result`. On MongoDB the same holds for `bson` classes such as `ObjectId`.
 
-In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `arktype` range to `^2.2.9` and the `bson` range to `^7.3.4`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. Then check that the lockfile has one version of each, for example with `pnpm why arktype`. A project that does not declare either itself needs no change.
+In each `package.json`, or catalog in `pnpm-workspace.yaml`, that `detection` matches, change the `arktype` range to `^2.2.9` and the `bson` range to `^7.3.4`, then reinstall. If the range is a reference such as `catalog:`, change the range it resolves to. The detection does not match a range with fewer than three version parts, such as `^2` or `^7`, or one with `x` or `*`, such as `2.2.x`; check those by hand, since they also allow an older version. Then check that the lockfile has one version of each, for example with `pnpm why arktype`. A project that does not declare either itself needs no change.
 
 
 ## `PrismaNextConfig` is now `PrismaConfig`
@@ -1241,7 +1239,7 @@ Which writes take more than one statement, and so run in a savepoint:
   - an `update()` or `delete()` whose `where` does not name one row by its primary key or a unique key, or that has an `offset` or a `cursor`, because the row is found with a `SELECT` first;
   - a write on a variant stored in its own table, such as `create()` (the base row and the variant row are two inserts) or `update()` and `delete()` even by primary key, and a write that returns rows of a polymorphic base model with such a variant, because the rows are read back with the variant's table;
   - on SQLite, a `createAll()` or `createAndCount()` whose rows do not all set the same fields, because SQLite sends one `INSERT` for each set of fields;
-  - since 8.0.0-rc.24, an `updateAll()` or `deleteAll()` that returns rows of a collection with two or more filters, where each `where()`, `whereUnique()`, `variant()` and method from `using` adds one. This is a known problem, not an intended behaviour; the release notes list it under "Known problems".
+  - since 8.0.0-rc.24, an `updateAll()` or `deleteAll()` that returns rows of a collection with two or more filters, where each `where()`, `whereUnique()`, `variant()` and method from `using` adds one; before, each was one statement. For `updateAll()` the extra statement only adds the savepoint, and the rows it returns are the rows it updated. For `deleteAll()` the release notes list it under "Known problems", because the rows it returns can include a row it did not delete.
 - On PostgreSQL and SQLite, a write takes one statement and opens no savepoint only when nothing in the list above applies to it. Then `create()`, `upsert()`, `createAll()`, `createAndCount()`, `updateAll()` and `deleteAll()` with at most one filter, `update()` and `delete()` by primary key or unique key, `updateAndCount()` and `deleteAndCount()` are one statement. A read never opens a savepoint.
 - On MySQL and MariaDB, which have no `RETURNING`, every write that returns rows takes more than one statement, because the ORM reads the rows back with a `SELECT`: `create()`, `createAll()`, `upsert()`, `update()`, `updateAll()`, `delete()` and `deleteAll()`. Only `createAndCount()`, `updateAndCount()` and `deleteAndCount()` take one.
 
