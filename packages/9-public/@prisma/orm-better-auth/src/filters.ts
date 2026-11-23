@@ -20,9 +20,7 @@ function scalarCodecIdOf(model: FoundModel, field: string, operator: string): st
   const type = model.model.fields[field];
   if (type?.type.kind !== 'scalar' || type.many) throw unsupportedError(model, field, operator);
   const kind = codecKind(type.type.codecId);
-  if (kind !== undefined && kind !== 'string' && kind !== 'enum') {
-    throw unsupportedError(model, field, operator);
-  }
+  if (kind !== undefined && kind !== 'string') throw unsupportedError(model, field, operator);
   return type.type.codecId;
 }
 
