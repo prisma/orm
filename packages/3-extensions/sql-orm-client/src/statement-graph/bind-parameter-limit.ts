@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { collectOrderedParamRefs, type InsertAst } from '@internal/sql-relational-core/ast';
-import { targetDisplayNameOf } from '@internal/sql-relational-core/plan';
+import type { InsertAst } from '@internal/sql-relational-core/ast';
+import { bindParameterCountOf, targetDisplayNameOf } from '@internal/sql-relational-core/plan';
 import { bindParameterLimitOf } from '../collection-contract';
 import { ormError } from '../orm-errors';
 import type { WrittenRowOwner } from '../written-keys';
@@ -12,7 +12,9 @@ import type { WrittenRowOwner } from '../written-keys';
  * `construction` runs on the ASTs a graph is built from, before any statement is sent. `execution`
  * runs in `Insert.execute` on the ASTs after payload parameters (parent keys, junction keys) have
  * been added to every row, because those push the statement past a limit its construction-time
- * count was under. The `why` of each refusal matches its point: at construction nothing was sent,
+ * count was under. The count is the target's, from `bindParameterCountOf`: MySQL binds a parameter
+ * the statement repeats once per occurrence, so the one payload parameter every row shares counts
+ * once per row there. The `why` of each refusal matches its point: at construction nothing was sent,
  * while at execution earlier statements of the same run may already have written rows.
  */
 export function requireBindParametersWithinLimit(
@@ -24,7 +26,7 @@ export function requireBindParametersWithinLimit(
   const limit = bindParameterLimitOf(contract);
   if (limit === undefined) return;
   for (const ast of asts) {
-    const parameters = collectOrderedParamRefs(ast).length;
+    const parameters = bindParameterCountOf(ast, contract.target);
     if (parameters <= limit) continue;
     throw ormError(
       'ORM.ARGUMENT_INVALID',

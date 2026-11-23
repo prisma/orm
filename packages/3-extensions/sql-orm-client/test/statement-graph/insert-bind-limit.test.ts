@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { collectOrderedParamRefs } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { parseMutationInput } from '../../src/relation-mutations';
 import { createAllGraph, createGraph } from '../../src/statement-graph/collection-graphs';
@@ -158,6 +159,74 @@ describe('nested insert bind-parameter limit', () => {
     });
     // The parent insert ran; only the nested insert is refused.
     expect(runtime.executions).toHaveLength(1);
+  });
+});
+
+describe('nested insert bind-parameter limit on MySQL', () => {
+  // 16,384 rows x 3 columns bind 49,152 parameters of their own, and the payload adds one parent-key
+  // parameter that every row shares: 49,153 references, under the limit where a shared reference is
+  // bound once. MySQL has only positional parameters, so its driver binds the shared one again in
+  // every row: 16,384 x 4 = 65,536 values, one past its limit.
+  const postRows = Array.from({ length: 16_384 }, (_, i) => ({
+    id: i + 1,
+    title: `p${i}`,
+    views: 0,
+  }));
+
+  function nestedGraphOf(context: typeof target.context) {
+    return createGraph(
+      { ...target, context },
+      parseMutationInput(
+        context.contract,
+        'public',
+        'User',
+        {
+          id: 1,
+          name: 'Ada',
+          email: 'ada@example.com',
+          posts: (postsMutator: RelationMutator<Contract<SqlStorage>, 'Post'>) =>
+            postsMutator.create(postRows),
+        } as never,
+        relatedCollectionOf(context),
+      ),
+    );
+  }
+
+  it('refuses a nested insert whose shared payload parameter is bound once per row, past the MySQL limit', async () => {
+    const graph = nestedGraphOf(contextMysql);
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[{ id: 1 }]]);
+
+    await expect(executeGraph(graph, { runtime, context: contextMysql })).rejects.toMatchObject({
+      code: 'ORM.ARGUMENT_INVALID',
+      message:
+        'create() on model "Post" would bind 65536 parameters in one INSERT statement; MySQL allows 65535 per statement.',
+      meta: expect.objectContaining({
+        problem: 'too-many-bind-parameters',
+        method: 'create()',
+        model: 'Post',
+        parameters: 65_536,
+        limit: 65_535,
+        target: 'mysql',
+      }),
+    });
+    // The parent insert ran; only the nested insert is refused.
+    expect(runtime.executions).toHaveLength(1);
+  });
+
+  it('sends the same nested insert on PostgreSQL, which binds the shared parameter once', async () => {
+    const graph = nestedGraphOf(target.context);
+    const runtime = createMockRuntime();
+    runtime.setNextResults([[{ id: 1 }], []]);
+
+    await executeGraph(graph, { runtime, context: target.context });
+
+    // The statement is the same one: 65,536 occurrences of 49,153 parameters, which PostgreSQL binds
+    // as 49,153.
+    const nested = runtime.executions[1]?.plan.ast;
+    if (nested === undefined) throw new Error('the nested insert was not sent');
+    expect(nested.collectParamRefs()).toHaveLength(65_536);
+    expect(collectOrderedParamRefs(nested)).toHaveLength(49_153);
   });
 });
 

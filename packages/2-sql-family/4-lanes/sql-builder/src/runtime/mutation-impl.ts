@@ -9,7 +9,6 @@ import type { StorageTable } from '@internal/sql-contract/types';
 import {
   type AnyExpression as AstExpression,
   ColumnRef,
-  collectOrderedParamRefs,
   DeleteAst,
   InsertAst,
   ParamRef,
@@ -19,6 +18,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { createFunctions } from '@internal/sql-relational-core/functions';
 import {
+  bindParameterCountOf,
   bindParameterLimitOfTarget,
   type SqlQueryPlan,
   targetDisplayNameOf,
@@ -75,7 +75,7 @@ function requireBindParametersWithinLimit(
 ): void {
   const limit = bindParameterLimitOfTarget(ctx.target);
   if (limit === undefined) return;
-  const parameters = collectOrderedParamRefs(ast).length;
+  const parameters = bindParameterCountOf(ast, ctx.target);
   if (parameters <= limit) return;
   throw structuredError(
     'ORM.ARGUMENT_INVALID',
