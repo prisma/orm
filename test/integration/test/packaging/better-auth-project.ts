@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { timeouts } from '@repo/test-utils';
 import { runInScratch } from '@repo/tsdown/shell-testkit';
 import { expect } from 'vitest';
 
@@ -46,7 +47,7 @@ export const twoFactorModel = twoFactorMissing.slice(
   twoFactorMissing.indexOf('\n\nThen run'),
 );
 
-export const userLastField = '  accounts      Account[]\n';
+const userLastField = '  accounts      Account[]\n';
 
 /** `corePsl`, or a part of it holding the User model, with the fields the two-factor plugin adds to User. */
 export function withTwoFactorFields(psl: string): string {
@@ -64,7 +65,7 @@ export function twoFactorAdded(path: string): string {
 
 export const notChanged = '`auth generate` did not change your contract, because';
 
-export function prismaConfig(contract: string): string {
+function prismaConfig(contract: string): string {
   return `import { definePrismaConfig } from '${cliEngine}';
 import { defineConfig } from '${facade}/config';
 
@@ -72,7 +73,7 @@ export default definePrismaConfig({ orm: defineConfig({ contract: '${contract}' 
 `;
 }
 
-export type AuthPlugin = 'twoFactor' | 'admin';
+type AuthPlugin = 'twoFactor' | 'admin';
 
 function authConfig(plugin: AuthPlugin): string {
   return `import { prismaAdapter } from '${adapter}';
@@ -95,7 +96,7 @@ import contractJson from '../../prisma/contract.json' with { type: 'json' };
 export const db = sqlite({ contract: contractFromJson(contractJson), path: './auth.db' });
 `;
 
-export interface AuthRun {
+interface AuthRun {
   readonly status: number | null;
   readonly stdout: string;
   readonly stderr: string;
@@ -111,6 +112,7 @@ export function runAuth(
     cwd,
     encoding: 'utf-8',
     input,
+    timeout: timeouts.coldTransformImport,
     env: {
       ...process.env,
       BETTER_AUTH_SECRET: 'a-test-secret-that-is-long-enough-for-better-auth',
@@ -119,6 +121,11 @@ export function runAuth(
       NO_COLOR: '1',
     },
   });
+  if (run.signal !== null) {
+    throw new Error(
+      `auth ${args.join(' ')} was stopped by ${run.signal} before it finished, after at most ${timeouts.coldTransformImport} ms. Standard error:\n${run.stderr}`,
+    );
+  }
   if (run.error !== undefined) throw run.error;
   return { status: run.status, stdout: run.stdout, stderr: run.stderr };
 }
@@ -135,10 +142,19 @@ export function projectFiles(dir: string): Record<string, string> {
   );
 }
 
-/** The message, without what the command logs while it loads the configuration. */
+/** What Better Auth 1.7.6 to 1.7.21 logged at startup for a contract the adapter's check rejects. */
+const falseConnectionAdvice = [
+  'Could not validate the database schema',
+  'Check your database connection',
+];
+
+/** The line `auth generate` prints when it starts its spinner. Its first character is a spinner frame, which depends on whether the system supports Unicode. */
+const spinnerStart = /^\S+ preparing schema\.\.\.\n/;
+
+/** Everything the command printed on standard error, but the spinner's first line. */
 export function printedMessage(run: AuthRun): string {
-  expect(run.stderr).not.toContain('Error running Better Auth CLI');
-  return run.stderr.slice(run.stderr.indexOf('Your Prisma contract')).trim();
+  for (const advice of falseConnectionAdvice) expect(run.stderr).not.toContain(advice);
+  return run.stderr.replace(spinnerStart, '').trim();
 }
 
 /** Non-empty lines of what the command printed on standard output. */
@@ -146,7 +162,7 @@ export function printedLines(run: AuthRun): string[] {
   return run.stdout.split('\n').filter((line) => line !== '');
 }
 
-export interface AuthProjectOptions {
+interface AuthProjectOptions {
   /** The contract source files, by path inside the project. */
   readonly sources?: Readonly<Record<string, string>>;
   /** The contract input `prisma.config.ts` names, or `null` for a project without one. */

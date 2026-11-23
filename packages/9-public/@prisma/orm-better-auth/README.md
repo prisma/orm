@@ -18,10 +18,10 @@ export const auth = betterAuth({
 
 ## Install
 
-Install the adapter at the same version as your Prisma 8 database package, together with Better Auth 1.7.6 or a later 1.7 release:
+Install the adapter at the same version as your Prisma 8 database package, together with Better Auth 1.7.22 or a later 1.7 release:
 
 ```sh
-pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@~1.7.6
+pnpm add @prisma/orm-better-auth@<version of @prisma/orm-postgres or @prisma/orm-sqlite> better-auth@~1.7.22
 ```
 
 The adapter uses the Prisma packages your database package already installs. If the versions differ, your package manager warns you, or refuses to install when it checks peer dependencies strictly. Keep them the same, or the adapter loads a second copy of Prisma's code.
@@ -31,7 +31,7 @@ Better Auth must load one copy of `@better-auth/core`, the one `better-auth` its
 ## Supported databases and versions
 
 - Postgres and SQLite, through `@prisma/orm-postgres` and `@prisma/orm-sqlite`. The adapter refuses a client for another database.
-- Better Auth 1.7.6 or a later 1.7 release (`>=1.7.6 <1.8.0`). It is tested against 1.7.6 and 1.7.27. 1.7.6 is the first release whose `auth` program has the `check` command and whose `@better-auth/core` lets the adapter register the contract check.
+- Better Auth 1.7.22 or a later 1.7 release (`>=1.7.22 <1.8.0`). It is tested against 1.7.22 and 1.7.27. Releases from 1.7.6 to 1.7.21 run the contract check when the auth instance is created, and log a contract that is missing something as "Could not validate the database schema. Check your database connection.", which is wrong. From 1.7.22 the check runs before the first request instead, and the request fails with the adapter's message.
 
 ## Set up
 
@@ -271,7 +271,7 @@ Model and field names: the adapter matches Better Auth's model names to your con
 ## Dependencies
 
 - `@prisma/orm-framework`, `@prisma/orm-family-sql` and `@prisma/orm-toolchain`, as peers at the same version as your database package, which already depends on all three. The adapter loads `@prisma/orm-toolchain` only while `auth generate` runs, to read `prisma.config.ts`. Reading it also needs `@prisma/cli-engine`, which your `prisma.config.ts` already imports.
-- `@better-auth/core` 1.7.6 or a later 1.7 release, below 1.8, as a peer.
+- `@better-auth/core` 1.7.22 or a later 1.7 release, below 1.8, as a peer.
 
 The package imports only published entrypoints, so it works outside the Prisma repository. [DEVELOPING.md](DEVELOPING.md) has notes for people who change it.
 

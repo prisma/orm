@@ -1,7 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { stripVTControlCharacters } from 'node:util';
 import { publicShells, type ShellName } from '@internal/publish-surface/shells';
 import {
   installShells,
@@ -177,6 +176,51 @@ describe('the Better Auth adapter installed next to the SQLite database package'
     expect(runInScratch(scratch, script)).toContain('signed up');
   });
 
+  it('logs nothing when the auth instance is created over a contract the check rejects, and fails the first request with the message', () => {
+    const script = `
+      import { betterAuth } from 'better-auth';
+      import { twoFactor } from 'better-auth/plugins';
+      import { prismaAdapter } from '${adapter}';
+      import { defineConfig } from '${facade}/config';
+      import { createSqliteControlClient } from '${facade}/control';
+      import sqlite from '${facade}/runtime';
+      import { contractFromJson } from '${facade}/static';
+
+      const { contract: contractConfig } = defineConfig({ contract: './contract.prisma' });
+      const emitted = await createSqliteControlClient().emit({ contractConfig });
+      if (!emitted.ok) throw new Error(JSON.stringify(emitted.failure));
+      const db = sqlite({ contract: contractFromJson(JSON.parse(emitted.value.contractJson)), path: './startup.db' });
+
+      const logged = [];
+      const writes = [process.stdout, process.stderr].map((stream) => {
+        const write = stream.write;
+        stream.write = (chunk) => logged.push(String(chunk)) > 0;
+        return () => { stream.write = write; };
+      });
+      const auth = betterAuth({
+        database: prismaAdapter(db),
+        emailAndPassword: { enabled: true },
+        secret: 'a-test-secret-that-is-long-enough-for-better-auth',
+        baseURL: 'http://localhost:3000',
+        plugins: [twoFactor()],
+      });
+      await auth.$context;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const atStartup = logged.splice(0);
+      const rejection = await auth.api
+        .signUpEmail({ body: { email: 'ada@example.com', password: 'a-long-password', name: 'Ada' } })
+        .then(() => undefined, (error) => ({ name: error.name, message: error.message }));
+      await db.close();
+      for (const restore of writes) restore();
+      console.log(JSON.stringify({ atStartup, rejection, afterStartup: logged }));
+    `;
+    expect(JSON.parse(runInScratch(scratch, script))).toEqual({
+      atStartup: [],
+      rejection: { name: 'BetterAuthError', message: twoFactorMissing },
+      afterStartup: [],
+    });
+  });
+
   const contractPath = 'prisma/contract.prisma';
   const twoFactorEdit = `${withTwoFactorFields(corePsl)}\n${twoFactorModel}\n`;
   const sessionStart = corePsl.indexOf('model Session');
@@ -184,9 +228,9 @@ describe('the Better Auth adapter installed next to the SQLite database package'
   const sessionsPsl = `// use prisma-8\n\n${corePsl.slice(sessionStart)}`;
   const splitSources = { 'prisma/users.prisma': usersPsl, 'prisma/sessions.prisma': sessionsPsl };
 
-  function generate(projectDir: string, args: readonly string[] = []) {
+  function generate(projectDir: string, args: readonly string[] = [], input?: string) {
     const before = projectFiles(projectDir);
-    return { before, run: runAuth(projectDir, scratch, ['generate', ...args]) };
+    return { before, run: runAuth(projectDir, scratch, ['generate', ...args], input) };
   }
 
   it('auth generate adds what the two-factor plugin needs to the contract, refuses again until it is emitted, and auth check passes once it is', () => {
@@ -354,31 +398,29 @@ ${notChanged} the additions belong in prisma/users.prisma and prisma/sessions.pr
     expect(projectFiles(project.projectDir)).toEqual(before);
   });
 
-  it('auth generate without --yes writes only when the question is answered yes', () => {
+  it('auth generate without --yes and without a terminal refuses to ask and writes nothing', () => {
     const project = authProject(scratch, 'auth-cli-prompt');
     project.emit();
-    const before = projectFiles(project.projectDir);
 
-    const question = `The file ${realpathSync(join(project.projectDir, contractPath))} already exists. Do you want to overwrite the schema to the file?`;
-
-    const declined = runAuth(project.projectDir, scratch, ['generate'], 'n\n');
-    expect(declined.status).toBe(1);
-    expect(
-      printedLines({ ...declined, stdout: stripVTControlCharacters(declined.stdout) }),
-    ).toEqual([twoFactorAdded(contractPath), `? ${question} › (y/N)✔ ${question} … no`]);
-    expect(declined.stderr).toContain('Schema generation aborted.');
+    const { before, run } = generate(project.projectDir, [], 'y\n');
+    expect(run.status).toBe(2);
+    expect(printedLines(run)).toEqual([twoFactorAdded(contractPath)]);
+    expect(printedMessage(run)).toBe(
+      `Can't overwrite ${realpathSync(join(project.projectDir, contractPath))} without --yes in non-interactive mode.`,
+    );
     expect(projectFiles(project.projectDir)).toEqual(before);
+  });
 
-    const accepted = runAuth(project.projectDir, scratch, ['generate'], 'y\n');
-    expect(accepted.status, accepted.stderr).toBe(0);
-    expect(
-      printedLines({ ...accepted, stdout: stripVTControlCharacters(accepted.stdout) }),
-    ).toEqual([
-      twoFactorAdded(contractPath),
-      `? ${question} › (y/N)✔ ${question} … yes`,
-      '🚀 Schema was overwritten successfully!',
-    ]);
-    expect(projectFiles(project.projectDir)).toEqual({ ...before, [contractPath]: twoFactorEdit });
+  it('auth generate writes nothing and says --output must name the contract file when it names a directory', () => {
+    const project = authProject(scratch, 'auth-cli-output-directory', { configContract: null });
+    project.emit();
+
+    const { before, run } = generate(project.projectDir, ['--yes', '--output', 'prisma']);
+    expect(run.status).toBe(1);
+    expect(printedMessage(run)).toBe(
+      `${twoFactorMissing}\n\n${notChanged} prisma/auth-schema.ts was not found. Pass your contract's PSL file itself with \`--output\`, not a directory.`,
+    );
+    expect(projectFiles(project.projectDir)).toEqual(before);
   });
 
   it('auth generate prints the message and writes nothing when the contract needs more than additions', () => {
