@@ -72,7 +72,7 @@ A model is named "__proto__", which JavaScript reads as the prototype of an obje
 
 Rename the model, field, relation, composite type, enum or root. What a rename does to stored documents:
 
-- **A model's field.** Keep its stored name with `@map("…")`, or `.mongo({ field })` in TypeScript, and no document changes. A field stored as `__proto__` cannot be kept under that name; give it another stored name.
+- **A model's field.** Keep its stored name with `@map("…")`, or `.mongo({ field })` in TypeScript, and no document changes. A field stored as `__proto__` was already refused before this release, so nothing changes for it.
 - **A member of a composite type or value object.** It is always stored under its own name, so renaming it changes the key in the embedded documents. Documents may already hold values under `__proto__`, and a rename leaves them under the old key. Move them to the new key. For a member of an embedded document:
 
   ```js
@@ -106,7 +106,7 @@ Rename the model, field, relation, composite type, enum or root. What a rename d
 
 The TypeScript builder also refuses an object literal with a `__proto__` key, such as `models: { __proto__: Post, User }`, which used to drop the entry without an error.
 
-For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there. In `mongosh`, `db.__proto__` is not the collection, so name it with `db.getCollection("__proto__")`. How to move the documents depends on the command you apply changes with:
+For a collection, name another collection with `@@map`. `@@map` only changes which collection the client reads and writes: documents already in a collection named `__proto__` stay there. In `mongosh`, `db.__proto__` is not the collection, so name it with `db.getCollection("__proto__")`. Stop every writer to the old collection before you rename or copy it, and keep it stopped until the application runs with the new contract; a write that reaches the old collection after the copy is lost when you drop it. How to move the documents depends on the command you apply changes with:
 
 - **`prisma db update`.** Rename the collection in the database first, then emit the contract and run `db update`. If you run `db update` first, it plans to drop the collection named `__proto__`, with its documents.
 
