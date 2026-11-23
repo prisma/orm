@@ -127,6 +127,25 @@ describe('createSchema for auth generate', () => {
     await expect(inDirectory(dir, () => generate())).rejects.toThrow(expected);
   });
 
+  it('prints the message when prisma.config.ts does not load', async () => {
+    const dir = await projectWith({ 'prisma.config.ts': "throw new Error('broken config');\n" });
+    const expected = await refusalFor(
+      `\`auth generate\` did not change your contract, because prisma.config.ts did not load: Config file could not be evaluated. ${passOutput}`,
+    );
+    await expect(inDirectory(dir, () => generate())).rejects.toThrow(expected);
+  });
+
+  it('prints the message when prisma.config.ts names a contract written in TypeScript', async () => {
+    const dir = await projectWith({
+      'prisma.config.ts': config("{ contract: './prisma/contract.ts' }"),
+      'prisma/contract.ts': 'export {};\n',
+    });
+    const expected = await refusalFor(
+      '`auth generate` did not change your contract, because it is written in TypeScript. Add the equivalent models and fields in TypeScript.',
+    );
+    await expect(inDirectory(dir, () => generate())).rejects.toThrow(expected);
+  });
+
   it('prints the message when the file --output names does not exist, and creates nothing', async () => {
     const dir = await projectWith({});
     const file = join(dir, 'prisma/contract.prisma');

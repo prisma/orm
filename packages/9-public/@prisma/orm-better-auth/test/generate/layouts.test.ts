@@ -77,6 +77,18 @@ describe.each(targets)('auth generate on %s', (target) => {
     });
   });
 
+  it('separates the new model with one blank line in a file without a final line break', async () => {
+    const text = appPsl.trimEnd();
+    expect(await editAndEmit(fixture(), target, [{ path: contractPath, text }], options)).toEqual({
+      edit: {
+        path: contractPath,
+        code: `${insertAfter(text, userLastField, twoFactorFields)}\n\n${twoFactorModel}\n`,
+        summary: twoFactorSummary(contractPath),
+      },
+      problemsAfter: [],
+    });
+  });
+
   it('indents added fields as the last field is indented, with a tab', async () => {
     const text = appPsl.replace(/^ {2}/gm, '\t');
     const code = `${insertAfter(text, userLastField.replace('  ', '\t'), twoFactorFields.replaceAll('\n  ', '\n\t'))}\n${twoFactorModel}\n`;
