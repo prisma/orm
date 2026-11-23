@@ -10,7 +10,7 @@ import {
 } from '@prisma/orm-framework/psl-parser/syntax';
 import type { ContractComparison } from '../contract/compare';
 import { type PrintedBlock, printPsl, renderBlocks } from '../contract/print-psl';
-import { modelNameCandidates } from '../models/model-lookup';
+import { isSearchedNamespace, modelNameCandidates } from '../models/model-lookup';
 import { assertOnlyAdditions, listOf, notChanged } from './refusal';
 
 export interface ContractSourceFile {
@@ -114,11 +114,9 @@ interface StoredUnderAnotherName {
   readonly path: string;
   /** The declaration as the developer wrote it: the model's name, or the field's name after its model's. */
   readonly declared: string;
-  /** The name alone, which Better Auth's renaming option would point at. */
-  readonly declaredName: string;
   readonly storage: string;
-  readonly kind: 'model' | 'field';
-  readonly betterAuthName: string;
+  /** What Better Auth looks for, as the edit would have written it. */
+  readonly lookedFor: string;
   readonly renameTo: string;
 }
 
@@ -154,16 +152,16 @@ function fieldConflicts(
     into.storedUnderAnotherName.push({
       path: file.path,
       declared: `${block.modelName}.${name}`,
-      declaredName: name,
       storage: `the column "${column}"`,
-      kind: 'field',
-      betterAuthName: needed,
+      lookedFor: `a field named ${needed} in ${block.modelName}`,
       renameTo: needed,
     });
   }
 }
 
-/** The models of the namespace that conflict with a model the block would add: by a name the adapter looks the model up by, or by its table. */
+/**
+ * The declared models that conflict with a model the block would add: one with a name the adapter looks the model up by, in a namespace the adapter searches; or one stored in its table, in the namespace the model goes into.
+ */
 function modelConflicts(
   block: PrintedBlock,
   models: readonly DeclaredModel[],
@@ -173,34 +171,35 @@ function modelConflicts(
   const { physicalName, table } = block;
   if (physicalName === undefined || table === undefined) return;
   const lookedUp = new Set(modelNameCandidates(physicalName));
-  for (const { file, declaration } of models) {
+  const newNamespace = comparison.namespace ?? comparison.defaultNamespace;
+  for (const { file, namespaceId, declaration } of models) {
     const name = declaration.name()?.name();
     if (name === undefined) continue;
-    if (lookedUp.has(name)) {
+    if (lookedUp.has(name) && isSearchedNamespace(namespaceId, comparison.namespace)) {
       into.aheadOfEmit.push({ name, path: file.path });
       continue;
     }
+    if (namespaceId !== newNamespace) continue;
     const stored = mappedName(declaration.attributes()) ?? name;
     if (!sameStorageName(stored, table, comparison)) continue;
     into.storedUnderAnotherName.push({
       path: file.path,
       declared: name,
-      declaredName: name,
       storage: `the table "${stored}"`,
-      kind: 'model',
-      betterAuthName: physicalName,
+      lookedFor: `a model named ${block.modelName}`,
       renameTo: block.modelName,
     });
   }
 }
 
-function storedUnderAnotherNameReason(conflict: StoredUnderAnotherName): string {
-  const { path, declared, declaredName, storage, kind, betterAuthName, renameTo } = conflict;
-  const option =
-    kind === 'model'
-      ? `set Better Auth's \`modelName\` for ${betterAuthName} to ${declaredName}`
-      : `map Better Auth's field ${betterAuthName} to ${declaredName} with the \`fields\` option`;
-  return `${path} stores ${declared} in ${storage}, which Better Auth's ${kind} ${betterAuthName} needs, but Better Auth finds a ${kind} by its name. Rename ${declared} to ${renameTo}, or ${option} (for a plugin's ${kind}, in the plugin's \`schema\` option), then run \`auth generate\` again.`;
+function storedUnderAnotherNameReason({
+  path,
+  declared,
+  storage,
+  lookedFor,
+  renameTo,
+}: StoredUnderAnotherName): string {
+  return `${path} stores ${declared} in ${storage}, but Better Auth looks for ${lookedFor}. Rename ${declared} to ${renameTo}, then run \`prisma contract emit\`.`;
 }
 
 function uniquePaths(models: readonly DeclaredModel[]): string[] {
@@ -334,13 +333,10 @@ export function editContractSource<F extends ContractSourceFile>(
     return { block, ...match };
   });
 
-  const newNamespace = comparison.namespace ?? comparison.defaultNamespace;
-  const inNewNamespace = [...declared.values()]
-    .flat()
-    .filter(({ namespaceId }) => namespaceId === newNamespace);
+  const allDeclared = [...declared.values()].flat();
   const conflicts: Conflicts = { aheadOfEmit: [], storedUnderAnotherName: [] };
   for (const { block, ...model } of targets) fieldConflicts(block, model, comparison, conflicts);
-  for (const block of added) modelConflicts(block, inNewNamespace, comparison, conflicts);
+  for (const block of added) modelConflicts(block, allDeclared, comparison, conflicts);
   const { aheadOfEmit, storedUnderAnotherName } = conflicts;
   if (aheadOfEmit.length > 0) {
     throw notChanged(

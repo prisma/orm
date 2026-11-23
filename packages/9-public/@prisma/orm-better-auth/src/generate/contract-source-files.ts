@@ -13,12 +13,16 @@ const typeScriptContract =
   'it is written in TypeScript. Add the equivalent models and fields in TypeScript.';
 const typeScriptFile = /\.[cm]?tsx?$/;
 
-/**
- * How a reason line names a caught error: by its code, as the operating system and the module loader give one, since their messages differ between systems and hold absolute paths; otherwise by the first line of its message, which comes from the developer's own config.
- */
-function errorDetail(error: unknown): string {
+/** A caught error's code, as the operating system and the module loader give one, in parentheses; nothing when it has none. Their messages are left out: they differ between systems and hold absolute paths. */
+function errorCode(error: unknown): string {
   const code: unknown = error instanceof Error ? Reflect.get(error, 'code') : undefined;
-  if (typeof code === 'string') return ` (${code})`;
+  return typeof code === 'string' ? ` (${code})` : '';
+}
+
+/** A caught error's code, or else the first line of its message. Used where an error without a code comes from the developer's own `prisma.config.ts` or file, whose text is what they need. */
+function errorDetail(error: unknown): string {
+  const code = errorCode(error);
+  if (code !== '') return code;
   const message = error instanceof Error ? error.message : String(error);
   return `: ${message.split('\n')[0]}`;
 }
@@ -33,7 +37,7 @@ async function configLoader(comparison: ContractComparison) {
   } catch (error) {
     throw notChanged(
       comparison,
-      `Prisma's config loader could not be loaded${errorDetail(error)}. ${passOutput}`,
+      `Prisma's config loader could not be loaded${errorCode(error)}. ${passOutput}`,
     );
   }
 }

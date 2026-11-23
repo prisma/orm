@@ -220,7 +220,7 @@ The message can also list fields whose type is wrong; optional Better Auth field
 - a model has no field named `id` (see [Limits](#limits)).
 - a model it would add fields to is written on one line, with its `}` on the line of its last field.
 - the contract file already declares a model or field it would add, under the name Better Auth looks it up by. This happens when you edit the contract and do not run `prisma contract emit`: run it, then `auth generate` again.
-- the contract file stores a model in the table, or a field in the column, that Better Auth's model or field needs, under another name. Emitting does not help, because the adapter finds models and fields by name, not by table or column. Rename your model or field to the name Better Auth uses, or point Better Auth at your name with its `modelName` or `fields` option (for a plugin's model or field, in the plugin's `schema` option). On SQLite, table and column names that differ only in case count as the same.
+- the contract file stores a model in the table, or a field in the column, that Better Auth's model or field needs, under another name. Emitting does not help, because the adapter finds models and fields by name, not by table or column. The message names the model or field Better Auth looks for: rename yours to that name, then run `prisma contract emit`. Better Auth's own naming options are the other way to make the names agree (see the model and field names under [Options](#options)). On SQLite, table and column names that differ only in case count as the same.
 
 Some things to know:
 

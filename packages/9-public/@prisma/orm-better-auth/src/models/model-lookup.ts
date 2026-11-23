@@ -36,6 +36,11 @@ export function modelNameCandidates(physicalName: string): readonly string[] {
   return [...new Set([physicalName, upperFirst(physicalName)])];
 }
 
+/** Whether the adapter looks for Better Auth's models in a namespace: every namespace without the adapter's `namespace` option, else only the one it names. */
+export function isSearchedNamespace(namespaceId: string, namespace: string | undefined): boolean {
+  return namespace === undefined || namespaceId === namespace;
+}
+
 /**
  * Finds the contract model for a Better Auth physical model name: the exact name first, then the name with its first letter upper-cased, in the namespace the adapter's `namespace` option names or else in every namespace. The physical model name is matched to a contract model name, never to a table name.
  */
@@ -45,10 +50,7 @@ export function findModel(
   namespace: string | undefined,
 ): ModelLookup {
   const namespaces = contract.domain.namespaces;
-  const searched =
-    namespace === undefined
-      ? Object.keys(namespaces)
-      : [namespace].filter((id) => Object.hasOwn(namespaces, id));
+  const searched = Object.keys(namespaces).filter((id) => isSearchedNamespace(id, namespace));
   for (const name of modelNameCandidates(physicalName)) {
     const hits = searched.filter((id) => Object.hasOwn(namespaces[id]?.models ?? {}, name)).sort();
     const [only] = hits;
