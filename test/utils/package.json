@@ -6,7 +6,8 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsdown",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",
