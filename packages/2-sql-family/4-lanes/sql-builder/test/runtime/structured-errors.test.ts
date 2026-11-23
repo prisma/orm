@@ -68,6 +68,57 @@ describe('sql() builder structured error codes', () => {
     });
   });
 
+  describe('a column name several joined tables have', () => {
+    const sharedId = {
+      code: 'ORM.COLUMN_UNKNOWN',
+      meta: { column: 'id', tables: ['users', 'posts', 'profiles'] },
+    };
+    const joined = () => {
+      const d = db();
+      return d.public.users
+        .innerJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+        .innerJoin(d.public.profiles, (f, fns) => fns.eq(f.users.id, f.profiles.user_id));
+    };
+    const selected = () =>
+      joined().select('email') as unknown as {
+        orderBy(arg: string): unknown;
+        groupBy(...args: string[]): unknown;
+        distinctOn(...args: string[]): unknown;
+      };
+
+    it('names the tables in select', () => {
+      expect(capture(() => joined().select('id' as never))).toMatchObject({
+        ...sharedId,
+        message:
+          'Column "id" is in more than one joined table (users, posts, profiles); name its table in a callback, such as (f) => f.users.id',
+      });
+    });
+
+    it('names the tables in orderBy, groupBy and distinctOn', () => {
+      expect({
+        orderBy: capture(() => selected().orderBy('id')),
+        groupBy: capture(() => selected().groupBy('id')),
+        distinctOn: capture(() => selected().distinctOn('id')),
+      }).toMatchObject({
+        orderBy: {
+          ...sharedId,
+          message:
+            'Column "id" in orderBy is in more than one joined table (users, posts, profiles); name its table in a callback, such as (f) => f.users.id',
+        },
+        groupBy: {
+          ...sharedId,
+          message:
+            'Column "id" in groupBy is in more than one joined table (users, posts, profiles); name its table in a callback, such as (f) => f.users.id',
+        },
+        distinctOn: {
+          ...sharedId,
+          message:
+            'Column "id" in distinctOn is in more than one joined table (users, posts, profiles); name its table in a callback, such as (f) => f.users.id',
+        },
+      });
+    });
+  });
+
   it('invalid orderBy argument raises ORM.ARGUMENT_INVALID', () => {
     const query = db().public.users.select('name') as unknown as {
       orderBy(arg: unknown): unknown;

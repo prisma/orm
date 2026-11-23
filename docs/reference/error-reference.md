@@ -1123,6 +1123,8 @@ The operation needs a contract capability the contract does not declare; the pay
 
 A mutation payload or where-expression references a column that does not exist on the resolved table. Thrown while compiling the query plan or binding the where clause, by the ORM client and by the `sql()` builder DSL. Payload: `namespaceId`, `tableName`, `column`.
 
+The `sql()` builder also raises it when `select`, `orderBy`, `groupBy` or `distinctOn` names a column by itself and no single table in the query's scope owns that name. If no joined table has the column, the message says it was not found. If more than one joined table has it, the message lists those tables in `tables` and says to name the table in a callback, such as `(f) => f.users.id`; a name that two or more joined tables share is never a top-level field. Payload: `column`, plus `tables` for a shared name.
+
 ### ORM.CURSOR_VALUE_MISSING
 
 Cursor pagination was requested but the cursor object lacks a value for one of the `orderBy` columns, so the position cannot be anchored. Payload: `column`.

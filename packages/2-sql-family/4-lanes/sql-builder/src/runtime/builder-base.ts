@@ -33,7 +33,7 @@ import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { structuredError } from '@internal/utils/structured-error';
+import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import type {
   AggregateFunctions,
   Expression,
@@ -313,6 +313,29 @@ export function mergeScopes<A extends Scope, B extends Scope>(a: A, b: B): Merge
   );
 }
 
+function unknownColumnError(
+  scope: Scope,
+  column: string,
+  method: string | undefined,
+): StructuredError {
+  const tables = Object.entries(scope.namespaces)
+    .filter(([, fields]) => Object.hasOwn(fields, column))
+    .map(([table]) => table);
+  const [firstTable] = tables;
+  if (firstTable === undefined || tables.length < 2) {
+    const where = method === undefined ? '' : ` for ${method}`;
+    return structuredError('ORM.COLUMN_UNKNOWN', `Column "${column}" not found in scope${where}`, {
+      meta: { column },
+    });
+  }
+  const where = method === undefined ? '' : ` in ${method}`;
+  return structuredError(
+    'ORM.COLUMN_UNKNOWN',
+    `Column "${column}"${where} is in more than one joined table (${tables.join(', ')}); name its table in a callback, such as (f) => f.${firstTable}.${column}`,
+    { meta: { column, tables } },
+  );
+}
+
 function scopeColumnNames(scope: Scope): ReadonlySet<string> {
   return new Set([
     ...Object.keys(scope.topLevel),
@@ -397,10 +420,7 @@ export function resolveSelectArgs(
   if (typeof args[0] === 'string' && (args.length === 1 || typeof args[1] !== 'function')) {
     for (const colName of args as string[]) {
       const field = ownScopeField(scope.topLevel, colName);
-      if (!field)
-        throw structuredError('ORM.COLUMN_UNKNOWN', `Column "${colName}" not found in scope`, {
-          meta: { column: colName },
-        });
+      if (!field) throw unknownColumnError(scope, colName, undefined);
       projections.push(
         ProjectionItem.of(colName, IdentifierRef.of(colName), codecRefOf(field, ctx)),
       );
@@ -476,14 +496,7 @@ export function resolveOrderBy(
 
   if (typeof arg === 'string') {
     const combined = orderByScopeOf(scope, rowFields);
-    if (!Object.hasOwn(combined.topLevel, arg))
-      throw structuredError(
-        'ORM.COLUMN_UNKNOWN',
-        `Column "${arg}" not found in scope for orderBy`,
-        {
-          meta: { column: arg },
-        },
-      );
+    if (!Object.hasOwn(combined.topLevel, arg)) throw unknownColumnError(scope, arg, 'orderBy');
     return toOrderByItem(IdentifierRef.of(arg));
   }
 
@@ -509,11 +522,7 @@ export function resolveGroupBy(
     const combined = orderByScopeOf(scope, rowFields);
     return (args as string[]).map((colName) => {
       if (!Object.hasOwn(combined.topLevel, colName))
-        throw structuredError(
-          'ORM.COLUMN_UNKNOWN',
-          `Column "${colName}" not found in scope for groupBy`,
-          { meta: { column: colName } },
-        );
+        throw unknownColumnError(scope, colName, 'groupBy');
       return IdentifierRef.of(colName);
     });
   }
@@ -543,11 +552,7 @@ export function resolveDistinctOn(
   const combined = orderByScopeOf(scope, rowFields);
   return (args as string[]).map((colName) => {
     if (!Object.hasOwn(combined.topLevel, colName))
-      throw structuredError(
-        'ORM.COLUMN_UNKNOWN',
-        `Column "${colName}" not found in scope for distinctOn`,
-        { meta: { column: colName } },
-      );
+      throw unknownColumnError(scope, colName, 'distinctOn');
     return IdentifierRef.of(colName);
   });
 }
