@@ -9,7 +9,7 @@ changes:
 
 ## `delete-all-includes-without-row-identity-refused`
 
-`deleteAll()` that returns its rows and loads includes reads the rows first, then deletes them. It limits the `DELETE` to the keys of the rows it read, and returns only the rows the `DELETE` removed. A table with no primary key, and no unique constraint whose columns are all `NOT NULL`, gives the rows no key to do that by. The previous release ran such a call anyway when the includes loaded in the same query: it deleted by the filter alone and returned the rows it had read, so it could report a row as deleted that was still in the table. The call is now refused before any statement runs, with the error `updateAll()` already raised:
+`deleteAll()` that returns its rows and loads includes reads the rows first, then deletes them. It limits the `DELETE` to the keys of the rows it read. A table with no primary key, and no unique constraint whose columns are all `NOT NULL`, gives the rows no key to do that by. The previous release ran such a call anyway when the includes loaded in the same query: it deleted by the filter alone and returned the rows it had read, so it could report a row as deleted that was still in the table. The call is now refused before any statement runs, with the error `updateAll()` already raised:
 
 ```text
 Cannot load include "author" of model "Log": table "Log" has no primary key, and no unique constraint whose columns are all NOT NULL, to match the included rows to their parent rows by.

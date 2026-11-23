@@ -346,7 +346,7 @@ On a polymorphic target, `variant(value).create(rows, options)` takes either opt
 
 ## Writes without `RETURNING`
 
-A write that returns rows is built the same way on every database: the write, then a `SELECT` that reads the written rows back by their key. When the contract reports `returning`, the ORM merges that `SELECT` into the write, so the write is one statement with `RETURNING`. These calls still send more than one statement on such a database:
+A write that returns rows is built the same way on every database: the write, then a `SELECT` that reads the written rows back by their key. When the contract reports `returning`, the ORM merges that `SELECT` into the write, so the write is one statement with `RETURNING`. These calls still read their rows with a separate `SELECT` on such a database, before or after the write:
 
 - `create()`, `createAll()`, `upsert()`, `update()` and `updateAll()` whose rows load includes or the variant tables of a polymorphic base model, and `update()` and `updateAll()` on a variant stored in its own table, write with `RETURNING` of the columns they read the rows back by (the key, or for `upsert()` the conflict columns), then read the rows back by them, because the write cannot return those rows. For `update()` and `updateAll()` the rows are the rows the `UPDATE` changed, with their new values.
 - `update()` whose filter names no unique key, or that has an `offset`, a `cursor`, `distinct` or `distinctOn`, first selects the key of the row `first()` returns. The `UPDATE` then has the caller's filter and that key, so it skips a row that no longer matches the filter, and `update()` then returns `null`.
