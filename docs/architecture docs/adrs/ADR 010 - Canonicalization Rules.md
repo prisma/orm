@@ -2,6 +2,8 @@
 
 **Revised:** 2026-07-23 — hashes are represented as bare lowercase hex; the former `sha256:` algorithm prefix was dropped before the RC format freeze (TML-2756). The prefix carried no information — the algorithm never varies per hash — and a change to the hashing rules is signalled by re-emit, not by an in-band marker, the same no-in-band-version reasoning [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md) records. Examples below use the bare form.
 
+**Partly superseded by** [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md): the canonicalization rules that hashes use do not change within a major, so a rule change is no longer handled by emitting and signing again. The hashes cover only `targetFamily`, `target` and their own section.
+
 ## Context
 
 - `contract.json` is the canonical artifact consumed by the runtime, planner, preflight, and PPg

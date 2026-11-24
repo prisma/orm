@@ -1,5 +1,7 @@
 # ADR 004 — Storage Hash vs Profile Hash (formerly “core hash”)
 
+**Hash inputs superseded by** [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md): each hash covers only `targetFamily`, `target` and its own section, and the rules do not change within a major.
+
 ## Context
 
 - We hash the emitted data contract to tie code, database state, and artifacts together
