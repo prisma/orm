@@ -1,6 +1,11 @@
 # Public API check: plan
 
-The design is in [spec.md](spec.md). Two slices, one pull request each, in order.
+The design is in [spec.md](spec.md). Two slices, one pull request each, in order. Linear project: [Catch breaking API changes and accidental exports in CI](https://linear.app/prisma-company/project/catch-breaking-api-changes-and-accidental-exports-in-ci-d45c81b36a78).
+
+- Slice 1: [TML-3932](https://linear.app/prisma-company/issue/TML-3932), files in [slices/api-lists/](slices/api-lists/spec.md).
+- Slice 2: [TML-3933](https://linear.app/prisma-company/issue/TML-3933).
+
+Spike records are in [spikes/](spikes/).
 
 ## Slice 1: every package lists its API in a committed file
 
