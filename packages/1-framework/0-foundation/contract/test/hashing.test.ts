@@ -1,7 +1,17 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { PreserveEmptyPredicate, StorageSort } from '../src/canonicalization';
+import {
+  assertContractHashes,
+  computeExecutionHash,
+  computeProfileHash,
+  computeStorageHash,
+} from '../src/hashing';
 
-import { computeExecutionHash, computeProfileHash, computeStorageHash } from '../src/hashing';
+const sha256OfJsonText = (value: unknown): string =>
+  createHash('sha256')
+    .update(JSON.stringify(value, null, 2))
+    .digest('hex');
 
 const sqlPreserveEmpty: PreserveEmptyPredicate = (path) => {
   const len = path.length;
@@ -212,5 +222,163 @@ describe('computeExecutionHash', () => {
       },
     });
     expect(hash1).not.toBe(hash2);
+  });
+});
+
+describe('the hash input', () => {
+  it('is the family, the target and the storage, with keys sorted', () => {
+    expect(
+      computeStorageHash({
+        target: 'postgres',
+        targetFamily: 'sql',
+        storage: emptyNamespacedStorage(),
+        ...SQL_HOOKS,
+      }),
+    ).toBe(
+      sha256OfJsonText({
+        storage: { namespaces: { __unbound__: { entries: { table: {} }, id: '__unbound__' } } },
+        target: 'postgres',
+        targetFamily: 'sql',
+      }),
+    );
+  });
+
+  it('is the family, the target and the capabilities for the profile hash', () => {
+    expect(
+      computeProfileHash({
+        target: 'postgres',
+        targetFamily: 'sql',
+        capabilities: { postgres: { jsonAgg: true, lateral: false }, sql: {} },
+      }),
+    ).toBe(
+      sha256OfJsonText({
+        capabilities: { postgres: { jsonAgg: true } },
+        target: 'postgres',
+        targetFamily: 'sql',
+      }),
+    );
+  });
+
+  it('is the family, the target and the execution section for the execution hash', () => {
+    expect(
+      computeExecutionHash({
+        target: 'postgres',
+        targetFamily: 'sql',
+        execution: {
+          mutations: {
+            defaults: [
+              {
+                ref: { namespace: 'public', entry: 'user', field: 'created_at' },
+                onCreate: { kind: 'generator', id: 'now' },
+              },
+            ],
+          },
+        },
+      }),
+    ).toBe(
+      sha256OfJsonText({
+        execution: {
+          mutations: {
+            defaults: [
+              {
+                onCreate: { id: 'now', kind: 'generator' },
+                ref: { entry: 'user', field: 'created_at', namespace: 'public' },
+              },
+            ],
+          },
+        },
+        target: 'postgres',
+        targetFamily: 'sql',
+      }),
+    );
+  });
+});
+
+describe('assertContractHashes', () => {
+  const savedContract = {
+    target: 'postgres',
+    targetFamily: 'sql',
+    storage: { storageHash: 'stale', ...emptyNamespacedStorage() },
+    capabilities: { postgres: { jsonAgg: true } },
+    execution: {
+      executionHash: 'stale',
+      mutations: {
+        defaults: [
+          {
+            ref: { namespace: 'public', entry: 'user', field: 'created_at' },
+            onCreate: { kind: 'generator', id: 'now' },
+          },
+        ],
+      },
+    },
+  };
+  const hashes = {
+    storageHash: 'edb2eedf15ba501832cdba6905d1adb959b4ca1939a76c34193a2f968669c4d4',
+    profileHash: 'cd6efaeff6fcb46dd626aa8a6cf5178ed1492a7c699a0afa209df503f5b190f6',
+    executionHash: '3bf322885c8caba8949f645910600987a17c24874df8ddd48e6a9d9e61ced8d1',
+  };
+
+  it('passes when every hash matches, ignoring the hashes the contract stores', () => {
+    expect(() =>
+      assertContractHashes({
+        contracts: [{ name: 'users', contract: savedContract, ...hashes }],
+        ...SQL_HOOKS,
+      }),
+    ).not.toThrow();
+  });
+
+  it('names the contract and the hash that differs', () => {
+    expect(() =>
+      assertContractHashes({
+        contracts: [
+          { name: 'users', contract: savedContract, ...hashes, profileHash: 'b'.repeat(64) },
+        ],
+        ...SQL_HOOKS,
+      }),
+    ).toThrow(
+      `Contract "users": the profile hash is ${hashes.profileHash}, but ${'b'.repeat(64)} was expected.`,
+    );
+  });
+
+  it('reports every difference in every contract', () => {
+    expect(() =>
+      assertContractHashes({
+        contracts: [
+          { name: 'first', contract: savedContract, ...hashes, storageHash: 'x' },
+          { name: 'second', contract: savedContract, ...hashes, executionHash: 'y' },
+        ],
+        ...SQL_HOOKS,
+      }),
+    ).toThrow(
+      [
+        'The hash rules give different hashes for 2 saved contracts:',
+        `Contract "first": the storage hash is ${hashes.storageHash}, but x was expected.`,
+        `Contract "second": the execution hash is ${hashes.executionHash}, but y was expected.`,
+      ].join('\n'),
+    );
+  });
+
+  it('fails for a contract with an execution section and no expected execution hash', () => {
+    const { executionHash: _executionHash, ...withoutExecutionHash } = hashes;
+    expect(() =>
+      assertContractHashes({
+        contracts: [{ name: 'users', contract: savedContract, ...withoutExecutionHash }],
+        ...SQL_HOOKS,
+      }),
+    ).toThrow(
+      `Contract "users": the execution hash is ${hashes.executionHash}, but no execution hash was expected.`,
+    );
+  });
+
+  it('fails for an expected execution hash when the contract has no execution section', () => {
+    const { execution: _execution, ...withoutExecution } = savedContract;
+    expect(() =>
+      assertContractHashes({
+        contracts: [{ name: 'users', contract: withoutExecution, ...hashes }],
+        ...SQL_HOOKS,
+      }),
+    ).toThrow(
+      `Contract "users": the contract has no execution section, but execution hash ${hashes.executionHash} was expected.`,
+    );
   });
 });
