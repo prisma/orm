@@ -28,8 +28,9 @@ const COMMENTS = new Set([
 ]);
 
 // Collapses whitespace between tokens to one space; the text of string and template literals is
-// kept as it is, except that a line break in it is written `\n`, so every item stays on one line. Tokens are TypeScript's own: a `}` that closes a template's `${…}` is scanned
-// again as the rest of the template.
+// kept as it is, except that a line break in it is written `\n`, so every item stays on one line.
+// Tokens are TypeScript's own: a `}` that closes a template's `${…}` is scanned again as the rest
+// of the template.
 export function oneLine(text) {
   const scanner = ts.createScanner(
     ts.ScriptTarget.Latest,
@@ -205,10 +206,11 @@ class LineSet {
 }
 
 // Emits the lines of one item and its members. `ownName` is null for a member. With
-// `keepImportModules`, types keep the module of an `import("…")` reference, to compare declarations.
+// `keepImportModules`, types keep the module of an `import("…")` reference, to compare
+// declarations. `marker` goes before the item's own line only, not its members'.
 function emitItem(
   item,
-  { prefix, context, ownName, nameOf, origin, lines, keepImportModules, qualify },
+  { prefix, context, ownName, nameOf, origin, lines, keepImportModules, qualify, marker = '' },
 ) {
   const itemOrigin = `${origin} ${item.canonicalReference.toString()}`;
   const options = { keepImportModules, qualify };
@@ -222,8 +224,10 @@ function emitItem(
     if (!(error instanceof TypeTextError)) throw error;
     throw new ApiListError(`${prefix}${item.canonicalReference.toString()}: ${error.message}`);
   }
-  lines.add(`${prefix}${own}`, itemOrigin);
-  if (item.tsdocComment?.deprecatedBlock) lines.add(`${prefix}deprecated: ${own}`, itemOrigin);
+  lines.add(`${prefix}${marker}${own}`, itemOrigin);
+  if (item.tsdocComment?.deprecatedBlock) {
+    lines.add(`${prefix}deprecated: ${marker}${own}`, itemOrigin);
+  }
   const containerWord = CONTAINER_WORDS[item.kind];
   if (!containerWord) return;
   const childContext = `${context}${containerWord} ${ownName ?? item.displayName}, `;
@@ -255,6 +259,21 @@ function loadModels(entryPoints) {
     });
 }
 
+// The package an import specifier names: `@scope/name` or `name`, without a subpath.
+function packageOfSpecifier(specifier) {
+  const parts = specifier.split('/');
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
+}
+
+// The module users import for a package's types: DefinitelyTyped's `@types/pg` types `pg`, and
+// `@types/babel__core` types `@babel/core`.
+export function moduleUsersImport(module) {
+  const typed = /^@types\/(.+)$/.exec(module)?.[1];
+  if (typed === undefined) return module;
+  const [scope, name] = typed.split('__');
+  return name === undefined ? scope : `@${scope}/${name}`;
+}
+
 // The package or module a canonical reference names: `mongodb` in `mongodb!MongoClient:class`,
 // `node:fs` in `!"\"node:fs\"".ReadStream:class`. A global type has none.
 function moduleOf(reference) {
@@ -262,6 +281,15 @@ function moduleOf(reference) {
   if (bang > 0) return reference.slice(0, bang);
   return /^!"\\"([^"\\]+)\\""/.exec(reference)?.[1];
 }
+
+// Kinds of declaration that are a value as well as a type, so exporting them type-only matters.
+const VALUE_KINDS = new Set([
+  ApiItemKind.Class,
+  ApiItemKind.Enum,
+  ApiItemKind.Variable,
+  ApiItemKind.Function,
+  ApiItemKind.Namespace,
+]);
 
 const AE_SIGNATURE_KEYS = {
   [ApiItemKind.CallSignature]: '__call',
@@ -386,9 +414,9 @@ const hash = (text) => createHash('sha256').update(text).digest('hex');
 //
 // Non-exported declarations with the same name are ordered by a key that does not depend on
 // assigned names: their text with source names, then their text with the full names of types
-// from elsewhere, then the same for what they refer to, a few levels deep. Declarations that print identically once what they refer to has its final name
-// are one declaration copied into two files and share one name; merges are only ever added, so
-// the rounds end.
+// from elsewhere, then the same for what they refer to, a few levels deep. Declarations that print
+// identically once what they refer to has its final name are one declaration copied into two
+// files and share one name; merges are only ever added, so the rounds end.
 function nameDeclarations(models, paths, packageName, problems) {
   const exportedByModel = new Map();
   const exportedNames = new Map();
@@ -419,22 +447,37 @@ function nameDeclarations(models, paths, packageName, problems) {
 
   const sourceName = (item) => withoutBundlerSuffix(declaredName(item));
   // A type from elsewhere whose name this package also exports is printed with its package, so
-  // the two read differently.
-  const exportNames = new Set(
+  // the two read differently. A name the package forwards counts unless the forward names the
+  // same declaration, which shows as the same declaring package.
+  const ownNames = new Set(
     [...exportedByModel.values()].flatMap((exported) =>
       [...exported.values()].flatMap((group) => group.names),
     ),
   );
+  const forwardedFrom = new Map();
+  for (const info of paths.values()) {
+    for (const [name, from] of info.forwardedFrom) {
+      forwardedFrom.set(name, new Set([...(forwardedFrom.get(name) ?? []), from]));
+    }
+  }
+  // For an import("…") type the build wrote with no reference, the package is the specifier's.
+  const qualifyImport = (name, specifier) => {
+    const module = packageOfSpecifier(specifier);
+    return clashes(name, module) ? moduleUsersImport(module) : undefined;
+  };
+  const clashes = (name, module) =>
+    ownNames.has(name) ||
+    (forwardedFrom.has(name) && [...forwardedFrom.get(name)].some((from) => from !== module));
   // The module is the one API Extractor's reference names, the package that declares the type,
   // whatever the build wrote, so one type is always spelled one way. A global is `globalThis.X`.
   const qualified = (reference, text, { afterDot, afterImport }) => {
     if ((afterDot && !afterImport) || reference.startsWith(`${packageName}!`)) return undefined;
     const external = TOP_LEVEL_REFERENCE.exec(reference);
     const name = external && text.includes('$') ? withoutBundlerSuffix(external[2]) : text;
-    if (!exportNames.has(name)) return undefined;
-    if (/^![A-Za-z0-9_$]+:[a-z]+$/.test(reference)) return `globalThis.${name}`;
     const module = moduleOf(reference);
-    return module === undefined ? undefined : `import("${module}").${name}`;
+    if (!clashes(name, module)) return undefined;
+    if (/^![A-Za-z0-9_$]+:[a-z]+$/.test(reference)) return `globalThis.${name}`;
+    return module === undefined ? undefined : `import("${moduleUsersImport(module)}").${name}`;
   };
   const nameOf = (model, names) => (reference, text, position) => {
     const item = model.byReference.get(reference);
@@ -559,7 +602,7 @@ function nameDeclarations(models, paths, packageName, problems) {
     local.sameAs = root === local.key ? undefined : locals.get(root);
   }
 
-  return { locals, localNames, exportNames, nameOf: (model) => nameOf(model, localNames) };
+  return { locals, localNames, qualifyImport, nameOf: (model) => nameOf(model, localNames) };
 }
 
 export function portabilityProblems(lines, root) {
@@ -673,7 +716,7 @@ export function flattenPackage(packageDir, entryPoints) {
 function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf }) {
   const problems = [];
   const packageName = models[0]?.packageName;
-  const { locals, localNames, exportNames, nameOf } = nameDeclarations(
+  const { locals, localNames, qualifyImport, nameOf } = nameDeclarations(
     models,
     paths,
     packageName,
@@ -693,7 +736,7 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
         nameOf: nameOf(local.model),
         origin: local.key,
         lines,
-        qualify: exportNames,
+        qualify: qualifyImport,
       });
     }
   }
@@ -724,14 +767,18 @@ function collectLines(models, { checker, paths, isOwn, containers, memberKeysOf 
       for (const name of group.names) {
         for (const item of group.items) {
           const isDefault = name === 'default';
+          const typeOnly = group.typeOnly.get(name) && VALUE_KINDS.has(item.kind);
           emitItem(item, {
-            prefix: isDefault ? `${pathPrefix}export default = ` : pathPrefix,
+            prefix: isDefault
+              ? `${pathPrefix}export ${typeOnly ? 'type ' : ''}default = `
+              : pathPrefix,
+            marker: typeOnly && !isDefault ? 'export type ' : '',
             context: '',
             ownName: isDefault ? withoutBundlerSuffix(declaredName(item)) : name,
             nameOf: nameOf(model),
             origin: `${model.subpath} ${name}`,
             lines,
-            qualify: exportNames,
+            qualify: qualifyImport,
           });
           cover(model.subpath, name);
         }

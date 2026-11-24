@@ -1,7 +1,8 @@
 // What each import path of a package exports, as the TypeScript compiler sees it. This uses the
 // repository's TypeScript; API Extractor brings its own copy, which reads the same files.
 
-import { relative, resolve, sep } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { SourceMapper } from '@microsoft/api-extractor/lib/collector/SourceMapper';
 import ts from 'typescript';
 import { COMPILER_OPTIONS } from './compiler-options.mjs';
@@ -27,8 +28,6 @@ function moduleSpecifierOf(declaration) {
   return undefined;
 }
 
-// Follows an export through imports and re-exports to the first non-relative module it passes,
-// and the name it has there.
 function isTypeOnly(declaration) {
   if (ts.isImportSpecifier(declaration)) {
     return declaration.isTypeOnly || declaration.parent.parent.isTypeOnly;
@@ -39,6 +38,45 @@ function isTypeOnly(declaration) {
   if (ts.isImportClause(declaration)) return declaration.isTypeOnly;
   if (ts.isNamespaceImport(declaration)) return declaration.parent.isTypeOnly;
   return false;
+}
+
+// Whether any import or export between a path and the declaration it exports is type-only.
+function isTypeOnlyExport(checker, symbol) {
+  let current = symbol;
+  const seen = new Set();
+  while (current && current.flags & ts.SymbolFlags.Alias && !seen.has(current)) {
+    seen.add(current);
+    if ((current.declarations ?? []).some(isTypeOnly)) return true;
+    current = checker.getImmediateAliasedSymbol(current);
+  }
+  return false;
+}
+
+const packageNames = new Map();
+
+// The name in the package.json nearest above a file: the package that declares what is in it.
+function packageOf(fileName) {
+  for (let folder = dirname(fileName); dirname(folder) !== folder; folder = dirname(folder)) {
+    if (!packageNames.has(folder)) {
+      const manifest = join(folder, 'package.json');
+      packageNames.set(
+        folder,
+        existsSync(manifest) ? JSON.parse(readFileSync(manifest, 'utf8')).name : undefined,
+      );
+    }
+    const name = packageNames.get(folder);
+    if (name !== undefined) return name;
+  }
+  return undefined;
+}
+
+// The package that declares what an exported symbol names, after following its aliases.
+function declaringPackage(checker, symbol) {
+  const target = symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+  const declaration = target.declarations?.[0];
+  return declaration === undefined
+    ? undefined
+    : packageOf(realpathSync(declaration.getSourceFile().fileName));
 }
 
 // Follows an export through imports and re-exports to the first non-relative module it passes:
@@ -231,10 +269,11 @@ function readPath(checker, program, file, packageDir) {
     namespaceForwards: [],
     starForwards: [],
     starCovered: new Set(),
+    forwardedFrom: new Map(),
     augmentations: [],
     problems: [],
   };
-  const starNames = new Set();
+  const starNames = new Map();
   for (const statement of file.statements) {
     if (!ts.isExportDeclaration(statement) || statement.exportClause !== undefined) continue;
     const specifier = statement.moduleSpecifier?.text;
@@ -248,7 +287,8 @@ function readPath(checker, program, file, packageDir) {
       continue;
     }
     info.starForwards.push(specifier);
-    for (const exported of checker.getExportsOfModule(module)) starNames.add(exported.name);
+    for (const exported of checker.getExportsOfModule(module))
+      starNames.set(exported.name, exported);
   }
 
   const module = checker.getSymbolAtLocation(file);
@@ -257,8 +297,10 @@ function readPath(checker, program, file, packageDir) {
     info.exportNames.push(name);
     const here = exported.declarations?.find((declaration) => declaration.getSourceFile() === file);
     if (here === undefined) {
-      if (starNames.has(name)) info.starCovered.add(name);
-      else info.problems.push(`cannot tell where the export ${name} comes from`);
+      if (starNames.has(name)) {
+        info.starCovered.add(name);
+        info.forwardedFrom.set(name, declaringPackage(checker, starNames.get(name)));
+      } else info.problems.push(`cannot tell where the export ${name} comes from`);
       continue;
     }
     const target =
@@ -274,8 +316,10 @@ function readPath(checker, program, file, packageDir) {
           own.map((declaration) => ts.getNameOfDeclaration(declaration)?.getText()).filter(Boolean),
         ),
         items: [],
+        typeOnly: new Map(),
       };
       group.names.push(name);
+      group.typeOnly.set(name, isTypeOnlyExport(checker, exported));
       info.groups.set(target, group);
       continue;
     }
@@ -291,6 +335,7 @@ function readPath(checker, program, file, packageDir) {
         typeOnly: forward.typeOnly,
       });
     } else {
+      info.forwardedFrom.set(name, declaringPackage(checker, exported));
       info.namedForwards.push({
         exportName: name,
         originalName: forward.originalName,

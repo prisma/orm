@@ -66,12 +66,15 @@ function isTypeName(node) {
   return false;
 }
 
-// Prints `node` with the members of every union sorted and `import("…").Name` as `Name`, or
-// with the module kept when `keepImportModules` is set, or as `module.Name` when `qualify` holds
-// the name. `rename` may give the printed name of an
-// identifier that names a type.
+// Prints `node` with the members of every union sorted and `import("…").Name` as `Name`, or with
+// the module kept when `keepImportModules` is set. `qualify(name, specifier)` may give a module to
+// print before the name, and `rename` the printed name of an identifier that names a type.
 export function renderNode(node, file, options = {}) {
-  const { rename = () => undefined, keepImportModules = false, qualify = new Set() } = options;
+  const {
+    rename = () => undefined,
+    keepImportModules = false,
+    qualify = () => undefined,
+  } = options;
   if (isTypeName(node)) return rename(node) ?? node.getText(file);
   if (ts.isUnionTypeNode(node)) {
     return node.types
@@ -83,8 +86,8 @@ export function renderNode(node, file, options = {}) {
   if (imported) {
     checkSpecifier(imported.specifier);
     if (keepImportModules) return node.getText(file);
-    const module = qualify.has(imported.names[0]) ? `${imported.specifier}.` : '';
-    return `${module}${imported.names.join('.')}`;
+    const module = qualify(imported.names[0], imported.specifier);
+    return `${module ? `${module}.` : ''}${imported.names.join('.')}`;
   }
   if (ts.isImportTypeNode(node)) checkSpecifier(node.argument.literal.text);
   if (ts.isImportTypeNode(node) && node.qualifier && !keepImportModules) {
@@ -94,7 +97,8 @@ export function renderNode(node, file, options = {}) {
     const leftmost = ts.isQualifiedName(node.qualifier)
       ? leftmostName(node.qualifier)
       : node.qualifier;
-    const module = qualify.has(leftmost.text) ? `${node.argument.literal.text}.` : '';
+    const qualified = qualify(leftmost.text, node.argument.literal.text);
+    const module = qualified ? `${qualified}.` : '';
     return `${node.isTypeOf ? 'typeof ' : ''}${module}${node.qualifier.getText(file)}${typeArguments}`;
   }
   let text = '';
@@ -106,12 +110,14 @@ export function renderNode(node, file, options = {}) {
   return text + file.text.slice(cursor, node.end);
 }
 
-// `context` says what `text` is: 'declaration', 'interface member', 'class member' or 'enum member'.
+// `context` says what `text` is: 'declaration', 'interface member', 'class member' or
+// 'enum member'.
 export function normalizeTypes(text, context, { keepImportModules = false, qualify } = {}) {
   const [prefix, suffix] = wrapperFor(text, context);
   const source = `${prefix}${text}${suffix}`;
   const file = ts.createSourceFile('type.d.ts', source, ts.ScriptTarget.Latest, true);
-  // parseDiagnostics is internal to TypeScript; it is the only way to learn a parse failed without building a program.
+  // parseDiagnostics is internal to TypeScript; it is the only way to learn a parse failed without
+  // building a program.
   if (!Array.isArray(file.parseDiagnostics)) {
     throw new TypeTextError('this TypeScript version does not expose parse diagnostics');
   }

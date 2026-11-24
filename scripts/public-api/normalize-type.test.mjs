@@ -100,7 +100,7 @@ describe('normalizeTypes', () => {
     );
     strictEqual(
       normalizeTypes('class A extends import("pkg").Base<1>', 'declaration', {
-        qualify: new Set(['Base']),
+        qualify: (name, specifier) => (name === 'Base' ? specifier : undefined),
       }),
       'class A extends pkg.Base<1>',
     );

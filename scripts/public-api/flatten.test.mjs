@@ -3,7 +3,13 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { compareCodeUnits, flattenPackage, oneLine, portabilityProblems } from './flatten.mjs';
+import {
+  compareCodeUnits,
+  flattenPackage,
+  moduleUsersImport,
+  oneLine,
+  portabilityProblems,
+} from './flatten.mjs';
 import { readPackageApi } from './read-api.mjs';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -624,6 +630,33 @@ describe('flattenPackage', () => {
     );
   });
 
+  it('marks a class or constant of the package exported type-only, on the path that does so', () => {
+    deepStrictEqual(
+      linesOf('own-type-only'),
+      sorted([
+        '.: class Widget, readonly required property size: number',
+        '.: export type class Widget',
+        '.: export type const limit: number',
+        '.: interface Shape',
+        '.: interface Shape, readonly required property x: number',
+        './value: class Widget',
+        './value: class Widget, readonly required property size: number',
+      ]),
+    );
+  });
+
+  it('qualifies an outside type whose name the package forwards from another declaration', () => {
+    deepStrictEqual(
+      linesOf('forward-clash'),
+      sorted([
+        '.: export ArkErrors from arktype',
+        '.: export ReadStream from node:fs',
+        '.: function check(errors: ArkErrors): void',
+        '.: function terminal(stream: node:tty.ReadStream): void',
+      ]),
+    );
+  });
+
   it('sorts union members and prints import("…") references by name alone', () => {
     deepStrictEqual(
       linesOf('normalize'),
@@ -658,6 +691,15 @@ describe('flattenPackage', () => {
 
   it('gives identical output on a second run', () => {
     deepStrictEqual(linesOf('shared'), linesOf('shared'));
+  });
+});
+
+describe('moduleUsersImport', () => {
+  it('names the module a DefinitelyTyped package types', () => {
+    deepStrictEqual(
+      ['@types/pg', '@types/babel__core', 'arktype', '@ark/schema'].map(moduleUsersImport),
+      ['pg', '@babel/core', 'arktype', '@ark/schema'],
+    );
   });
 });
 

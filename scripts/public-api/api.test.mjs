@@ -1,5 +1,5 @@
 import { deepStrictEqual, match, strictEqual, throws } from 'node:assert/strict';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,56 @@ function output() {
   let text = '';
   return { write: (chunk) => (text += chunk), text: () => text };
 }
+
+// Update mode rewrites committed lists, so it runs on copies of the fixture roots, kept in the
+// worktree's ignored wip/ folder.
+function copyOfRoot(name) {
+  const copy = join(here, '..', '..', 'wip', 'public-api-test-roots', `${name}-${process.pid}`);
+  rmSync(copy, { recursive: true, force: true });
+  cpSync(join(fixtures, name), copy, { recursive: true });
+  return copy;
+}
+
+describe('main in update mode', () => {
+  it('rewrites the stale and missing lists, after which check passes', async () => {
+    const root = copyOfRoot('root-stale');
+    try {
+      const stdout = output();
+      strictEqual(await main({ mode: 'update', root, stdout }), 0);
+      strictEqual(
+        stdout.text(),
+        [
+          'api:update: 2 of 2 lists changed',
+          '  packages/9-public/@prisma/missing/api.txt',
+          '  packages/9-public/@prisma/stale/api.txt',
+          '',
+        ].join('\n'),
+      );
+      const scope = join(root, 'packages/9-public/@prisma');
+      strictEqual(
+        readFileSync(join(scope, 'stale/api.txt'), 'utf8'),
+        apiText(['.: function ready(): void']),
+      );
+      strictEqual(
+        readFileSync(join(scope, 'missing/api.txt'), 'utf8'),
+        apiText(['.: function absent(): void']),
+      );
+      strictEqual(await main({ mode: 'check', root, stdout: output() }), 0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('writes no committed list when a package fails', async () => {
+    const root = copyOfRoot('root-broken');
+    try {
+      strictEqual(await main({ mode: 'update', root, stderr: output() }), 1);
+      strictEqual(existsSync(join(root, 'packages/9-public/@prisma/ok/api.txt')), false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('main', () => {
   it('passes check when every list matches', async () => {
@@ -88,15 +138,11 @@ describe('main', () => {
     );
   });
 
-  it('writes the lists that did generate when another package fails, and no committed list', async () => {
+  it('writes the lists that did generate when another package fails', async () => {
     const okList = join(fixtures, 'root-broken/packages/9-public/@prisma/ok/dist-api/api.txt');
     rmSync(okList, { force: true });
     await main({ mode: 'check', root: join(fixtures, 'root-broken'), stderr: output() });
     strictEqual(readFileSync(okList, 'utf8'), apiText(['.: function fine(): void']));
-    strictEqual(
-      existsSync(join(fixtures, 'root-broken/packages/9-public/@prisma/ok/api.txt')),
-      false,
-    );
   });
 
   it('fails on a folder that has an api.txt but no package.json', async () => {
@@ -140,6 +186,8 @@ describe('augmentsItself', () => {
   it('finds a declare module of the package itself, indented or not', () => {
     const packageDir = join(fixtures, 'indented-augment');
     strictEqual(augmentsItself(packageDir, entryPointsOf(packageDir)), true);
+    const dts = join(fixtures, 'dts-augment');
+    strictEqual(augmentsItself(dts, entryPointsOf(dts)), true);
     const plain = join(fixtures, 'kinds');
     strictEqual(augmentsItself(plain, entryPointsOf(plain)), false);
   });
