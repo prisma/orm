@@ -19,7 +19,7 @@ Each project below states:
 - **How, where we know:** the work we expect. The numbers in brackets are the task numbers this plan used before 2026-11-24; the research reports under [research/](research/) and [handover.md](handover.md) refer to tasks by those numbers.
 - **To decide when it starts:** what is not settled.
 
-**What GA requires.** The promise starts at `8.0.0`. A project is **Must** when its changes would themselves break the promise if made later: a change to a stored format, a hash, an import path or a published type. Project 1 is Must because the people and agents who build the others read the repository's docs. Project 4 is Must because the first release after `8.0.0` needs it. The others are **Later**: they can become true after `8.0.0` without breaking a user.
+**What GA requires.** These placements were proposed on 2026-11-24 and are not yet confirmed, except that reducing exports was already placed as Must. The promise starts at `8.0.0`. A project is **Must** when its changes would themselves break the promise if made later: a change to a stored format, a hash, an import path or a published type. Project 1 is Must because the people and agents who build the others read the repository's docs. Project 4 is Must because project 3 needs it. A project is **Aim**, wanted at GA but able to ship just after, when users need it from the first release after `8.0.0`: projects 7, 9 and 12. The others are **Later**. Project 8 being Later has a cost: until the reference documentation exists, no behaviour is specified, so the promise holds for types, stored data and formats but not yet for behaviour.
 
 **Order.** Project 1 first. Project 4 before project 3, because it lists each package's exports, which is what makes reducing them reviewable. Projects 2, 5 and 6 depend on none of the others.
 
@@ -40,6 +40,7 @@ The facts below about the code were read on 2026-11-23 at `8.0.0-rc.24` and noth
 **How, where we know.**
 
 - The records to correct are listed in [analysis.md](analysis.md), under "Existing records the decided policy contradicts": the no-backward-compatibility rules in `CONTRIBUTING.md`, the architecture overview and the repository rules; decision records that handle a format or hash change by telling users to emit and sign again; the record that lists the format version as a storage hash input; the marker record's statement that the runtime refuses to execute on a mismatch; `docs/oss/versioning.md` and `SECURITY.md`; the rule that a renamed PSL name is removed after "one release line".
+- Project 1 corrects what a contributor reads as a rule today. A record that describes behaviour another project changes, such as the hash inputs or the marker check, is corrected by that project when the behaviour changes.
 - Revise the decision record on version support (`docs/architecture docs/adrs/ADR 222 - Version support policy.md`), which says "We raise floors freely", the project intent, which repeats it, and the header of `scripts/validate-typescript-peer.mjs` (part of task 6).
 
 **To decide when it starts.** Whether the policy is one decision record or several. The wording point in [open-questions.md](open-questions.md): whether the end of exact version pins at `8.0.0` covers the pins between our own packages.
@@ -143,6 +144,8 @@ The facts below about the code were read on 2026-11-23 at `8.0.0-rc.24` and noth
 
 ## Projects that can follow GA
 
+Projects 7, 9 and 12 are Aim. Projects 8, 10 and 11 are Later.
+
 ### 7. Bring Prisma's own database tables up to date in each release, so no upgrade fails on them
 
 **Purpose.** An upgrade never fails because the tables Prisma keeps for itself in a user's database were created by an earlier release.
@@ -165,7 +168,7 @@ The facts below about the code were read on 2026-11-23 at `8.0.0-rc.24` and noth
 
 **Purpose.** A user reads, in the release notes, every change in behaviour and why it was allowed. A change made for a package below GA never affects an application that does not use that package.
 
-**What it achieves.** The author of a change states its class from section 5.2 of the spec and the reviewer checks it. Every release lists each change to behaviour with its class.
+**What it achieves.** The author of a change states its class and the reviewer checks it. The four classes are in section 5.2 of the spec: a fix to wrong behaviour, a change to specified behaviour, a change to unspecified detail, and a security fix. Every release lists each change to behaviour with its class.
 
 **How, where we know.**
 

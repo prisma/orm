@@ -8,6 +8,7 @@ This handover was taken up on 2026-11-24. Two things changed that day, and where
 
 - These files moved from `planning/ga-readiness/` on the branch `planning/prisma-8-ga` to `projects/ga-compatibility/` on the branch `ga-compatibility`. The planning branch keeps the GA plan, whose stream 7 lists the projects and points here.
 - [plan.md](plan.md) is organised as 12 projects, not 23 unordered tasks, and records which projects GA requires. Each project names the old task numbers it covers, which the research reports still use.
+- The statements below that only one row is marked Must, and that the next step is to wait for Will's instruction, are out of date. [plan.md](plan.md) has the current placements and order.
 
 ## What this work is
 
