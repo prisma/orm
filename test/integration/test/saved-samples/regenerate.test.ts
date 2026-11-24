@@ -1,13 +1,15 @@
 /**
- * Writes a new saved sample set with this branch's code. It runs only when `REGENERATE_SAVED_SAMPLES` names the release, and never replaces a set that exists; the procedure is in this folder's README.
+ * Writes a new saved sample set with this branch's code. `vitest.config.ts` leaves it out of every test run; `pnpm samples:write` runs it, with `REGENERATE_SAVED_SAMPLES` naming the release. It never writes into a set that exists. The procedure is in this folder's README.
  */
 
-import { cpSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createDevDatabase, timeouts } from '@repo/test-utils';
-import { MongoClient } from 'mongodb';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import type { DeclaredDatabasePolicies } from '@internal/framework-components/control';
+import { writeRef } from '@internal/migration-tools/refs';
+import { createDevDatabase, timeouts, withClient } from '@repo/test-utils';
+import { BSON, type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { join } from 'pathe';
-import { describe, expect, it } from 'vitest';
+import { dirname, join } from 'pathe';
+import { expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   injectMigrationSqlDbSetup,
@@ -17,24 +19,37 @@ import {
   runContractEmit,
   runMigrate,
   runMigrationPlan,
-  runRef,
   selfEmitMigration,
 } from '../utils/journey-test-helpers';
+import { mongoConfig, mongoSources, postgresConfig, postgresSources } from './generator-inputs';
 import {
-  emptySampleProject,
+  computeSampleChecksums,
+  connectionPlaceholder,
+  mongoRecordCollection,
+  postgresSchemaFile,
   type SampleDatabase,
+  type SavedSchema,
+  sampleChecksumsPath,
   sampleDatabaseDir,
   sampleProjectDir,
-  sampleSetExists,
-  saveMongoRecords,
-  savePostgresRecords,
+  sampleQueryPath,
+  sampleSetDir,
+  writeProjectConfig,
 } from './sample-projects';
 
 /** The release the new set is written for: the version that will ship this branch's code, which can be later than the root `package.json` version until the release is cut. */
 const release = process.env['REGENERATE_SAVED_SAMPLES'] ?? '';
 
-/** The project files a release writes, and the contract source the user wrote; the config and manifest are left out. */
-function saveProjectFiles(ctx: JourneyContext, database: SampleDatabase): void {
+/** The policies the `production` ref declares, which `db migrate --to production` records on the marker. */
+const productionPolicies: DeclaredDatabasePolicies = { change: ['migrate'] };
+
+function writeJson(path: string, value: unknown): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+/** The project files a release writes, the contract source and the config the user wrote; the config keeps the placeholder for the connection string. */
+function saveProjectFiles(ctx: JourneyContext, database: SampleDatabase, config: string): void {
   const kept = new Set([
     'contract.prisma',
     'contract.json',
@@ -42,13 +57,13 @@ function saveProjectFiles(ctx: JourneyContext, database: SampleDatabase): void {
     'output',
     'migrations',
   ]);
+  const projectDir = sampleProjectDir(release, database);
   for (const entry of readdirSync(ctx.testDir)) {
     if (kept.has(entry)) {
-      cpSync(join(ctx.testDir, entry), join(sampleProjectDir(release, database), entry), {
-        recursive: true,
-      });
+      cpSync(join(ctx.testDir, entry), join(projectDir, entry), { recursive: true });
     }
   }
+  writeFileSync(join(projectDir, 'prisma.config.ts'), config);
 }
 
 async function emitAndPlan(
@@ -64,109 +79,141 @@ async function emitAndPlan(
   expect(plan.exitCode, `migration plan ${name}: ${plan.stdout}\n${plan.stderr}`).toBe(0);
 }
 
-async function migrate(ctx: JourneyContext): Promise<void> {
-  const migrated = await runMigrate(ctx);
+async function migrate(ctx: JourneyContext, args: readonly string[] = []): Promise<void> {
+  const migrated = await runMigrate(ctx, args);
   expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
 }
 
-async function setProductionRef(ctx: JourneyContext): Promise<void> {
-  const ref = await runRef(ctx, ['set', 'production', latestMigrationToHash(ctx)]);
-  expect(ref.exitCode, `migration ref set: ${ref.stderr}`).toBe(0);
+/** Fills the data migration `migration.plan` scaffolded, gives its data transform `invariantId`, and runs it to write `ops.json`. */
+async function fillDataMigration(
+  ctx: JourneyContext,
+  invariantId: string,
+  fill: (scaffold: string) => string,
+): Promise<void> {
+  const dir = join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx));
+  const migrationTs = join(dir, 'migration.ts');
+  const filled = fill(readFileSync(migrationTs, 'utf8')).replace(
+    /(dataTransform\((?:\w+,\s*)?['"][\w.-]+['"]\s*,\s*\{\n)/,
+    `$1  invariantId: '${invariantId}',\n`,
+  );
+  expect(filled, 'the data transform carries the invariant').toContain(invariantId);
+  writeFileSync(migrationTs, filled);
+  const selfEmit = await selfEmitMigration(ctx, ['--dir', dir, '--config', ctx.configPath]);
+  expect(selfEmit.exitCode, `node migration.ts: ${selfEmit.stdout}\n${selfEmit.stderr}`).toBe(0);
+  expect(readJsonFile(join(dir, 'migration.json'))).toMatchObject({
+    providedInvariants: [invariantId],
+  });
 }
 
-const postgresSources = {
-  initial: `// use prisma-8
-
-types {
-  Embedding3 = pgvector.Vector(3)
+function readJsonFile(path: string): unknown {
+  return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-enum Role {
-  @@type("pg/text@1")
-  USER
-  ADMIN
+/** Declares the `production` ref at the latest migration, requiring `invariantId` and declaring policies, and applies it so the marker records both. */
+async function deployProduction(ctx: JourneyContext, invariantId: string): Promise<void> {
+  await writeRef(join(ctx.testDir, 'migrations', 'app', 'refs'), 'production', {
+    hash: latestMigrationToHash(ctx),
+    invariants: [invariantId],
+    policies: productionPolicies,
+  });
+  await migrate(ctx, ['--to', 'production', '--permit-policy-change']);
 }
 
-model User {
-  id    Int    @id @default(autoincrement())
-  email String @unique
-  role  Role
+/** Saves how Prisma's tables on PostgreSQL were created and the rows they hold, one JSON file per table. */
+async function savePostgresRecords(connectionString: string, dir: string): Promise<void> {
+  await withClient(connectionString, async (client) => {
+    const columns = await client.query(`
+      SELECT c.table_name, c.column_name, c.is_nullable, c.column_default,
+        (SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a
+          WHERE a.attrelid = format('%I.%I', c.table_schema, c.table_name)::regclass
+            AND a.attname = c.column_name) AS type
+      FROM information_schema.columns c
+      WHERE c.table_schema = 'prisma_contract'
+      ORDER BY c.table_name, c.ordinal_position`);
+    const keys = await client.query(`
+      SELECT k.table_name, k.column_name
+      FROM information_schema.table_constraints t
+      JOIN information_schema.key_column_usage k
+        ON k.constraint_schema = t.constraint_schema AND k.constraint_name = t.constraint_name
+      WHERE t.table_schema = 'prisma_contract' AND t.constraint_type = 'PRIMARY KEY'
+      ORDER BY k.table_name, k.ordinal_position`);
+    const sequences = await client.query(`
+      SELECT s.relname AS name, format_type(q.seqtypid, NULL) AS type,
+        t.relname AS table, a.attname AS column
+      FROM pg_class s
+      JOIN pg_namespace n ON n.oid = s.relnamespace
+      JOIN pg_sequence q ON q.seqrelid = s.oid
+      JOIN pg_depend d ON d.objid = s.oid AND d.deptype = 'a'
+      JOIN pg_class t ON t.oid = d.refobjid
+      JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+      WHERE n.nspname = 'prisma_contract' AND s.relkind = 'S'
+      ORDER BY s.relname`);
 
-  @@map("user")
+    const tableNames = [...new Set(columns.rows.map((row) => row.table_name as string))];
+    const schema: SavedSchema = {
+      tables: tableNames.map((name) => ({
+        name,
+        columns: columns.rows
+          .filter((row) => row.table_name === name)
+          .map((row) => ({
+            name: row.column_name,
+            type: row.type,
+            nullable: row.is_nullable === 'YES',
+            default: row.column_default,
+          })),
+        primaryKey: keys.rows
+          .filter((row) => row.table_name === name)
+          .map((row) => row.column_name),
+      })),
+      sequences: sequences.rows.map((row) => ({
+        name: row.name,
+        type: row.type,
+        table: row.table,
+        column: row.column,
+      })),
+    };
+    writeJson(join(dir, postgresSchemaFile), schema);
+
+    for (const table of schema.tables) {
+      const order = table.primaryKey.map((column) => `"${column}"`).join(', ');
+      const rows = await client.query(
+        `SELECT to_jsonb(t) AS row FROM prisma_contract."${table.name}" t ORDER BY ${order}`,
+      );
+      writeJson(
+        join(dir, `${table.name}.json`),
+        rows.rows.map((row) => row.row),
+      );
+    }
+  });
 }
 
-model Document {
-  id        Int         @id @default(autoincrement())
-  title     String
-  embedding Embedding3?
-
-  @@map("document")
+/** Saves the documents of Prisma's collection on MongoDB in canonical Extended JSON, which keeps their BSON types. */
+async function saveMongoRecords(db: Db, dir: string): Promise<void> {
+  const documents = await db
+    .collection(mongoRecordCollection)
+    .find({}, { sort: { _id: 1 } })
+    .toArray();
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `${mongoRecordCollection}.json`),
+    `${BSON.EJSON.stringify(documents, undefined, 2, { relaxed: false })}\n`,
+  );
 }
-`,
-  posts: `// use prisma-8
-
-types {
-  Embedding3 = pgvector.Vector(3)
-}
-
-enum Role {
-  @@type("pg/text@1")
-  USER
-  ADMIN
-}
-
-model User {
-  id    Int    @id @default(autoincrement())
-  email String @unique
-  role  Role
-  posts Post[]
-
-  @@map("user")
-}
-
-model Post {
-  id       Int    @id @default(autoincrement())
-  title    String
-  authorId Int
-  author   User   @relation(fields: [authorId], references: [id])
-
-  @@index([authorId])
-  @@map("post")
-}
-
-model Document {
-  id        Int         @id @default(autoincrement())
-  title     String
-  embedding Embedding3?
-
-  @@map("document")
-}
-`,
-};
-
-const postgresDisplayName = postgresSources.posts.replace(
-  '  role  Role\n  posts Post[]',
-  '  role  Role\n  displayName String\n  posts Post[]',
-);
 
 async function generatePostgres(createTempDir: () => string): Promise<void> {
   const database = await createDevDatabase();
   try {
-    const ctx = emptySampleProject(createTempDir(), 'postgres', database.connectionString);
+    const ctx = writeProjectConfig(createTempDir(), postgresConfig, database.connectionString);
     await emitAndPlan(ctx, postgresSources.initial, 'initial');
     await migrate(ctx);
     await emitAndPlan(ctx, postgresSources.posts, 'add-posts');
     await migrate(ctx);
-    await emitAndPlan(ctx, postgresDisplayName, 'add-display-name', [
+    await emitAndPlan(ctx, postgresSources.displayName, 'add-display-name', [
       '--backfill',
       'User.displayName',
     ]);
-
-    const dataMigrationDir = join(ctx.testDir, 'migrations/app', latestMigrationDirName(ctx));
-    const migrationTs = join(dataMigrationDir, 'migration.ts');
-    writeFileSync(
-      migrationTs,
-      injectMigrationSqlDbSetup(readFileSync(migrationTs, 'utf8'))
+    await fillDataMigration(ctx, 'backfill-user-display-name', (scaffold) =>
+      injectMigrationSqlDbSetup(scaffold)
         .replace(
           'createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter })',
           'createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter, extensions: [pgvector] })',
@@ -184,57 +231,19 @@ async function generatePostgres(createTempDir: () => string): Promise<void> {
           "() => db.public.user.update({ displayName: 'unnamed' }).where((f, fns) => fns.eq(f.displayName, null))",
         ),
     );
-    const selfEmit = await selfEmitMigration(ctx, [
-      '--dir',
-      dataMigrationDir,
-      '--config',
-      ctx.configPath,
-    ]);
-    expect(selfEmit.exitCode, `node migration.ts: ${selfEmit.stdout}\n${selfEmit.stderr}`).toBe(0);
+    await deployProduction(ctx, 'backfill-user-display-name');
 
-    await migrate(ctx);
-    await setProductionRef(ctx);
-
-    saveProjectFiles(ctx, 'postgres');
+    saveProjectFiles(ctx, 'postgres', postgresConfig);
     await savePostgresRecords(database.connectionString, sampleDatabaseDir(release, 'postgres'));
+    writeJson(sampleQueryPath(release, 'postgres'), {
+      model: 'User',
+      table: 'user',
+      row: { email: 'ada@example.com', role: 'ADMIN', displayName: 'Ada' },
+    });
   } finally {
     await database.close();
   }
 }
-
-const mongoSources = {
-  initial: `// use prisma-8
-
-enum Role {
-  USER
-  ADMIN
-}
-
-model User {
-  id    ObjectId @id @map("_id")
-  email String   @unique
-  role  Role
-
-  @@map("users")
-}
-`,
-};
-
-const mongoPosts = mongoSources.initial
-  .replace('  role  Role\n', '  role  Role\n  posts Post[]\n')
-  .concat(`
-model Post {
-  id       ObjectId @id @map("_id")
-  title    String
-  authorId ObjectId
-  author   User     @relation(fields: [authorId], references: [id])
-
-  @@index([authorId])
-  @@map("posts")
-}
-`);
-
-const mongoName = mongoPosts.replace('  role  Role\n', '  role  Role\n  name  String?\n');
 
 async function generateMongo(createTempDir: () => string): Promise<void> {
   const replSet = await MongoMemoryReplSet.create({
@@ -247,37 +256,64 @@ async function generateMongo(createTempDir: () => string): Promise<void> {
   try {
     await client.connect();
     const dbName = 'saved_samples';
-    const ctx = emptySampleProject(createTempDir(), 'mongo', replSet.getUri(dbName));
+    const ctx = writeProjectConfig(createTempDir(), mongoConfig, replSet.getUri(dbName));
     await emitAndPlan(ctx, mongoSources.initial, 'initial');
     await migrate(ctx);
-    await emitAndPlan(ctx, mongoPosts, 'add-posts');
+    await emitAndPlan(ctx, mongoSources.posts, 'add-posts');
     await migrate(ctx);
-    await emitAndPlan(ctx, mongoName, 'add-name');
-    await migrate(ctx);
-    await setProductionRef(ctx);
+    await emitAndPlan(ctx, mongoSources.name, 'add-name', ['--backfill', 'User.name']);
+    await fillDataMigration(ctx, 'backfill-user-name', (scaffold) =>
+      scaffold.replace(/placeholder\(['"]User\.name:update['"]\)/, "{ $set: { name: 'unnamed' } }"),
+    );
+    await deployProduction(ctx, 'backfill-user-name');
 
-    saveProjectFiles(ctx, 'mongo');
+    saveProjectFiles(ctx, 'mongo', mongoConfig);
     await saveMongoRecords(client.db(dbName), sampleDatabaseDir(release, 'mongo'));
+    writeJson(sampleQueryPath(release, 'mongo'), {
+      root: 'users',
+      row: { email: 'ada@example.com', role: 'ADMIN', name: 'Ada' },
+    });
   } finally {
     await client.close();
     await replSet.stop();
   }
 }
 
+function writeSetReadme(): void {
+  writeFileSync(
+    join(sampleSetDir(release), 'README.md'),
+    `# Saved samples written by ${release}
+
+These files and records were written on ${new Date().toISOString().slice(0, 10)} by the code of ${release}, with \`pnpm samples:write\` (see [the procedure](../../README.md)). \`../${release}.sha256\` lists every file with its SHA-256; once ${release} is released, neither changes.
+
+- \`postgres/project/\`: a PostgreSQL project with the pgvector extension pack, and its \`prisma.config.ts\` with \`${connectionPlaceholder}\` where each run puts its connection string. Its contract has an enum, a relation with an index, and a vector column. It has three application migrations, the third a data migration that fills a new required column and provides an invariant, and the pgvector pack's own migrations, refs and snapshots. The \`production\` ref requires the invariant and declares database policies; \`db\` declares neither.
+- \`postgres/database/\`: how Prisma's tables in \`prisma_contract\` were created (\`${postgresSchemaFile}\`) and their rows after \`db migrate --to production\`, one JSON file per table. The marker records the policies and the invariant.
+- \`mongo/project/\`: a MongoDB project whose contract has an enum, a relation with an index and a required field filled by a data migration that provides an invariant, with its config, three migrations, refs and snapshots. The refs are as on PostgreSQL.
+- \`mongo/database/\`: the documents of \`${mongoRecordCollection}\` after \`db migrate --to production\`, in canonical Extended JSON.
+- \`<database>/query.json\`: the row the tests write and read back through the facade.
+`,
+  );
+}
+
 withTempDir(({ createTempDir }) => {
-  describe.runIf(release !== '')(`saved sample set for ${release}`, () => {
-    it.each(['postgres', 'mongo'] as const)(
-      'is written for %s',
-      async (database) => {
-        if (sampleSetExists(release, database)) {
-          throw new Error(
-            `A ${database} sample set for ${release} exists. A released set is never edited; delete it first only if ${release} has not been released.`,
-          );
-        }
-        if (database === 'postgres') await generatePostgres(createTempDir);
-        else await generateMongo(createTempDir);
-      },
-      timeouts.spinUpPpgDev + timeouts.spinUpMongoMemoryServer,
-    );
-  });
+  it(
+    `writes the saved sample set for ${release || '(no release named)'}`,
+    async () => {
+      if (release === '') {
+        throw new Error(
+          'Name the release the set is for: REGENERATE_SAVED_SAMPLES=<version> pnpm samples:write',
+        );
+      }
+      if (existsSync(sampleSetDir(release)) || existsSync(sampleChecksumsPath(release))) {
+        throw new Error(
+          `A saved sample set for ${release} exists. A saved set is never written over: it records what ${release} wrote. Write a set for the release that will ship this change instead.`,
+        );
+      }
+      await generatePostgres(createTempDir);
+      await generateMongo(createTempDir);
+      writeSetReadme();
+      writeFileSync(sampleChecksumsPath(release), computeSampleChecksums(release));
+    },
+    timeouts.spinUpPpgDev + timeouts.spinUpMongoMemoryServer,
+  );
 });

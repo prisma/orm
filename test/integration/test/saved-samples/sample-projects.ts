@@ -1,14 +1,16 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { cpSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { withClient } from '@repo/test-utils';
 import { BSON, type Db } from 'mongodb';
-import { dirname, join } from 'pathe';
+import { dirname, join, relative } from 'pathe';
 import { writeProjectManifest } from '../utils/cli-test-helpers';
 import type { JourneyContext } from '../utils/journey-test-helpers';
 
 export type SampleDatabase = 'postgres' | 'mongo';
 
-export const samplesRoot = dirname(fileURLToPath(import.meta.url));
+/** The folder holding each saved set, `<release>/`, and its checksum list, `<release>.sha256`. */
+export const samplesRoot = join(dirname(fileURLToPath(import.meta.url)), 'sets');
 
 /** Each release that has a saved sample set, named by its version. */
 export function savedReleases(): string[] {
@@ -18,7 +20,16 @@ export function savedReleases(): string[] {
     .sort();
 }
 
-/** The files of a project as `release` wrote them. */
+export function sampleSetDir(release: string): string {
+  return join(samplesRoot, release);
+}
+
+/** The list of every file in a set with its SHA-256, kept beside the set. */
+export function sampleChecksumsPath(release: string): string {
+  return join(samplesRoot, `${release}.sha256`);
+}
+
+/** The files of a project as `release` wrote them, with the config its user wrote. */
 export function sampleProjectDir(release: string, database: SampleDatabase): string {
   return join(samplesRoot, release, database, 'project');
 }
@@ -28,77 +39,17 @@ export function sampleDatabaseDir(release: string, database: SampleDatabase): st
   return join(samplesRoot, release, database, 'database');
 }
 
-/** The Prisma tables on PostgreSQL whose rows a sample set saves, each with the order its rows are saved in. */
-export const postgresRecordTables = {
-  marker: 'space',
-  ledger: 'id',
-  contract: 'core_hash',
-} as const;
-
-export type PostgresRecordTable = keyof typeof postgresRecordTables;
-
-export const mongoRecordCollection = '_prisma_migrations';
-
-/**
- * The project's config. A release does not write it, so the samples leave it out and each run writes it pointing at its own database.
- */
-const configs: Record<SampleDatabase, string> = {
-  postgres: `import postgresAdapter from '@internal/adapter-postgres/control';
-import { defineConfig as ormConfig } from '@internal/cli/config-types';
-import postgresDriver from '@internal/driver-postgres/control';
-import pgvector from '@internal/extension-pgvector/control';
-import sql from '@internal/family-sql/control';
-import { prismaContract } from '@internal/sql-contract-psl/provider';
-import postgres from '@internal/target-postgres/control';
-import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import { definePrismaConfig } from '@prisma/cli-engine';
-
-export default definePrismaConfig({
-  orm: ormConfig({
-    family: sql,
-    target: postgres,
-    adapter: postgresAdapter,
-    driver: postgresDriver,
-    extensions: [pgvector],
-    contract: {
-      ...prismaContract('./contract.prisma', {
-        output: 'contract.json',
-        target: postgres,
-        createNamespace: postgresCreateNamespace,
-      }),
-      typesModule: '@internal/postgres/contract-types',
-    },
-    db: { connection: '{{DB_URL}}' },
-    migrations: { dir: 'migrations', module: '@internal/postgres/migration' },
-  }),
-});
-`,
-  mongo: `import { defineConfig as mongo } from '@internal/mongo/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
-
-export default definePrismaConfig({
-  orm: mongo({
-    contract: './contract.prisma',
-    output: 'output',
-    db: { connection: '{{DB_URL}}' },
-  }),
-});
-`,
-};
-
-/** Writes the project's config, pointing at `connectionString`. */
-export function writeSampleConfig(
-  testDir: string,
-  database: SampleDatabase,
-  connectionString: string,
-): string {
-  const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(
-    configPath,
-    configs[database].replace('{{DB_URL}}', () => connectionString),
-  );
-  return configPath;
+/** The row a test writes and reads back through the facade, as the set's contract describes it. */
+export function sampleQueryPath(release: string, database: SampleDatabase): string {
+  return join(samplesRoot, release, database, 'query.json');
 }
+
+export function sampleSetExists(release: string, database: SampleDatabase): boolean {
+  return existsSync(join(samplesRoot, release, database));
+}
+
+/** The placeholder a saved `prisma.config.ts` holds where each run puts its connection string. */
+export const connectionPlaceholder = '{{DB_URL}}';
 
 /** Where the project's emitted `contract.json` is, relative to the project. */
 export const emittedContractPath: Record<SampleDatabase, string> = {
@@ -106,18 +57,22 @@ export const emittedContractPath: Record<SampleDatabase, string> = {
   mongo: 'output/contract.json',
 };
 
-/** A new project in `testDir` with its config and manifest, and no other files. */
-export function emptySampleProject(
+/** Writes `config` into the project with the placeholder replaced by `connectionString`, and the manifest beside it. */
+export function writeProjectConfig(
   testDir: string,
-  database: SampleDatabase,
+  config: string,
   connectionString: string,
 ): JourneyContext {
   writeProjectManifest(testDir);
-  const configPath = writeSampleConfig(testDir, database, connectionString);
+  const configPath = join(testDir, 'prisma.config.ts');
+  writeFileSync(
+    configPath,
+    config.replace(connectionPlaceholder, () => connectionString),
+  );
   return { testDir, configPath, outputDir: join(testDir, 'output') };
 }
 
-/** A copy of a saved project in `testDir`, so a test never changes the saved files. */
+/** A copy of a saved project in `testDir`, its config pointing at `connectionString`, so a test never changes the saved files. */
 export function copySampleProject(
   release: string,
   database: SampleDatabase,
@@ -125,62 +80,129 @@ export function copySampleProject(
   connectionString: string,
 ): JourneyContext {
   cpSync(sampleProjectDir(release, database), testDir, { recursive: true });
-  return emptySampleProject(testDir, database, connectionString);
+  return writeProjectConfig(
+    testDir,
+    readFileSync(join(testDir, 'prisma.config.ts'), 'utf8'),
+    connectionString,
+  );
+}
+
+/** The migration spaces of a saved project: every folder under `migrations/` but the snapshots. */
+export function sampleSpaces(release: string, database: SampleDatabase): string[] {
+  return readdirSync(join(sampleProjectDir(release, database), 'migrations'), {
+    withFileTypes: true,
+  })
+    .filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
+    .map((entry) => entry.name)
+    .sort();
 }
 
 export function readSampleJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
-function writeJson(path: string, value: unknown): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true, recursive: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(dir, join(entry.parentPath, entry.name)))
+    .sort();
 }
 
-/** Saves the rows of each Prisma table on PostgreSQL, one JSON file per table. */
-export async function savePostgresRecords(connectionString: string, dir: string): Promise<void> {
+/** Every file of a set with its SHA-256, one `<hash>  <path>` line per file, as `sha256sum` writes them. */
+export function computeSampleChecksums(release: string): string {
+  const dir = sampleSetDir(release);
+  return filesUnder(dir)
+    .map((file) => {
+      const hash = createHash('sha256')
+        .update(readFileSync(join(dir, file)))
+        .digest('hex');
+      return `${hash}  ${file}\n`;
+    })
+    .join('');
+}
+
+/** A table of Prisma's on PostgreSQL as a release created it. */
+export interface SavedTable {
+  readonly name: string;
+  readonly columns: readonly {
+    readonly name: string;
+    readonly type: string;
+    readonly nullable: boolean;
+    readonly default: string | null;
+  }[];
+  readonly primaryKey: readonly string[];
+}
+
+/** A sequence in Prisma's schema on PostgreSQL, and the column that owns it. */
+export interface SavedSequence {
+  readonly name: string;
+  readonly type: string;
+  readonly table: string;
+  readonly column: string;
+}
+
+/** How a release created Prisma's tables on PostgreSQL, saved as `tables.json` beside their rows. */
+export interface SavedSchema {
+  readonly tables: readonly SavedTable[];
+  readonly sequences: readonly SavedSequence[];
+}
+
+export const postgresSchemaFile = 'tables.json';
+
+const quote = (identifier: string) => `"${identifier.replaceAll('"', '""')}"`;
+const qualified = (name: string) => `prisma_contract.${quote(name)}`;
+
+/**
+ * Replaces Prisma's schema on PostgreSQL with the tables a release created, as its `tables.json` describes them, holding the rows it saved. The current release then runs against the tables as that release left them.
+ */
+export async function restorePostgresRecords(connectionString: string, dir: string): Promise<void> {
+  const schema = readSampleJson(join(dir, postgresSchemaFile)) as SavedSchema;
   await withClient(connectionString, async (client) => {
-    for (const [table, order] of Object.entries(postgresRecordTables)) {
-      const result = await client.query(
-        `SELECT to_jsonb(t) AS row FROM prisma_contract.${table} t ORDER BY ${order}`,
-      );
-      writeJson(
-        join(dir, `${table}.json`),
-        result.rows.map((row) => row.row),
-      );
+    await client.query('DROP SCHEMA prisma_contract CASCADE');
+    await client.query('CREATE SCHEMA prisma_contract');
+    for (const sequence of schema.sequences) {
+      await client.query(`CREATE SEQUENCE ${qualified(sequence.name)} AS ${sequence.type}`);
     }
-  });
-}
-
-/** Replaces the rows of each Prisma table on PostgreSQL with the saved ones. */
-export async function loadPostgresRecords(connectionString: string, dir: string): Promise<void> {
-  await withClient(connectionString, async (client) => {
-    for (const table of Object.keys(postgresRecordTables)) {
-      const rows = readFileSync(join(dir, `${table}.json`), 'utf8');
-      await client.query(`DELETE FROM prisma_contract.${table}`);
+    for (const table of schema.tables) {
+      const columns = table.columns.map(
+        (column) =>
+          `${quote(column.name)} ${column.type}${column.nullable ? '' : ' NOT NULL'}${
+            column.default === null ? '' : ` DEFAULT ${column.default}`
+          }`,
+      );
+      const primaryKey = `PRIMARY KEY (${table.primaryKey.map(quote).join(', ')})`;
       await client.query(
-        `INSERT INTO prisma_contract.${table} SELECT * FROM jsonb_populate_recordset(NULL::prisma_contract.${table}, $1::jsonb)`,
-        [rows],
+        `CREATE TABLE ${qualified(table.name)} (${[...columns, primaryKey].join(', ')})`,
+      );
+      await client.query(
+        `INSERT INTO ${qualified(table.name)} SELECT * FROM jsonb_populate_recordset(NULL::${qualified(table.name)}, $1::jsonb)`,
+        [readFileSync(join(dir, `${table.name}.json`), 'utf8')],
+      );
+    }
+    for (const sequence of schema.sequences) {
+      const owner = `${qualified(sequence.table)}.${quote(sequence.column)}`;
+      await client.query(`ALTER SEQUENCE ${qualified(sequence.name)} OWNED BY ${owner}`);
+      await client.query(
+        `SELECT setval('${qualified(sequence.name)}', COALESCE(MAX(${quote(sequence.column)}), 0) + 1, false) FROM ${qualified(sequence.table)}`,
       );
     }
   });
 }
 
-/** Saves the documents of Prisma's collection on MongoDB in canonical Extended JSON, which keeps their BSON types. */
-export async function saveMongoRecords(db: Db, dir: string): Promise<void> {
-  const documents = await db
-    .collection(mongoRecordCollection)
-    .find({}, { sort: { _id: 1 } })
-    .toArray();
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    join(dir, `${mongoRecordCollection}.json`),
-    `${BSON.EJSON.stringify(documents, undefined, 2, { relaxed: false })}\n`,
-  );
+/** The rows of a table of Prisma's on PostgreSQL, each as JSON. */
+export async function readPostgresRows(
+  connectionString: string,
+  table: string,
+): Promise<Record<string, unknown>[]> {
+  return withClient(connectionString, async (client) => {
+    const result = await client.query(`SELECT to_jsonb(t) AS row FROM ${qualified(table)} t`);
+    return result.rows.map((row) => row.row);
+  });
 }
 
-/** Replaces the documents of Prisma's collection on MongoDB with the saved ones. */
-export async function loadMongoRecords(db: Db, dir: string): Promise<void> {
+export const mongoRecordCollection = '_prisma_migrations';
+
+export function readMongoRecords(dir: string): Record<string, unknown>[] {
   const documents = BSON.EJSON.parse(
     readFileSync(join(dir, `${mongoRecordCollection}.json`), 'utf8'),
     { relaxed: false },
@@ -188,10 +210,11 @@ export async function loadMongoRecords(db: Db, dir: string): Promise<void> {
   if (!Array.isArray(documents)) {
     throw new Error(`${mongoRecordCollection}.json does not hold an array of documents`);
   }
-  await db.collection(mongoRecordCollection).deleteMany({});
-  await db.collection(mongoRecordCollection).insertMany(documents);
+  return documents;
 }
 
-export function sampleSetExists(release: string, database: SampleDatabase): boolean {
-  return existsSync(join(samplesRoot, release, database));
+/** Replaces the documents of Prisma's collection on MongoDB with the saved ones. */
+export async function loadMongoRecords(db: Db, dir: string): Promise<void> {
+  await db.collection(mongoRecordCollection).deleteMany({});
+  await db.collection(mongoRecordCollection).insertMany(readMongoRecords(dir));
 }

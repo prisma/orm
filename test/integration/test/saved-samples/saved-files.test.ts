@@ -30,13 +30,13 @@ import {
   type SampleDatabase,
   sampleProjectDir,
   sampleSetExists,
+  sampleSpaces,
   savedReleases,
 } from './sample-projects';
 
 interface DatabaseReaders {
   readonly contractFromJson: (json: unknown) => unknown;
   readonly hashRules: Omit<Parameters<typeof assertContractHashes>[0], 'contracts'>;
-  readonly spaces: readonly string[];
 }
 
 const readers: Record<SampleDatabase, DatabaseReaders> = {
@@ -46,12 +46,10 @@ const readers: Record<SampleDatabase, DatabaseReaders> = {
       ...sqlContractCanonicalizationHooks,
       profileHashCapabilities: sqlProfileHashCapabilities,
     },
-    spaces: ['app', 'pgvector'],
   },
   mongo: {
     contractFromJson: (json) => mongoContractFromJson(json),
     hashRules: mongoContractCanonicalizationHooks,
-    spaces: ['app'],
   },
 };
 
@@ -96,7 +94,8 @@ describe.each(sets)('the $database files $release wrote', ({ release, database }
     emittedContractPath[database],
     ...snapshotHashes.map((hash) => `migrations/snapshots/${hash}/contract.json`),
   ];
-  const { contractFromJson, hashRules, spaces } = readers[database];
+  const { contractFromJson, hashRules } = readers[database];
+  const spaces = sampleSpaces(release, database);
 
   it('has contracts the facade reads', () => {
     for (const file of contractFiles) {

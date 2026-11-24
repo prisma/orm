@@ -1,5 +1,5 @@
 /**
- * Each saved PostgreSQL sample set, run by this release against an in-process database: the saved migrations apply to an empty database, and a database whose Prisma tables hold the rows the saved release wrote is read as up to date and can be queried.
+ * Each saved PostgreSQL sample set, run by this release against an in-process database: the saved migrations apply to an empty database, and a database whose Prisma tables are as the saved release created them, holding the rows it wrote, is read as up to date, keeps every saved row, and can be queried.
  */
 
 import { readFileSync } from 'node:fs';
@@ -20,9 +20,15 @@ import { createRowThroughOrm, selectRows } from '../utils/journey-workspace-help
 import {
   copySampleProject,
   emittedContractPath,
-  loadPostgresRecords,
+  postgresSchemaFile,
+  readPostgresRows,
+  readSampleJson,
+  restorePostgresRecords,
+  type SavedSchema,
   sampleDatabaseDir,
+  sampleQueryPath,
   sampleSetExists,
+  sampleSpaces,
   savedReleases,
 } from './sample-projects';
 
@@ -47,11 +53,33 @@ async function ledgerNames(connectionString: string): Promise<string[]> {
   });
 }
 
+function savedRows(release: string, table: string): Record<string, unknown>[] {
+  return readSampleJson(join(sampleDatabaseDir(release, 'postgres'), `${table}.json`)) as Record<
+    string,
+    unknown
+  >[];
+}
+
 function savedLedgerNames(release: string): string[] {
-  const rows = JSON.parse(
-    readFileSync(join(sampleDatabaseDir(release, 'postgres'), 'ledger.json'), 'utf8'),
-  ) as readonly { readonly space: string; readonly migration_name: string }[];
-  return rows.map((row) => `${row.space}/${row.migration_name}`);
+  return savedRows(release, 'ledger').map((row) => `${row['space']}/${row['migration_name']}`);
+}
+
+/** The runtime pack of each extension a contract names, so a set's contract decides which packs its queries need. */
+const runtimePacks = { pgvector };
+
+function runtimePacksFor(contractJson: { readonly extensions: Record<string, unknown> }) {
+  return Object.keys(contractJson.extensions).map((id) => {
+    if (!Object.hasOwn(runtimePacks, id)) {
+      throw new Error(`The saved contract uses the extension ${id}; add its runtime pack here.`);
+    }
+    return runtimePacks[id as keyof typeof runtimePacks];
+  });
+}
+
+interface SavedQuery {
+  readonly model: string;
+  readonly table: string;
+  readonly row: Record<string, unknown>;
 }
 
 withTempDir(({ createTempDir }) => {
@@ -76,12 +104,12 @@ withTempDir(({ createTempDir }) => {
         await withDevDatabase(async ({ connectionString }) => {
           const ctx = copySampleProject(release, 'postgres', createTempDir(), connectionString);
           await expectMigrated(ctx);
-          await loadPostgresRecords(connectionString, sampleDatabaseDir(release, 'postgres'));
+          await restorePostgresRecords(connectionString, sampleDatabaseDir(release, 'postgres'));
 
           const status = await runMigrationStatus(ctx, ['--json']);
           expect(status.exitCode, `migration status: ${status.stdout}\n${status.stderr}`).toBe(0);
           const statusJson = parseMigrationStatusJson(status);
-          for (const space of ['app', 'pgvector']) {
+          for (const space of sampleSpaces(release, 'postgres')) {
             const { currentContract, targetContract, migrations } = migrationStatusAppSpace(
               statusJson,
               space,
@@ -108,25 +136,37 @@ withTempDir(({ createTempDir }) => {
 
           await expectVerified(ctx);
 
+          const { tables } = readSampleJson(
+            join(sampleDatabaseDir(release, 'postgres'), postgresSchemaFile),
+          ) as SavedSchema;
+          for (const { name } of tables) {
+            const saved = savedRows(release, name);
+            expect(await readPostgresRows(connectionString, name), name).toEqual(
+              expect.arrayContaining(saved.map((row) => expect.objectContaining(row))),
+            );
+          }
+
           const contractJson = JSON.parse(
             readFileSync(join(ctx.testDir, emittedContractPath.postgres), 'utf8'),
           );
+          const extensions = runtimePacksFor(contractJson);
+          const query = readSampleJson(sampleQueryPath(release, 'postgres')) as SavedQuery;
           await createRowThroughOrm({
             contractJson,
             connectionString,
-            extensions: [pgvector],
-            model: 'User',
-            row: { email: 'ada@example.com', role: 'ADMIN', displayName: 'Ada' },
+            extensions,
+            model: query.model,
+            row: query.row,
           });
           expect(
             await selectRows({
               contractJson,
               connectionString,
-              extensions: [pgvector],
-              table: 'user',
-              columns: ['email', 'role', 'displayName'],
+              extensions,
+              table: query.table,
+              columns: Object.keys(query.row),
             }),
-          ).toEqual([{ email: 'ada@example.com', role: 'ADMIN', displayName: 'Ada' }]);
+          ).toEqual([query.row]);
         });
       },
       timeouts.spinUpPpgDev,

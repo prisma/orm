@@ -1,5 +1,5 @@
 /**
- * Each saved MongoDB sample set, run by this release against an in-process replica set: the saved migrations apply to an empty database, and a database whose `_prisma_migrations` collection holds the documents the saved release wrote is read as up to date and can be queried.
+ * Each saved MongoDB sample set, run by this release against an in-process replica set: the saved migrations apply to an empty database, and a database whose `_prisma_migrations` collection holds the documents the saved release wrote is read as up to date, keeps every saved document, and can be queried.
  */
 
 import { readFileSync } from 'node:fs';
@@ -24,8 +24,12 @@ import {
   emittedContractPath,
   loadMongoRecords,
   mongoRecordCollection,
+  readMongoRecords,
+  readSampleJson,
   sampleDatabaseDir,
+  sampleQueryPath,
   sampleSetExists,
+  sampleSpaces,
   savedReleases,
 } from './sample-projects';
 
@@ -50,15 +54,14 @@ async function ledgerNames(db: Db): Promise<string[]> {
 }
 
 function savedLedgerNames(release: string): string[] {
-  const documents = BSON.EJSON.parse(
-    readFileSync(
-      join(sampleDatabaseDir(release, 'mongo'), `${mongoRecordCollection}.json`),
-      'utf8',
-    ),
-  ) as readonly Record<string, unknown>[];
-  return documents
+  return readMongoRecords(sampleDatabaseDir(release, 'mongo'))
     .filter((document) => document['type'] === 'ledger')
     .map((document) => `${document['space']}/${document['migrationName']}`);
+}
+
+interface SavedQuery {
+  readonly root: string;
+  readonly row: Record<string, unknown>;
 }
 
 describe.each(releases)(
@@ -109,20 +112,26 @@ describe.each(releases)(
 
         const status = await runMigrationStatus(ctx, ['--json']);
         expect(status.exitCode, `migration status: ${status.stdout}\n${status.stderr}`).toBe(0);
-        const { currentContract, targetContract, migrations } = migrationStatusAppSpace(
-          parseMigrationStatusJson(status),
-        );
-        const named = (status: string) =>
-          migrations.filter((m) => m.status === status).map((m) => `app/${m.name}`);
-        expect({
-          currentContract,
-          applied: named('applied').sort(),
-          pending: named('pending'),
-        }).toEqual({
-          currentContract: targetContract,
-          applied: savedLedgerNames(release).sort(),
-          pending: [],
-        });
+        const statusJson = parseMigrationStatusJson(status);
+        for (const space of sampleSpaces(release, 'mongo')) {
+          const { currentContract, targetContract, migrations } = migrationStatusAppSpace(
+            statusJson,
+            space,
+          );
+          const named = (status: string) =>
+            migrations.filter((m) => m.status === status).map((m) => `${space}/${m.name}`);
+          expect({
+            currentContract,
+            applied: named('applied').sort(),
+            pending: named('pending'),
+          }).toEqual({
+            currentContract: targetContract,
+            applied: savedLedgerNames(release)
+              .filter((name) => name.startsWith(`${space}/`))
+              .sort(),
+            pending: [],
+          });
+        }
 
         const migrated = await runMigrate(ctx);
         expect(migrated.exitCode, `db migrate: ${migrated.stdout}\n${migrated.stderr}`).toBe(0);
@@ -131,6 +140,19 @@ describe.each(releases)(
 
         await expectVerified(ctx);
 
+        const canonical = (document: unknown) => BSON.EJSON.serialize(document, { relaxed: false });
+        expect(
+          (await client.db(dbName).collection(mongoRecordCollection).find({}).toArray()).map(
+            canonical,
+          ),
+        ).toEqual(
+          expect.arrayContaining(
+            readMongoRecords(sampleDatabaseDir(release, 'mongo')).map((document) =>
+              expect.objectContaining(canonical(document)),
+            ),
+          ),
+        );
+
         const db = mongo({
           contract: contractFromJson(
             JSON.parse(readFileSync(join(ctx.testDir, emittedContractPath.mongo), 'utf8')),
@@ -138,7 +160,8 @@ describe.each(releases)(
           mongoClient: client,
           dbName,
         });
-        const users = (
+        const query = readSampleJson(sampleQueryPath(release, 'mongo')) as SavedQuery;
+        const root = (
           db.orm as unknown as Record<
             string,
             {
@@ -146,13 +169,13 @@ describe.each(releases)(
               select(...fields: string[]): { all(): AsyncIterable<unknown> };
             }
           >
-        )['users'];
-        if (users === undefined)
-          throw new Error(`the ORM exposes no users; it has ${Object.keys(db.orm)}`);
-        await users.create({ email: 'ada@example.com', role: 'ADMIN', name: 'Ada' });
+        )[query.root];
+        if (root === undefined)
+          throw new Error(`the ORM exposes no ${query.root}; it has ${Object.keys(db.orm)}`);
+        await root.create(query.row);
         const rows: unknown[] = [];
-        for await (const row of users.select('email', 'role', 'name').all()) rows.push(row);
-        expect(rows).toEqual([{ email: 'ada@example.com', role: 'ADMIN', name: 'Ada' }]);
+        for await (const row of root.select(...Object.keys(query.row)).all()) rows.push(row);
+        expect(rows).toEqual([query.row]);
       });
     });
   },

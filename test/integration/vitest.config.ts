@@ -7,6 +7,12 @@ export const initJourneyExclude = process.env['RUN_INIT_JOURNEY']
   ? []
   : ['test/cli-journeys/init-journey.e2e.test.ts'];
 
+// The saved-samples generator writes a new set; `pnpm samples:write` runs it with
+// REGENERATE_SAVED_SAMPLES naming the release (test/saved-samples/README.md).
+export const savedSamplesGeneratorExclude = process.env['REGENERATE_SAVED_SAMPLES']
+  ? []
+  : ['test/saved-samples/regenerate.test.ts'];
+
 export const setupFiles = ['./test/setup-temporal.ts'];
 
 export default defineConfig({
@@ -53,7 +59,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles,
-    exclude: [...configDefaults.exclude, ...initJourneyExclude],
+    exclude: [...configDefaults.exclude, ...initJourneyExclude, ...savedSamplesGeneratorExclude],
     typecheck: {
       enabled: true,
       include: ['test/**/*.test-d.ts'],
@@ -77,7 +83,12 @@ export default defineConfig({
         test: {
           name: 'integration',
           include: ['test/**/*.test.ts'],
-          exclude: [...configDefaults.exclude, ...initJourneyExclude, 'test/packaging/**'],
+          exclude: [
+            ...configDefaults.exclude,
+            ...initJourneyExclude,
+            ...savedSamplesGeneratorExclude,
+            'test/packaging/**',
+          ],
         },
       },
       {
