@@ -18,7 +18,7 @@ import { createControlStack, storageHashHex } from '@internal/framework-componen
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { readMigrationPackage, readMigrationsDir } from '@internal/migration-tools/io';
-import postgres from '@internal/postgres/runtime';
+import postgres, { type PostgresOptionsBase } from '@internal/postgres/runtime';
 import { contractFromJson } from '@internal/postgres/static';
 import { printPsl } from '@internal/psl-printer';
 import { SqlStorage } from '@internal/sql-contract/types';
@@ -121,16 +121,18 @@ export function writeMongoPslConfig(testDir: string, connectionString: string): 
   return configPath;
 }
 
-/** The rows of `table`'s `columns`, selected through a Postgres client built from the emitted contract. */
+/** The rows of `table`'s `columns`, selected through a Postgres client built from the emitted contract and the runtime `extensions` it requires. */
 export async function selectRows(options: {
   readonly contractJson: unknown;
   readonly connectionString: string;
   readonly table: string;
   readonly columns: readonly string[];
+  readonly extensions?: PostgresOptionsBase['extensions'];
 }): Promise<readonly unknown[]> {
   const client = postgres({
     contract: contractFromJson<Contract<SqlStorage>>(options.contractJson),
     url: options.connectionString,
+    extensions: options.extensions ?? [],
   });
   const runtime = await client.connect();
   try {
@@ -155,16 +157,18 @@ export async function selectRows(options: {
   }
 }
 
-/** Creates a row of `model` in the `public` namespace through a Postgres client built from the emitted contract. */
+/** Creates a row of `model` in the `public` namespace through a Postgres client built from the emitted contract and the runtime `extensions` it requires. */
 export async function createRowThroughOrm(options: {
   readonly contractJson: unknown;
   readonly connectionString: string;
   readonly model: string;
   readonly row: Record<string, unknown>;
+  readonly extensions?: PostgresOptionsBase['extensions'];
 }): Promise<unknown> {
   const client = postgres({
     contract: contractFromJson<Contract<SqlStorage>>(options.contractJson),
     url: options.connectionString,
+    extensions: options.extensions ?? [],
   });
   const runtime = await client.connect();
   try {
