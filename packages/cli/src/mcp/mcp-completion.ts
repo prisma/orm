@@ -1,4 +1,4 @@
-import type { CommandCompletion } from '@prisma/internals/src/cli/types'
+import type { CommandCompletion } from '@prisma/internals'
 
 export const mcpCompletion: CommandCompletion = {
   name: 'mcp',

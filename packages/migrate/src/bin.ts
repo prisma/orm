@@ -53,21 +53,27 @@ const args = arg(
 async function main(): Promise<number> {
   // create a new CLI with our subcommands
   const cli = CLI.new({
-    migrate: MigrateCommand.new({
-      dev: MigrateDev.new(),
-      status: MigrateStatus.new(),
-      resolve: MigrateResolve.new(),
-      reset: MigrateReset.new(),
-      deploy: MigrateDeploy.new(),
-      diff: MigrateDiff.new(),
-    }),
-    db: DbCommand.new({
-      execute: DbExecute.new(),
-      pull: DbPull.new(),
-      push: DbPush.new(),
-      // drop: DbDrop.new(),
-      seed: DbSeed.new(),
-    }),
+    migrate: MigrateCommand.new(
+      {
+        dev: MigrateDev.new('prisma'),
+        status: MigrateStatus.new('prisma'),
+        resolve: MigrateResolve.new('prisma'),
+        reset: MigrateReset.new('prisma'),
+        deploy: MigrateDeploy.new('prisma'),
+        diff: MigrateDiff.new('prisma'),
+      },
+      'prisma',
+    ),
+    db: DbCommand.new(
+      {
+        execute: DbExecute.new('prisma'),
+        pull: DbPull.new('prisma'),
+        push: DbPush.new('prisma'),
+        // drop: DbDrop.new('prisma'),
+        seed: DbSeed.new('prisma'),
+      },
+      'prisma',
+    ),
   })
 
   const configFile = args['--config']
@@ -80,7 +86,7 @@ async function main(): Promise<number> {
   }
 
   if (!config) {
-    console.error('`prisma.config.ts` not found')
+    console.error('`prisma7.config.ts` not found')
     return 1
   }
 

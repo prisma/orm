@@ -22,12 +22,8 @@ import { DbDropNeedsForceError } from '../utils/errors'
 import { PreviewFlagError } from '../utils/flagErrors'
 import { printDatasource } from '../utils/printDatasource'
 
-export class DbDrop implements Command {
-  public static new(): DbDrop {
-    return new DbDrop()
-  }
-
-  private static help = format(`
+function renderHelp(cliCommand: string): string {
+  return format(`
 ${process.platform === 'win32' ? '' : '💣  '}Drop the database
 
 ${bold(yellow('WARNING'))} ${bold(
@@ -38,9 +34,9 @@ ${dim('When using any of the subcommands below you need to explicitly opt-in via
 
 ${bold('Usage')}
 
-  ${dim('$')} prisma db drop [options] --preview-feature
+  ${dim('$')} ${cliCommand} db drop [options] --preview-feature
 
-  The datasource URL configuration is read from the Prisma config file (e.g., ${italic('prisma.config.ts')}).
+  The datasource URL configuration is read from the Prisma config file (e.g., ${italic('prisma7.config.ts')}).
 
 ${bold('Options')}
 
@@ -52,14 +48,22 @@ ${bold('Options')}
 ${bold('Examples')}
 
   Drop the database
-  ${dim('$')} prisma db drop --preview-feature
+  ${dim('$')} ${cliCommand} db drop --preview-feature
 
   Specify a schema
-  ${dim('$')} prisma db drop --preview-feature --schema=./schema.prisma
+  ${dim('$')} ${cliCommand} db drop --preview-feature --schema=./schema.prisma
 
   Use --force to skip the confirmation prompt
-  ${dim('$')} prisma db drop --preview-feature --force
+  ${dim('$')} ${cliCommand} db drop --preview-feature --force
 `)
+}
+
+export class DbDrop implements Command {
+  public static new(cliCommand: string): DbDrop {
+    return new DbDrop(cliCommand)
+  }
+
+  private constructor(private readonly cliCommand: string) {}
 
   public async parse(argv: string[], config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(argv, {
@@ -93,10 +97,10 @@ ${bold('Examples')}
       }),
     })
 
-    const cmd = 'db drop'
-    const validatedConfig = validatePrismaConfigWithDatasource({ config, cmd })
+    const cmd = `${this.cliCommand} db drop`
+    const validatedConfig = validatePrismaConfigWithDatasource({ config, command: cmd })
 
-    checkUnsupportedDataProxy({ cmd, validatedConfig })
+    checkUnsupportedDataProxy({ command: cmd, validatedConfig })
 
     const datasourceInfo = parseDatasourceInfo(schemaContext.primaryDatasource, validatedConfig)
     printDatasource({ datasourceInfo })
@@ -105,7 +109,7 @@ ${bold('Examples')}
 
     if (!args['--force']) {
       if (!canPrompt()) {
-        throw new DbDropNeedsForceError('drop')
+        throw new DbDropNeedsForceError('drop', this.cliCommand)
       }
 
       const confirmation = await prompt({
@@ -142,9 +146,11 @@ ${bold('Examples')}
   }
 
   public help(error?: string): string | HelpError {
+    const help = renderHelp(this.cliCommand)
+
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${DbDrop.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${help}`)
     }
-    return DbDrop.help
+    return help
   }
 }

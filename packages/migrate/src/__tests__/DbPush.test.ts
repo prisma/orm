@@ -2,12 +2,28 @@ import path from 'path'
 import prompt from 'prompts'
 
 import { DbPush } from '../commands/DbPush'
+import { Migrate } from '../Migrate'
+import { agentMatchers } from '../utils/ai-safety'
 import { setupMongo, SetupParams, tearDownMongo } from '../utils/setupMongo'
 import { setupPostgres, tearDownPostgres } from '../utils/setupPostgres'
 import { describeMatrix, mongodbOnly, postgresOnly } from './__helpers__/conditionalTests'
 import { createDefaultTestContext } from './__helpers__/context'
 
 const ctx = createDefaultTestContext()
+
+const agentEnvVars = [
+  ...new Set(agentMatchers.flatMap((matcher) => matcher.envVars)),
+  'PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION',
+]
+
+beforeEach(() => {
+  // Pushing data loss changes goes through the AI safety checkpoint, and the
+  // tests themselves may be running under an AI agent, so the inherited
+  // markers must be cleared before each test.
+  for (const name of agentEnvVars) {
+    delete process.env[name]
+  }
+})
 
 describe('push', () => {
   // A test that requires docker (e.g, because it relies on extensions being installed)
@@ -17,7 +33,7 @@ describe('push', () => {
     it('should require a datasource in the config', async () => {
       ctx.fixture('no-config')
 
-      const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+      const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
       await expect(result).rejects.toThrowErrorMatchingInlineSnapshot(
         `"The datasource.url property is required in your Prisma config file when using prisma db push."`,
       )
@@ -27,11 +43,11 @@ describe('push', () => {
   it('should fail if no schema file', async () => {
     ctx.fixture('empty')
 
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).rejects.toThrowErrorMatchingInlineSnapshot(`
       "Could not find Prisma Schema that is required for this command.
       You can either provide it with \`--schema\` argument,
-      set it in your Prisma Config file (e.g., \`prisma.config.ts\`),
+      set it in your Prisma Config file (e.g., \`prisma7.config.ts\`),
       set it as \`prisma.schema\` in your package.json,
       or put it into the default location (\`./prisma/schema.prisma\`, or \`./schema.prisma\`.
       Checked following paths:
@@ -45,7 +61,7 @@ describe('push', () => {
 
   it('should fail if nativeTypes VarChar on sqlite', async () => {
     ctx.fixture('nativeTypes-sqlite')
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).rejects.toThrowErrorMatchingInlineSnapshot(`
       "P1012
 
@@ -62,7 +78,7 @@ describe('push', () => {
 
   it('already in sync', async () => {
     ctx.fixture('reset')
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "my_db": SQLite database "dev.db" <location placeholder>
@@ -76,7 +92,7 @@ describe('push', () => {
     ctx.fixture('prisma-config-nested-sqlite')
     ctx.setConfigFile('config/prisma.config.ts')
 
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "db": SQLite database "dev.db" <location placeholder>
@@ -88,7 +104,7 @@ describe('push', () => {
 
   inDockerIt('should load extensions from the config', async () => {
     ctx.fixture('prisma-config-extensions')
-    const result = DbPush.new().parse(['--force-reset'], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse(['--force-reset'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "db": PostgreSQL database "tests-migrate-prisma-config-extensions" <location placeholder>
@@ -106,7 +122,7 @@ describe('push', () => {
     ctx.fixture('existing-db-warnings')
     process.env.GITHUB_ACTIONS = '1'
 
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).rejects.toMatchInlineSnapshot(
       `"Use the --accept-data-loss flag to ignore the data loss warnings like prisma db push --accept-data-loss"`,
     )
@@ -117,7 +133,7 @@ describe('push', () => {
 
     prompt.inject(['y'])
 
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "my_db": SQLite database "dev.db" <location placeholder>
@@ -139,7 +155,7 @@ describe('push', () => {
 
     prompt.inject([new Error()]) // simulate user cancellation
 
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).rejects.toMatchInlineSnapshot(`"process.exit: 130"`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "my_db": SQLite database "dev.db" <location placeholder>
@@ -159,7 +175,7 @@ describe('push', () => {
 
   it('--accept-data-loss flag', async () => {
     ctx.fixture('existing-db-warnings')
-    const result = DbPush.new().parse(['--accept-data-loss'], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse(['--accept-data-loss'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "my_db": SQLite database "dev.db" <location placeholder>
@@ -179,9 +195,22 @@ describe('push', () => {
     ctx.fixture('existing-db-warnings')
     process.env.CLAUDECODE = '1'
 
-    const result = DbPush.new().parse([flag], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([flag], await ctx.config(), ctx.configDir())
 
     await expect(result).rejects.toThrow('invoked by Claude Code')
+  })
+
+  it('interactive confirmation triggers the AI safety checkpoint', async () => {
+    ctx.fixture('existing-db-warnings')
+    process.env.CLAUDECODE = '1'
+    const push = jest.spyOn(Migrate.prototype, 'push')
+
+    prompt.inject(['y'])
+
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
+
+    await expect(result).rejects.toThrow('invoked by Claude Code')
+    expect(push).not.toHaveBeenCalledWith({ force: true })
   })
 
   it('unexecutable - drop allowed (--force-reset)', async () => {
@@ -189,7 +218,7 @@ describe('push', () => {
 
     const sqliteDbSizeBefore = ctx.fs.inspect('dev.db')!.size
 
-    const result = DbPush.new().parse(['--force-reset'], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse(['--force-reset'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
     const sqliteDbSizeAfter = ctx.fs.inspect('dev.db')!.size
@@ -213,7 +242,7 @@ describe('push', () => {
 
     prompt.inject([new Error()]) // simulate user cancellation
 
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).rejects.toMatchInlineSnapshot(`"process.exit: 130"`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "my_db": SQLite database "dev.db" <location placeholder>
@@ -235,7 +264,7 @@ describe('push', () => {
     ctx.fixture('existing-db-1-unexecutable-schema-change')
     process.env.GITHUB_ACTIONS = '1'
 
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).rejects.toMatchInlineSnapshot(`
       "
       ⚠️ We found changes that cannot be executed:
@@ -254,7 +283,7 @@ describe('push', () => {
       url: 'file:./other.db',
     })
 
-    const result = DbPush.new().parse(['--url=file:./dev.db'], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse(['--url=file:./dev.db'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "my_db": SQLite database "dev.db" <location placeholder>
@@ -267,7 +296,7 @@ describe('push', () => {
   it('--url works when no datasource exists in config', async () => {
     ctx.fixture('reset')
 
-    const result = DbPush.new().parse(['--url=file:./dev.db'], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse(['--url=file:./dev.db'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "my_db": SQLite database "dev.db" <location placeholder>
@@ -312,7 +341,7 @@ describeMatrix(postgresOnly, 'postgres', () => {
 
     prompt.inject(['y'])
 
-    const result = DbPush.new().parse(['--force-reset'], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse(['--force-reset'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStderr()).toMatchInlineSnapshot(`
       "Prisma schema loaded from prisma/schema.prisma.
@@ -331,7 +360,7 @@ describeMatrix(postgresOnly, 'postgres', () => {
   it('should exclude external tables', async () => {
     ctx.fixture('external-tables')
 
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     // Note the missing warnings about the User table as it is marked as external and won't be modified
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
@@ -380,7 +409,7 @@ describeMatrix(postgresOnly, 'postgres-multischema', () => {
 
     prompt.inject(['y'])
 
-    const result = DbPush.new().parse(['--force-reset'], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse(['--force-reset'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "db": PostgreSQL database "tests-migrate-db-push-multischema", schemas "base, transactional" <location placeholder>
@@ -421,7 +450,7 @@ describeMatrix(mongodbOnly, 'push existing-db with mongodb', () => {
   it('--force-reset should succeed and print a log', async () => {
     ctx.fixture('existing-db-warnings-mongodb')
 
-    const result = DbPush.new().parse(['--force-reset'], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse(['--force-reset'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "my_db": MongoDB database "tests-migrate-existing-db" <location placeholder>
@@ -439,7 +468,7 @@ describeMatrix(mongodbOnly, 'push existing-db with mongodb', () => {
 
   it('does not create data loss warnings', async () => {
     ctx.fixture('existing-db-warnings-mongodb')
-    const result = DbPush.new().parse([], await ctx.config(), ctx.configDir())
+    const result = DbPush.new('prisma').parse([], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
       "Datasource "my_db": MongoDB database "tests-migrate-existing-db" <location placeholder>

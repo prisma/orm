@@ -49,8 +49,7 @@ describe('update available message', () => {
       })
       const message = ctx.mocked['console.error'].mock.calls[0][0]
       expect(message).toContain('This is a major update')
-      expect(message).toContain('npm i --save-dev prisma@dev')
-      expect(message).toContain('npm i @prisma/client@dev')
+      expect(message).not.toContain('npm i')
       expect(message).toMatchSnapshot()
     })
 
@@ -86,8 +85,27 @@ describe('update available message', () => {
       })
       const message = ctx.mocked['console.error'].mock.calls[0][0]
       expect(message).toContain('This is a major update')
-      expect(message).toContain('npm i --save-dev prisma@latest')
-      expect(message).toContain('npm i @prisma/client@latest')
+      expect(message).not.toContain('npm i')
+      expect(message).toMatchSnapshot()
+    })
+
+    it('latest tag - major pre-release', () => {
+      printUpdateMessage({
+        status: 'ok',
+        // @ts-ignore
+        data: {
+          previous_version: '7.10.1',
+          current_version: '8.0.0-rc.34',
+          package: 'prisma',
+          release_tag: 'latest',
+          outdated: true,
+        },
+      })
+      const message = ctx.mocked['console.error'].mock.calls[0][0]
+      expect(message).toContain('7.10.1 -> 8.0.0-rc.34')
+      expect(message).toContain('https://pris.ly/d/major-version-upgrade')
+      expect(message).not.toContain('prisma@latest')
+      expect(message).not.toContain('@prisma/client@latest')
       expect(message).toMatchSnapshot()
     })
   })

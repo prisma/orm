@@ -8,7 +8,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/generator-helper"
   },
   "author": "Tim Suchanek <suchanek@prisma.io>",
@@ -22,7 +22,6 @@
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
     "build": "tsx helpers/build.ts",
-    "test": "vitest run",
     "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {

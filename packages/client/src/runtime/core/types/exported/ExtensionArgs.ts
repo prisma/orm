@@ -15,7 +15,7 @@ export type ResultArgs = {
   }
 }
 
-export type ResultArgsFieldCompute = (model: any) => unknown
+export type ResultArgsFieldCompute = (model: any, modelName: string) => unknown
 
 export type ResultArg = {
   [FieldName in string]: ResultFieldDefinition

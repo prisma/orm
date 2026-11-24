@@ -3,11 +3,12 @@ import path from 'node:path'
 
 import { getPackedPackage } from '@prisma/internals'
 import tsd, { formatter } from 'tsd'
+import { beforeAll, describe, expect, test, vi } from 'vitest'
 
 import { compileFile } from '../../utils/compileFile'
 import { generateInFolder } from '../../utils/generateInFolder'
 
-jest.setTimeout(300_000)
+vi.setConfig({ testTimeout: 300_000 })
 
 let packageSource: string
 beforeAll(async () => {

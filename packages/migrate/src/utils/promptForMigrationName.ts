@@ -1,4 +1,4 @@
-import { isCi, isInteractive } from '@prisma/internals'
+import { canPrompt } from '@prisma/internals'
 import slugify from '@sindresorhus/slugify'
 import { prompt } from 'prompts'
 
@@ -16,9 +16,8 @@ export async function getMigrationName(name?: string): Promise<getMigrationNameO
       name: slugify(name, { separator: '_' }).substring(0, maxMigrationNameLength),
     }
   }
-  // We use prompts.inject() for testing in our CI
   // If not TTY or CI, use default name
-  else if ((!isInteractive || isCi()) && Boolean(prompt._injected?.length) === false) {
+  else if (!canPrompt()) {
     return {
       name: '',
     }

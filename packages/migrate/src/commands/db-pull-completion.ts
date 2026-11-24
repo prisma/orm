@@ -1,11 +1,11 @@
+import type { CommandCompletion } from '@prisma/internals'
 import {
   completionCompositeTypeDepths,
   completionConfigPaths,
   completionDatabaseSchemas,
   completionDatasourceUrls,
   completionSchemaPaths,
-} from '@prisma/internals/src/cli/completion-values'
-import type { CommandCompletion } from '@prisma/internals/src/cli/types'
+} from '@prisma/internals'
 
 export const dbPullCompletion: CommandCompletion = {
   name: 'db pull',

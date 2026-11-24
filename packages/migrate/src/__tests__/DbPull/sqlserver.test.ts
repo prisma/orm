@@ -71,7 +71,7 @@ describeMatrix(sqlServerOnly, 'SQL Server', () => {
 
   test('basic introspection', async () => {
     ctx.fixture('introspection/sqlserver')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
 
@@ -140,7 +140,7 @@ describeMatrix(sqlServerOnly, 'sqlserver-multischema', () => {
 
   test('without datasource property `schemas` it should error with P4001, empty database', async () => {
     ctx.fixture('introspection/sqlserver-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'without-schemas-in-datasource.prisma'],
       await ctx.config(),
@@ -153,7 +153,7 @@ describeMatrix(sqlServerOnly, 'sqlserver-multischema', () => {
 
   test('datasource property `schemas=[]` should error with P1012, array can not be empty', async () => {
     ctx.fixture('introspection/sqlserver-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-0-value.prisma'],
       await ctx.config(),
@@ -186,7 +186,7 @@ describeMatrix(sqlServerOnly, 'sqlserver-multischema', () => {
   // https://buildkite.com/prisma/test-prisma-typescript/builds/18825#01855966-3d90-4362-b130-502021a1047b
   test.skip('datasource property `schemas=["base", "transactional"]` should succeed', async () => {
     ctx.fixture('introspection/sqlserver-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-2-values.prisma'],
       await ctx.config(),
@@ -211,7 +211,7 @@ describeMatrix(sqlServerOnly, 'sqlserver-multischema', () => {
 
   test('datasource property `schemas=["base"]` should succeed', async () => {
     ctx.fixture('introspection/sqlserver-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-1-value.prisma'],
       await ctx.config(),
@@ -250,7 +250,7 @@ describeMatrix(sqlServerOnly, 'sqlserver-multischema', () => {
 
   test('datasource property `schemas=["does-not-exist"]` should error with P4001, empty database', async () => {
     ctx.fixture('introspection/sqlserver-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-1-non-existing-value.prisma'],
       await ctx.config(),
@@ -263,7 +263,7 @@ describeMatrix(sqlServerOnly, 'sqlserver-multischema', () => {
 
   test('datasource property `schemas=["does-not-exist", "base"]` should succeed', async () => {
     ctx.fixture('introspection/sqlserver-multischema')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-schemas-in-datasource-1-existing-1-non-existing-value.prisma'],
       await ctx.config(),
@@ -306,7 +306,7 @@ describeMatrix(sqlServerOnly, 'sqlserver-multischema', () => {
       url: `${(await ctx.datasource())?.url}schema=does-not-exist`,
     })
 
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
     await expect(result).rejects.toThrow(`P4001`)
 
@@ -319,7 +319,7 @@ describeMatrix(sqlServerOnly, 'sqlserver-multischema', () => {
       url: `${(await ctx.datasource())?.url}schema=base`,
     })
 
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(sanitizeSQLServerIdName(ctx.normalizedCapturedStdout())).toMatchInlineSnapshot(`

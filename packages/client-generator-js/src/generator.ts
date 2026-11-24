@@ -9,6 +9,7 @@ import { generateClient } from './generateClient'
 import { resolvePrismaClient } from './resolvePrismaClient'
 
 type PrismaClientJsGeneratorOptions = {
+  cliCommand: string
   shouldResolvePrismaClient?: boolean
   shouldInstallMissingPackages?: boolean
   runtimePath?: string
@@ -22,11 +23,13 @@ type PrismaClientJsGeneratorOptions = {
 export class PrismaClientJsGenerator implements Generator {
   readonly name = BuiltInProvider.PrismaClientJs
 
+  #cliCommand: string
   #shouldResolvePrismaClient: boolean
   #runtimePath?: string
   #cachedPrismaClientPath: string | undefined
 
-  constructor({ shouldResolvePrismaClient = true, runtimePath }: PrismaClientJsGeneratorOptions = {}) {
+  constructor({ cliCommand, shouldResolvePrismaClient = true, runtimePath }: PrismaClientJsGeneratorOptions) {
+    this.#cliCommand = cliCommand
     this.#shouldResolvePrismaClient = shouldResolvePrismaClient
     this.#runtimePath = runtimePath
   }
@@ -94,7 +97,7 @@ export class PrismaClientJsGenerator implements Generator {
       return this.#cachedPrismaClientPath
     }
 
-    this.#cachedPrismaClientPath = await resolvePrismaClient(path.dirname(config.sourceFilePath))
+    this.#cachedPrismaClientPath = await resolvePrismaClient(path.dirname(config.sourceFilePath), this.#cliCommand)
     return this.#cachedPrismaClientPath
   }
 

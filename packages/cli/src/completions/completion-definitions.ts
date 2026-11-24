@@ -1,22 +1,24 @@
+import type { CommandCompletion, CompletionOption } from '@prisma/internals'
 import {
   completionDevDbPorts,
   completionDevHttpPorts,
   completionDevServerNames,
   completionDevShadowDbPorts,
-} from '@prisma/internals/src/cli/completion-values'
-import type { CommandCompletion, CompletionOption } from '@prisma/internals/src/cli/types'
-import { dbCompletion } from '@prisma/migrate/src/commands/db-command-completion'
-import { dbExecuteCompletion } from '@prisma/migrate/src/commands/db-execute-completion'
-import { dbPullCompletion } from '@prisma/migrate/src/commands/db-pull-completion'
-import { dbPushCompletion } from '@prisma/migrate/src/commands/db-push-completion'
-import { dbSeedCompletion } from '@prisma/migrate/src/commands/db-seed-completion'
-import { migrateCompletion } from '@prisma/migrate/src/commands/migrate-command-completion'
-import { migrateDeployCompletion } from '@prisma/migrate/src/commands/migrate-deploy-completion'
-import { migrateDevCompletion } from '@prisma/migrate/src/commands/migrate-dev-completion'
-import { migrateDiffCompletion } from '@prisma/migrate/src/commands/migrate-diff-completion'
-import { migrateResetCompletion } from '@prisma/migrate/src/commands/migrate-reset-completion'
-import { migrateResolveCompletion } from '@prisma/migrate/src/commands/migrate-resolve-completion'
-import { migrateStatusCompletion } from '@prisma/migrate/src/commands/migrate-status-completion'
+} from '@prisma/internals'
+import {
+  dbCompletion,
+  dbExecuteCompletion,
+  dbPullCompletion,
+  dbPushCompletion,
+  dbSeedCompletion,
+  migrateCompletion,
+  migrateDeployCompletion,
+  migrateDevCompletion,
+  migrateDiffCompletion,
+  migrateResetCompletion,
+  migrateResolveCompletion,
+  migrateStatusCompletion,
+} from '@prisma/migrate'
 
 import { bootstrapCompletion } from '../bootstrap/bootstrap-completion'
 import { debugInfoCompletion } from '../debug-info-completion'

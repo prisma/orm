@@ -12,8 +12,33 @@ import { blue, bold, cyan, dim, magenta, red, underline } from 'kleur/colors'
 import pRetry from 'p-retry'
 import semver from 'semver'
 
+import { getNextMinorStable, getPackageDistTag, getPublishChannel, parseCustomDistTag } from './publish-channel'
+
 const onlyPackages = process.env.ONLY_PACKAGES ? process.env.ONLY_PACKAGES.split(',') : null
 const skipPackages = process.env.SKIP_PACKAGES ? process.env.SKIP_PACKAGES.split(',') : null
+
+async function validatePrismaBotNpmToken(token: string): Promise<void> {
+  let response: Response
+  try {
+    response = await fetch('https://registry.npmjs.org/-/whoami', {
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    })
+  } catch (error) {
+    throw new Error(`Could not validate PRISMABOT_NPM_TOKEN with the npm registry: ${String(error)}`)
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      'PRISMABOT_NPM_TOKEN is invalid, expired, or revoked. Create a new npm access token and update the PRISMABOT_NPM_TOKEN GitHub Actions secret before publishing.',
+    )
+  }
+
+  if (!response.ok) {
+    throw new Error(`Could not validate PRISMABOT_NPM_TOKEN with the npm registry (HTTP ${response.status})`)
+  }
+}
 
 async function getLatestCommitHash(dir: string): Promise<string> {
   if (process.env.GITHUB_CONTEXT) {
@@ -51,7 +76,13 @@ async function runResult(cwd: string, cmd: string): Promise<string> {
  * @param cwd cwd for running the command
  * @param cmd command to run
  */
-async function run(cwd: string, cmd: string, dry = false, hidden = false): Promise<void> {
+async function run(
+  cwd: string,
+  cmd: string,
+  dry = false,
+  hidden = false,
+  envOverrides: NodeJS.ProcessEnv = {},
+): Promise<void> {
   const args = [underline('./' + cwd).padEnd(20), bold(cmd)]
   if (dry) {
     args.push(dim('(dry)'))
@@ -70,6 +101,7 @@ async function run(cwd: string, cmd: string, dry = false, hidden = false): Promi
       shell: true,
       env: {
         ...process.env,
+        ...envOverrides,
       },
     })
   } catch (_e) {
@@ -158,7 +190,10 @@ function getPrismaDependencies(dependencies?: { [name: string]: string }): strin
   if (!dependencies) {
     return []
   }
-  return Object.keys(dependencies).filter((d) => d.startsWith('@prisma') && !d.startsWith('@prisma/studio'))
+  return Object.keys(dependencies).filter(
+    (dependency) =>
+      (dependency.startsWith('@prisma') && !dependency.startsWith('@prisma/studio')) || dependency === 'prisma',
+  )
 }
 
 function getCircularDependencies(packages: Packages): string[][] {
@@ -184,12 +219,6 @@ export function getPublishOrder(packages: Packages): string[][] {
   return topo(dag) // TODO: this is now done by pnpm (top sort), can we remove?
 }
 
-function zeroOutPatch(version: string): string {
-  const parts = version.split('.')
-  parts[parts.length - 1] = '0'
-  return parts.join('.')
-}
-
 /**
  * Takes the max dev version + 1
  * For now supporting X.Y.Z-dev.#
@@ -198,10 +227,7 @@ function zeroOutPatch(version: string): string {
 async function getNewDevVersion(packages: Packages): Promise<string> {
   const before = Math.round(performance.now())
   console.log('\nCalculating new dev version...')
-  // Why are we calling zeroOutPatch?
-  // Because here we're only interested in the 2.5.0 <- the next minor stable version
-  // If the current version would be 2.4.7, we would end up with 2.5.7
-  const nextStable = zeroOutPatch((await getNextMinorStable())!)
+  const nextStable = await fetchNextMinorStable()
 
   console.log(`getNewDevVersion: Next minor stable: ${nextStable}`)
 
@@ -221,10 +247,7 @@ async function getNewDevVersion(packages: Packages): Promise<string> {
 async function getNewIntegrationVersion(packages: Packages, branch: string): Promise<string> {
   const before = Math.round(performance.now())
   console.log('\nCalculating new integration version...')
-  // Why are we calling zeroOutPatch?
-  // Because here we're only interested in the 2.5.0 <- the next minor stable version
-  // If the current version would be 2.4.7, we would end up with 2.5.7
-  const nextStable = zeroOutPatch((await getNextMinorStable())!)
+  const nextStable = await fetchNextMinorStable()
 
   console.log(`getNewIntegrationVersion: Next minor stable: ${nextStable}`)
 
@@ -368,11 +391,15 @@ function getMaxPatchVersionIncrement(versions: string[]): number {
 
 /**
  * @param pkgs
- * @param channel
+ * @param prereleaseId
  * @param prefix
- * @returns All versions published on npm for a given channel and prefix
+ * @returns All versions published on npm that contain `prereleaseId` and start with `prefix`
  */
-export async function getAllVersionsPublishedFor(pkgs: Packages, channel: string, prefix: string): Promise<string[]> {
+export async function getAllVersionsPublishedFor(
+  pkgs: Packages,
+  prereleaseId: string,
+  prefix: string,
+): Promise<string[]> {
   // We check the versions for the `@prisma/debug` package
   // Why?
   // Because `@prisma/debug` is the first package that will be published
@@ -402,7 +429,11 @@ export async function getAllVersionsPublishedFor(pkgs: Packages, channel: string
     const remoteVersions: string = JSON.parse(remoteVersionsString)
 
     for (const remoteVersion of remoteVersions) {
-      if (remoteVersion.includes(channel) && remoteVersion.startsWith(prefix) && !pkgVersions.includes(remoteVersion)) {
+      if (
+        remoteVersion.includes(prereleaseId) &&
+        remoteVersion.startsWith(prefix) &&
+        !pkgVersions.includes(remoteVersion)
+      ) {
         pkgVersions.push(remoteVersion)
       }
     }
@@ -414,18 +445,13 @@ export async function getAllVersionsPublishedFor(pkgs: Packages, channel: string
 }
 
 /**
- * Only used when publishing to the `dev` and `integration` npm channels
- * (see `getNewDevVersion()` and `getNewIntegrationVersion()`)
- * @returns The next minor version for the `latest` channel
- * Example: If latest is `4.9.0` it will return `4.10.0`
+ * Only used for dev and integration versions (see `getNewDevVersion()` and `getNewIntegrationVersion()`)
+ * @returns The next minor version after the highest stable Prisma 7 release, e.g. `7.11.0` when it is `7.10.1`
  */
-async function getNextMinorStable() {
-  // We check the Prisma CLI `latest` version
-  // We retry a few times if it fails
-  // npm can have some hiccups
-  const remoteVersionString = await pRetry(
+async function fetchNextMinorStable(): Promise<string> {
+  const remoteVersionsString = await pRetry(
     async () => {
-      return await runResult('.', `npm info prisma version`)
+      return await runResult('.', `npm info prisma versions --json`)
     },
     {
       retries: 6,
@@ -434,7 +460,7 @@ async function getNextMinorStable() {
       },
     },
   )
-  return increaseMinor(remoteVersionString)
+  return getNextMinorStable(JSON.parse(remoteVersionsString) as string[])
 }
 
 // TODO: could probably use the semver package
@@ -523,10 +549,6 @@ async function publish() {
     throw new Error(`Oops, there are circular dependencies: ${circles}`)
   }
 
-  let prismaVersion: undefined | string
-  let tag: undefined | string
-  let tagForEcosystemTestsCheck: undefined | string
-
   const patchBranch = getPatchBranch()
   console.log({ patchBranch })
 
@@ -534,46 +556,50 @@ async function publish() {
   const branch = await getPrismaBranch()
   console.log({ branch })
 
-  // For branches that are named "integration/" we publish to the integration npm tag
-  if (branch && (process.env.FORCE_INTEGRATION_RELEASE === 'true' || branch.startsWith('integration/'))) {
-    prismaVersion = await getNewIntegrationVersion(packages, branch)
-    tag = 'integration'
-  }
-  // Is it a patch branch? (Like 2.20.x)
-  else if (patchBranch) {
-    prismaVersion = await getNewPatchDevVersion(packages, patchBranch)
-    tag = 'patch-dev'
-    if (args['--release']) {
-      tagForEcosystemTestsCheck = 'patch-dev' //?
-      prismaVersion = args['--release']
-      tag = 'latest'
-    }
-  } else if (args['--release']) {
-    // TODO:Where each patch branch goes
-    prismaVersion = args['--release']
-    tag = 'latest'
-    tagForEcosystemTestsCheck = 'dev'
-  } else {
-    prismaVersion = await getNewDevVersion(packages)
-    tag = 'dev'
+  const channel = getPublishChannel({
+    branch,
+    patchBranch,
+    releaseVersion: args['--release'],
+    forceIntegrationRelease: process.env.FORCE_INTEGRATION_RELEASE === 'true',
+  })
+  const { ecosystemTestsBranch } = channel
+  let tag = channel.tag
+
+  let prismaVersion: string
+  switch (channel.kind) {
+    case 'integration':
+      prismaVersion = await getNewIntegrationVersion(packages, branch!)
+      break
+    case 'patch-dev':
+      prismaVersion = await getNewPatchDevVersion(packages, patchBranch!)
+      break
+    case 'release':
+      prismaVersion = args['--release']!
+      break
+    case 'dev':
+      prismaVersion = await getNewDevVersion(packages)
+      break
   }
 
   if (args['--custom-dist-tag']) {
-    console.log(`Using custom dist tag: ${args['--custom-dist-tag']}`)
-    tag = args['--custom-dist-tag']
+    tag = parseCustomDistTag(args['--custom-dist-tag'])
+    console.log(`Using custom dist tag: ${tag}`)
   }
+  const publishesPrisma = (args['--publish'] || dryRun) && !isSkipped('prisma')
+  const prismaTag = publishesPrisma ? getPackageDistTag('prisma', tag) : undefined
 
   console.log({
     patchBranch,
     tag,
-    tagForEcosystemTestsCheck,
+    prismaTag,
+    ecosystemTestsBranch,
     prismaVersion,
   })
 
   if (typeof process.env.GITHUB_OUTPUT == 'string' && process.env.GITHUB_OUTPUT.length > 0) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `patchBranch=${patchBranch}\n`)
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\n`)
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tagForEcosystemTestsCheck=${tagForEcosystemTestsCheck}\n`)
+    fs.appendFileSync(process.env.GITHUB_OUTPUT, `tagForEcosystemTestsCheck=${ecosystemTestsBranch}\n`)
     fs.appendFileSync(process.env.GITHUB_OUTPUT, `prismaVersion=${prismaVersion}\n`)
   }
 
@@ -588,13 +614,13 @@ async function publish() {
 
   if (args['--publish'] || dryRun) {
     if (args['--release']) {
-      if (!tagForEcosystemTestsCheck) {
-        throw new Error(`tagForEcosystemTestsCheck missing`)
+      if (!ecosystemTestsBranch) {
+        throw new Error(`ecosystemTestsBranch missing`)
       }
-      const passing = await areEcosystemTestsPassing(tagForEcosystemTestsCheck)
+      const passing = await areEcosystemTestsPassing(ecosystemTestsBranch)
       if (!passing && process.env.SKIP_ECOSYSTEMTESTS_CHECK !== 'true') {
-        throw new Error(`We can't release, as the ecosystem-tests are not passing for the ${tag} npm tag!
-Check them out at https://github.com/prisma/ecosystem-tests/actions?query=workflow%3Atest+branch%3A${tag}`)
+        throw new Error(`We can't release, as the ecosystem-tests are not passing on the ${ecosystemTestsBranch} branch!
+Check them out at https://github.com/prisma/ecosystem-tests/actions?query=workflow%3Atest+branch%3A${ecosystemTestsBranch}`)
       }
     }
 
@@ -675,15 +701,6 @@ function intersection<T>(arr1: T[], arr2: T[]): T[] {
 const semverRegex =
   /^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
 
-function increaseMinor(version: string) {
-  const match = semverRegex.exec(version)
-  if (match?.groups) {
-    return `${match.groups.major}.${Number(match.groups.minor) + 1}.${match.groups.patch}`
-  }
-
-  return undefined
-}
-
 function filterPublishOrder(publishOrder: string[][], packages: string[]): string[][] {
   return publishOrder.reduce<string[][]>((acc, curr) => {
     if (Array.isArray(curr)) {
@@ -712,6 +729,15 @@ async function publishPackages(
   // if there is a change in prisma-client-js, it will also use this new version
 
   const publishStr = dryRun ? `${bold('Dry publish')} ` : releaseVersion ? 'Releasing ' : 'Publishing '
+
+  let prismaBotNpmToken: string | undefined
+  if (!dryRun && !isSkipped('prisma')) {
+    prismaBotNpmToken = process.env.PRISMABOT_NPM_TOKEN
+    if (!prismaBotNpmToken) {
+      throw new Error('Missing env var PRISMABOT_NPM_TOKEN required to publish the prisma package')
+    }
+    await validatePrismaBotNpmToken(prismaBotNpmToken)
+  }
 
   if (releaseVersion) {
     console.log(red(bold(`RELEASE. This will release ${underline(releaseVersion)} on latest!!!`)))
@@ -769,8 +795,9 @@ async function publishPackages(
       const pkgDir = path.dirname(pkg.path)
 
       const newVersion = prismaVersion
+      const packageTag = isSkipped(pkgName) ? tag : getPackageDistTag(pkgName, tag)
 
-      console.log(`\nPublishing ${magenta(`${pkgName}@${newVersion}`)} ${dim(`on ${tag}`)}`)
+      console.log(`\nPublishing ${magenta(`${pkgName}@${newVersion}`)} ${dim(`on ${packageTag}`)}`)
 
       // Why is this needed?
       // Was introduced in the first version of this script on Apr 14, 2020
@@ -813,7 +840,12 @@ async function publishPackages(
          *  - Your working directory is clean (there are no uncommitted changes).
          *  - The branch is up-to-date.
          */
-        await run(pkgDir, `pnpm publish --no-git-checks --access public --tag ${tag}`, dryRun)
+        const publishEnv: NodeJS.ProcessEnv = {}
+        if (pkgName === 'prisma' && prismaBotNpmToken) {
+          publishEnv.NODE_AUTH_TOKEN = prismaBotNpmToken
+        }
+
+        await run(pkgDir, `pnpm publish --no-git-checks --access public --tag ${packageTag}`, dryRun, false, publishEnv)
       }
     }
   }
@@ -870,11 +902,11 @@ async function getPrismaBranch(): Promise<string | undefined> {
   return undefined
 }
 
-async function areEcosystemTestsPassing(tag: string): Promise<boolean> {
+async function areEcosystemTestsPassing(branch: string): Promise<boolean> {
   let svgUrl = 'https://github.com/prisma/ecosystem-tests/workflows/test/badge.svg?branch='
 
-  if (tag === 'patch-dev') {
-    svgUrl += tag
+  if (branch === 'patch-dev') {
+    svgUrl += branch
   } else {
     svgUrl += 'dev'
   }

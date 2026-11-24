@@ -32,13 +32,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/adapter-d1"
   },
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
-    "build": "tsx helpers/build.ts",
-    "test": "vitest run"
+    "build": "tsx helpers/build.ts"
   },
   "files": [
     "dist",

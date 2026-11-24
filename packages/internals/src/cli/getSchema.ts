@@ -160,7 +160,7 @@ async function readSchemaFromFileOrDirectory(schemaPath: string): Promise<Lookup
 
 /**
  * Tries to load schema from either provided
- * arg, prisma.config.ts location, default location relative to cwd
+ * arg, Prisma config file location, default location relative to cwd
  * or any of the Yarn1Workspaces.
  *
  * If schema is specified explicitly with any of the methods but can
@@ -215,7 +215,7 @@ function renderDefaultLookupError(error: DefaultLookupError, cwd: string) {
   const parts: string[] = [
     `Could not find Prisma Schema that is required for this command.`,
     `You can either provide it with ${green('`--schema`')} argument,`,
-    `set it in your Prisma Config file (e.g., ${green('`prisma.config.ts`')}),`,
+    `set it in your Prisma Config file (e.g., ${green('`prisma7.config.ts`')}),`,
     `set it as ${green('`prisma.schema`')} in your ${green('package.json')},`,
     `or put it into the default location (${green('`./prisma/schema.prisma`')}, or ${green('`./schema.prisma`')}.`,
     'Checked following paths:\n',
@@ -256,7 +256,7 @@ export async function getConfigProvidedSchemaFile(schemaPathFromConfig: string):
 
   if (!schemaResult.ok) {
     throw new Error(
-      `Could not load schema from \`${schemaPathFromConfig}\` provided by "prisma.config.ts"\`: ${renderLookupError(
+      `Could not load schema from \`${schemaPathFromConfig}\` provided by the Prisma config file: ${renderLookupError(
         schemaResult.error,
       )}`,
     )

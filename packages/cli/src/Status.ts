@@ -4,32 +4,22 @@ import { arg, format, HelpError, isError } from '@prisma/internals'
 import { bold, dim, red } from 'kleur/colors'
 
 import { fetchStatus } from './status-page'
+import type { CliDistributionIdentity } from './utils/cli-distribution-identity'
 
 /** $ prisma platform status */
 export class Status implements Command {
-  static new(): Status {
-    return new Status()
+  static new(identity: CliDistributionIdentity): Status {
+    return new Status(identity)
   }
 
-  private static help = format(`
-  Show Prisma Data Platform service status
-
-  ${bold('Usage')}
-
-  ${dim('$')} prisma platform status [options]
-
-  ${bold('Options')}
-
-    -h, --help     Display this help message
-        --json     Output raw JSON from the status API
-`)
+  constructor(private readonly identity: CliDistributionIdentity) {}
 
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${Status.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
     }
 
-    return Status.help
+    return createHelp(this.identity)
   }
 
   async parse(argv: string[], _config: PrismaConfigInternal): Promise<string | Error> {
@@ -50,4 +40,19 @@ export class Status implements Command {
 
     return fetchStatus(args['--json'] ?? false)
   }
+}
+
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
+  Show Prisma Data Platform service status
+
+  ${bold('Usage')}
+
+  ${dim('$')} ${identity} platform status [options]
+
+  ${bold('Options')}
+
+    -h, --help     Display this help message
+        --json     Output raw JSON from the status API
+`)
 }

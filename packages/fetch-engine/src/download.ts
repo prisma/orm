@@ -14,7 +14,7 @@ import { BinaryType } from './BinaryType'
 import { chmodPlusX } from './chmodPlusX'
 import { cleanupCache } from './cleanupCache'
 import { downloadZip } from './downloadZip'
-import { allEngineEnvVarsSet, getBinaryEnvVarPath } from './env'
+import { getBinaryEnvVarPath } from './env'
 import { getHash } from './getHash'
 import { getBar } from './log'
 import { getCacheDir, getDownloadUrl, overwriteFile } from './utils'
@@ -73,17 +73,9 @@ export async function download(options: DownloadOptions): Promise<BinaryPaths> {
   }
 
   // get platform
-  const { binaryTarget, ...os } = await getPlatformInfo()
+  const { binaryTarget } = await getPlatformInfo()
 
-  if (os.targetDistro && ['nixos'].includes(os.targetDistro) && !allEngineEnvVarsSet(Object.keys(options.binaries))) {
-    console.error(
-      `${yellow('Warning')} Precompiled engine files are not available for ${
-        os.targetDistro
-      }, please provide the paths via environment variables, see https://pris.ly/d/custom-engines`,
-    )
-  } else if (
-    ['freebsd11', 'freebsd12', 'freebsd13', 'freebsd14', 'freebsd15', 'openbsd', 'netbsd'].includes(binaryTarget)
-  ) {
+  if (['freebsd11', 'freebsd12', 'freebsd13', 'freebsd14', 'freebsd15', 'openbsd', 'netbsd'].includes(binaryTarget)) {
     console.error(
       `${yellow(
         'Warning',

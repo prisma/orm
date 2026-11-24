@@ -98,7 +98,7 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
    * Should the query fail due to a connection error, the connection is
    * marked as unhealthy.
    */
-  private async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+  protected async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
     const { sql, args } = query
     const values = args.map((arg, i) => mapArg(arg, query.argTypes[i]))
 
@@ -132,6 +132,9 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
 }
 
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
+  private closed = false
+  private runningStatements = 0
+
   constructor(
     client: pg.PoolClient,
     readonly options: TransactionOptions,
@@ -141,18 +144,55 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
     super(client, pgOptions)
   }
 
+  protected override async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+    if (this.closed) {
+      throw new DriverAdapterError({
+        kind: 'TransactionAlreadyClosed',
+        cause: 'The transaction has already been committed or rolled back',
+      })
+    }
+
+    this.runningStatements++
+    try {
+      return await super.performIO(query)
+    } finally {
+      this.runningStatements--
+    }
+  }
+
+  /**
+   * Closes the transaction at most once. Once the pool has lent the client to
+   * a new owner, a second `release()` would corrupt the pool's bookkeeping, so
+   * it is skipped. A client with a statement still running is released with an
+   * error so the pool destroys it instead of lending out a busy connection.
+   */
+  private close(): void {
+    if (this.closed) {
+      return
+    }
+    this.closed = true
+
+    try {
+      this.cleanup?.()
+    } finally {
+      if (this.runningStatements > 0) {
+        this.client.release(new Error('Transaction closed with a statement still running'))
+      } else {
+        this.client.release()
+      }
+    }
+  }
+
   async commit(): Promise<void> {
     debug(`[js::commit]`)
 
-    this.cleanup?.()
-    this.client.release()
+    this.close()
   }
 
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
-    this.cleanup?.()
-    this.client.release()
+    this.close()
   }
 
   async createSavepoint(name: string): Promise<void> {
@@ -170,15 +210,12 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
 
 export type PrismaPgOptions = {
   /**
-   * The name of the schema to use in generated queries and as the `search_path` of connections
-   * in pools managed by the adapter. When not set and the adapter is constructed from a
-   * connection string or a config containing one, it falls back to the `?schema=` parameter of
-   * the connection URL, if present.
-   *
-   * For externally constructed `pg.Pool` instances the pool configuration is caller-owned and
-   * left untouched: the connection URL fallback does not apply and `search_path` is not
-   * modified, but an explicit `schema` option still determines the schema used in generated
-   * queries.
+   * The name of the schema to use in generated queries. When not set, the `?schema=` parameter of the
+   * connection string is used; a pre-built `pg.Pool`'s connection string is not read. Raw queries are
+   * not affected: they resolve unqualified names through the connection's `search_path`. Qualify the name in raw SQL
+   * (`"mySchema"."User"`), or set the search path on the database role
+   * (`ALTER ROLE ... SET search_path = ...`). The adapter does not set it itself, because behind a
+   * connection pooler in transaction mode a session setting is shared with the pooler's other clients.
    */
   schema?: string
   /**

@@ -61,7 +61,7 @@ Invalid \`prisma.user.create()\` invocation in
   XX   },
   XX }),
 → XX prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=cockroachdb, js_pg_cockroachdb) batching rollback within callback 1`] = `
@@ -73,7 +73,7 @@ Invalid \`tx.user.create()\` invocation in
   XX ])
   XX 
 → XX await tx.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=cockroachdb, js_pg_cockroachdb) rollback query 1`] = `
@@ -85,7 +85,7 @@ Invalid \`prisma.user.create()\` invocation in
   XX })
   XX 
 → XX await prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=mongodb) batching rollback 1`] = `
@@ -405,7 +405,7 @@ Invalid \`prisma.user.create()\` invocation in
   XX   },
   XX }),
 → XX prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=postgresql, js_pg) batching rollback within callback 1`] = `
@@ -417,7 +417,7 @@ Invalid \`tx.user.create()\` invocation in
   XX ])
   XX 
 → XX await tx.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=postgresql, js_pg) rollback query 1`] = `
@@ -429,7 +429,7 @@ Invalid \`prisma.user.create()\` invocation in
   XX })
   XX 
 → XX await prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=postgresql, qpe=remote) batching raw rollback 1`] = `
@@ -449,7 +449,7 @@ Invalid \`prisma.user.create()\` invocation in
   XX   },
   XX }),
 → XX prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=postgresql, qpe=remote) batching rollback within callback 1`] = `
@@ -461,7 +461,7 @@ Invalid \`tx.user.create()\` invocation in
   XX ])
   XX 
 → XX await tx.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=postgresql, qpe=remote) rollback query 1`] = `
@@ -473,7 +473,7 @@ Invalid \`prisma.user.create()\` invocation in
   XX })
   XX 
 → XX await prisma.user.create(
-Unique constraint failed on the fields: (\`email\`)"
+Unique constraint failed on the constraint: \`User_email_key\`"
 `;
 
 exports[`interactive-transactions (provider=sqlite) batching raw rollback 1`] = `

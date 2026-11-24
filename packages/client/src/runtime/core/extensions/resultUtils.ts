@@ -97,8 +97,8 @@ function composeCompute(
   if (!previousCompute) {
     return nextCompute
   }
-  return (model) => {
-    return nextCompute({ ...model, [fieldName]: previousCompute(model) })
+  return (model, modelName) => {
+    return nextCompute({ ...model, [fieldName]: previousCompute(model, modelName) }, modelName)
   }
 }
 

@@ -11,7 +11,7 @@ describe('introspection panic', () => {
     process.env.FORCE_PANIC_SCHEMA_ENGINE = '1'
     ctx.fixture(path.join('introspection', 'sqlite'))
 
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     try {
       await introspect.parse(['--print'], await ctx.config(), ctx.configDir())
     } catch (e) {

@@ -1,6 +1,7 @@
 import { Writer } from '@prisma/ts-builders'
 import ansiEscapesSerializer from 'jest-serializer-ansi-escapes'
 import { $ as colors } from 'kleur/colors'
+import { describe, expect, type SnapshotSerializer, test } from 'vitest'
 
 import { GlobalOmitOptions } from '../jsonProtocol/serializeJsonQuery'
 import { JsArgs } from '../types/exported/JsApi'
@@ -9,7 +10,7 @@ import { applyValidationError } from './applyValidationError'
 import { ArgumentsRenderingTree, buildArgumentsRenderingTree } from './ArgumentsRenderingTree'
 import { activeColors, inactiveColors } from './base'
 
-expect.addSnapshotSerializer(ansiEscapesSerializer)
+expect.addSnapshotSerializer(ansiEscapesSerializer as unknown as SnapshotSerializer)
 
 const renderError = (error: ValidationError, args: JsArgs, globalOmit: GlobalOmitOptions = {}) => {
   const argsTree = buildArgumentsRenderingTree(args)

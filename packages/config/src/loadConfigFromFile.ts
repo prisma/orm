@@ -1,4 +1,5 @@
-import path from 'node:path'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import process from 'node:process'
 
 import { Debug } from '@prisma/debug'
@@ -13,6 +14,48 @@ const debug = Debug('prisma:config:loadConfigFromFile')
 // to `jiti` or to `jitiOptions.extensions`.
 // See: https://github.com/unjs/c12/blob/1efbcbce0e094a8f8a0ba676324affbef4a0ba8b/src/loader.ts#L35-L42
 export const SUPPORTED_EXTENSIONS = ['.js', '.ts', '.mjs', '.cjs', '.mts', '.cts'] as const satisfies string[]
+
+const PRISMA7_CONFIG_FILE_CANDIDATES = [
+  ...SUPPORTED_EXTENSIONS.map((extension) => `prisma7.config${extension}`),
+  ...SUPPORTED_EXTENSIONS.map((extension) => path.join('.config', `prisma7${extension}`)),
+] as const satisfies readonly string[]
+
+const LEGACY_CONFIG_FILE_BASENAMES = [
+  'prisma.config',
+  path.join('.config', 'prisma'),
+  path.join('.config', 'prisma.config'),
+] as const
+
+const LEGACY_CONFIG_FILE_CANDIDATES = LEGACY_CONFIG_FILE_BASENAMES.flatMap((basename) => [
+  ...SUPPORTED_EXTENSIONS.map((extension) => `${basename}${extension}`),
+  ...SUPPORTED_EXTENSIONS.map((extension) => path.join(basename, `index${extension}`)),
+])
+
+/**
+ * Find the highest-precedence Prisma 7-specific config file without loading it.
+ */
+function findPrisma7ConfigFile(configRoot = process.cwd()): string | null {
+  return findFirstConfigFile(PRISMA7_CONFIG_FILE_CANDIDATES, configRoot)
+}
+
+/**
+ * Find the config file selected by automatic Prisma 7 discovery without loading it.
+ */
+export function findPrismaConfigFile(configRoot = process.cwd()): string | null {
+  return findPrisma7ConfigFile(configRoot) ?? findFirstConfigFile(LEGACY_CONFIG_FILE_CANDIDATES, configRoot)
+}
+
+function findFirstConfigFile(candidates: readonly string[], configRoot: string): string | null {
+  for (const candidate of candidates) {
+    const resolvedPath = path.resolve(configRoot, candidate)
+
+    if (fs.statSync(resolvedPath, { throwIfNoEntry: false })?.isFile()) {
+      return resolvedPath
+    }
+  }
+
+  return null
+}
 
 type LoadConfigFromFileInput = {
   /**
@@ -99,7 +142,8 @@ export async function loadConfigFromFile({
   const diagnostics = [] as ConfigDiagnostic[]
 
   try {
-    const { configModule, resolvedPath, error } = await loadConfigTsOrJs(configRoot, configFile)
+    const selectedConfigFile = configFile ?? findPrisma7ConfigFile(configRoot) ?? undefined
+    const { configModule, resolvedPath, error } = await loadConfigTsOrJs(configRoot, selectedConfigFile)
 
     if (error) {
       return {
@@ -240,10 +284,12 @@ async function loadConfigTsOrJs(configRoot: string, configFile: string | undefin
     const error = e as Error
     debug('jiti import failed: %s', error.message)
 
-    // Extract the location of config file that couldn't be read from jiti's wrapped BABEL_PARSE_ERROR message.
+    // Extract the location of automatically discovered legacy config files from jiti's wrapped BABEL_PARSE_ERROR message.
     const configFileMatch = error.message.match(/prisma\.config\.(\w+)/)
     const extension = configFileMatch?.[1]
-    const filenameWithExtension = path.join(configRoot, extension ? `prisma.config.${extension}` : '')
+    const filenameWithExtension = configFile
+      ? path.resolve(configRoot, configFile)
+      : path.join(configRoot, extension ? `prisma.config.${extension}` : '')
     debug('faulty config file: %s', filenameWithExtension)
 
     return {

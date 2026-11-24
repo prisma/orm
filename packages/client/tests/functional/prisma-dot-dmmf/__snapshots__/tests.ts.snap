@@ -645,6 +645,7 @@ exports[`prisma-dot-dmmf (provider=postgresql, js_pg) Prisma.dmmf in JS client e
           },
         ],
         "name": "User",
+        "schema": null,
       },
       {
         "dbName": null,
@@ -672,6 +673,7 @@ exports[`prisma-dot-dmmf (provider=postgresql, js_pg) Prisma.dmmf in JS client e
           },
         ],
         "name": "Post",
+        "schema": null,
       },
     ],
     "types": [],

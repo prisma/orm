@@ -9,6 +9,7 @@ import { getModelNames } from '../../bootstrap/project-state'
 import { login } from '../../management-api/auth'
 import { createAuthenticatedManagementAPI } from '../../management-api/auth-client'
 import { FileTokenStorage } from '../../management-api/token-storage'
+import type { CliDistributionIdentity } from '../../utils/cli-distribution-identity'
 import { formatCompletionOutput } from './completion-output'
 import { isAlreadyLinked, writeLocalFiles, type WriteLocalFilesResult } from './local-setup'
 import {
@@ -127,32 +128,11 @@ async function resolveProjectForDatabase(client: ManagementApiClient, databaseId
 }
 
 export class Link implements Command {
-  public static new(): Link {
-    return new Link()
+  public static new(identity: CliDistributionIdentity): Link {
+    return new Link(identity)
   }
 
-  private static help = format(`
-Link a local project to a Prisma Postgres database.
-
-${bold('Usage')}
-
-  ${dim('$')} prisma postgres link [options]
-
-${bold('Options')}
-
-  --api-key      Workspace API key (CI / non-interactive)
-  --database     Database ID to link to (e.g. db_abc123)
-  --force        Re-link even if already linked to Prisma Postgres
-  -h, --help     Display this help message
-
-${bold('Examples')}
-
-  Interactive (opens browser, lets you pick project & database)
-  ${dim('$')} prisma postgres link
-
-  Non-interactive with explicit credentials
-  ${dim('$')} prisma postgres link --api-key "<your-api-key>" --database "db_..."
-`)
+  constructor(private readonly identity: CliDistributionIdentity) {}
 
   public async parse(argv: string[], _config: PrismaConfigInternal, baseDir: string): Promise<string | Error> {
     const args = arg(argv, {
@@ -182,26 +162,26 @@ ${bold('Examples')}
 
     if (explicitApiKey && !databaseId) {
       return new HelpError(
-        `\n${bold(red('!'))} Missing ${bold('--database')} flag.\n\nWhen using ${bold('--api-key')}, you must also provide ${bold('--database')}.\n${Link.help}`,
+        `\n${bold(red('!'))} Missing ${bold('--database')} flag.\n\nWhen using ${bold('--api-key')}, you must also provide ${bold('--database')}.\n${createHelp(this.identity)}`,
       )
     }
 
     if (databaseId && !databaseId.startsWith('db_')) {
       return new HelpError(
-        `\n${bold(red('!'))} Invalid database ID "${databaseId}" — expected format: ${bold('db_<id>')}\n${Link.help}`,
+        `\n${bold(red('!'))} Invalid database ID "${databaseId}" — expected format: ${bold('db_<id>')}\n${createHelp(this.identity)}`,
       )
     }
 
     try {
       const result = await this.executeLinkFlow(apiKey, databaseId, baseDir)
-      return formatCompletionOutput(result)
+      return formatCompletionOutput(result, this.identity)
     } catch (err) {
       if (!apiKey && isExpiredSessionError(err)) {
         console.log(`Session expired. Re-authenticating via browser...`)
         await login({ utmMedium: 'command-postgres-link' })
         try {
           const result = await this.executeLinkFlow(apiKey, databaseId, baseDir)
-          return formatCompletionOutput(result)
+          return formatCompletionOutput(result, this.identity)
         } catch (retryErr) {
           return Link.formatError(retryErr)
         }
@@ -278,8 +258,33 @@ ${bold('Examples')}
 
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${Link.help}`)
+      return new HelpError(`\n${bold(red(`!`))} ${error}\n${createHelp(this.identity)}`)
     }
-    return Link.help
+    return createHelp(this.identity)
   }
+}
+
+function createHelp(identity: CliDistributionIdentity): string {
+  return format(`
+Link a local project to a Prisma Postgres database.
+
+${bold('Usage')}
+
+  ${dim('$')} ${identity} postgres link [options]
+
+${bold('Options')}
+
+  --api-key      Workspace API key (CI / non-interactive)
+  --database     Database ID to link to (e.g. db_abc123)
+  --force        Re-link even if already linked to Prisma Postgres
+  -h, --help     Display this help message
+
+${bold('Examples')}
+
+  Interactive (opens browser, lets you pick project & database)
+  ${dim('$')} ${identity} postgres link
+
+  Non-interactive with explicit credentials
+  ${dim('$')} ${identity} postgres link --api-key "<your-api-key>" --database "db_..."
+`)
 }

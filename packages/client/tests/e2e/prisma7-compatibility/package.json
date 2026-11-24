@@ -1,0 +1,23 @@
+{
+  "private": true,
+  "version": "0.0.0",
+  "type": "commonjs",
+  "scripts": {},
+  "dependencies": {
+    "@prisma/adapter-better-sqlite3": "/tmp/prisma-adapter-better-sqlite3-0.0.0.tgz",
+    "@prisma/client": "/tmp/prisma-client-0.0.0.tgz",
+    "@prisma/client-runtime-utils": "/tmp/prisma-client-runtime-utils-0.0.0.tgz",
+    "@prisma/prisma7": "/tmp/prisma-prisma7-0.0.0.tgz"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "~20.19.0",
+    "typescript": "5.7.3",
+    "vitest": "4.0.18"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
+  }
+}

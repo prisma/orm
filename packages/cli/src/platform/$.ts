@@ -3,16 +3,19 @@ import type { Command, Commands } from '@prisma/internals'
 import { arg, HelpError, isError } from '@prisma/internals'
 import { bold, red } from 'kleur/colors'
 
+import type { CliDistributionIdentity } from '../utils/cli-distribution-identity'
 import { dispatchToSubCommand } from './_lib/cli/dispatch-to-sub-command'
 import { createHelp } from './_lib/help'
 
-/** $ prisma platform */
 export class $ implements Command {
-  static new(cmds: Commands): $ {
-    return new $(cmds)
+  static new(cmds: Commands, identity: CliDistributionIdentity): $ {
+    return new $(cmds, identity)
   }
 
-  private constructor(private readonly cmds: Commands) {}
+  private constructor(
+    private readonly cmds: Commands,
+    private readonly identity: CliDistributionIdentity,
+  ) {}
 
   async parse(argv: string[], config: PrismaConfigInternal, baseDir: string = process.cwd()): Promise<string | Error> {
     const args = arg(argv, {
@@ -38,13 +41,13 @@ export class $ implements Command {
 
   public help(error?: string): string | HelpError {
     if (error) {
-      return new HelpError(`\n${bold(red(`!`))} ${error}\n${$.help}`)
+      return new HelpError(
+        `\n${bold(red(`!`))} ${error}\n${createHelp(this.identity, { subcommands: [['status', 'Show Prisma Data Platform service status']], examples: [`${this.identity} platform status`] })}`,
+      )
     }
-    return $.help
+    return createHelp(this.identity, {
+      subcommands: [['status', 'Show Prisma Data Platform service status']],
+      examples: [`${this.identity} platform status`],
+    })
   }
-
-  private static help = createHelp({
-    subcommands: [['status', 'Show Prisma Data Platform service status']],
-    examples: ['prisma platform status'],
-  })
 }

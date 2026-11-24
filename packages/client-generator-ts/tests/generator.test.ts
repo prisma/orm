@@ -92,6 +92,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -150,12 +151,13 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
     }).rejects.toThrowErrorMatchingInlineSnapshot(`
       [GetDmmfError: Prisma schema validation - (get-dmmf wasm)
       Error code: P1012
       error: Error validating model "public": The model name \`public\` is invalid. It is a reserved name. Please change it. Read more at https://pris.ly/d/naming-models
-        -->  tests/denylist.prisma:10
+        -->  packages/client-generator-ts/tests/denylist.prisma:10
          | 
        9 | 
       10 | model public {
@@ -163,7 +165,7 @@ describe('generator', () => {
       12 | }
          | 
       error: Error validating model "return": The model name \`return\` is invalid. It is a reserved name. Please change it. Read more at https://pris.ly/d/naming-models
-        -->  tests/denylist.prisma:14
+        -->  packages/client-generator-ts/tests/denylist.prisma:14
          | 
       13 | 
       14 | model return {
@@ -185,9 +187,10 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
     }).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: Could not load \`--schema\` from provided path \`tests/doesnotexist.prisma\`: file or directory not found]`,
+      `[Error: Could not load \`--schema\` from provided path \`packages/client-generator-ts/tests/doesnotexist.prisma\`: file or directory not found]`,
     )
   })
 
@@ -198,6 +201,7 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
 
       await generator.generate()
@@ -220,6 +224,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -276,6 +281,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])

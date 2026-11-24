@@ -1,5 +1,5 @@
-import { completionConfigPaths, completionSchemaPaths } from '@prisma/internals/src/cli/completion-values'
-import type { CommandCompletion } from '@prisma/internals/src/cli/types'
+import type { CommandCompletion } from '@prisma/internals'
+import { completionConfigPaths, completionSchemaPaths } from '@prisma/internals'
 
 export const formatCompletion: CommandCompletion = {
   name: 'format',

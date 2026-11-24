@@ -6,29 +6,25 @@
   "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/engines"
   },
   "license": "Apache-2.0",
   "author": "Tim Suchanek <suchanek@prisma.io>",
   "devDependencies": {
-    "@swc/core": "1.11.5",
-    "@swc/jest": "0.2.37",
-    "@types/jest": "29.5.14",
     "@types/node": "~20.19.24",
     "execa": "5.1.1",
     "typescript": "5.4.5"
   },
   "dependencies": {
     "@prisma/debug": "workspace:*",
-    "@prisma/engines-version": "7.9.0-1.e922089b7d7502aff4249d5da3420f6fa55fc6ad",
+    "@prisma/engines-version": "8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8",
     "@prisma/fetch-engine": "workspace:*",
     "@prisma/get-platform": "workspace:*"
   },
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
     "build": "tsx helpers/build.ts",
-    "test": "vitest run",
     "prepublishOnly": "pnpm run build",
     "postinstall": "node scripts/postinstall.js"
   },

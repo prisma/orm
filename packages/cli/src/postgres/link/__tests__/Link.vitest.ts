@@ -81,18 +81,18 @@ function setupMockApiSuccess() {
 
 describe('Link command — help and validation', () => {
   test('shows help with --help flag', async () => {
-    const result = await Link.new().parse(['--help'], defaultTestConfig(), tmpDir)
+    const result = await Link.new('prisma').parse(['--help'], defaultTestConfig(), tmpDir)
     expect(result).toContain('prisma postgres link')
   })
 
   test('returns error when --api-key is given without --database', async () => {
-    const result = await Link.new().parse(['--api-key', 'test_key'], defaultTestConfig(), tmpDir)
+    const result = await Link.new('prisma').parse(['--api-key', 'test_key'], defaultTestConfig(), tmpDir)
     expect(result).toBeInstanceOf(HelpError)
     expect((result as HelpError).message).toContain('--database')
   })
 
   test('validates database ID format', async () => {
-    const result = await Link.new().parse(
+    const result = await Link.new('prisma').parse(
       ['--api-key', 'test_key', '--database', 'invalid-id'],
       defaultTestConfig(),
       tmpDir,
@@ -106,7 +106,7 @@ describe('Link command — non-interactive mode (--api-key + --database)', () =>
   test('links successfully and writes direct connection to DATABASE_URL', async () => {
     setupMockApiSuccess()
 
-    const result = await Link.new().parse(
+    const result = await Link.new('prisma').parse(
       ['--api-key', 'test_key', '--database', 'db_abc123'],
       defaultTestConfig(),
       tmpDir,
@@ -124,7 +124,7 @@ describe('Link command — non-interactive mode (--api-key + --database)', () =>
     vi.stubEnv('PRISMA_API_KEY', 'env_api_key')
     setupMockApiSuccess()
 
-    const result = await Link.new().parse(['--database', 'db_abc123'], defaultTestConfig(), tmpDir)
+    const result = await Link.new('prisma').parse(['--database', 'db_abc123'], defaultTestConfig(), tmpDir)
 
     expect(result).not.toBeInstanceOf(Error)
 
@@ -152,7 +152,7 @@ model User {
       'utf-8',
     )
 
-    const result = await Link.new().parse(
+    const result = await Link.new('prisma').parse(
       ['--api-key', 'test_key', '--database', 'db_abc123'],
       defaultTestConfig(),
       tmpDir,
@@ -166,7 +166,7 @@ model User {
   test('shows next steps for schema without models', async () => {
     setupMockApiSuccess()
 
-    const result = await Link.new().parse(
+    const result = await Link.new('prisma').parse(
       ['--api-key', 'test_key', '--database', 'db_abc123'],
       defaultTestConfig(),
       tmpDir,
@@ -182,7 +182,7 @@ model User {
       error: { error: { code: 'unauthorized', message: 'Unauthorized' } },
     })
 
-    const result = await Link.new().parse(
+    const result = await Link.new('prisma').parse(
       ['--api-key', 'bad_key', '--database', 'db_abc123'],
       defaultTestConfig(),
       tmpDir,
@@ -201,7 +201,7 @@ describe('Link command — idempotency', () => {
       'utf-8',
     )
 
-    const result = await Link.new().parse(
+    const result = await Link.new('prisma').parse(
       ['--api-key', 'test_key', '--database', 'db_abc123'],
       defaultTestConfig(),
       tmpDir,
@@ -220,7 +220,7 @@ describe('Link command — idempotency', () => {
     )
     setupMockApiSuccess()
 
-    const result = await Link.new().parse(
+    const result = await Link.new('prisma').parse(
       ['--api-key', 'test_key', '--database', 'db_abc123', '--force'],
       defaultTestConfig(),
       tmpDir,
@@ -263,7 +263,7 @@ describe('Link command — interactive mode (no --api-key, no --database)', () =
     setupMockApiSuccess()
 
     vi.stubEnv('PRISMA_API_KEY', 'some_permanent_key')
-    const result = await Link.new().parse([], defaultTestConfig(), tmpDir)
+    const result = await Link.new('prisma').parse([], defaultTestConfig(), tmpDir)
 
     expect(result).not.toBeInstanceOf(Error)
     expect(createManagementApiClient).not.toHaveBeenCalled()
@@ -300,7 +300,7 @@ describe('Link command — interactive mode (no --api-key, no --database)', () =
     setupMockApiSuccess()
 
     vi.unstubAllEnvs()
-    const result = await Link.new().parse([], defaultTestConfig(), tmpDir)
+    const result = await Link.new('prisma').parse([], defaultTestConfig(), tmpDir)
 
     expect(result).not.toBeInstanceOf(Error)
     const output = result as string
@@ -335,7 +335,7 @@ describe('Link command — interactive mode (no --api-key, no --database)', () =
     setupMockApiSuccess()
 
     vi.unstubAllEnvs()
-    const result = await Link.new().parse([], defaultTestConfig(), tmpDir)
+    const result = await Link.new('prisma').parse([], defaultTestConfig(), tmpDir)
 
     expect(result).not.toBeInstanceOf(Error)
     expect(mockSelect).toHaveBeenCalledTimes(1)
@@ -348,7 +348,7 @@ describe('Link command — interactive mode (no --api-key, no --database)', () =
     })
 
     vi.unstubAllEnvs()
-    const result = await Link.new().parse([], defaultTestConfig(), tmpDir)
+    const result = await Link.new('prisma').parse([], defaultTestConfig(), tmpDir)
 
     expect(result).toBeInstanceOf(HelpError)
     expect((result as HelpError).message).toContain('No projects found')
@@ -374,7 +374,7 @@ describe('Link command — interactive mode (no --api-key, no --database)', () =
     })
 
     vi.unstubAllEnvs()
-    const result = await Link.new().parse([], defaultTestConfig(), tmpDir)
+    const result = await Link.new('prisma').parse([], defaultTestConfig(), tmpDir)
 
     expect(result).toBeInstanceOf(HelpError)
     expect((result as HelpError).message).toContain('No ready databases')
@@ -392,7 +392,7 @@ describe('Link command — expired session retry', () => {
     setupMockApiSuccess()
 
     vi.unstubAllEnvs()
-    const result = await Link.new().parse(['--database', 'db_abc123'], defaultTestConfig(), tmpDir)
+    const result = await Link.new('prisma').parse(['--database', 'db_abc123'], defaultTestConfig(), tmpDir)
 
     expect(result).not.toBeInstanceOf(Error)
     const output = result as string

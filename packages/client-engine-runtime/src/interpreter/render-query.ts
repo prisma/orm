@@ -11,7 +11,7 @@ import {
   type QueryPlanDbQuery,
 } from '../query-plan'
 import { UserFacingError } from '../user-facing-error'
-import { assertNever, DeepReadonly } from '../utils'
+import { appendToArray, assertNever, DeepReadonly } from '../utils'
 import { GeneratorRegistrySnapshot } from './generators'
 import { ScopeBindings } from './scope'
 
@@ -94,8 +94,9 @@ function renderTemplateSql(
     if (fragment.type === 'stringChunk') {
       continue
     }
-    const length = flattenedParams.length
-    const added = flattenedParams.push(...flattenedFragmentParams(fragment)) - length
+    const fragmentParams = Array.from(flattenedFragmentParams(fragment))
+    const added = fragmentParams.length
+    appendToArray(flattenedParams, fragmentParams)
 
     if (fragment.argType.arity === 'tuple') {
       if (added % fragment.argType.elements.length !== 0) {

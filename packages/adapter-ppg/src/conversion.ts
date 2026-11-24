@@ -39,45 +39,74 @@ export function convertArgs(args: Array<unknown>, argTypes: Array<ArgType>): Arr
       return null
     }
 
-    const scalarType = argType.scalarType
-    switch (scalarType) {
-      case 'int':
-      case 'bigint':
-      case 'float':
-      case 'decimal':
-      case 'string':
-      case 'enum':
-      case 'boolean':
-        return String(arg)
-
-      case 'datetime':
-        // PostgreSQL expects ISO 8601 format
-        if (arg instanceof Date) {
-          return arg.toISOString()
-        }
-        return arg
-
-      case 'json':
-        return typeof arg === 'string' ? arg : JSON.stringify(arg)
-
-      case 'bytes':
-        // Convert Uint8Array/Buffer to hex string for PostgreSQL bytea
-        if (arg instanceof Uint8Array) {
-          return `\\x${Array.from(arg)
-            .map((b) => b.toString(16).padStart(2, '0'))
-            .join('')}`
-        }
-        return arg
-
-      case 'uuid':
-        return String(arg)
-
-      case 'unknown':
-      default:
-        // Default: pass through as-is
-        return arg
+    // The PPG client sends every parameter as text, so a list has to go out as an array literal.
+    if (Array.isArray(arg) && argType.arity === 'list') {
+      return toArrayLiteral(arg.map((element) => convertArg(element, argType)))
     }
+
+    return convertArg(arg, argType)
   })
+}
+
+/**
+ * Converts a single scalar value, or one element of a list, to a PPG client-compatible value.
+ */
+function convertArg(arg: unknown, argType: ArgType): unknown {
+  if (arg === null || arg === undefined) {
+    return null
+  }
+
+  const scalarType = argType.scalarType
+  switch (scalarType) {
+    case 'int':
+    case 'bigint':
+    case 'float':
+    case 'decimal':
+    case 'string':
+    case 'enum':
+    case 'boolean':
+      return String(arg)
+
+    case 'datetime':
+      // PostgreSQL expects ISO 8601 format
+      if (arg instanceof Date) {
+        return arg.toISOString()
+      }
+      return arg
+
+    case 'json':
+      return typeof arg === 'string' ? arg : JSON.stringify(arg)
+
+    case 'bytes':
+      // Convert Uint8Array/Buffer to hex string for PostgreSQL bytea
+      if (arg instanceof Uint8Array) {
+        return `\\x${Array.from(arg)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')}`
+      }
+      return arg
+
+    case 'uuid':
+      return String(arg)
+
+    case 'unknown':
+    default:
+      // Default: pass through as-is
+      return arg
+  }
+}
+
+/**
+ * Serializes converted elements as a PostgreSQL array literal, e.g. `{"a","b c",NULL}`.
+ * Every element is quoted, so commas, braces and spaces inside a value survive.
+ */
+function toArrayLiteral(elements: Array<unknown>): string {
+  const items = elements.map((element) => {
+    if (element === null) return 'NULL'
+    const text = typeof element === 'string' ? element : String(element)
+    return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  })
+  return `{${items.join(',')}}`
 }
 
 export const ScalarColumnType = {
@@ -171,6 +200,7 @@ export const ArrayColumnType = {
   TEXT_ARRAY: 1009,
   TIMESTAMP_ARRAY: 1115,
   TIMESTAMPTZ_ARRAY: 1185,
+  TIMETZ_ARRAY: 1270,
   TIME_ARRAY: 1183,
   UUID_ARRAY: 2951,
   VARBIT_ARRAY: 1563,
@@ -246,8 +276,10 @@ export function fieldToColumnType(fieldTypeId: number): ColumnType {
     case ArrayColumnType.DATE_ARRAY:
       return ColumnTypeEnum.DateArray
     case ArrayColumnType.TIME_ARRAY:
+    case ArrayColumnType.TIMETZ_ARRAY:
       return ColumnTypeEnum.TimeArray
     case ArrayColumnType.TIMESTAMP_ARRAY:
+    case ArrayColumnType.TIMESTAMPTZ_ARRAY:
       return ColumnTypeEnum.DateTimeArray
     case ArrayColumnType.JSON_ARRAY:
     case ArrayColumnType.JSONB_ARRAY:
@@ -284,6 +316,7 @@ export const builtinParsers = Object.entries({
   [ScalarColumnType.TIME]: normalize_time,
   [ArrayColumnType.TIME_ARRAY]: normalize_array(normalize_time),
   [ScalarColumnType.TIMETZ]: normalize_timez,
+  [ArrayColumnType.TIMETZ_ARRAY]: normalize_array(normalize_timez),
   [ScalarColumnType.DATE]: normalize_date,
   [ArrayColumnType.DATE_ARRAY]: normalize_array(normalize_date),
   [ScalarColumnType.TIMESTAMP]: normalize_timestamp,
@@ -301,10 +334,33 @@ export const builtinParsers = Object.entries({
   [ArrayColumnType.BIT_ARRAY]: normalize_array(normalizeBit),
   [ArrayColumnType.VARBIT_ARRAY]: normalize_array(normalizeBit),
   [ArrayColumnType.XML_ARRAY]: normalize_array(normalize_xml),
+  // The PPG client returns every array it has no parser for as the raw literal (`{a,b}`),
+  // so each array type that `fieldToColumnType` reports needs one here.
+  [ArrayColumnType.BOOL_ARRAY]: normalize_array(normalize_bool),
+  [ArrayColumnType.INT2_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.INT4_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.INT8_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.OID_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.FLOAT4_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.FLOAT8_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.TEXT_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.VARCHAR_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.BPCHAR_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.CHAR_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.UUID_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.INET_ARRAY]: normalize_array(identity),
+  [ArrayColumnType.CIDR_ARRAY]: normalize_array(identity),
 }).map(([k, v]) => ({
   oid: Number(k),
   parse: v,
 }))
+
+/**
+ * Element normalizer for array types whose elements the data mapper already accepts as strings.
+ */
+function identity(x: string): string {
+  return x
+}
 
 function normalize_bool(x: string | null) {
   return x === null ? null : x === 'f' ? 'false' : 'true'
@@ -364,18 +420,38 @@ function normalize_time(time: string): string {
 
 function normalize_timez(time: string | null): string | null {
   if (time === null) return null
-  // Although it might be controversial, UTC is assumed in consistency with the behavior of rust postgres driver
-  // in quaint. See quaint/src/connector/postgres/conversion.rs
-  return time.replace(/[+-]\d{2}(:\d{2})?$/, '')
+  // Postgres sends TIMETZ as HH:MM:SS[.ffffff]±HH[:MM[:SS]]. Prisma surfaces it as a UTC time of day,
+  // so the offset has to be applied, not just dropped.
+  const match = time.match(/^(\d{2}):(\d{2}):(\d{2})(\.\d+)?([+-])(\d{2})(?::(\d{2}))?(?::(\d{2}))?$/)
+  if (!match) return time
+  const [, h, m, s, fraction = '', sign, oh, om = '0', os = '0'] = match
+  const offset = (sign === '+' ? 1 : -1) * (Number(oh) * 3600 + Number(om) * 60 + Number(os))
+  if (offset === 0) return `${h}:${m}:${s}${fraction}`
+  const seconds = (((Number(h) * 3600 + Number(m) * 60 + Number(s) - offset) % 86400) + 86400) % 86400
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}${fraction}`
 }
 
 /******************/
 /* Money handling */
 /******************/
 
+const SUPPORTED_MONEY_FORMAT = /^(?:(-)[\p{L}\p{Sc}]+|[\p{L}\p{Sc}]+(-)?)(\d{1,3}(?:,\d{3})*)(\.(?!\d{3}$)\d+)?$/u
+
 function normalize_money(money: string | null): string | null {
   if (money === null) return null
-  return money.slice(1)
+  // Postgres formats money using `lc_monetary`: `$1,234.50` by default, `£1,234.50`, `¥500` or `HK$-120.00` elsewhere.
+  // Anything else is refused rather than misread: other separators (`1.234,50 €`), a space after the symbol
+  // (`CHF 15.00`), a sign that is not "-" (`−$5.00`, `($5.00)`), and a three-digit fraction, because `$1.234` could be
+  // 1234 in a locale with a "." thousands separator and no decimals. `,` is assumed to separate thousands.
+  const match = SUPPORTED_MONEY_FORMAT.exec(money)
+  if (match === null) {
+    throw new Error(
+      `Unsupported money format "${money}": expected a currency symbol directly followed by an amount with "," thousands separators and a "." decimal point, such as -£1,234.50`,
+    )
+  }
+  const [, signBeforeSymbol = '', signAfterSymbol = '', integer, fraction = ''] = match
+  return `${signBeforeSymbol}${signAfterSymbol}${integer.replaceAll(',', '')}${fraction}`
 }
 
 /******************/

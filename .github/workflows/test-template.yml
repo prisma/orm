@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -117,10 +117,10 @@ jobs:
       JEST_JUNIT_SUITE_NAME: 'client/functional'
       JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -136,7 +136,7 @@ jobs:
           skip-tsc: false
 
       # And run all non functional, non e2e tests (except the types tests)
-      - run: pnpm run test-notypes ${{ env.FUNCTIONAL_TEST_OPTIONS }} --silent --shard ${{ matrix.shard }}
+      - run: pnpm run test-notypes --silent --shard ${{ matrix.shard }}
         if: |
           contains(inputs.jobsToRun, '-all-') ||
           contains(inputs.jobsToRun, '-client-')
@@ -145,8 +145,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -169,10 +169,10 @@ jobs:
         node: ['20.19.0', '22.12.0', '24']
         flavor: ['js_pg']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -197,8 +197,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -237,10 +237,10 @@ jobs:
         node: ['20.19.0']
         previewFeatures: ['', 'relationJoins']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -265,8 +265,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -304,10 +304,10 @@ jobs:
         node: ['20.19.0']
         previewFeatures: ['', 'relationJoins']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -332,8 +332,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -359,10 +359,10 @@ jobs:
         shard: ['1/6', '2/6', '3/6', '4/6', '5/6', '6/6']
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -387,8 +387,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -419,11 +419,11 @@ jobs:
         # several machines. See `--shard` in tests/e2e/_utils/run.ts.
         shard: ['1/3', '2/3', '3/3']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       # Not currently needed, but we might need it in the future
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -464,7 +464,7 @@ jobs:
       JEST_JUNIT_SUITE_NAME: 'client/functional'
       JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Set RELATION_MODE custom test env var
         run: |
@@ -474,7 +474,7 @@ jobs:
           fi
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -510,8 +510,8 @@ jobs:
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -534,7 +534,7 @@ jobs:
       matrix:
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -548,21 +548,22 @@ jobs:
         working-directory: packages/client
 
   #
-  # Client internals and generator packages
+  # Vitest
   #
-  client-packages:
-    name: Client internals and generators [v${{ matrix.node }}]
+  vitest:
+    name: Vitest [v${{ matrix.node }}]
     timeout-minutes: 30
     runs-on: ubuntu-latest
     if: |
       contains(inputs.jobsToRun, '-all-') ||
-      contains(inputs.jobsToRun, '-client-')
+      contains(inputs.jobsToRun, '-client-') ||
+      contains(inputs.jobsToRun, '-query-plan-executor-')
     strategy:
       fail-fast: false
       matrix:
         node: ['20.19.0', '22.12.0', '24']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -571,29 +572,7 @@ jobs:
           engine-hash: ${{ inputs.engineHash }}
           skip-tsc: false
 
-      - run: pnpm run test
-        name: 'client-common'
-        working-directory: packages/client-common
-
-      - run: pnpm run test
-        name: 'client-engine-runtime'
-        working-directory: packages/client-engine-runtime
-
-      - run: pnpm run test
-        name: 'ts-builders'
-        working-directory: packages/ts-builders
-
-      - run: pnpm run test
-        name: 'client-generator-js'
-        working-directory: packages/client-generator-js
-
-      - run: pnpm run test
-        name: 'client-generator-ts'
-        working-directory: packages/client-generator-ts
-
-      - run: pnpm run test
-        name: 'client-generator-registry'
-        working-directory: packages/client-generator-registry
+      - run: pnpm vitest
 
   #
   # WORKSPACE-TYPES
@@ -607,7 +586,7 @@ jobs:
       matrix:
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -617,6 +596,9 @@ jobs:
           engine-hash: ${{ inputs.engineHash }}
 
       - run: pnpm tsc -p tsconfig.utils.typecheck.json
+
+      - name: Test publish channel selection
+        run: pnpm tsx --test scripts/ci/publish-channel.test.ts
 
   #
   # INTEGRATION-TESTS
@@ -633,10 +615,10 @@ jobs:
       matrix:
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -669,10 +651,10 @@ jobs:
         os: [ubuntu-latest]
         node: ['20.19.0', '22.12.0', '24']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -707,10 +689,10 @@ jobs:
         # driverAdapter: ['', 'libsql'] # TODO: once we have all tests pass with driver adapters actually enable them on CI and add further adapters
         driverAdapter: ['']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -745,10 +727,10 @@ jobs:
         os: [ubuntu-latest]
         node: ['20.19.0', '22.12.0', '24']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Start Docker Compose Services
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
         with:
           timeout_minutes: 10
           max_attempts: 5
@@ -786,7 +768,7 @@ jobs:
           - os: macos-latest
             version: 18
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -799,171 +781,6 @@ jobs:
         working-directory: packages/cli
 
   #
-  # All the other packages!
-  #
-  others:
-    name: Others [v${{ matrix.node }}]
-    timeout-minutes: 10
-    runs-on: ${{ matrix.os }}
-    if: contains(inputs.jobsToRun, '-all-')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        node: ['20.19.0', '22.12.0', '24']
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install & build
-        uses: ./.github/actions/setup
-        with:
-          node-version: ${{ matrix.node }}
-          engine-hash: ${{ inputs.engineHash }}
-          skip-tsc: true
-
-      - run: pnpm run test
-        name: 'debug'
-        working-directory: packages/debug
-
-      - run: pnpm run test
-        name: 'generator-helper'
-        working-directory: packages/generator-helper
-
-      - run: pnpm run test
-        name: 'get-platform'
-        working-directory: packages/get-platform
-
-      - run: pnpm run test
-        name: 'fetch-engine'
-        working-directory: packages/fetch-engine
-
-      - run: pnpm run test
-        name: 'engines'
-        working-directory: packages/engines
-
-      - run: pnpm run test
-        name: 'instrumentation'
-        working-directory: packages/instrumentation
-
-      - run: pnpm run test
-        name: 'instrumentation-contract'
-        working-directory: packages/instrumentation-contract
-
-      - run: pnpm run test
-        name: 'schema-files-loader'
-        working-directory: packages/schema-files-loader
-
-      - run: pnpm run test
-        name: 'config'
-        working-directory: packages/config
-
-      - run: pnpm run test
-        name: 'dmmf'
-        working-directory: packages/dmmf
-
-      - run: pnpm run test
-        name: 'generator'
-        working-directory: packages/generator
-
-      - run: pnpm run test
-        name: 'credentials-store'
-        working-directory: packages/credentials-store
-
-      - run: pnpm run test
-        name: 'sqlcommenter-query-tags'
-        working-directory: packages/sqlcommenter-query-tags
-
-      - run: pnpm run test
-        name: 'sqlcommenter-trace-context'
-        working-directory: packages/sqlcommenter-trace-context
-
-      - run: pnpm run test
-        name: 'sqlcommenter-query-insights'
-        working-directory: packages/sqlcommenter-query-insights
-
-  #
-  # Driver Adapter Unit Tests
-  #
-  driver-adapter-unit-tests:
-    name: DA Unit Tests [v${{ matrix.node }}]
-    timeout-minutes: 10
-    runs-on: ${{ matrix.os }}
-    if: contains(inputs.jobsToRun, '-all-')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        node: ['20.19.0', '24']
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install & build
-        uses: ./.github/actions/setup
-        with:
-          node-version: ${{ matrix.node }}
-          engine-hash: ${{ inputs.engineHash }}
-          skip-tsc: true
-
-      - run: pnpm run test
-        name: 'adapter-libsql'
-        working-directory: packages/adapter-libsql
-
-      - run: pnpm run test
-        name: 'adapter-mariadb'
-        working-directory: packages/adapter-mariadb
-
-      - run: pnpm run test
-        name: 'adapter-d1'
-        working-directory: packages/adapter-d1
-
-      - run: pnpm run test
-        name: 'adapter-pg'
-        working-directory: packages/adapter-pg
-
-      - run: pnpm run test
-        name: 'adapter-planetscale'
-        working-directory: packages/adapter-planetscale
-
-      - run: pnpm run test
-        name: 'adapter-mssql'
-        working-directory: packages/adapter-mssql
-
-      - run: pnpm run test
-        name: 'adapter-neon'
-        working-directory: packages/adapter-neon
-
-      - run: pnpm run test
-        name: 'adapter-ppg'
-        working-directory: packages/adapter-ppg
-
-  #
-  # Query plan executor unit tests
-  #
-  qpe-unit-tests:
-    name: QPE Unit Tests [v${{ matrix.node }}]
-    timeout-minutes: 10
-    runs-on: ${{ matrix.os }}
-    if: contains(inputs.jobsToRun, '-all-') || contains(inputs.jobsToRun, '-query-plan-executor-')
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        node: ['24']
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install & build
-        uses: ./.github/actions/setup
-        with:
-          node-version: ${{ matrix.node }}
-          engine-hash: ${{ inputs.engineHash }}
-          skip-tsc: true
-
-      - run: pnpm run test
-        name: 'query-plan-executor'
-        working-directory: packages/query-plan-executor
-
-  #
   # Run type performance benchmark tests
   #
   type-benchmark-tests:
@@ -974,7 +791,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Install & build
         uses: ./.github/actions/setup
@@ -1006,14 +823,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-latest, windows-latest]
         node: ['20.19.0']
-        shard: ['1/2', '2/2']
     if: |
       contains(inputs.jobsToRun, '-all-') ||
       contains(inputs.jobsToRun, '-client-')
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Prerequisites
         shell: bash
@@ -1039,20 +855,20 @@ jobs:
           skip-tsc: true
 
       - name: Test packages/client
-        run: pnpm run test:functional:code ${{ env.FUNCTIONAL_TEST_OPTIONS }} --silent --shard ${{ matrix.shard }}
+        run: pnpm run test:functional:code ${{ env.FUNCTIONAL_TEST_OPTIONS }} --silent
         working-directory: packages/client
         env:
           # allow Node.js to allocate at most 14GB of heap on macOS and 7GB on Windows
           # https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
-          NODE_OPTIONS: "${{ matrix.os == 'macos-14' && '--max-old-space-size=14336' || '--max-old-space-size=7168' }}"
+          NODE_OPTIONS: "${{ matrix.os == 'macos-latest' && '--max-old-space-size=14336' || '--max-old-space-size=7168' }}"
           JEST_JUNIT_SUITE_NAME: 'client/functional'
           JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
 
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason =='buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason =='buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833
@@ -1073,10 +889,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-latest, windows-latest]
         node: ['20.19.0']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       - name: Prerequisites
         shell: bash
@@ -1102,6 +918,9 @@ jobs:
           # Fails if set to true
           skip-tsc: false
 
+      - run: pnpm vitest
+        if: contains(inputs.jobsToRun, '-all-')
+
       - name: Test packages/internals
         if: contains(inputs.jobsToRun, '-all-') || contains(inputs.jobsToRun, '-internals-')
         run: pnpm run test --testTimeout=40000
@@ -1118,7 +937,7 @@ jobs:
           # Allow Node.js to allocate at most a certain amount heap on macOS and a different amount on Windows
           # Note that this value should be lower than the total amount of RAM available
           # https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
-          NODE_OPTIONS: "${{ matrix.os == 'macos-14' && '--max-old-space-size=14336' || '--max-old-space-size=3072' }}"
+          NODE_OPTIONS: "${{ matrix.os == 'macos-latest' && '--max-old-space-size=14336' || '--max-old-space-size=3072' }}"
           JEST_JUNIT_SUITE_NAME: 'client/old'
           JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
 
@@ -1138,142 +957,11 @@ jobs:
           JEST_JUNIT_SUITE_NAME: 'cli'
           JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
 
-      - name: Test packages/debug
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/debug
-        env:
-          JEST_JUNIT_SUITE_NAME: 'debug'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/generator-helper
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/generator-helper
-        env:
-          JEST_JUNIT_SUITE_NAME: 'generator-helper'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/get-platform
-        continue-on-error: true # Can fail randomly and we don't want to fail the whole workflow
-        if: success() && contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/get-platform
-        env:
-          JEST_JUNIT_SUITE_NAME: 'get-platform'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/fetch-engine
-        continue-on-error: true # Can fail randomly and we don't want to fail the whole workflow
-        if: success() && contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/fetch-engine
-        env:
-          JEST_JUNIT_SUITE_NAME: 'fetch-engine'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/engines
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/engines
-        env:
-          JEST_JUNIT_SUITE_NAME: 'engines'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/schema-files-loader
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/schema-files-loader
-        env:
-          JEST_JUNIT_SUITE_NAME: 'schema-files-loader'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/config
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/config
-        env:
-          JEST_JUNIT_SUITE_NAME: 'config'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - name: Test packages/client-engine-runtime
-        if: contains(inputs.jobsToRun, '-all-')
-        run: pnpm run test
-        working-directory: packages/client-engine-runtime
-        env:
-          JEST_JUNIT_SUITE_NAME: 'client-engine-runtime'
-          JEST_JUNIT_UNIQUE_OUTPUT_NAME: true
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'dmmf'
-        working-directory: packages/dmmf
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'generator'
-        working-directory: packages/generator
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'client-common'
-        working-directory: packages/client-common
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'ts-builders'
-        working-directory: packages/ts-builders
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'client-generator-js'
-        working-directory: packages/client-generator-js
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'client-generator-ts'
-        working-directory: packages/client-generator-ts
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'credentials-store'
-        working-directory: packages/credentials-store
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'client-generator-registry'
-        working-directory: packages/client-generator-registry
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-') || contains(inputs.jobsToRun, '-query-plan-executor-')
-        name: 'query-plan-executor'
-        working-directory: packages/query-plan-executor
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'instrumentation-contract'
-        working-directory: packages/instrumentation-contract
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'sqlcommenter-query-tags'
-        working-directory: packages/sqlcommenter-query-tags
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'sqlcommenter-trace-context'
-        working-directory: packages/sqlcommenter-trace-context
-
-      - run: pnpm run test
-        if: contains(inputs.jobsToRun, '-all-')
-        name: 'sqlcommenter-query-insights'
-        working-directory: packages/sqlcommenter-query-insights
-
       - name: Upload test results to BuildPulse for flaky test detection
         # Only run this step for branches where we have access to secrets.
         # Run this step even when the tests fail. Skip if the workflow is cancelled.
-        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/prisma'
-        uses: buildpulse/buildpulse-action@v0.11.0
+        if: env.HAS_BUILDPULSE_SECRETS == 'true' && !cancelled() && inputs.reason == 'buildpulse' && github.repository == 'prisma/orm'
+        uses: buildpulse/buildpulse-action@d0d30f53585cf16b2e01811a5a753fd47968654a # v0.11.0
         with:
           account: 17219288
           repository: 192925833

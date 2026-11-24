@@ -129,7 +129,7 @@ function inferColumnType(value: NonNullable<Value>): ColumnType {
 }
 
 function inferObjectType(value: {}): ColumnType {
-  if (value instanceof ArrayBuffer) {
+  if (value instanceof ArrayBuffer || value instanceof Uint8Array) {
     return ColumnTypeEnum.Bytes
   }
   throw new UnexpectedTypeError(value)

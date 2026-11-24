@@ -177,7 +177,7 @@ class Parameterizer {
       const edge = this.#view.inputEdge(node, key)
 
       if (edge) {
-        result[key] = this.#parameterizeValue(value, edge) as JsonArgumentValue
+        result[key] = this.#parameterizeValue(value, edge, key) as JsonArgumentValue
       } else {
         result[key] = value as JsonArgumentValue
       }
@@ -189,7 +189,7 @@ class Parameterizer {
   /**
    * Core parameterization logic for a single value.
    */
-  #parameterizeValue(value: unknown, edge: InputEdge): unknown {
+  #parameterizeValue(value: unknown, edge: InputEdge, key: string): unknown {
     const classified = classifyValue(value)
 
     switch (classified.kind) {
@@ -201,7 +201,7 @@ class Parameterizer {
         return value
 
       case 'primitive':
-        return this.#handlePrimitive(classified.value, edge)
+        return this.#handlePrimitive(classified.value, edge, key)
 
       case 'taggedScalar':
         return this.#handleTaggedScalar(value as JsonInputTaggedValue, classified.tag, edge)
@@ -220,7 +220,7 @@ class Parameterizer {
   /**
    * Handles parameterization of primitive values (string, number, boolean).
    */
-  #handlePrimitive(value: string | number | boolean, edge: InputEdge): JsonArgumentValue {
+  #handlePrimitive(value: string | number | boolean, edge: InputEdge, key: string): JsonArgumentValue {
     if (hasFlag(edge, EdgeFlag.ParamEnum) && edge.enumNameIndex !== undefined && typeof value === 'string') {
       const enumValues = this.#view.enumValues(edge)
       if (enumValues && Object.hasOwn(enumValues, value)) {
@@ -238,13 +238,19 @@ class Parameterizer {
       return value
     }
 
-    const type = getPrimitivePlaceholderType(value)
-    if (!matchesPrimitiveMask(type, mask)) {
-      return value
+    if (mask & ScalarMask.Json) {
+      if (JSON_COMPARISON_FILTERS.has(key)) {
+        return value
+      }
+
+      const jsonValue = JSON.stringify(value)
+      const type: PlaceholderType = { type: 'Json' }
+      return this.#getOrCreatePlaceholder(jsonValue, type)
     }
 
-    if (mask & ScalarMask.Json) {
-      value = JSON.stringify(value)
+    const type = getPrimitivePlaceholderType(value, mask)
+    if (!matchesPrimitiveMask(type, mask)) {
+      return value
     }
 
     return this.#getOrCreatePlaceholder(value, type)
@@ -291,7 +297,7 @@ class Parameterizer {
       const allValid = items.every((item) => validateListElement(item, edge))
       if (allValid && items.length > 0) {
         const decodedItems = items.map((item) => decodeIfTagged(item))
-        const innerType = inferListElementType(items)
+        const innerType = inferListElementType(items, getScalarMask(edge))
         const type: PlaceholderType = { type: 'List', inner: innerType }
         return this.#getOrCreatePlaceholder(decodedItems, type)
       }
@@ -414,10 +420,13 @@ function createValueKey(value: unknown, type: PlaceholderType): string {
   return `${typeKey}:${valueKey}`
 }
 
+// The query compiler reads the literal value of these filters to choose which JSON type to compare against
+const JSON_COMPARISON_FILTERS = new Set(['gt', 'gte', 'lt', 'lte'])
+
 const MAX_INT = 2 ** 31 - 1
 const MIN_INT = -(2 ** 31)
 
-function getPrimitivePlaceholderType(value: string | number | boolean): PlaceholderType {
+function getPrimitivePlaceholderType(value: string | number | boolean, mask: number): PlaceholderType {
   switch (typeof value) {
     case 'boolean':
       return { type: 'Boolean' }
@@ -428,6 +437,10 @@ function getPrimitivePlaceholderType(value: string | number | boolean): Placehol
       }
       if (MIN_INT <= value && value <= MAX_INT) {
         return { type: 'Int' }
+      }
+      // Integer-valued floats like 1e20 lose precision when inlined into the query compiler.
+      if (!(mask & ScalarMask.BigInt) && mask & ScalarMask.Float) {
+        return { type: 'Float' }
       }
       return { type: 'BigInt' }
 
@@ -479,7 +492,7 @@ function getTaggedPlaceholderType(tag: JsonInputTaggedValue['$type']): Placehold
  * Infers the widest placeholder type that accommodates all elements in a list.
  * For example, a list containing both Int and Float values infers Float.
  */
-function inferListElementType(items: unknown[]): PlaceholderType {
+function inferListElementType(items: unknown[], mask: number): PlaceholderType {
   let widest: PlaceholderType = { type: 'Any' }
 
   for (const item of items) {
@@ -488,7 +501,7 @@ function inferListElementType(items: unknown[]): PlaceholderType {
 
     switch (classified.kind) {
       case 'primitive':
-        itemType = getPrimitivePlaceholderType(classified.value)
+        itemType = getPrimitivePlaceholderType(classified.value, mask)
         break
       case 'taggedScalar':
         itemType = getTaggedPlaceholderType(classified.tag) ?? { type: 'Any' }
@@ -557,8 +570,8 @@ function validateListElement(item: unknown, edge: InputEdge): boolean {
       return false
 
     case 'primitive': {
-      const type = getPrimitivePlaceholderType(classified.value)
       const mask = getScalarMask(edge)
+      const type = getPrimitivePlaceholderType(classified.value, mask)
       return mask !== 0 && matchesPrimitiveMask(type, mask)
     }
 

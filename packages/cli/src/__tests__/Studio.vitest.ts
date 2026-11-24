@@ -2,6 +2,7 @@ import { defaultTestConfig } from '@prisma/config'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const createPoolMock = vi.fn(() => ({ end: vi.fn() }))
+const getPortMock = vi.fn(() => Promise.resolve(55_555))
 const readFileMock = vi.fn((filePath: string) => {
   if (/[\\/]studio\.js$/.test(filePath)) {
     return Promise.resolve('window.__studioBundle = true;')
@@ -39,6 +40,12 @@ vi.mock('mysql2/promise', () => {
   }
 })
 
+vi.mock('get-port-please', () => {
+  return {
+    getPort: getPortMock,
+  }
+})
+
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
 
@@ -50,6 +57,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 vi.mock('../studio-server', () => {
   return {
+    STUDIO_SERVER_HOST: '127.0.0.1',
     startStudioServer: startStudioServerMock,
   }
 })
@@ -82,6 +90,130 @@ vi.mock('@prisma/studio-core/data/postgresjs', () => {
   }
 })
 
+beforeEach(() => {
+  getPortMock.mockReset()
+  getPortMock.mockResolvedValue(55_555)
+})
+
+test('uses the Prisma 7 config filename in help examples', async () => {
+  const { Studio } = await import('../Studio')
+  const help = Studio.new('prisma').help()
+
+  expect(help).toEqual(expect.any(String))
+  expect(help).toContain('studio --config=./prisma7.config.ts')
+  expect(help).not.toContain('studio --config=./prisma.config.ts')
+})
+
+describe('Studio URL validation', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    createPoolMock.mockClear()
+    createPostgresJSExecutorMock.mockClear()
+    readFileMock.mockClear()
+    startStudioServerMock.mockClear()
+    serializeErrorMock.mockClear()
+  })
+
+  test('accepts sqlserver:// URLs (semicolon-delimited, not valid WHATWG URLs)', async () => {
+    const { Studio } = await import('../Studio')
+
+    const result = await Studio.new('prisma').parse(
+      ['--browser', 'none', '--port', '5555', '--url', 'sqlserver://localhost;database=mydb;user=sa;password=secret'],
+      defaultTestConfig(),
+    )
+
+    expect(result).toBeInstanceOf(Error)
+    expect((result as Error).name).toBe('UserFacingError')
+    expect((result as Error).message).toContain('Prisma Studio is not supported for the "sqlserver" protocol.')
+  })
+
+  test('rejects invalid non-sqlserver URLs', async () => {
+    const { Studio } = await import('../Studio')
+
+    const result = await Studio.new('prisma').parse(
+      ['--browser', 'none', '--port', '5555', '--url', 'not a valid url'],
+      defaultTestConfig(),
+    )
+
+    expect(result).toBeInstanceOf(Error)
+    expect((result as Error).name).toBe('UserFacingError')
+    expect((result as Error).message).toContain('The provided database URL is not valid.')
+  })
+
+  test('passes valid mysql:// URLs through unchanged', async () => {
+    const { Studio } = await import('../Studio')
+
+    const result = await Studio.new('prisma').parse(
+      ['--browser', 'none', '--port', '5555', '--url', 'mysql://user:password@aws.connect.psdb.cloud/db'],
+      defaultTestConfig(),
+    )
+
+    expect(result).toBe('')
+    expect(createPoolMock).toHaveBeenCalledTimes(1)
+    // Verify the URL was forwarded to the mysql2 pool, preserving
+    // the protocol, host, and path. We compare URL components rather
+    // than raw strings because normaliseMySQLConnectionString may
+    // round-trip the connection URL through new URL().
+    expect(new URL(createPoolMock.mock.calls[0][0]).protocol).toBe('mysql:')
+    expect(new URL(createPoolMock.mock.calls[0][0]).hostname).toBe('aws.connect.psdb.cloud')
+    expect(new URL(createPoolMock.mock.calls[0][0]).pathname).toBe('/db')
+  })
+})
+
+describe('Studio port selection', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    createPostgresJSExecutorMock.mockClear()
+    startStudioServerMock.mockClear()
+  })
+
+  test('checks for an available port on the loopback interface when no port is requested', async () => {
+    const { Studio } = await import('../Studio')
+
+    await Studio.new('prisma').parse(
+      ['--browser', 'none', '--url', 'postgresql://user:password@localhost:5432/db'],
+      defaultTestConfig(),
+    )
+
+    expect(getPortMock).toHaveBeenCalledWith({
+      host: '127.0.0.1',
+      port: 51_212,
+      portRange: [49_152, 51_211],
+    })
+    expect(startStudioServerMock).toHaveBeenCalledWith(expect.objectContaining({ port: 55_555 }))
+  })
+
+  test('uses a requested port without probing for an available port', async () => {
+    const { Studio } = await import('../Studio')
+
+    await Studio.new('prisma').parse(
+      ['--browser', 'none', '--port', '5555', '--url', 'postgresql://user:password@localhost:5432/db'],
+      defaultTestConfig(),
+    )
+
+    expect(getPortMock).not.toHaveBeenCalled()
+    expect(startStudioServerMock).toHaveBeenCalledWith(expect.objectContaining({ port: 5_555 }))
+  })
+
+  test.each(['0', '-1', '1.5', '65536'])(
+    'rejects an explicitly requested port outside the valid integer range: %s',
+    async (port) => {
+      const { Studio } = await import('../Studio')
+
+      const result = await Studio.new('prisma').parse(
+        ['--browser', 'none', '--port', port, '--url', 'postgresql://user:password@localhost:5432/db'],
+        defaultTestConfig(),
+      )
+
+      expect(result).toBeInstanceOf(Error)
+      expect((result as Error).name).toBe('UserFacingError')
+      expect((result as Error).message).toContain('The Studio port must be an integer between 1 and 65535.')
+      expect(getPortMock).not.toHaveBeenCalled()
+      expect(startStudioServerMock).not.toHaveBeenCalled()
+    },
+  )
+})
+
 describe('Studio MySQL URL compatibility', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -95,7 +227,7 @@ describe('Studio MySQL URL compatibility', () => {
   test('converts sslaccept=strict to mysql2 ssl JSON', async () => {
     const { Studio } = await import('../Studio')
 
-    await Studio.new().parse(
+    await Studio.new('prisma').parse(
       [
         '--browser',
         'none',
@@ -118,7 +250,7 @@ describe('Studio MySQL URL compatibility', () => {
   test('maps connection_limit to mysql2 connectionLimit', async () => {
     const { Studio } = await import('../Studio')
 
-    await Studio.new().parse(
+    await Studio.new('prisma').parse(
       [
         '--browser',
         'none',
@@ -141,7 +273,7 @@ describe('Studio MySQL URL compatibility', () => {
   test('converts sslaccept=accept_invalid_certs to mysql2 ssl JSON', async () => {
     const { Studio } = await import('../Studio')
 
-    await Studio.new().parse(
+    await Studio.new('prisma').parse(
       [
         '--browser',
         'none',
@@ -198,7 +330,7 @@ describe('Studio BFF', () => {
       schemaVersion: 'v1',
       sql: 'select 1',
     })
-    expect(response.headers.get('access-control-allow-origin')).toBe('*')
+    expect(response.headers.has('access-control-allow-origin')).toBe(false)
     expect(await response.json()).toEqual([
       null,
       {
@@ -345,6 +477,108 @@ describe('Studio BFF', () => {
     expect(await response.json()).toEqual([null, [[{ id: 1 }], [{ id: 2 }]]])
   })
 
+  test('rejects cross-origin BFF requests before executing a query', async () => {
+    const executeMock = vi.fn()
+
+    await startStudioBff({
+      execute: executeMock,
+    })
+
+    const response = await getServerResponse('http://localhost:5555/bff', {
+      body: JSON.stringify({
+        procedure: 'query',
+        query: { parameters: [], sql: 'delete from User' },
+      }),
+      headers: {
+        'content-type': 'text/plain',
+        origin: 'https://attacker.example',
+      },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(403)
+    expect(response.headers.has('access-control-allow-origin')).toBe(false)
+    expect(executeMock).not.toHaveBeenCalled()
+  })
+
+  test('allows same-origin BFF requests', async () => {
+    const executeMock = vi.fn(() => Promise.resolve([null, [{ id: 1 }]]))
+
+    await startStudioBff({
+      execute: executeMock,
+    })
+
+    const response = await getServerResponse('http://localhost:5555/bff', {
+      body: JSON.stringify({
+        procedure: 'query',
+        query: { parameters: [], sql: 'select 1 as id' },
+      }),
+      headers: {
+        'content-type': 'application/json',
+        origin: 'http://localhost:5555',
+      },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.has('access-control-allow-origin')).toBe(false)
+    expect(executeMock).toHaveBeenCalledWith({ parameters: [], sql: 'select 1 as id' })
+  })
+
+  test.each(['http://localhost', 'http://127.0.0.1'])('allows default-port BFF requests from %s', async (origin) => {
+    const executeMock = vi.fn(() => Promise.resolve([null, [{ id: 1 }]]))
+
+    await startStudioBff(
+      {
+        execute: executeMock,
+      },
+      80,
+    )
+
+    const response = await getServerResponse(`${origin}/bff`, {
+      body: JSON.stringify({
+        procedure: 'query',
+        query: { parameters: [], sql: 'select 1 as id' },
+      }),
+      headers: {
+        'content-type': 'application/json',
+        origin,
+      },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(200)
+    expect(executeMock).toHaveBeenCalledWith({ parameters: [], sql: 'select 1 as id' })
+  })
+
+  test.each(['http://localhost', 'http://127.0.0.1'])(
+    'allows default-port telemetry requests from %s',
+    async (origin) => {
+      await startStudioBff(
+        {
+          execute: vi.fn(),
+        },
+        80,
+      )
+
+      const response = await getServerResponse(`${origin}/telemetry`, {
+        body: JSON.stringify({
+          eventId: 'event-id',
+          name: 'studio_closed',
+          payload: {},
+          timestamp: '2026-08-05T00:00:00.000Z',
+        }),
+        headers: {
+          'content-type': 'application/json',
+          origin,
+        },
+        method: 'POST',
+      })
+
+      expect(response.status).toBe(200)
+    },
+  )
+
   test('returns an explicit error when query insights are unsupported', async () => {
     await startStudioBff({
       execute: vi.fn(),
@@ -384,7 +618,7 @@ describe('Studio BFF', () => {
     const html = await response.text()
 
     expect(response.status).toBe(200)
-    expect(response.headers.get('access-control-allow-origin')).toBe('*')
+    expect(response.headers.has('access-control-allow-origin')).toBe(false)
     expect(html).toContain('<link rel="icon"')
     expect(html).toContain('<link rel="stylesheet" href="/studio.css">')
     expect(html).toContain('<script type="module" src="/studio.js"></script>')
@@ -414,20 +648,21 @@ describe('Studio BFF', () => {
     expect(await cssResponse.text()).toBe('.ps { color: black; }')
   })
 
-  test('responds to OPTIONS requests with CORS preflight headers', async () => {
+  test('rejects cross-origin preflight requests', async () => {
     await startStudioBff({
       execute: vi.fn(),
     })
 
     const response = await getServerResponse('http://localhost:5555/bff', {
+      headers: {
+        'access-control-request-method': 'POST',
+        origin: 'https://attacker.example',
+      },
       method: 'OPTIONS',
     })
 
-    expect(response.status).toBe(204)
-    expect(response.headers.get('access-control-allow-origin')).toBe('*')
-    expect(response.headers.get('access-control-allow-methods')).toBe('GET, HEAD, POST, OPTIONS')
-    expect(response.headers.get('access-control-allow-headers')).toBe('Content-Type')
-    expect(await response.text()).toBe('')
+    expect(response.status).toBe(403)
+    expect(response.headers.has('access-control-allow-origin')).toBe(false)
   })
 
   test('no longer serves adapter.js', async () => {
@@ -463,17 +698,20 @@ async function getServerResponse(input: string, init?: RequestInit): Promise<Res
   return fetchHandler(new Request(input, init))
 }
 
-async function startStudioBff(executor: {
-  execute: ReturnType<typeof vi.fn>
-  executeTransaction?: ReturnType<typeof vi.fn>
-  lintSql?: ReturnType<typeof vi.fn>
-}) {
+async function startStudioBff(
+  executor: {
+    execute: ReturnType<typeof vi.fn>
+    executeTransaction?: ReturnType<typeof vi.fn>
+    lintSql?: ReturnType<typeof vi.fn>
+  },
+  port = 5555,
+) {
   createPostgresJSExecutorMock.mockReturnValueOnce(executor)
 
   const { Studio } = await import('../Studio')
 
-  await Studio.new().parse(
-    ['--browser', 'none', '--port', '5555', '--url', 'postgresql://user:password@localhost:5432/db'],
+  await Studio.new('prisma').parse(
+    ['--browser', 'none', '--port', String(port), '--url', 'postgresql://user:password@localhost:5432/db'],
     defaultTestConfig(),
   )
 }

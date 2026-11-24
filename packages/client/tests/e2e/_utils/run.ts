@@ -60,8 +60,20 @@ async function main() {
 
   console.log('🎠 Preparing e2e tests')
 
-  let allPackageFolderNames = await fs.readdir(path.join(monorepoRoot, 'packages'))
-  allPackageFolderNames = allPackageFolderNames.filter((p) => !p.includes('DS_Store'))
+  const packagesDir = path.join(monorepoRoot, 'packages')
+  const allPackageFolderNames = (await fs.readdir(packagesDir)).filter((folderName) =>
+    existsSync(path.join(packagesDir, folderName, 'package.json')),
+  )
+  const allPackageFolders = allPackageFolderNames.map((folderName) => path.join(packagesDir, folderName))
+  const allPkgJsonPaths = allPackageFolders.map((packageFolder) => path.join(packageFolder, 'package.json'))
+  const allPkgJson = allPkgJsonPaths.map(
+    (packageJsonPath) =>
+      require(packageJsonPath) as {
+        name: string
+        dependencies?: Record<string, string>
+      },
+  )
+  const packedPackageFilename = (packageName: string) => `${packageName.replace(/^@/, '').replace('/', '-')}-0.0.0.tgz`
 
   const prismaTmpDir = path.join(os.homedir(), '.local', 'share', 'prisma-tmp')
 
@@ -70,16 +82,13 @@ async function main() {
     await $`pnpm -r exec cp package.json package.copy.json`
 
     // we prepare to replace references to local packages with their tarballs names
-    const localPackageNames = [...allPackageFolderNames.map((p) => `@prisma/${p}`), 'prisma']
-    const allPackageFolders = allPackageFolderNames.map((p) => path.join(monorepoRoot, 'packages', p))
-    const allPkgJsonPaths = allPackageFolders.map((p) => path.join(p, 'package.json'))
-    const allPkgJson = allPkgJsonPaths.map((p) => require(p))
+    const localPackageNames = allPkgJson.map((packageJson) => packageJson.name)
 
     // replace references to unbundled local packages with built and packaged tarballs
     for (let i = 0; i < allPkgJson.length; i++) {
       for (const key of Object.keys(allPkgJson[i].dependencies ?? {})) {
         if (localPackageNames.includes(key)) {
-          allPkgJson[i].dependencies[key] = `/tmp/${key.replace('@prisma/', 'prisma-')}-0.0.0.tgz`
+          allPkgJson[i].dependencies[key] = `/tmp/${packedPackageFilename(key)}`
         }
       }
 
@@ -121,10 +130,10 @@ async function main() {
   const dockerVolumeOptions = process.platform === 'linux' ? ':z' : ''
   const dockerVolume = (source: string, target: string) => `${source}:${target}${dockerVolumeOptions}`
   const dockerVolumes = [
-    dockerVolume(`${prismaTmpDir}/prisma-0.0.0.tgz`, '/tmp/prisma-0.0.0.tgz'), // hardcoded because folder doesn't match name
-    ...allPackageFolderNames.map((p) =>
-      dockerVolume(`${prismaTmpDir}/prisma-${p}-0.0.0.tgz`, `/tmp/prisma-${p}-0.0.0.tgz`),
-    ),
+    ...allPkgJson.map(({ name }) => {
+      const filename = packedPackageFilename(name)
+      return dockerVolume(`${prismaTmpDir}/${filename}`, `/tmp/${filename}`)
+    }),
     dockerVolume(path.join(monorepoRoot, 'packages', 'engines'), '/engines'),
     dockerVolume(path.join(monorepoRoot, 'packages', 'client'), '/client'),
     dockerVolume(e2eRoot, '/e2e'),

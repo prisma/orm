@@ -1,23 +1,24 @@
 import { format } from '@prisma/internals'
 import { bold, dim } from 'kleur/colors'
 
+import type { CliDistributionIdentity } from '../../utils/cli-distribution-identity'
+
 interface HelpOptions {
   subcommands: [string, string][]
   examples: string[]
 }
 
-/** Generates formatted help text for a platform subcommand group. */
-export function createHelp({ subcommands, examples }: HelpOptions): string {
+export function createHelp(identity: CliDistributionIdentity, { subcommands, examples }: HelpOptions): string {
   const maxNameLen = Math.max(...subcommands.map(([name]) => name.length))
   const subcommandLines = subcommands.map(([name, desc]) => `    ${name.padEnd(maxNameLen)}   ${desc}`).join('\n')
-  const exampleLines = examples.map((e) => `    ${dim('$')} ${e}`).join('\n')
+  const exampleLines = examples.map((example) => `    ${dim('$')} ${example}`).join('\n')
 
   return format(`
   Prisma Data Platform commands
 
   ${bold('Usage')}
 
-    ${dim('$')} prisma platform [command]
+    ${dim('$')} ${identity} platform [command]
 
   ${bold('Commands')}
 

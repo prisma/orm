@@ -1,9 +1,5 @@
-import {
-  completionConfigPaths,
-  completionMigrationIds,
-  completionSchemaPaths,
-} from '@prisma/internals/src/cli/completion-values'
-import type { CommandCompletion } from '@prisma/internals/src/cli/types'
+import type { CommandCompletion } from '@prisma/internals'
+import { completionConfigPaths, completionMigrationIds, completionSchemaPaths } from '@prisma/internals'
 
 export const migrateResolveCompletion: CommandCompletion = {
   name: 'migrate resolve',

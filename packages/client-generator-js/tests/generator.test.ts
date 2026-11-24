@@ -70,7 +70,7 @@ expect.addSnapshotSerializer({
 const registry = {
   'prisma-client-js': {
     type: 'in-process',
-    generator: new PrismaClientJsGenerator(),
+    generator: new PrismaClientJsGenerator({ cliCommand: 'prisma' }),
   },
 } satisfies GeneratorRegistry
 
@@ -95,6 +95,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -168,6 +169,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -235,6 +237,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     await generator.generate()
@@ -261,12 +264,13 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
     }).rejects.toThrowErrorMatchingInlineSnapshot(`
       [GetDmmfError: Prisma schema validation - (get-dmmf wasm)
       Error code: P1012
       error: Error validating model "public": The model name \`public\` is invalid. It is a reserved name. Please change it. Read more at https://pris.ly/d/naming-models
-        -->  tests/denylist.prisma:9
+        -->  packages/client-generator-js/tests/denylist.prisma:9
          | 
        8 | 
        9 | model public {
@@ -274,7 +278,7 @@ describe('generator', () => {
       11 | }
          | 
       error: Error validating model "return": The model name \`return\` is invalid. It is a reserved name. Please change it. Read more at https://pris.ly/d/naming-models
-        -->  tests/denylist.prisma:13
+        -->  packages/client-generator-js/tests/denylist.prisma:13
          | 
       12 | 
       13 | model return {
@@ -305,9 +309,10 @@ describe('generator', () => {
         printDownloadProgress: false,
         skipDownload: true,
         registry,
+        cliCommand: 'prisma',
       })
     }).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: Could not load \`--schema\` from provided path \`tests/doesnotexist.prisma\`: file or directory not found]`,
+      `[Error: Could not load \`--schema\` from provided path \`packages/client-generator-js/tests/doesnotexist.prisma\`: file or directory not found]`,
     )
   })
 
@@ -317,6 +322,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     await expect(generator.generate()).rejects.toThrowErrorMatchingInlineSnapshot(`
@@ -350,6 +356,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     const manifest = omit(generator.manifest!, ['version'])
@@ -419,6 +426,7 @@ describe('generator', () => {
       printDownloadProgress: false,
       skipDownload: true,
       registry,
+      cliCommand: 'prisma',
     })
 
     await generator.generate()

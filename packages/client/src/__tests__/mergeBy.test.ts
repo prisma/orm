@@ -1,3 +1,5 @@
+import { expect, test } from 'vitest'
+
 import { mergeBy } from '../runtime/mergeBy'
 
 test('basic mergeBy', () => {

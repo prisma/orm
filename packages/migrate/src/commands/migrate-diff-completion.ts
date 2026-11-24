@@ -1,10 +1,10 @@
+import type { CommandCompletion } from '@prisma/internals'
 import {
   completionConfigPaths,
   completionDiffOutputPaths,
   completionMigrationsDirPaths,
   completionSchemaPaths,
-} from '@prisma/internals/src/cli/completion-values'
-import type { CommandCompletion } from '@prisma/internals/src/cli/types'
+} from '@prisma/internals'
 
 export const migrateDiffCompletion: CommandCompletion = {
   name: 'migrate diff',

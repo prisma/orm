@@ -21,15 +21,14 @@
   "homepage": "https://www.prisma.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/sqlcommenter-query-insights"
   },
   "bugs": "https://github.com/prisma/prisma/issues",
   "scripts": {
     "dev": "DEV=true tsx helpers/build.ts",
     "build": "tsx helpers/build.ts",
-    "prepublishOnly": "pnpm run build",
-    "test": "vitest run"
+    "prepublishOnly": "pnpm run build"
   },
   "files": [
     "dist"

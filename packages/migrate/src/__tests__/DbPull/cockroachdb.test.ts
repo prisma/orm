@@ -49,7 +49,7 @@ describeMatrix(cockroachdbOnly, 'cockroachdb', () => {
 
   test('basic introspection (with cockroachdb provider)', async () => {
     ctx.fixture('introspection/cockroachdb')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(['--print'], await ctx.config(), ctx.configDir())
     await expect(result).resolves.toMatchInlineSnapshot(`""`)
     expect(ctx.normalizedCapturedStdout()).toMatchInlineSnapshot(`
@@ -94,7 +94,7 @@ describeMatrix(cockroachdbOnly, 'cockroachdb', () => {
 
   test('basic introspection (with postgresql provider) should fail', async () => {
     ctx.fixture('introspection/cockroachdb')
-    const introspect = new DbPull()
+    const introspect = DbPull.new('prisma')
     const result = introspect.parse(
       ['--print', '--schema', 'with-postgresql-provider.prisma'],
       await ctx.config(),

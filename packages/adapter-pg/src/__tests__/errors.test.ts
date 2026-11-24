@@ -43,6 +43,80 @@ describe('convertDriverError', () => {
     })
   })
 
+  it('should handle UniqueConstraintViolation (23505) with constraint', () => {
+    const error = { code: '23505', message: 'msg', severity: 'ERROR', detail: 'Key (id)', constraint: 'users_id_key' }
+    // No `table` on the error (as with CockroachDB), so it is derived from the
+    // default-named constraint `users_id_key` and the parsed field `id`.
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'users_id_key' },
+      table: 'users',
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should handle UniqueConstraintViolation (23505) with only constraint', () => {
+    const error = { code: '23505', message: 'msg', severity: 'ERROR', constraint: 'users_email_key' }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'users_email_key' },
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should report the table for UniqueConstraintViolation (23505)', () => {
+    const error = {
+      code: '23505',
+      message: 'duplicate key value violates unique constraint "users_email_key"',
+      severity: 'ERROR',
+      detail: 'Key (email)=(a@b.c) already exists.',
+      table: 'users',
+      constraint: 'users_email_key',
+    }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'users_email_key' },
+      table: 'users',
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should derive the table from a default-named constraint when the error carries no table (CockroachDB)', () => {
+    const error = {
+      code: '23505',
+      message: 'duplicate key value violates unique constraint "app_major_versions_appId_number_key"',
+      severity: 'ERROR',
+      detail: "Key (appId, number)=('x', 1) already exists.",
+      constraint: 'app_major_versions_appId_number_key',
+    }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'app_major_versions_appId_number_key' },
+      table: 'app_major_versions',
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
+  it('should report no table for a custom-named constraint when the error carries no table', () => {
+    const error = {
+      code: '23505',
+      message: 'duplicate key value violates unique constraint "my_custom_constraint"',
+      severity: 'ERROR',
+      detail: 'Key (email)=(a@b.c) already exists.',
+      constraint: 'my_custom_constraint',
+    }
+    expect(convertDriverError(error)).toEqual({
+      kind: 'UniqueConstraintViolation',
+      constraint: { index: 'my_custom_constraint' },
+      originalCode: error.code,
+      originalMessage: error.message,
+    })
+  })
+
   it('should handle NullConstraintViolation (23502)', () => {
     const error = { code: '23502', message: 'msg', severity: 'ERROR', detail: 'Key (foo)' }
     expect(convertDriverError(error)).toEqual({
@@ -127,8 +201,8 @@ describe('convertDriverError', () => {
     })
   })
 
-  it('should handle TransactionWriteConflict (40001)', () => {
-    const error = { code: '40001', message: 'msg', severity: 'ERROR' }
+  it.each(['40001', '40P01'])('should handle TransactionWriteConflict (%s)', (code) => {
+    const error = { code, message: 'msg', severity: 'ERROR' }
     expect(convertDriverError(error)).toEqual({
       kind: 'TransactionWriteConflict',
       originalCode: error.code,
