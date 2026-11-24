@@ -37,8 +37,6 @@ A release writes the oldest format version whose printer (section 1.4) accepts t
 
 The effect: an extension author who upgrades their tooling does not force every application that uses the extension to upgrade, unless the extension uses something new.
 
-A later release never rewrites a migration or a contract snapshot in a newer format. A migration's hash covers `migration.json` and `ops.json`, and a snapshot is stored under its storage hash and hashed again on every read, so a rewritten file would read as tampered with. Those files keep the version they were written with for the whole major version. `contract.json` and ref files are written afresh each time, under the rule above.
-
 Cargo does something close: it keeps an existing lock file in its old format when nothing needs the new one.
 
 ### 1.4 How it is built
