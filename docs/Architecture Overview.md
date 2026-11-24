@@ -15,7 +15,7 @@ Prisma 8 also addresses the largest weakness in Prisma 7: a monolithic, tightly 
 ## Guiding Principles
 
 ### Contract-first
-The contract is the center of gravity. A single canonical `contract.json` defines what exists, what’s allowed, and what’s expected. Both planes ingest the same deterministic data. The control plane verifies `storageHash` and `profileHash` against the database marker before acting; the SQL runtime compares them once, on its first use of the database, and warns on a difference. Contracts carry no executable logic; they are data that gates execution (ADR 006, ADR 010, ADR 021)
+The contract is the center of gravity. A single canonical `contract.json` defines what exists, what’s allowed, and what’s expected. Both planes ingest the same deterministic data. The control plane verifies `storageHash` and `profileHash` against the database marker before acting; the SQL runtime compares the `storageHash`, and the `profileHash` when the contract has one, once, on its first use of the database, and warns on a difference. Contracts carry no executable logic; they are data that gates execution (ADR 006, ADR 010, ADR 021)
 
 ### Plans are the product
 We don’t execute intent directly; we compile it into immutable Plans. Every query plan lowers to one statement for predictability and guardrails, and every migration is a contract→contract edge with verifiable pre and post conditions. Plans are hashable, auditable, and portable across environments (ADR 002, ADR 003, ADR 001, ADR 011)
