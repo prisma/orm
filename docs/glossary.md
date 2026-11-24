@@ -79,15 +79,19 @@ Which specific database you're using — Postgres, MySQL, MongoDB, etc. Each tar
 
 ### Target package
 
-The package an application installs to use a target, such as `@prisma/orm-postgres`. Its `defineConfig` assembles the family, target, adapter and driver, and it exports everything the application imports. ADR 242 and some older code call it a *facade*. An application lists it together with the platform packages it names as peer dependencies ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
+The npm package that provides a target, such as `@prisma/orm-target-postgres`. It is one of the platform packages. An application does not import from it; it lists it so that it holds one copy ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
+
+### Facade
+
+The package an application installs to use a database, such as `@prisma/orm-postgres`, named after the facade design pattern. One function in it, `defineConfig`, glues together the framework, family, target, adapter and driver so that an application starts in one call, and the facade re-exports everything application code imports. A facade is not a target package. An application lists it together with the platform packages it names as peer dependencies ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
 
 ### Platform package
 
-One of the packages extension authors build against: `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-*` and `@prisma/orm-target-*`. An application lists the ones its target package names as peer dependencies, at the target package's version, so it holds one copy of each (a monorepo whose applications are on different Prisma versions can still get two; see [ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md#consequences)), but application code imports from the target package and the extensions, not from a platform package. `@prisma/orm-target-postgres` is the PostgreSQL target's platform package, not a target package.
+One of the packages extension authors build against: `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-*` and `@prisma/orm-target-*`. An application lists the ones its facade names as peer dependencies, so it holds one copy of each (a monorepo whose applications are on different Prisma versions can still get two; see [ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md#consequences)), but application code imports from the facade and the extensions, not from a platform package.
 
 ### Init contribution
 
-What a target package tells `prisma orm init`: the default export of its `init` entrypoint, typed `InitContribution`. It holds the starter contract, the `db.ts` and `.env.example` text, the driver packages, the quick reference and an optional server probe. Unlike a descriptor's contributions, no stack aggregates it; `init` loads it from the one target package the user chose. See [ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md).
+What a facade tells `prisma orm init`: the default export of its `init` entrypoint, typed `InitContribution`. It holds the starter contract, the `db.ts` and `.env.example` text, the driver packages, the quick reference and an optional server probe. Unlike a descriptor's contributions, no stack aggregates it; `init` loads it from the one facade the user chose. See [ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md).
 
 ### Family
 
