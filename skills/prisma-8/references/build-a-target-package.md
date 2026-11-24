@@ -91,6 +91,8 @@ export default {
 | `probe(databaseUrl, signal)` | Optional. Runs for `--probe-db` |
 | `prisma7QuickReference(input)` | Optional. Required when your `configModule` exports `prisma7Schema` |
 
+A user names your package in `--target` by its full package name, such as `--target prisma-orm-acmedb`; short names such as `postgres` exist only for the packages Prisma publishes. With `--skip-install`, your package must already be installed in the project, because every file `init` writes comes from it.
+
 Rules:
 
 - **No framework code runs in `/init`.** Types are fine. The CLI that loads it may be a different installed copy of the framework from the one your package depends on, and two copies in one process do not recognise each other's values.
