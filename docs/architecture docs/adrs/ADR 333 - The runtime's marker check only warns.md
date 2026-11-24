@@ -12,7 +12,7 @@ An application starts against a database whose marker row was written in a form 
 
 ```ts
 const db = postgres({ contract, url, log });
-const users = await db.orm.user.select({ id: true }).all();
+const users = await db.orm.public.User.select('id').all();
 ```
 
 The runtime reads the marker once, before its first use of the database. The row cannot be decoded, so it logs one line and runs the query:
@@ -41,9 +41,9 @@ The check that compares a running application's contract with the database's mar
 | The marker row cannot be decoded | `CONTRACT.MARKER_ROW_CORRUPT` |
 | The marker cannot be read, for any other reason | `CONTRACT.MARKER_READ_FAILED` |
 
-The check runs once for each runtime instance, before the runtime's first statement or the first connection it takes to hold. A check that failed counts as that one check. It is not tried again.
+The check runs once for each runtime instance, before the runtime's first statement or the first connection it takes to hold. A check that ends in any row of this table is that one check, including a marker that could not be read. It is not tried again.
 
-If the database cannot be reached at all, the check logs `CONTRACT.MARKER_READ_FAILED` and the user's own query then fails with the driver's own error.
+A database that cannot be reached is not an outcome of the check. When the read fails because no connection could be made, or because the runtime is not connected, the call rejects with the driver's own error, nothing is logged, and the next call makes the check. The runtime recognises this case by the error's type (`SqlConnectionError`) or code (`DRIVER.CONNECTION_FAILED`, `DRIVER.NOT_CONNECTED`), never by its message.
 
 `verifyMarker: false` still skips the check.
 
@@ -51,9 +51,13 @@ If the database cannot be reached at all, the check logs `CONTRACT.MARKER_READ_F
 
 The marker is a record Prisma keeps for itself. A later release of Prisma 8 must work with a database an earlier one set up, and an application must never stop serving queries because of Prisma's own records. A marker that is unreadable says nothing about whether the application's tables match its contract. Refusing to run would turn a diagnostic into an outage, and the user could do nothing about it while the application is down.
 
-A query against a database that really does not match the contract fails on its own, with the database's error for the table or column that is missing.
+The check is a diagnostic, not a safeguard. A database that lacks a table or column the contract names fails the query that needs it, with the database's own error. A difference the database does not report, such as a changed nullability or type, runs unnoticed whether the check warns or fails. `prisma db verify` is the command that finds it.
 
-A failed read is not tried again on later calls. With no failure to recover from, a retry would only repeat the warning on every call for as long as the marker stays unreadable.
+A read that reached the database and failed is not tried again on later calls. Such a failure rarely goes away by itself: a role with no `SELECT` on the marker table would add a failing read to every call.
+
+A database that cannot be reached is treated differently for two reasons. The user's query cannot succeed either, so rejecting with the driver's error stops nothing that would have worked, and it spares the call a second wait for the connection timeout. And an application that starts before its database does still gets its check, and its mismatch warning, once the database answers.
+
+A logger that throws does not fail the call either. The runtime discards an error from `log.warn` during the check.
 
 ## What does not change
 
@@ -65,4 +69,5 @@ The runtime's default logger discards warnings. An application sees them when it
 
 - **Fail the call on an unreadable marker, warn on drift.** It stops an application for a failure in a record the application does not use.
 - **A strict mode that refuses to run.** ADR 021 described one. The runtime has none, and `prisma db verify` serves the operator who wants a deploy to stop.
-- **Retry a failed read on the next call.** Rejected for the reason above.
+- **Read again on each call until one read completes, then warn once.** Rejected for a read that reached the database: a failure that does not go away adds a failing read to every call.
+- **Warn when the database cannot be reached, and let the query fail by itself.** Rejected: the first call waits for the connection timeout twice, and the check is used up before it ever reached the database.

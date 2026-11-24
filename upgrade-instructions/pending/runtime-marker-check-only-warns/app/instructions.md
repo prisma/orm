@@ -2,7 +2,7 @@
 changes:
   - id: runtime-marker-check-only-warns
     summary: |
-      On its first use of the database, the runtime compares the contract with the database's marker. When the marker cannot be read, or its row cannot be decoded, that first call no longer rejects with `CONTRACT.MARKER_READ_FAILED` or `CONTRACT.MARKER_ROW_CORRUPT`. The runtime passes one warning with that code to the `log` option and runs the query. A failed check is not tried again on later calls. When the database cannot be reached at all, the query rejects with the driver's own error. Code that caught either code from a query, for example a startup check, no longer sees it there: run `prisma db verify` in the deploy, or read the warnings that `log` receives.
+      On its first use of the database, the runtime compares the contract with the database's marker. When the marker cannot be read, or its row cannot be decoded, that first call no longer rejects with `CONTRACT.MARKER_READ_FAILED` or `CONTRACT.MARKER_ROW_CORRUPT`. The runtime passes one warning with that code to the `log` option and runs the query. Such a check is not tried again on later calls. When the database cannot be reached at all, the call rejects with the driver's own error, no warning is logged, and the next call makes the check. Code that caught either code from a query, for example a startup check, no longer sees it there: run `prisma db verify` in the deploy, or read the warnings that `log` receives.
     detection:
       glob: "**/*.{ts,tsx,mts,cts,js,mjs,cjs}"
       matches:
@@ -37,4 +37,4 @@ const db = postgres({
 });
 ```
 
-When the database cannot be reached, the first query now rejects with the driver's own error, such as a connection refusal, where before it rejected with `CONTRACT.MARKER_READ_FAILED`. Code that matched on the marker code to detect an unreachable database matches on the driver's error instead.
+When the database cannot be reached, the first query now rejects with the driver's own connection error, where before it rejected with `CONTRACT.MARKER_READ_FAILED`. Code that matched on the marker code to detect an unreachable database matches on the driver's error instead.
