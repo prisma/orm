@@ -52,7 +52,7 @@ const counts = await db.posts
   .all();
 ```
 
-In a join, a column name that only one joined table has can be written by itself, as `'title'` or `f.title`. A name that two or more joined tables or aliases have must be written with its table, as `f.invitee.name`; written by itself it is a type error, and `select('name')` throws `ORM.COLUMN_UNKNOWN`.
+In a join, a column name that only one joined table has can be written by itself, as `'title'` or `f.title`. A name that two or more joined tables or aliases have must be written with its table, as `f.invitee.name`; written by itself it is a type error, and `select('name')` throws `ORM.COLUMN_AMBIGUOUS`.
 
 ### Row locking
 

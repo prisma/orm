@@ -1119,11 +1119,15 @@ An argument to an ORM client or query-builder method, including the input of a n
 
 The operation needs a contract capability the contract does not declare; the payload names it in `capability` and the operation in `action` or `method`.
 
+### ORM.COLUMN_AMBIGUOUS
+
+The `sql()` builder's `select`, `orderBy`, `groupBy` or `distinctOn` names a column by itself, and more than one joined table or alias has that name, so the builder cannot tell which one is meant. A name that two or more joined tables share is never a top-level field. Raised when the query is built. `fix` gives the call with the table named, such as `select('id', (f) => f.users.id)` for `select`, or `orderBy((f) => f.users.id)` for the others. Payload: `column`, `candidates` (the tables or aliases that have it).
+
 ### ORM.COLUMN_UNKNOWN
 
 A mutation payload or where-expression references a column that does not exist on the resolved table. Thrown while compiling the query plan or binding the where clause, by the ORM client and by the `sql()` builder DSL. Payload: `namespaceId`, `tableName`, `column`.
 
-The `sql()` builder also raises it when `select`, `orderBy`, `groupBy` or `distinctOn` names a column by itself and no single table in the query's scope owns that name. If no joined table has the column, the message says it was not found. If more than one joined table has it, the message lists those tables in `tables` and says to name the table in a callback, such as `(f) => f.users.id`; a name that two or more joined tables share is never a top-level field. Payload: `column`, plus `tables` for a shared name.
+The `sql()` builder also raises it when `select`, `orderBy`, `groupBy` or `distinctOn` names a column by itself and no table in the query's scope has that name. Payload: `column`.
 
 ### ORM.CURSOR_VALUE_MISSING
 

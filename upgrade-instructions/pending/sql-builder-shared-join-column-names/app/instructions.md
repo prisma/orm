@@ -2,7 +2,7 @@
 changes:
   - id: sql-builder-shared-join-column-name-needs-table
     summary: |
-      In the SQL builder, a column name that two or more joined tables have is now reached only through its table, such as `f.users.id`, however many tables the query joins. Before, with three or more joined tables, a name that the first two shared but a later one also had, such as `id`, became a top-level field again. In 8.0.0-rc.25, `f.id` and `select('id')` type-checked, ran, and silently returned the column of the table joined last, without an error; in earlier releases the database refused the query as ambiguous. They are now a type error, and `select('id')` is refused at run time with `ORM.COLUMN_UNKNOWN`. Decide which table's column the code means, which may not be the one joined last, and name that table. Results such code produced in 8.0.0-rc.25 may hold the wrong table's values.
+      In the SQL builder, a column name that two or more joined tables have is now reached only through its table, such as `f.users.id`, however many tables the query joins. Before, with three or more joined tables, a name that the first two shared but a later one also had, such as `id`, became a top-level field again. In 8.0.0-rc.25, reading that field in a callback, such as `f.id`, type-checked, ran without an error and silently returned the column of the table joined last; in earlier releases the database refused it as ambiguous. Passing the name as a string, as in `select('id')`, `orderBy('id')`, `groupBy('id')` or `distinctOn('id')`, was refused by the database as ambiguous in every release. Both forms are now a type error, and the string forms throw `ORM.COLUMN_AMBIGUOUS` when the query is built. Decide which table's column the code means, which may not be the one joined last, and name that table. Results that the callback form produced in 8.0.0-rc.25 may hold the wrong table's values; so may either form inside a lateral subquery.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       matches:
@@ -33,6 +33,10 @@ Do not assume the table joined last is the right one. Read the code, decide whic
   .select((f) => ({ id: f.users.id }));
 ```
 
-If it meant another table, name that one instead, such as `f.posts.id` or `f.profiles.id`. If the code ran on 8.0.0-rc.25 and meant a table other than the last one joined, the results it produced, and any data written from them, hold the wrong table's values; check them.
+If it meant another table, name that one instead, such as `f.posts.id` or `f.profiles.id`. If the code ran on 8.0.0-rc.25 and meant a table other than the last one joined, the results it produced, and any data written from them, hold the wrong table's values; check them. The same applies to such a name read in `where`, `orderBy` and the other callbacks.
 
-The same applies to `select('id')`, `where`, `orderBy` and the other callbacks, and inside the subquery of `lateralJoin` or `outerLateralJoin`: there, a name that the subquery's table shares with two or more parent tables read the subquery's own table. Write that table's name, such as `f.profiles.id`. Names that only one joined table has stay available at top level.
+Passing the name as a string is different. `select('id')`, `orderBy('id')`, `groupBy('id')` and `distinctOn('id')` sent a bare `"id"`, which the database refused as ambiguous in 8.0.0-rc.25 and every earlier release, so that code never returned wrong results. It is now a type error, and it throws `ORM.COLUMN_AMBIGUOUS` when the query is built instead of failing in the database. Name the table, as the error's `fix` says: `select('id', (f) => f.users.id)`, or `orderBy((f) => f.users.id)` and the same for `groupBy` and `distinctOn`.
+
+Inside the subquery of `lateralJoin` or `outerLateralJoin`, both forms ran without an error: a name that the subquery's table shares with two or more parent tables read the subquery's own table. If the code meant a parent table's column, its results hold the wrong values; check them. Write the table's name, such as `f.profiles.id`.
+
+Names that only one joined table has stay available at top level.
