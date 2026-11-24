@@ -24,8 +24,8 @@ Counts the projects marked Must in each stream. A project counts as done only wh
 | Query features | 10 of 11 (91%) | `█████████░` | 1 | 0 |
 | Docs and the new user's first hour | 2 of 5 (40%) | `████░░░░░░` | 2 | 1 |
 | Work found along the way | 4 of 9 (44%) | `████░░░░░░` | 1 | 4 |
-| Compatibility policy | 0 of 7 (0%) | `░░░░░░░░░░` | 3 | 4 |
-| **All streams** | **34 of 53 (64%)** | `██████░░░░` | **8** | **11** |
+| Compatibility policy | 0 of 6 (0%) | `░░░░░░░░░░` | 2 | 4 |
+| **All streams** | **34 of 52 (65%)** | `███████░░░` | **7** | **11** |
 
 ## Stream 1: Foundations and breaking changes
 
@@ -143,17 +143,17 @@ Work found after the plan was made goes here, so the first five streams keep the
 
 ## Stream 7: Compatibility policy
 
-**GA readiness:** 0 of 7 Must projects done (0%). 3 in progress, 4 not started.
+**GA readiness:** 0 of 6 Must projects done (0%). 2 in progress, 4 not started.
 
 **Goal:** from `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database. Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. A project belongs in this stream when it removes a reason for a user to hesitate before upgrading.
 
 **More information:** the [policy](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/spec.md), the [maturity levels](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/maturity-levels.md) and the [plan](https://github.com/prisma/orm/blob/ga-compatibility/projects/ga-compatibility/plan.md), which gives each project's purpose and scope, are on the branch `ga-compatibility`.
 
-Project 4 comes before project 3, which needs it.
+Each project brings its code changes, its checks and its documentation together, so what is on `main` is what is in force. Project 4 comes before project 3, which needs it.
 
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 🟡 | Document the compatibility policy in the repository | Must | Will | prisma/orm#31194 opened 2026-11-24, waiting on review | |
+| 1 | — | Document the compatibility policy in the repository | Moved into the other projects | Will | Dropped 2026-11-24. Each project documents its own part of the policy when it implements it. prisma/orm#31194 holds the drafts and is not merged | |
 | 2 | 🔄 | Make later releases read the files and database records of earlier releases | Must | Will | Design agreed and work started 2026-11-24 | |
 | 3 | ⏳ | Minimize the exported TS APIs of GA packages and guarantee them until the next major version | Must | Will | Not started. Needs two decisions from Will | |
 | 4 | ⏳ | Catch breaking changes and accidental new exports in CI, by comparing each package's API with the last release | Must | Will | Started 2026-11-24 with its design | |

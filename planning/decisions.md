@@ -97,6 +97,8 @@ Will, 2026-09-30: the emulator controls (start, stop, list, reset) are now urgen
 - In stream 7, projects 1 to 6 are Must, 7, 9 and 12 are Aim, and 8, 10 and 11 are Later. They can be moved as the work goes on (Will, 2026-11-24).
 - Stream 7, project 7 (Prisma's own database tables) moves from Aim to Must (Will, 2026-11-24). The tables become a contract space the framework owns, and `8.0.0` must write the marker row for it, or a later release cannot tell which form a database's tables are in. It also removes friction for the remaining release candidates.
 
+- Each stream 7 project introduces its documentation and its enforcement, and changes the code to conform, together (Will, 2026-11-24). Nothing that describes a part of the compatibility policy merges to `main` before the code conforms, so no document on `main` describes an `8.0.0` policy the current release candidate does not follow. A part is in force for the release candidates after its project merges; until `8.0.0` it can still be broken by a deliberate decision. Promises about exports start only after the exports are reduced. Stream 7's project 1, documenting the whole policy on `main` first, is dropped for this reason.
+
 ## Changes of 2026-11-23
 
 - Migrations that are safe on a large production table become a project that completes before GA (stream 6, row 14) (Will, 2026-11-23). It began with prisma/orm#31182, where the PostgreSQL runner waits for a table lock with no time limit, and with a public account of two outages in which generated Prisma migrations locked a 300-million-row table at peak traffic. What Will decided:
